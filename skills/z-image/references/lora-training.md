@@ -67,4 +67,4 @@ Two variants ship in the `ostris/zimage_turbo_training_adapter` HF repo (referen
 
 ---
 
-Once trained, see `references/workflows.md §6 — Using LoRAs` for loading, weight tuning, and the multi-stage iteration loop (draft in Turbo → finalize in Z-Image).
+Once trained, see `references/workflows.md §6 — Using LoRAs` for loading and weight tuning. The draft-in-Turbo → finalize-in-Z-Image iteration loop is the **Default workflow** in `SKILL.md` and the layered pipeline in `workflows.md §2` — it's the same loop whether or not a LoRA is loaded.

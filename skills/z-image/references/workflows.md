@@ -102,14 +102,14 @@ This is the generic "I downloaded a LoRA, how do I run it" path. Training your o
 
 ### Node wiring
 
-Z-Image is loaded as a diffusion model (not a checkpoint), and a Z-Image LoRA patches the **DiT only** — there's no CLIP-side LoRA to load the way SD1.5/SDXL had. Load it with **`LoraLoaderModelOnly`** on the model path, right after the model loader and before `ModelSamplingAuraFlow`:
+Z-Image is loaded as a diffusion model (not a checkpoint). A Z-Image LoRA patches the **DiT** (attention + MLP), loaded with a LoRA loader on the model path — right after the model loader, before `ModelSamplingAuraFlow`:
 
 ```
-Load Diffusion Model → LoraLoaderModelOnly → ModelSamplingAuraFlow (shift 3) → KSampler
-CLIPLoader (qwen_3_4b, "lumina2") ──────────────────────────────────────────┘   (not patched)
+Load Diffusion Model → LoRA loader → ModelSamplingAuraFlow (shift 3) → KSampler
+CLIPLoader (qwen_3_4b, "lumina2") ─────────────────────────────────┘
 ```
 
-Leave the Qwen-3 encoder (CLIPLoader) untouched. *(This is the standard ComfyUI DiT pattern — same shape as Flux — inferred from the LoRA targeting DiT attention/MLP; if a LoRA ships text-encoder weights, switch to the full `LoraLoader`. Verify against the template you're using.)*
+**Which loader:** the ComfyUI core PR #12717 repro adds the LoRA with the **full `LoraLoader`** (model + clip). **`LoraLoaderModelOnly`** also works and is the clean choice — Z-Image LoRAs target the DiT, and most (Ostris-trained, diffusers-format) carry **no text-encoder weights**, so the Qwen-3/CLIP side is usually a no-op either way. Don't agonize over it; if a LoRA *does* ship Qwen-3 keys, use the full `LoraLoader` so they apply. *(DiT target is verified from PR #12717; the model-vs-model+clip node choice is a usage detail, not a break-or-not fact.)*
 
 ### The gotcha that makes a LoRA silently do almost nothing (Z-Image-SPECIFIC)
 
