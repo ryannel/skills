@@ -247,13 +247,15 @@ The [klein] 4B's Apache 2.0 status is a deliberate BFL decision — making the f
 
 ---
 
-## Confidence / provenance tier
+## How to read the claims in this skill — two bars, by claim type
 
-**Primary / verified** (GitHub source, model cards, raw ComfyUI template JSON, diffusers API docs): architecture (32B MM-DiT, 8+48 blocks, Mistral 3.2 24B for dev, Qwen3 4B/8B for klein 4B/9B), licence terms (Apache 2.0 for klein 4B; Non-Commercial for dev/9B), ComfyUI file layout and stock node settings verbatim from template JSON, all new node names, official quantised filenames and sizes from Comfy-Org HF repos, no-negative mechanism (guidance-distilled dev; CFG=1 klein distilled), official 4-part prompting structure, hex color syntax.
+This skill holds two kinds of claim to two different standards, because they fail in two different ways.
 
-**Official-via-docs** (BFL docs/blog, HF blog — high confidence, spot-verify if load-bearing): multi-reference image count (range ~4–10; marketing says 10, prompting guide says 8 — discrepancy unresolved), release dates, API model slugs, async polling pattern.
+**Hard facts — must be exact or it breaks.** Architecture (32B MM-DiT, 8+48 blocks, Mistral 3.2 24B for [dev], Qwen3 4B/8B for [klein] 4B/9B), licence terms (Apache 2.0 for [klein] 4B; Non-Commercial for [dev]/9B), the ComfyUI file layout and stock node settings (verbatim from the template JSON), all node names, the official quantised filenames and sizes (Comfy-Org HF repos), the no-negative mechanism (guidance-distilled [dev]; CFG=1 [klein]), the 4-part prompting structure, hex color syntax, the API model slugs and async polling pattern. **Source of truth is official** — BFL GitHub/model cards/docs, the raw ComfyUI template JSON, diffusers. A wrong quant filename 404s; a misread licence (NC vs Apache) is a legal problem. **Flux.2 is days-to-weeks old — these are volatile:** quant filenames/sizes, the diffusers stable version (v0.38.0 is *inferred* from source links — verify at pypi), and template details move fast. **Re-verify before relying on them, regardless of who said it.**
 
-**Community / single-source** (flagged inline): VRAM numbers for GGUF configs, exact GGUF file sizes (rapidly changing), API pricing (BFL publishes only an interactive calculator — verify at `bfl.ai/pricing`), LoRA training hyperparameters, diffusers stable release number (v0.38.0 inferred from source code links; verify at pypi). **ControlNet and PuLID tooling** — the Alibaba PAI Fun Union ControlNet repo, node names, and filenames are community/third-party (verify repos and exact filenames exist before downloading); iFayens PuLID weights and the bryanmcguire community nodes are single-source community tooling (verify at time of use).
+**Craft — what actually makes a good image.** The photoreal camera/lighting vocabulary, LoRA weights and stacking, multi-reference editing technique, GGUF VRAM trade-offs, and the ControlNet/PuLID identity tooling. **The authoritative source here is the community** — the ComfyUI workflow authors and the people running [dev]/[klein] daily — and for a model this new, *they are often ahead of BFL's own docs*. Stated with confidence; ranges and "verify at time of use" flags mark where the community layer is still forming, not where it's untrustworthy. Specifically third-party/community-tooling to verify before downloading: the Alibaba PAI **Fun Union ControlNet** repo/node names/filenames, the **iFayens PuLID** weights, and the **bryanmcguire** community nodes.
+
+**One genuinely-unresolved fact:** the multi-reference image count — BFL marketing says **10**, the prompting guide says **8**. Discrepancy unresolved across official sources; treat ~8 as the safe working number and test if you need more.
 
 **Release:** [dev] 25 Nov 2025; [klein] 15 Jan 2026. Re-verify volatile specifics (pricing, quant filenames, diffusers version, LoRA tooling, ComfyUI template details) before relying on them.
 
