@@ -1,7 +1,7 @@
 ---
 name: z-image
 description: >
-  Authoritative guide for the Z-Image model family (Z-Image and Z-Image-Turbo, Alibaba Tongyi Lab) in ComfyUI or the diffusers API. Use this whenever the user touches Z-Image in any way, even obliquely: choosing between Z-Image and Turbo (or weighing Z-Image against other models), installing or setting it up in ComfyUI (file layout, loaders, quantisation, ControlNet), writing or fixing prompts (the Qwen-3 LLM encoder needs sentences not tags; realism, killing plastic/waxy stock-photo skin, bilingual text rendering, high/low-angle gaze control), pose control and structural conditioning (Fun Union ControlNet — Pose, Depth, Canny, HED, Scribble; ModelPatchLoader + QwenImageDiffsynthControlnet nodes; Turbo-only; V2.1 model files), face identity (no PuLID for Z-Image — character LoRA via FaceDetailer is the standard approach), building single- or multi-stage workflows (hires refine, tiled upscale, face detailer, img2img/inpaint) with practical sampler/CFG/denoise/resolution/step settings, or generating a dataset and training a LoRA with the Ostris AI-Toolkit.
+  Authoritative guide for the Z-Image model family (Z-Image and Z-Image-Turbo, Alibaba Tongyi Lab) in ComfyUI or the diffusers API. Use this whenever the user touches Z-Image in any way, even obliquely: choosing between Z-Image and Turbo (or weighing Z-Image against other models), installing or setting it up in ComfyUI (file layout, loaders, quantisation, ControlNet), writing or fixing prompts (the Qwen-3 LLM encoder needs sentences not tags; realism, killing plastic/waxy stock-photo skin, bilingual text rendering, high/low-angle gaze control), pose control and structural conditioning (Fun Union ControlNet — Pose, Depth, Canny, HED, Scribble; ModelPatchLoader + QwenImageDiffsynthControlnet nodes; Turbo-only; V2.1 model files), face identity (no PuLID for Z-Image — character LoRA via FaceDetailer is the standard approach), building single- or multi-stage workflows (hires refine, tiled upscale, face detailer, img2img/inpaint) with practical sampler/CFG/denoise/resolution/step settings, using LoRAs (loading any downloaded style/realism/character LoRA with the right node, weight-by-type tuning, stacking with rgthree, the diffusers-format QKV silent-failure gotcha, Base↔Turbo cross-compatibility), or generating a dataset and training a LoRA with the Ostris AI-Toolkit.
 ---
 
 # Z-Image Family
@@ -99,8 +99,7 @@ Decoupled-DMD distillation removes CFG dependency. Fastest path from prompt to d
 - **Resolution:** 1024×1024
 - **Negative prompts:** Do not use — phrase all constraints positively inside the prompt
 - **Seed diversity:** Lower than Z-Image; Turbo converges toward the strongest mode
-- **LoRA weight:** ~0.8 (official inference example: `adapter_weights=[0.8]`); 1.0 overcooks saturation and edges
-- **LoRA training:** Requires the Ostris training adapter — see `references/lora-training.md`
+- **LoRAs:** start ~0.7–0.8 and sweep 0.5–1.2 — there is **no hard 0.8 cap**; style LoRAs often want 0.3–0.5, character 0.7–1.0 (per-LoRA, read the author's card). If a LoRA "does almost nothing," update ComfyUI first — diffusers-format Z-Image LoRAs silently lose their attention weights on builds before core PR #12717. Full loading/stacking/cross-compat guidance: `references/workflows.md §6`. Training: `references/lora-training.md`
 
 ---
 
@@ -189,13 +188,23 @@ Before hitting Queue Prompt:
 
 **Licence:** Apache-2.0 for all currently released variants (Z-Image and Z-Image-Turbo). Z-Image-Edit and Z-Image-Omni-Base are still unreleased as of mid-2026 (both marked "to be released" on the official GitHub); verify their licences before use when they land.
 
-**Turbo negative-prompt behaviour is contested.** The Tongyi-MAI team states negatives are ignored at the guidance-free setting (CFG 1.0 in a ComfyUI KSampler / `guidance_scale=0` in diffusers). ComfyUI users report that raising CFG to 1.2–1.5 re-introduces weak negative subtraction. The official guidance is authoritative; CFG > 1 on Turbo is a community workaround, not a supported feature.
-
-**Confidence of claims in this skill.** **Primary / verified** (read from the official model card, the official ComfyUI template, and diffusers): architecture (6B S3-DiT, Qwen-3 4B encoder), Apache-2.0 licence, the stock node settings (shift 3, `lumina2`, `res_multistep`/`simple`, the steps/CFG in the templates), the official quant files, the diffusers pipeline classes, and the core prompting rules (natural language not tag soup, bilingual EN/ZH text, Turbo's guidance-free behaviour with negatives inert). **Official-via-docs** (model card recommendations — high confidence, spot-verify if load-bearing): the step/CFG *ranges* for the undistilled base and the Turbo "9 → 8 DiT forwards" detail. **Community / single-source** (flagged inline where used): VRAM thresholds for quantised builds, community fp8/GGUF requants, the **multi-stage pipeline numbers** (per-stage steps/denoise, the ×1.7/×2 upscale ladder — often from custom-finetune workflows, so tune them for stock weights), the Turbo CFG > 1 negative-prompt workaround, and the camera-vocabulary, gaze-anchor, and 8-point rotation phrasings (well-supported extrapolations, not all A/B-tested specifically on Z-Image). **Fun Union ControlNet** — model filenames, ComfyUI node names, and the `control_context_scale` guidance are community/third-party; verify filenames against the `alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union-2.1` HF repo before downloading.
-
 **Release timeline:** Z-Image-Turbo shipped 26 Nov 2025; the undistilled Z-Image base 27 Jan 2026. This is a fast-moving family — re-verify volatile specifics (quant filenames, VRAM numbers, ComfyUI template details, LoRA tooling) before relying on them.
 
 **VRAM for Z-Image (undistilled):** Tongyi-MAI has not published an inference VRAM figure. At 6B parameters in bfloat16 plus the shared encoder and VAE, budget at least 16 GB; a high-VRAM card (24 GB+) gives comfortable headroom for larger batches or resolutions.
+
+---
+
+## How to read the claims in this skill — two bars, by claim type
+
+This skill holds two kinds of claim to two different standards, because they fail in two different ways.
+
+**Hard facts — must be exact or it breaks.** Architecture (6B S3-DiT, Qwen-3 4B encoder), the Apache-2.0 licence, exact filenames, node names (`ModelSamplingAuraFlow`, `EmptySD3LatentImage`, `LoraLoaderModelOnly`, `QwenImageDiffsynthControlnet`), the CLIPLoader `lumina2` type, what a setting *numerically* does (CFG 1.0 = guidance-off = `guidance_scale=0`), the diffusers pipeline classes, the QKV / ComfyUI PR #12717 LoRA-loading fix. **Source of truth is official** — model card, ComfyUI template, ComfyUI PRs/issues, diffusers — and they're verified there. A wrong filename 404s the download; a wrong node name won't wire. These are also the **volatile** ones: filenames, VRAM figures, quant builds, tooling, template details move week to week in this young family — **re-verify before relying on them, regardless of who said it.**
+
+**Craft — what actually makes a good image.** Sampler/CFG/denoise ladders, the multi-stage ZIB→ZIT pipeline numbers and the ×1.7/×2 upscale ladder, LoRA weights by type and stacking, the realism camera/film stack, the gaze anchors, the 8-point rotation phrasings. **The authoritative source here is the community** — named workflow authors and reproducible Civitai/Reddit/Banodoco results that have run thousands of generations — *not* the model card, which ships one example image and moves on. This is the deep, battle-tested knowledge, not a lesser tier, and it's stated with confidence. Where a craft claim is given as a range or flagged "tune this," that's because **your weights, finetune, and resolution differ from the author's** — not because community sourcing is suspect. Where strong named sources genuinely disagree (exact LoRA weights; Base→Turbo transfer magnitude), the skill shows the disagreement rather than papering over it.
+
+Two contested points worth holding in your head:
+- **Turbo negatives:** Tongyi-MAI states negatives are inert at the guidance-free setting (CFG 1.0 KSampler / `guidance_scale=0`); ComfyUI users report CFG 1.2–1.5 re-introduces weak negative subtraction. The official guidance is the fact; CFG > 1 on Turbo is a community workaround, not a supported feature.
+- **LoRA cross-compat & weights:** loads-on-either-variant is a fact (shared S3-DiT); *clean transfer* and the exact per-type weights are contested craft — see `references/workflows.md §6`.
 
 ---
 
@@ -204,5 +213,5 @@ Before hitting Queue Prompt:
 | File | When to read it |
 |---|---|
 | `references/prompting-guide.md` | 6-part prompt anatomy in full detail; realism vocabulary; camera vocabulary (8-point rotation, shot sizes, high/low angle); lighting vocabulary; bilingual text rendering; common mistakes; drop-in templates |
-| `references/workflows.md` | Multi-stage ComfyUI pipelines: the minimal build, the layered ZIB+ZIT pipeline with per-stage settings, resolution table, universal node settings (ModelSamplingAuraFlow / lumina2 / EmptySD3LatentImage), character-LoRA-via-detailer method, optional layers (skin contrast, SeedVR2, tiled upscale); **§9: Fun Union ControlNet** (V2.1 files, ModelPatchLoader + QwenImageDiffsynthControlnet nodes, all conditioning types and preprocessors, Turbo-only caveat); **§10: face identity methods** (LoRA, inpaint, IP-Adapter status) |
-| `references/lora-training.md` | LoRA loading settings; dataset generation workflow; Ostris AI-Toolkit hyperparameters; training adapter requirement for Turbo; debugging identity collapse and angle failures |
+| `references/workflows.md` | Multi-stage ComfyUI pipelines: the minimal build, the layered ZIB+ZIT pipeline with per-stage settings, resolution table, universal node settings (ModelSamplingAuraFlow / lumina2 / EmptySD3LatentImage), optional layers (skin contrast, SeedVR2, tiled upscale); **§6: Using LoRAs** (node wiring + `LoraLoaderModelOnly`, the QKV/PR #12717 silent-failure gotcha, weight-by-type, rgthree stacking, ZIB↔ZIT cross-compat, "fights distillation," ecosystem, and the character-via-detailer high-likeness method); **§9: Fun Union ControlNet** (V2.1 files, ModelPatchLoader + QwenImageDiffsynthControlnet nodes, all conditioning types and preprocessors, Turbo-only caveat); **§10: face identity methods** (LoRA, inpaint, IP-Adapter status) |
+| `references/lora-training.md` | **Making** a LoRA only (loading/using is workflows.md §6): train-on-Base/generate-on-Turbo decision, dataset generation workflow, Ostris AI-Toolkit hyperparameters, Turbo training-adapter requirement, debugging identity collapse and angle failures |

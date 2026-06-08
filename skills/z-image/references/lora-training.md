@@ -1,10 +1,12 @@
 # Z-Image LoRA Training
 
-## Loading a Z-Image LoRA
+> **Using** a LoRA (loading, weights, stacking, the QKV gotcha, cross-compatibility) is in `references/workflows.md §6 — Using LoRAs`. This file is only about **making** one.
 
-- **Recommended weight:** ~0.8 (official inference example uses `adapter_weights=[0.8]`; community range 0.7–0.9)
-- **Why not 1.0:** Turbo at full strength overcooks saturation and edges and loses its speed characteristic
-- **Trigger words:** Place at the very start of the prompt
+## Which variant to train on — train on Base, generate on Turbo
+
+The community-recommended path (incl. the official Tongyi-MAI HF discussion #18) is to **train the LoRA on undistilled Z-Image Base and generate with it on Z-Image-Turbo.** Base gives the better cross-prompt control, and a Turbo-trained LoRA tends to "fight" the distillation (blurry at 8 steps, clean only at ~30 — see workflows §6). Train *on* Turbo only if you specifically want fast-delivery behavior baked in.
+
+A Base-trained LoRA still **loads** on Turbo without error (shared S3-DiT), but it doesn't transfer perfectly — face/identity softens and a strength bump may be needed. Test on the variant you'll actually deploy on. *(Best practice; transfer magnitude is contested across sources — see workflows §6.)*
 
 ---
 
@@ -25,7 +27,7 @@ Use the anchor as a reference seed — run img2img passes at low denoise to prod
 **Step 3 — Caption each image**
 Include angle + shot size explicitly in every caption so the LoRA disentangles identity from viewpoint. If the caption omits the angle, the LoRA will conflate identity with the angle it was mostly trained on.
 
-**Rule:** vary one thing at a time. If you change both clothing and lighting in the same image, the LoRA cannot disentangle which features belong to the character.
+**Rule:** vary one thing at a time. If you change both clothing and lighting in the same image, the LoRA cannot disentangle which features belong to the character. For the rotation series specifically, keep the subject description and lighting direction **byte-identical** across all eight views — change only the angle clause.
 
 ---
 
@@ -59,17 +61,10 @@ Two variants ship in the `ostris/zimage_turbo_training_adapter` HF repo (referen
 |---|---|---|
 | Blurry output, identity collapse early | LR too high or adapter missing (Turbo) | Reduce LR to 5e-5; confirm adapter is loaded; retrain from scratch |
 | Specific angles fail (especially back views) | Insufficient coverage in the training set | Add 5 more targeted images of those angles; retrain |
-| Colours over-saturated, edges over-cooked | LoRA loaded at weight 1.0 on Turbo | Drop to 0.8 at inference |
+| Colours over-saturated, edges over-cooked | LoRA inference weight too high for this LoRA | Lower the weight (try 0.5–0.8; style LoRAs often want less) — see workflows §6 |
 | Identity still generic at 2k steps | Too few images or insufficient caption specificity | Add more images; make captions more specific about identity markers |
 | Identity drifts across seeds | LR too high or rank too high | Drop to rank 8, LR 5e-5 |
 
 ---
 
-## Iteration workflow (prompting with a trained LoRA)
-
-1. Draft in Turbo (8 steps in ComfyUI / 9 in diffusers, CFG 1.0, LoRA at 0.8) to find prompt and seed.
-2. Once composition feels right, randomise seed — run 8–12 variants. Pick the strongest.
-3. Re-render the winner in Z-Image (40 steps, CFG 4.0) for the final asset. Add negative prompt here.
-4. Upscale afterward — Z-Image produces excellent structure; crisp microtexture comes from a separate upscale pass.
-
-**The key constraint for LoRA dataset consistency:** when generating the training set rotation series, keep subject description and lighting direction byte-identical across all eight views — change only the angle clause.
+Once trained, see `references/workflows.md §6 — Using LoRAs` for loading, weight tuning, and the multi-stage iteration loop (draft in Turbo → finalize in Z-Image).
