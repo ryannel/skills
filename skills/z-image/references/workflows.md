@@ -145,7 +145,7 @@ A LoRA trained **directly on Turbo** can disturb Turbo's few-step "landing traje
 
 ### Trigger words
 
-Place trigger tokens at the **very start of the prompt**. Z-Image's encoder is the Qwen-3 LLM, not a CLIP tag-matcher, so a trigger generally works best folded into natural language rather than dropped as a bare tag — but **how the LLM encoder weights trigger tokens vs. tag-based SD1.5/SDXL LoRAs is not well established** in community sources yet; follow the LoRA author's stated trigger and phrasing. *(Open question — flagged.)*
+Z-Image's encoder is the Qwen-3 LLM, not a CLIP tag-matcher, so a trigger generally works best **folded into natural-language description** rather than dropped as a bare tag. This matches what FLUX.2 trainers report for *its* LLM encoder (Mistral/Qwen3) — bare trigger words "confuse the model," and descriptive captions activate a LoRA better — so it's a consistent LLM-encoder pattern, not a Z-Image quirk. Still: follow the LoRA author's stated trigger and include it if they define one. The precise token-weighting behavior isn't formally documented for Z-Image, so treat heavy trigger-engineering as lower-yield than on tag-based SDXL. *(Cross-model community pattern; not A/B-tested on Z-Image specifically.)*
 
 ### Ecosystem (early–mid 2026)
 
@@ -208,6 +208,8 @@ Source: `alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union-2.1` on Hugging Face (of
 ### Model files
 
 All files install to `models/model_patches/` (not `models/controlnet/`).
+
+> **Verify the exact filename against the `alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union-2.1` HF repo before downloading.** These are third-party files on a fast-moving repo — the names below are a snapshot and a wrong one just 404s.
 
 **Recommended file (V2.1, 8-step optimised):**
 

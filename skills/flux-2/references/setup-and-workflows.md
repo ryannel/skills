@@ -12,7 +12,8 @@ Source tier: ComfyUI template JSONs (primary, read verbatim), Comfy-Org HF repos
 4. [ComfyUI — [klein] 9B KV template](#4-9b-kv)
 5. [ComfyUI — GGUF quants (community)](#5-gguf)
 6. [diffusers — detailed setup](#6-diffusers)
-7. [LoRA training](#7-lora)
+7. [Using LoRAs](#7-using-loras)
+8. [LoRA training](#8-lora)
 
 ---
 
@@ -238,7 +239,35 @@ pipe = Flux2Pipeline.from_pretrained(
 
 ---
 
-## 7. LoRA training
+## 7. Using LoRAs
+
+The generic path for any downloaded FLUX.2 LoRA. (Training your own is §8.)
+
+> **Sourcing:** the loader node and the frozen-encoder fact are verified (official template + AI-Toolkit configs); the weight ranges and "FLUX.2 dislikes trigger words" are community craft from named Flux LoRA trainers (apatero, RunComfy, fal.ai, bghira/SimpleTuner). FLUX.2 is new — treat the numbers as starting points.
+
+**Node wiring — model-only.** A FLUX.2 LoRA patches the **DiT transformer only**; the text encoders (Mistral 3.2 for [dev], Qwen3 for [klein]) are **frozen** in both training and inference, so there are no encoder weights to apply. Load it with **`LoraLoaderModelOnly`** on the model path:
+
+```
+(model loader) → LoraLoaderModelOnly → Flux2 sampler chain
+```
+
+If a LoRA *does* ship text-encoder weights (rare for FLUX.2), switch to the full `LoraLoader` so they apply — but model-only is the norm.
+
+**Variant-specific — a [dev] LoRA does not load on [klein], and vice-versa.** Unlike Z-Image (where Base and Turbo share one architecture), FLUX.2's variants are **different model sizes** — [dev] is 32B, [klein] is 4B or 9B — so their LoRAs are **not interchangeable**. Match the LoRA to the exact variant it was trained on. The Klein sizes matter too: **Klein 9B requires the Qwen3-8B encoder** — run it against the 4B encoder and it fails outright. Check the LoRA's stated base model before downloading.
+
+**Weight.** Start ~**0.8**, sweep **0.6–1.2**. Lower for style LoRAs that flatten texture; higher to force a stubborn concept. Read the LoRA's card for the author's tested weight. *(Community; consistent with Flux.1 conventions.)*
+
+**Trigger words — FLUX.2 mostly doesn't want them.** Because the encoder is a full LLM (Mistral/Qwen3), FLUX.2 reads **natural-language description** far better than bare trigger tokens — trainers report that trigger words "confuse the model" and that semi-long descriptive captions activate a LoRA best. If a LoRA defines a trigger, include it verbatim; otherwise just *describe* what you want in prose. This is the opposite of tag-based SDXL, where the literal trigger token is mandatory.
+
+**Stacking.** Chain `LoraLoaderModelOnly` nodes (MODEL out → MODEL in), or use the rgthree **Power Lora Loader**. Community practice runs **3–4 LoRAs** max and **lowers each strength** as you add them (e.g. a character + a style + an effect, each ~0.5–0.8) so they don't fight or over-bake. Use `strength_model` to make one dominant.
+
+**The Turbo LoRA** (`Flux_2-Turbo-LoRA_comfyui.safetensors`) is a special case — an *acceleration* LoRA that cuts [dev]/[klein] to 8 steps (guidance stays 4), toggled via `ComfySwitchNode`. It stacks with content LoRAs like a speed LoRA, not a style one.
+
+**Ecosystem (early 2026, fast-moving).** Civitai is the main LoRA source — filter by the **exact FLUX.2 variant** ([dev] vs [klein]); a Flux.1 LoRA won't load. Most are trained with the **Ostris AI-Toolkit**; BFL published an official "fine-tune [klein] in under 60 min" LoRA guide, and fal.ai / RunComfy / bghira's SimpleTuner all support FLUX.2 training. The published pool was still small and growing close to release.
+
+---
+
+## 8. LoRA training
 
 **Supported base models for training:**
 - [dev] 32B (Non-Commercial)
@@ -303,4 +332,12 @@ Civitai published an AI-Toolkit-based training recipe for [klein] at `developer.
 | Training data | 10–50 images | Concept: 10–20; style/character: 25–50 |
 | Train text encoder | No | Standard recommendation; encoder is frozen |
 
-LoRA files load in ComfyUI with `LoraLoaderModelOnly` — they apply to the UNet only, not the text encoder (Mistral/Qwen3 are frozen in inference). The SKILL.md main file documents the `LoraLoaderModelOnly` node.
+**How the knobs interact** (architecture-general): **total steps ≈ images × repeats × epochs ÷ batch**; **effective LR scales as `alpha ÷ rank`**. For FLUX's larger DiT, `alpha = rank` is the safe default and **`alpha = 2×rank` is a legitimate, commonly-used config** (the "alpha must never exceed rank" rule is an SDXL-era myth). Start LR at the low end — the big transformer fries fast.
+
+**Dataset — caption the *residual*, in natural language.** FLUX.2's encoder is an LLM (Mistral/Qwen3), so captions are **descriptive sentences, not booru tags** — and trainers report FLUX prefers prose over rare trigger tokens (it often reads a clear *description* of your concept better than a made-up word). The residual principle is unchanged: for a **character**, describe everything that is **not** the identity (pose, clothing, scene, lighting) so the identity is what's left over; for a **style**, describe the **content** across **diverse subjects** so the look becomes the residual. Vary pose/angle for characters; use varied subjects for styles. *(Caption-the-residual is architecture-general; the natural-language phrasing is the LLM-encoder specific — see also the trigger note in §7.)*
+
+**Assessing fit — judge by images, not loss.** Save **multiple checkpoints**, then generate an **XY grid of epoch × LoRA strength (0.1–1.0)** on fixed test prompts and pick the "Goldilocks" cell. **Overfit** = outputs drift toward the *training images* (rigid poses, baked backgrounds) → fewer steps / more variety / lower rank. **Underfit** = weak likeness or style won't transfer → more steps / check captions. A sweet spot **below 1.0 is normal**, not a sign of overcooking — and a modest, lower-rank, not-over-trained LoRA is the one that **stacks** cleanly with others (§7) instead of dominating the frame.
+
+> **FLUX.2 training tooling is brand-new (2026) and fast-moving.** The numbers above are community starting points — **verify rank/alpha/LR against the current Ostris AI-Toolkit FLUX.2 config examples** (and the BFL "fine-tune [klein] in 60 min" guide) before a long run. The *relationships* are stable; the *exact* FLUX.2 defaults are not yet settled.
+
+Once trained, see **§7 — Using LoRAs** for loading, weights, stacking, and the variant-compatibility rule.

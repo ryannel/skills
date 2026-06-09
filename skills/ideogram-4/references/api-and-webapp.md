@@ -1,5 +1,7 @@
 # Ideogram 4 Hosted API & Web App
 
+> **Secondary path.** The main skill is about running the **open weights** yourself (ComfyUI / diffusers / CLI). Reach for this file only for the two things the open weights can't do: **commercial use** (the weights are non-commercial) and the **web-only Character/Style Reference** features.
+
 The commercial cloud surfaces. **Output you generate here is yours and may be used commercially** (web/API Terms of Service assign output ownership to you) — unlike the non-commercial local weights. This is the path for commercial work.
 
 Confidence: the **magic-prompt endpoint** is confirmed from the open-source client code (`src/ideogram4/magic_prompt.py`). The rest of the API surface and pricing come from `developer.ideogram.ai` / `docs.ideogram.ai` / `ideogram.ai/api-pricing` fetched through a summariser — **high confidence but spot-verify against the live docs before building**, especially the presence/absence of optional params.

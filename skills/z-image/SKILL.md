@@ -163,7 +163,7 @@ Characteristic artefacts of the family and the fastest fix for each:
 | Garbled / wrong rendered text | Too many words, or curly/smart quotes | ≤10 words per text block, wrapped in straight double quotes |
 | Deformed hands, extra fingers | Common DiT weakness | Z-Image: add `extra fingers, deformed hands` negatives; Turbo: re-roll seed or describe hands positively |
 | Uncanny / contradictory look | Mixed mediums, moods, or lenses in one prompt | One medium, one mood, one lens — contradictions don't average out |
-| Negatives seem ignored (Turbo) | Guidance-free (CFG 1.0 in ComfyUI) doesn't apply negatives | Phrase constraints positively inside the prompt (the CFG > 0 workaround is in Licence & limitations) |
+| Negatives seem ignored (Turbo) | Guidance-free (CFG 1.0 in ComfyUI) doesn't apply negatives | Phrase constraints positively inside the prompt (the CFG > 1 workaround is in the Turbo-negatives note under *How to read the claims in this skill*) |
 
 ---
 
@@ -214,4 +214,4 @@ Two contested points worth holding in your head:
 |---|---|
 | `references/prompting-guide.md` | 6-part prompt anatomy in full detail; realism vocabulary; camera vocabulary (8-point rotation, shot sizes, high/low angle); lighting vocabulary; bilingual text rendering; common mistakes; drop-in templates |
 | `references/workflows.md` | Multi-stage ComfyUI pipelines: the minimal build, the layered ZIB+ZIT pipeline with per-stage settings, resolution table, universal node settings (ModelSamplingAuraFlow / lumina2 / EmptySD3LatentImage), optional layers (skin contrast, SeedVR2, tiled upscale); **§6: Using LoRAs** (node wiring + `LoraLoaderModelOnly`, the QKV/PR #12717 silent-failure gotcha, weight-by-type, rgthree stacking, ZIB↔ZIT cross-compat, "fights distillation," ecosystem, and the character-via-detailer high-likeness method); **§9: Fun Union ControlNet** (V2.1 files, ModelPatchLoader + QwenImageDiffsynthControlnet nodes, all conditioning types and preprocessors, Turbo-only caveat); **§10: face identity methods** (LoRA, inpaint, IP-Adapter status) |
-| `references/lora-training.md` | **Making** a LoRA only (loading/using is workflows.md §6): train-on-Base/generate-on-Turbo decision, dataset generation workflow, Ostris AI-Toolkit hyperparameters, Turbo training-adapter requirement, debugging identity collapse and angle failures |
+| `references/lora-training.md` | **Making** a LoRA only (loading/using is workflows.md §6): train-on-Base/generate-on-Turbo decision, dataset generation, **caption-the-residual** (character vs style datasets), Ostris AI-Toolkit hyperparameters + how rank/alpha/LR/steps interact, training a stack-friendly "good citizen," **assessing fit** (XY-grid epoch×strength eval, overfit/underfit signals, loss is a weak signal), Turbo training-adapter requirement, debugging identity collapse and angle failures |

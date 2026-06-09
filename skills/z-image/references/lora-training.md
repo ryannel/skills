@@ -27,7 +27,13 @@ Use the anchor as a reference seed — run img2img passes at low denoise to prod
 **Step 3 — Caption each image**
 Include angle + shot size explicitly in every caption so the LoRA disentangles identity from viewpoint. If the caption omits the angle, the LoRA will conflate identity with the angle it was mostly trained on.
 
+**The core captioning principle — caption the *residual*.** A LoRA learns whatever you *don't* name. So for a **character**, describe everything that is **not** the identity — the pose, clothing, background, lighting, angle — and let the rare trigger word carry the face/identity that's left over. (A bonus: anything you caption becomes *changeable* at inference. Caption the hat in the photos that have one, and you can later prompt the hat on or off.) Captions are natural-language sentences here, not booru tags — Z-Image's Qwen-3 encoder reads prose. *(Caption-the-residual is architecture-general LoRA craft; the natural-language phrasing is the Qwen-3/LLM-encoder specific.)*
+
 **Rule:** vary one thing at a time. If you change both clothing and lighting in the same image, the LoRA cannot disentangle which features belong to the character. For the rotation series specifically, keep the subject description and lighting direction **byte-identical** across all eight views — change only the angle clause.
+
+### Style LoRAs — the dataset inverts
+
+A **style** LoRA flips the residual: you want the *look* to be what's left over, so **caption the content** of each image (the subject, scene, composition) across **diverse subjects** (people, objects, landscapes — not one repeated subject), and the shared visual style becomes the residual the LoRA binds to. Style sets can run larger than character sets, and a trigger word is optional (many style LoRAs need none — see workflows §6). If you train a style on one subject only, the LoRA will entangle that subject *into* the style.
 
 ---
 
@@ -52,6 +58,29 @@ Two variants ship in the `ostris/zimage_turbo_training_adapter` HF repo (referen
 | Resolution | 1024×1024 |
 | Steps | 2000–3000 |
 | Hardware reference | RTX 5090: ~1 hour for 3k steps at these settings |
+
+**How these interact** (architecture-general mechanics):
+- **Total steps ≈ images × repeats × epochs ÷ batch.** Hold this in mind when you change dataset size — doubling the images halves the epochs for the same step count.
+- **Effective learning rate scales as `alpha ÷ rank`.** `alpha = rank` means no scaling; `alpha < rank` quietly dampens learning (alpha 8 / rank 16 ≈ half LR). Set `alpha = rank` to start; this is the principled knob, not a magic number.
+- **Train low, for a reason — make a "good citizen."** A LoRA that's lower-rank, not over-trained, and lands its sweet spot **below 1.0** stacks with other LoRAs without frying or dominating them. Over-baked high-magnitude LoRAs hijack a stack. *(The modest-delta principle is sound craft; precise "alpha must be X for stacking" prescriptions are folklore — strong sources disagree, so don't over-tune by ritual.)*
+
+> **These Z-Image numbers are a community starting point and the tooling is new** — verify rank/LR/alpha against the **current Ostris AI-Toolkit** Z-Image config examples before a long run. The *relationships* above are stable across architectures; the *exact* Z-Image defaults are fast-moving.
+
+---
+
+## Assessing fit — is the LoRA actually working?
+
+Judge a LoRA by **generated images, not the loss curve.** Loss barely moves in a way that predicts image quality; the community consensus is to evaluate visually. So **save several checkpoints** during the run (e.g. every few hundred steps) instead of only the last one.
+
+**The standard evaluation: an XY grid of saved epochs × LoRA strength.** Put the **checkpoint/epoch on one axis** and **strength 0.1 → 1.0 on the other**, generate the grid on a couple of fixed test prompts, and read off the cell that's strongest. You're hunting the "Goldilocks" epoch — enough to capture the concept, not so much it locks up.
+
+| Signal | What you see | Fix |
+|---|---|---|
+| **Good fit** | Concept reproduced *with flexibility* — you can change pose, clothing, scene, and it holds | ship that checkpoint |
+| **Overfit** | Outputs drift toward the *training images themselves* — rigid/identical poses, baked-in backgrounds, fried color; only usable at low strength | fewer steps / earlier epoch; more dataset variety; lower rank |
+| **Underfit** | Concept barely present — weak likeness, style doesn't transfer | more steps / higher LR; check captions actually bind the trigger |
+
+> **A sub-1.0 sweet spot is normal — not an overfit verdict.** Many good LoRAs (especially styles, and anything you'll stack) land best around 0.6–0.9. Needing < 1.0 is not a sign the LoRA is "overcooked"; that's a common myth. Overfit is diagnosed by the *training-image drift* above, not by the sweet-spot weight.
 
 ---
 
