@@ -13,7 +13,7 @@ Source tier: ComfyUI template JSONs (primary, read verbatim), Comfy-Org HF repos
 5. [ComfyUI — GGUF quants (community)](#5-gguf)
 6. [diffusers — detailed setup](#6-diffusers)
 7. [Using LoRAs](#7-using-loras)
-8. [LoRA training](#8-lora)
+8. [LoRA training → moved to `references/lora-training.md`](#8-lora)
 
 ---
 
@@ -267,77 +267,6 @@ If a LoRA *does* ship text-encoder weights (rare for FLUX.2), switch to the full
 
 ---
 
-## 8. LoRA training
+## 8. LoRA training → `references/lora-training.md`
 
-**Supported base models for training:**
-- [dev] 32B (Non-Commercial)
-- [klein] 4B Base (Apache 2.0 — use this for commercially-deployable LoRAs)
-- [klein] 9B Base (Non-Commercial)
-
-**Do not use distilled (4-step) variants as LoRA training bases** — the distillation removes texture diversity needed for fine-tuning. Always use the corresponding base.
-
-### AI-Toolkit (Ostris) — community, most common
-
-Supports [dev], [klein] 4B base, [klein] 9B base.
-
-```yaml
-# config.yaml example
-job: extension
-config:
-  name: my_flux2_lora
-  process:
-    - type: sd_trainer
-      training_folder: "path/to/your/images"
-      device: cuda:0
-      trigger_word: "my_concept"
-      network:
-        type: lora
-        linear: 16
-        linear_alpha: 16
-      train:
-        batch_size: 1
-        steps: 2000
-        gradient_accumulation_steps: 1
-        train_unet: true
-        train_text_encoder: false
-        content_or_style: balanced
-        learning_rate: 1e-4
-        optimizer: adamw8bit
-        lr_scheduler: cosine
-        max_grad_norm: 1.0
-      model:
-        name_or_path: "black-forest-labs/FLUX.2-dev"
-        is_flux2: true  # flag for FLUX.2 architecture (verify this flag in current AI-Toolkit)
-        quantize: true
-```
-
-Install: `pip install git+https://github.com/ostris/ai-toolkit` (check for FLUX.2 support tag). **Community-tier** — training stability and optimal hyperparameters for FLUX.2 were still being established close to the model's release. Check AI-Toolkit GitHub issues/discussions for current recommendations.
-
-### Kohya-ss / sd-scripts — community
-
-Kohya supports Flux.1 LoRA training; FLUX.2 support was pending/in-progress close to release. Verify at `github.com/kohya-ss/sd-scripts` before relying on it for FLUX.2.
-
-### Civitai AI-Toolkit recipe — community
-
-Civitai published an AI-Toolkit-based training recipe for [klein] at `developer.civitai.com/orchestration/recipes/training-flux2-klein`. It targets [klein] distilled (4-step) for inference but you should train on the base for texture diversity.
-
-**Practical training notes (community-tier):**
-
-| Parameter | Suggested range | Notes |
-|---|---|---|
-| Steps | 1500–3000 | Fewer for concepts; more for complex styles |
-| Rank (r / linear) | 16–64 | Higher rank = more capacity = larger file |
-| Learning rate | 5e-5 to 2e-4 | FLUX.2's large DiT is sensitive to LR — start at the low end |
-| Batch size | 1–4 | Higher VRAM allows higher batch; 1 with gradient accumulation is safe |
-| Training data | 10–50 images | Concept: 10–20; style/character: 25–50 |
-| Train text encoder | No | Standard recommendation; encoder is frozen |
-
-**How the knobs interact** (architecture-general): **total steps ≈ images × repeats × epochs ÷ batch**; **effective LR scales as `alpha ÷ rank`**. For FLUX's larger DiT, `alpha = rank` is the safe default and **`alpha = 2×rank` is a legitimate, commonly-used config** (the "alpha must never exceed rank" rule is an SDXL-era myth). Start LR at the low end — the big transformer fries fast.
-
-**Dataset — caption the *residual*, in natural language.** FLUX.2's encoder is an LLM (Mistral/Qwen3), so captions are **descriptive sentences, not booru tags** — and trainers report FLUX prefers prose over rare trigger tokens (it often reads a clear *description* of your concept better than a made-up word). The residual principle is unchanged: for a **character**, describe everything that is **not** the identity (pose, clothing, scene, lighting) so the identity is what's left over; for a **style**, describe the **content** across **diverse subjects** so the look becomes the residual. Vary pose/angle for characters; use varied subjects for styles. *(Caption-the-residual is architecture-general; the natural-language phrasing is the LLM-encoder specific — see also the trigger note in §7.)*
-
-**Assessing fit — judge by images, not loss.** Save **multiple checkpoints**, then generate an **XY grid of epoch × LoRA strength (0.1–1.0)** on fixed test prompts and pick the "Goldilocks" cell. **Overfit** = outputs drift toward the *training images* (rigid poses, baked backgrounds) → fewer steps / more variety / lower rank. **Underfit** = weak likeness or style won't transfer → more steps / check captions. A sweet spot **below 1.0 is normal**, not a sign of overcooking — and a modest, lower-rank, not-over-trained LoRA is the one that **stacks** cleanly with others (§7) instead of dominating the frame.
-
-> **FLUX.2 training tooling is brand-new (2026) and fast-moving.** The numbers above are community starting points — **verify rank/alpha/LR against the current Ostris AI-Toolkit FLUX.2 config examples** (and the BFL "fine-tune [klein] in 60 min" guide) before a long run. The *relationships* are stable; the *exact* FLUX.2 defaults are not yet settled.
-
-Once trained, see **§7 — Using LoRAs** for loading, weights, stacking, and the variant-compatibility rule.
+Training moved to its own file, matching the suite's layout: **`references/lora-training.md`** covers the supported training bases (train on base, never distilled; [klein] 4B Base for commercial rights), the AI-Toolkit YAML and the Civitai klein recipe (including its dim-2 floor warning), hyperparameters by target (character vs style — Herbst's 50+-run ablation), caption-the-residual in prose and the contested captionless debate, **style-LoRA specifics** (diversity maxim, color-cast lock-in, the out-of-set acceptance test), and XY-grid evaluation. The full character pipeline is **`references/characters.md`**. Once trained, **§7** above covers loading, weights, stacking, and variant compatibility.

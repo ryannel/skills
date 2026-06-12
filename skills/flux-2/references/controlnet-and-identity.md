@@ -150,10 +150,10 @@ Positive and negative conditioning pass through the apply node. The `strength` p
 
 | Method | Pros | Cons |
 |---|---|---|
-| PuLID | No training required; works from a single reference portrait at inference | Requires custom nodes + extra model files; in-progress (some features unfinished) |
-| Character LoRA | More stable; full control over training domain | Requires training (20–50 images, ~2000 steps); LoRA is subject-specific |
+| PuLID | No training required; works from a single reference portrait at inference | Requires custom nodes + extra model files; in-progress (some features unfinished); drifts at extreme angles |
+| Character LoRA | More stable; full control over training domain; carries body/outfit/mannerisms, not just the face | Requires training (20–50 images, ~2000 steps); LoRA is subject-specific |
 
-For **one-off identity** (a photo of someone you can't train on): PuLID. For **recurring character** (product persona, IP character, actor): train a LoRA.
+For **one-off identity** (a photo of someone you can't train on): PuLID. For **recurring character** (product persona, IP character, actor): train a LoRA. The PuLID weights are natively trained **klein-first** (`pulid_flux2_klein_v1/v2` in the `Fayens/Pulid-Flux2` repo) and calibration differs between base and distilled variants — a single-maintainer, fast-moving project; re-verify current weights and limits before install. **The full character playbook — choosing between multi-reference, PuLID, and the LoRA pipeline, the dataset factory, and multi-character scenes — is `references/characters.md`.**
 
 ---
 

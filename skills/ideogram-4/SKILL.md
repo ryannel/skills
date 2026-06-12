@@ -1,7 +1,7 @@
 ---
 name: ideogram-4
 description: >
-  Authoritative guide for running Ideogram 4.0 (Ideogram, Inc.) — Ideogram's first open-weight text-to-image model — yourself, on your own GPU or a rented cloud GPU (RunPod, Vast.ai), via ComfyUI, the diffusers Ideogram4Pipeline, or the run_inference.py CLI. Use this whenever the user touches Ideogram 4 in any way, even obliquely: understanding the licence split (non-commercial open weights, Apache code → route any commercial work through the hosted API/web app) and which surface a task actually needs, writing or fixing prompts (the model is trained exclusively on structured JSON captions — schema, key ordering, the CaptionVerifier, plain-text vs JSON, Magic Prompt expansion), text rendering and typography (its headline strength — multi-line stacking, multilingual, editable text layers, transparency), bounding-box layout and hex color-palette control, getting photoreal results (the Ideogram way — neutral white balance, kill the "warm"/amber look), choosing rendering speed / sampler preset (Quality 48 / Default 20 / Turbo 12) and resolution, setting up the open weights (nf4/fp8 quant, VRAM, gating, ComfyUI nodes and file layout, the diffusers Ideogram4Pipeline, the run_inference.py CLI), or — only when commercial use or the web-only Character/Style Reference features require it — routing through the hosted API/web app (endpoints, params, pricing), and debugging the safety filter, verifier errors, and layout failures.
+  Authoritative guide for running Ideogram 4.0 (Ideogram, Inc.) — Ideogram's first open-weight text-to-image model — yourself, on your own GPU or a rented cloud GPU (RunPod, Vast.ai), via ComfyUI, the diffusers Ideogram4Pipeline, or the run_inference.py CLI. Use this whenever the user touches Ideogram 4 in any way, even obliquely: understanding the licence split (non-commercial open weights, Apache code → route any commercial work through the hosted API/web app) and which surface a task actually needs, writing or fixing prompts (the model is trained exclusively on structured JSON captions — schema, key ordering, the CaptionVerifier, plain-text vs JSON, Magic Prompt expansion), text rendering and typography (its headline strength — multi-line stacking, multilingual, editable text layers, transparency), bounding-box layout and hex color-palette control, getting photoreal results (the Ideogram way — neutral white balance, kill the "warm"/amber look), choosing rendering speed / sampler preset (Quality 48 / Default 20 / Turbo 12) and resolution, setting up the open weights (nf4/fp8 quant, VRAM, gating, ComfyUI nodes and file layout, the diffusers Ideogram4Pipeline, the run_inference.py CLI), or — only when commercial use or the web-only Character/Style Reference features require it — routing through the hosted API/web app (endpoints, params, pricing), and debugging the safety filter, verifier errors, and layout failures. Also use it to learn what Ideogram 4 is the wrong tool for (consistent characters and LoRAs on open weights — it routes you to the right model) and how it slots into mixed-model pipelines as the typography/design pass for imagery generated elsewhere.
 ---
 
 # Ideogram 4
@@ -138,6 +138,8 @@ Ideogram 4 leads open models on in-image text (official: 0.97 X-Omni English OCR
 - **Multilingual:** English + CJK/Cyrillic/etc. render well; keep prose fields in English and put only the literal characters in `text`, stored as literal UTF-8 (`ensure_ascii=False`).
 - **Editable text layers & native transparency** are first-class v4 features — the web app can "layerize" text and output transparent PNGs; for a cutout, set `background` to exactly `"transparent background"`.
 
+**The typography pass in mixed-model pipelines.** Because typography is Ideogram 4's headline strength and other models' weakness, its natural role in a multi-model workflow is the **text/design stage**: generate the poster/label/signage layer here (using `bbox` layout and `text` elements, or as a transparent-background plate), then composite or inpaint it into imagery produced by another model — or inversely, mask the text region of an Ideogram render and restyle everything else in SDXL/Flux. Handoffs are always pixel-space (export PNG, re-encode in the other model's VAE). This pattern is practiced but has **no canonical named workflow yet — inferred craft, flagged as such**; the general cross-model rules live in the **`image-production-workflows`** skill.
+
 ---
 
 ## Setup & ecosystem
@@ -145,6 +147,8 @@ Ideogram 4 leads open models on in-image text (official: 0.97 X-Omni English OCR
 - **Web app / API:** nothing to install. API auth header is `Api-Key`; the core call is `POST /v1/ideogram-v4/generate` with `text_prompt` *or* `json_prompt`. Endpoints, params, pricing, and web-app editing tools: **`references/api-and-webapp.md`**.
 
 **Pose control and face identity (open weights):** ControlNet, PuLID, and IP-Adapter face do not exist for Ideogram 4 — none have been released by Ideogram or any community team as of June 2026. The model's 34-layer single-stream DiT architecture is structurally incompatible with existing ControlNet or IP-Adapter implementations. For structural control on open weights, the only available mechanism is the **bounding-box `bbox` layout** inside the JSON caption (constrains *where* elements appear in the frame, not skeleton or depth input). **Character Reference** (face identity) and **Style Reference** are available in the **web app and v3 API only** — not the v4 API and not the open-weight release. Details: **`references/api-and-webapp.md` §6**.
+
+**Consistent characters: route elsewhere — this is not Ideogram 4's job on open weights.** With no identity adapters, no LoRA ecosystem, and no edit variant, there is no self-hosted character path here, and pretending otherwise wastes hours. Three honest routes: (1) hosted **Character Reference** in the web app (commercial-clean, face identity from one image); (2) build the character in **`flux-2`** (multi-reference + PuLID + LoRA) or **`z-image`** (character LoRA + FaceDetailer) and use Ideogram only for what it's best at; (3) the hybrid — render the character scene in another model, then bring it to Ideogram for the **typography pass** (below).
 - **Self-hosted open weights (gating):** gated on Hugging Face — accept the licence and authenticate (`hf auth login` / `HF_TOKEN`) or downloads 404. Two quants: **`nf4`** (bitsandbytes 4-bit, **CUDA-only**, diffusers-compatible, fits a 24 GB GPU) and **`fp8`** (weight-only float8, **any hardware**, activations stay bf16). diffusers exposes **`Ideogram4Pipeline`**; the repo ships a `run_inference.py` CLI. The diffusers/CLI quick start, sampler presets, and VRAM notes are in **`references/self-hosting.md`**.
   - **You don't need local hardware.** ComfyUI / diffusers / the CLI all run the same on a **rented cloud GPU** — RunPod, Vast.ai, etc. — which is the usual way to get a 24 GB+ (or H100) box for the larger quants and 2K renders. The non-commercial licence is unchanged by renting (it's about *purpose*, not place).
 
@@ -203,6 +207,19 @@ Before generating:
 9. Photoreal: neutral grade, no "warm", no DSLR-bokeh markers?
 10. Right surface for the job — commercial output via web app/API, **not** the non-commercial self-hosted weights (RunPod/cloud doesn't change that)?
 11. Serialized with `separators=(",",":")` and `ensure_ascii=False`?
+
+---
+
+## Where Ideogram 4 sits in the suite
+
+| Job | Ideogram 4 | Reach for instead |
+|---|---|---|
+| In-image typography, layout, design | **The leader** — JSON captions, `bbox` layout, text layers, transparency | — (this is why you're here) |
+| Consistent characters | **Not on open weights** — no adapters, no LoRA ecosystem, no edit variant | `flux-2` (multi-ref + PuLID), `z-image` or `sdxl` (character LoRA); or hosted Character Reference |
+| Style / character LoRAs | No ecosystem yet (Ostris PoC only) | `sdxl` (mature) or `z-image`/`flux-2` |
+| Photoreal faces & skin | Relative weak spot | `z-image` (realism stacking) or an `sdxl` photoreal finetune |
+| Structural control (pose/depth) | `bbox` layout only | `sdxl` or the Fun Union ControlNets (`flux-2`, `z-image`) |
+| Mixed-model pipelines | **The typography pass** — text plates and design layers for other models' imagery | `image-production-workflows` for the cross-model craft |
 
 ---
 

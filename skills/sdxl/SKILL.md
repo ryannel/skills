@@ -1,7 +1,7 @@
 ---
 name: sdxl
 description: >
-  Authoritative guide for Stable Diffusion XL (SDXL 1.0, Stability AI) and its ecosystem — base + refiner, the distilled fast variants (Turbo, Lightning, LCM, Hyper-SDXL), and the community finetunes (Juggernaut, RealVisXL, DreamShaper, Pony, Illustrious/NoobAI) — in ComfyUI or the diffusers API. Use this whenever the user touches SDXL in any way, even obliquely: choosing a checkpoint or fast variant (base vs Turbo vs Lightning vs LCM vs Hyper, or which photoreal/anime finetune), installing or setting it up in ComfyUI (single-checkpoint loader, the fp16-fix VAE, file layout, base+refiner ensemble graph), writing or fixing prompts (SDXL is a dual-CLIP 77-token model — weighted comma-separated keyword phrases, not LLM sentences and not generic "masterpiece 8k"; matching the prompt dialect to the checkpoint; the text_g/text_l split; negative prompts and CFG), getting photoreal results (use a photoreal finetune, then stack camera body + film stock + lens + lighting vocabulary), choosing steps/CFG/sampler/scheduler/resolution per variant, running ControlNet / IP-Adapter / LoRA, training a LoRA (kohya_ss / OneTrainer), or debugging artefacts (fried colours, cut-off heads, plastic skin, mangled hands, unreadable text). It also covers the licence picture (OpenRAIL++-M is commercially clean; Turbo's licence is contested).
+  Authoritative guide for Stable Diffusion XL (SDXL 1.0, Stability AI) and its ecosystem — base + refiner, the distilled fast variants (Turbo, Lightning, LCM, Hyper-SDXL), and the community finetunes (Juggernaut, RealVisXL, DreamShaper, Pony, Illustrious/NoobAI) — in ComfyUI or the diffusers API. Use this whenever the user touches SDXL in any way, even obliquely: choosing a checkpoint or fast variant (base vs Turbo vs Lightning vs LCM vs Hyper, or which photoreal/anime finetune), installing or setting it up in ComfyUI (single-checkpoint loader, the fp16-fix VAE, file layout, base+refiner ensemble graph), writing or fixing prompts (SDXL is a dual-CLIP 77-token model — weighted comma-separated keyword phrases, not LLM sentences and not generic "masterpiece 8k"; matching the prompt dialect to the checkpoint; the text_g/text_l split; negative prompts and CFG), getting photoreal results (use a photoreal finetune, then stack camera body + film stock + lens + lighting vocabulary), choosing steps/CFG/sampler/scheduler/resolution per variant, running ControlNet / IP-Adapter / LoRA, training a LoRA (kohya_ss / OneTrainer) including style LoRAs (the Illustrious recipe, dataset diversity, XY-grid evaluation), creating a consistent character (InstantID vs IP-Adapter FaceID vs HyperLoRA vs a trained character LoRA, the detailer LoRA swap, ADetailer [SEP] multi-character routing, block-weighted LoRA to stop style bleed), building multi-stage production pipelines (hires-fix, tiled upscale, detailers) or using SDXL as the controllable front-end / texture back-end in mixed-model workflows, or debugging artefacts (fried colours, cut-off heads, plastic skin, mangled hands, unreadable text). It also covers the licence picture (OpenRAIL++-M is commercially clean; Turbo's licence is contested).
 ---
 
 # Stable Diffusion XL (SDXL)
@@ -50,7 +50,7 @@ Base SDXL 1.0 is a strong *foundation* but looks undertrained/plasticky next to 
 
 ## The one rule that changes everything
 
-SDXL is conditioned by CLIP, which matches **tokens and short phrases**, not syntax. So **write a weighted, comma-separated list of keyword phrases — front-loaded, within ~77 tokens — and match the dialect to your checkpoint.** This is the opposite of the LLM-encoder models: don't write a flowing sentence (CLIP can't parse clause structure the way LLM-encoder models do), and don't lean on a generic `masterpiece, best quality, 8k` booster block (near-useless on SDXL — earn quality with concrete photographic terms instead).
+SDXL is conditioned by CLIP, which matches **tokens and short phrases**, not syntax. So **write a weighted, comma-separated list of keyword phrases — front-loaded, within ~77 tokens — and match the dialect to your checkpoint.** This is the opposite of the LLM-encoder models: don't write a flowing sentence (CLIP can't parse clause structure the way LLM-encoder models do), and don't lean on a generic `masterpiece, best quality, 8k` booster block (near-useless on SDXL — earn quality with concrete photographic terms instead). The encoder class also flips the LoRA rules: SDXL triggers are **verbatim rare tokens** (CLIP tag-matching) and training captions are tags — where Flux/Z-Image fold triggers into prose or omit them. Dialect, triggers, and captions all follow the encoder, not folklore.
 
 | Don't (LLM-style) | Don't (empty booster) | Do (SDXL keyword phrases) |
 |---|---|---|
@@ -130,6 +130,26 @@ SDXL's strengths are **ecosystem depth (LoRAs, ControlNet, IP-Adapter), speed, l
 
 ---
 
+## Production pipelines & mixing models
+
+For production output, SDXL runs the **full multi-stage ladder** — it's the family with the most rungs worth climbing:
+
+1. **Base gen** in a 1024-area bucket (finetune + optional speed LoRA). Judge composition only; reroll freely.
+2. **Hires second pass** — latent ×1.5 at denoise 0.3–0.5, or pixel-space upscale + re-sample at 0.25–0.35.
+3. **Detailers** — FaceDetailer/ADetailer at denoise ~0.4; swap the character LoRA in *here* (`references/characters.md §3`).
+4. **Tiled upscale** — `UltimateSDUpscale` with a 4× ESRGAN model, denoise 0.2–0.35, simpler prompt than the base gen.
+5. **Finish** — ColorMatch against the pre-upscale image; optional SeedVR2-class restorer.
+
+Per-stage settings: `references/setup-and-workflows.md §6`.
+
+**SDXL's role in mixed-model pipelines** is defined by its ecosystem: it has the control tooling the DiT models lack, and they have the rendering quality it lacks. Two named, mainstream patterns *(community — Civitai workflow authors)*:
+- **Controllable front-end:** compose with SDXL's ControlNet/IP-Adapter/regional stack → decode to pixels → refine in Z-Image-Turbo or Flux.2 Klein img2img at denoise ~0.25–0.4 for natural rendering and cleaner anatomy.
+- **Texture back-end:** generate in a DiT model → img2img through a photoreal SDXL finetune (RealVis-class) at ~0.3–0.55 to add its skin/texture character.
+
+The handoff rule between families: **always VAE-decode to pixels first** — SDXL's latent space is incompatible with Flux/Z-Image latents. The full cross-model craft (denoise bands, resolution matching, color management, workflows-as-code) is the **`image-production-workflows`** skill.
+
+---
+
 ## Failure modes & QC
 
 | Symptom | Cause | Fix |
@@ -162,6 +182,19 @@ Before hitting Queue Prompt:
 8. Negative prompt present **only where it works** (base/finetune at CFG > 1), inert on distilled?
 9. fp16 decode → `sdxl-vae-fp16-fix` loaded (no black images)?
 10. Not asking SDXL to render in-image text?
+
+---
+
+## Where SDXL sits in the suite
+
+| Job | SDXL | Reach for instead |
+|---|---|---|
+| Consistent characters | **Deepest toolbox** — InstantID/HyperLoRA adapters, mature LoRA training, `[SEP]` routing, block-weight control (`references/characters.md`) | `flux-2` for native multi-reference editing |
+| Style LoRAs | **The mature ecosystem** — years of recipes, two trainers, separate Pony/Illustrious pools (`references/lora-training.md`) | a DiT model when the style needs prompt comprehension SDXL lacks |
+| Structural control | **The most complete stack** — union ControlNet, IP-Adapter, regional prompting | — (this is SDXL's edge) |
+| In-image typography | Basically can't | `ideogram-4` |
+| Compositional / long prompts | 77-token CLIP ceiling | `flux-2` or `z-image` (LLM encoders) |
+| Mixed-model pipelines | **Front-end (control) and back-end (texture)** roles | `image-production-workflows` for the cross-model craft |
 
 ---
 
@@ -203,4 +236,6 @@ This skill holds two kinds of claim to two different standards, because they fai
 |---|---|
 | `references/prompting-guide.md` | Full prompt anatomy; the complete photoreal vocabulary (style tags, camera bodies, film stocks, lenses, lighting, photographer names, filters); weighting and 77-token/BREAK economy; the dual-encoder text_g/text_l split; negative-prompt guidance (variant-aware); the Pony score-tag and Illustrious booru dialects; worked SDXL-calibrated example prompts |
 | `references/setup-and-workflows.md` | ComfyUI graphs in full (base, base+refiner ensemble, Turbo, Lightning, LCM, Hyper); every stock node setting; the fp16-fix VAE wiring; diffusers code (t2i, img2img, inpaint, the ensemble); hires-fix and tiled upscale; ControlNet and IP-Adapter setup; quantisation/VRAM |
-| `references/checkpoints-and-loras.md` | The finetune ecosystem in depth (Juggernaut, RealVisXL, DreamShaper, Pony V6, Illustrious/NoobAI) with dialects and licence notes; the separate Pony/Illustrious LoRA pools; **§4 Using LoRAs** (loading any LoRA — the full `LoraLoader` patches UNet + both CLIP encoders, `strength_model`/`strength_clip`, dialect-pool matching, weight-by-type, triggers, stacking); the fast-variant speed LoRAs; LoRA training with kohya_ss / OneTrainer; ControlNet and IP-Adapter model catalog |
+| `references/checkpoints-and-loras.md` | The finetune ecosystem in depth (Juggernaut, RealVisXL, DreamShaper, Pony V6, Illustrious/NoobAI) with dialects and licence notes; the separate Pony/Illustrious LoRA pools; **§4 Using LoRAs** (loading any LoRA — the full `LoraLoader` patches UNet + both CLIP encoders, `strength_model`/`strength_clip`, dialect-pool matching, weight-by-type, triggers, stacking); the fast-variant speed LoRAs; ControlNet and IP-Adapter model catalog |
+| `references/lora-training.md` | **Making** a LoRA (using is checkpoints-and-loras §4): kohya_ss/OneTrainer, the convergent recipes and rank-by-type ladder, Prodigy, caption-the-residual in the target dialect, **style-LoRA specifics** (the Illustrious recipe, the diversity maxim, color-cast lock-in, the out-of-set acceptance test), LoKr, good-citizen training, XY-grid evaluation |
+| `references/characters.md` | Creating a **consistent character**: the identity-tool decision table (InstantID vs FaceID vs HyperLoRA vs ReActor vs character LoRA), the character LoRA pipeline (edit-model dataset factory, 8-point rotation in keyword dialect), the detailer LoRA swap, **`[SEP]` multi-character routing**, the **block-weight style-bleed fix** (SDXL-unique), multi-outfit LoRAs, failure modes |

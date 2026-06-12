@@ -1,7 +1,7 @@
 ---
 name: z-image
 description: >
-  Authoritative guide for the Z-Image model family (Z-Image and Z-Image-Turbo, Alibaba Tongyi Lab) in ComfyUI or the diffusers API. Use this whenever the user touches Z-Image in any way, even obliquely: choosing between Z-Image and Turbo (or weighing Z-Image against other models), installing or setting it up in ComfyUI (file layout, loaders, quantisation, ControlNet), writing or fixing prompts (the Qwen-3 LLM encoder needs sentences not tags; realism, killing plastic/waxy stock-photo skin, bilingual text rendering, high/low-angle gaze control), pose control and structural conditioning (Fun Union ControlNet — Pose, Depth, Canny, HED, Scribble; ModelPatchLoader + QwenImageDiffsynthControlnet nodes; Turbo-only; V2.1 model files), face identity (no PuLID for Z-Image — character LoRA via FaceDetailer is the standard approach), building single- or multi-stage workflows (hires refine, tiled upscale, face detailer, img2img/inpaint) with practical sampler/CFG/denoise/resolution/step settings, using LoRAs (loading any downloaded style/realism/character LoRA with the right node, weight-by-type tuning, stacking with rgthree, the diffusers-format QKV silent-failure gotcha, Base↔Turbo cross-compatibility), or generating a dataset and training a LoRA with the Ostris AI-Toolkit.
+  Authoritative guide for the Z-Image model family (Z-Image and Z-Image-Turbo, Alibaba Tongyi Lab) in ComfyUI or the diffusers API. Use this whenever the user touches Z-Image in any way, even obliquely: choosing between Z-Image and Turbo (or weighing Z-Image against other models), installing or setting it up in ComfyUI (file layout, loaders, quantisation, ControlNet), writing or fixing prompts (the Qwen-3 LLM encoder needs sentences not tags; realism, killing plastic/waxy stock-photo skin, bilingual text rendering, high/low-angle gaze control), pose control and structural conditioning (Fun Union ControlNet — Pose, Depth, Canny, HED, Scribble; ModelPatchLoader + QwenImageDiffsynthControlnet nodes; Turbo-only; V2.1 model files), face identity (no PuLID for Z-Image — character LoRA via FaceDetailer is the standard approach), building single- or multi-stage workflows (hires refine, tiled upscale, face detailer, img2img/inpaint) with practical sampler/CFG/denoise/resolution/step settings, using LoRAs (loading any downloaded style/realism/character LoRA with the right node, weight-by-type tuning, stacking with rgthree, the diffusers-format QKV silent-failure gotcha, Base↔Turbo cross-compatibility), generating a dataset and training a LoRA with the Ostris AI-Toolkit, creating a consistent original character (anchor image → edit-model dataset factory → character LoRA → FaceDetailer deployment; multi-outfit and multi-character limits), training a style LoRA (diverse-subject datasets, prose captions, XY-grid evaluation), or using Z-Image-Turbo as the realism refiner in a mixed-model pipeline (e.g. refining SDXL renders).
 ---
 
 # Z-Image Family
@@ -49,13 +49,13 @@ The text encoder and VAE are common to every variant — download once. Official
 
 **ControlNet (pose, depth, canny, and more).** The official Fun Union ControlNet for Z-Image **Turbo** is from Alibaba PAI. A single Union model file handles all conditioning types. File: `Z-Image-Turbo-Fun-Controlnet-Union-2.1-8steps.safetensors` (6.71 GB) or the lite variant (2.02 GB) → `models/model_patches/`. ComfyUI nodes are both built-in core: `ModelPatchLoader` (loads the patch) + `QwenImageDiffsynthControlnet` (applies it). Pose uses `DWPreprocessor` (DWPose). **Turbo only** — base Z-Image ControlNet has no ComfyUI support yet. Full file table, all V2.1 variants, node wiring, and per-type preprocessors: **`references/workflows.md §9`**.
 
-**Face identity.** No PuLID or IP-Adapter face model exists for Z-Image. The standard approach is a **character LoRA loaded at the FaceDetailer stage** (references/workflows.md §6). Full comparison of available methods: **`references/workflows.md §10`**.
+**Face identity & characters.** No PuLID or IP-Adapter face model exists for Z-Image — the character LoRA *is* the path, loaded at the FaceDetailer stage (references/workflows.md §6). The full character pipeline — anchor image, the Qwen-Image-Edit dataset factory, rotation/expression coverage, multi-outfit and multi-character craft, failure modes — is **`references/characters.md`**; method comparison in `references/workflows.md §10`.
 
 ---
 
 ## The one rule that changes everything
 
-Qwen 3 4B is an LLM-grade encoder — it parses syntax and clause structure. Write a **sentence**, not a tag list.
+Qwen 3 4B is an LLM-grade encoder — it parses syntax and clause structure. Write a **sentence**, not a tag list. (This is the encoder class, not folklore: the same rule governs FLUX.2's Mistral/Qwen3 encoders, and the *opposite* rule — weighted tags, verbatim trigger tokens — governs CLIP models like SDXL. Prompting dialect, LoRA trigger handling, and caption style all follow the encoder.)
 
 | Don't | Do |
 |---|---|
@@ -184,6 +184,20 @@ Before hitting Queue Prompt:
 
 ---
 
+## Where Z-Image sits in the suite
+
+Choose the model for the job — defaults like realism direction and prompting dialect are model-specific, not universal:
+
+| Job | Z-Image | Reach for instead |
+|---|---|---|
+| Consistent characters | Strong via character LoRA + FaceDetailer (`references/characters.md`); no adapter shortcut | `flux-2` for no-training multi-reference identity (ReferenceLatent, PuLID) |
+| Style LoRAs | Fully supported (AI-Toolkit; `references/lora-training.md`) | `sdxl` for the deepest trained-LoRA ecosystem and mature recipes |
+| In-image typography | Workable for short bilingual text | `ideogram-4` — the open-weights typography leader |
+| Structural control (pose/depth/canny) | Fun Union ControlNet, **Turbo only** | `sdxl` for the most mature, complete control stack |
+| Mixed-model pipelines | **The realism refiner** — ZIT finishing other models' renders (`references/workflows.md §11`) | `image-production-workflows` for the cross-model craft itself |
+
+---
+
 ## Licence and known limitations
 
 **Licence:** Apache-2.0 for all currently released variants (Z-Image and Z-Image-Turbo). Z-Image-Edit and Z-Image-Omni-Base are still unreleased as of mid-2026 (both marked "to be released" on the official GitHub); verify their licences before use when they land.
@@ -213,5 +227,6 @@ Two contested points worth holding in your head:
 | File | When to read it |
 |---|---|
 | `references/prompting-guide.md` | 6-part prompt anatomy in full detail; realism vocabulary; camera vocabulary (8-point rotation, shot sizes, high/low angle); lighting vocabulary; bilingual text rendering; common mistakes; drop-in templates |
-| `references/workflows.md` | Multi-stage ComfyUI pipelines: the minimal build, the layered ZIB+ZIT pipeline with per-stage settings, resolution table, universal node settings (ModelSamplingAuraFlow / lumina2 / EmptySD3LatentImage), optional layers (skin contrast, SeedVR2, tiled upscale); **§6: Using LoRAs** (node wiring + `LoraLoaderModelOnly`, the QKV/PR #12717 silent-failure gotcha, weight-by-type, rgthree stacking, ZIB↔ZIT cross-compat, "fights distillation," ecosystem, and the character-via-detailer high-likeness method); **§9: Fun Union ControlNet** (V2.1 files, ModelPatchLoader + QwenImageDiffsynthControlnet nodes, all conditioning types and preprocessors, Turbo-only caveat); **§10: face identity methods** (LoRA, inpaint, IP-Adapter status) |
-| `references/lora-training.md` | **Making** a LoRA only (loading/using is workflows.md §6): train-on-Base/generate-on-Turbo decision, dataset generation, **caption-the-residual** (character vs style datasets), Ostris AI-Toolkit hyperparameters + how rank/alpha/LR/steps interact, training a stack-friendly "good citizen," **assessing fit** (XY-grid epoch×strength eval, overfit/underfit signals, loss is a weak signal), Turbo training-adapter requirement, debugging identity collapse and angle failures |
+| `references/workflows.md` | Multi-stage ComfyUI pipelines: the minimal build, the layered ZIB+ZIT pipeline with per-stage settings, resolution table, universal node settings (ModelSamplingAuraFlow / lumina2 / EmptySD3LatentImage), optional layers (skin contrast, SeedVR2, tiled upscale); **§6: Using LoRAs** (node wiring + `LoraLoaderModelOnly`, the QKV/PR #12717 silent-failure gotcha, weight-by-type, rgthree stacking, ZIB↔ZIT cross-compat, "fights distillation," ecosystem, and the character-via-detailer high-likeness method); **§9: Fun Union ControlNet** (V2.1 files, ModelPatchLoader + QwenImageDiffsynthControlnet nodes, all conditioning types and preprocessors, Turbo-only caveat); **§10: face identity methods** (LoRA, inpaint, IP-Adapter status); **§11: Z-Image in mixed-model pipelines** (the ZIT-as-refiner role, decode-to-pixels handoff rule, refine denoise bands) |
+| `references/lora-training.md` | **Making** a LoRA only (loading/using is workflows.md §6): train-on-Base/generate-on-Turbo decision, dataset generation, **caption-the-residual** (character vs style datasets), **style-LoRA craft** (diverse-subject rule, prose captions, color-cast lock-in, the out-of-set acceptance test, rank-by-type), Ostris AI-Toolkit hyperparameters + how rank/alpha/LR/steps interact, the de-turbo alternative, training a stack-friendly "good citizen," **assessing fit** (XY-grid epoch×strength eval, overfit/underfit signals, loss is a weak signal), Turbo training-adapter requirement, debugging identity collapse and angle failures |
+| `references/characters.md` | Creating a **consistent original character** end-to-end: the two paths (edit-model engine vs LoRA pipeline) and how they chain, the anchor image, the **Qwen-Image-Edit dataset factory** (generate ~60 → curate ~30), rotation/elevation/expression coverage, the detailer-deploy step, **multi-outfit LoRAs** (~6-outfit ceiling), **multi-character scenes** (per-face detailer passes — no regional tooling exists), character failure modes (angle collapse, same-face overfit, expression lock-in, style bleed) |

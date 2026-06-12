@@ -12,6 +12,8 @@ A Base-trained LoRA still **loads** on Turbo without error (shared S3-DiT), but 
 
 ## Dataset generation workflow
 
+> The full character orchestration — the edit-model dataset factory (Qwen-Image-Edit), the coverage checklist, multi-outfit and multi-character craft, and character failure modes — is in **`references/characters.md`**. This section is the minimal in-model pattern.
+
 The proven pattern for a new character LoRA:
 
 **Step 1 — Anchor portrait**
@@ -33,7 +35,17 @@ Include angle + shot size explicitly in every caption so the LoRA disentangles i
 
 ### Style LoRAs — the dataset inverts
 
-A **style** LoRA flips the residual: you want the *look* to be what's left over, so **caption the content** of each image (the subject, scene, composition) across **diverse subjects** (people, objects, landscapes — not one repeated subject), and the shared visual style becomes the residual the LoRA binds to. Style sets can run larger than character sets, and a trigger word is optional (many style LoRAs need none — see workflows §6). If you train a style on one subject only, the LoRA will entangle that subject *into* the style.
+A **style** LoRA flips the residual: you want the *look* to be what's left over, so **caption the content** of each image (the subject, scene, composition) across **diverse subjects** (people, objects, landscapes — not one repeated subject), and the shared visual style becomes the residual the LoRA binds to. The governing maxim: **consistency in the thing you're training, diversity in everything else.** If you train a style on one subject only, the LoRA entangles that subject *into* the style; if every image shares one palette, the LoRA locks that color cast onto everything.
+
+Style-specific dataset rules *(community, convergent — neurocanvas Z-Image guide; alvdansen's published style-training notes; Civitai style guides)*:
+- **Size: 15–40 images** for Z-Image, diminishing returns above ~50. A well-curated 30 beats a sloppy 200 — the legacy "style needs 300+" figure is SDXL-era folklore; stronger bases need fewer examples.
+- **Captions: short natural-language scene descriptions that never mention the style itself** — caption-the-residual expressed in prose. (On Flux-class models a captionless variant is genuinely contested — see the flux-2 skill; for Z-Image the prose-residual approach is the documented community path.)
+- **Trigger word: optional, often omitted.** If you use one, fold it into the sentence ("an illustration in the style of TRIGGER") — a bare leading token has no stable meaning to an LLM encoder.
+- **Watch the palette**: include the style's full tonal range, and keep B&W images out of a color style set — narrow color statistics are what cause color-cast lock-in.
+- **Capacity:** styles typically want **more rank than characters** — start rank 16, go 32 for texture-heavy styles (64 appears in realism work). Direction is agreed across sources; the exact ceiling is contested *(flagged)*.
+- **Ethics flag:** a single living artist's style trained without consent is the community's sharpest fault line (Civitai requires disclosure). Prefer self-made, licensed, or historic/aggregate aesthetics.
+
+**The style acceptance test:** the LoRA passes when the style is recognizable on subjects that are *not* in the training set. During training, point the trainer's sample prompts at out-of-set subjects, and include at least one sample prompt *without* the trigger to catch style leakage early.
 
 ---
 
@@ -48,6 +60,8 @@ Two variants ship in the `ostris/zimage_turbo_training_adapter` HF repo (referen
 - `zimage_turbo_training_adapter_v2.safetensors` — experimental; often better for character work
 
 > Z-Image (undistilled) does not require the training adapter.
+>
+> An alternative "de-turbo" route exists: train on Turbo *without* the adapter and accept that the LoRA undoes some distillation — then **infer at 20–30 steps, CFG 2–3** instead of the 8-step preset. Valid when you don't care about Turbo's speed; otherwise use the adapter. *(Community — neurocanvas, Tongyi-MAI issue #64.)* Tooling beyond AI-Toolkit: `tdrussell/diffusion-pipe` also supports Z-Image (ComfyUI-format output; it documents the model's **shift = 3** timestep setting, matching the `ModelSamplingAuraFlow` value at inference).
 
 ### Recommended hyperparameters (character LoRA, 15–25 images at 1024×1024)
 
@@ -61,7 +75,7 @@ Two variants ship in the `ostris/zimage_turbo_training_adapter` HF repo (referen
 
 **How these interact** (architecture-general mechanics):
 - **Total steps ≈ images × repeats × epochs ÷ batch.** Hold this in mind when you change dataset size — doubling the images halves the epochs for the same step count.
-- **Effective learning rate scales as `alpha ÷ rank`.** `alpha = rank` means no scaling; `alpha < rank` quietly dampens learning (alpha 8 / rank 16 ≈ half LR). Set `alpha = rank` to start; this is the principled knob, not a magic number.
+- **Effective learning rate scales as `alpha ÷ rank`.** `alpha = rank` means no scaling; `alpha < rank` quietly dampens learning (alpha 8 / rank 16 ≈ half LR). Set `alpha = rank` to start; this is the principled knob, not a magic number. And the old "alpha above rank burns the image" rule is a myth — `alpha = 2×rank` is a legitimate, commonly-used config; it just doubles the effective LR, so compensate there.
 - **Train low, for a reason — make a "good citizen."** A LoRA that's lower-rank, not over-trained, and lands its sweet spot **below 1.0** stacks with other LoRAs without frying or dominating them. Over-baked high-magnitude LoRAs hijack a stack. *(The modest-delta principle is sound craft; precise "alpha must be X for stacking" prescriptions are folklore — strong sources disagree, so don't over-tune by ritual.)*
 
 > **These Z-Image numbers are a community starting point and the tooling is new** — verify rank/LR/alpha against the **current Ostris AI-Toolkit** Z-Image config examples before a long run. The *relationships* above are stable across architectures; the *exact* Z-Image defaults are fast-moving.
@@ -77,7 +91,7 @@ Judge a LoRA by **generated images, not the loss curve.** Loss barely moves in a
 | Signal | What you see | Fix |
 |---|---|---|
 | **Good fit** | Concept reproduced *with flexibility* — you can change pose, clothing, scene, and it holds | ship that checkpoint |
-| **Overfit** | Outputs drift toward the *training images themselves* — rigid/identical poses, baked-in backgrounds, fried color; only usable at low strength | fewer steps / earlier epoch; more dataset variety; lower rank |
+| **Overfit** | Outputs drift toward the *training images themselves* — rigid/identical poses, baked-in backgrounds, fried color; only usable at low strength. Style-specific tells: composition memorization (training layouts reproduced regardless of prompt), training subjects appearing unprompted, every output taking the dataset's average palette | fewer steps / earlier epoch; more dataset variety; lower rank |
 | **Underfit** | Concept barely present — weak likeness, style doesn't transfer | more steps / higher LR; check captions actually bind the trigger |
 
 > **A sub-1.0 sweet spot is normal — not an overfit verdict.** Many good LoRAs (especially styles, and anything you'll stack) land best around 0.6–0.9. Needing < 1.0 is not a sign the LoRA is "overcooked"; that's a common myth. Overfit is diagnosed by the *training-image drift* above, not by the sweet-spot weight.

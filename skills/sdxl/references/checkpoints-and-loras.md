@@ -8,7 +8,7 @@ The defining practical fact about SDXL: **you almost never run base 1.0 raw — 
 3. The anime / booru finetunes (Pony, Illustrious/NoobAI)
 4. Using LoRAs — loading any style / character / concept LoRA
 5. The fast-variant LoRAs (stacking speed onto any finetune)
-6. LoRA training (kohya_ss / OneTrainer)
+6. LoRA training → moved to `references/lora-training.md`
 7. ControlNet & IP-Adapter catalog
 
 ---
@@ -95,19 +95,9 @@ The speed axis composes with the style axis because Lightning, LCM, and Hyper-SD
 
 ---
 
-## 6. LoRA training (kohya_ss / OneTrainer)
+## 6. LoRA training → `references/lora-training.md`
 
-SDXL LoRA training is the most mature in open-source image gen.
-
-- **Tools:** **kohya_ss** (`sd-scripts`, the de-facto standard, GUI + CLI) and **OneTrainer** (friendlier UI, good defaults). Both train SDXL LoRA/LoCon/LoHA and full finetunes.
-- **Base for training:** train **character/style LoRAs on base SDXL 1.0** for maximum compatibility across the photoreal family; train on **Pony/Illustrious** if you specifically target those (the result only works on that family).
-- **Hyperparameters — start here, then tune.** kohya's own defaults are rank 8, LR 1e-4 (UNet) / 5e-5 (text encoder). A recipe several independent named guides (ViewComfy, Bieler, Civitai cheatsheets) converge on: **rank 32 / alpha 32 (alpha = rank), AdamW, constant scheduler, 0 % warmup, LR ~3e-5** (usable range ~3e-6 to 8e-5), batch 1–4, 1024-area bucketed images, AdamW8bit or **Prodigy** (adaptive — set LR 1.0) optimizer. Rank-by-type ladder: simple character **8**, complex/real character **16**, concept **16–32**, style **32** (lower dim = less chance of soaking up unwanted background/style). VRAM: ~12 GB with gradient checkpointing + 8-bit optimizer; 16–24 GB comfortable. *(Exact LR and rank are genuinely contested across reputable guides — these are one convergent set, not gospel; present as a starting point.)*
-- **How the knobs interact** (architecture-general): **total steps ≈ images × repeats × epochs ÷ batch**; **effective LR scales as `alpha ÷ rank`** (alpha = rank → no scaling; alpha < rank dampens). The old "alpha must never exceed rank or it burns" rule is a myth — `alpha = 2×rank` is a legitimate high-rank config; alpha is just an LR scaler.
-- **Dataset — caption the *residual*.** A LoRA learns whatever you don't name. For a **character**: caption everything that is **not** the identity (pose, clothing, background, lighting) and let a rare trigger token carry the face; vary pose/angle/lighting (front, 3/4, profile, low/high angle). For a **style**: caption the **content** across **diverse subjects** so the look becomes the residual. **Caption in the target dialect:** booru tags for Pony/Illustrious, descriptive phrases for photoreal SDXL. Rare trigger tokens bind to whatever sits next to them (`skw man` binds the man, `skw suit` binds the suit), so place them deliberately. ~15–30 images for a character; styles can run larger.
-- **Train a "good citizen" if it'll be stacked:** modest rank, don't over-train, and accept a sweet spot **below 1.0** — that's what lets it coexist with other LoRAs instead of frying the image. (Sub-1.0 strength is normal, *not* a sign of overcooking.)
-- **ControlNet/IP-Adapter** often substitute for training when you need pose/identity control on a one-off (no training run needed).
-
-**Assessing fit — judge by images, not loss.** The loss curve barely predicts image quality; evaluate visually. Save **multiple checkpoints**, then generate an **XY grid of epoch × LoRA strength (0.1–1.0)** on fixed test prompts and pick the "Goldilocks" cell. **Overfit** = outputs drift toward the *training images* (rigid poses, baked backgrounds, fried color, usable only at low strength) → fewer steps / more dataset variety / lower rank. **Underfit** = weak likeness or the style won't transfer → more steps / higher LR / check the captions actually isolate the trigger.
+Training moved to its own file, matching the suite's layout: **`references/lora-training.md`** covers kohya_ss/OneTrainer, the convergent hyperparameter recipes (rank-by-type ladder, Prodigy, the alpha=2×rank myth), caption-the-residual in the target dialect, **style-LoRA specifics** (the Illustrious recipe, dataset diversity, color-cast lock-in, the out-of-set acceptance test), LoKr, the good-citizen principle, and XY-grid evaluation. The full character pipeline (dataset factory, detailer deployment, multi-character) is **`references/characters.md`**.
 
 ---
 

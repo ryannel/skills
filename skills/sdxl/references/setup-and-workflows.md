@@ -133,9 +133,11 @@ image = refiner(prompt=prompt, num_inference_steps=n_steps,
 
 SDXL is 1024-native, so you don't *need* the SD1.5 low-res-first dance — but to exceed ~1.5 MP without duplication/anatomy artefacts, generate in a 1024-area bucket then upscale:
 
-- **Latent hires-fix:** `KSampler` → `LatentUpscaleBy` (×1.5, `bislerp`) → second `KSampler` at **denoise 0.3–0.5** → decode. Low denoise preserves composition while adding detail.
-- **Tiled upscale (community):** `UltimateSDUpscale` (custom node) with a 4× ESRGAN model and **denoise ~0.2–0.35**, tile 1024, for large prints. Or model-only upscale (`UpscaleModelLoader` + `ImageUpscaleWithModel`, e.g. `4x-UltraSharp`) with no re-diffusion for a clean non-hallucinating enlarge.
-- **Face/hand repair:** inpaint the region or use a detailer node (`FaceDetailer` from Impact Pack) at denoise ~0.4 — the SDXL-era equivalent of SD1.5's aDetailer.
+- **Latent hires-fix:** `KSampler` → `LatentUpscaleBy` (×1.5, `bislerp`) → second `KSampler` at **denoise 0.3–0.5** → decode. Low denoise preserves composition while adding detail. (Pixel-space variant: decode → `ImageUpscaleWithModel` → re-encode → re-sample at **0.25–0.35** — tolerates lower denoise than latent interpolation.)
+- **Tiled upscale (community):** `UltimateSDUpscale` (custom node) with a 4× ESRGAN model and **denoise ~0.2–0.35**, tile 1024, for large prints. Use its **seam-fix modes** (half-tile is the usual pick) + tile overlap when seams show. A tile only sees its own patch — give the upscale pass a *simpler* prompt than the base gen so localized details don't get stamped onto every tile. Or model-only upscale (`UpscaleModelLoader` + `ImageUpscaleWithModel`, e.g. `4x-UltraSharp`, `Remacri`) with no re-diffusion for a clean non-hallucinating enlarge.
+- **Face/hand repair:** inpaint the region or use a detailer node (`FaceDetailer` from Impact Pack) at denoise ~0.4 — the SDXL-era equivalent of SD1.5's aDetailer. Settings consensus: `guide_size` 512, `max_size` 1024, `bbox_crop_factor` ~1.3–2 for tighter face context. This is also where a character LoRA gets swapped in (`references/characters.md §3`).
+- **Color drift:** VAE round-trips and second samplers shift color; fix once at the end with a **ColorMatch** node (KJNodes) against the pre-upscale image rather than per stage.
+- The full production ladder (per-stage denoise bands, finishers like SeedVR2, cross-model refine passes) is the **`image-production-workflows`** skill in this suite — SDXL's specific role there is the controllable front-end and the texture-refine back-end.
 
 ---
 
@@ -144,15 +146,17 @@ SDXL is 1024-native, so you don't *need* the SD1.5 low-res-first dance — but t
 Both are mature for SDXL — its biggest practical edge.
 
 **ControlNet** (community model zoo — Stability's official SDXL ControlNets plus `xinsir`, `diffusers`, `kohya` releases):
-- Load with `ControlNetLoader` → `ControlNetApplyAdvanced` (set `strength`, `start_percent`, `end_percent`) between conditioning and sampler.
-- Common types: **canny, depth, openpose, tile, scribble, lineart, softedge**. `xinsir/controlnet-union-sdxl` bundles many types in one model.
+- Load with `ControlNetLoader` → `ControlNetApplyAdvanced` (set `strength`, `start_percent`, `end_percent`) between conditioning and sampler. Multiple ControlNets chain by stacking Apply nodes with per-CN strength/start/end.
+- Common types: **canny, depth, openpose, tile, scribble, lineart, softedge**. **`xinsir/controlnet-union-sdxl-1.0` (ProMax)** is the consensus best — 10+ control types plus tile/inpaint/outpaint in one checkpoint. (xinsir's further training is stalled for GPU funding — frozen but stable and still SOTA for SDXL.)
 - Preprocess the source with the `comfyui_controlnet_aux` nodes (depth-anything, openpose, canny, etc.).
 
 **IP-Adapter** (image prompt / style / identity transfer):
 - `ComfyUI_IPAdapter_plus` custom nodes. Variants: base, **Plus** (more detail), **FaceID** / **FaceID Plus v2** (identity via InsightFace embeddings).
 - Pipeline: `IPAdapterUnifiedLoader` → `IPAdapter` node with a reference image and `weight` ~0.5–0.8. FaceID needs the InsightFace model installed.
+- **Maintenance status:** cubiq's `ComfyUI_IPAdapter_plus` went **maintenance-only in April 2025**; Comfy-Org maintains a reference implementation (`comfyorg/comfyui-ipadapter`). Both work; check which your other nodes expect.
+- For *face identity* specifically, **InstantID** has displaced FaceID as the community go-to, and **HyperLoRA** (ByteDance) generates LoRA weights zero-shot from a face photo — the full identity-tool decision table is **`references/characters.md §1`**.
 
-These let SDXL do pose/structure/identity control that newer DiT models still lack mature tooling for.
+These let SDXL do pose/structure/identity control that newer DiT models still lack mature tooling for — which is exactly why mixed-model pipelines compose with SDXL first and refine elsewhere.
 
 ---
 

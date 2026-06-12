@@ -185,6 +185,8 @@ Loading a character LoRA into the *base* generation often gives mediocre results
 
 **Tiled-upscale prompt caveat.** When `UltimateSDUpscale` splits the image into tiles, a tile only "sees" its local patch — so a prompt that says "a tattoo reading 'X' below the collarbone" can make the model stamp that text onto unrelated smooth-skin tiles (shoulder, arm, back). If you render localised text/marks, give the upscale pass a **simpler prompt** (or the conditioning switch many graphs expose) so per-tile hallucinations don't reproduce it.
 
+**Color drift across passes.** Every VAE decode/encode round-trip and every re-sample pass shifts color slightly, and the shifts compound through a long pipeline. Fix it once at the end, not per stage: a **ColorMatch node (KJNodes**; `mkl` or `hm-mvgd-hm` method) comparing the final image against the stage-1/stage-3 composition reference pulls the grade back without touching detail. *(Community-standard practice; see the `image-production-workflows` skill for the full color-management treatment.)*
+
 ---
 
 ## 8. Build order summary
@@ -272,4 +274,18 @@ No PuLID or IP-Adapter face implementation exists for Z-Image as of June 2026. T
 | **Z-Image-Edit** | Instruction-based editing of an existing image | Announced; verify availability at time of use |
 | **Community IP-Adapter (Boyonodes)** | Experimental generic image conditioning | No published weights; requires manual SD3 weight conversion; not recommended for production |
 
-**The practical identity path for Z-Image is: train a character LoRA and inject it at the FaceDetailer stage (§6).** This gives consistent identity and composits cleanly with the multi-stage pipeline.
+**The practical identity path for Z-Image is: train a character LoRA and inject it at the FaceDetailer stage (§6).** This gives consistent identity and composits cleanly with the multi-stage pipeline. The full character pipeline — anchor image, edit-model dataset factory, coverage rules, multi-character craft — is in **`references/characters.md`**.
+
+---
+
+## 11. Z-Image in mixed-model pipelines
+
+Z-Image-Turbo has earned a specific role in cross-model production: **the realism refiner for other models' renders.** Because ZIT is fast (8 steps), guidance-free, and has a strong photographic prior, named community workflows compose in another model and finish in ZIT — e.g. Cordina's "ZIT Refiner workflows – SDXL v1" (Civitai, Jan 2026): SDXL base gen → ZIT img2img pass "to add realism" → detailers → upscale. *(Community, named author.)*
+
+The handoff mechanics, if you build one yourself:
+- **Always decode to pixels between model families.** Z-Image's latent space is not SDXL's or FLUX's — `VAE Decode` (model A) → image → `VAE Encode` (Z-Image's `ae.safetensors`) → ZIT KSampler. Feeding a foreign latent straight in produces garbage.
+- **Refine denoise 0.2–0.5:** ~0.25–0.35 preserves the source composition and identity while re-rendering texture; above ~0.5 ZIT starts re-composing; below ~0.2 it only adds noise-pattern detail.
+- **Match resolution** to Z-Image's comfortable range before encoding (downscale a 4 MP source or tile it).
+- The reverse direction also exists: ZIB/ZIT base → an SDXL photoreal finetune img2img for its texture character, or → SDXL for its mature ControlNet/IP-Adapter ecosystem when a control type Z-Image lacks is required.
+
+The model-agnostic craft — the full production ladder, cross-family handoff rules, color management, workflows-as-code (ComfyScript, comfy-cli, the `/prompt` API) — lives in the **`image-production-workflows`** skill in this suite.
