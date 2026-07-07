@@ -255,7 +255,8 @@ The handoff rule: **always VAE-decode to pixels between model families** — FLU
 | Style LoRAs | Supported, young ecosystem (`references/lora-training.md`) | `sdxl` for mature recipes and years of accumulated craft |
 | In-image typography | Good, high variance | `ideogram-4` — the typography leader |
 | Structural control | Fun Union ControlNet (custom nodes) | `sdxl` for the most complete, mature control stack |
-| Commercial local use | **[klein] 4B is the suite's only Apache-2.0 path** at this quality level | `sdxl` (OpenRAIL++-M) for the mature alternative |
+| Commercial local use | **[klein] 4B is the suite's only Apache-2.0 path** at this quality level | `sdxl` (OpenRAIL++-M) for the mature alternative; `krea-2` is free commercial only under $1M revenue |
+| Aesthetic range / anti-AI-look | Default rendering (especially [klein]) skews over-sharpened "AI look" | `krea-2` — tuned *against* the AI look, style-reference system, widest stylistic space (its hosted Large even renders through the FLUX.2 VAE) |
 | Mixed-model pipelines | Quality refiner ([klein] img2img) and composition front-end | `image-production-workflows` for the cross-model craft |
 
 ---

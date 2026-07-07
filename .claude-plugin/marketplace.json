@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "image-model-skills",
-      "description": "Authoritative ComfyUI, diffusers, and API guides for FLUX.2, Ideogram 4, Z-Image, and SDXL — covering setup, prompting, ControlNet, face identity, character consistency, LoRA training, multi-stage and mixed-model production pipelines, and failure modes",
+      "description": "Authoritative ComfyUI, diffusers, and API guides for FLUX.2, Ideogram 4, Z-Image, SDXL, and Krea 2 — covering setup, prompting, ControlNet, face identity, character consistency, LoRA training, multi-stage and mixed-model production pipelines, and failure modes",
       "source": "./",
       "strict": false,
       "skills": [
@@ -19,6 +19,7 @@
         "./skills/ideogram-4",
         "./skills/z-image",
         "./skills/sdxl",
+        "./skills/krea-2",
         "./skills/image-production-workflows"
       ]
     }

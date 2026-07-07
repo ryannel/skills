@@ -1,6 +1,6 @@
 # Mixed-Model Recipes — cross-family handoffs and the control stack
 
-Why mix models: each family has a comparative advantage — SDXL has the deepest control/LoRA ecosystem, the DiT models (Flux.2, Z-Image) render more naturally, Ideogram 4 owns typography. Cross-model pipelines let each stage run on the model that's best at it. This went from exotic to mainstream during 2025–26; the named workflows below are the evidence.
+Why mix models: each family has a comparative advantage — SDXL has the deepest control/LoRA ecosystem, the DiT models (Flux.2, Z-Image) render more naturally, Ideogram 4 owns typography, Krea 2 brings the widest aesthetic range with no house look. Cross-model pipelines let each stage run on the model that's best at it. This went from exotic to mainstream during 2025–26; the named workflows below are the evidence.
 
 ## Contents
 1. The three handoff rules
@@ -42,6 +42,8 @@ Plus the hygiene items: fixed seed in the refine pass; color-match at the end of
 | **"Flux Klein IMG2IMG"** (Enzino, Civitai) | SDXL/Pony render → **FLUX.2 [klein]** img2img | community, named | "more natural rendering… better anatomical consistency, reduced SDXL artifacts"; klein 4B is Apache-2.0 → the commercially-clean refine |
 | **Flux/DiT → SDXL texture refine** | DiT render → **photoreal SDXL finetune** (RealVis-class) img2img at ~0.3–0.55 | community, replicated widely (no single canonical author) | borrows the finetune's skin/texture character; also the route to SDXL-only LoRA looks |
 | **SDXL as control front-end** | SDXL ControlNet/IP-Adapter/regional stack composes the scene → DiT refine | community ("Modern Easy SDXL — 2026 Base for Flux & Z-Image", Civitai) | use SDXL's mature control tooling, render quality elsewhere |
+| **Krea 2 → Z-Image repair & face pass** (nsfwVariant, Civitai, Jul 2026) | **Krea 2** composes the scene (aesthetic range, anatomy, wide-aspect) → **Z-Image** inpaints its artefact zones (hair strands, fine patterns, halftone areas) and/or re-renders the face at **~0.2 denoise** | community, named | the emerging standard pairing — LoRA authors already ship paired Krea-2 + Z-Image-Turbo versions of the same style; Z-Image supplies the facial expressiveness Krea 2's safety tuning mutes (see the `krea-2` skill) |
+| **Krea 2 gen → Klein 9B edit** (shootthesound, ComfyUI-Angelo, Jul 2026) | **Krea 2** generates → **FLUX.2 [klein] 9B** handles the instruction-edit pass (Krea 2 has no official edit model) | community, named | packaged as an app-style node suite; the generate-here/edit-there split that community edit-LoRAs only approximate |
 | **Ideogram typography pass** | text/design plate in **Ideogram 4** (bbox layout, transparent background) → composite/inpaint into another model's imagery; or mask Ideogram's text and restyle the rest elsewhere | **inferred craft — no canonical named workflow; flagged** | handoffs pixel-space; Ideogram's own Magic Fill covers the hosted half |
 
 The pattern behind all of them: **compose where control is deepest, render where quality is highest, finish where the finisher is best.**
@@ -54,6 +56,7 @@ The pattern behind all of them: **compose where control is deepest, render where
 | **FLUX.2** | Alibaba PAI `FLUX.2-dev-Fun-Controlnet-Union` | young; custom nodes (VideoX-Fun official or community wrapper) | scale 0.65–0.80; Flux.1 ControlNets are architecturally incompatible |
 | **Z-Image** | Alibaba PAI Fun Union 2.1 | official ComfyUI template; **Turbo only** | core nodes (`ModelPatchLoader` + `QwenImageDiffsynthControlnet`) |
 | **Ideogram 4** | none | — | `bbox` JSON layout is the only structural lever |
+| **Krea 2** | community depth ControlNet (Tanmay Patil, `Krea-2-depth-controlnet`) | days old (Jul 2026), depth only | no pose/canny/union yet; no identity adapters (a community identity-edit LoRA is the nearest); hosted style refs condition *style*, not structure |
 
 Multiple ControlNets chain with per-CN strength/start/end; union models mostly remove the need.
 

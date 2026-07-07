@@ -194,7 +194,8 @@ Choose the model for the job — defaults like realism direction and prompting d
 | Style LoRAs | Fully supported (AI-Toolkit; `references/lora-training.md`) | `sdxl` for the deepest trained-LoRA ecosystem and mature recipes |
 | In-image typography | Workable for short bilingual text | `ideogram-4` — the open-weights typography leader |
 | Structural control (pose/depth/canny) | Fun Union ControlNet, **Turbo only** | `sdxl` for the most mature, complete control stack |
-| Mixed-model pipelines | **The realism refiner** — ZIT finishing other models' renders (`references/workflows.md §11`) | `image-production-workflows` for the cross-model craft itself |
+| Aesthetic range / stylistic exploration | One strong realism-leaning default | `krea-2` — deliberately no house look (style refs, moodboards, official style LoRAs); Z-Image is *its* standard face/detail finisher, so the pairing runs both ways |
+| Mixed-model pipelines | **The realism refiner** — ZIT finishing other models' renders (`references/workflows.md §11`); the standard face-pass and repair-inpaint partner for `krea-2` scenes (~0.2 denoise) | `image-production-workflows` for the cross-model craft itself |
 
 ---
 

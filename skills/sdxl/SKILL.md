@@ -194,6 +194,7 @@ Before hitting Queue Prompt:
 | Structural control | **The most complete stack** — union ControlNet, IP-Adapter, regional prompting | — (this is SDXL's edge) |
 | In-image typography | Basically can't | `ideogram-4` |
 | Compositional / long prompts | 77-token CLIP ceiling | `flux-2` or `z-image` (LLM encoders) |
+| Stylistic range without checkpoint-hopping | The look lives in the checkpoint — switching styles means switching finetunes | `krea-2` — one model spanning a wide visual space via style refs / official style LoRAs |
 | Mixed-model pipelines | **Front-end (control) and back-end (texture)** roles | `image-production-workflows` for the cross-model craft |
 
 ---

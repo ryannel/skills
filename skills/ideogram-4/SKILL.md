@@ -216,8 +216,9 @@ Before generating:
 |---|---|---|
 | In-image typography, layout, design | **The leader** — JSON captions, `bbox` layout, text layers, transparency | — (this is why you're here) |
 | Consistent characters | **Not on open weights** — no adapters, no LoRA ecosystem, no edit variant | `flux-2` (multi-ref + PuLID), `z-image` or `sdxl` (character LoRA); or hosted Character Reference |
-| Style / character LoRAs | No ecosystem yet (Ostris PoC only) | `sdxl` (mature) or `z-image`/`flux-2` |
+| Style / character LoRAs | No ecosystem yet (Ostris PoC only) | `sdxl` (mature) or `z-image`/`flux-2`; `krea-2` for style LoRAs with an official train-Raw/run-Turbo doctrine |
 | Photoreal faces & skin | Relative weak spot | `z-image` (realism stacking) or an `sdxl` photoreal finetune |
+| Stylised / aesthetic-led imagery (non-typographic) | Design-literate but one aesthetic register | `krea-2` — style references, moodboards, the widest open-weights visual range |
 | Structural control (pose/depth) | `bbox` layout only | `sdxl` or the Fun Union ControlNets (`flux-2`, `z-image`) |
 | Mixed-model pipelines | **The typography pass** — text plates and design layers for other models' imagery | `image-production-workflows` for the cross-model craft |
 
