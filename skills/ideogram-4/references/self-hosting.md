@@ -4,7 +4,7 @@ How to run the open-weight model yourself — via diffusers, the shipped CLI, or
 
 **Licence reminder:** the weights are **Non-Commercial** (commercial use needs a separate paid licence from Ideogram); the inference code is Apache-2.0. The non-commercial restriction is about the *purpose* of use, so **running on a paid cloud GPU does not make commercial use OK**. For commercial output, use the hosted API/web app instead (`references/api-and-webapp.md`).
 
-Sources are labelled **[official]** (the `ideogram-oss/ideogram4` repo, HF model cards) vs **[community/single-source]** (forum/blog reports, flagged because this model is days old).
+Sources are labelled **[official]** (the `ideogram-oss/ideogram4` repo, HF model cards) vs **[community/single-source]** (forum/blog reports, flagged because the practitioner corpus for this model is still thin).
 
 ---
 
@@ -199,12 +199,33 @@ Two layers (both **[official]**):
 
 ---
 
-## 6. LoRA training & fine-tuning (very early — flagged)
+## 6. LoRA training & fine-tuning
 
-As of days post-launch, this is bleeding-edge:
+**This section was rewritten on 2026-08-13.** At launch there was no training path and this skill said so. That is no longer true, and the earlier text routed people away from something that now works — if you are reading an older copy, disregard it.
 
-- The Non-Commercial licence **permits fine-tuning** for non-commercial use; nf4 is diffusers-compatible, so the technical path exists.
-- **Ostris** (ai-toolkit) reported a working **proof-of-concept** LoRA on Ideogram 4 — notably, one trained to make the model accept *natural-language* prompts (bypassing the JSON requirement). Exploratory, not a finished/validated pipeline. **[community/single-source]**
-- ai-toolkit's documented support list does **not yet formally include** Ideogram 4; no kohya/diffusers formal support found; **no production character/style LoRAs** are published on Civitai yet (only workflows). **[community]**
+The Non-Commercial licence **permits fine-tuning** for non-commercial use, and both a hosted and a self-hosted path now exist.
 
-Treat any LoRA-training claim as provisional and re-check tooling status — this will move fast.
+### Trainers
+
+| Path | Status |
+|---|---|
+| **`ostris/ai-toolkit`** | `ideogram-ai/ideogram-4-fp8` is **named in the supported-models list**. This is the self-hosted route `[official — repo]` |
+| **fal — "Ideogram V4 LoRA Trainer"** | **Live, not waitlisted.** Exposes `steps` (100–40,000, default 1000), learning rate (1e-6–1e-2, default 1e-4), resolution (auto / preset / custom `WxH`), and a default caption for uncaptioned images `[official — fal docs]` |
+
+**The fal trainer emits two files, and the second one is the important one:** a `fal` format for fal's own Ideogram V4 endpoint, and a **`comfy` format for ComfyUI**. Per fal: *"The two files contain the same trained weights; only the internal key names differ."* That is what makes a hosted-trained LoRA usable on the **open weights** — you are not locked into their endpoint.
+
+### What the community has actually trained
+
+**33 Ideogram 4.0 LoRAs are published on Civitai** (sampled 2026-08-13, `baseModel=Ideogram 4.0` — note the `.0`, the obvious spellings return zero). So this is a real, if small, ecosystem rather than a proof of concept.
+
+**Read the composition, not just the count** — it is almost entirely **style and aesthetic** work: Ghibli, Tintin, vintage anime, fantasy-realism refiners, a `Gray Screen bypass`. **Character/likeness LoRAs are essentially absent**, and **none of the 33 are adult-flagged**, which is consistent with the model-level safety filter documented in §5 rather than with a gap in tooling.
+
+A calibration note on download counts: the most-downloaded entry, `Lenovo UltraReal`, shows 152k downloads — but it spans **12 base models**, and its **Ideogram 4.0 version has 6,866**. Civitai reports downloads at the *model* level, not the version level, so a big number next to an Ideogram LoRA usually is not an Ideogram number.
+
+### What this does and does not unlock
+
+- **Style LoRAs: supported and in active use.** Train them.
+- **Character LoRAs: the training path exists, but nobody has demonstrated it.** With no published character LoRAs and no identity adapters (below), treat a character run here as **exploratory work you are doing first**, not a documented recipe.
+- **Still no ControlNet, PuLID, or IP-Adapter** for Ideogram 4, from Ideogram or any community team — a HuggingFace discussion on `ideogram-4-fp8` is titled *"No Controlnet Capability."* `[community]` **This is a separate axis from LoRA training and it has not moved.** Structural pose/identity conditioning remains unavailable.
+
+Trainer support is young; re-verify flags and supported-model lists before a long run.
