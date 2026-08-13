@@ -1,0 +1,255 @@
+---
+name: comfyui-on-runpod
+description: >
+  Run ComfyUI on RunPod so that a fresh instance loads your workflows and finds every model **out of the box** — the layer between RunPod's platform skills and the model skills. Use this whenever the user is deploying, debugging or budgeting ComfyUI on rented GPUs, even obliquely: laying out a network volume, writing `extra_model_paths.yaml`, deciding where a checkpoint / text encoder / VAE / LoRA / upscaler actually goes, getting tens of gigabytes of weights onto a volume without burning GPU hours, keeping a model manifest so a new pod reproduces the old one, choosing between an interactive pod and a serverless endpoint for ComfyUI, deploying API-format workflow JSON and polling it correctly, smoke-testing an install before spending real time on it, or debugging the classics — "ComfyUI can't find my model", "it works in the studio but breaks in serverless", "the proxy URL 502s", "my LoRA isn't in the dropdown", "why did my pod bill all night". Owns the **ComfyUI-specific** layer only: for provisioning, GPU selection, pod lifecycle, `runpodctl`/MCP commands and networking, it routes to RunPod's own official skills rather than restating them.
+---
+
+# ComfyUI on RunPod
+
+The goal this skill serves: **a fresh ComfyUI instance, pointed at your network volume, opens your workflow JSON and every node resolves — no missing-model dialogs, no re-downloads, no manual fixups.** Everything below is in service of that.
+
+## What this owns, and what it doesn't
+
+RunPod publishes its own skills, and they are good. Do not restate them — route.
+
+| Question | Where it belongs |
+|---|---|
+| Provisioning a pod, ports, SSH, proxy URLs, `--terminate-after` | **`runpod`** router → `runpodctl` / `runpod-mcp` |
+| Which GPU, how much VRAM, pods vs serverless *in general* | **`runpod-usage`** |
+| Getting ComfyUI *running at all* on a pod | **`runpod`** golden path 02 — prebuilt `runpod/comfyui` image is the default |
+| Bake into the image vs mount from a volume | **`runpod`** golden path 25 |
+| HuggingFace / AWS / Docker CLI setup | **`companion-clis`** |
+| **Where models live so ComfyUI finds them** | **here** |
+| **`extra_model_paths.yaml` and the dual mount root** | **here** |
+| **Model manifests and reproducible volumes** | **here** |
+| **ComfyUI as a serverless endpoint, API-format workflows** | **here** |
+| Model-specific files and settings | the model skill — [`wan-2-2`](../wan-2-2/), [`minimax-h3`](../minimax-h3/), [`z-image`](../z-image/), … |
+
+---
+
+## The one rule that changes everything
+
+**The volume is the contract, and `extra_model_paths.yaml` is how ComfyUI reads it — under *two different roots*.**
+
+The same network volume is mounted at a different path depending on where ComfyUI is running:
+
+| Context | Volume root |
+|---|---|
+| Interactive pod | **`/workspace/`** |
+| Serverless worker | **`/runpod-volume/`** |
+| S3 API from your laptop | **`s3://<volume-id>/`** |
+
+So `extra_model_paths.yaml` must declare **both roots with identical key sets**. Miss one and you get the single most confusing failure in this stack: **it works in the studio and breaks in serverless**, with a model-not-found error for a file you can see on the volume.
+
+```yaml
+network_volume:            # interactive pod
+  base_path: /workspace/
+  checkpoints: models/checkpoints/
+  clip: models/clip/
+  text_encoders: models/clip/          # ← see the note below
+  clip_vision: models/clip_vision/
+  controlnet: models/controlnet/
+  diffusion_models: |                  # ← two paths, one key
+               models/diffusion_models/
+               models/unet/
+  embeddings: models/embeddings/
+  ipadapter: models/ipadapter/
+  loras: models/loras/
+  upscale_models: models/upscale_models/
+  vae: models/vae/
+  vae_approx: models/vae_approx/       # ← TAE preview decoders
+
+runpod_volume:             # serverless worker — SAME KEYS, different base
+  base_path: /runpod-volume/
+  # … identical body …
+```
+
+Three details in there that cost people hours:
+
+- **`text_encoders` and `clip` can point at the same directory.** Modern DiT models load their encoder through a `CLIPLoader` that searches `text_encoders`; older configs only declare `clip`. Declare both at one path and either style resolves.
+- **`diffusion_models` takes multiple paths** as a block scalar. `models/unet/` is the legacy name and some downloads still land there.
+- **`vae_approx` is not optional** if you want fast previews — it's where TAE decoders live (e.g. H3's `taeh3.safetensors`).
+
+Deploy this file to ComfyUI's install directory on boot, not by hand. On a pod that is typically `…/ComfyUI/extra_model_paths.yaml`; in a serverless image, bake it in.
+
+---
+
+## Volume layout
+
+One canonical tree, keyed by **which loader node reads it**. That is the only organising principle that survives contact with ComfyUI.
+
+```
+/workspace/                        ← (= /runpod-volume/ in serverless)
+└── models/
+    ├── diffusion_models/          ← UNETLoader / Load Diffusion Model
+    ├── checkpoints/               ← CheckpointLoaderSimple (all-in-one SD/SDXL)
+    ├── clip/                      ← CLIPLoader (text encoders)
+    ├── vae/                       ← VAELoader
+    ├── vae_approx/                ← TAE preview decoders
+    ├── controlnet/                ← ControlNetLoader
+    ├── upscale_models/            ← UpscaleModelLoader
+    ├── ipadapter/  clip_vision/  embeddings/  style_models/
+    └── loras/                     ← LoraLoader — foldered by base model
+        ├── <base-a>/
+        ├── <base-b>/
+        └── _shared/               ← works on more than one base
+```
+
+**Fold LoRAs by base model.** `LoraLoader` shows the subfolder as a path prefix in the dropdown, so `z-image-turbo/amy_v9/…` tells you at a glance what it belongs to — and when you retire a base model, the folder tells you what dies with it.
+
+**But the folder is the human view, not the truth.** A LoRA trained on a base often loads on its distilled sibling at reduced strength. Record the real dependency in your manifest (`compat: [base, turbo]`) and let the folder be its *primary home*. A workflow builder can then check compatibility before wiring a LoRA and skip incompatible ones silently, so one scene definition renders correctly under either base.
+
+Full layout rationale, placement table and LoRA conventions: **`references/volume-and-models.md`**.
+
+---
+
+## The manifest — how a fresh volume becomes the old volume
+
+The thing that makes "works out of the box" reproducible is a **declarative model manifest** checked into your repo, not a folder someone populated by hand.
+
+Give each model an entry recording what it is, which files it needs, where each file goes, and what it's compatible with:
+
+```yaml
+stack: [z-image-base, z-image-turbo, …]     # what's active right now
+
+models:
+  z-image-base:
+    description: "6B S3-DiT, non-distilled. Training + inference base."
+    architecture: z-image-base
+    unet_filename: z_image_bf16.safetensors
+    clip_filename: qwen_3_4b_fp8_mixed.safetensors
+    clip_type: lumina2                       # the CLIPLoader `type` argument
+    vae_filename: ae.safetensors
+    files:
+      - repo: Comfy-Org/z_image
+        filename: split_files/diffusion_models/z_image_bf16.safetensors
+        dest: /workspace/models/diffusion_models/
+        rename: z_image_bf16.safetensors
+```
+
+What this buys you:
+
+- **Rebuild a volume from nothing** with one command, in a known-good state.
+- **Workflow builders read the same file** — `unet_filename`, `clip_type` and `vae_filename` are exactly the values a graph needs, so workflows and downloads can't drift apart.
+- **Answer "if I remove X, what breaks?"** by querying `compat`, instead of guessing.
+- **Renames are explicit.** Upstream repos nest files under `split_files/…` and use long names; `rename` pins the flat name your workflows reference.
+
+---
+
+## Getting the weights there without burning GPU hours
+
+Model downloads are I/O, not compute. **Never do them on a GPU pod.**
+
+| Route | Use when |
+|---|---|
+| **CPU pod** running `hf download` straight to the mounted volume | Bulk population. Fastest link, no GPU billing. The default |
+| **S3 API** — `aws s3 cp/sync` to `s3://<volume-id>/…` with `--endpoint-url https://s3api-<dc>.runpod.io/` | Pushing files from your laptop; auditing what's actually on the volume without booting anything |
+| `hf download` on the GPU pod itself | Only for a small file you discovered mid-session |
+
+Two rules worth stating plainly:
+
+- **Use `hf download` (or the S3 API), never `wget`.** You get resume, parallel chunks, and the correct revision. A 20 GB `wget` that dies at 90% is a wasted half hour.
+- **The volume is pinned to one datacenter.** Your pod must be created in that same DC, which narrows GPU availability — check the GPU exists there *before* you plan around it. This is the most common reason a "just spin one up" plan stalls.
+
+---
+
+## Pod or serverless?
+
+Both run ComfyUI; they fail differently and bill very differently.
+
+| | Interactive pod | Serverless endpoint |
+|---|---|---|
+| Bills | Per second **while it exists**, whether or not you're using it | Per second **while a request runs**; scales to zero |
+| Runaway risk | **High** — a forgotten pod bills all night | Low — a forgotten endpoint idles free |
+| Good for | Building and debugging graphs in the web UI, LoRA training | Batch generation, anything programmatic |
+| Cold start | Once, then it's warm | Per scale-up; mitigate with FlashBoot and idle timeout |
+| Mount root | `/workspace/` | `/runpod-volume/` |
+
+**Default: build interactively, run in serverless.** The web UI is where graphs get made; the endpoint is where they get executed a thousand times.
+
+**Cost guards that actually work** (details in RunPod's skills — this is the ComfyUI-shaped summary):
+
+- **`--terminate-after <iso8601>` at creation.** It *deletes* the pod at that time. Prefer it over `--stop-after`, which merely stops it and keeps billing disk. Set it on every pod, always, even when you're sure you'll be quick.
+- **Tear down in order:** remove the pod, *then* delete the volume if it was scratch. The volume can't be deleted while a pod holds it.
+- **Volume data survives pod removal** — only deleting the volume clears it. That's the point: you rebuild pods freely and never re-download.
+
+---
+
+## Deploying and running workflows
+
+Two formats, and mixing them up is a common early error: the **UI format** you save from the ComfyUI canvas is *not* the **API format** the endpoint accepts. Export via *Save (API Format)* — or build the graph programmatically.
+
+Against a serverless endpoint:
+
+- **`POST /run` and poll `/status/{id}`.** Do **not** use `/runsync` for generation — video and multi-stage image jobs exceed its window and you get connection resets that look like endpoint failures.
+- **Input images go base64-encoded** in the request payload, and `LoadImage` in the graph must reference the matching filename.
+- **Model filenames in the workflow must exactly match the volume.** A mismatch surfaces as a validation error inside the `/status` response body, not as a transport error — so check the response body before assuming the endpoint is broken.
+- **Bound your concurrency** to the endpoint's max workers; more in-flight requests than workers just queues and confuses timing.
+
+Endpoint knobs worth knowing: max workers, idle timeout (trades cold-start latency against idle cost), FlashBoot (pre-warms layers), and the queue-delay scaler. Full patterns: **`references/serverless-comfyui.md`**.
+
+---
+
+## Smoke test before you trust it
+
+On rented hardware, find out in two minutes rather than twenty. Run this after any volume change, image change or fresh pod:
+
+1. **UI answers.** Poll the proxy URL until it loads. Expect 502s during warm-up — that is normal, keep polling. *"Running" is not "ready."*
+2. **Every loader dropdown is populated** — diffusion model, text encoder, VAE, and your LoRA folders. An empty dropdown means `extra_model_paths.yaml` isn't being read, not that the file is missing.
+3. **Smallest possible generation.** Lowest resolution, fewest steps, shortest length. You are testing wiring, not quality.
+4. **Check every output branch.** If the model emits more than one modality, verify each one — a video model with audio can produce a perfect-looking silent file, and frames alone won't tell you.
+5. **Then the same graph through the API**, if serverless is the target — this is where the second mount root gets exercised.
+
+Fail at step 2 and it's `extra_model_paths.yaml`. Fail at step 5 having passed step 3 and it's the `runpod_volume` block.
+
+---
+
+## Failure modes & QC
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Model dropdowns empty | `extra_model_paths.yaml` not deployed, or ComfyUI not restarted since | Deploy the file, restart ComfyUI (Manager → Restart) |
+| Works in studio, "model not found" in serverless | Only the `network_volume` block declared; the worker mounts at `/runpod-volume/` | Declare both blocks with identical keys |
+| A single model type missing, rest fine | That loader's key absent — commonly `text_encoders` or `vae_approx` | Add the key; map `text_encoders` and `clip` to the same dir |
+| LoRA on the volume but not in the dropdown | Wrong subfolder, or ComfyUI not restarted | Check the folder, restart; the dropdown shows the subfolder as a prefix |
+| Proxy URL 502s | Still booting, or ComfyUI bound to `127.0.0.1` | Keep polling; ensure `--listen 0.0.0.0` |
+| Can't add a port to a running pod | Ports are fixed at creation | Recreate with the port exposed (`8188/http`) |
+| Endpoint "fails" instantly on dispatch | `/runsync` against a long job | Use `/run` + poll `/status/{id}` |
+| Validation error naming a model file | Workflow filename ≠ volume filename | List the volume directory; fix the manifest `rename` or the workflow |
+| GPU you wanted is unavailable | Volume is DC-locked and that GPU isn't in that DC | Check GPU availability in the volume's DC first, or place the volume deliberately |
+| Surprise bill overnight | Pod created without `--terminate-after` | Always set it; verify teardown with a pod list |
+
+---
+
+## Pre-flight checklist
+
+1. `extra_model_paths.yaml` declares **both** `/workspace/` and `/runpod-volume/` roots with identical keys?
+2. `text_encoders` **and** `clip` mapped; `diffusion_models` includes `models/unet/`; `vae_approx` present?
+3. Every model in a manifest with explicit `dest` and `rename`, not hand-placed?
+4. LoRAs foldered by base, with real compatibility recorded in the manifest rather than implied by the folder?
+5. Downloads run on a **CPU pod or the S3 API**, never a GPU pod?
+6. Volume's datacenter checked against GPU availability *before* planning?
+7. Pod created with **`--terminate-after`** and the port exposed at creation?
+8. Workflow exported in **API format** (not UI format) for endpoint use?
+9. Dispatch via **`/run` + poll**, not `/runsync`?
+10. Smoke test passed through **both** the UI and the API before real work?
+11. Teardown verified — pod removed, and volume kept or deleted deliberately?
+
+---
+
+## How to read the claims in this skill — two bars, by claim type
+
+**Hard facts — must be exact or it breaks.** The dual mount roots (`/workspace/` vs `/runpod-volume/`), the `extra_model_paths.yaml` key set and its multi-path `diffusion_models` block, which loader reads which directory, the S3 endpoint form `s3api-<dc>.runpod.io`, `--terminate-after` deleting versus `--stop-after` stopping, ports being fixed at pod creation, volumes being datacenter-locked, and API-format-not-UI-format for endpoints. **Source of truth is official** — RunPod's own skills and docs — plus a working production configuration these were read out of. A wrong path silently hides a model; a missing cost guard bills all night. **Re-verify the CLI flags and pricing against `runpodctl` before relying on them**; platform surfaces change.
+
+**Craft — what actually makes this work day to day.** The volume-as-contract framing, foldering LoRAs by base with a separate compatibility graph, the manifest pattern, downloading on CPU pods, build-interactively-run-in-serverless, and the smoke-test order. **This is house craft distilled from a running studio**, not vendor documentation — it is what the vendor docs don't tell you because it only shows up after you've rebuilt a volume a few times. Stated with confidence; adapt the specifics to your stack.
+
+One thing deliberately **not** claimed: GPU recommendations and prices. They move constantly and are model-specific — `runpod-usage` owns the general question and each model skill owns its own requirement. Any price you see quoted anywhere in this suite is a stale snapshot; check `runpodctl gpu list`.
+
+---
+
+## Reference files
+
+| File | When to read it |
+|---|---|
+| `references/volume-and-models.md` | Full volume layout and placement table, the `extra_model_paths.yaml` in full, LoRA foldering and compatibility, the manifest schema, and how to populate or rebuild a volume from scratch |
+| `references/serverless-comfyui.md` | ComfyUI as an endpoint: API-format workflows, the `/run` + poll pattern, base64 image inputs, endpoint scaling knobs, cold start, and the deployment failure table |

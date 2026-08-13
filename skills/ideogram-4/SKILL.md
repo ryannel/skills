@@ -221,6 +221,7 @@ Before generating:
 | Stylised / aesthetic-led imagery (non-typographic) | Design-literate but one aesthetic register | `krea-2` — style references, moodboards, the widest open-weights visual range |
 | Structural control (pose/depth) | `bbox` layout only | `sdxl` or the Fun Union ControlNets (`flux-2`, `z-image`) |
 | Mixed-model pipelines | **The typography pass** — text plates and design layers for other models' imagery | `image-production-workflows` for the cross-model craft |
+| Making it move | Still images only | `wan-2-2` — image-to-video from a still locked here. Worth knowing the limit: text rendered into a still will not survive motion cleanly, so animate around type rather than through it |
 
 ---
 

@@ -134,6 +134,11 @@ Per-model facts live in the model skills — this skill only owns what spans the
 | `z-image` | realism stacking, layered ZIB/ZIT pipeline | fast realism refiner (ZIT) |
 | `flux-2` | prompt comprehension, multi-reference identity; klein 4B Apache-2.0 | quality refiner (klein); composition front-end |
 | `ideogram-4` | typography, layout, design | the typography pass |
+| `krea-2` | widest aesthetic range; tuned against the AI look | aesthetics/composition front-end |
+| `wan-2-2` | **video** — image-to-video, motion and camera control | the downstream stage: a still finished by this ladder is what drives I2V |
+| `minimax-h3` | **video + native audio** — omni-modal, reference conditioning | downstream, and the one output this ladder can silently break: most video post nodes are picture-only and will drop the audio track |
+
+**Where this ladder stops.** Everything here is the *image* ladder. Video has its own, and the two are not interchangeable — the ordering rule on the video side is **restore/upscale before you interpolate**, and a per-frame image upscaler used on video produces shimmer because it has no cross-frame consistency. See `wan-2-2` for the video ladder and its per-stage settings.
 
 ---
 

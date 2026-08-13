@@ -5,13 +5,13 @@
     "email": "rnel66@gmail.com"
   },
   "metadata": {
-    "description": "Authoritative setup and prompting guides for image generation models",
-    "version": "1.0.0"
+    "description": "Authoritative setup, prompting, and production guides for generative media models",
+    "version": "1.1.0"
   },
   "plugins": [
     {
-      "name": "image-model-skills",
-      "description": "Authoritative ComfyUI, diffusers, and API guides for FLUX.2, Ideogram 4, Z-Image, SDXL, and Krea 2 — covering setup, prompting, ControlNet, face identity, character consistency, LoRA training, multi-stage and mixed-model production pipelines, and failure modes",
+      "name": "generative-media-skills",
+      "description": "Authoritative ComfyUI, diffusers, and API guides for generative media models — image (FLUX.2, Ideogram 4, Z-Image, SDXL, Krea 2) and video (Wan 2.2, MiniMax H3) — spanning setup, prompting, ControlNet and motion/camera control, native audio-video generation, face identity, character consistency across frames and shots, LoRA training, the image-to-video handoff, licence and territory pitfalls, multi-stage and mixed-model production pipelines, and failure modes",
       "source": "./",
       "strict": false,
       "skills": [
@@ -20,6 +20,10 @@
         "./skills/z-image",
         "./skills/sdxl",
         "./skills/krea-2",
+        "./skills/wan-2-2",
+        "./skills/minimax-h3",
+        "./skills/character-lora-training",
+        "./skills/comfyui-on-runpod",
         "./skills/image-production-workflows"
       ]
     }

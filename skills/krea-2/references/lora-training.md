@@ -1,5 +1,8 @@
 # Krea 2 — LoRA training
 
+> **Shared craft lives in [`character-lora-training`](../../character-lora-training/)** — dataset coverage, caption-the-residual, evaluation, adult/NSFW base selection, and the real-person likeness rules that decide whether a LoRA is publishable. This file covers what is specific to this model.
+
+
 **Making** a LoRA for Krea 2. Using/stacking one is `setup-and-workflows.md §6`; the character pipeline end-to-end is `characters.md`. The ecosystem is ~2 weeks old (open weights 2026-06-22): the official doctrine is unusually explicit, one full named recipe exists, and the biggest question is genuinely contested. Verified 2026-07-07.
 
 ## Contents
@@ -55,6 +58,47 @@ Key facts from the docs [official-kohya]:
 - **Memory:** `--fp8_base --fp8_scaled` (must be together; fp8 covers the 28 main blocks, the text-fusion stage stays bf16); `--blocks_to_swap` up to **26**; `--gradient_checkpointing`; `--compile` for the main blocks. **12 GB is enough in practice**: a named style-LoRA config on an RTX 3060 12 GB / 48 GB RAM runs `--fp8_base --fp8_scaled --blocks_to_swap 18 --block_swap_h2d_only --block_swap_ring_size 1 --split_attn --gradient_checkpointing_cpu_offload` — ~1,200 steps in ~2 h at ~5.9 s/it on 30-image datasets [community — urabewe, r/StableDiffusion, full command published].
 - **Sample on Turbo while training Raw:** `--turbo_dit turbo.safetensors` applies the in-training LoRA on top of Turbo weights for previews (`--l 1 --s 8` in the sample prompt — CFG off, 8 steps) — previewing on the checkpoint you'll actually run is the doctrine made ergonomic. Raw-side samples need CFG (CFG-off Raw output is blurry by design). `--turbo_dit` is incompatible with `--blocks_to_swap`.
 - **Inference script** (`krea2_generate_image.py`) uses the **classic CFG scale** (≤1 = off): Turbo = `--steps 8 --guidance_scale 1 --mu 1.15`; Raw default `--guidance_scale 5.5` ≙ official guidance 4.5. Fits a 24 GB card with `--fp8_scaled` and/or block swap; LoRAs merge into base weights at load (the only correct route under fp8).
+
+## 2a. Training on 12 GB — the low-VRAM configuration
+
+A fully documented 12 GB path exists, and it is worth stating precisely because the naive attempt fails `[community — SirMick, Civitai, 2026-07]`. Verified on an **RTX 3060 12 GB, 64 GB system RAM, Windows**, with musubi-tuner.
+
+**Why it is hard:** the full stack far exceeds the card.
+
+| Component | Approx. size |
+|---|---|
+| Krea 2 Raw | ~24.5 GB |
+| Qwen3-VL 4B text encoder | ~8.3 GB |
+| Qwen Image VAE | ~1.1 GB |
+
+**FP8 alone is not enough** — training stayed unstable, slow and prone to CUDA crashes. The working solution is FP8 **plus CPU block swapping**:
+
+```
+--fp8_base --fp8_scaled          # base-model quantisation
+--blocks_to_swap 20              # move inactive transformer blocks to system RAM
+--block_swap_h2d_only            # keep a CPU master copy; stream host→device only,
+                                 #   skipping the needless device→host copy in LoRA training
+--block_swap_ring_size 2         # two GPU ring buffers so the next block prefetches
+                                 #   while the current one is processed (also musubi's default)
+```
+
+**System RAM is the hidden requirement.** 64 GB was tested; **32 GB can become tight** depending on dataset, OS overhead, caching and page-file settings. On a 12 GB card the constraint that bites is usually host memory, not VRAM.
+
+Validated bucket geometries at this size: **512×512 and 1024×256**, batch size 1.
+
+The original author notes their benchmark tests the block-swapping flags as a combination and does not isolate `--block_swap_h2d_only`, so no independent speedup is claimed for it — a level of care worth preserving when citing these numbers.
+
+## 2b. Adult / NSFW work
+
+**Krea 2 supports this well** — roughly **52% of published Krea 2 LoRAs are adult-flagged**, the highest share of any image model in this suite `[community — Civitai model API, sampled 2026-08-13]`. That is consistent with `nsfwVariant` already being one of this skill's most-cited craft sources for general Krea 2 technique.
+
+Two Krea-specific points:
+
+- **The doctrine is unchanged: train on Raw, run on Turbo.** Adult LoRAs follow the same path as any other, and several published ones ship exactly that way.
+- **Several LoRA families span bases** — the same named adult LoRA lines appear built for Krea 2, Z-Image Turbo and Flux Klein. If you are already running one family on another base, check whether a Krea 2 build exists before training your own.
+- Krea 2's soft/airbrushed default and its **two taxes** (see SKILL.md) apply here as everywhere — the Wan 2.1 VAE swap and texture anchoring matter more, not less, for anatomy work.
+
+General doctrine — why base coverage rather than refusal is the limit, explicit captioning, anatomy failure modes — is in [`character-lora-training/references/nsfw-training.md`](../../character-lora-training/references/nsfw-training.md). Publishing constraints, which bind harder than capability, are in [`publishing-and-likeness.md`](../../character-lora-training/references/publishing-and-likeness.md).
 
 ## 3. AI-Toolkit and the Ostris turbo-adapter path
 

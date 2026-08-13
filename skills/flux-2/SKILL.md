@@ -258,6 +258,7 @@ The handoff rule: **always VAE-decode to pixels between model families** — FLU
 | Commercial local use | **[klein] 4B is the suite's only Apache-2.0 path** at this quality level | `sdxl` (OpenRAIL++-M) for the mature alternative; `krea-2` is free commercial only under $1M revenue |
 | Aesthetic range / anti-AI-look | Default rendering (especially [klein]) skews over-sharpened "AI look" | `krea-2` — tuned *against* the AI look, style-reference system, widest stylistic space (its hosted Large even renders through the FLUX.2 VAE) |
 | Mixed-model pipelines | Quality refiner ([klein] img2img) and composition front-end | `image-production-workflows` for the cross-model craft |
+| Making it move | Still images only | `wan-2-2` — image-to-video. Wan's I2V path is much stronger than its text-to-video, so the still you lock here controls the shot; multi-reference identity work here is the upstream half of a consistent character on screen |
 
 ---
 

@@ -196,6 +196,7 @@ Choose the model for the job — defaults like realism direction and prompting d
 | Structural control (pose/depth/canny) | Fun Union ControlNet, **Turbo only** | `sdxl` for the most mature, complete control stack |
 | Aesthetic range / stylistic exploration | One strong realism-leaning default | `krea-2` — deliberately no house look (style refs, moodboards, official style LoRAs); Z-Image is *its* standard face/detail finisher, so the pairing runs both ways |
 | Mixed-model pipelines | **The realism refiner** — ZIT finishing other models' renders (`references/workflows.md §11`); the standard face-pass and repair-inpaint partner for `krea-2` scenes (~0.2 denoise) | `image-production-workflows` for the cross-model craft itself |
+| Making it move | Still images only | `wan-2-2` — image-to-video. Wan's I2V path is much stronger than its text-to-video, so a still locked here (character LoRA + FaceDetailer included) is what actually controls the shot; the character work in `references/characters.md` is the upstream half of consistent characters in video |
 
 ---
 

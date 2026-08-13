@@ -1,5 +1,8 @@
 # FLUX.2 LoRA Training
 
+> **Shared craft lives in [`character-lora-training`](../../character-lora-training/)** — dataset coverage, caption-the-residual, evaluation, adult/NSFW base selection, and the real-person likeness rules that decide whether a LoRA is publishable. This file covers what is specific to this model.
+
+
 > **Using** a LoRA (loader node, variant compatibility, weights, stacking, the Turbo accel-LoRA) is `setup-and-workflows.md §7`. This file is only about **making** one. The full character pipeline (dataset factory, deployment, multi-character) is `references/characters.md`.
 
 **Supported training bases:**
@@ -43,6 +46,27 @@ Other live options: **Civitai's official orchestration recipe** for [klein] (`de
 
 > ⚠ **The Civitai klein-4B recipe defaults to dim 2 / alpha 1.** That is a cost-optimized floor for their hosted trainer, not a quality recommendation — community ablation finds rank 4–8 LoRAs barely move FLUX.2's fused attention/MLP blocks. For local training start at 16 (character) / 32+ (style). *(Official-platform recipe vs named-community ablation — a genuine divergence, flagged.)*
 
+## The official reference config
+
+BFL publishes its own Klein training documentation, which makes this the one model in the suite with a **vendor-stated** LoRA recipe rather than a purely community-derived one:
+
+| Parameter | Value |
+|---|---|
+| Rank | **64** |
+| Alpha | **128** (i.e. `2×rank` — double effective LR, and a legitimate config despite the old "alpha must not exceed rank" folklore) |
+| Batch (total) | **4** |
+| Learning rate | **1e-5** |
+
+`[official — BFL Klein training docs]`
+
+BFL also frames the expected shape of a run: **15–40 images sharing one look, roughly 60 minutes** on a single GPU.
+
+**Train on a Base (undistilled) variant.** Klein Base is the intended fine-tuning target precisely because it is undistilled — the same train-on-the-undistilled-variant rule that governs Z-Image and Krea 2. Guidance-distilled variants fight training.
+
+**Klein 9B has documented collapse patterns** — community trainers report characteristic failure modes specific to the 9B at certain configs. If a 9B run degenerates rather than converging, that is a known class of problem rather than a dataset fault `[community — re-verify]`.
+
+The `ai-toolkit-perceptual` character-training fork (see [`character-lora-training`](../../character-lora-training/) §8 territory, and `sdxl/references/lora-training.md` §8 for the full method) **defaults to the Klein 9B checkpoint** in its quickstart, so Flux.2 is the best-supported target for weight-noising and depth-anchoring experiments.
+
 ## Hyperparameters
 
 | Parameter | Character | Style | Notes |
@@ -74,6 +98,16 @@ FLUX.2's encoders are LLMs, so captions are **descriptive natural-language sente
 - **Ethics flag:** single-living-artist styles without consent are the community fault line; Civitai requires real-artist disclosure. Prefer self-made, licensed, or historic/aggregate aesthetics.
 
 **The style acceptance test:** the LoRA passes when the style is recognizable on subjects *not* in the training set. Point trainer sample prompts at out-of-set subjects, and include one prompt *without* any trigger to catch leakage early.
+
+## Adult / NSFW work
+
+**BFL filtered the pre-training data** for NSFW and unlawful content. That is a data decision, not a refusal mechanism — so the model does not decline, it simply has thin coverage and produces poor anatomy. No conditioning trick changes that; in particular, swapping in an abliterated text encoder does nothing but perturb your conditioning (the mechanism is in [`character-lora-training/references/nsfw-training.md`](../../character-lora-training/references/nsfw-training.md) §1).
+
+Consequences for training:
+
+- **Community NSFW finetunes exist** and are the practical base if this is the target. Verify each one's licence and lineage separately — Flux's variant licences differ sharply, and a finetune inherits the constraints of whatever it was built on.
+- **Training the capability in from a filtered base is expensive.** You are teaching coverage the model largely lacks, not adjusting a bias it already has. If adult work is the primary goal, [`sdxl`](../../sdxl/) and its purpose-built finetunes are a far shorter path.
+- The licence split across Flux.2 variants makes this a **commercial-use question as well as a capability one** — check which variant you trained on before distributing anything.
 
 ## Assessing fit — judge by images, not loss
 

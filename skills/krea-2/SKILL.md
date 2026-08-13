@@ -56,6 +56,8 @@ The load-bearing axis is the **role split** — which checkpoint you train on, w
 
 **The community corollary: turn the stock prompt-enhancer off.** The official ComfyUI template ships an LLM prompt-expansion subgraph *enabled by default*. It refuses benign prompts — "photo of a dog on a kitchen table" gets an ethics lecture instead of an expansion [community — 808charlie, Comfy-Org/ComfyUI#14631] — and named workflow authors ship abliterated-Qwen replacements rather than use it [community — lonecatone23, Civitai]. Toggle `prompt_enhance` off in the subgraph and write the full prompt yourself, or swap in the API-node enhancer of your choice. If you want LLM expansion offline, Krea publishes the expander's system prompt (`docs/expansion.txt` in the GitHub repo) for use with any LLM [official].
 
+**But swap the enhancer, not the encoder — the subgraph wires the same LLM to both.** This template is the documented origin of a myth that spread across the whole ecosystem: because the enhancer refuses benign prompts, people replace it with an abliterated ("heretic") Qwen build, and the subgraph quietly applies that swap to the `CLIPTextEncode` path as well. The author of Heretic has since stated plainly that an abliterated **text encoder** cannot uncensor a diffusion model — abliteration only removes an LLM's ability to *refuse*, and refusal lives in output layers a text encoder never uses, so all you get is perturbed hidden states and slightly worse prompt adherence [community — -p-e-w-, author of Heretic]. Unpack the subgraph, point the abliterated model at the **expander only**, and leave the encoder stock. Measured impact of encoder swaps on Z-Image is reportedly small either way [community — afinalsin, XY grids over 8 encoder finetunes], so this is a correctness point more than a quality one. See [`minimax-h3`](../minimax-h3/) for the fuller account.
+
 Full prompt anatomy, official example prompts, realism vocabulary, and the style-LoRA trigger table: **`references/prompting-guide.md`**.
 
 ---
@@ -217,6 +219,7 @@ Choose the model for the job — defaults like realism direction and prompting d
 | Structural control (pose/depth/canny) | First community **depth** ControlNet just landed (Tanmay Patil); no pose/canny/union yet | `sdxl` (mature stack) or `z-image` (Fun Union ControlNet) |
 | Commercial local use | Community License: free under $1M revenue | `flux-2` [klein] 4B or `sdxl` for unrestricted-revenue Apache/OpenRAIL paths |
 | Mixed-model pipelines | Aesthetics/composition front-end; Z-Image inpaints its artefact zones | `image-production-workflows` for the cross-model craft |
+| Making it move | Still images only | `wan-2-2` — image-to-video from a still locked here. Note the existing link runs the other way too: the **Wan 2.1 VAE swap** in this skill's anti-AI-look craft is borrowed from that family |
 
 ---
 

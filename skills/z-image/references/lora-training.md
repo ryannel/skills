@@ -1,5 +1,8 @@
 # Z-Image LoRA Training
 
+> **Shared craft lives in [`character-lora-training`](../../character-lora-training/)** — dataset coverage, caption-the-residual, evaluation, adult/NSFW base selection, and the real-person likeness rules that decide whether a LoRA is publishable. This file covers what is specific to this model.
+
+
 > **Using** a LoRA (loading, weights, stacking, the QKV gotcha, cross-compatibility) is in `references/workflows.md §6 — Using LoRAs`. This file is only about **making** one.
 
 ## Which variant to train on — train on Base, generate on Turbo
@@ -81,6 +84,37 @@ Two variants ship in the `ostris/zimage_turbo_training_adapter` HF repo (referen
 > **These Z-Image numbers are a community starting point and the tooling is new** — verify rank/LR/alpha against the **current Ostris AI-Toolkit** Z-Image config examples before a long run. The *relationships* above are stable across architectures; the *exact* Z-Image defaults are fast-moving.
 
 ---
+
+## The fast path — RunPod + the Ostris template
+
+Z-Image is unusually cheap to train, and the published quick path is worth knowing because it lowers the cost of iterating on a dataset `[community — Prompting_Pixels, Civitai]`:
+
+- **RunPod's official Ostris AI-Toolkit template** is a one-click deploy into a browser UI — no local install, and there is a **low-VRAM toggle** in the UI for tight cards. Deployment mechanics: [`comfyui-on-runpod`](../../comfyui-on-runpod/).
+- A reported run: **9 images, no captions at all, 3000 steps, ~1 hour on a 5090**, 1024×1024, for a simple character concept. Captionless training is contested in general (see [`character-lora-training`](../../character-lora-training/)) but it does work for straightforward replication, and Z-Image's speed makes it cheap to test both ways.
+- **The subject typically emerges by 1000–1500 steps.** If nothing recognisable has appeared by then, stop and look at the dataset rather than training longer.
+- **Sample every ~250 steps, and put the trigger in the sample prompts.** Forget the trigger and the early samples look like the base model, which makes progress impossible to read.
+
+With small datasets, diversity matters far more than count — the same coverage protocol as everywhere else, just with fewer images to carry it.
+
+## Experimental methods and how Z-Image responds
+
+The weight-noising / depth-anchoring fork (full method in [`sdxl/references/lora-training.md`](../../sdxl/references/lora-training.md) §8) added **experimental Z-Image Turbo support**, and two findings came out of that specific to this family `[community — QuantumBogoSort, EmploymentLong9284; early]`:
+
+- **Z-Image Turbo dislikes multi-resolution buckets** far more than Flux does — bucketed training reportedly degrades quality noticeably versus **pure 1024 training**. That is the opposite of the Flux recipe, where varied buckets are part of the method.
+- **Noise sigma tuned on Flux is too aggressive for ZiT.** One report: the concept's geometry was learned in half the steps, but style quality collapsed. Start well below the Flux value and raise carefully.
+
+Both are early reports on an experimental method. `[flagged — re-verify]`
+
+## Adult / NSFW work
+
+**Z-Image supports this work well, and has a mature LoRA ecosystem for it.** Roughly **46–47% of published Z-Image LoRAs are adult-flagged**, on Turbo and Base alike — including anatomy-specific LoRAs rather than only general realism ones, which is the signal that the base has usable coverage rather than needing capability taught in from scratch `[community — Civitai model API, sampled 2026-08-13]`.
+
+Practical notes:
+
+- **Both variants are served**, so the normal doctrine holds unchanged: **train on Base, generate on Turbo**. LoRAs exist for each.
+- **Anatomy LoRAs stack with realism LoRAs.** Z-Image's airbrushed default (see the realism technique in the SKILL.md) applies here too — the skin-texture and realism LoRAs that fix it are the same ones. Expect to stack, and train a good citizen accordingly.
+- The general rule still governs: limits are **training-data coverage, not refusal**, so no encoder swap or conditioning trick changes an outcome. Mechanism in [`character-lora-training/references/nsfw-training.md`](../../character-lora-training/references/nsfw-training.md) §1.
+- **Publishing is the binding constraint** — real-person likeness is prohibited on Civitai regardless of rating. See [`publishing-and-likeness.md`](../../character-lora-training/references/publishing-and-likeness.md).
 
 ## Assessing fit — is the LoRA actually working?
 
