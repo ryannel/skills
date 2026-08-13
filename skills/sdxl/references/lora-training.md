@@ -209,6 +209,8 @@ Two consequences: if your character already has good community LoRAs, **try stac
 
 Save **checkpoints throughout** — every 200–500 steps on a conventional run, every 25 on an experimental one — because the best checkpoint is usually well before the final. Then build an **XY grid of epoch × strength (0.1–1.0)** on fixed prompts spanning simple → complex and in-domain → out-of-domain, and pick the Goldilocks cell. Generating the grid in ComfyUI is truer than trainer preview samples.
 
+**Then judge the grid blind** — it is labelled by design, so you know which cell trained longer before you look. Which comparison tool to use, the shuffled-candidate pass, a reusable probe set and how to score likeness with numbers: [`character-lora-training/references/evaluation-and-tooling.md`](../../character-lora-training/references/evaluation-and-tooling.md).
+
 **A concrete ship criterion** `[community — neonkisu]`: if the LoRA holds identity at **0.7+ weight across three or more clearly different environments**, ship it. Do not over-optimise the first version — feedback from real use is faster than another isolated iteration round.
 
 **Train a good citizen if it will be stacked.** Modest rank, don't over-train, and accept a sweet spot **below 1.0** — that is what lets a LoRA coexist with speed LoRAs and other content LoRAs. Sub-1.0 strength is normal, not a sign of undercooking.

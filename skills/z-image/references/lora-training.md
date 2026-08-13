@@ -122,6 +122,8 @@ Judge a LoRA by **generated images, not the loss curve.** Loss barely moves in a
 
 **The standard evaluation: an XY grid of saved epochs × LoRA strength.** Put the **checkpoint/epoch on one axis** and **strength 0.1 → 1.0 on the other**, generate the grid on a couple of fixed test prompts, and read off the cell that's strongest. You're hunting the "Goldilocks" epoch — enough to capture the concept, not so much it locks up.
 
+**Then judge it blind, and score likeness separately from prompt-adherence** — they peak at different checkpoints. Tooling, a reusable probe set and the cost arithmetic: [`character-lora-training/references/evaluation-and-tooling.md`](../../character-lora-training/references/evaluation-and-tooling.md).
+
 | Signal | What you see | Fix |
 |---|---|---|
 | **Good fit** | Concept reproduced *with flexibility* — you can change pose, clothing, scene, and it holds | ship that checkpoint |

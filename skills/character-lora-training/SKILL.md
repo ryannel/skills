@@ -1,7 +1,7 @@
 ---
 name: character-lora-training
 description: >
-  Train a character LoRA that holds an identity across prompts, poses and models — the cross-model craft that every model skill in this suite otherwise repeats. Use this whenever the user is building, debugging or planning a LoRA, even obliquely: assembling and curating a dataset, deciding how many images, captioning (and the character-vs-style inversion that decides what a LoRA actually learns), picking rank/alpha/LR/steps as starting points, judging whether a run over- or under-fit, holding likeness across a multi-stage pipeline or into video, or choosing which base model to train on in the first place. It covers **adult/NSFW work as a first-class case** — which base models actually have the training data (the limit is nearly always data, not refusal), why explicit captioning is mandatory rather than optional, anatomy failure modes, and why automated captioners fail on adult video. It also covers what determines whether a LoRA is **publishable at all**: Civitai's total ban on real-person likeness (SFW and NSFW alike) and the TAKE IT DOWN Act's live FTC enforcement, both of which constrain dataset sourcing and distribution. Per-model hyperparameters, trainer flags and quirks live in the model skills — this owns what transfers.
+  Train a character LoRA that holds an identity across prompts, poses and models — the cross-model craft that every model skill in this suite otherwise repeats. Use this whenever the user is building, debugging or planning a LoRA, even obliquely: assembling and curating a dataset, deciding how many images, captioning (and the character-vs-style inversion that decides what a LoRA actually learns), picking rank/alpha/LR/steps as starting points, **evaluating a finished run** — which checkpoint to ship, how to build and read an XY/checkpoint grid, which comparison tool to use, whether a run over- or under-fit, how to score likeness objectively — holding likeness across a multi-stage pipeline or into video, or choosing which base model to train on in the first place. It covers **adult/NSFW work as a first-class case** — which base models actually have the training data (the limit is nearly always data, not refusal), why explicit captioning is mandatory rather than optional, anatomy failure modes, and why automated captioners fail on adult video. It also covers what determines whether a LoRA is **publishable at all**: Civitai's total ban on real-person likeness (SFW and NSFW alike) and the TAKE IT DOWN Act's live FTC enforcement, both of which constrain dataset sourcing and distribution. Per-model hyperparameters, trainer flags and quirks live in the model skills — this owns what transfers.
 ---
 
 # Character LoRA training
@@ -99,12 +99,27 @@ These are the shape of the consensus, not settings to copy — every model skill
 
 **Loss is a weak signal.** It tells you the model is fitting; it does not tell you whether the identity generalises.
 
-The real test, in order:
+Three layers, cheapest first:
 
-1. **XY grid: epoch × strength.** Checkpoints on one axis, LoRA weight on the other, one fixed prompt and seed. This finds the usable region and shows the drift into overfit.
-2. **Out-of-distribution prompts.** Put the character somewhere unlike anything in the dataset. A LoRA that only works on near-copies of training data memorised rather than learned.
-3. **Strength sweep.** A healthy character LoRA has a usable band, not a single knife-edge value. If only 1.0 works, it is over-trained.
-4. **Stack test**, if it will be used with others — a "good citizen" LoRA does not blow out when combined.
+1. **Training samples** — free, already on. Fix the seed and use 3–5 prompts, and they show you *roughly where the useful region is* so the next layer can be small. Don't pick a final checkpoint from them: the trainer's sampler isn't your production one.
+2. **A grid: checkpoint × strength**, fixed prompts and seed, generated in the tool you will actually ship from. This is the only step that costs real compute — narrow the checkpoint range using layer 1 first.
+3. **Judge it blind.** The grid is labelled by design, so you know which cell trained longer before you look at it. Shuffle the candidates unlabelled, pick, then reveal. This costs nothing and routinely reverses the answer the labelled grid gave.
+
+**Three habits that decide whether the evaluation is worth anything:**
+
+- **Probe out of distribution, or you have tested nothing.** Put the character somewhere unlike anything in the dataset — a costume, a painted style, a wide shot where the face is small. A LoRA that only holds on near-copies of its training data memorised rather than learned, and in-domain prompts cannot tell you which happened.
+- **Write the probe prompts before you see any results, and reuse the set across runs.** Prompts invented while browsing outputs drift toward what the LoRA already does well. A fixed set is also the only way run 3 becomes comparable to run 1.
+- **Score likeness and prompt-adherence separately** — they peak at *different* checkpoints, reliably, because likeness keeps improving after flexibility has begun to die. One "which is best?" silently averages two axes moving in opposite directions.
+- **A prompt that fails on every checkpoint is a dataset finding, not a checkpoint finding.** No epoch choice fixes missing profile coverage. Those prompts are the specification for your next dataset.
+
+**Numbers are a screen, not a verdict.** `FaceEmbedDistance` (from `ComfyUI_FaceAnalysis`) is the reachable quantitative signal — but calibrate a baseline from real photos first, and know that DINO/CLIP-I-family similarity metrics are **documented as significantly misaligned with human judgement** on exactly this task, and inflate when a LoRA overfits pose.
+
+Tools, a copy-pasteable starter probe set, the cost arithmetic, and what is worth building yourself: **`references/evaluation-and-tooling.md`**.
+
+Two further tests worth running before shipping:
+
+- **Strength sweep.** A healthy character LoRA has a usable band, not a knife-edge. If only 1.0 works, it is over-trained.
+- **Stack test**, if it will run with others — a "good citizen" LoRA does not blow out when combined.
 
 | Signal | Diagnosis | Fix |
 |---|---|---|
@@ -170,4 +185,5 @@ Dated **2026-08-13**.
 |---|---|
 | `references/dataset-and-captioning.md` | Building the set: the 8-point rotation protocol in full, elevation and shot-size coverage, curation criteria, the synthetic dataset-factory loop, caption formats by encoder class, and multi-outfit / multi-character limits |
 | `references/nsfw-training.md` | Adult work in depth: per-family base-model selection and what each ecosystem offers, why the encoder-swap myth persists and what to do instead, explicit-captioning practice, anatomy failure modes, and the manual-captioning cost on video datasets |
+| `references/evaluation-and-tooling.md` | Judging a finished run at home: which grid tool to use (SwarmUI Grid Generator, Efficiency Nodes, X/Y/Z plot) and their limits, the blind-judging pass, a copy-pasteable held-out probe set, `FaceEmbedDistance` with baseline calibration and why the metric misleads, cost arithmetic for rented GPUs, and the small script worth writing yourself |
 | `references/publishing-and-likeness.md` | What determines whether a LoRA is publishable: Civitai's rules in full, the TAKE IT DOWN Act, dataset provenance, the synthetic-character resemblance test, and where distribution is still open |

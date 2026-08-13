@@ -113,6 +113,8 @@ Consequences for training:
 
 Save **multiple checkpoints** (every 200–500 steps — the best is usually well before the final), then generate an **XY grid of checkpoint × LoRA strength (0.1–1.0)** on fixed prompts spanning in-domain → out-of-domain subjects, and pick the "Goldilocks" cell.
 
+**Then judge the grid blind, on a probe set you wrote before seeing results.** Tooling and protocol: [`character-lora-training/references/evaluation-and-tooling.md`](../../character-lora-training/references/evaluation-and-tooling.md).
+
 | Signal | What you see | Fix |
 |---|---|---|
 | **Good fit** | Concept reproduced *with flexibility* — pose/scene/outfit all remain promptable | ship it |
