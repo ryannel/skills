@@ -41,6 +41,10 @@ The same network volume is mounted at a different path depending on where ComfyU
 
 So `extra_model_paths.yaml` must declare **both roots with identical key sets**. Miss one and you get the single most confusing failure in this stack: **it works in the studio and breaks in serverless**, with a model-not-found error for a file you can see on the volume.
 
+**Verified on live infrastructure 2026-08-13** — a serverless worker enumerated exactly the volume's `models/vae/` contents, and RunPod's docs are explicit: serverless mounts at `/runpod-volume`, pods at `/workspace`.
+
+> **The trap that makes people disbelieve this.** A RunPod **template** carries a `volumeMountPath` field, and it commonly reads `/workspace` — *including on templates used by serverless endpoints.* It is a **pod-only field, and serverless ignores it**: serverless templates do not expose a mount-path option at all, because the path is fixed and uncustomisable. Reading `volumeMountPath: /workspace` off a serverless template and concluding the second block is unnecessary is exactly the wrong inference, and it is an easy one to make from the console.
+
 ```yaml
 network_volume:            # interactive pod
   base_path: /workspace/
@@ -81,19 +85,22 @@ One canonical tree, keyed by **which loader node reads it**. That is the only or
 ```
 /workspace/                        ← (= /runpod-volume/ in serverless)
 └── models/
-    ├── diffusion_models/          ← UNETLoader / Load Diffusion Model
-    ├── checkpoints/               ← CheckpointLoaderSimple (all-in-one SD/SDXL)
-    ├── clip/                      ← CLIPLoader (text encoders)
-    ├── vae/                       ← VAELoader
-    ├── vae_approx/                ← TAE preview decoders
+    ├── diffusion_models/          ← UNETLoader / Load Diffusion Model      [core]
+    ├── checkpoints/               ← CheckpointLoaderSimple (all-in-one)    [core]
+    ├── clip/                      ← CLIPLoader (text encoders)             [core]
+    ├── vae/                       ← VAELoader                              [core]
+    ├── upscale_models/            ← UpscaleModelLoader                     [core]
+    ├── loras/                     ← LoraLoader — foldered by base model    [core]
+    │   ├── <base-a>/
+    │   ├── <base-b>/
+    │   └── _shared/               ← works on more than one base
+    ├── vae_approx/                ← TAE preview decoders        [only if you want previews]
+    ├── insightface/               ← FaceAnalysis / PuLID / InstantID    [if doing face work]
     ├── controlnet/                ← ControlNetLoader
-    ├── upscale_models/            ← UpscaleModelLoader
-    ├── ipadapter/  clip_vision/  embeddings/  style_models/
-    └── loras/                     ← LoraLoader — foldered by base model
-        ├── <base-a>/
-        ├── <base-b>/
-        └── _shared/               ← works on more than one base
+    └── ipadapter/  clip_vision/  embeddings/  style_models/
 ```
+
+**Create the `[core]` six; add the rest when a node actually needs them.** A working production volume inspected on 2026-08-13 had exactly the core six plus `insightface/` — no `controlnet/`, `vae_approx/`, `ipadapter/`, `clip_vision/`, `embeddings/` or `style_models/`, because nothing in its pipelines loaded them. An absent directory is not a fault; a directory absent from `extra_model_paths.yaml` *while a node needs it* is. Declare the keys generously in the yaml, create the folders lazily.
 
 **Fold LoRAs by base model.** `LoraLoader` shows the subfolder as a path prefix in the dropdown, so `z-image-turbo/amy_v9/…` tells you at a glance what it belongs to — and when you retire a base model, the folder tells you what dies with it.
 
@@ -170,6 +177,8 @@ Both run ComfyUI; they fail differently and bill very differently.
 **Cost guards that actually work** (details in RunPod's skills — this is the ComfyUI-shaped summary):
 
 - **`--terminate-after <iso8601>` at creation.** It *deletes* the pod at that time. Prefer it over `--stop-after`, which merely stops it and keeps billing disk. Set it on every pod, always, even when you're sure you'll be quick.
+
+  > **Use `runpodctl pod create`, not `runpodctl create pod`.** Both exist in `runpodctl` 2.3.0 and they are different command surfaces. The legacy verb-noun form (`create pod`) takes `--gpuType`/`--networkVolumeId`/`--imageName` and has **no cost guard at all** — no `--terminate-after`, no `--stop-after`. The modern noun-verb form (`pod create`) takes `--gpu-id`/`--network-volume-id`/`--image` and is the one that carries the guards. Reach for the wrong one and you will conclude the flag doesn't exist and create an unguarded pod. Verified against `runpodctl 2.3.0-be4ced4` on 2026-08-13. Check with `runpodctl pod create --help` before a first run on a new machine.
 - **Tear down in order:** remove the pod, *then* delete the volume if it was scratch. The volume can't be deleted while a pod holds it.
 - **Volume data survives pod removal** — only deleting the volume clears it. That's the point: you rebuild pods freely and never re-download.
 
@@ -202,6 +211,24 @@ On rented hardware, find out in two minutes rather than twenty. Run this after a
 
 Fail at step 2 and it's `extra_model_paths.yaml`. Fail at step 5 having passed step 3 and it's the `runpod_volume` block.
 
+### Ask the worker what it can see, instead of guessing
+
+The fastest diagnostic in this stack, and it costs one failed job rather than a debugging session. **Send a workflow with a deliberately invalid model name.** ComfyUI's validation error enumerates the values it *can* resolve:
+
+```
+vae_name: '__nonexistent__.safetensors' not in
+  ['ae.safetensors', 'flux2-vae.safetensors', 'sdxl_vae_fp16_fix.safetensors', 'pixel_space']
+```
+
+A populated list means the volume is mounted and that key resolves. An empty or built-ins-only list means it is not. Compare the list against an S3 listing of the volume and you know within one job whether the problem is the mount, the yaml key, or the filename.
+
+Two things that make this work:
+
+- **The graph needs an output node.** Without one, ComfyUI returns `prompt_no_outputs` and never validates inputs — you burn a worker spin-up and learn nothing. Wire a `SaveImage`.
+- **Validation runs before sampling**, so the job fails in well under a second of execution once the worker is warm. No GPU work happens.
+
+Use it before you start editing `extra_model_paths.yaml` on a hunch.
+
 ---
 
 ## Failure modes & QC
@@ -210,6 +237,7 @@ Fail at step 2 and it's `extra_model_paths.yaml`. Fail at step 5 having passed s
 |---|---|---|
 | Model dropdowns empty | `extra_model_paths.yaml` not deployed, or ComfyUI not restarted since | Deploy the file, restart ComfyUI (Manager → Restart) |
 | Works in studio, "model not found" in serverless | Only the `network_volume` block declared; the worker mounts at `/runpod-volume/` | Declare both blocks with identical keys |
+| Template shows `volumeMountPath: /workspace`, so the second block "must be unnecessary" | `volumeMountPath` is a **pod-only** field that serverless ignores | Ignore it on serverless templates; declare both blocks anyway |
 | A single model type missing, rest fine | That loader's key absent — commonly `text_encoders` or `vae_approx` | Add the key; map `text_encoders` and `clip` to the same dir |
 | LoRA on the volume but not in the dropdown | Wrong subfolder, or ComfyUI not restarted | Check the folder, restart; the dropdown shows the subfolder as a prefix |
 | Proxy URL 502s | Still booting, or ComfyUI bound to `127.0.0.1` | Keep polling; ensure `--listen 0.0.0.0` |
@@ -239,7 +267,7 @@ Fail at step 2 and it's `extra_model_paths.yaml`. Fail at step 5 having passed s
 
 ## How to read the claims in this skill — two bars, by claim type
 
-**Hard facts — must be exact or it breaks.** The dual mount roots (`/workspace/` vs `/runpod-volume/`), the `extra_model_paths.yaml` key set and its multi-path `diffusion_models` block, which loader reads which directory, the S3 endpoint form `s3api-<dc>.runpod.io`, `--terminate-after` deleting versus `--stop-after` stopping, ports being fixed at pod creation, volumes being datacenter-locked, and API-format-not-UI-format for endpoints. **Source of truth is official** — RunPod's own skills and docs — plus a working production configuration these were read out of. A wrong path silently hides a model; a missing cost guard bills all night. **Re-verify the CLI flags and pricing against `runpodctl` before relying on them**; platform surfaces change.
+**Hard facts — must be exact or it breaks.** The dual mount roots (`/workspace/` vs `/runpod-volume/`), the `extra_model_paths.yaml` key set and its multi-path `diffusion_models` block, which loader reads which directory, the S3 endpoint form `s3api-<dc>.runpod.io`, `--terminate-after` deleting versus `--stop-after` stopping, ports being fixed at pod creation, volumes being datacenter-locked, and API-format-not-UI-format for endpoints. **Source of truth is official** — RunPod's own skills and docs — plus a working production configuration these were read out of. **The dual mount root was validated against live infrastructure on 2026-08-13** (a serverless worker enumerated exactly the volume's `models/vae/`), and the `runpodctl` command-surface split was verified against `2.3.0-be4ced4`. A wrong path silently hides a model; a missing cost guard bills all night. **Re-verify the CLI flags and pricing against `runpodctl` before relying on them**; platform surfaces change.
 
 **Craft — what actually makes this work day to day.** The volume-as-contract framing, foldering LoRAs by base with a separate compatibility graph, the manifest pattern, downloading on CPU pods, build-interactively-run-in-serverless, and the smoke-test order. **This is house craft distilled from a running studio**, not vendor documentation — it is what the vendor docs don't tell you because it only shows up after you've rebuilt a volume a few times. Stated with confidence; adapt the specifics to your stack.
 
