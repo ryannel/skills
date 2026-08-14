@@ -46,6 +46,13 @@ Install by **skill name** — it does not depend on which domain folder a skill 
 so these commands keep working if a skill is later regrouped. Target a specific agent
 with `-a claude-code`, or install globally with `-g`.
 
+Several skills cross-reference each other — `flux-2` points at
+`character-lora-training` for shared training craft, the model skills point at
+`comfyui-on-runpod` for deployment. Those links are relative between siblings, and
+installing flattens the domain folder away, so they resolve **once both skills are
+installed** and dangle if only one is. If a skill you installed keeps referring to
+another, install that one too.
+
 As a Claude Code plugin instead:
 
 ```bash
