@@ -1,7 +1,7 @@
 ---
 name: skill-freshness
 description: >
-  Run the freshness protocol for the published skills in this repo — detect whether the facts in
+  REPO-INTERNAL AUTHORING MACHINERY for github.com/ryannel/skills — not a general-purpose skill. It is driven by that repo's freshness.json state file and will do nothing useful without it. Run the freshness protocol for the published skills in this repo — detect whether the facts in
   skills/generative-media/* have drifted from reality, on a per-skill cadence driven by central
   state in freshness.json. Use this whenever the user wants to check, validate, audit, or refresh
   the skills' currency — "are the skills up to date?", "run a freshness check", "check if anything

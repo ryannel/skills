@@ -44,6 +44,10 @@ The reason for keeping them out of the catalogue is that both are load-bearing o
 
 **Being in `.agents/skills/` is deliberate, not accidental:** that path plus the `.claude/skills` symlink is how Claude Code discovers them when working *in* this repo, which is the only place they make sense.
 
+**Known wart: they still appear in `npx skills add ryannel/skills --list`.** The CLI scans `.agents/skills/` and `.claude/skills/` as standard locations, so the repo reports 12 skills where the catalogue has 10. There is no clean fix today — every path an agent auto-discovers is a path the CLI scans, by design, so the meta-skills cannot be both locally discoverable and hidden. The upstream request for a `metadata.internal` flag is [vercel-labs/skills#572](https://github.com/vercel-labs/skills/issues/572), open and unimplemented as of 2026-08-14.
+
+Until it lands, both meta-skill descriptions open with a **REPO-INTERNAL AUTHORING MACHINERY** notice, so anyone who finds them in a listing knows before installing. If #572 ships, add the flag and drop the prefix.
+
 Revisit if either becomes true: the house style is wanted by people outside this repo, or a second factory needs the same machinery. Until then the cost of maintaining a generalised fork outweighs the benefit.
 
 ## Freshness protocol
