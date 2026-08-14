@@ -1,1 +1,7 @@
 .DS_Store
+*.log
+*.tmp
+
+# Python bytecode from the vendored skill-creator
+__pycache__/
+*.pyc

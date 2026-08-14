@@ -1,0 +1,953 @@
+{
+  "version": 1,
+  "updated": "2026-08-14",
+  "tiers": {
+    "hot": 1,
+    "active": 7,
+    "stable": 30
+  },
+  "skills": {
+    "ideogram-4": {
+      "path": "skills/generative-media/ideogram-4",
+      "tier": "hot",
+      "cadence_days": 1,
+      "last_checked": "2026-08-13",
+      "last_drift_found": "2026-08-13",
+      "quiet_streak": 0,
+      "why_tier": "Model released 2026-06-03 — days old. Vendor has signalled checkpoint updates (safety filter); FLASH API tier announced but not live; community tooling (LoRA, quants, ComfyUI craft) forming week to week.",
+      "watchlist": [
+        {
+          "id": "flash-tier",
+          "type": "pending-release",
+          "claim": "rendering_speed FLASH is announced but the API returns 400 'coming soon'",
+          "where": "SKILL.md (sampler/pricing table footnote, ~L90); references/api-and-webapp.md §2",
+          "check": "Hit the docs/changelog: is FLASH live? If yes, update param table, pricing, and the footnote."
+        },
+        {
+          "id": "v3-edit-paths",
+          "type": "flagged-inference",
+          "claim": "Edit/upscale/reframe/replace-bg have no v4 endpoints; inference is that the 4.0 model runs through /v1/ideogram-v3/* paths (marked [flagged] in the skill)",
+          "where": "references/api-and-webapp.md §4",
+          "check": "Look for v4-namespaced edit-family endpoints or an official statement; replace the inference with a stated fact either way."
+        },
+        {
+          "id": "api-pricing",
+          "type": "pricing",
+          "claim": "API per-image prices from ideogram.ai/api-pricing (page internally dated 2025-08-06 — unreliable timestamp); web-app plan numbers are third-party approximations (marked [flagged])",
+          "where": "references/api-and-webapp.md §5; SKILL.md pricing column",
+          "check": "Re-read live api-pricing and pricing pages; replace third-party web-plan numbers with official ones if now accessible."
+        },
+        {
+          "id": "safety-filter-checkpoint",
+          "type": "pending-release",
+          "claim": "Ideogram has signalled checkpoint updates, notably for the safety filter; skill documents current filter behavior and debugging",
+          "where": "SKILL.md release footer (~L244) and safety-filter debugging section",
+          "check": "Any new checkpoint on the HF repo? If shipped, re-verify safety-filter guidance and quant filenames."
+        },
+        {
+          "id": "no-control-adapters",
+          "type": "ecosystem-gap",
+          "claim": "No ControlNet, PuLID, or IP-Adapter exists for Ideogram 4 from Ideogram or any community team, as of June 2026",
+          "where": "SKILL.md ~L149",
+          "check": "Search for any released control/identity adapter for Ideogram 4; if one lands this is a major rewrite trigger for the pose/identity section."
+        },
+        {
+          "id": "lora-tooling",
+          "type": "ecosystem-gap",
+          "claim": "Self-hosting/LoRA tooling described as bleeding-edge, days post-launch; no mature LoRA training path on open weights",
+          "where": "references/self-hosting.md (end); SKILL.md 'wrong tool for' framing",
+          "check": "Has AI-Toolkit / kohya / OneTrainer added Ideogram 4 support? If LoRAs become practical, the 'routes you to another model' framing needs revisiting."
+        },
+        {
+          "id": "comfy-template",
+          "type": "version-pin",
+          "claim": "ComfyUI node names, file layout, and template details captured days after launch",
+          "where": "SKILL.md setup section; references/self-hosting.md",
+          "check": "Diff against the current official ComfyUI template JSON; verify quant filenames in the HF repo."
+        },
+        {
+          "id": "days-old-framing",
+          "type": "date-stamp",
+          "claim": "Skill says 'this is a days-old model; the community is still learning it'",
+          "where": "SKILL.md ~L244",
+          "check": "This framing ages out on its own — rewrite once the release is >4-6 weeks old or community consensus stabilises."
+        },
+        {
+          "id": "ideogram4-lora-trainers",
+          "type": "tool-behaviour",
+          "claim": "ostris/ai-toolkit lists ideogram-ai/ideogram-4-fp8 in supported models. fal runs a live 'Ideogram V4 LoRA Trainer' (steps 100-40000 default 1000, LR 1e-6..1e-2 default 1e-4, resolution auto/preset/custom) emitting BOTH 'fal' and 'comfy' format weights - the comfy output is what makes hosted training usable on open weights.",
+          "where": "references/self-hosting.md section 6 trainer table; SKILL.md LoRA paragraph and wrong-tool table",
+          "check": "Confirm both still shipped and the comfy-format output still offered. Check whether kohya/OneTrainer have added support, and whether concrete recipes (rank/alpha/steps) are now published - the section deliberately gives no hyperparameters because none were found."
+        },
+        {
+          "id": "ideogram4-civitai-lora-composition",
+          "type": "figure",
+          "claim": "33 Ideogram 4.0 LoRAs on Civitai (2026-08-13), near-entirely style/aesthetic; character LoRAs essentially absent; 0 adult-flagged. Top Ideogram-specific version: Lenovo UltraReal v1.0 Ideogram4 at 6,866 downloads.",
+          "where": "references/self-hosting.md section 6; SKILL.md two-bar craft note and wrong-tool table",
+          "check": "Re-run with baseModel='Ideogram 4.0' (the .0 matters - 'Ideogram', 'Ideogram 4', 'Ideogram4' and 'IdeogramV4' ALL return zero). If character LoRAs appear in volume, the character-routing advice needs revisiting. NOTE Civitai reports downloads at MODEL level, not version level - always check whether a high count spans other base models."
+        }
+      ],
+      "open_findings": [
+        {
+          "id": "ideogram4-lora-ecosystem-exists",
+          "severity": "resolved",
+          "found": "2026-08-13",
+          "finding": "CONFIRMED DRIFT, two independent sources. (1) fal ships a LIVE 'Ideogram V4 LoRA Trainer' - not waitlisted, exposes steps (100-40000, default 1000), LR (1e-6..1e-2, default 1e-4), resolution and default-caption, and emits BOTH a 'fal' and a 'comfy' output format ('same trained weights; only the internal key names differ'). ComfyUI-format output means these LoRAs run on the OPEN weights. (2) ostris/ai-toolkit now lists ideogram-ai/ideogram-4-fp8 in its supported models - directly falsifying self-hosting.md:208 'ai-toolkit's documented support list does not yet formally include Ideogram 4'.",
+          "where": "SKILL.md description ('wrong tool for ... LoRAs on open weights - it routes you to the right model'); SKILL.md:151 consistent-characters routing; SKILL.md:218-219 wrong-tool table; SKILL.md:242 two-bar note; references/self-hosting.md:202-210 section 6",
+          "action": "RESOLVED 2026-08-13. self-hosting.md section 6 rewritten with the two trainers, the comfy-format detail, and the Civitai composition. SKILL.md character-routing paragraph, wrong-tool table (now three rows: characters / style LoRAs / character LoRAs) and description all revised. Adapters vs training kept as separate axes throughout. NUANCE FOUND DURING REPAIR: 33 published Ideogram 4.0 LoRAs exist but are near-entirely STYLE work - no character LoRAs - so routing characters elsewhere still stands, for a changed reason."
+        },
+        {
+          "id": "ideogram4-days-old-framing-expired",
+          "severity": "resolved",
+          "found": "2026-08-13",
+          "finding": "Mechanical but pervasive: released 2026-06-03, now 71 days ago. The watchlist said this framing ages out at 4-6 weeks. 'This is a days-old model' and 'at days old the deep practitioner corpus hasn't accumulated yet' now read as wrong.",
+          "where": "SKILL.md:238, :242, :246; references/self-hosting.md:7",
+          "action": "RESOLVED 2026-08-13. 'days-old' replaced in all five places with a dated review stamp."
+        },
+        {
+          "id": "ideogram4-flash-still-pending",
+          "severity": "none",
+          "found": "2026-08-13",
+          "finding": "CLAIM HOLDS. rendering_speed=FLASH still marked 'coming soon' and still returns 400. Live speeds/pricing corroborated: TURBO $0.03/12 steps, DEFAULT $0.06/20, QUALITY $0.10/48.",
+          "where": "references/api-and-hosted.md param table",
+          "action": "None. Keep on the watchlist."
+        },
+        {
+          "id": "ideogram4-no-control-adapters-holds",
+          "severity": "none",
+          "found": "2026-08-13",
+          "finding": "CLAIM HOLDS and is now better sourced: a HF discussion thread on ideogram-ai/ideogram-4-fp8 is titled 'No Controlnet Capability'. No ControlNet, PuLID or IP-Adapter for Ideogram 4 found. NOTE this is what keeps half the routing advice correct even after the LoRA finding - adapters and LoRA training are separate axes and the repair must not conflate them.",
+          "where": "SKILL.md:151, :218",
+          "action": "None, but see ideogram4-lora-ecosystem-exists - the repair must preserve this distinction."
+        }
+      ]
+    },
+    "flux-2": {
+      "path": "skills/generative-media/flux-2",
+      "tier": "active",
+      "cadence_days": 7,
+      "last_checked": "2026-08-13",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "[dev] is 6+ months old, [klein] ~5 months — core facts settled, but the ecosystem (PuLID single-maintainer repo, ControlNet ports, diffusers, LoRA recipes) moves weekly.",
+      "watchlist": [
+        {
+          "id": "pulid-flux2",
+          "type": "version-pin",
+          "claim": "iFayens/ComfyUI-PuLID-Flux2 is the only FLUX.2 PuLID; t2i-only as of v0.6.x; weights pulid_flux2_klein_v1/v2; single-maintainer fast-moving project",
+          "where": "references/characters.md ~L14; references/controlnet-and-identity.md §PuLID (~L90)",
+          "check": "Check repo releases: new versions, i2i/edit support, new weight files, or a competing implementation."
+        },
+        {
+          "id": "flux1-cn-teams",
+          "type": "ecosystem-gap",
+          "claim": "InstantX, Shakker-Labs, and xinsir have not published a FLUX.2 ControlNet adaptation as of June 2026 (only Alibaba PAI Fun Union exists)",
+          "where": "references/controlnet-and-identity.md ~L19",
+          "check": "Search each team's HF/GitHub for FLUX.2 ControlNets; a release changes the pose-control recommendation."
+        },
+        {
+          "id": "no-ip-adapter",
+          "type": "ecosystem-gap",
+          "claim": "No FLUX.2-native IP-Adapter (general or face) has been released as of June 2026",
+          "where": "references/controlnet-and-identity.md ~L162",
+          "check": "Search for FLUX.2 IP-Adapter releases (Tencent ailab, InstantX, community)."
+        },
+        {
+          "id": "bfl-pricing",
+          "type": "pricing",
+          "claim": "API pricing is community-tier/directional — BFL uses an interactive calculator; stated numbers are from research-agent lookups",
+          "where": "references/api-and-bfl.md §8",
+          "check": "Spot-check bfl.ai/pricing for the four model slugs; also watch for new API variants/endpoints."
+        },
+        {
+          "id": "diffusers-status",
+          "type": "version-pin",
+          "claim": "Flux2Pipeline / Flux2KleinPipeline install path and minimum diffusers version as captured at authoring",
+          "where": "SKILL.md diffusers setup; references/setup-and-workflows.md",
+          "check": "Is the install line still git+ or now a stable diffusers release? Update version pin."
+        },
+        {
+          "id": "captionless-debate",
+          "type": "contested",
+          "claim": "Captionless vs captioned LoRA training presented as genuinely contested (kohya #1497, Herbst ablation)",
+          "where": "references/lora-training.md ~L66",
+          "check": "Only update if the community visibly converges — look for new ablations or trainer-default changes."
+        },
+        {
+          "id": "regional-lora-dit",
+          "type": "contested",
+          "claim": "Per-region LoRA application on DiT attention masking 'still contested — expect retries'",
+          "where": "references/characters.md ~L50",
+          "check": "Look for new ComfyUI core/node-pack work on regional LoRA for Flux-class DiTs."
+        },
+        {
+          "id": "new-variants",
+          "type": "pending-release",
+          "claim": "Variant table covers dev/klein-4B/klein-9B/9B-KV + API pro/max/flex/klein",
+          "where": "SKILL.md variant selector",
+          "check": "Watch BFL blog/HF for new FLUX.2 checkpoints, klein updates, or licence changes."
+        },
+        {
+          "id": "bfl-official-lora-config",
+          "type": "version-pin",
+          "claim": "BFL-published Klein LoRA reference config: rank 64, alpha 128, batch 4, LR 1e-5; 15-40 images sharing one look, ~60 min. One of the few vendor-stated recipes in the suite.",
+          "where": "references/lora-training.md 'The official reference config'",
+          "check": "Re-read docs.bfl.ml Klein training page. Vendor recipes change with model revisions."
+        },
+        {
+          "id": "klein-9b-collapse",
+          "type": "community",
+          "claim": "Klein 9B has documented collapse patterns at certain configs - a known failure class rather than a dataset fault.",
+          "where": "references/lora-training.md 'The official reference config'",
+          "check": "Sourced from secondary summary, not a named trainer. Upgrade attribution or downgrade the claim."
+        }
+      ],
+      "open_findings": []
+    },
+    "z-image": {
+      "path": "skills/generative-media/z-image",
+      "tier": "active",
+      "cadence_days": 7,
+      "last_checked": "2026-08-13",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "Released model is settled, but two announced variants (Edit, Omni-Base) could land any week — either landing is a major rewrite trigger (characters reference is built on 'no edit model exists').",
+      "watchlist": [
+        {
+          "id": "z-image-edit",
+          "type": "pending-release",
+          "claim": "Z-Image-Edit: announced, not yet released ('to be released' on official GitHub)",
+          "where": "SKILL.md variant table L17, L203; references/characters.md L5 (whole reference assumes its absence)",
+          "check": "Check Tongyi-MAI GitHub/HF. If released: verify licence, then flag characters.md for rewrite (dataset-factory path changes) — major."
+        },
+        {
+          "id": "z-image-omni-base",
+          "type": "pending-release",
+          "claim": "Z-Image-Omni-Base: announced, not yet released",
+          "where": "SKILL.md variant table L18, L203",
+          "check": "Same as z-image-edit — verify licence on landing; variant table + default-workflow guidance need updating."
+        },
+        {
+          "id": "regional-tooling",
+          "type": "ecosystem-gap",
+          "claim": "No regional-prompting or attention-masking tooling for Z-Image as of mid-2026; per-face detailer passes are the multi-character mitigation",
+          "where": "references/characters.md ~L68; cross-referenced in image-production-workflows mixed-model-recipes.md L66",
+          "check": "Search for Z-Image regional/attention-mask node packs; a release also triggers the linked image-production-workflows item."
+        },
+        {
+          "id": "lora-pr-12717",
+          "type": "version-pin",
+          "claim": "diffusers-format Z-Image LoRAs silently lose attention weights on ComfyUI builds before core PR #12717 ('update ComfyUI first')",
+          "where": "SKILL.md ~L102; references/workflows.md §6",
+          "check": "Ages out as old builds disappear — once the fix is months-old in stable releases, demote from headline gotcha to footnote."
+        },
+        {
+          "id": "base-turbo-transfer",
+          "type": "contested",
+          "claim": "Base→Turbo LoRA transfer degradation magnitude genuinely contested ('~100% similarity' to 'little impact'); train-on-Base is the consensus",
+          "where": "references/workflows.md ~L140",
+          "check": "Look for new systematic comparisons (HF Tongyi-MAI discussions, named community ablations)."
+        },
+        {
+          "id": "base-vram",
+          "type": "gap",
+          "claim": "Z-Image (base) VRAM listed as 'not published'",
+          "where": "SKILL.md variant table",
+          "check": "Has the model card or community established a firm number? Fill the gap."
+        },
+        {
+          "id": "zit-bucket-and-noise",
+          "type": "flagged-inference",
+          "claim": "Z-Image Turbo reportedly degrades with multi-resolution buckets (prefer pure 1024), and Flux-tuned weight-noise sigma is too aggressive for ZiT. Early reports on an experimental fork.",
+          "where": "references/lora-training.md 'Experimental methods and how Z-Image responds'",
+          "check": "Both are single early reports from the ai-toolkit-perceptual discussion. Corroborated? Has ZiT support matured past experimental?"
+        },
+        {
+          "id": "z-image-nsfw-position",
+          "type": "community",
+          "claim": "RESOLVED 2026-08-13: Z-Image supports adult work well - 46-47% of published LoRAs adult-flagged on Turbo and Base alike, including anatomy-specific ones. Doctrine unchanged (train Base, run Turbo).",
+          "where": "references/lora-training.md 'Adult / NSFW work'",
+          "check": "Re-sample the Civitai model API if the ecosystem shifts. No longer an open gap."
+        }
+      ],
+      "open_findings": []
+    },
+    "sdxl": {
+      "path": "skills/generative-media/sdxl",
+      "tier": "stable",
+      "cadence_days": 30,
+      "last_checked": "2026-08-13",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "SDXL 1.0 is frozen (July 2023); architecture, prompting dialect, and licence facts don't move. Only the ecosystem drifts: finetune versions, trainer defaults, and the contested Turbo licence.",
+      "watchlist": [
+        {
+          "id": "turbo-licence",
+          "type": "contested",
+          "claim": "Turbo licence contested: LICENSE.md is Stability AI Community License (free commercial <$1M revenue) but repo metadata still tags sai-nc-community and model-card prose says non-commercial",
+          "where": "SKILL.md ~L211-215",
+          "check": "Re-read stabilityai/sdxl-turbo LICENSE.md, metadata tag, and model card; if Stability reconciles them, replace the 'contested' framing with the verdict."
+        },
+        {
+          "id": "finetune-versions",
+          "type": "version-pin",
+          "claim": "Named finetune recommendations (Juggernaut, RealVisXL, DreamShaper, Pony, Illustrious/NoobAI) reflect versions current at authoring",
+          "where": "SKILL.md checkpoint axis; references/checkpoints-and-loras.md",
+          "check": "Check Civitai/HF for major new versions of each named finetune or a new dominant finetune in either dialect family."
+        },
+        {
+          "id": "trainer-status",
+          "type": "version-pin",
+          "claim": "kohya_ss / OneTrainer defaults and the Illustrious style recipe as captured at authoring",
+          "where": "references/lora-training.md",
+          "check": "Skim trainer changelogs for changed SDXL defaults; low priority, mature area."
+        },
+        {
+          "id": "sdxl-nsfw-base-lineages",
+          "type": "community",
+          "claim": "Base selection table: Pony V6 XL (score tags, non-transferable), Illustrious v2.0 (largest character-LoRA library), NoobAI-XL V-Pred 1.0 (most anatomically accurate, REQUIRES v-prediction + Euler), WAI-NSFW v17 (easier runner-up), Anima (newer, described as becoming 'the new Illustrious').",
+          "where": "references/lora-training.md section 1; section 11",
+          "check": "Fastest-moving part of this skill. Have newer Illustrious/NoobAI/Anima versions displaced these? Is the v-pred sampler constraint still current? Anima's status is flagged and needs resolving either way."
+        },
+        {
+          "id": "sdxl-rank-contested",
+          "type": "contested",
+          "claim": "Rank for character LoRAs is contested: the classic ladder says 8-16 for characters, named trainers say 48/48 default and 48-64 when the LoRA forgets below 0.5 weight. Both presented, not averaged.",
+          "where": "references/lora-training.md section 3",
+          "check": "Has consensus formed? The two positions may be reconcilable by base model or by whether the LoRA is meant to stack."
+        },
+        {
+          "id": "identity-ratio-and-caption-dropout",
+          "type": "community",
+          "claim": "The 0.33 identity-emphasis / 0.67 in-context dataset split with distinct failure directions, and caption_dropout ~0.3 as the strongest single generalisation lever.",
+          "where": "references/lora-training.md sections 4-5; mirrored in character-lora-training",
+          "check": "Single-author system (neonkisu, Civitai). Has it been independently reproduced? Strong internal logic but one source - upgrade the attribution if corroborated."
+        },
+        {
+          "id": "weight-noising-depth-anchoring",
+          "type": "flagged-inference",
+          "claim": "Weight noising (Gaussian perturbation into LoRA weights each step, sigma ~0.0125) plus depth anchoring resists memorisation and improves likeness at the same step count. ai-toolkit-perceptual fork. SDXL: depth anchoring supported, weight-noising params NOT yet worked out.",
+          "where": "references/lora-training.md section 8",
+          "check": "Explicitly experimental and author-acknowledged as unstable. Have SDXL params been established? Ported to OneTrainer? Has the Rose optimizer interaction settled?"
+        },
+        {
+          "id": "multi-lora-stacking",
+          "type": "community",
+          "claim": "Stacking N LoRAs of the same character at reduced strength (2@0.55, 3@0.425, 4@0.35, 5@0.275) beats one at 1.0 on flexibility; Model Soups (arXiv 2203.05482) as theoretical support.",
+          "where": "references/lora-training.md section 9",
+          "check": "Widely reproduced anecdotally but the specific strength ladder is one author's. Worth testing in skill-testbed - cheap, no training required."
+        }
+      ],
+      "open_findings": []
+    },
+    "krea-2": {
+      "path": "skills/generative-media/krea-2",
+      "tier": "hot",
+      "cadence_days": 1,
+      "last_checked": "2026-08-13",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "Open weights released 2026-06-22 — two weeks old at registration. Official edit models announced as coming (major rewrite trigger), LoRA doctrine actively contested, template has an open bug against its default, GGUF/quant ecosystem forming daily.",
+      "watchlist": [
+        {
+          "id": "edit-models-pending",
+          "type": "pending-release",
+          "claim": "No official edit/img2img model; 'robust editing, image reference, and native 2K/4K' named as future work; CTO says edit models 'coming'",
+          "where": "SKILL.md variant-selector default-workflow note + limitations; references/characters.md (whole reference assumes their absence); references/setup-and-workflows.md §4 (t2i-only diffusers)",
+          "check": "Check krea-ai GitHub/HF/blog. If an edit model lands: verify licence, then flag characters.md for rewrite (dataset-factory path changes) and the diffusers/ComfyUI sections for new pipelines/templates — major."
+        },
+        {
+          "id": "lora-doctrine",
+          "type": "contested",
+          "claim": "Train-on-Raw/run-on-Turbo (official, kohya) vs Ostris turbo-adapter direct-on-Turbo; as of 2026-07-07 both paths have named successes (JahJedi, urabewe, Any_Tea_3499 LoKr recipe) — 'either works' is evidenced, 'which is better' is open; musubi docs say 'optimal settings are not yet established'",
+          "where": "SKILL.md LoRA summary + contested points; references/lora-training.md §1, §3, §6, §7",
+          "check": "Look for direct A/B comparisons between the paths, an ai-toolkit example config landing in config/examples, or convergence in trainer defaults; update the dispute framing when one path visibly wins."
+        },
+        {
+          "id": "raw-as-inference",
+          "type": "contested",
+          "claim": "Raw+TurboLoRA@0.6 recipe 'WAY better' (nsfwVariant) vs plain Raw more airbrushed than Turbo (amida168) — recipes differ, no consensus",
+          "where": "SKILL.md per-variant settings (Raw) + contested points; references/setup-and-workflows.md §7a",
+          "check": "Watch for replications or refutations of the two-stage recipe by other named authors."
+        },
+        {
+          "id": "comfy-template-enhancer",
+          "type": "version-pin",
+          "claim": "Official template ships the TextGenerate prompt-enhancer on by default; it refuses benign prompts (open issue Comfy-Org/ComfyUI#14631); skill's advice is 'turn it off'",
+          "where": "SKILL.md one-rule section + stock-settings table; references/prompting-guide.md §6; references/setup-and-workflows.md §1",
+          "check": "Check the issue and the current template JSON — if the default flips or the enhancer is fixed/replaced, soften the guidance."
+        },
+        {
+          "id": "diffusers-source-only",
+          "type": "version-pin",
+          "claim": "Krea2Pipeline requires diffusers from source (docs on main, 'no hub repo yet' for the converted layout in docs prose, though HF cards show from_pretrained('krea/Krea-2-Raw'))",
+          "where": "SKILL.md setup §diffusers; references/setup-and-workflows.md §4",
+          "check": "Check pypi/diffusers release notes for a stable release containing Krea2Pipeline; update the install line and drop the source-only caveat."
+        },
+        {
+          "id": "api-pricing-1k",
+          "type": "pricing",
+          "claim": "Medium $0.030/Large $0.060 (+refs/moodboard surcharges); API resolution '1K only currently'",
+          "where": "SKILL.md hosted-surfaces + limitations; references/api-and-hosted.md §2",
+          "check": "Re-read krea.ai developer docs: prices, and whether 2K+ API resolution shipped (also removes a hosted-vs-open asymmetry the skill states)."
+        },
+        {
+          "id": "licence-seat-terms",
+          "type": "flagged-inference",
+          "claim": "A '50-seat' free-tier figure circulates in secondary coverage but is absent from the licence agreement text; skill treats the <$1M revenue test as the operative gate",
+          "where": "SKILL.md licence section",
+          "check": "Re-read krea.ai/krea-2-licensing and LICENSE.pdf; if seat terms appear (or marketing/legal reconcile), state the verdict plainly."
+        },
+        {
+          "id": "control-identity-tooling",
+          "type": "ecosystem-gap",
+          "claim": "Control/identity layer is days old as of 2026-07-07: one community depth ControlNet (Tanmay Patil), one community identity-edit LoRA (conradlocke, needs ComfyUI-Krea2Edit nodes), Ostris edit stack, nova452 Rebalance — no PuLID/InstantID/IP-Adapter, no pose/canny/union CN, no official edit model",
+          "where": "SKILL.md suite table + limitations; references/characters.md §1, §3; image-production-workflows mixed-model-recipes.md control-stack table",
+          "check": "Fast-moving: check for new adapters (pose/union CN, face embedders), maturation or abandonment of the depth CN and identity-edit LoRA, and whether the official edit model lands — each materially rewrites the characters/control routing."
+        },
+        {
+          "id": "gguf-quant-ecosystem",
+          "type": "version-pin",
+          "claim": "GGUF ecosystem is gguf-org/vantagewithai/molbal/realrebelai (no city96); sizes as listed; no per-quant quality comparison exists; int8-convrot ~2× faster than fp8 claim is single-source",
+          "where": "SKILL.md quantisation; references/setup-and-workflows.md §2",
+          "check": "Re-check HF for new/renamed GGUF repos (city96 entering would change the default pointer) and for any published quant-quality shootout."
+        },
+        {
+          "id": "two-weeks-old-framing",
+          "type": "date-stamp",
+          "claim": "Skill repeatedly frames the ecosystem as '~2 weeks old', 'no consensus yet' on several craft items (per-quant quality, seed lore, captioning, hosted-vs-open, Flux.2 shootout)",
+          "where": "SKILL.md two-bar closing; scattered 'no consensus' flags in references",
+          "check": "Ages out on its own — once the release is >4–6 weeks old, sweep the 'no consensus yet' items: several will have answers, and the framing needs rewriting."
+        },
+        {
+          "id": "krea-12gb-config",
+          "type": "community",
+          "claim": "12GB training path: musubi-tuner with --fp8_base --fp8_scaled --blocks_to_swap 20 --block_swap_h2d_only --block_swap_ring_size 2; 64GB system RAM (32GB tight); buckets 512x512 and 1024x256; batch 1. FP8 alone insufficient.",
+          "where": "references/lora-training.md section 2a",
+          "check": "Verified once on RTX 3060 12GB/Windows by a named author. Do musubi flag names still match? Has anyone reproduced on other 12GB cards?"
+        },
+        {
+          "id": "krea-nsfw-position",
+          "type": "community",
+          "claim": "RESOLVED 2026-08-13: Krea 2 supports adult work well - ~52% of published LoRAs adult-flagged, highest share of any image model in the suite. Consistent with nsfwVariant being an existing named source for this skill.",
+          "where": "SKILL.md NSFW family table via character-lora-training; references/lora-training.md",
+          "check": "Re-sample if the ecosystem shifts. No longer an open gap."
+        }
+      ],
+      "open_findings": []
+    },
+    "wan-2-2": {
+      "path": "skills/generative-media/wan-2-2",
+      "tier": "hot",
+      "cadence_days": 1,
+      "last_checked": "2026-08-13",
+      "last_drift_found": "2026-08-13",
+      "quiet_streak": 0,
+      "why_tier": "Video ecosystems churn faster than image ones. Wan 3.0 is pre-announced as open weights and would be a major rewrite trigger; the lightx2v speed-LoRA versions, VACE-for-2.2 file naming, and the ComfyUI template numbers all move week to week.",
+      "linked_skills": [
+        "z-image",
+        "flux-2",
+        "sdxl",
+        "krea-2",
+        "image-production-workflows"
+      ],
+      "watchlist": [
+        {
+          "id": "wan-3-0-open-weights",
+          "type": "pending-release",
+          "claim": "Wan 3.0 pre-announced as an Apache-2.0 open-weight release; unconfirmed. Wan 2.2 framed throughout as 'the current open-weights frontier, and may be the last'.",
+          "where": "SKILL.md intro L20; 'Licence and known limitations'; two-bar section contested point 3",
+          "check": "Check Wan-Video GitHub + Wan-AI HF org for published 3.0 weights. If released: the intro framing, the suite-positioning table and the whole variant selector need rework - MAJOR."
+        },
+        {
+          "id": "wan-2-5-plus-api-only",
+          "type": "flagged-inference",
+          "claim": "Wan 2.5 / 2.6 / 2.7 exist but are API-only; weights pre-announced as open and never published.",
+          "where": "SKILL.md intro L20; 'Licence and known limitations'",
+          "check": "Verify no weights have since appeared for 2.5+. Sourced from secondary reporting, not a primary Alibaba statement - upgrade or correct the sourcing."
+        },
+        {
+          "id": "lightx2v-slow-motion-fixes",
+          "type": "contested",
+          "claim": "Slow-motion tax fixes: strength split 0.6-0.8 high / 1.0 low, CFG 2-3.5 on high only, 8 steps; and the resolution effect (1280x720 normal vs 832x480 slow).",
+          "where": "SKILL.md 'The speed LoRAs, and their tax'; failure-modes table row 1",
+          "check": "lightx2v HF discussions (#26 is the acknowledged slow-motion thread) - has an upstream fix shipped that supersedes the community recipes? Exact numbers vary by author."
+        },
+        {
+          "id": "two-lora-single-expert",
+          "type": "contested",
+          "claim": "Whether a low-noise-only LoRA is an acceptable substitute for the high+low pair. Presented as an appearance-only shortcut, not a general substitute.",
+          "where": "SKILL.md 'The two-LoRA rule'; references/lora-training.md section 1",
+          "check": "musubi-tuner discussion #455 and current Civitai training articles - has consensus moved either way?"
+        },
+        {
+          "id": "musubi-569-one-lora",
+          "type": "flagged-inference",
+          "claim": "musubi-tuner may emit only one LoRA file from a high+low training run (issue #569).",
+          "where": "SKILL.md 'The two-LoRA rule'; references/lora-training.md section 1",
+          "check": "Is kohya-ss/musubi-tuner#569 closed/fixed? If fixed, drop the warning or note the fixed version."
+        },
+        {
+          "id": "vace-for-wan22-naming",
+          "type": "ecosystem-gap",
+          "claim": "VACE for Wan 2.2 exists as a Fun variant (Wan2.2-VACE-Fun-A14B); exact file naming and node wiring flagged for verification.",
+          "where": "references/motion-and-camera.md 'VACE'",
+          "check": "Confirm current official/community file names and whether ComfyUI has native template support; this is the fastest-moving corner of the Wan ecosystem."
+        },
+        {
+          "id": "comfy-template-numbers",
+          "type": "version-pin",
+          "claim": "All per-mode settings read verbatim from Comfy-Org/workflow_templates on 2026-08-13: 14B 20 steps CFG 3.5-4.0 shift 8 (4 steps CFG 1.0 shift 5 on the LoRA path), 81f@16fps; 5B 20 steps CFG 5.0 uni_pc shift 8 121f@24fps; S2V 10 steps CFG 6.0 77f.",
+          "where": "SKILL.md 'Per-mode settings'; references/setup-and-workflows.md sections 1-3",
+          "check": "Re-pull the template JSONs (video_wan2_2_*.json) and diff the widgets_values. Templates change silently on ComfyUI releases."
+        },
+        {
+          "id": "lightx2v-lora-versions",
+          "type": "version-pin",
+          "claim": "Speed LoRA filenames: i2v uses ..._lora_v1_{high,low}_noise, t2v uses ..._lora_v1.1_{high,low}_noise.",
+          "where": "SKILL.md 'The speed LoRAs'; references/setup-and-workflows.md section 1",
+          "check": "Version suffixes bump often and the i2v/t2v mismatch is deliberate - re-verify both against the current templates."
+        },
+        {
+          "id": "quant-vram-thresholds",
+          "type": "community",
+          "claim": "Q4_K_M is the 12GB sweet spot for 14B; 5B fp16 beats 14B Q3_K on ~8GB.",
+          "where": "SKILL.md 'Quantisation & VRAM' and task-mode selector note; references/setup-and-workflows.md section 4",
+          "check": "Sourced from a secondary guide, not a named author benchmark - upgrade the sourcing or downgrade the claim."
+        },
+        {
+          "id": "chinese-default-negative",
+          "type": "community",
+          "claim": "Wan ships a default Chinese negative prompt and it should be kept in Chinese rather than translated.",
+          "where": "SKILL.md 'Prompting Wan 2.2'; references/prompting-guide.md section 5",
+          "check": "Confirm the exact default string in the current repo inference config / ComfyUI template. The skill deliberately does not reproduce it verbatim - verify it still ships and consider quoting it once verified."
+        },
+        {
+          "id": "wan-trainer-comparison",
+          "type": "community",
+          "claim": "musubi requires latent + text-encoder pre-caching via separate scripts; image-only datasets use .txt sidecars with is_image_dataset: True; image LoRA ~12GB, I2V fits 16GB with FP8+block-swap.",
+          "where": "references/lora-training.md section 2 'Choosing between them'",
+          "check": "Verify flag/behaviour names against current musubi-tuner and ai-toolkit releases."
+        },
+        {
+          "id": "wan-nsfw-manual-captioning",
+          "type": "community",
+          "claim": "40+ community adult LoRAs across T2V and I2V; automated captioners fail on adult footage so the community captions manually - the strongest argument for single-frame training.",
+          "where": "references/lora-training.md section 4a",
+          "check": "Has a captioner emerged that handles this? Would materially change the cost calculus for video datasets."
+        }
+      ],
+      "open_findings": [
+        {
+          "id": "wan22-animate-2",
+          "severity": "minor",
+          "found": "2026-08-13",
+          "finding": "Wan-AI HF org now lists Wan2.2-Animate-2-14B and Wan2.2-Animate-2-14B-Distilled (plus -Diffusers variants). The skill's task-mode selector and motion-and-camera.md only reference the original Animate-14B.",
+          "where": "SKILL.md task-mode selector 'Animate' row; references/motion-and-camera.md 'Animate' section",
+          "action": "Add Animate-2 (and the Distilled variant) to the selector and the Animate section; verify ComfyUI template support and file names before writing settings."
+        },
+        {
+          "id": "wan-3-0-checked-absent",
+          "severity": "none",
+          "found": "2026-08-13",
+          "finding": "Watchlist item wan-3-0-open-weights checked directly against the Wan-AI HF org: NO Wan 3.0 present; latest is Wan 2.2. A secondary SEO site (wan27.org) claims an April 2026 Wan 3.0 open-weights release - NOT supported by the official org. Skill wording ('pre-announced, unconfirmed') remains correct.",
+          "where": "SKILL.md intro; 'Licence and known limitations'",
+          "action": "No change needed. Note that wan27.org is an unreliable secondary source for this family - do not cite it."
+        }
+      ]
+    },
+    "minimax-h3": {
+      "path": "skills/generative-media/minimax-h3",
+      "tier": "hot",
+      "cadence_days": 1,
+      "last_checked": "2026-08-13",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "Model is 11 days old (released 2026-08-02) and the ecosystem is moving daily. Two system modules are promised-but-unreleased, sparse attention is withheld, the AUP is explicitly amendable, and there is no community craft consensus yet. Nearly every craft claim in this skill is provisional.",
+      "linked_skills": [
+        "wan-2-2",
+        "z-image",
+        "flux-2",
+        "sdxl",
+        "krea-2"
+      ],
+      "watchlist": [
+        {
+          "id": "h3-territory-clause",
+          "type": "contested",
+          "claim": "MiniMax H3 Community License excludes the EU, UK, Republic of Korea and USA from the Applicable Territory; Exhibit A #1 makes use outside it a prohibited use. This is the load-bearing axis of the whole skill.",
+          "where": "SKILL.md 'Before anything else' section; references/licence-and-territory.md throughout; description frontmatter",
+          "check": "Re-read LICENSE in MiniMaxAI/MiniMax-H3. Has the Excluded Territories list changed? Has MiniMax issued clarification? Any change here rewrites the skill's spine - MAJOR."
+        },
+        {
+          "id": "h3-context-ir-closed",
+          "type": "pending-release",
+          "claim": "H3-Context-IR is hosted-only and not in the open release; the model card calls it critical to output quality.",
+          "where": "SKILL.md 'What open weights means here'; references/prompting-guide.md section 6",
+          "check": "Has Context-IR been open-sourced? If so, the prompting guide's approximation section becomes obsolete and local/demo parity changes - MAJOR."
+        },
+        {
+          "id": "h3-regenerate-2k-closed",
+          "type": "pending-release",
+          "claim": "H3-Regenerate-2K is not open-sourced ('we will release it once it is ready'); local output ceiling is 768p.",
+          "where": "SKILL.md module table and failure modes; references/setup-and-workflows.md section 6",
+          "check": "Released? If so the 768p ceiling claim and the production ladder both change."
+        },
+        {
+          "id": "h3-sparse-attention",
+          "type": "pending-release",
+          "claim": "Sparse-attention implementation withheld from the initial release; open inference is full-attention only.",
+          "where": "SKILL.md 'What open weights means here' closing paragraph",
+          "check": "Has the sparse-attention implementation shipped? Affects speed and context-length guidance."
+        },
+        {
+          "id": "h3-frame-lattice",
+          "type": "version-pin",
+          "claim": "Frame count must satisfy frames = 17n + 5; formula max(5, round(a*24)) + (5 - (max(5, round(a*24)) %% 17)) %% 17. Defaults 73 (t2v/i2v) and 124 (r2v).",
+          "where": "SKILL.md 'Frame count and resolution'; references/setup-and-workflows.md section 3",
+          "check": "Re-pull video_minimax_h3_{t2v,i2v,r2v}.json from Comfy-Org/workflow_templates and diff the ComfyMathExpression and node defaults. The mod-17 mechanism is asserted as observed, not explained - do not add a mechanism claim without a source."
+        },
+        {
+          "id": "h3-template-settings",
+          "type": "version-pin",
+          "claim": "Sampler chain res_multistep / simple / 20 steps / denoise 1.0 via SamplerCustomAdvanced + BasicGuider (guidance-free, no negative path); CLIPLoader type 'minimax'; dual video+audio VAE with VAEDecodeAudio; fps 24; default 1344x768.",
+          "where": "SKILL.md 'Setup & ecosystem' and per-mode settings; references/setup-and-workflows.md sections 1-4",
+          "check": "Re-pull the three template JSONs and diff widgets_values. Templates change silently on ComfyUI releases; H3 support landed in PR #15224."
+        },
+        {
+          "id": "h3-lora-training-unknown",
+          "type": "gap",
+          "claim": "Speed/Turbo LoRAs are established (larryvrh original, drbaph ComfyUI conversions; 6-8 steps, beta scheduler, strength 1.0) and FL2VA-trained LoRAs reportedly work on Ref2VA. What remains unknown is *training* doctrine: trainer support, hyperparameters, and whether audio behaviour can be trained.",
+          "where": "references/loras-and-training.md (entire file)",
+          "check": "Has musubi-tuner / diffusion-pipe / ai-toolkit shipped H3 support? Any published training recipe (the Turbo LoRA ships EMA/non-EMA checkpoints at steps 500/600/850 but no recipe)? Has anyone trained audio?"
+        },
+        {
+          "id": "h3-diffusers-entrypoint",
+          "type": "flagged-inference",
+          "claim": "The model card's diffusers snippet is HF's generic autogenerated one and shows an image call; the real pipeline class is unverified.",
+          "where": "SKILL.md 'diffusers' subsection; two-bar section",
+          "check": "Check huggingface.co/docs/diffusers for the actual H3 pipeline class and minimum version, then replace the placeholder note."
+        },
+        {
+          "id": "h3-local-vs-demo-gap",
+          "type": "flagged-inference",
+          "claim": "Local H3-Base output is expected to fall short of official demos because those run through Context-IR; the size of the gap is not established.",
+          "where": "SKILL.md failure-modes table; references/prompting-guide.md section 6",
+          "check": "Has community testing quantified this? Does an LLM prompt pre-pass measurably close it? Currently reasoned, not measured."
+        },
+        {
+          "id": "ltx-2-5-licence-unread",
+          "type": "gap",
+          "claim": "LTX-2.5 is offered as an alternative for excluded territories, but its community licence is gated behind a contact-information agreement and was NOT read.",
+          "where": "SKILL.md licence section and suite table; references/licence-and-territory.md alternatives table",
+          "check": "Read the ltx-2-community-license-agreement (requires accepting the HF gate - a user decision, not an agent one). Until then the comparison must stay flagged as unverified."
+        },
+        {
+          "id": "h3-audio-scheduling-fix",
+          "type": "pending-release",
+          "claim": "H3 schedules video and audio separately; the stock ComfyUI sampler chain mishandles this with the Turbo LoRA, breaking audio at low step counts. Workaround is larryvrh's ComfyUI-MiniMax-H3-Turbo sampler node; a Kijai PR (Comfy-Org/ComfyUI#15243) addresses it in core.",
+          "where": "SKILL.md 'Going faster' section and failure-modes table; references/loras-and-training.md evaluation section",
+          "check": "Has Comfy-Org/ComfyUI#15243 merged? If so the custom-node workaround may be unnecessary and the failure-mode row needs rewriting."
+        },
+        {
+          "id": "h3-turbo-lora-worth-it",
+          "type": "contested",
+          "claim": "Whether the Turbo LoRA is worth its artefacts is contested: some named users prefer 6-8 steps with it, others prefer stock at ~15 steps or 10 steps + EasyCache.",
+          "where": "SKILL.md 'Going faster' contested note; two-bar section",
+          "check": "Has consensus formed as the LoRA matures (it is described by its own packager as undertrained)? Check for newer checkpoint versions."
+        }
+      ],
+      "open_findings": []
+    },
+    "character-lora-training": {
+      "path": "skills/generative-media/character-lora-training",
+      "tier": "active",
+      "cadence_days": 7,
+      "last_checked": "2026-08-13",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "Craft is stable, but the legal/platform layer is not: state deepfake statutes are still landing, FTC enforcement of the TAKE IT DOWN Act only began 2026-05-19, and platform policy follows regulation. A policy change here rewrites the skill's opening section.",
+      "linked_skills": [
+        "sdxl",
+        "z-image",
+        "flux-2",
+        "krea-2",
+        "wan-2-2",
+        "minimax-h3"
+      ],
+      "watchlist": [
+        {
+          "id": "civitai-real-person-policy",
+          "type": "contested",
+          "claim": "Civitai prohibits real-person likeness outright - living or deceased, public or private, SFW and NSFW alike, no consent exception, covers actors portraying fictional characters.",
+          "where": "SKILL.md 'Before anything: can you publish it?'; references/publishing-and-likeness.md section 1",
+          "check": "Re-read civitai.com/content/rules/real-people. Any softening, carve-outs, or a verified-consent path? This is the skill's opening section - a change is a rewrite."
+        },
+        {
+          "id": "take-it-down-act",
+          "type": "date-stamp",
+          "claim": "TAKE IT DOWN Act signed 2025-05-19; platform compliance deadline and FTC enforcement both 2026-05-19; ~$53,088 per violation; covers AI-generated NCII 'indistinguishable from an authentic visual depiction'.",
+          "where": "SKILL.md publishing section; references/publishing-and-likeness.md section 2",
+          "check": "Verify penalty figure (inflation-adjusted annually) and check for early enforcement actions that clarify scope. Also check whether EU/UK/state-level instruments now warrant their own coverage."
+        },
+        {
+          "id": "sdxl-nsfw-finetune-landscape",
+          "type": "community",
+          "claim": "NoobAI-XL V-Pred 1.0 most anatomically accurate but requires v-prediction + Euler specifically; WAI-NSFW v17 easier runner-up; Illustrious has the largest character-LoRA library; Pony V6 XL the largest general ecosystem.",
+          "where": "references/nsfw-training.md section 2",
+          "check": "This lineage moves fast. Have newer Illustrious/NoobAI versions displaced these? Is the v-pred sampler constraint still current?"
+        },
+        {
+          "id": "z-image-krea-nsfw-position",
+          "type": "gap",
+          "claim": "Z-Image and Krea 2's adult-content capability is not well documented either way; the skill declines to claim it.",
+          "where": "SKILL.md NSFW family table; references/nsfw-training.md section 2",
+          "check": "Has community testing established either model's position? krea-2 already cites nsfwVariant as a named craft source, so evidence may exist - resolve the gap rather than leaving it open."
+        },
+        {
+          "id": "encoder-abliteration-myth",
+          "type": "community",
+          "claim": "Abliterated text encoders do not uncensor diffusion output - refusal lives in output layers a text encoder never uses. Attributed to the author of Heretic. Abliterated models ARE valid for prompt expansion.",
+          "where": "SKILL.md 'Adult and NSFW work'; references/nsfw-training.md section 1",
+          "check": "Has the position been challenged with evidence? The author noted models that actively refuse (e.g. Ideogram) may be a genuine exception via a different approach."
+        },
+        {
+          "id": "captionless-dit-training",
+          "type": "contested",
+          "claim": "Captionless DiT character training works for pure replication but gives up controllability.",
+          "where": "references/dataset-and-captioning.md section 4",
+          "check": "Long-running disagreement. Has consensus formed on newer DiT architectures?"
+        },
+        {
+          "id": "civitai-api-access-note",
+          "type": "structural",
+          "claim": "Civitai's article API is fully open anonymously and an API key changes nothing (byte-identical responses). Articles DO carry nsfwLevel > 1 (e.g. article 16130 is level 4, returned anonymously) - most sit at 1 because the rating attaches to the cover image, not the text. No login or key is needed for article research; VERIFIED by fetching known-NSFW article IDs anonymously, not inferred from a flat distribution.",
+          "where": "Research method, not a skill claim. Recorded so the mistake is not repeated.",
+          "check": "Method note, not a skill claim. Base-model query strings matter: ZImageTurbo/ZImageBase/'Krea 2'/'Wan Video 2.2 I2V-A14B', not friendly names. Adult-side ecosystem evidence lives in the MODELS endpoint (nsfw=true, levels 3-31, anonymous)."
+        },
+        {
+          "id": "anima-uncovered-base",
+          "type": "ecosystem-gap",
+          "claim": "Anima is the most common base in a newest-first adult LoRA pull (28 of 100) and named trainers describe it as 'becoming the new Illustrious'. The suite has no Anima coverage at all.",
+          "where": "sdxl/references/lora-training.md section 1 base table (flagged); character-lora-training NSFW family table",
+          "check": "Candidate for its own model skill. Assess whether it is a distinct base worth covering or an Illustrious derivative that the sdxl skill can absorb."
+        },
+        {
+          "id": "capability-vs-character-lora-scale",
+          "type": "community",
+          "claim": "Teaching a base model anatomy it lacks is a capability LoRA: 1,500+ handpicked images and rank 128 minimum, vs 15-30 images and rank 8-64 for a character LoRA. '100-300 images won't do it.' The production pattern is to stack a capability LoRA under a character LoRA.",
+          "where": "references/nsfw-training.md section 1, 'But train it in is a different job at a different scale'",
+          "check": "Single-source (Qwen-Image NSFW LoRA notes). Corroborate the 1,500/rank-128 figures against other capability-LoRA authors - the order of magnitude matters more than the exact numbers."
+        },
+        {
+          "id": "eval-metric-alignment",
+          "type": "contested",
+          "claim": "DINO/CLIP-I (subject fidelity) and CLIP-T (prompt following) show significant discrepancies from human judgement on personalized generation - DreamBench++, ICLR 2025. ArcFace/FaceEmbedDistance inherits this, and inflates when a LoRA overfits pose.",
+          "where": "references/evaluation-and-tooling.md section 5; SKILL.md 'Evaluating a run'",
+          "check": "Has a human-aligned metric become reachable at home scale (local VLM judge, a packaged scorer, a ComfyUI node)? This is the file's one genuinely open question - flagged [contested]."
+        },
+        {
+          "id": "vlm-judge-pairwise",
+          "type": "figure",
+          "claim": "Raw pointwise VLM judging is unreliable: Qwen3-VL-8B scores 26.5% pointwise vs 59.4% as a direct pairwise judge (MMRB2). This is the evidence base for recommending blind pairwise judging over per-cell scoring.",
+          "where": "references/evaluation-and-tooling.md sections 3 and 8",
+          "check": "Confirm the figures and benchmark name against the source paper. Newer VLMs may close the pointwise gap, which would weaken the pairwise-only recommendation."
+        },
+        {
+          "id": "swarmui-grid-generator",
+          "type": "tool-behaviour",
+          "claim": "SwarmUI Grid Generator is built in by default; infinite axes; outputs Just Images / Grid Image (3 axes max) / Web Page (interactive, up to 4 axes at a time). No dedicated LoRA axis - LoRA variation goes through 'prompt replace'.",
+          "where": "references/evaluation-and-tooling.md section 2; image-production-workflows/references/workflows-as-code.md 'Batch QC'",
+          "check": "Re-read the GridGenerator README. A dedicated LoRA/preset axis has been requested (issue #613) - if it lands, the prompt-replace workaround becomes stale advice."
+        },
+        {
+          "id": "onetrainer-validation-loss",
+          "type": "tool-behaviour",
+          "claim": "OneTrainer supports genuine validation loss via concepts flagged as validation data, graphed per-concept to TensorBoard - a held-out signal the other trainers do not provide.",
+          "where": "references/evaluation-and-tooling.md section 1",
+          "check": "Confirm still present in the OneTrainer wiki. Also check whether kohya/AI-Toolkit have added an equivalent, which would change the 'only OneTrainer' framing."
+        },
+        {
+          "id": "faceanalysis-node",
+          "type": "tool-behaviour",
+          "claim": "cubiq/ComfyUI_FaceAnalysis provides FaceEmbedDistance (InsightFace/ArcFace or DLib, cosine or euclidean) - the reachable home-scale identity metric. Requires baseline calibration from real photos.",
+          "where": "references/evaluation-and-tooling.md section 5",
+          "check": "Confirm the repo is still maintained and the node name unchanged. Check for a better-maintained alternative."
+        }
+      ],
+      "open_findings": []
+    },
+    "comfyui-on-runpod": {
+      "path": "skills/generative-media/comfyui-on-runpod",
+      "tier": "active",
+      "cadence_days": 14,
+      "last_checked": "2026-08-13",
+      "last_drift_found": "2026-08-13",
+      "quiet_streak": 0,
+      "why_tier": "Platform surfaces (runpodctl flags, endpoint knobs, S3 endpoint form) change on RunPod's release cadence, not weekly. The ComfyUI-side contract (extra_model_paths.yaml keys, loader dirs) is stable. Deliberately holds no GPU prices.",
+      "linked_skills": [
+        "minimax-h3",
+        "wan-2-2",
+        "z-image",
+        "image-production-workflows"
+      ],
+      "watchlist": [
+        {
+          "id": "runpod-official-skills-overlap",
+          "type": "structural",
+          "claim": "This skill defers provisioning, GPU choice, pod lifecycle and networking to RunPod's official skills (runpod router, runpod-usage, runpodctl, runpod-mcp, flash, companion-clis), vendored in .agents/skills/.",
+          "where": "SKILL.md 'What this owns, and what it doesn't' routing table",
+          "check": "Re-pull runpod/runpod-plugins-official. Has RunPod added ComfyUI volume/extra_model_paths coverage that now overlaps this skill? Golden path 02 is pod-only today - if they add a serverless-ComfyUI path, narrow this skill accordingly."
+        },
+        {
+          "id": "extra-model-paths-keys",
+          "type": "version-pin",
+          "claim": "extra_model_paths.yaml key set incl. text_encoders/clip aliasing, multi-path diffusion_models block, and vae_approx.",
+          "where": "SKILL.md 'The one rule'; references/volume-and-models.md section 1",
+          "check": "ComfyUI adds model directories as new architectures land. Diff against a current ComfyUI extra_model_paths.yaml.example."
+        },
+        {
+          "id": "runpodctl-cost-flags",
+          "type": "version-pin",
+          "claim": "--terminate-after deletes the pod at a datetime; --stop-after only stops it and keeps billing disk. Ports fixed at creation. Volumes are datacenter-locked.",
+          "where": "SKILL.md 'Pod or serverless?' and failure-modes table; pre-flight items 6-7",
+          "check": "Verify flags against `runpodctl pod create --help`. These are the cost guards - a rename here has real financial consequence."
+        },
+        {
+          "id": "serverless-mount-root",
+          "type": "flagged-inference",
+          "claim": "Serverless mounts at /runpod-volume/ by default, though an endpoint can be configured to mount elsewhere (a production setup was observed mounting at /workspace).",
+          "where": "references/serverless-comfyui.md section 1; SKILL.md 'The one rule'",
+          "check": "Confirm current default and whether the mount path is still configurable per endpoint. The advice to declare both roots is robust either way."
+        },
+        {
+          "id": "comfyui-api-format",
+          "type": "structural",
+          "claim": "UI-format and API-format workflow JSON are not interchangeable; endpoints accept only API format.",
+          "where": "references/serverless-comfyui.md section 2",
+          "check": "Stable for years, but ComfyUI's subgraph work has changed export behaviour before - re-verify if subgraph-heavy workflows fail to submit."
+        },
+        {
+          "id": "runpodctl-surface-split",
+          "type": "tool-behaviour",
+          "claim": "runpodctl 2.3.0-be4ced4: 'pod create' carries --terminate-after/--stop-after; legacy 'create pod' carries neither.",
+          "where": "SKILL.md cost-guards blockquote",
+          "check": "Re-run 'runpodctl pod create --help' and 'runpodctl create pod --help' after any runpodctl upgrade. If the legacy surface is dropped, delete the warning."
+        }
+      ],
+      "open_findings": [
+        {
+          "id": "cor-dual-mount-validated",
+          "severity": "resolved",
+          "found": "2026-08-13",
+          "finding": "VALIDATED against live infrastructure - the skill's central claim holds. A serverless worker on the production endpoint enumerated exactly the volume's models/vae/ contents (ae, flux2-vae, sdxl_vae_fp16_fix), matching an S3 listing; RunPod docs confirm serverless mounts at /runpod-volume and pods at /workspace. Full record in skill-testbed/validations/2026-08-13-comfyui-dual-mount-root/.",
+          "where": "SKILL.md 'The one rule that changes everything'",
+          "action": "Done - validation stamp added to the rule and the two-bar section. This was the largest unmeasured claim in the suite; it is now measured."
+        },
+        {
+          "id": "cor-volumemountpath-trap",
+          "severity": "resolved",
+          "found": "2026-08-13",
+          "finding": "NEW TRAP, nearly caused a false negative: RunPod templates carry a volumeMountPath field reading /workspace even on templates used by SERVERLESS endpoints. It is pod-only and serverless ignores it - serverless templates expose no mount-path option because the path is fixed.",
+          "where": "SKILL.md dual-root section; failure-modes table",
+          "action": "Done - documented as a blockquote plus a failure-mode row."
+        },
+        {
+          "id": "cor-runpodctl-command-surfaces",
+          "severity": "resolved",
+          "found": "2026-08-13",
+          "finding": "NEW TRAP, and a cost-safety one. runpodctl 2.3.0 has TWO pod-creation surfaces: legacy 'runpodctl create pod' (--gpuType/--networkVolumeId/--imageName) has NO --terminate-after and NO --stop-after; modern 'runpodctl pod create' (--gpu-id/--network-volume-id/--image) carries both. I hit this myself and briefly concluded the flag did not exist.",
+          "where": "SKILL.md cost-guards section",
+          "action": "Done - documented. Re-verify on runpodctl upgrades; the legacy surface may be removed, which would make the warning obsolete."
+        },
+        {
+          "id": "cor-volume-tree-aspirational",
+          "severity": "resolved",
+          "found": "2026-08-13",
+          "finding": "The canonical volume tree prescribed six directories (vae_approx, controlnet, ipadapter, clip_vision, embeddings, style_models) that do NOT exist on a working production volume, and omitted insightface/ which does. The tree was aspirational, presented as observed.",
+          "where": "SKILL.md 'Volume layout'",
+          "action": "Done - tree now marks a [core] six and explains the rest are created lazily; insightface/ added."
+        }
+      ]
+    },
+    "image-production-workflows": {
+      "path": "skills/generative-media/image-production-workflows",
+      "tier": "active",
+      "cadence_days": 14,
+      "last_checked": "2026-08-13",
+      "last_drift_found": "2026-08-13",
+      "quiet_streak": 0,
+      "why_tier": "Cross-model craft moves at medium pace (upscaler landscape, ComfyUI automation tooling). Also inherits drift from the five model skills it cross-references — linked findings land here too.",
+      "linked_skills": [
+        "z-image",
+        "sdxl",
+        "flux-2",
+        "ideogram-4",
+        "krea-2"
+      ],
+      "watchlist": [
+        {
+          "id": "upscaler-landscape",
+          "type": "version-pin",
+          "claim": "Tiled-upscale tool recommendations: UltimateSDUpscale, TTP Toolset for DiTs, SeedVR2, SUPIR status, ESRGAN model picks",
+          "where": "SKILL.md production ladder; references/production-ladder.md",
+          "check": "Any new dominant upscaler or status change (e.g. SUPIR successor, SeedVR2 updates)? This is the fastest-moving part of the skill."
+        },
+        {
+          "id": "z-image-regional",
+          "type": "ecosystem-gap",
+          "claim": "'Z-Image: no regional tooling as of mid-2026' — mirrors the z-image skill's regional-tooling watch item",
+          "where": "references/mixed-model-recipes.md ~L66",
+          "check": "Linked item — resolves together with z-image/regional-tooling; update both skills in the same pass."
+        },
+        {
+          "id": "workflows-as-code",
+          "type": "version-pin",
+          "claim": "ComfyScript, comfy-cli, Export-API JSON + /prompt automation surface as captured at authoring",
+          "where": "references/workflows-as-code.md",
+          "check": "Check ComfyScript/comfy-cli repos for breaking changes or new official automation surfaces."
+        },
+        {
+          "id": "mixed-model-recipes",
+          "type": "community",
+          "claim": "Named community cross-model workflows (compose in X, refine in Y) reflect the 2025-26 meta",
+          "where": "references/mixed-model-recipes.md",
+          "check": "Have new named workflows displaced the documented recipes? Weight named, reproducible authors."
+        },
+        {
+          "id": "cross-skill-sync",
+          "type": "structural",
+          "claim": "This skill cross-references model-specific facts owned by the four model skills",
+          "where": "throughout",
+          "check": "Whenever a linked model skill takes a major finding (new release, new tooling), sweep this skill for stale cross-references."
+        }
+      ],
+      "open_findings": [
+        {
+          "id": "ipw-upscaler-landscape-holds",
+          "severity": "none",
+          "found": "2026-08-13",
+          "finding": "CLAIM HOLDS. SeedVR2 still the front-runner ('wins overall, best balance across 1K/2K/4K'); SUPIR still frozen. Skill's 'SeedVR2 = current default finisher, SUPIR = frozen' matches the 2026 community picture.",
+          "where": "references/production-ladder.md:66-71",
+          "action": "None."
+        },
+        {
+          "id": "ipw-seedvr2-tiling-node",
+          "severity": "minor",
+          "found": "2026-08-13",
+          "finding": "ADDITION, not contradiction: moonwhaler/comfyui-seedvr2-tilingupscaler combines tiling with SeedVR2 - constant VRAM regardless of output size, 8K on consumer GPUs. The skill treats tiled upscale (UltimateSDUpscale/TTP) and the SeedVR2 finisher as separate ladder stages; this collapses them.",
+          "where": "references/production-ladder.md stages 4-5; SKILL.md:25-26 ladder table",
+          "action": "Verify maintenance status and real VRAM behaviour, then add as an option at stage 4/5. Low urgency - the existing two-stage chain still works."
+        },
+        {
+          "id": "ipw-batch-qc-selfinflicted",
+          "severity": "resolved",
+          "found": "2026-08-13",
+          "finding": "SELF-INFLICTED, same-day: the batch-QC claim in references/workflows-as-code.md was corrected to name SwarmUI Grid Generator / Efficiency Nodes / rgthree Image Comparer, but SKILL.md:149 still says 'batch-QC tooling is thin (grids + human cull is the actual state of the art)'. The skill body now contradicts its own reference file.",
+          "where": "SKILL.md:149 two-bar section",
+          "action": "RESOLVED 2026-08-13: SKILL.md:149 rewritten to 'tooled for comparison but not for judgement', naming the three tools and the labelled-axes bias. Now consistent with references/workflows-as-code.md."
+        }
+      ]
+    }
+  }
+}
