@@ -5,26 +5,36 @@
     "email": "rnel66@gmail.com"
   },
   "metadata": {
-    "description": "Authoritative setup, prompting, and production guides for generative media models",
-    "version": "1.1.0"
+    "description": "Agent skills organised by domain — deeply researched, provenance-tracked, and kept current against fast-moving ecosystems",
+    "version": "2.0.0"
   },
   "plugins": [
     {
       "name": "generative-media-skills",
-      "description": "Authoritative ComfyUI, diffusers, and API guides for generative media models — image (FLUX.2, Ideogram 4, Z-Image, SDXL, Krea 2) and video (Wan 2.2, MiniMax H3) — spanning setup, prompting, ControlNet and motion/camera control, native audio-video generation, face identity, character consistency across frames and shots, LoRA training, the image-to-video handoff, licence and territory pitfalls, multi-stage and mixed-model production pipelines, and failure modes",
+      "description": "Authoritative ComfyUI, diffusers, and API guides for generative media models — image (FLUX.2, Ideogram 4, Z-Image, SDXL, Krea 2) and video (Wan 2.2, MiniMax H3) — spanning setup, prompting, ControlNet and motion/camera control, native audio-video generation, face identity, character consistency across frames and shots, LoRA training and evaluation, the image-to-video handoff, licence and territory pitfalls, multi-stage and mixed-model production pipelines, GPU deployment on RunPod, and failure modes",
       "source": "./",
       "strict": false,
+      "version": "1.2.0",
+      "category": "creative",
+      "keywords": [
+        "image-generation",
+        "video-generation",
+        "comfyui",
+        "lora",
+        "diffusion",
+        "runpod"
+      ],
       "skills": [
-        "./skills/flux-2",
-        "./skills/ideogram-4",
-        "./skills/z-image",
-        "./skills/sdxl",
-        "./skills/krea-2",
-        "./skills/wan-2-2",
-        "./skills/minimax-h3",
-        "./skills/character-lora-training",
-        "./skills/comfyui-on-runpod",
-        "./skills/image-production-workflows"
+        "./skills/generative-media/flux-2",
+        "./skills/generative-media/ideogram-4",
+        "./skills/generative-media/z-image",
+        "./skills/generative-media/sdxl",
+        "./skills/generative-media/krea-2",
+        "./skills/generative-media/wan-2-2",
+        "./skills/generative-media/minimax-h3",
+        "./skills/generative-media/character-lora-training",
+        "./skills/generative-media/comfyui-on-runpod",
+        "./skills/generative-media/image-production-workflows"
       ]
     }
   ]
