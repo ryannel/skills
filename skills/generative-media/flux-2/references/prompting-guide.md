@@ -138,7 +138,7 @@ FLUX.2 was trained on natural language. JSON is a workflow tool for situations w
 
 FLUX.2's default tendency (especially [klein]) is over-processed sharpness. Camera vocabulary works because Mistral/Qwen3 have strong priors on what images these setups produce — they're not just keywords, they're world-model activations.
 
-### Camera bodies (photoreal signal strength: high)
+### Camera bodies (photoreal signal strength: high) `[community — fal.ai prompting guide; convergent]`
 
 | Camera | Typical use / signal |
 |---|---|
@@ -151,7 +151,7 @@ FLUX.2's default tendency (especially [klein]) is over-processed sharpness. Came
 | Ricoh GR IIIx | Street, 40mm equivalent, compact, film-noir undertone |
 | Mamiya RB67 | Vintage medium-format, square format, smooth bokeh |
 
-### Lenses (signal: aperture controls background separation)
+### Lenses (signal: aperture controls background separation) `[community — fal.ai prompting guide; convergent]`
 
 | Spec | What it reads as |
 |---|---|
@@ -162,7 +162,7 @@ FLUX.2's default tendency (especially [klein]) is over-processed sharpness. Came
 | 135mm f/2 | Compressed background, telephoto compression |
 | 24mm f/2.8 | Wide environmental portrait, architecture |
 
-### Film stocks (signal: tonal and colour character)
+### Film stocks (signal: tonal and colour character) `[community — fal.ai prompting guide; convergent]`
 
 | Stock | Character |
 |---|---|
@@ -174,7 +174,7 @@ FLUX.2's default tendency (especially [klein]) is over-processed sharpness. Came
 | Kodak Tri-X 400 | B&W, gritty grain, street photography |
 | CineStill 800T | Cinematic halation, tungsten colour shift, night scenes |
 
-### Lighting vocabulary
+### Lighting vocabulary `[community — fal.ai prompting guide; convergent]`
 
 | Term | Effect |
 |---|---|
@@ -335,4 +335,4 @@ Sony A7R V, 50mm f/1.8, available street lighting, puddles on the pavement.
 | Subject buried mid-prompt | LLM encoders front-weight tokens | Front-load subject in first clause |
 | Treating JSON as required ("plain text fails") | FLUX.2 was trained on natural language; JSON is optional and a workflow tool | Use plain language for single subjects; JSON for complex multi-subject |
 | Dropping camera gear to avoid the "AI look" | Some models benefit from removing DSLR markers; FLUX.2 is the opposite — Mistral/Qwen3 treat camera vocabulary as semantic context | Keep camera body + lens + film stock in FLUX.2 prompts for photoreal results |
-| `(text:1.5)` parenthetical weight syntax | AUTOMATIC1111 syntax; meaningless for LLM encoders | No parenthetical weighting; rephrase sentence instead |
+| `(text:1.5)` parenthetical weight syntax | AUTOMATIC1111 syntax; meaningless *here* — FLUX.2's Mistral/Qwen3 conditioning has no per-token weight channel. Not a rule about LLM encoders as a class: [`anima`](../../anima/) has one and ships officially documented weighting | No parenthetical weighting; rephrase the sentence instead |

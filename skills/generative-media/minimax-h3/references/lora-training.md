@@ -1,4 +1,4 @@
-# MiniMax H3 — LoRAs and training
+# MiniMax H3 — LoRA training and the LoRA ecosystem
 
 > **Shared craft lives in [`character-lora-training`](../../character-lora-training/)** — dataset coverage, caption-the-residual, evaluation, adult/NSFW base selection, and the real-person likeness rules that decide whether a LoRA is publishable. This file covers what is specific to this model.
 
@@ -9,11 +9,17 @@
 
 ## What exists
 
-**Speed / Turbo LoRAs are the dominant artefact so far, and they are real and usable.** The original is by **larryvrh**, with ComfyUI-compatible conversions by **drbaph** (`drbaph/MiniMax-H3-Turbo-Lora-ComfyUI`). Recipe, settings and the audio caveat are in SKILL.md — the short version is 6–8 steps, `beta` scheduler, strength 1.0, and a dedicated sampler node to keep the audio intact.
+**Speed / Turbo LoRAs are the dominant artefact so far, and they are real and usable.** The original is by **larryvrh**, with ComfyUI-compatible conversions by **drbaph** (`drbaph/MiniMax-H3-Turbo-Lora-ComfyUI`). Recipe, settings and the audio caveat are in SKILL.md and [`setup-and-workflows.md §9`](setup-and-workflows.md) — the short version is 6–8 steps, `beta` scheduler, strength 1.0, and, since ComfyUI v0.31.0, the core `ModelSamplingMiniMaxH3` node's `audio_shift` rather than a third-party sampler.
 
-What that tells you: the community's first priority was **making a 33B model with a 32B encoder cheap enough to run**, not teaching it new subjects. That is the usual order for a large release, and it means the acceleration story will mature well before the customisation one.
+**As of 2026-08-22 there is an official one.** `lightx2v/Minimax-h3-Turbo` publishes `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (4–8 step) — a first-party ComfyUI-format release from the team that does this for the whole open-video field. Prefer it as the default; the community conversions remain in wide use and are still what most posted workflows reference. A separate widely-repeated tip cuts across both: **run speed LoRAs at 0.8–0.85 rather than 1.0**, which contradicts the LoRA authors' own recipe and is `[contested]`.
+
+**Non-speed LoRAs now exist too**, which is the more meaningful signal: `Mamad8/MaxiMin-HHH-R2V-ThisIsFine` is a detail LoRA in circulation for Ref2VA work. So "the ecosystem is speed-only" is no longer strictly true — but it is still overwhelmingly true by volume.
+
+What that tells you: the community's first priority was **making a 33B model with a 32B encoder cheap enough to run**, not teaching it new subjects. That is the usual order for a large release, and it means the acceleration story matured well before the customisation one — see the four-layer acceleration stack in [`setup-and-workflows.md §9`](setup-and-workflows.md), which matured while the training story is still a blank.
 
 **One thing the Turbo LoRA settles: weights transfer between the task checkpoints.** It was trained against **FL2VA** and is reported working on **Ref2VA** as well `[community — Organix33; re-verify]`. So the two checkpoints are close enough that a LoRA is not automatically checkpoint-locked — useful, and the opposite of what you would assume from "task-specific checkpoints." Still worth validating on your target checkpoint rather than assuming.
+
+**Third-party *checkpoints* exist, which is stronger evidence than LoRAs.** `RedCraft | REDMIX Hybrid A2A beta1 … Lightning 8` is a MiniMax H3 checkpoint on Civitai and, at ~343k downloads, the most-downloaded H3 artefact anywhere. Whether it is a genuine finetune, a merge, or a repackaged quant is **not established here** `[flagged — re-verify]` — but somebody is doing more than converting weights, and the hybrid FL2VA/Ref2VA builds in `setup-and-workflows.md` §5 prove that surgical tensor-level work on H3 is tractable in the community.
 
 **What is not established** `[flagged — re-verify]`:
 
@@ -61,7 +67,7 @@ Train when you need something summonable by prompt across arbitrary contexts wit
 
 Nothing H3-specific is established, so the transferable principles from the suite apply and nothing more:
 
-- **Caption the residual** — describe what varies, not what is constant. [`z-image/references/lora-training.md`](../../z-image/references/lora-training.md) is the fullest treatment.
+- **Caption the residual** — describe what varies, not what is constant. [`character-lora-training`](../../character-lora-training/) is the suite's full treatment; it is model-independent by design.
 - **Character datasets need angle and expression diversity**; style datasets need **subject** diversity, and the acceptance test is that the style survives on out-of-set subjects.
 - **Single-frame vs clip training** is the cost decision on every video model — stills for appearance, clips for motion. Whether H3 supports single-frame training is unverified.
 - **If audio is in scope**, no established practice exists at all. Anyone doing this is doing it first.
@@ -85,6 +91,8 @@ Community reports are that **H3 does not meaningfully refuse** — what looks li
 Two consequences specific to H3:
 
 - **Try Ref2VA before training.** Nine images, three video clips and three audio clips of reference conditioning is a lot of signal, it is free, and on a model this young it is much better supported than training. See `characters.md`.
+- **Ref2VA is the right mode for this work specifically**, not just the convenient one. You can still pass start and end frames, but you can *also* pass anatomy references, and a start frame behaves as a strong guide the model adjusts toward the prompt rather than a fixed copy — which is usually what you want. Supply a **nude reference** so the model knows what is underneath; **close-up anatomy references substitute** when you have no full-body nude of that character. `[community — nsfwVariant, throwaway0204055]`
+- **The craft that actually fixes explicit output is prompt ordering, not weights.** H3 assumes sequential actions unless told otherwise, and the phasing-clothes-through-limbs failure everyone hits is an under-description problem the model is adherent enough to be talked out of. Allow **≥3 s per garment**, timestamp each step, work near **0.8 MP**, and use **30 steps rather than 20** — which improves cloth physics *and* audio quality. Full treatment in [`prompting-guide.md` §8](prompting-guide.md#8-ordering-timing-and-the-shot-list).
 - **MiniMax runs automated moderation** on submitted text, images and video through its hosted surfaces. That governs the API and app rather than local inference, and it does not change your obligations under the licence — which, as the SKILL.md opens with, excludes several major territories outright. Read [`character-lora-training/references/publishing-and-likeness.md`](../../character-lora-training/references/publishing-and-likeness.md) before building anything on a real likeness.
 
 General doctrine — base-model coverage, explicit captioning, why abliterated encoders do nothing — is in [`character-lora-training/references/nsfw-training.md`](../../character-lora-training/references/nsfw-training.md).

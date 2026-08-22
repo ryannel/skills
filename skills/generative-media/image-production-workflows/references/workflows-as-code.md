@@ -22,7 +22,7 @@ How to take a working graph from "I click Queue" to parametrized, batched, scrip
 
 ## 2. ComfyScript
 
-`Chaoses-Ib/ComfyScript` — **alive and current** (v0.6.0 Nov 2025 added ComfyUI v3-schema support and Python 3.14; v0.6.1 followed), but a **single-maintainer project: pin versions in production.** *(Official repo.)*
+`Chaoses-Ib/ComfyScript` — **alive and current** (v0.6.0 Nov 2025 added ComfyUI v3-schema support and Python 3.14; v0.6.1 followed), but a **single-maintainer project: pin versions in production** `[official — Chaoses-Ib/ComfyScript]`.
 
 Three modes:
 - **Virtual mode** — your Python builds workflow JSON and submits it to a ComfyUI server (local or remote). The default for production: the server stays the executor, your script is the orchestrator.
@@ -55,7 +55,7 @@ Node classes are generated from the connected server's node registry, so custom 
 3. Parametrize by editing the JSON's input fields (seed, prompt text, filenames) before each POST — the node IDs are stable, so a thin wrapper dict-update is all it takes.
 4. **comfy-cli** wraps the same flow for shell use: run workflows from the command line, convert GUI↔API formats, manage models and the queue.
 
-This is what the hosted wrappers (ComfyDeploy, RunComfy serverless, Baseten guides) productize — typed inputs over an API-format workflow. If you'll eventually deploy, building around API-format JSON from day one is the smooth path. *(Community-strong — ViewComfy's production-API guide is the canonical writeup.)*
+This is what the hosted wrappers (ComfyDeploy, RunComfy serverless, Baseten guides) productize — typed inputs over an API-format workflow. If you'll eventually deploy, building around API-format JSON from day one is the smooth path `[community — ViewComfy production-API guide; strong]`. Deploying that JSON on rented GPUs is [`comfyui-on-runpod`](../../comfyui-on-runpod/)'s territory, not this file's.
 
 ## 4. diffusers as the code-first alternative
 
@@ -72,8 +72,8 @@ Multi-stage support is first-class (SDXL base+refiner ensemble, ControlNet and I
 
 ## 5. Pro conventions
 
-- **Native Subgraphs** (official since Aug 2025, frontend ≥ 1.24.3): package each stage — base / refine / detail / upscale — as a nested, reusable subgraph node. This replaced the old group-node convention and is how the large Civitai workflows are organized. One mega-workflow with toggleable stage-subgraphs beats five separate files.
+- **Native Subgraphs** (in ComfyUI core since Aug 2025, frontend ≥ 1.24.3): package each stage — base / refine / detail / upscale — as a nested, reusable subgraph node. This replaced the old group-node convention and is how the large Civitai workflows are organized. One mega-workflow with toggleable stage-subgraphs beats five separate files.
 - **rgthree-comfy** is the de-facto plumbing standard: **Context** pipes (one cable carrying model/clip/vae/conditioning between stages), **Fast Muter** (bypass stages without rewiring), **Power Lora Loader** (stacks with per-LoRA toggles), and the **global Seed** node (one seed reused across all stages — the cheap way to honor the same-seed discipline).
 - **Wildcards / dynamic prompts at scale:** Impact Pack's `{a|b|c}` + `__wildcard__` grammar, or `adieyal/comfyui-dynamicprompts` (random *and combinatorial* modes — the latter enumerates every combination, which is what you want for systematic coverage). The same wildcard harness ports across families — a published Civitai pack runs it on Pony, SDXL, Illustrious, Flux, Qwen, and Z-Image-Turbo identically.
 - **Batch QC** has named tooling for *comparison*, and nothing for *judgement*. For comparison: **SwarmUI's Grid Generator** (built in, infinite axes, and its "Web Page" output is an interactive viewer showing up to 4 axes at a time rather than a frozen grid image), Efficiency Nodes' `XY Input: LoRA Plot` inside ComfyUI, and rgthree's `Image Comparer` wipe-slider for final head-to-heads. Around those, the usual practice holds: auto-incrementing seeds via the API, and keeping every stage's intermediate image saved so a bad final can be diagnosed to a stage instead of rerun blind. What no tool does is stop you knowing which cell is which — grid axes are labelled by design, so a blind pass is worth adding wherever the call is close. Protocol: [`character-lora-training/references/evaluation-and-tooling.md`](../../character-lora-training/references/evaluation-and-tooling.md).
-- **Queue automation:** comfy-cli or raw `/prompt` with the WebSocket for monitoring; on a fixed reference set, FLUX.2 [klein] 9B KV-caching makes repeated-reference batches ~1.5–3× faster (see the flux-2 skill).
+- **Queue automation:** comfy-cli or raw `/prompt` with the WebSocket for monitoring; on a fixed reference set, FLUX.2 [klein] 9B KV-caching makes repeated-reference batches ~1.5–3× faster ([`flux-2`](../../flux-2/)).

@@ -24,6 +24,7 @@ RunPod publishes its own skills, and they are good. Do not restate them — rout
 | **Model manifests and reproducible volumes** | **here** |
 | **ComfyUI as a serverless endpoint, API-format workflows** | **here** |
 | Model-specific files and settings | the model skill — [`wan-2-2`](../wan-2-2/), [`minimax-h3`](../minimax-h3/), [`z-image`](../z-image/), … |
+| Multi-stage pipeline design — which stage does what, denoise bands, mixing models, the decode-to-pixels handoff | [`image-production-workflows`](../image-production-workflows/) — that skill assumes the compute already runs; this one is how it gets there |
 
 ---
 
@@ -100,7 +101,7 @@ One canonical tree, keyed by **which loader node reads it**. That is the only or
     └── ipadapter/  clip_vision/  embeddings/  style_models/
 ```
 
-**Create the `[core]` six; add the rest when a node actually needs them.** A working production volume inspected on 2026-08-13 had exactly the core six plus `insightface/` — no `controlnet/`, `vae_approx/`, `ipadapter/`, `clip_vision/`, `embeddings/` or `style_models/`, because nothing in its pipelines loaded them. An absent directory is not a fault; a directory absent from `extra_model_paths.yaml` *while a node needs it* is. Declare the keys generously in the yaml, create the folders lazily.
+**Create the `[core]` six; add the rest when a node actually needs them.** A single production ComfyUI-on-RunPod deployment external to this repo, inspected on 2026-08-13, had exactly the core six plus `insightface/` — no `controlnet/`, `vae_approx/`, `ipadapter/`, `clip_vision/`, `embeddings/` or `style_models/`, because nothing in its pipelines loaded them. An absent directory is not a fault; a directory absent from `extra_model_paths.yaml` *while a node needs it* is. Declare the keys generously in the yaml, create the folders lazily.
 
 **Fold LoRAs by base model.** `LoraLoader` shows the subfolder as a path prefix in the dropdown, so `z-image-turbo/amy_v9/…` tells you at a glance what it belongs to — and when you retire a base model, the folder tells you what dies with it.
 
@@ -267,11 +268,17 @@ Use it before you start editing `extra_model_paths.yaml` on a hunch.
 
 ## How to read the claims in this skill — two bars, by claim type
 
-**Hard facts — must be exact or it breaks.** The dual mount roots (`/workspace/` vs `/runpod-volume/`), the `extra_model_paths.yaml` key set and its multi-path `diffusion_models` block, which loader reads which directory, the S3 endpoint form `s3api-<dc>.runpod.io`, `--terminate-after` deleting versus `--stop-after` stopping, ports being fixed at pod creation, volumes being datacenter-locked, and API-format-not-UI-format for endpoints. **Source of truth is official** — RunPod's own skills and docs — plus a working production configuration these were read out of. **The dual mount root was validated against live infrastructure on 2026-08-13** (a serverless worker enumerated exactly the volume's `models/vae/`), and the `runpodctl` command-surface split was verified against `2.3.0-be4ced4`. A wrong path silently hides a model; a missing cost guard bills all night. **Re-verify the CLI flags and pricing against `runpodctl` before relying on them**; platform surfaces change.
+This skill holds two kinds of claim to two different standards, because they fail in two different ways.
 
-**Craft — what actually makes this work day to day.** The volume-as-contract framing, foldering LoRAs by base with a separate compatibility graph, the manifest pattern, downloading on CPU pods, build-interactively-run-in-serverless, and the smoke-test order. **This is house craft distilled from a running studio**, not vendor documentation — it is what the vendor docs don't tell you because it only shows up after you've rebuilt a volume a few times. Stated with confidence; adapt the specifics to your stack.
+**Hard facts — must be exact or it breaks.** The dual mount roots (`/workspace/` vs `/runpod-volume/`), the `extra_model_paths.yaml` key set and its multi-path `diffusion_models` block, which loader reads which directory, the S3 endpoint form `s3api-<dc>.runpod.io`, `--terminate-after` deleting versus `--stop-after` stopping, ports being fixed at pod creation, volumes being datacenter-locked, and API-format-not-UI-format for endpoints. **Source of truth is official** — RunPod's own skills and docs — plus a single production ComfyUI-on-RunPod deployment external to this repo, which these were read out of. **The dual mount root was validated against live infrastructure on 2026-08-13** (a serverless worker enumerated exactly the volume's `models/vae/`), and the `runpodctl` command-surface split was verified against `2.3.0-be4ced4`. A wrong path silently hides a model; a missing cost guard bills all night. **Re-verify the CLI flags and pricing against `runpodctl` before relying on them**; platform surfaces change.
+
+**Craft — what actually makes this work day to day.** The volume-as-contract framing, foldering LoRAs by base with a separate compatibility graph, the manifest pattern, downloading on CPU pods, build-interactively-run-in-serverless, and the smoke-test order. **This is house craft distilled from that same single production ComfyUI-on-RunPod deployment**, not vendor documentation — it is what the vendor docs don't tell you because it only shows up after you've rebuilt a volume a few times. Stated with confidence; adapt the specifics to your stack.
 
 One thing deliberately **not** claimed: GPU recommendations and prices. They move constantly and are model-specific — `runpod-usage` owns the general question and each model skill owns its own requirement. Any price you see quoted anywhere in this suite is a stale snapshot; check `runpodctl gpu list`.
+
+**Nothing is currently contested or flagged.** The 2026-08-13 pass resolved every open finding (see `freshness.json`); the watchlist there tracks what could still drift.
+
+**Facts dated 2026-08-13.** The `runpodctl` command surface and endpoint knobs are what moves fastest here — re-verify those before relying on them; the ComfyUI-side contract (`extra_model_paths.yaml` keys, loader directories) is stable.
 
 ---
 

@@ -2,7 +2,7 @@
 
 The defining practical fact about SDXL: **you almost never run base 1.0 raw — you run a finetune of it.** This file maps the ecosystem. Everything here is **community tier** unless a licence is cited from a model card — verify current versions and licences on the model page (these move; the base model doesn't).
 
-## Table of contents
+## Contents
 1. Why finetunes, and the two dialect families
 2. The photoreal / general finetunes
 3. The anime / booru finetunes (Pony, Illustrious/NoobAI)
@@ -64,7 +64,7 @@ Place it right after the checkpoint loader; feed the patched MODEL to the sample
 
 **Match the LoRA to the checkpoint's dialect family — the SDXL-specific rule that trips everyone.** SDXL has *separate LoRA pools* (§1). A LoRA trained on base/photoreal SDXL will misbehave on Pony or Illustrious and vice-versa — those finetunes drifted too far from base. **Check the LoRA's "base model" on its Civitai page and match the family:** base/photoreal ↔ photoreal finetunes; Pony ↔ Pony; Illustrious/NoobAI ↔ the Illustrious pool. A mismatched pool is the #1 reason a LoRA "does nothing."
 
-**Weight by LoRA type** (community starting points — always read the LoRA's own card; authors publish a tested weight and trigger):
+**Weight by LoRA type** `[community]` — always read the LoRA's own card; authors publish a tested weight and trigger:
 
 | Type | Typical `strength_model` | Notes |
 |---|---|---|

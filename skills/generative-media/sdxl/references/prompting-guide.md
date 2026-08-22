@@ -2,7 +2,7 @@
 
 SDXL is a **dual-CLIP, 77-token UNet**. It matches tokens and short phrases, not sentence syntax. Everything below follows from that. The vocabulary lists are the copy-pasteable core; the weights and workflow numbers are SDXL-calibrated (lower than the SD1.5-era guides this vocabulary was mined from — see §9).
 
-## Table of contents
+## Contents
 1. Prompt anatomy
 2. Weighting, ordering, token economy
 3. The dual-encoder split (`text_g` / `text_l`)
@@ -39,7 +39,7 @@ This is a *default*, not a law. Anime/booru checkpoints use a different structur
 
 - **Position = weight.** CLIP weights earlier tokens more heavily. Front-load subject + the highest-value concepts. The model "prioritises key/early words and ignores less important ones."
 - **Emphasis syntax:** `(phrase:1.2)` raises, `(phrase:0.9)` lowers. Bare `(phrase)` ≈ 1.1, `[phrase]` ≈ 0.9 in A1111-style UIs.
-- **SDXL-calibrated weight range: ~1.05–1.3.** This is the most important recalibration in this guide. SD1.5 photorealism guides routinely use 1.5–1.8; on SDXL those **fry colours, posterise, and over-contrast**. Start at 1.15, nudge in 0.05 steps.
+- **SDXL-calibrated weight range: ~1.05–1.3** `[community]`. This is the most important recalibration in this guide. SD1.5 photorealism guides routinely use 1.5–1.8; on SDXL those **fry colours, posterise, and over-contrast**. Start at 1.15, nudge in 0.05 steps.
 - **77-token chunks.** Each CLIP chunk is 77 tokens (~60 words). Past that, weight falls off sharply. Keep prompts tight. If you truly need more, insert `BREAK` (ComfyUI/A1111) — each side of `BREAK` is encoded as its own chunk and the embeddings are concatenated, so put a self-contained idea in each chunk rather than splitting mid-phrase.
 - **No generic booster blocks.** `8k, masterpiece, best quality, ultra detailed, hyperrealistic` are near-inert on SDXL — they consume tokens without earning quality. Replace them with concrete photographic terms (§4).
 

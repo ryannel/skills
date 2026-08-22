@@ -1,5 +1,7 @@
 # Volume layout, `extra_model_paths.yaml`, and the model manifest
 
+Everything ComfyUI needs to find a model on the volume: the dual-root config, the placement table, LoRA foldering, and the manifest that makes a volume reproducible. Deployment mechanics (pods, endpoints, dispatch) are `serverless-comfyui.md`.
+
 1. [The dual mount root, in full](#1-the-dual-mount-root-in-full)
 2. [Placement table — file type → directory → loader](#2-placement-table)
 3. [LoRA organisation and compatibility](#3-lora-organisation-and-compatibility)

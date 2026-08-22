@@ -1,28 +1,39 @@
 ---
 name: ideogram-4
 description: >
-  Authoritative guide for running Ideogram 4.0 (Ideogram, Inc.) — Ideogram's first open-weight text-to-image model — yourself, on your own GPU or a rented cloud GPU (RunPod, Vast.ai), via ComfyUI, the diffusers Ideogram4Pipeline, or the run_inference.py CLI. Use this whenever the user touches Ideogram 4 in any way, even obliquely: understanding the licence split (non-commercial open weights, Apache code → route any commercial work through the hosted API/web app) and which surface a task actually needs, writing or fixing prompts (the model is trained exclusively on structured JSON captions — schema, key ordering, the CaptionVerifier, plain-text vs JSON, Magic Prompt expansion), text rendering and typography (its headline strength — multi-line stacking, multilingual, editable text layers, transparency), bounding-box layout and hex color-palette control, getting photoreal results (the Ideogram way — neutral white balance, kill the "warm"/amber look), choosing rendering speed / sampler preset (Quality 48 / Default 20 / Turbo 12) and resolution, setting up the open weights (nf4/fp8 quant, VRAM, gating, ComfyUI nodes and file layout, the diffusers Ideogram4Pipeline, the run_inference.py CLI), or — only when commercial use or the web-only Character/Style Reference features require it — routing through the hosted API/web app (endpoints, params, pricing), and debugging the safety filter, verifier errors, and layout failures. training a LoRA on it (style LoRAs are supported and in active use — ai-toolkit and fal's trainer, which emits ComfyUI-format weights; character LoRAs are trainable but undemonstrated). Also use it to learn what Ideogram 4 is the wrong tool for (consistent characters on open weights — no identity adapters exist, so it routes you to the right model) and how it slots into mixed-model pipelines as the typography/design pass for imagery generated elsewhere.
+  Authoritative guide for running Ideogram 4.0 (Ideogram, Inc.) — Ideogram's first open-weight text-to-image model — yourself, on your own GPU or a rented cloud GPU (RunPod, Vast.ai), via ComfyUI, the diffusers Ideogram4Pipeline, or the run_inference.py CLI; the hosted API and web app are covered as the secondary, commercial-clean surface. **The open weights are non-commercial wherever you run them — for commercial output, route through the hosted API or web app instead.** Use this whenever the user touches Ideogram 4 in any way, even obliquely: choosing a surface and understanding the licence split (non-commercial weights, Apache code, outputs yours), writing or fixing prompts (the model is trained exclusively on structured JSON captions — schema, key ordering, the CaptionVerifier, plain-text vs JSON, Magic Prompt expansion), text rendering and typography (its headline strength — multi-line stacking, multilingual, editable text layers, transparency), bounding-box layout and hex color-palette control, getting photoreal results the Ideogram way (neutral white balance, killing the "warm"/amber look), choosing rendering speed / sampler preset (Quality 48 / Default 20 / Turbo 12) and resolution, setting up the open weights (nf4/fp8 quant, VRAM, HF gating, ComfyUI nodes and file layout, DualModelGuider, the gemma4 gotcha), training a LoRA on it (ai-toolkit and fal's trainer, which emits ComfyUI-format weights; style LoRAs work, character LoRAs are trainable but undemonstrated), using it as the typography/design pass in a mixed-model pipeline, routing through the hosted API/web app when commercial use or the web-only Character/Style Reference features require it, and debugging the safety filter, verifier aborts and layout failures. Also use it to learn what Ideogram 4 is the wrong tool for — consistent characters on open weights, where no identity adapters exist. Use this for any question about Ideogram 4 in any context.
+
 ---
 
 # Ideogram 4
 
 Ideogram 4 is **Ideogram, Inc.'s first open-weight text-to-image model** (released 3 June 2026). It is a **9.3B-parameter, fully single-stream Diffusion Transformer (DiT)** trained from scratch — text tokens and image latent tokens travel through one 34-layer sequence. The text encoder is **Qwen3-VL-8B-Instruct**, a full vision-language model (hidden states from 13 layers concatenated). It is a flow-matching model with **dual-branch (asymmetric) classifier-free guidance** — a separate unconditional transformer — and renders **native 2K** at any resolution 256–2048 px (multiples of 16, aspect ratios to 6:1).
 
-Its defining trait: **it was trained *exclusively* on structured JSON captions.** Plain-text prompts work, but a JSON caption that follows the schema is how you unlock its real strengths — best-in-class text rendering, bounding-box layout, and hex color-palette control.
+**The defining trait:** it was trained **exclusively on structured JSON captions**. Plain-text prompts work, but a JSON caption that follows the schema is how you unlock its real strengths — best-in-class text rendering, bounding-box layout, and hex color-palette control.
 
 **This skill is about running the open weights** — the gated `nf4`/`fp8` model on your own GPU (or a rented cloud GPU) via **ComfyUI**, the diffusers **`Ideogram4Pipeline`**, or the **`run_inference.py`** CLI. That's the path with full control over every sampler knob, and the one the rest of this guide assumes.
 
-**Know the licence split before you start** — it's the single most-misunderstood fact about this release (full detail in *Licence & limitations*):
+**Know the licence split before you start** — it is the single most-misunderstood fact about this release. The **code** is Apache-2.0, the **weights** are under the Ideogram 4 Non-Commercial Model Agreement, and the **outputs** are yours. The restriction is on *purpose*, not place: renting a cloud GPU grants no commercial rights. Which surface that leaves you is the next section; the clauses themselves are *Licence & limitations*.
 
-- **Code** (GitHub): Apache-2.0. **Weights:** the **Ideogram 4 Non-Commercial Model Agreement**. **Outputs you generate:** yours.
-- The open weights are **non-commercial wherever you run them** — your GPU, RunPod, any cloud. Renting hardware doesn't grant commercial rights; it's about *purpose*, not place.
-- **For commercial work, route through Ideogram's hosted API or web app** (their Terms permit commercial use and assign you output ownership) — or obtain a separate paid weights licence. The hosted web app is also the *only* place the **Character Reference** (face identity) and **Style Reference** features exist — they're not in the open weights. API params, pricing, and web-app tools, if you need that path: `references/api-and-webapp.md`.
+---
+
+## Surface selector
+
+There is one checkpoint, so the first choice is not *which weights* but *which surface* — and unusually for this suite, the licence decides it rather than the hardware. Settle this before writing a caption: the surfaces differ in what they can do, not just in convenience.
+
+| Surface | Use when… | What you give up |
+|---|---|---|
+| **Self-hosted open weights** — ComfyUI, diffusers `Ideogram4Pipeline`, `run_inference.py` (your GPU or a rented pod) | Non-commercial work — research, personal, hobby, internal. You want every sampler knob, reproducible seeds, batch runs, or a LoRA in the graph | Commercial rights; Character/Style Reference; the edit family (Magic Fill, reframe, upscale, layerize) |
+| **Hosted API** — `POST /v1/ideogram-v4/generate` | The output is commercial, or you want the edit/describe/remix endpoints, or you'd rather not own a 24 GB GPU | Sampler control — you get three `rendering_speed` tiers, not schedules; per-image cost; `seed`/`num_images` unconfirmed on v4 `[flagged — re-verify]` |
+| **Web app** | You need **Character Reference** (face identity) or **Style Reference** — they exist nowhere else — or the interactive editing tools | Automation and reproducibility; it is a UI, not an endpoint |
+
+**Renting a cloud GPU does not move you between rows** — a RunPod H100 running the open weights is still the top row. Surfaces two and three: `references/api-and-hosted.md`.
 
 ---
 
 ## The one rule that changes everything
 
-**Write a structured JSON caption, not a prose paragraph or a tag list.** The model was trained only on JSON, so JSON minimises train/inference mismatch and is the reliable way to get every requested object, every line of text, and your exact layout. Plain text is a fallback that underperforms — and trips the safety filter more often (official).
+**Write a structured JSON caption, not a prose paragraph or a tag list.** The model was trained only on JSON, so JSON minimises train/inference mismatch and is the reliable way to get every requested object, every line of text, and your exact layout. Plain text is a fallback that underperforms — and trips the safety filter more often `[official — ideogram-oss/ideogram4 docs/prompting.md]`.
 
 Minimal valid caption — `compositional_deconstruction` is the only **required** top-level field:
 
@@ -38,7 +49,7 @@ Minimal valid caption — `compositional_deconstruction` is the only **required*
 }
 ```
 
-**Don't want to write JSON?** That is exactly what **Magic Prompt** does: an LLM expands your plain-text idea into a full caption before generation. It is automatic in the web app, automatic for `text_prompt` on the API, and on by default in the repo's `run_inference.py`. Three backends ship with the package: `ideogram-4-v1` (Ideogram's free hosted API, needs `IDEOGRAM_API_KEY`), `claude-opus-v1`, and `claude-sonnet-v1` (via OpenRouter, need `MAGIC_PROMPT_API_KEY`). **There is no fully-offline Magic Prompt** — either it calls a hosted LLM, or you run the open-source system prompt through your own model (ComfyUI bundles an in-stack `gemma4` for this).
+**Don't want to write JSON?** That is what **Magic Prompt** is for: an LLM expands your idea into a full caption first — automatic in the web app and for `text_prompt` on the API, on by default in `run_inference.py`, with three shipped backends. **None is offline**; each calls a hosted LLM, so a fully local path means running the open-source system prompt through your own model (ComfyUI bundles `gemma4` for exactly this).
 
 Full schema, the caption-craft rules, and worked examples: **`references/json-caption-guide.md`**.
 
@@ -54,19 +65,7 @@ Three top-level fields, in this order. **Key order is strict** — the pipeline 
 | `style_description` | optional | the visual style block (see below) |
 | `compositional_deconstruction` | **required** | `background` (string, required) + `elements` (list, required) |
 
-**`style_description`** must contain **exactly one** of `photo` (photographic) or `art_style` (everything else), plus `aesthetics`, `lighting`, `medium`; `color_palette` is optional and **must be last**. Key order is fixed per type:
-
-| Caption type | Required key order |
-|---|---|
-| Photo | `aesthetics`, `lighting`, `photo`, `medium`, `color_palette` |
-| Non-photo | `aesthetics`, `lighting`, `medium`, `art_style`, `color_palette` |
-
-**`elements`** are objects (`type:"obj"`) or text (`type:"text"`), each with a fixed key order. `bbox` and `color_palette` are optional but, if present, must sit in the position shown:
-
-| Type | Key order |
-|---|---|
-| `"obj"` | `type`, `bbox`, `desc`, `color_palette` |
-| `"text"` | `type`, `bbox`, `text`, `desc`, `color_palette` |
+**`style_description`** must contain **exactly one** of `photo` (photographic) or `art_style` (everything else), plus `aesthetics`, `lighting`, `medium`; `color_palette` is optional and **must be last**. **`elements`** are objects (`type:"obj"`) or text (`type:"text"`). Each of those three blocks has its own strict key order — including where an optional `bbox` or `color_palette` must sit — and the exact orders, field meanings and worked examples are `references/json-caption-guide.md` §1. Look them up rather than guessing: the verifier catches you, but only after you have written the caption.
 
 - **`bbox` = `[y_min, x_min, y_max, x_max]`**, normalised **0–1000 on both axes**, origin top-left. (Note: **y comes first** — easy to invert.)
 - **`color_palette`** entries are uppercase `#RRGGBB` only (no shorthand). Up to **16** at style level, **5** per element.
@@ -77,21 +76,21 @@ Three top-level fields, in this order. **Key order is strict** — the pipeline 
 
 ---
 
-## Rendering speed, steps & guidance
+## Per-mode settings
 
-Speed/quality is one axis with three named presets. On the self-hosted weights these are sampler presets; on the API they are `rendering_speed` tiers; in the web app they are credit tiers.
+**One axis, not per-checkpoint variants.** There is a single Ideogram 4 checkpoint, and the only mode axis is speed — the same three presets everywhere: sampler presets on the self-hosted weights, `rendering_speed` tiers on the API, credit tiers in the web app. One table rather than three `###` blocks, because nothing else varies with the mode: sampler, scheduler, resolution range and seed behaviour are identical across all three, and negatives don't exist at any tier (the model has no negative-prompt string — see *ComfyUI* below).
 
-| Preset (self-hosted) | API `rendering_speed` | Steps | Guidance schedule | `mu` | `std` | API $/image¹ |
-|---|---|---|---|---|---|---|
-| `V4_QUALITY_48` *(default)* | `QUALITY` | 48 | 45 steps @ gw 7, then 3 polish @ gw 3 | 0.0 | 1.5 | $0.10 |
-| `V4_DEFAULT_20` | `DEFAULT` *(API default)* | 20 | 18 @ gw 7, then 2 polish @ gw 3 | 0.0 | 1.75 | $0.06 |
-| `V4_TURBO_12` | `TURBO` | 12 | 11 @ gw 7, then 1 polish @ gw 3 | 0.5 | 1.75 | $0.03 |
+| Preset (self-hosted) | API `rendering_speed` | Use when… | Steps | Guidance schedule | `mu` | `std` | API $/image¹ |
+|---|---|---|---|---|---|---|---|
+| `V4_QUALITY_48` *(default)* | `QUALITY` | Final delivery, hero shots, anything at 2K, dense typography | 48 | 45 steps @ gw 7, then 3 polish @ gw 3 | 0.0 | 1.5 | $0.10 |
+| `V4_DEFAULT_20` | `DEFAULT` *(API default)* | Most iteration work — composition and layout read correctly here | 20 | 18 @ gw 7, then 2 polish @ gw 3 | 0.0 | 1.75 | $0.06 |
+| `V4_TURBO_12` | `TURBO` | Drafts and batch exploration; judging a caption before committing | 12 | 11 @ gw 7, then 1 polish @ gw 3 | 0.5 | 1.75 | $0.03 |
 
-> ¹ API per-image prices from ideogram.ai/api-pricing. A `FLASH` API tier is announced but returns 400 ("coming soon"). The default constant `guidance_scale` is **7.0** when no schedule is given; presets supply the per-step schedule. Higher guidance = more prompt adherence, lower = more diversity.
+Across all three: sampler **`euler`**, scheduler **`Ideogram4Scheduler`**, `seed` for reproducibility, and guidance **7.0** constant whenever no schedule is supplied. Higher guidance = more prompt adherence, lower = more diversity.
 
-**Resolution.** Default 1024×1024. Native range 256–2048, multiples of 16, aspect ratios to 6:1 / 1:6. For maximum quality pair **2048×2048 with `V4_QUALITY_48`**. The diffusers pipeline takes `height`/`width`; the API takes an explicit `resolution` string (e.g. `"2048x2048"`, `"2880x1440"`); the web app and the Magic Prompt endpoint take an `aspect_ratio` string (e.g. `"16x9"`).
+> ¹ API per-image prices from ideogram.ai/api-pricing `[official — ideogram.ai/api-pricing]`. A `FLASH` API tier is announced but returns 400 ("coming soon") `[pending release]`.
 
-Common resolutions: `1024×1024` (1:1) · `1536×1024` (3:2) · `1024×1536` (2:3) · `1920×1088` (~16:9) · `2048×768` (~21:9) · `1024×1792` (~9:16) · `1600×400` (4:1 banner).
+**Resolution.** Default 1024×1024. Native range 256–2048, multiples of 16, aspect ratios to 6:1 / 1:6. For maximum quality pair **2048×2048 with `V4_QUALITY_48`**. Three surfaces, three parameter shapes: the diffusers pipeline takes `height`/`width`, the API an explicit `resolution` string (`"2880x1440"`), the web app and Magic Prompt endpoint an `aspect_ratio` string (`"16x9"`). Common pairs: `references/setup-and-workflows.md` §2.
 
 ---
 
@@ -102,13 +101,13 @@ These come straight from Ideogram's **open-source Magic Prompt system prompt** �
 - **One subject = one element.** A person, animal, car, or building is exactly one `obj`; anatomical/structural parts go in that element's `desc`, never as separate elements. Multiple *distinct* subjects (a person *and* a dog) = multiple elements.
 - **`background` is the shell only.** Walls, floor/ground, sky, atmosphere, ambient light, distant blurred context. **The ground/floor/pavement is ALWAYS `background`** (including puddles, reflections, wet/cracked surface state) — *zero tolerance*. Furniture, vehicles, people, decor, free-standing lamps are **elements**, never background.
   - **Why it matters (a real failure mode):** emit the floor as an `obj` and the renderer treats it as a flat 2D band at the bottom of the frame and **buries the subject's legs in it**. Keep the floor in `background`.
-- **No double-counting.** Every component lives in exactly one field. Before emitting an `obj`, scan `background` — if it's named there, drop the `obj`.
+- **No double-counting.** Every component lives in exactly one field: before emitting an `obj`, scan `background`, and if it's named there, drop the `obj`.
 - **Shell-affixed hero objects → dual mention.** A chalkboard wall, built-in fireplace, mounted TV: (1) name it in `background`, (2) also emit it as an `obj` whose `desc` starts with "the primary background element", (3) place it **first** in `elements` (painter's algorithm draws it behind foreground items).
 - **Commit to one value — no hedging.** Banned in element/background text: `things like`, `such as`, `various`, `or similar`, `e.g.`, `style of`, and alternative listings (`oak or walnut`, `bold or semibold`). Pick one and commit. Typography: one typeface category, one weight, one style.
-- **Keep render-language out of `obj` descs.** Depth of field, bokeh, grain, motion blur, shadows belong in `high_level_description`/`background` (and only if asked) — not in element descs (the renderer infers shadows). Viewpoint/angle (`low-angle`, `bird's-eye`) *is* allowed in a desc.
-- **Populate sparse scenes** by depth layer and commit to a *specific* place ("a pho stall outside Hoi An", not "a Southeast Asian village"). Built environments need text on every surface — `text: []` is almost always wrong for a shop/stall/market.
+- **Keep render-language out of `obj` descs.** Depth of field, bokeh, grain, motion blur and shadows belong in `high_level_description`/`background`, and only if asked — the renderer infers shadows. Viewpoint (`low-angle`, `bird's-eye`) *is* allowed in a desc.
+- **Populate sparse scenes** by depth layer, and commit to a *specific* place ("a pho stall outside Hoi An", not "a Southeast Asian village"). Built environments carry text on every surface — `text: []` is almost always wrong for a shop or market.
 
-**Bounding boxes — the #1 failure.** `bbox` is normalised 0–1000 on **both** axes, so a "square" `[0,0,500,500]` is only square on a 1:1 frame; on 16:9 it becomes a wide rectangle, on 9:16 a tall one. **Most duplicate/extra-subject/mis-scale bugs come from this.** For round or on-screen-square regions, scale spans so `(x2−x1)/(y2−y1) ≈ W/H`. Give each subject a tight bbox so no one box dominates and invites a duplicate. Omit bboxes on dense/unenumerable content (crowds, fields, starfields).
+**Bounding boxes — the #1 failure.** `bbox` is normalised 0–1000 on **both** axes, so a "square" `[0,0,500,500]` is square only on a 1:1 frame; on 16:9 it is a wide rectangle, on 9:16 a tall one. **Most duplicate, extra-subject and mis-scale bugs come from this.** Scale spans so `(x2−x1)/(y2−y1) ≈ W/H`, give each subject a tight box so none dominates and invites a duplicate, and omit bboxes entirely on unenumerable content (crowds, fields, starfields).
 
 ---
 
@@ -130,7 +129,7 @@ Photoreal faces and skin are Ideogram 4's relative **weak spot**. Its strengths 
 
 ## Text rendering & typography (the headline strength)
 
-Ideogram 4 leads open models on in-image text (official: 0.97 X-Omni English OCR). To use it well:
+Ideogram 4 leads open models on in-image text — 0.97 X-Omni English OCR `[official — Ideogram 4 model card]`. To use it well:
 
 - **One text element per visually distinct block.** Use `\n` for line breaks *within* one block; use separate elements for separate blocks.
 - **Stack stylised hero titles with `\n` at word breaks** — long single-line stylised titles produce typos and dropped letters (`"ENTRE\nVERSOS E\nCONTOS"`, not one line).
@@ -138,30 +137,22 @@ Ideogram 4 leads open models on in-image text (official: 0.97 X-Omni English OCR
 - **Multilingual:** English + CJK/Cyrillic/etc. render well; keep prose fields in English and put only the literal characters in `text`, stored as literal UTF-8 (`ensure_ascii=False`).
 - **Editable text layers & native transparency** are first-class v4 features — the web app can "layerize" text and output transparent PNGs; for a cutout, set `background` to exactly `"transparent background"`.
 
-**The typography pass in mixed-model pipelines.** Because typography is Ideogram 4's headline strength and other models' weakness, its natural role in a multi-model workflow is the **text/design stage**: generate the poster/label/signage layer here (using `bbox` layout and `text` elements, or as a transparent-background plate), then composite or inpaint it into imagery produced by another model — or inversely, mask the text region of an Ideogram render and restyle everything else in SDXL/Flux. Handoffs are always pixel-space (export PNG, re-encode in the other model's VAE). This pattern is practiced but has **no canonical named workflow yet — inferred craft, flagged as such**; the general cross-model rules live in the **`image-production-workflows`** skill.
+Typography is also what Ideogram contributes to work that starts in another model — that handoff is *Production pipelines & mixing models*, below.
 
 ---
 
 ## Setup & ecosystem
 
-- **Web app / API:** nothing to install. API auth header is `Api-Key`; the core call is `POST /v1/ideogram-v4/generate` with `text_prompt` *or* `json_prompt`. Endpoints, params, pricing, and web-app editing tools: **`references/api-and-webapp.md`**.
+- **Web app / API:** nothing to install. Auth header is `Api-Key`; the core call is `POST /v1/ideogram-v4/generate` with `text_prompt` *or* `json_prompt`. Endpoints, params, pricing, web-app tools: **`references/api-and-hosted.md`**.
+- **Self-hosted open weights (gating):** gated on Hugging Face — accept the licence and authenticate (`hf auth login` / `HF_TOKEN`) or downloads 404. Two quants: **`nf4`** (bitsandbytes 4-bit, **CUDA-only**, diffusers-compatible, fits a 24 GB GPU) and **`fp8`** (weight-only float8, **any hardware**, activations stay bf16). diffusers exposes **`Ideogram4Pipeline`**; the repo ships a `run_inference.py` CLI. All three stacks run identically on a **rented cloud GPU**, which is the usual way to reach 24 GB+ for the larger quants and 2K renders. Quick start, sampler presets and VRAM notes: **`references/setup-and-workflows.md`**.
 
-**Pose control and face identity (open weights):** ControlNet, PuLID, and IP-Adapter face do not exist for Ideogram 4 — none have been released by Ideogram or any community team as of June 2026. The model's 34-layer single-stream DiT architecture is structurally incompatible with existing ControlNet or IP-Adapter implementations. For structural control on open weights, the only available mechanism is the **bounding-box `bbox` layout** inside the JSON caption (constrains *where* elements appear in the frame, not skeleton or depth input). **Character Reference** (face identity) and **Style Reference** are available in the **web app and v3 API only** — not the v4 API and not the open-weight release. Details: **`references/api-and-webapp.md` §6**.
+**What the open weights don't have is a short list with long consequences.** No ControlNet, no PuLID, no IP-Adapter face, no edit variant — and the 34-layer single-stream DiT is structurally incompatible with existing ControlNet and IP-Adapter implementations, so this is not a "not ported yet" gap. The only structural control is the **`bbox` layout** inside the caption: it constrains *where* elements land, never skeleton or depth. **Character Reference** and **Style Reference** are web-app and v3-API only (`references/api-and-hosted.md` §6).
 
-**LoRA training exists now — but it is a style ecosystem, not a character one.** Keep these two apart, because they moved at different times:
-
-- **Training: available.** `ostris/ai-toolkit` lists `ideogram-4-fp8` in its supported models, and fal runs a live **Ideogram V4 LoRA Trainer** that emits a **ComfyUI-format** file alongside its own — so a hosted-trained LoRA runs on the open weights. **33 Ideogram 4.0 LoRAs are published on Civitai**, overwhelmingly style and aesthetic work.
-- **Identity conditioning: still absent.** No ControlNet, no PuLID, no IP-Adapter, and no edit variant.
-
-**So for consistent characters, still route elsewhere — but for a narrower reason than "there is no path."** The path exists and nobody has walked it: there are effectively **no published character LoRAs** for Ideogram 4, and none of the structural identity tooling that makes character work reliable elsewhere. Training a character LoRA here is exploratory work, not a recipe — worth doing if you want to find out, not if you need a result today.
-
-Three routes that do work: (1) hosted **Character Reference** in the web app (commercial-clean, face identity from one image); (2) build the character in **`flux-2`** (multi-reference + PuLID + LoRA) or **`z-image`** (character LoRA + FaceDetailer) and use Ideogram only for what it's best at; (3) the hybrid — render the character scene in another model, then bring it to Ideogram for the **typography pass** (below). Training craft, if you do try it: **`character-lora-training`**.
-- **Self-hosted open weights (gating):** gated on Hugging Face — accept the licence and authenticate (`hf auth login` / `HF_TOKEN`) or downloads 404. Two quants: **`nf4`** (bitsandbytes 4-bit, **CUDA-only**, diffusers-compatible, fits a 24 GB GPU) and **`fp8`** (weight-only float8, **any hardware**, activations stay bf16). diffusers exposes **`Ideogram4Pipeline`**; the repo ships a `run_inference.py` CLI. The diffusers/CLI quick start, sampler presets, and VRAM notes are in **`references/self-hosting.md`**.
-  - **You don't need local hardware.** ComfyUI / diffusers / the CLI all run the same on a **rented cloud GPU** — RunPod, Vast.ai, etc. — which is the usual way to get a 24 GB+ (or H100) box for the larger quants and 2K renders. The non-commercial licence is unchanged by renting (it's about *purpose*, not place).
+**LoRA training, though, does exist — as a style ecosystem, not a character one.** `ostris/ai-toolkit` lists `ideogram-4-fp8`, and fal's live **Ideogram V4 LoRA Trainer** emits a ComfyUI-format file alongside its own, so a hosted-trained LoRA runs on the open weights; **33 are published on Civitai**, overwhelmingly style work. **So consistent characters still route elsewhere — but for a narrower reason than "there is no path":** the path exists and nobody has walked it. Build the character in [`flux-2`](../flux-2/) or [`z-image`](../z-image/), or use hosted Character Reference, then bring the result here for the typography pass. Training: `references/lora-training.md`, plus [`character-lora-training`](../character-lora-training/) for what transfers.
 
 ### ComfyUI (day-0 native support)
 
-ComfyUI is a **runtime for the open weights**, not a "local-only" path — run it on your workstation *or* a cloud GPU pod identically. It added native support on launch day. Use the official template **`image_ideogram4_t2i.json`** (`Comfy-Org/workflow_templates`); the walkthrough is on `blog.comfy.org` / `docs.comfy.org/tutorials/image/ideogram/ideogram-v4`. **Requires an updated/nightly ComfyUI** — the loaders are brand-new and stable Desktop/Cloud builds may lag (on a RunPod template, pull the nightly). The details below are read verbatim from the template JSON.
+Native support landed on launch day. Use the official template **`image_ideogram4_t2i.json`** (`Comfy-Org/workflow_templates`); the walkthrough is on `docs.comfy.org/tutorials/image/ideogram/ideogram-v4`. **Requires an updated/nightly ComfyUI** — the loaders are new and stable Desktop/Cloud builds lag (inside a pod, pull the nightly). Details below are read verbatim from the template JSON.
 
 **File layout** (download into these folders):
 
@@ -175,11 +166,29 @@ ComfyUI is a **runtime for the open weights**, not a "local-only" path — run i
 
 **What's unusual:** **two diffusion models load** and combine through a **`DualModelGuider`** — this is the model's dual-branch (asymmetric) CFG (a conditional + a separate unconditional transformer), not a negative-prompt string. Stock template defaults: sampler **`euler`**, **`Ideogram4Scheduler`** at **20 steps** (the Default tier; a `CustomCombo` switches Quality 48 / Default 20 / Turbo 12), `DualModelGuider` guidance **7**, latent **1024×1024**.
 
-**Two prompt modes:** (1) **natural language** — a plain sentence; (2) **structured JSON** — paste a JSON caption into the multiline `CLIPTextEncode` field (its default already holds one); downstream `JsonExtractString` nodes pull dimensions/fields out of it. JSON unlocks layout/text/palette control (see *The JSON caption schema* above).
+**Two prompt modes:** a plain sentence, or a JSON caption pasted into the multiline `CLIPTextEncode` field — its default already holds one, and downstream `JsonExtractString` nodes pull dimensions out of it.
 
-> **`gemma4` gotcha:** it's on the required-download list but **no node in the shipped template loads it**. It's the recommended *in-stack* LLM (runs on your own GPU, vs the hosted `ideogram-4-v1` Magic Prompt) for the natural-language → JSON caption step — the template includes a string-assembly helper subgraph but no LLM-execution node, so you run that conversion yourself. Downloading it and finding nowhere to plug it in is the most common first-day confusion.
+> **`gemma4` gotcha:** it is on the required-download list but **no node in the shipped template loads it**. It is the recommended *in-stack* LLM for the natural-language → JSON caption step (your own GPU, versus the hosted `ideogram-4-v1` Magic Prompt), and the template ships a string-assembly helper subgraph but no LLM-execution node — so you run that conversion yourself. Downloading it and finding nowhere to plug it in is the most common first-day confusion.
 
-Full node table, VRAM reports, the `nf4`-vs-`nvfp4` file-naming caveat, and GGUF status: **`references/self-hosting.md` §4**.
+Full node table, VRAM reports, the `nf4`-vs-`nvfp4` file-naming caveat, and GGUF status: **`references/setup-and-workflows.md` §4**.
+
+---
+
+## Production pipelines & mixing models
+
+Most skills in this suite describe a ladder that stays inside one model — base, refine, detail, upscale. Ideogram 4's does not, and that is the honest shape of it: on the open weights there is **no edit variant and no image conditioning of any kind** (no ControlNet, no IP-Adapter, no remix — that lives on the hosted API only), so the model can neither refine its own output nor accept a base image from upstream. The pipeline is a **handoff**, one-way by construction, and Ideogram owns exactly one rung of it: the text and design layer.
+
+1. **Generate the base scene** in whichever model suits the imagery — [`flux-2`](../flux-2/) or [`z-image`](../z-image/) for photoreal and illustrated work, [`krea-2`](../krea-2/) for stylised, [`sdxl`](../sdxl/) when you need its checkpoint ecosystem or a ControlNet rig. Lock composition **at the final aspect ratio**; you cannot reframe later without regenerating the type.
+2. **Generate the text/design layer in Ideogram 4**, in one of two shapes. A **transparent plate** — `background` set to exactly `"transparent background"` (`references/json-caption-guide.md` §8) — gives a PNG with alpha to drop over the base, and is the more controllable option. Rendering the type **inside the target composition**, with `bbox` pinning each `text` element and the base scene restated in `background`, integrates better because the lighting reads.
+3. **Composite, or inpaint the plate in.** A straight alpha composite where the type sits flat on the frame; an inpaint pass in the *base* model at low denoise where it has to sit **on** a surface — a sign, a shirt, a shop window — and pick up that surface's perspective and light.
+4. **The inverse order often beats it.** Render the whole design in Ideogram, mask everything *except* the text, and restyle the imagery in the other model: you keep Ideogram's layout and typography, buy the other model's texture, and the masked type cannot be garbled by an SDXL or Flux pass.
+5. **Generate the plate at final size.** Ideogram renders native 2K at arbitrary 16-multiples; upscaling a text plate afterwards softens exactly the edges that make type read as type.
+
+**Which rungs are bypassable:** all but 2 and 3. Steps 1 and 4 are alternatives rather than a sequence, and a purely design-led job (poster, ad, packaging mock) skips the other model entirely, leaving 2 and 5.
+
+**Every step crosses model families, so every step is pixel-space:** export PNG, re-encode in the receiving model's VAE. The trap specific to this pairing is that Ideogram 4 **reuses Flux.2's VAE file** (`flux2-vae.safetensors`) and latent space, which makes a direct latent handoff look like it should work. It doesn't — a shared VAE means the two *decoders* agree, not that a latent conditioned by one model carries meaning in the other. Decode to pixels like any other cross-model step.
+
+This role is widely practiced but has **no canonical named workflow** — no published node graph, no named author's recipe `[flagged — re-verify]`. Treat the ladder above as reasoned from what the model can and cannot do, not transcribed from one. Cross-model craft in general — denoise bands, resolution matching, colour management — is [`image-production-workflows`](../image-production-workflows/), where this belongs once someone writes it down.
 
 ---
 
@@ -187,7 +196,7 @@ Full node table, VRAM reports, the `nf4`-vs-`nvfp4` file-naming caveat, and GGUF
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Gray screen, "Image blocked by safety filter" | Model-level NSFW filter (in the weights, can't disable); fires more on plain text | Rephrase; **use a JSON caption** (lower false-positive rate, official); the team has acknowledged over-blocking and plans a checkpoint update |
+| Gray screen, "Image blocked by safety filter" | Model-level NSFW filter (in the weights, can't disable); fires more on plain text | Rephrase; **use a JSON caption** — lower false-positive rate `[official — ideogram-oss/ideogram4]`; the team has acknowledged over-blocking and plans a checkpoint update |
 | Pipeline aborts / caption warnings | Wrong key order, unknown key, missing required key, or `\uXXXX` escapes | Match the canonical key order; serialize with `ensure_ascii=False`; or pass `--warn-on-caption-issues` to continue |
 | Subject's legs buried in the floor / floor looks like a 2D band | Floor emitted as an `obj` element | Move the floor/ground into `background` (always) |
 | Extra/duplicate subjects, mis-scaled objects | `bbox` square-on-non-square distortion (0–1000 both axes) | Scale bbox spans to the frame's W/H ratio; tight box per subject |
@@ -222,14 +231,15 @@ Before generating:
 | Job | Ideogram 4 | Reach for instead |
 |---|---|---|
 | In-image typography, layout, design | **The leader** — JSON captions, `bbox` layout, text layers, transparency | — (this is why you're here) |
-| Consistent characters | **Weak on open weights** — no identity adapters, no edit variant, and no published character LoRAs, though training is now possible | `flux-2` (multi-ref + PuLID), `z-image` or `sdxl` (character LoRA); or hosted Character Reference |
-| **Style LoRAs** | **Supported** — ai-toolkit lists `ideogram-4-fp8`; fal's trainer emits ComfyUI-format weights; 33 published on Civitai | Fine to train here. `krea-2` if you want the official train-Raw/run-Turbo doctrine |
-| **Character LoRAs** | Trainable but **undemonstrated** — the path exists, the ecosystem doesn't | `sdxl` (mature) or `z-image`/`flux-2`; craft in `character-lora-training` |
-| Photoreal faces & skin | Relative weak spot | `z-image` (realism stacking) or an `sdxl` photoreal finetune |
-| Stylised / aesthetic-led imagery (non-typographic) | Design-literate but one aesthetic register | `krea-2` — style references, moodboards, the widest open-weights visual range |
-| Structural control (pose/depth) | `bbox` layout only | `sdxl` or the Fun Union ControlNets (`flux-2`, `z-image`) |
-| Mixed-model pipelines | **The typography pass** — text plates and design layers for other models' imagery | `image-production-workflows` for the cross-model craft |
-| Making it move | Still images only | `wan-2-2` — image-to-video from a still locked here. Worth knowing the limit: text rendered into a still will not survive motion cleanly, so animate around type rather than through it |
+| Consistent characters | **Weak on open weights** — no identity adapters, no edit variant, no published character LoRAs | [`flux-2`](../flux-2/) (multi-ref + PuLID), [`z-image`](../z-image/) or [`sdxl`](../sdxl/) (character LoRA); or hosted Character Reference |
+| **Style LoRAs** | **Supported** — ai-toolkit lists `ideogram-4-fp8`; fal's trainer emits ComfyUI-format weights; 33 published on Civitai | Fine to train here. [`krea-2`](../krea-2/) if you want the official train-Raw/run-Turbo doctrine |
+| **Character LoRAs** | Trainable, essentially **undemonstrated** — the path exists, the ecosystem doesn't. One cross-model comparison exists, rating Ideogram 4 *above* Krea 2 and Z-Image at learning tattoos `[community — Any_Tea_3499; single report]` — recorded in [`krea-2`](../krea-2/references/characters.md), which means somebody has trained one; no published recipe | [`sdxl`](../sdxl/) (mature) or [`z-image`](../z-image/)/[`flux-2`](../flux-2/); craft in [`character-lora-training`](../character-lora-training/) |
+| Photoreal faces & skin | Relative weak spot | [`z-image`](../z-image/) (realism stacking) or an [`sdxl`](../sdxl/) photoreal finetune |
+| Stylised / aesthetic-led imagery (non-typographic) | Design-literate but one aesthetic register | [`krea-2`](../krea-2/) — style references, moodboards, the widest open-weights visual range; [`anima`](../anima/) if the register you want is anime or booru illustration, which is a vocabulary this model was never captioned in |
+| Structural control (pose/depth) | `bbox` layout only | [`sdxl`](../sdxl/) or the Fun Union ControlNets ([`flux-2`](../flux-2/), [`z-image`](../z-image/)) |
+| Commercial use under the licence | **Purpose-restricted weights** — non-commercial wherever you run them, the same shape as [`flux-2`](../flux-2/)'s [dev] and 9B variants and [`anima`](../anima/)'s Model. What is unusual here is not the restriction but the absence of an escape hatch: FLUX.2 keeps [klein] 4B under Apache-2.0, and Anima carves its *outputs* out of the restriction entirely, whereas Ideogram's grant excludes generating output for revenue-generating products at all. Outputs are yours to own; producing them commercially *from the weights* is outside the grant | The hosted API or web app (`references/api-and-hosted.md`), or a paid weights licence — here the fallback is hosted, not another variant. Commercial *and* self-hosted isn't this model: [`z-image`](../z-image/) is the freest path in the suite (Apache-2.0 on weights and outputs alike), [`sdxl`](../sdxl/) carries no purpose restriction, and [`flux-2`](../flux-2/) has the Apache-licensed [klein] 4B |
+| Mixed-model pipelines | **The typography pass** — text plates and design layers for other models' imagery | [`image-production-workflows`](../image-production-workflows/) for the cross-model craft |
+| Making it move | Still images only | [`wan-2-2`](../wan-2-2/) — image-to-video from a still locked here. Know the limit: rendered text does not survive motion cleanly, so animate *around* type rather than through it |
 
 ---
 
@@ -241,17 +251,34 @@ Before generating:
 - **Outputs:** you own them — Ideogram claims no rights in your outputs (both the Non-Commercial Agreement and the web/API Terms). But generating those outputs *via the self-hosted weights* for commercial purposes is outside the grant — and that holds wherever you run them (your GPU, RunPod, any cloud). **For commercial work, use the web app or hosted API** (whose Terms assign output ownership to you and permit commercial use), or obtain a separate commercial weights licence from Ideogram.
 - **Use restrictions** (weights): no military/surveillance, no biometric processing, no competing-model training from outputs, must not remove watermarking/safety measures, AI-disclosure where legally required.
 
-**Safety filter.** Two layers: (1) a **model-level** NSFW filter that returns a gray "Image blocked by safety filter" screen — it is in the weights and false-positives are **higher for plain-text than JSON** prompts (official; a fix is planned); and (2) **optional external Hive** text+image moderation wired into the reference `run_inference.py` (you supply `HIVE_*` keys; it warns loudly if absent). The "open-weight ≠ open source" critique and the irony that the non-commercial licence restricts exactly the design/branding use-cases the model is best at are the main community grievances (verified on Hacker News).
+**Safety filter.** Two layers: (1) a **model-level** NSFW filter that returns a gray "Image blocked by safety filter" screen — it is in the weights and false-positives are **higher for plain-text than JSON** prompts `[official — ideogram-oss/ideogram4]`, with a fix signalled; and (2) **optional external Hive** text+image moderation wired into the reference `run_inference.py` (you supply `HIVE_*` keys; it warns loudly if absent). The "open-weight ≠ open source" critique and the irony that the non-commercial licence restricts exactly the design/branding use-cases the model is best at are the main community grievances `[community — Hacker News]`.
 
-**How to read the claims in this skill — two bars, by claim type.** Ideogram 4 is an **open-weights** model — gated `nf4`/`fp8` weights under a non-commercial licence, run via the diffusers `Ideogram4Pipeline` or ComfyUI. The hosted API/web app is a *side path*, relevant only for commercial use (the weights are NC) and for the web-only Character/Style Reference features. The two bars below are the same shape as the other open-model skills; the difference is **recency** — the model is a couple of months old, so the community craft layer is thinner here than for SDXL or Z-Image, and the tooling picture is still moving.
+**Release:** 3 June 2026. Ideogram has signalled checkpoint updates, notably for the safety filter, so the limitations above are a snapshot of one checkpoint rather than a permanent shape.
 
-- **Hard facts — must be exact or it breaks.** Architecture and encoder, the 13 Qwen3-VL caption layers, the **JSON caption schema and `CaptionVerifier` rules**, the three sampler presets and their exact `mu`/`std`/guidance schedules, the Magic Prompt backends and system-prompt rules, quantisation (`nf4`/`fp8`) and HF gating, the licence terms, and the `Ideogram4Pipeline` / `run_inference.py` / ComfyUI node surface. **Source of truth is official** — the GitHub repo, model source, and licence. A wrong quant filename or sampler value breaks the run; a misread non-commercial licence is a legal problem. **Young and volatile:** quant filenames (the `nf4`-vs-`nvfp4` naming), VRAM numbers, ComfyUI template details, and LoRA tooling all move — re-verify before relying on them. LoRA support in particular went from "does not exist" to "ai-toolkit and fal both ship it" inside ten weeks.
+---
 
-- **Craft — what actually makes a good image.** Almost entirely **JSON caption craft**: single-subject elements, background-as-shell, dual-mention, specificity, the `bbox` layout (painter's-algorithm ordering). The authoritative source here will be the **open-weights community** — the people self-hosting it in ComfyUI/diffusers — exactly as for SDXL or Z-Image. The one caveat is *recency, not closedness*: at a couple of months the deep practitioner corpus is still thin, so today's craft leans on the official schema and examples plus early community testing, and will sharpen further. **The LoRA ecosystem is real but lopsided** — 33 published on Civitai, essentially all style work, no character LoRAs and no identity adapters.
+## How to read the claims in this skill — two bars, by claim type
 
-**Independent positioning** (third-party evals): Ideogram 4 ranks #1 among open-weight models on DesignArena and #2 on a blind designer-preference eval (behind GPT Image 2) — strongest on text/typography/design, weakest on photoreal faces.
+This skill holds two kinds of claim to two different standards, because they fail in two different ways. Ideogram 4 is an **open-weights** model — gated `nf4`/`fp8` weights under a non-commercial licence, run through the diffusers `Ideogram4Pipeline` or ComfyUI — with the hosted API and web app as a side path for commercial output and the two web-only reference features. The bars below are the same shape as the other open-model skills; what differs is **recency**, and it changes the craft bar in a way worth stating outright.
 
-**Release:** 3 June 2026. **Skill reviewed 2026-08-13** — the LoRA-training sections were rewritten in that pass, because at launch no training path existed and this skill said so; ai-toolkit and fal both ship one now. The community is still building craft here, and Ideogram has signalled checkpoint updates (notably for the safety filter). Re-verify fast-moving specifics (pricing, quant files, ComfyUI template details, LoRA tooling) before relying on them.
+**Hard facts — must be exact or it breaks.** Treated as hard fact here: the architecture (9.3B single-stream DiT, 34 layers) and the Qwen3-VL-8B-Instruct encoder with its 13 concatenated hidden-state layers; the JSON schema and every `CaptionVerifier` rule (key order, required fields, abort-on-warning); the three sampler presets and their exact `mu`/`std`/guidance schedules; the Magic Prompt backends; quantisation, the ComfyUI file layout and node names, and Hugging Face gating; the licence terms; and the `Ideogram4Pipeline` / `run_inference.py` surface. **Source of truth is official** — the `ideogram-oss/ideogram4` repo, the HF model cards, the raw ComfyUI template JSON, and the licence text. The failure modes are unforgiving in two directions: a wrong quant filename 404s the download, and a misread non-commercial licence is a legal problem rather than a rendering bug. **Young and volatile:** quant filenames (`nf4` vs `nvfp4`), VRAM numbers, template details and LoRA tooling all move — **re-verify before relying on them, regardless of who said it.** LoRA support went from "does not exist" to "ai-toolkit and fal both ship it" inside ten weeks.
+
+**Craft — what actually makes a good image.** Almost entirely **JSON caption craft**: one subject per element, background-as-shell, dual-mention for shell-affixed hero objects, committing to one value instead of hedging, `bbox` strategy and its painter's-algorithm ordering, and the neutral-white-balance realism defaults. **Here the suite's usual answer does not hold.** Everywhere else the authoritative source for craft is the community — named practitioners with a track record. At a couple of months old Ideogram 4 has no such corpus: the self-hosting community exists (Civitai's 33 LoRA authors, the `ideogram-4-fp8` HF discussions, the ComfyUI day-0 walkthrough) but nobody has published the repeated, attributable testing a `[community — author]` marker points at. So this skill's craft rests on an **official artefact used as craft evidence** — Ideogram's open-source Magic Prompt system prompt, the instructions Ideogram gives an LLM to caption for its own model. Unusually strong for the structural rules, since they are what the model was trained against; only *informed taste* for the aesthetic defaults, which is why the realism section says so rather than stating them as prohibitions. **The LoRA ecosystem is real but lopsided** — essentially all style work, no character LoRAs, no identity adapters.
+
+**Independent positioning** (third-party evals): #1 among open-weight models on DesignArena, #2 on a blind designer-preference eval (behind GPT Image 2) — strongest on text, typography and design, weakest on photoreal faces.
+
+**Contested / unresolved points:**
+
+- Whether Edit / Upscale / Reframe / Replace-Background actually run 4.0 through the `/v1/ideogram-v3/*` paths is an inference from the pricing page, not a stated fact `[flagged — re-verify]`.
+- The ComfyUI-native 4-bit quant filename — `nf4` per the HF repo, or `ideogram4_nvfp4_mixed.safetensors` per some community workflows `[flagged — re-verify]`.
+- The `CFGOverride` node's `0.7` field reads as an override-start fraction; exact meaning unconfirmed `[community — single report; re-verify]`.
+- Community GGUF support (`stduhpf/ideogram-4-gguf`, `city96/ComfyUI-GGUF`) for this architecture is early and undocumented `[community — early; re-verify]`.
+- Where a trained LoRA plugs into a graph that loads **two** diffusion models, and at what strength, has no published example `[flagged — re-verify]`.
+- Whether a training set should be captioned in JSON, to match what the base model saw, is untested `[flagged — re-verify]`.
+- Ideogram 4 as the typography pass in a mixed-model pipeline is widely practiced but has no canonical named workflow `[flagged — re-verify]`.
+- The `FLASH` API tier is announced but still returns 400 "coming soon" `[pending release]`.
+
+**Facts dated 2026-08-22**; hard facts last re-verified against source 2026-08-13, when the LoRA-training coverage was rewritten. LoRA tooling, quant filenames, the `FLASH` tier and the v3-edit-path inference move fastest — re-verify each before relying on it.
 
 ---
 
@@ -259,6 +286,7 @@ Before generating:
 
 | File | When to read it |
 |---|---|
-| `references/json-caption-guide.md` | The full JSON caption schema; the complete caption-craft ruleset (single-subject elements, background-as-shell, dual-mention, specificity, bbox strategy); text rendering & multilingual; color-palette conditioning; transparency; Magic Prompt; and drop-in templates |
-| `references/self-hosting.md` | Self-hosted open-weight setup (your GPU or a cloud GPU like RunPod): diffusers `Ideogram4Pipeline`, the `run_inference.py` CLI, sampler presets, resolutions, nf4/fp8 quant + VRAM, HF gating, the ComfyUI day-0 node graph (files, folders, node names, settings, the `gemma4` in-stack captioner), GGUF status, and early LoRA/fine-tuning notes |
-| `references/api-and-webapp.md` | **Secondary / commercial-routing path only** — read when commercial use (NC weights) or the web-only Character/Style Reference features force you off the open weights. The hosted API (generate / remix / describe / magic-prompt endpoints, params, `json_prompt` vs `text_prompt`, resolutions, pricing & rate limits), the web app (Magic Fill, reframe, upscale, transparency, editable text layers), and the commercial-use/ownership terms |
+| `references/json-caption-guide.md` | **Prompting** — read whenever writing or debugging a caption. The schema field by field; the complete caption-craft ruleset; text rendering & multilingual; color-palette conditioning; transparency; Magic Prompt; and drop-in templates to paste and edit |
+| `references/setup-and-workflows.md` | Read when getting the weights running or a graph wired, on your GPU or a rented pod: diffusers `Ideogram4Pipeline`, the `run_inference.py` CLI, sampler presets, resolutions, nf4/fp8 quant + VRAM, HF gating, the full ComfyUI node table, GGUF status, the safety filter, and loading a LoRA you have trained |
+| `references/lora-training.md` | Read before starting a training run: what the non-commercial licence permits and what it does to your LoRA, the ai-toolkit and fal trainers, the unresolved question of how to caption a training set for a JSON-trained model, what the 33 Civitai LoRAs actually are, and why character work here is exploratory. Cross-model craft: [`character-lora-training`](../character-lora-training/) |
+| `references/api-and-hosted.md` | **Secondary / commercial-routing path only** — read when commercial use or the web-only Character/Style Reference features force you off the open weights. The hosted API (generate / remix / describe / magic-prompt endpoints, params, resolutions, pricing, rate limits), the web app (Magic Fill, reframe, upscale, transparency, editable text layers), and the ownership terms |

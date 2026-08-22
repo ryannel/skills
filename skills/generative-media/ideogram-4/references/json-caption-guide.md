@@ -2,6 +2,23 @@
 
 Ideogram 4 was trained **exclusively on structured JSON captions**. Plain text works but underperforms — and trips the safety filter more often. This guide is the full schema plus the caption-craft rules distilled from Ideogram's own open-source Magic Prompt system prompt (the instructions Ideogram gives an LLM to write captions). That system prompt is the most authoritative prompting guidance available; the rules below are quoted/paraphrased from it and from `docs/prompting.md` in the official repo.
 
+
+**This file owns the caption itself** — schema, craft rules, layout, palette, templates. Running the
+model (nodes, quants, CLI) is `setup-and-workflows.md`; captioning a *training* set is a different
+and much less settled problem, covered in `lora-training.md § 3`.
+
+## Contents
+
+- [1. The schema](#1-the-schema)
+- [2. Plain text vs JSON vs Magic Prompt](#2-plain-text-vs-json-vs-magic-prompt)
+- [3. Caption-craft rules](#3-caption-craft-rules-from-ideograms-magic-prompt-system-prompt)
+- [4. Bounding-box strategy](#4-bounding-box-strategy)
+- [5. Realism — the Ideogram way](#5-realism--the-ideogram-way)
+- [6. Text rendering, typography & multilingual](#6-text-rendering-typography--multilingual)
+- [7. Color-palette conditioning](#7-color-palette-conditioning)
+- [8. Transparency / cutouts](#8-transparency--cutouts)
+- [9. Drop-in templates](#9-drop-in-templates)
+
 ---
 
 ## 1. The schema
@@ -205,7 +222,7 @@ These are the **defaults the shipped caption-expander injects for *underspecifie
 
 ## 6. Text rendering, typography & multilingual
 
-Ideogram 4's headline strength (official: 0.97 X-Omni English in-image OCR).
+Ideogram 4's headline strength — 0.97 X-Omni English in-image OCR `[official — Ideogram 4 model card]`.
 
 - **Sources of text to include:** user-quoted strings (verbatim), format-required copy (headlines, taglines, dates, CTAs, brand names), in-scene text (signage, labels, jersey numbers, license plates, t-shirt prints), numeric content (prices, scores, addresses — **numbers are text**), and prominent product brand text.
 - **One text element per visually distinct block.** Each text string appears **once** in the list — don't also spell it out in a `desc` (refer to it by role/position there).

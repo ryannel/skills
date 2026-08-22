@@ -6,6 +6,8 @@
 
 SDXL LoRA training is the most mature in open-source image generation — years of accumulated recipes, several solid trainers, stable behaviour, and by far the deepest body of published craft. The numbers below are convergent recipes from named guides. LR and **rank in particular are genuinely contested** across reputable sources, so treat them as starting points.
 
+## Contents
+
 1. [Choosing the base — the decision that dominates](#1-choosing-the-base)
 2. [Tools](#2-tools)
 3. [Hyperparameters](#3-hyperparameters)
@@ -31,7 +33,7 @@ SDXL LoRA training is the most mature in open-source image generation — years 
 | **Illustrious** (v2.0 as a finetune base) | Booru tags | **The largest character-LoRA library.** The default choice for character work if you want compatibility with existing community LoRAs |
 | **NoobAI-XL V-Pred 1.0** | Booru tags | Reported as the most anatomically accurate with the best tag comprehension. **Requires v-prediction sampler settings and Euler specifically — other samplers will not work.** Budget an evening for that alone |
 | **WAI-NSFW v17** | Booru tags | The usual easier-setup runner-up to v-pred NoobAI |
-| **Anima** | Booru tags | Newer, gaining momentum — named trainers describe it as becoming "the new Illustrious," and note that most Civitai LoRAs for it are still poorly trained. An opportunity and a risk `[flagged — re-verify]` |
+| **Anima** | Booru tags | **Not an SDXL finetune** — a separate 2B model that happens to speak the same booru dialect, so it needs its own trainer config and its own LoRA pool. Named trainers describe it as becoming "the new Illustrious," and note that LoRA quality there varies widely — the pool is young `[community — re-verify]`. **Weights are non-commercial**, unlike everything else in this table, and your LoRA is a Derivative that inherits that — but not as a flat bar. §2(c) lets a person **operating in an individual capacity** sell the LoRA weights themselves; what it does not let anyone do is ship those weights inside a larger product or serve them behind a paid API. The images the LoRA makes are unrestricted for everyone, individual or company. Full shape: [`anima`](../../anima/) `[official — CircleStone NC licence §1(a)/§2(c)/§2(e)]` |
 
 **Cross-family transfer is partial at best.** Some NoobAI LoRAs are reported to work acceptably on Illustrious, since the lineages share ancestry `[community — re-verify]`. Pony is the outlier: its score-tag conditioning means a Pony-trained LoRA carries assumptions nothing else shares.
 
@@ -53,13 +55,13 @@ SDXL LoRA training is the most mature in open-source image generation — years 
 
 **The convergent photoreal/general recipe** (ViewComfy, Bieler, Civitai cheatsheets independently land here): **rank 32 / alpha 32, AdamW or AdamW8bit, constant scheduler, 0% warmup, LR ~3e-5** (usable ~3e-6 to 8e-5), batch 1–4, 1024-area bucketed images.
 
-**Prodigy** (set LR 1.0 and it self-tunes; d-coef ~0.5 for styles) dominates Pony/Illustrious practice and is the best answer to "I don't want to tune LR."
+**Prodigy** (set LR 1.0 and it self-tunes; d-coef ~0.5 for styles) is the default across Pony/Illustrious training guides and is the best answer to "I don't want to tune LR" `[community]`.
 
 **Rank is genuinely contested, and the disagreement is worth understanding rather than averaging away:**
 
 | Source | Position |
 |---|---|
-| The classic rank-by-type ladder | Simple character **8**, complex/realistic character **16**, concept 16–32, style **32** (up to 128/α64 for very detailed styles) |
+| The classic rank-by-type ladder `[community]` | Simple character **8**, complex/realistic character **16**, concept 16–32, style **32** (up to 128/α64 for very detailed styles) |
 | Named character-LoRA trainers | **48/48** as a working default, with **48–64** prescribed specifically when a LoRA "forgets" at weights below 0.5 `[community — neonkisu, QuantumBogoSort]` |
 
 Both are defensible. Lower rank soaks up less unwanted background and style and produces a better-behaved stacking citizen; higher rank captures fine identity detail and holds up at reduced weight. **If your LoRA needs 1.0 to work, that is the signal to raise rank** — not to accept 1.0.
@@ -67,7 +69,7 @@ Both are defensible. Lower rank soaks up less unwanted background and style and 
 **Steps.** Two anchors, and they agree better than they look:
 
 - **~80–100 steps per image** is the community rule of thumb, corroborated across SDXL and newer architectures `[community — QuantumBogoSort and others]`. Twenty images ≈ 1600–2000 steps.
-- **~3000 total** is the long-standing SDXL/Illustrious *style* anchor. Characters usually converge sooner.
+- **~3000 total** is the SDXL/Illustrious *style* anchor `[community — Civitai 25645, L3n4]`. Characters usually converge sooner.
 
 **How the knobs interact:** total steps ≈ images × repeats × epochs ÷ batch; **effective LR scales as `alpha ÷ rank`** (alpha = rank → no scaling). The old "alpha must never exceed rank or it burns" rule is a myth — `alpha = 2×rank` is a legitimate config that simply doubles effective LR.
 
@@ -132,7 +134,7 @@ Two traps in that structure:
 - **If the dataset mixes colour and monochrome images, keep colour terms out of the prepend.** It confuses how the model interprets monochrome inputs — a real problem for manga/manhwa sourcing.
 - Use the append slot for something you want to toggle at inference. Tagging source styling (`manga`, `manhwa`) there lets you switch panel styling in or out of the positive prompt later.
 
-Auto-tagger settings that recur across guides: **max ~30 tags, minimum threshold ~0.4**, plus a standard quality blacklist (`bad quality`, `worst quality`, `deformed`, `mutation`, `blurry`).
+Auto-tagger settings: **max ~30 tags, minimum threshold ~0.4**, plus a standard quality blacklist (`bad quality`, `worst quality`, `deformed`, `mutation`, `blurry`) `[community — convergent across SDXL captioning guides]`.
 
 **Body tokens belong in the captions.** Height, build and proportions are part of an identity, and omitting them is a documented cause of a LoRA whose face is right and whose body is wrong — which matters most where the body is actually visible.
 
@@ -161,7 +163,7 @@ Also: **dedupe hard.** Twenty frames pulled from one video clip look like twenty
 The governing maxim: **consistency in the thing you're training, diversity in everything else.** A style set must show the style on varied subjects — people, objects, interiors, landscapes — or the LoRA learns "this style = these subjects."
 
 - **Size:** ~50 minimum is the Illustrious-era recommendation. The legacy "300–500 ideal" figure is early-SDXL folklore that curation replaced — **a well-curated 30–50 beats a poorly curated 500** `[community — L3n4's crash course, Civitai 25645]`.
-- **The Illustrious style recipe** `[named — Civitai 25645]`: dim 32 / alpha 32, Prodigy (UNet 0.5 / TE 0.5), cosine scheduler, ~3000 steps, ~50 images, booru captions capped at ~30 tags, no style tags in captions.
+- **The Illustrious style recipe** `[community — Civitai 25645]`: dim 32 / alpha 32, Prodigy (UNet 0.5 / TE 0.5), cosine scheduler, ~3000 steps, ~50 images, booru captions capped at ~30 tags, no style tags in captions.
 - **Invert the captioning:** caption the **content** of each image and never mention the style; the shared look becomes the residual.
 - **Palette discipline:** include the style's full tonal range and keep B&W out of a colour style set — narrow colour statistics cause **colour-cast lock-in**, where every output takes the dataset's average palette.
 - **Ethics flag:** a single living artist's style trained without consent is the community's sharpest fault line, and Civitai requires real-artist disclosure. Prefer self-made, licensed, or historic/aggregate aesthetics.
@@ -172,7 +174,7 @@ The governing maxim: **consistency in the thing you're training, diversity in ev
 
 ## 8. Advanced: weight noising and depth anchoring
 
-An experimental method with published results and an active feedback loop, worth knowing because it targets the exact failure that plagues character runs `[community — QuantumBogoSort, `ai-toolkit-perceptual` fork]`.
+An experimental method with published results and an active feedback loop, worth knowing because it targets the exact failure that plagues character runs `[community — QuantumBogoSort, ai-toolkit-perceptual fork]`.
 
 **Weight noising** injects a small Gaussian perturbation directly into the LoRA weights at every training step. The intuition: it helps the model *forget* what is inconsistent and keep only what the data agrees on. Mechanically it biases training toward flatter loss minima and spreads learning across more singular directions of the LoRA factorisation (a measured +20% stable rank on the same config). The practical effect is **resistance to the memorisation that overcooks character runs**, with better likeness at the same step count.
 

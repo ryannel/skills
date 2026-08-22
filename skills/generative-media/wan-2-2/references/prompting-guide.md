@@ -41,7 +41,7 @@ For **T2V**, in roughly this order:
 
 For **I2V**, collapse to **Action → Camera**, plus only enough subject reference to disambiguate ("*the woman on the left*") when the frame has several candidates.
 
-**Length.** Wan responds well to detailed prompts, and the official prompt-extension feature exists precisely because longer, richer prompts improve output [official]. But every added clause is another state the model must satisfy — so add *detail*, not *more subjects*. One clear action beats three competing ones.
+**Length.** Wan responds well to detailed prompts, and the official prompt-extension feature exists precisely because longer, richer prompts improve output `[official]`. But every added clause is another state the model must satisfy — so add *detail*, not *more subjects*. One clear action beats three competing ones.
 
 ---
 
@@ -101,7 +101,7 @@ Take the exact string from the official repo's inference config or the ComfyUI t
 
 ## 6. Prompt extension
 
-An official feature, not a community trick [official]:
+An official feature, not a community trick `[official]`:
 
 ```
 --use_prompt_extend --prompt_extend_method 'dashscope'   # Qwen-Plus (T2V) / Qwen-VL-Max (I2V), needs DASH_API_KEY

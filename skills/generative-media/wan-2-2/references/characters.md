@@ -43,6 +43,8 @@ The no-training path: supply reference imagery that conditions the whole clip ra
 
 When you need this character doing *this exact motion*, transfer the performance from a driving video rather than describing it. The relight LoRA is what makes an inserted character sit in the scene's lighting instead of looking pasted.
 
+If the job is specifically *replacing* someone already in footage rather than driving your own character, [`scail-2`](../../scail-2/) has displaced Animate for that in community practice — a Wan 2.1 fine-tune from zai-org, so it is a separate download and a separate graph, not a mode of this one.
+
 ### 4. Character LoRA on Wan itself
 
 The most expensive and most flexible: the character becomes summonable by prompt in arbitrary new contexts, no reference needed per shot.

@@ -4,6 +4,8 @@ Written for someone training on a consumer GPU or a modestly rented one — a ha
 
 The uncomfortable premise: **at this scale you are the measuring instrument, and you are biased in a known direction.** You know which checkpoint trained longer, you want the run to have worked, and you have been staring at this face for an hour. Almost everything below is about getting a usable reading anyway, cheaply.
 
+## Contents
+
 1. [Layer 1 — samples during training](#1-layer-1--samples-during-training)
 2. [Layer 2 — the grid, and the tools that build it](#2-layer-2--the-grid-and-the-tools-that-build-it)
 3. [Layer 3 — judging without fooling yourself](#3-layer-3--judging-without-fooling-yourself)
@@ -200,4 +202,4 @@ Not the target audience for this file, but worth knowing which of it is worth bo
 
 One thing genuinely open: **there is no accepted home-scale metric for character-LoRA fidelity.** ArcFace distance is what is reachable and it is known-imperfect; VLM judging is where the field went but has no turnkey local tooling at this scale. Expect this section to change. `[contested]`
 
-Dated **2026-08-13**.
+**Facts dated 2026-08-22.** The tooling layer moves fastest here — grid extensions, the `FaceEmbedDistance` node's backends, and whatever local VLM-judging tooling appears next — so re-verify a named tool's current state before building a habit around it.

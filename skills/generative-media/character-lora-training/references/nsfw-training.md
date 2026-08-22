@@ -45,13 +45,32 @@ The practical consequence: **if your base lacks the coverage, do not try to fix 
 
 That layering is the normal production pattern, and it is why the good-citizen advice in `../SKILL.md` matters — a character LoRA that demands 1.0 cannot coexist with the anatomy LoRA it needs.
 
-**Merging as an alternative to stacking.** Where several capability LoRAs are being combined, published tooling merges them into a single "meta-LoRA" by **rank concatenation** — concatenating the A and B matrices with each contribution scaled by `√(weight × alpha/rank)`. Worth knowing two things if you go there: rank adds up, so the merged file is the sum of its parts, and **naming conventions differ** — Kohya-style `.lora_down.weight` / `.lora_up.weight` / `.alpha` versus PEFT-style `.lora_A.weight` / `.lora_B.weight`. A merge script that assumes the wrong one silently finds no modules to merge.
+**Merging as an alternative to stacking.** Where several capability LoRAs are being combined, published merge tooling folds them into a single "meta-LoRA" by **rank concatenation** — concatenating the A and B matrices with each contribution scaled by `√(weight × alpha/rank)` `[community — published merge scripts; re-verify]`. Worth knowing two things if you go there: rank adds up, so the merged file is the sum of its parts, and **naming conventions differ** — Kohya-style `.lora_down.weight` / `.lora_up.weight` / `.alpha` versus PEFT-style `.lora_A.weight` / `.lora_B.weight`. A merge script that assumes the wrong one silently finds no modules to merge, reporting success while changing nothing.
 
 ---
 
 ## 2. Base model selection by family
 
 Base choice dominates every other decision here — more than rank, more than steps, more than captioning.
+
+**The measurable proxy: the share of a base's published LoRAs that are adult-flagged.** Sampled from Civitai's model API, 2026-08-13, ~100 LoRAs per base `[community — Civitai models API, 2026-08-13]`:
+
+| Family | Adult-flagged share | Position |
+|---|---|---|
+| **Wan 2.2 I2V** | **90%** | The highest density in the suite by a wide margin |
+| **Wan 2.2 T2V** | **84%** | Active, mature ecosystem |
+| **MiniMax H3** | **62%** | 77 LoRAs within days of release. Corroborates "no meaningful refusal" |
+| **Krea 2** | **52%** | Well supported in practice |
+| **Z-Image** (Turbo and Base alike) | **46–47%** | Well supported, including anatomy-specific LoRAs |
+| **SDXL / Pony / Illustrious** | 29–34% | Lower *share*, far larger absolute ecosystem, and the purpose-built finetunes live here |
+| [`anima`](../../anima/) | 29% | Rising fast — the most common base in a newest-first pull, and `nsfw`/`explicit` are trained rating tags rather than something you fight the model for |
+| **Flux** | 28% | Despite BFL **filtering the pre-training data** — the community-finetune route works |
+| [`ltx-2-5`](../../ltx-2-5/) | — | **Licence, not capability.** Its incorporated acceptable-use policy prohibits sexually explicit content universally, local weights included |
+| **Ideogram 4** | — | Hard model-level filter, in the weights |
+
+The percentages measure *ecosystem tilt*, not capability ceiling — SDXL's 31% of a much larger library is more absolute material than Wan's 90% of a newer one. What they do establish is that **adult work is the dominant published use of open video models**, which is worth knowing before assuming image-side craft transfers.
+
+What each family actually gives you:
 
 | Family | Position | What to reach for |
 |---|---|---|
@@ -64,11 +83,11 @@ Base choice dominates every other decision here — more than rank, more than st
 
 ### The SDXL finetunes
 
-The deepest ecosystem, and worth understanding as distinct lineages rather than interchangeable options:
+The deepest ecosystem, and worth understanding as distinct lineages rather than interchangeable options. The characterisations below are convergent community verdicts rather than measurements — no one has benchmarked these against each other, and the ranking claims in particular move as new versions land:
 
-| Finetune | Character |
+| Finetune | Character `[community — Civitai model cards and comparisons; convergent]` |
 |---|---|
-| **NoobAI-XL V-Pred 1.0** | Reported as the most anatomically accurate with the best tag comprehension and highest community ELO. **Requires v-prediction sampler settings and Euler specifically — other samplers will not work.** That trap costs people an evening |
+| **NoobAI-XL V-Pred 1.0** | The most anatomically accurate, with the best tag comprehension and the highest community ELO `[flagged — re-verify]`. **Requires v-prediction sampler settings and Euler specifically — other samplers will not work.** That trap costs people an evening |
 | **WAI-NSFW v17** | The usual runner-up; substantially easier setup than v-pred NoobAI |
 | **Illustrious** (v2.0 as a finetune base) | The **largest character-LoRA library**, which matters if you want compatibility with existing work |
 | **Pony Diffusion V6 XL** | Heavy booru-tagged training with explicit examples; tolerates arbitrarily long tag strings and stays coherent when tags conflict. Enormous LoRA ecosystem |

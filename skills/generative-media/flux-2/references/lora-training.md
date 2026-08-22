@@ -8,7 +8,7 @@
 **Supported training bases:**
 - [dev] 32B (Non-Commercial)
 - [klein] 4B Base (**Apache 2.0 — use this for commercially-deployable LoRAs**)
-- [klein] 9B Base (Non-Commercial; local training wants 32–48 GB VRAM *(community)*)
+- [klein] 9B Base (Non-Commercial; local training wants 32–48 GB VRAM `[community]`)
 
 **Do not train on the distilled (4-step) variants** — distillation removes the texture diversity fine-tuning needs. Train on the corresponding base, deploy on either.
 
@@ -44,7 +44,7 @@ config:
 
 Other live options: **Civitai's official orchestration recipe** for [klein] (`developer.civitai.com/orchestration/recipes/training-flux2-klein` — engine ai-toolkit; includes an edit-training mode with `control_N/` reference folders), SimpleTuner, fal.ai/RunComfy hosted trainers. kohya/sd-scripts FLUX.2 support was pending close to release — verify before relying on it.
 
-> ⚠ **The Civitai klein-4B recipe defaults to dim 2 / alpha 1.** That is a cost-optimized floor for their hosted trainer, not a quality recommendation — community ablation finds rank 4–8 LoRAs barely move FLUX.2's fused attention/MLP blocks. For local training start at 16 (character) / 32+ (style). *(Official-platform recipe vs named-community ablation — a genuine divergence, flagged.)*
+> ⚠ **The Civitai klein-4B recipe defaults to dim 2 / alpha 1.** That is a cost-optimized floor for their hosted trainer, not a quality recommendation — community ablation finds rank 4–8 LoRAs barely move FLUX.2's fused attention/MLP blocks. For local training start at 16 (character) / 32+ (style). This is an official-platform default sitting against a named community ablation, and neither side is obviously wrong — Civitai is optimising their own GPU bill, the ablation is optimising output `[contested]`.
 
 ## The official reference config
 
@@ -65,13 +65,13 @@ BFL also frames the expected shape of a run: **15–40 images sharing one look, 
 
 **Klein 9B has documented collapse patterns** — community trainers report characteristic failure modes specific to the 9B at certain configs. If a 9B run degenerates rather than converging, that is a known class of problem rather than a dataset fault `[community — re-verify]`.
 
-The `ai-toolkit-perceptual` character-training fork (see [`character-lora-training`](../../character-lora-training/) §8 territory, and `sdxl/references/lora-training.md` §8 for the full method) **defaults to the Klein 9B checkpoint** in its quickstart, so Flux.2 is the best-supported target for weight-noising and depth-anchoring experiments.
+The `ai-toolkit-perceptual` character-training fork (see [`character-lora-training`](../../character-lora-training/) §8 territory, and [`sdxl`](../../sdxl/references/lora-training.md) §8 for the full method) **defaults to the Klein 9B checkpoint** in its quickstart, so Flux.2 is the best-supported target for weight-noising and depth-anchoring experiments.
 
 ## Hyperparameters
 
 | Parameter | Character | Style | Notes |
 |---|---|---|---|
-| Rank (linear) | 16 (32 high end) | **32–128** | Herbst's 50+-run [klein]/[dev] ablation landed on **128/64/64/32** (linear/alpha/conv/conv-alpha, a 4:2:2:1 ratio) as "universally strong" for style — vs tool defaults of 16. Direction (style ≥ character) is agreed; magnitude is contested *(named community ablation — Calvin Herbst, Medium)* |
+| Rank (linear) | 16 (32 high end) | **32–128** | Herbst's 50+-run [klein]/[dev] ablation landed on **128/64/64/32** (linear/alpha/conv/conv-alpha, a 4:2:2:1 ratio) as "universally strong" for style — vs tool defaults of 16. Direction (style ≥ character) is agreed; magnitude is contested `[community — Calvin Herbst, Medium]` |
 | Alpha | = rank | = rank or rank/2 | effective LR scales as `alpha ÷ rank`; `alpha = 2×rank` is legitimate (just doubles effective LR) — the "never exceed rank" rule is an SDXL-era myth |
 | LR | 1e-4, drop to 5e-5 if frying | same | FLUX.2's big DiT is **LR-hypersensitive — start low**. [klein] tolerates 1e-4–5e-4. Herbst: weight decay 1e-5 is a surprisingly load-bearing color/tonality knob |
 | Steps | 1500–3000 | 2000 (Civitai default) — Herbst's style sweet spot was **7000**, degrading past 10k | almost certainly dataset-size and LR dependent — contested, run checkpoints and read the grid |
@@ -87,13 +87,13 @@ FLUX.2's encoders are LLMs, so captions are **descriptive natural-language sente
 
 - **Character:** describe everything that is *not* the identity — pose, clothing, scene, lighting, angle. No bare trigger token (it can confuse the LLM encoder); if you use one, embed it naturally ("a photo of TRIGGER, a woman with…"). Dataset protocol (rotation, expressions, factory): `references/characters.md §3`.
 - **Style:** invert it — describe the **content** of each image across **diverse subjects** and never mention the style; the shared look becomes the residual.
-- ⚠ **Captionless training is genuinely contested on Flux-class models.** The no-caption camp shows strong style replication from raw images alone; the pro-caption camp has the better-documented evidence for *generalization* (recris's "clown test" in kohya discussion #1497: detailed captions transfer beyond the training distribution; captionless LoRAs tend to replicate the dataset). Practical synthesis: **short natural-language scene descriptions that never mention the style** — caption-the-residual in prose. Captionless is defensible for a pure-replication style; captioned generalizes better. *(Named community evidence on both sides — presented as contested, not settled.)*
+- ⚠ **Captionless training is genuinely contested on Flux-class models.** The no-caption camp shows strong style replication from raw images alone; the pro-caption camp has the better-documented evidence for *generalization* (recris's "clown test" in kohya discussion #1497: detailed captions transfer beyond the training distribution; captionless LoRAs tend to replicate the dataset). Practical synthesis: **short natural-language scene descriptions that never mention the style** — caption-the-residual in prose. Captionless is defensible for a pure-replication style; captioned generalizes better. Both camps have named evidence, which is why this is presented as open rather than settled `[contested]`.
 
 ## Style LoRAs — the specifics
 
 - **The diversity maxim:** consistency in the style, diversity in everything else — people, objects, interiors, landscapes — or the LoRA learns "this style = these subjects."
 - **Palette discipline:** cover the style's tonal range; keep B&W out of a color set. Narrow color statistics cause **color-cast lock-in** (every output takes the dataset's average palette).
-- **Resolution:** 1024² standard; 512 training demonstrably works on Flux-class models for some named users, but "512 beats 1024" is unresolved *(kohya #1497 — contested)*.
+- **Resolution:** 1024² standard; 512 training demonstrably works on Flux-class models for some named users, but "512 beats 1024" is unresolved `[contested — kohya #1497]`.
 - **Inference strength:** FLUX.2 style LoRAs run hotter than SDXL's — typical 0.7–1.0; Herbst's ablated optimum for his style was 0.73 (usable 0.4–0.75).
 - **Ethics flag:** single-living-artist styles without consent are the community fault line; Civitai requires real-artist disclosure. Prefer self-made, licensed, or historic/aggregate aesthetics.
 

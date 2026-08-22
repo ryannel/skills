@@ -2,7 +2,7 @@
 
 All ComfyUI node settings here are read from the official `Comfy-Org/workflow_templates` JSONs and comfyanonymous's `ComfyUI_examples`; diffusers code from the Stability HF model cards. Community items are labelled.
 
-## Table of contents
+## Contents
 1. File layout & the VAE gotcha
 2. ComfyUI — base-only graph
 3. ComfyUI — base + refiner ensemble
@@ -28,7 +28,7 @@ All ComfyUI node settings here are read from the official `Comfy-Org/workflow_te
 
 **The checkpoint is one file** bundling UNet + CLIP-L + OpenCLIP-bigG + VAE; `CheckpointLoaderSimple` outputs `MODEL`, `CLIP`, `VAE`. No separate loaders needed for the stock graph.
 
-**VAE gotcha (community, well-established):** SDXL's original VAE **overflows in fp16 → black/NaN images**. The baked-in VAE used by the stock templates is fine. If you decode in fp16 with a *standalone* VAE, use **`madebyollin/sdxl-vae-fp16-fix`** via a `VAELoader` wired into `VAEDecode`, or run the VAE in fp32. Black outputs almost always = this.
+**VAE gotcha** `[community; strong]`: SDXL's original VAE **overflows in fp16 → black/NaN images**. The baked-in VAE used by the stock templates is fine. If you decode in fp16 with a *standalone* VAE, use **`madebyollin/sdxl-vae-fp16-fix`** via a `VAELoader` wired into `VAEDecode`, or run the VAE in fp32. Black outputs almost always = this.
 
 ---
 
@@ -82,7 +82,7 @@ From `sdxl_simple_example.json` (verbatim). Two `CheckpointLoaderSimple` (base +
 - **LoRA:** load a base-SDXL *finetune*, add `LoraLoader` with `sdxl_lightning_{N}step_lora.safetensors` at strength 1.0, same sampler settings. Use the LoRA route to make a *custom finetune* fast; use the full checkpoint for best quality on plain SDXL. **Match the step count to the file** — a 4-step LoRA at 8 steps degrades. 1-step is experimental; 2-step is the floor, 4-step the default.
 
 **LCM** (comfyanonymous LCM examples):
-- Patch the model with **`ModelSamplingDiscrete`** set to **`lcm`**, then `KSampler` at **sampler `lcm`, scheduler `sgm_uniform`, cfg 1–2, steps 4–8**, 1024². **LCM-LoRA** (`LoraLoader`) applies the same to any finetune. Forgetting the `ModelSamplingDiscrete` patch or leaving CFG high "blows things up" (community).
+- Patch the model with **`ModelSamplingDiscrete`** set to **`lcm`**, then `KSampler` at **sampler `lcm`, scheduler `sgm_uniform`, cfg 1–2, steps 4–8**, 1024². **LCM-LoRA** (`LoraLoader`) applies the same to any finetune. Forgetting the `ModelSamplingDiscrete` patch or leaving CFG high "blows things up" `[community]`.
 
 **Hyper-SDXL** (ByteDance): LoRA or full ckpt, **sampler `euler`, scheduler `sgm_uniform`, cfg ~1, steps 1/2/4/8**. Best-rated 1-step option. Some 1-step modes ship a unified-guidance LoRA — follow the model card.
 
@@ -134,8 +134,8 @@ image = refiner(prompt=prompt, num_inference_steps=n_steps,
 SDXL is 1024-native, so you don't *need* the SD1.5 low-res-first dance — but to exceed ~1.5 MP without duplication/anatomy artefacts, generate in a 1024-area bucket then upscale:
 
 - **Latent hires-fix:** `KSampler` → `LatentUpscaleBy` (×1.5, `bislerp`) → second `KSampler` at **denoise 0.3–0.5** → decode. Low denoise preserves composition while adding detail. (Pixel-space variant: decode → `ImageUpscaleWithModel` → re-encode → re-sample at **0.25–0.35** — tolerates lower denoise than latent interpolation.)
-- **Tiled upscale (community):** `UltimateSDUpscale` (custom node) with a 4× ESRGAN model and **denoise ~0.2–0.35**, tile 1024, for large prints. Use its **seam-fix modes** (half-tile is the usual pick) + tile overlap when seams show. A tile only sees its own patch — give the upscale pass a *simpler* prompt than the base gen so localized details don't get stamped onto every tile. Or model-only upscale (`UpscaleModelLoader` + `ImageUpscaleWithModel`, e.g. `4x-UltraSharp`, `Remacri`) with no re-diffusion for a clean non-hallucinating enlarge.
-- **Face/hand repair:** inpaint the region or use a detailer node (`FaceDetailer` from Impact Pack) at denoise ~0.4 — the SDXL-era equivalent of SD1.5's aDetailer. Settings consensus: `guide_size` 512, `max_size` 1024, `bbox_crop_factor` ~1.3–2 for tighter face context. This is also where a character LoRA gets swapped in (`references/characters.md §3`).
+- **Tiled upscale** `[community]`: `UltimateSDUpscale` (custom node) with a 4× ESRGAN model and **denoise ~0.2–0.35**, tile 1024, for large prints. Use its **seam-fix modes** (half-tile is the usual pick) + tile overlap when seams show. A tile only sees its own patch — give the upscale pass a *simpler* prompt than the base gen so localized details don't get stamped onto every tile. Or model-only upscale (`UpscaleModelLoader` + `ImageUpscaleWithModel`, e.g. `4x-UltraSharp`, `Remacri`) with no re-diffusion for a clean non-hallucinating enlarge.
+- **Face/hand repair:** inpaint the region or use a detailer node (`FaceDetailer` from Impact Pack) at denoise ~0.4 — the SDXL-era equivalent of SD1.5's aDetailer. Settings that recur across published detailer workflows: `guide_size` 512, `max_size` 1024, `bbox_crop_factor` ~1.3–2 for tighter face context `[community]`. This is also where a character LoRA gets swapped in (`references/characters.md §3`).
 - **Color drift:** VAE round-trips and second samplers shift color; fix once at the end with a **ColorMatch** node (KJNodes) against the pre-upscale image rather than per stage.
 - The full production ladder (per-stage denoise bands, finishers like SeedVR2, cross-model refine passes) is the **`image-production-workflows`** skill in this suite — SDXL's specific role there is the controllable front-end and the texture-refine back-end.
 
@@ -164,5 +164,5 @@ These let SDXL do pose/structure/identity control that newer DiT models still la
 
 - **No useful GGUF for SDXL.** It's a **Conv2D-heavy UNet**; GGUF/DiT quantisation targets transformers, and the `city96/ComfyUI-GGUF` author says explicitly *don't quantise SDXL* (quality collapses). fp16 is the format.
 - **fp8 weight-casting:** ComfyUI's `--fp8_e4m3fn-unet` casts UNet weights to fp8 to save VRAM (small quality cost); the model still computes in higher precision.
-- **VRAM (community):** ComfyUI auto-offloads, so 1024² runs on **~4 GB** (low-VRAM), **6–8 GB** comfortable. Base+refiner keeps both checkpoints resident → budget **8 GB+**. Fast variants don't reduce VRAM (same UNet), only time. Stability/Comfy publish no single hard minimum.
+- **VRAM** `[community]`: ComfyUI auto-offloads, so 1024² runs on **~4 GB** (low-VRAM), **6–8 GB** comfortable. Base+refiner keeps both checkpoints resident → budget **8 GB+**. Fast variants don't reduce VRAM (same UNet), only time. Stability/Comfy publish no single hard minimum.
 - **Speed:** distilled variants (Turbo/Lightning/LCM/Hyper) cut a 30-step render to 1–8 steps — near-real-time on a mid-range GPU. That's the lever for low-end hardware, not quantisation.

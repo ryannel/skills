@@ -1,10 +1,26 @@
-# Z-Image Multi-Stage ComfyUI Workflows
+# Z-Image Setup & Multi-Stage Workflows
 
-How to build layered rendering pipelines that get production-quality results — generate small, refine, then upscale in passes, using **ZIB for structure and ZIT for detail**.
+How to build layered rendering pipelines that get production-quality results — generate small, refine, then upscale in passes, using **ZIB for structure and ZIT for detail** — plus everything that hangs off the graph: node settings, **using and stacking LoRAs**, ControlNet, identity methods, and handoffs to other model families. What this file does *not* own: the one-time install and file layout (that is `SKILL.md § Setup & ecosystem`, kept there because you read it once), and **making** a LoRA rather than loading one (`references/lora-training.md`).
 
 The settings here come from two sources, kept labelled because they are not interchangeable:
 - **Official** — the stock ComfyUI Z-Image-Turbo template (`Comfy-Org/workflow_templates`).
 - **Community** — the layered pipeline pattern popularised by widely-shared community ComfyUI workflows (e.g. the "Moody" ZIB+ZIT graphs on Civitai). These often run **custom community finetunes** of Z-Image, so treat their step/CFG numbers as well-tuned starting points, not stock requirements. The *architecture* transfers to stock Z-Image; the exact numbers may need a nudge.
+
+That split is the reason this file is worth reading in order rather than grepping: a number's tier changes what you do when it doesn't reproduce.
+
+## Contents
+
+1. The minimal build (start here)
+2. The layered pipeline (the full build)
+3. Per-stage settings (community layered pipeline)
+4. Resolution strategy — generate small, upscale in layers
+5. Universal node settings
+6. Using LoRAs — wiring, the QKV gotcha, weights, stacking, ZIB↔ZIT cross-compat, the detailer "face-swap" method
+7. Optional improvement layers — skin contrast, upscale models, SeedVR2, the tiled-upscale prompt caveat, colour drift
+8. Build order summary
+9. Fun Union ControlNet (pose, depth, canny, and more)
+10. Face identity — available methods
+11. Z-Image in mixed-model pipelines
 
 ---
 
@@ -109,7 +125,7 @@ Load Diffusion Model → LoRA loader → ModelSamplingAuraFlow (shift 3) → KSa
 CLIPLoader (qwen_3_4b, "lumina2") ─────────────────────────────────┘
 ```
 
-**Which loader:** the ComfyUI core PR #12717 repro adds the LoRA with the **full `LoraLoader`** (model + clip). **`LoraLoaderModelOnly`** also works and is the clean choice — Z-Image LoRAs target the DiT, and most (Ostris-trained, diffusers-format) carry **no text-encoder weights**, so the Qwen-3/CLIP side is usually a no-op either way. Don't agonize over it; if a LoRA *does* ship Qwen-3 keys, use the full `LoraLoader` so they apply. *(DiT target is verified from PR #12717; the model-vs-model+clip node choice is a usage detail, not a break-or-not fact.)*
+**Which loader:** the ComfyUI core PR #12717 repro adds the LoRA with the **full `LoraLoader`** (model + clip). **`LoraLoaderModelOnly`** also works and is the clean choice — Z-Image LoRAs target the DiT, and most (Ostris-trained, diffusers-format) carry **no text-encoder weights**, so the Qwen-3/CLIP side is usually a no-op either way. The DiT target is verified `[official — ComfyUI PR #12717]`; which of the two loader nodes you pick is a usage detail, not a break-or-not fact. Don't agonize over it — if a LoRA *does* ship Qwen-3 keys, use the full `LoraLoader` so they apply.
 
 ### The gotcha that makes a LoRA silently do almost nothing (Z-Image-SPECIFIC)
 
@@ -127,29 +143,29 @@ Start **~0.7–0.8** and sweep **0.5–1.2**. By LoRA type, named authors land a
 | **Realism enhancer** | **~0.6–0.7** | potent; start low and raise |
 | **Character / concept** | **~0.7–1.0** | needs more strength to carry identity |
 
-These are **per-LoRA tunings, not a model-wide ceiling.** The old "1.0 overcooks Turbo" framing was overstated — there's no documented hard cap; a saturated result means *that* LoRA is hot, not that 1.0 is illegal. *(Community; exact numbers are fast-moving and sources mildly disagree — treat as starting points, and prefer the weight printed on the LoRA's own model card.)*
+These are **per-LoRA tunings, not a model-wide ceiling.** The old "1.0 overcooks Turbo" framing was overstated — there's no documented hard cap; a saturated result means *that* LoRA is hot, not that 1.0 is illegal. The exact numbers are fast-moving and sources mildly disagree, so treat the table as starting points and prefer the weight printed on the LoRA's own model card `[community — single report; re-verify]`.
 
 ### Stacking multiple LoRAs (general ComfyUI craft — stable across models)
 
-Use the rgthree **Power Lora Loader** node: multiple LoRAs in one node, per-LoRA strength, on/off toggles, "no real limit" (`FlexibleOptionalInputType`). Toggle to **separate model/clip strengths** via the advanced view if needed. On Turbo, **keep combined strength near or under ~1.0** to avoid burning/overexposure — a conservative heuristic; with normalization you can go higher, and a Z-Image-specific LoRA-merger node (`ComfyUI-ZImage-LoRA-Merger`) exists precisely because chained strengths accumulate on distilled models. Ordering has minor effects. *(rgthree README; community.)*
+Use the rgthree **Power Lora Loader** node: multiple LoRAs in one node, per-LoRA strength, on/off toggles, "no real limit" (`FlexibleOptionalInputType`). Toggle to **separate model/clip strengths** via the advanced view if needed. On Turbo, **keep combined strength near or under ~1.0** to avoid burning/overexposure — a conservative heuristic; with normalization you can go higher, and a Z-Image-specific LoRA-merger node (`ComfyUI-ZImage-LoRA-Merger`) exists precisely because chained strengths accumulate on distilled models. Ordering has minor effects `[community — rgthree README]`.
 
 ### ZIB ↔ ZIT cross-compatibility: loads fine, doesn't transfer cleanly (Z-Image-SPECIFIC)
 
 Base and Turbo share the **identical S3-DiT**, so any LoRA **loads on either without a format error.** But "loads" ≠ "transfers": a **Base-trained LoRA run on Turbo** shows **softer identity, dropped face consistency, shifted color/background** — and may need a strength bump.
 
-**Community best practice (incl. the official Tongyi-MAI HF discussion #18): train on Z-Image Base, generate on Z-Image-Turbo.** Base is the better base for cross-prompt control; train *on* Turbo only if you specifically want fast-delivery behavior. The exact magnitude of Base→Turbo degradation is **genuinely contested** across sources (reports range from "~100% similarity" to "little impact") — so **test it, don't assume.** *(Sources: HF Tongyi-MAI #18; RunComfy AI-Toolkit notes; lilting.ch. Fast-moving.)*
+**Community best practice (incl. the official Tongyi-MAI HF discussion #18): train on Z-Image Base, generate on Z-Image-Turbo.** Base is the better base for cross-prompt control; train *on* Turbo only if you specifically want fast-delivery behavior. The exact magnitude of Base→Turbo degradation is **genuinely contested** `[contested]` across sources — reports range from "~100% similarity" to "little impact" `[community — Tongyi-MAI #18, RunComfy, lilting.ch]` — so **test it, don't assume.**
 
 ### "Fights distillation" — why a Turbo-trained LoRA can look blurry (Z-Image-SPECIFIC)
 
-A LoRA trained **directly on Turbo** can disturb Turbo's few-step "landing trajectory" — it alters not just the subject/style but how the model converges in 8 steps, producing **blurry output at 8 steps that only cleans up at ~30.** This is the other reason the train-on-Base path is preferred, and why inference-time **DistillPatch** correction LoRAs exist (DiffSynth-Studio `Z-Image-Turbo-DistillPatch`; a Civitai equivalent). If a Turbo LoRA renders soft at 8 steps, suspect this before blaming your prompt. *(lilting.ch; DiffSynth-Studio HF.)*
+A LoRA trained **directly on Turbo** can disturb Turbo's few-step "landing trajectory" — it alters not just the subject/style but how the model converges in 8 steps, producing **blurry output at 8 steps that only cleans up at ~30.** This is the other reason the train-on-Base path is preferred, and why inference-time **DistillPatch** correction LoRAs exist (DiffSynth-Studio `Z-Image-Turbo-DistillPatch`; a Civitai equivalent). If a Turbo LoRA renders soft at 8 steps, suspect this before blaming your prompt `[community — lilting.ch, DiffSynth-Studio]`.
 
 ### Trigger words
 
-Z-Image's encoder is the Qwen-3 LLM, not a CLIP tag-matcher, so a trigger generally works best **folded into natural-language description** rather than dropped as a bare tag. This matches what FLUX.2 trainers report for *its* LLM encoder (Mistral/Qwen3) — bare trigger words "confuse the model," and descriptive captions activate a LoRA better — so it's a consistent LLM-encoder pattern, not a Z-Image quirk. Still: follow the LoRA author's stated trigger and include it if they define one. The precise token-weighting behavior isn't formally documented for Z-Image, so treat heavy trigger-engineering as lower-yield than on tag-based SDXL. *(Cross-model community pattern; not A/B-tested on Z-Image specifically.)*
+Z-Image's encoder is the Qwen-3 LLM, not a CLIP tag-matcher, so a trigger generally works best **folded into natural-language description** rather than dropped as a bare tag. This matches what FLUX.2 trainers report for *its* LLM encoder (Mistral/Qwen3) — bare trigger words "confuse the model," and descriptive captions activate a LoRA better — so it's a consistent LLM-encoder pattern, not a Z-Image quirk. Still: follow the LoRA author's stated trigger and include it if they define one. The precise token-weighting behavior isn't formally documented for Z-Image, so treat heavy trigger-engineering as lower-yield than on tag-based SDXL `[community — cross-model pattern; re-verify]`.
 
 ### Ecosystem (early–mid 2026)
 
-An active Civitai/HF ecosystem tags its uploads **`ZImageTurbo`**: **style** (e.g. "Technically Color Z," trigger `t3chnic4lly`), **realism enhancers** (e.g. "Realistic Snapshot"), and **character/concept** LoRAs. Most are trained with the **Ostris AI-Toolkit** (which ships a dedicated Z-Image-Turbo training adapter), which is why so many ship in diffusers format — tying straight back to the QKV gotcha above. Community "apply any LoRA" ComfyUI workflows exist (Civitai 2194203, Next Diffusion, RunComfy). *(Civitai; Ostris HF; fast-moving.)*
+An active Civitai/HF ecosystem tags its uploads **`ZImageTurbo`**: **style** (e.g. "Technically Color Z," trigger `t3chnic4lly`), **realism enhancers** (e.g. "Realistic Snapshot"), and **character/concept** LoRAs. Most are trained with the **Ostris AI-Toolkit** (which ships a dedicated Z-Image-Turbo training adapter), which is why so many ship in diffusers format — tying straight back to the QKV gotcha above. Community "apply any LoRA" ComfyUI workflows exist (Civitai 2194203, Next Diffusion, RunComfy) `[community — Civitai, Ostris HF]`.
 
 ---
 
@@ -185,7 +201,7 @@ Loading a character LoRA into the *base* generation often gives mediocre results
 
 **Tiled-upscale prompt caveat.** When `UltimateSDUpscale` splits the image into tiles, a tile only "sees" its local patch — so a prompt that says "a tattoo reading 'X' below the collarbone" can make the model stamp that text onto unrelated smooth-skin tiles (shoulder, arm, back). If you render localised text/marks, give the upscale pass a **simpler prompt** (or the conditioning switch many graphs expose) so per-tile hallucinations don't reproduce it.
 
-**Color drift across passes.** Every VAE decode/encode round-trip and every re-sample pass shifts color slightly, and the shifts compound through a long pipeline. Fix it once at the end, not per stage: a **ColorMatch node (KJNodes**; `mkl` or `hm-mvgd-hm` method) comparing the final image against the stage-1/stage-3 composition reference pulls the grade back without touching detail. *(Community-standard practice; see the `image-production-workflows` skill for the full color-management treatment.)*
+**Color drift across passes.** Every VAE decode/encode round-trip and every re-sample pass shifts color slightly, and the shifts compound through a long pipeline. Fix it once at the end, not per stage: a **ColorMatch node (KJNodes**; `mkl` or `hm-mvgd-hm` method) comparing the final image against the stage-1/stage-3 composition reference pulls the grade back without touching detail `[community]`. The full colour-management treatment is in [`image-production-workflows`](../../image-production-workflows/).
 
 ---
 
@@ -233,7 +249,7 @@ For tiled upscaling with ControlNet: `Z-Image-Turbo-Fun-Controlnet-Tile-2.1-8ste
 
 These are standard ComfyUI core nodes added in PR #11062 (ComfyUI v0.3.51+). The `QwenImageDiffsynthControlnet` name is misleading — it handles both Qwen-Image and Z-Image patches.
 
-**Recommended `control_context_scale`:** 0.65–0.80 (the parameter on `QwenImageDiffsynthControlnet`). The official template uses `strength=1.0`.
+**Recommended `control_context_scale`:** 0.65–0.80 `[community]` (the parameter on `QwenImageDiffsynthControlnet`) — a community band, not a documented default; the official template ships `strength=1.0` and leaves this alone `[official — Comfy-Org template JSON]`.
 
 ### Conditioning types and preprocessors
 
@@ -280,7 +296,7 @@ No PuLID or IP-Adapter face implementation exists for Z-Image as of June 2026. T
 
 ## 11. Z-Image in mixed-model pipelines
 
-Z-Image-Turbo has earned a specific role in cross-model production: **the realism refiner for other models' renders.** Because ZIT is fast (8 steps), guidance-free, and has a strong photographic prior, named community workflows compose in another model and finish in ZIT — e.g. Cordina's "ZIT Refiner workflows – SDXL v1" (Civitai, Jan 2026): SDXL base gen → ZIT img2img pass "to add realism" → detailers → upscale. *(Community, named author.)*
+Z-Image-Turbo has earned a specific role in cross-model production: **the realism refiner for other models' renders.** Because ZIT is fast (8 steps), guidance-free, and has a strong photographic prior, named community workflows compose in another model and finish in ZIT — e.g. Cordina's "ZIT Refiner workflows – SDXL v1" `[community — Cordina, Civitai Jan 2026]`: SDXL base gen → ZIT img2img pass "to add realism" → detailers → upscale.
 
 The handoff mechanics, if you build one yourself:
 - **Always decode to pixels between model families.** Z-Image's latent space is not SDXL's or FLUX's — `VAE Decode` (model A) → image → `VAE Encode` (Z-Image's `ae.safetensors`) → ZIT KSampler. Feeding a foreign latent straight in produces garbage.
@@ -288,4 +304,4 @@ The handoff mechanics, if you build one yourself:
 - **Match resolution** to Z-Image's comfortable range before encoding (downscale a 4 MP source or tile it).
 - The reverse direction also exists: ZIB/ZIT base → an SDXL photoreal finetune img2img for its texture character, or → SDXL for its mature ControlNet/IP-Adapter ecosystem when a control type Z-Image lacks is required.
 
-The model-agnostic craft — the full production ladder, cross-family handoff rules, color management, workflows-as-code (ComfyScript, comfy-cli, the `/prompt` API) — lives in the **`image-production-workflows`** skill in this suite.
+The model-agnostic craft — the full production ladder, cross-family handoff rules, color management, workflows-as-code (ComfyScript, comfy-cli, the `/prompt` API) — lives in the [`image-production-workflows`](../../image-production-workflows/) skill in this suite.

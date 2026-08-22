@@ -1,5 +1,20 @@
 # Z-Image Prompting Guide
 
+Everything about writing for the Qwen-3 encoder: the six-part anatomy in full, the vocabulary tables you compose from, and the two places Z-Image's defaults have to be argued with (plastic skin, and the chin that tilts back toward the lens). Sections 3.3–3.5 double as the **dataset-shot specification** for character LoRA work — `references/characters.md` sends you here for the angle clauses rather than restating them.
+
+## Contents
+
+1. Prompt anatomy
+2. Realism: killing the plastic default
+3. Camera vocabulary — 3.1 lens reference · 3.2 shot sizes · 3.3–3.4 horizontal rotation (LoRA datasets) · 3.5 elevation shots
+4. Lighting reference
+5. High- and low-angle gaze control
+6. Bilingual prompting and text rendering
+7. Common mistakes
+8. Drop-in templates
+
+---
+
 ## 1. Prompt anatomy
 
 Six parts in this order. Order matters — Qwen parses syntax, so earlier clauses carry more weight.

@@ -10,19 +10,19 @@ Training mechanics live in `lora-training.md`; loading/stacking in `checkpoints-
 
 | Tool | What it does | Strengths | Weaknesses |
 |---|---|---|---|
-| **InstantID** | one reference photo → identity-locked generation (InsightFace embedding + its own ControlNet) | best one-shot face fidelity on SDXL *(community consensus — it displaced FaceID as the go-to)* | face only; degrades at extreme angles; adds its own ControlNet pass |
+| **InstantID** | one reference photo → identity-locked generation (InsightFace embedding + its own ControlNet) | best one-shot face fidelity on SDXL `[community — displaced FaceID as the go-to]` | face only; degrades at extreme angles; adds its own ControlNet pass |
 | **IP-Adapter FaceID / FaceID Plus v2** | identity via InsightFace embedding into cross-attention | lighter than InstantID; composes with other IP-Adapters | widely held to underperform InstantID; h94's own card concedes imperfect ID consistency |
-| **HyperLoRA** (ByteDance, CVPR 2025) | **zero-shot generation of LoRA weights** from a face photo — adapter convenience, LoRA-grade quality | official ComfyUI nodes; "fidelity" vs "edit" checkpoints | newer, smaller install base *(official repo; community validation growing)* |
+| **HyperLoRA** (ByteDance, CVPR 2025) | **zero-shot generation of LoRA weights** from a face photo — adapter convenience, LoRA-grade quality | official ComfyUI nodes; "fidelity" vs "edit" checkpoints | newer, smaller install base `[official — ByteDance HyperLoRA repo]` `[community — validation growing]` |
 | **ReActor** | post-hoc face *swap* on a finished image | fixes identity after the fact; the 2025 rewrite **dropped InsightFace** (removing its non-commercial licence problem) and added ReSwapper/HyperSwap models | swap quality ceiling; doesn't help body/outfit |
 | **Character LoRA** | trained from 20–50 images | the only tool that carries the **whole character** — body, outfit, mannerisms — and survives angle extremes | needs a dataset and a training run |
 
-**The decision rule** *(community consensus, convergent across named head-to-heads — MyAIForce's comparisons are the best citable)*: adapters excel at one-shot *face* identity and need no training, but they drift at extreme angles and capture nothing below the neck. **A trained LoRA wins for a recurring character; an adapter wins for a one-off.** The strongest results combine them: character LoRA for the character, InstantID or a detailer pass to lock the face in difficult shots.
+**The decision rule** `[community — MyAIForce comparisons; convergent]`: adapters excel at one-shot *face* identity and need no training, but they drift at extreme angles and capture nothing below the neck. **A trained LoRA wins for a recurring character; an adapter wins for a one-off.** The strongest results combine them: character LoRA for the character, InstantID or a detailer pass to lock the face in difficult shots.
 
 ---
 
 ## 2. The character LoRA pipeline
 
-The 2026 cross-model consensus applies to SDXL directly *(community, strong — WeirdWonderfulAI, Mickmumpitz, Civitai dataset guides)*:
+The 2026 cross-model consensus applies to SDXL directly `[community — WeirdWonderfulAI, Mickmumpitz, Civitai dataset guides; strong]`:
 
 1. **Anchor image** — generate the character once in your target checkpoint (Juggernaut/RealVis for photoreal; Pony/Illustrious for anime). Specific, nameable features; plain background; neutral light.
 2. **Dataset factory** — multiply the anchor into **20–50 varied images**. The modern route is an edit model (Qwen-Image-Edit 2509/2511 — a different model used purely as a data tool; its look doesn't contaminate the LoRA because captions name everything but the identity). The classic route is img2img + inpainting inside SDXL itself. Generate ~60, curate the best ~30 — cut every frame where the face drifted.
@@ -37,7 +37,7 @@ The 2026 cross-model consensus applies to SDXL directly *(community, strong — 
 
 ## 3. Deploying: the detailer LoRA swap and `[SEP]` routing
 
-**The detailer swap** *(community, strong — MyAIForce's ADetailer and FaceDetailer writeups are the clearest named sources)*: generate the base image **without** the character LoRA (at full strength in the base pass it drags composition and body proportions toward its training data), then apply the LoRA only inside the **FaceDetailer/ADetailer** inpaint pass, where it gets the whole sampling budget on the face region. Detailer denoise ~0.4–0.5; match the detailer prompt to the image or you get the LoRA's default face.
+**The detailer swap** `[community — MyAIForce ADetailer/FaceDetailer writeups; strong]`: generate the base image **without** the character LoRA (at full strength in the base pass it drags composition and body proportions toward its training data), then apply the LoRA only inside the **FaceDetailer/ADetailer** inpaint pass, where it gets the whole sampling budget on the face region. Detailer denoise ~0.4–0.5; match the detailer prompt to the image or you get the LoRA's default face.
 
 **Multi-character via `[SEP]` routing** — ADetailer processes detected faces left-to-right and splits its prompt on the `[SEP]` token, so each face gets its own prompt *and its own LoRA*:
 
@@ -45,13 +45,13 @@ The 2026 cross-model consensus applies to SDXL directly *(community, strong — 
 Bobby <lora:bobby:0.9> [SEP] Tracy <lora:tracy:0.9>
 ```
 
-*(Official ADetailer discussion #533.)* In ComfyUI the same pattern is built manually: per-detection detailer passes (Impact Pack SEGS), each loading a different character LoRA.
+The `[SEP]` syntax is documented upstream `[official — ADetailer discussion #533]`. In ComfyUI the same pattern is built manually: per-detection detailer passes (Impact Pack SEGS), each loading a different character LoRA.
 
 ---
 
 ## 4. Style bleed — the block-weight fix (SDXL's unique lever)
 
-Character LoRAs absorb their dataset's *style* along with the identity, then stamp that style on every image. SDXL has a fix no DiT model has yet: **block-weighted LoRA application**. In the SDXL UNet, style concentrates in the **OUT1** (+IN08) attention blocks while subject/identity lives mostly in **OUT0** — so zeroing the style-carrying blocks at inference strips the bleed *without retraining*. Use Inspire Pack's **`LoraLoaderBlockWeight`** (per-block strength vectors, preset sweep syntax) in ComfyUI, or `lbw=` syntax in A1111-family UIs. The named writeup argues inference-time block editing beats lossy block-restricted *training* — you keep the full LoRA and choose per-image. *(Community, strong — Civitai article 5301; Inspire Pack docs.)*
+Character LoRAs absorb their dataset's *style* along with the identity, then stamp that style on every image. SDXL has a fix no DiT model has yet: **block-weighted LoRA application**. In the SDXL UNet, style concentrates in the **OUT1** (+IN08) attention blocks while subject/identity lives mostly in **OUT0** — so zeroing the style-carrying blocks at inference strips the bleed *without retraining*. Use Inspire Pack's **`LoraLoaderBlockWeight`** (per-block strength vectors, preset sweep syntax) in ComfyUI, or `lbw=` syntax in A1111-family UIs. The named writeup argues inference-time block editing beats lossy block-restricted *training* — you keep the full LoRA and choose per-image `[community — Civitai 5301, Inspire Pack docs; strong]`.
 
 Prevention at dataset time still matters: vary the dataset's lighting/background/medium so less style gets entangled in the first place.
 
@@ -60,7 +60,7 @@ Prevention at dataset time still matters: vary the dataset's lighting/background
 ## 5. Beyond the face
 
 - **Signature outfit:** leave it uncaptioned in the shots where it appears → it binds to the trigger. Caption it where you want it swappable.
-- **Multi-outfit LoRAs:** unique trigger tag per outfit, visually distinct outfits, balanced per-outfit image counts; practical ceiling **~6 outfits per LoRA** before quality collapses. *(Community, strong — Khanykov01, Civitai 6990.)*
+- **Multi-outfit LoRAs:** unique trigger tag per outfit, visually distinct outfits, balanced per-outfit image counts; practical ceiling **~6 outfits per LoRA** before quality collapses `[community — Khanykov01, Civitai 6990; strong]`.
 - **Multi-character scenes:** SDXL is the best-equipped open model here — three layers of defense, applied in order: (1) **regional prompting / attention-couple masking** with per-region LoRA application (the classic Regional-Prompter approach works on SDXL's UNet — it does *not* transfer to Flux-class DiTs); (2) **`[SEP]`-routed detailer passes** (§3) to re-assert each identity; (3) keep the scene prompt to one distinguishing feature per character to reduce bleed pressure. Attribute bleed (hair/clothing colors migrating between figures) is the expected failure; the layered defense manages it rather than eliminating it.
 
 ---
@@ -80,4 +80,4 @@ Prevention at dataset time still matters: vary the dataset's lighting/background
 
 ## Sources & confidence
 
-Tool facts (InstantID/FaceID/HyperLoRA/ReActor repos, ADetailer `[SEP]`, Inspire Pack nodes) are **[official]** from the respective repos — ReActor's InsightFace removal and HyperLoRA's checkpoints are 2025 changes, re-verify current state before install. The craft (detailer swap, block-weight map, multi-outfit ceiling, dataset rules) is **named-community, convergent** (MyAIForce, Civitai 5301/6990, dataset guides) and stated with confidence per this skill's two-bar policy. SDXL's character stack is mature and slow-moving compared to the DiT models'.
+Tool facts (InstantID/FaceID/HyperLoRA/ReActor repos, ADetailer `[SEP]`, Inspire Pack nodes) are `[official]` from the respective repos — ReActor's InsightFace removal and HyperLoRA's checkpoints are 2025 changes, re-verify current state before install. The craft (detailer swap, block-weight map, multi-outfit ceiling, dataset rules) is `[community — MyAIForce, Civitai 5301/6990, dataset guides; convergent]` and stated with confidence per this skill's two-bar policy. SDXL's character stack is mature and slow-moving compared to the DiT models'.

@@ -1,6 +1,6 @@
 # Wan 2.2 — motion, camera and structural control
 
-Wan 2.2's control stack is the strongest in the open video ecosystem, and it is the main reason to choose it over HunyuanVideo or LTX. All of it comes from **Alibaba PAI** — the same team behind the Fun Union ControlNet that [`z-image`](../../z-image/) uses — and all of it is **Apache 2.0**.
+Wan 2.2's control stack — Fun Camera, Fun Control, Fun InP, VACE — is the deepest in the open video ecosystem, and it is the reason to reach for Wan even where [`minimax-h3`](../../minimax-h3/) or [`ltx-2-5`](../../ltx-2-5/) win on raw fidelity or native audio. Be precise about why, because the honest claim is depth rather than exclusivity: [`minimax-h3`](../../minimax-h3/) has no conditioning rig at all and controls only through the prompt, while [`ltx-2-5`](../../ltx-2-5/) *does* ship one — IC-LoRAs that take a reference input plus an optional mask and cover depth, canny, pose and motion tracks. Wan's is the deeper and better-documented stack; most of LTX's adapters are 2.3-trained and its camera-move LoRAs are LTX-2-era files that may be stale `[flagged — re-verify]`. So **a named camera path is the one job that genuinely comes back here** — nothing else in the suite ships a working camera rig — while pose and depth are now a choice between two. All of it comes from **Alibaba PAI** — the same team behind the Fun Union ControlNet that [`z-image`](../../z-image/) uses — and all of it is **Apache 2.0**, which is the second half of the reason.
 
 ## Which tool for which job
 
@@ -66,7 +66,9 @@ Character animation and replacement: drive a character with a reference performa
 - Ships alongside `WanAnimate_relight_lora_fp16.safetensors` — a relight LoRA that matches the inserted character to the target scene's lighting, which is what makes replacement look composited rather than pasted
 - The template also loads `lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors` for acceleration; shift 8
 
-Animate is the strongest answer to "make *this specific person* do *this specific thing*" and is a genuinely different tool from a character LoRA: it transfers a performance, where a LoRA teaches an identity. They compose — a LoRA for who, Animate for what they do.
+Animate answers "make *this specific person* do *this specific thing*", and it is a genuinely different tool from a character LoRA: it transfers a performance, where a LoRA teaches an identity. They compose — a LoRA for who, Animate for what they do.
+
+**It is no longer the first reach for replacement, though.** [`scail-2`](../../scail-2/) — a Wan 2.1 fine-tune from zai-org, not an Alibaba release — has displaced Animate for reference-image-plus-driving-video character replacement in community practice. Animate remains the in-family option, the one that stays inside this two-expert graph, and the one whose relight LoRA is already wired for compositing into the target scene. Reach for it when you want replacement without leaving the Wan 2.2 stack; reach for SCAIL-2 when replacement fidelity is the whole job.
 
 ---
 
@@ -74,7 +76,7 @@ Animate is the strongest answer to "make *this specific person* do *this specifi
 
 Stated plainly, because the gaps matter as much as the features:
 
-- **No audio generation.** S2V consumes an audio track for lip-sync; nothing in the family produces sound. For generated audio, [`minimax-h3`](../../minimax-h3/) models video and stereo audio jointly in one forward pass — check its licence section first, since it excludes several major territories — and LTX-2.5 does the same.
+- **No audio generation.** S2V consumes an audio track for lip-sync; nothing in the family produces sound. For generated audio, [`minimax-h3`](../../minimax-h3/) models video and stereo audio jointly in one forward pass — check its licence section first, since it excludes several major territories — and [`ltx-2-5`](../../ltx-2-5/) does the same, under a licence gated on your company's revenue.
 - **No regional prompting across frames.** There is no per-region conditioning equivalent to image-side regional prompting; multi-character scenes are conditioned globally.
 - **Clip length is not a free parameter.** The 14B is built around ~81 frames. Longer is stitching, with the drift consequences that implies.
 - **Camera moves are discrete, not arbitrary trajectories.** Fun Camera exposes named moves and combinations, not a freeform keyframed path.

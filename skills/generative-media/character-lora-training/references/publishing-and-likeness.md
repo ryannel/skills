@@ -4,6 +4,8 @@
 
 The reason this sits in a training skill at all: **these rules decide whether a finished LoRA can be published, and they constrain the dataset before you assemble it.** Finding out afterwards means the work was wasted.
 
+**Everything here is dated because it moves.** Platform policy and statute are the two fastest-moving classes of claim in this whole skill, and both changed inside the last eighteen months. **Facts in this file were read on 2026-08-13** and the direction of travel is uniformly toward stricter. Re-verify the specific rule you are relying on before you publish `[flagged — re-verify]`.
+
 ---
 
 ## 1. Civitai: real-person likeness is prohibited outright
@@ -74,7 +76,24 @@ The genuine question people get stuck on: every base model was trained on photog
 
 ---
 
-## 4. Dataset provenance
+## 4. The model's licence follows the LoRA
+
+Likeness is the constraint people expect. This one catches them: **on some models the base licence attaches to the adapter you train, and the obligation travels to whoever you give it to.**
+
+[`ltx-2-5`](../../ltx-2-5/) is the sharp case in this suite. Its Community License names a **LoRA adapter as a Derivative** (§1.5, §3.5), requires any Derivative be distributed *"exclusively under the terms of this Agreement … with a complete copy of this Agreement included"* (§3.2), and then goes further than most licences do: *"If the transferee is a Commercial Entity … it must obtain a paid license from Licensor prior to any use of any Derivative of LTX-2.x, **regardless of who created such Derivative**"* (§3.5). You must notify recipients in writing, and you may not hand a Derivative to a Commercial Entity that lacks the licence. `[official — LTX-2.x Community License, 11 August 2026]`
+
+**What that means for a trainer, concretely:**
+
+- **You cannot publish an LTX LoRA under a permissive licence.** Not MIT, not CC0, not "do what you like with it." The agreement does not give you that power to grant.
+- **Uploading it to a model host is a distribution event**, and the host's default licence picker probably offers nothing that matches. Check what the platform will actually stamp on your upload before you publish.
+- **The obligation is contagious in a way likeness rules are not.** A real-person LoRA is a problem you own. A licence-inheriting LoRA is a problem you *pass on* — a studio that downloads yours and is over the revenue threshold now needs a paid licence, whether or not they ever read the model card.
+- **This is not an LTX peculiarity in principle**, only in degree. Anywhere the base weights are non-permissive — [`anima`](../../anima/)'s dual non-commercial position is another — check what the licence says about derivatives before you train, not after you have something to publish.
+
+The contrast worth holding: an **Apache-2.0 base** such as Wan 2.2 lets you publish the adapter on whatever terms you like. That difference costs nothing at training time and everything at distribution time, which is why it belongs on the base-model decision alongside anatomy coverage and VRAM.
+
+---
+
+## 5. Dataset provenance
 
 Even where likeness is not at issue, where the images came from matters:
 
@@ -87,7 +106,7 @@ Even where likeness is not at issue, where the images came from matters:
 
 ---
 
-## 5. Where distribution is still open
+## 6. Where distribution is still open
 
 The real-person rule closes one door, not all of them:
 

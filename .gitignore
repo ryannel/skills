@@ -5,3 +5,6 @@
 # Python bytecode from the vendored skill-creator
 __pycache__/
 *.pyc
+
+# Verbatim third-party forum text harvested during research — synthesis lives in FINDINGS.md
+workbench/**/raw/

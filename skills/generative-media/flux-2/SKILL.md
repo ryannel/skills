@@ -32,7 +32,9 @@ Its defining trait: **Mistral 3.2 and Qwen3 are instruction-following LLMs** —
 
 ## The one rule that changes everything
 
-Mistral 3.2 24B ([dev]) and Qwen3 ([klein]) are full instruction-following LLMs. They parse **clause structure, word order, and semantic context**, the same way a language model would. Quality-tag chains (`masterpiece, 8k, best quality, ultra-realistic, highly detailed`) are Stable Diffusion 1.5 habits — the encoder reads them as near-zero-signal noise. (This is the encoder class, not folklore: the same sentence rule governs Z-Image's Qwen-3, and the *opposite* — weighted tags, verbatim trigger tokens — governs CLIP models like SDXL. Prompt dialect, LoRA triggers, and training captions all follow the encoder.)
+Mistral 3.2 24B ([dev]) and Qwen3 ([klein]) are full instruction-following LLMs. They parse **clause structure, word order, and semantic context**, the same way a language model would. Quality-tag chains (`masterpiece, 8k, best quality, ultra-realistic, highly detailed`) are Stable Diffusion 1.5 habits — the encoder reads them as near-zero-signal noise. (This is the encoder class, not folklore: the same sentence rule governs Z-Image's Qwen-3, and the *opposite* — weighted tags, verbatim trigger tokens — governs CLIP models like SDXL. Prompt dialect, LoRA triggers, and training captions all follow the encoder **here**.)
+
+**One refinement, which is what makes the rule portable.** The encoder class sets the *ceiling* — what a dialect can express at all — but the **training caption corpus** sets what the model is actually fluent in. FLUX.2 was captioned in natural language, so the two coincide and "follow the encoder" is exactly right for this model. Elsewhere in the suite they come apart: [`anima`](../anima/) has an LLM encoder and wants weighted Danbooru tags, and [`ideogram-4`](../ideogram-4/) has one and wants JSON. Keep the encoder rule as your default — it is right far more often than not — but **check what a model was captioned on before inferring its dialect from its encoder name.**
 
 **Write a sentence. Use BFL's official four-part structure: Subject → Action → Style → Context**
 
@@ -128,7 +130,7 @@ Mixing old and new nodes compiles but gives degraded results — no error messag
 - [klein] 4B FP8: `black-forest-labs/FLUX.2-klein-4b-fp8` (~8 GB)
 - [klein] 9B FP8: `flux-2-klein-base-9b-fp8.safetensors` / `flux-2-klein-9b-fp8.safetensors` (~14–16 GB)
 
-**Community** (city96, unsloth — community-tier, verify availability): GGUF quants of [dev] from Q2_K (~13 GB) to Q8_0 (~35 GB). Requires `city96/ComfyUI-GGUF` custom node; GGUF files go in `models/unet/` (not `models/diffusion_models/`).
+**Community** — GGUF quants of [dev] from Q2_K (~13 GB) to Q8_0 (~35 GB) `[community — city96, unsloth; re-verify]`. Requires `city96/ComfyUI-GGUF` custom node; GGUF files go in `models/unet/` (not `models/diffusion_models/`).
 
 ### Pose control (ControlNet)
 
@@ -138,13 +140,13 @@ Install to `models/model_patches/`. Requires custom ComfyUI nodes — either the
 
 ### Face identity (PuLID)
 
-**`iFayens/ComfyUI-PuLID-Flux2`** (`github.com/iFayens/ComfyUI-PuLID-Flux2`) is the only FLUX.2-specific PuLID implementation. Required: PuLID weights from `Fayens/Pulid-Flux2` → `models/pulid/`; AntelopeV2 ONNX files → `models/insightface/models/antelopev2/`; EVA-CLIP (auto-downloads). Supports all FLUX.2 variants (weights are natively klein-trained). Strength 1.0–1.4 recommended.
+**`iFayens/ComfyUI-PuLID-Flux2`** (`github.com/iFayens/ComfyUI-PuLID-Flux2`) is the only FLUX.2-specific PuLID implementation. Required: PuLID weights from `Fayens/Pulid-Flux2` → `models/pulid/`; AntelopeV2 ONNX files → `models/insightface/models/antelopev2/`; EVA-CLIP (auto-downloads). Supports all FLUX.2 variants (weights are natively klein-trained). Strength 1.0–1.4 recommended `[official — iFayens/ComfyUI-PuLID-Flux2]`.
 
 No FLUX.2-native IP-Adapter face model exists. Full setup, node wiring, and a PuLID vs LoRA comparison: **`references/controlnet-and-identity.md`**. **Building a consistent character** — choosing between multi-reference, PuLID, and the character-LoRA pipeline, the dataset factory, multi-character scenes: **`references/characters.md`**.
 
 ### diffusers
 
-`Flux2Pipeline` ([dev]) and `Flux2KleinPipeline` ([klein] 9B base) are the primary classes. Version v0.38.0 appears in diffusers source links; the install may still be `pip install git+https://github.com/huggingface/diffusers -U` — verify at `pypi.org/project/diffusers` before relying on the git-install path.
+`Flux2Pipeline` ([dev]) and `Flux2KleinPipeline` ([klein] 9B base) are the primary classes. Version v0.38.0 appears in diffusers source links; the install may still be `pip install git+https://github.com/huggingface/diffusers -U` — verify at `pypi.org/project/diffusers` before relying on the git-install path `[flagged — re-verify]`.
 
 ```python
 from diffusers import Flux2Pipeline
@@ -169,19 +171,37 @@ Detailed diffusers params, hardware options (cpu_offload, group offloading, 4-bi
 - **Negative prompts:** none — guidance-distilled, no CFG path. Phrase positively.
 - **Turbo LoRA:** `Flux_2-Turbo-LoRA_comfyui.safetensors` reduces to **8 steps** (guidance stays at 4); toggle via `ComfySwitchNode`
 
+Distilled and base are separate checkpoints with separate numbers, and mixing them is the commonest klein mistake — a base checkpoint at 4 steps is mush, a distilled one at 20 steps burns edges `[community]`. They get separate blocks here for that reason.
+
 ### [klein] 4B — distilled (Apache 2.0)
 
-- **Steps:** 4 (distilled) or 20 (base)
-- **Guidance:** `CFGGuider` **1** (distilled = guidance-off) or **5** (base)
+- **Steps:** 4 — this is the number the distillation was trained for, not a floor to raise
+- **Guidance:** `CFGGuider` **1** (guidance-off)
 - **Sampler / scheduler:** `euler` / `Flux2Scheduler`
+- **Resolution:** 1024×1024 default; same 256–2048 px / multiple-of-16 range as [dev]
 - **Negative prompts:** CFG=1 is guidance-off — negatives inert. Never type 0.0 in KSampler.
-- **Use base for LoRA training** — distilled removes texture diversity needed for fine-tuning
+- **Not a training base** — distillation removes the texture diversity fine-tuning needs; the same train-on-the-undistilled-variant rule holds across Z-Image and Krea 2 `[community — convergent]`
+
+### [klein] 4B Base — undistilled (Apache 2.0)
+
+- **Steps:** 20
+- **Guidance:** `CFGGuider` **5**
+- **Sampler / scheduler:** `euler` / `Flux2Scheduler`
+- **Resolution:** as above
+- **Negative prompts:** a real CFG path exists here, but FLUX.2's prompting doctrine still says phrase positively — the encoder is an LLM, not a tag matcher
+- **This is the LoRA-training target** for commercially-deployable work (Apache 2.0 weights)
 
 ### [klein] 9B — distilled / 9B KV
 
-- Same settings as 4B distilled (4 steps, CFG=1); 9B base: 20 steps, CFG=5
-- Better quality than 4B on skin and fine detail; still susceptible to over-sharpening
-- [klein] 9B KV: use for repeated multi-reference editing; KV-caches reference tokens for speed
+- **Steps / guidance:** 4 steps, `CFGGuider` **1** — same as 4B distilled
+- **Sampler / scheduler:** `euler` / `Flux2Scheduler`
+- Better quality than 4B on skin and fine detail; still susceptible to over-sharpening `[community — re-verify]`
+- **[klein] 9B KV:** the same distilled settings, but use it for repeated multi-reference editing — it KV-caches reference tokens so a fixed reference bundle re-renders faster across many prompts
+
+### [klein] 9B Base — undistilled
+
+- **Steps / guidance:** 20 steps, `CFGGuider` **5**
+- The Non-Commercial training base — pick it over 4B Base only when quality outweighs losing commercial rights
 
 ---
 
@@ -194,7 +214,7 @@ Stack two or three:
 2. **Lens + aperture** — "80mm f/2.8" / "85mm f/1.4" / "35mm f/1.8"
 3. **Film stock or sensor emulation** — "Kodak Portra 400" / "Fujifilm Pro 400H" / light grain
 
-"Realistic", "high quality", "8K" are legacy booru tokens — they add nothing here. One non-idealised human feature (visible pores, a freckle, slight under-eye shadow) breaks the perfection signal. The over-AI'd look is worst on [klein] 4B distilled; [dev] is more measured.
+"Realistic", "high quality", "8K" are legacy booru tokens — they add nothing here. One non-idealised human feature (visible pores, a freckle, slight under-eye shadow) breaks the perfection signal. The over-AI'd look is worst on [klein] 4B distilled — guidance-off at 4 steps leaves the least room for the prior to be argued with — and [dev] is more measured. The camera/lens/film-stock vocabulary itself, and the verdict on where the look bites hardest, are the same body of practice the reference tabulates `[community — fal.ai prompting guide; convergent]`.
 
 ---
 
@@ -202,17 +222,19 @@ Stack two or three:
 
 FLUX.2 generates 1–2 MP natively, so it skips the classic SD low-res-first dance. The production ladder that fits it:
 
+The denoise bands in stages 2–4 are convergent ComfyUI-author practice rather than anything BFL publishes, and they are the numbers most worth re-testing against your own base gen `[community — re-verify]`.
+
 1. **Base gen** at 1024²–4 MP ([dev] 20 steps, or [klein] 4-step for drafts). Judge composition; reroll.
 2. **Refine pass** (optional) — img2img on itself at denoise ~0.3–0.45 for detail without re-composition.
 3. **Detailers** — Impact Pack FaceDetailer is model-agnostic and runs FLUX.2 fine; denoise ~0.4; the character-LoRA swap happens here (`references/characters.md §3`).
-4. **Tiled upscale** — for DiT models prefer **TTP Toolset** (it captions each tile for per-tile conditioning — the anti-hallucination trick) or `UltimateSDUpscale` at low denoise (~0.2–0.3) with a simplified prompt.
+4. **Tiled upscale** — for DiT models prefer **TTP Toolset** (it captions each tile for per-tile conditioning — the anti-hallucination trick) or `UltimateSDUpscale` at low denoise (~0.2–0.3) with a simplified prompt `[community — convergent]`.
 5. **Finish** — ColorMatch against the pre-upscale image; SeedVR2-class restorer for the final push.
 
-**FLUX.2's roles in mixed-model pipelines** *(named community workflows)*:
+**FLUX.2's roles in mixed-model pipelines** — each pattern below names its author `[community]`:
 - **Quality refiner:** [klein] img2img over SDXL/Pony renders for "more natural rendering, better anatomical consistency, reduced SDXL artifacts" (Enzino's Flux Klein IMG2IMG workflow, Civitai) — denoise ~0.25–0.4, and **[klein] 4B's Apache licence makes this the commercially-clean refine path**.
-- **Composition front-end:** [dev]'s prompt comprehension builds the scene; an SDXL photoreal finetune img2img pass (~0.3–0.55) adds its texture character afterward.
+- **Composition front-end:** [dev]'s prompt comprehension builds the scene; an SDXL photoreal finetune img2img pass (~0.3–0.55) adds its texture character afterward — this one is the pattern without a single canonical author behind it `[community — re-verify]`.
 
-The handoff rule: **always VAE-decode to pixels between model families** — FLUX.2's VAE is its own (and [dev]/[klein] 4B even use different VAE files internally); foreign latents produce garbage. Full cross-model craft (denoise bands, resolution matching, color management, workflows-as-code): the **`image-production-workflows`** skill.
+The handoff rule: **always VAE-decode to pixels between model families** — FLUX.2's VAE is its own (and [dev]/[klein] 4B even use different VAE files internally); foreign latents produce garbage `[community — convergent]`. Full cross-model craft (denoise bands, resolution matching, color management, workflows-as-code): the [`image-production-workflows`](../image-production-workflows/) skill.
 
 ---
 
@@ -243,7 +265,7 @@ The handoff rule: **always VAE-decode to pixels between model families** — FLU
 7. Camera body + lens + film stock named for photoreal subjects?
 8. Hex colours signalled with `"in color #XXXXXX"` — not bare hex codes?
 9. Commercial use: [klein] 4B (Apache 2.0) for local commercial; API for [pro]/[flex]; **not** [dev] or [klein] 9B weights for commercial production?
-10. Multi-reference: image count within the supported range (~4–10; marketing states 10, prompting guide states 8 — verify per model card at time of use)?
+10. Multi-reference: image count within the supported range (~4–10; marketing states 10, prompting guide states 8 `[contested]` — verify per model card at time of use)?
 
 ---
 
@@ -251,14 +273,30 @@ The handoff rule: **always VAE-decode to pixels between model families** — FLU
 
 | Job | FLUX.2 | Reach for instead |
 |---|---|---|
-| Consistent characters | **Strongest no-training path** — native multi-reference (ReferenceLatent) + PuLID; full LoRA pipeline too (`references/characters.md`) | `sdxl` for the deepest adapter toolbox (InstantID/HyperLoRA) and `[SEP]` multi-character routing |
-| Style LoRAs | Supported, young ecosystem (`references/lora-training.md`) | `sdxl` for mature recipes and years of accumulated craft |
-| In-image typography | Good, high variance | `ideogram-4` — the typography leader |
-| Structural control | Fun Union ControlNet (custom nodes) | `sdxl` for the most complete, mature control stack |
-| Commercial local use | **[klein] 4B is the suite's only Apache-2.0 path** at this quality level | `sdxl` (OpenRAIL++-M) for the mature alternative; `krea-2` is free commercial only under $1M revenue |
-| Aesthetic range / anti-AI-look | Default rendering (especially [klein]) skews over-sharpened "AI look" | `krea-2` — tuned *against* the AI look, style-reference system, widest stylistic space (its hosted Large even renders through the FLUX.2 VAE) |
-| Mixed-model pipelines | Quality refiner ([klein] img2img) and composition front-end | `image-production-workflows` for the cross-model craft |
-| Making it move | Still images only | `wan-2-2` — image-to-video. Wan's I2V path is much stronger than its text-to-video, so the still you lock here controls the shot; multi-reference identity work here is the upstream half of a consistent character on screen |
+| Consistent characters | **Strongest no-training path** — native multi-reference (ReferenceLatent) + PuLID; full LoRA pipeline too (`references/characters.md`) | [`sdxl`](../sdxl/) for the deepest adapter toolbox (InstantID/HyperLoRA) and `[SEP]` multi-character routing; [`character-lora-training`](../character-lora-training/) for the dataset and captioning craft that transfers across every model here |
+| Style LoRAs | Supported, young ecosystem (`references/lora-training.md`) | [`sdxl`](../sdxl/) for mature recipes and years of accumulated craft |
+| In-image typography | Good, high variance | [`ideogram-4`](../ideogram-4/) — the typography leader |
+| Structural control | Fun Union ControlNet (custom nodes) | [`sdxl`](../sdxl/) for the most complete, mature control stack |
+| Commercial local use | **[klein] 4B is the family's Apache-2.0 path** — the one FLUX.2 variant you may run locally for commercial work without a separate BFL licence | [`z-image`](../z-image/) — Apache-2.0 across its whole family, weights *and* outputs, and the least encumbered licence in the suite; [`sdxl`](../sdxl/) (OpenRAIL++-M) for the mature alternative, though its use-restrictions travel downstream; [`krea-2`](../krea-2/) is free commercial only under $1M revenue |
+| Photoreal faces & skin | Strong on [dev] with the camera/lens/film-stock stack; [klein] skews over-sharpened (see *Aesthetic range* below) | [`z-image`](../z-image/) — the suite's owner of faces and skin, and the standard face-pass finisher over a FLUX.2 render |
+| Anime / booru illustration | Not its dialect — an encoder trained on prose wants sentences, and tag vocabularies land as noise | [`anima`](../anima/), the anime-native base (LLM encoder, booru corpus — the caption-corpus point above, in one model); [`sdxl`](../sdxl/) for the mature Illustrious/Pony finetunes |
+| Aesthetic range / anti-AI-look | Default rendering (especially [klein]) skews over-sharpened "AI look" | [`krea-2`](../krea-2/) — tuned *against* the AI look, style-reference system, widest stylistic space (its hosted Large even renders through the FLUX.2 VAE) |
+| Mixed-model pipelines | Quality refiner ([klein] img2img) and composition front-end | [`image-production-workflows`](../image-production-workflows/) for the cross-model craft |
+| Making it move | Still images only | [`wan-2-2`](../wan-2-2/) — image-to-video. Wan's I2V path is much stronger than its text-to-video, so the still you lock here controls the shot; multi-reference identity work here is the upstream half of a consistent character on screen |
+
+---
+
+## FLUX 3 — announced, not available, and not an image model in the usual sense
+
+BFL announced **FLUX 3** on **23 July 2026** `[official — bfl.ai/blog/flux-3]`. It matters to anyone using FLUX.2 today, and it is important not to over-read it.
+
+**What it is.** A *multimodal* foundation model trained jointly on **images, video and audio** in one architecture, built on an approach BFL call **Self-Flow** (aligning multimodal generation and understanding within the same architecture). The framing is explicitly world-modelling rather than image generation — the argument being that each modality is a lossy projection of one underlying reality, and their mutual constraints teach more than any one alone. Stated video capabilities: up to **20 seconds with native audio** in a single generation, text-to-video, image-to-video (as animation or as visual reference), video-to-video carrying a character into a new scene, keyframe-to-video, multilingual dialogue, agentic chaining of clips into multi-shot sequences, and strong typography. There is also an **action-prediction** branch (FLUX-mimic, with mimic robotics) that has nothing to do with content creation.
+
+**What you can actually use.** As of this writing: **Early Access via API and private weight access only.** FLUX 3 Image had not opened even to early access at announcement. The launch plan does promise **"FLUX 3 Dev" — open-weight access to a multimodal backbone** covering video, audio, image and action — but with **no date**, and every prior capability is gated behind an early-access phase first. `[pending release]`
+
+**How to read the numbers.** BFL's preference rates are their own, preliminary, and taken while the model was still in development: preferred over Grok Imagine Video in up to 69% of comparisons, Kling v3 Pro 60%, Seedance 2.0 and Gemini Omni Flash 52%, Runway Gen-4.5 77%, Luma Ray 3.2 93%. Treat them as a vendor claim about a moving target.
+
+**What this changes for you today: nothing, except planning.** FLUX.2 [dev] and [klein] remain the open FLUX models. But note the direction — BFL's next generation is a video-and-audio model, which is the same bet MiniMax made with [`minimax-h3`](../minimax-h3/) and Lightricks with [`ltx-2-5`](../ltx-2-5/). If FLUX 3 Dev ships as described, it will not slot into this skill; it will need its own, and it will land in the *video* half of the suite rather than the image half.
 
 ---
 
@@ -284,13 +322,13 @@ The [klein] 4B's Apache 2.0 status is a deliberate BFL decision — making the f
 
 This skill holds two kinds of claim to two different standards, because they fail in two different ways.
 
-**Hard facts — must be exact or it breaks.** Architecture (32B MM-DiT, 8+48 blocks, Mistral 3.2 24B for [dev], Qwen3 4B/8B for [klein] 4B/9B), licence terms (Apache 2.0 for [klein] 4B; Non-Commercial for [dev]/9B), the ComfyUI file layout and stock node settings (verbatim from the template JSON), all node names, the official quantised filenames and sizes (Comfy-Org HF repos), the no-negative mechanism (guidance-distilled [dev]; CFG=1 [klein]), the 4-part prompting structure, hex color syntax, the API model slugs and async polling pattern. **Source of truth is official** — BFL GitHub/model cards/docs, the raw ComfyUI template JSON, diffusers. A wrong quant filename 404s; a misread licence (NC vs Apache) is a legal problem. **Flux.2 is days-to-weeks old — these are volatile:** quant filenames/sizes, the diffusers stable version (v0.38.0 is *inferred* from source links — verify at pypi), and template details move fast. **Re-verify before relying on them, regardless of who said it.**
+**Hard facts — must be exact or it breaks.** Architecture (32B MM-DiT, 8+48 blocks, Mistral 3.2 24B for [dev], Qwen3 4B/8B for [klein] 4B/9B), licence terms (Apache 2.0 for [klein] 4B; Non-Commercial for [dev]/9B), the ComfyUI file layout and stock node settings (verbatim from the template JSON), all node names, the official quantised filenames and sizes (Comfy-Org HF repos), the no-negative mechanism (guidance-distilled [dev]; CFG=1 [klein]), the 4-part prompting structure, hex color syntax, the API model slugs and async polling pattern. **Source of truth is official** — BFL GitHub/model cards/docs, the raw ComfyUI template JSON, diffusers. A wrong quant filename 404s; a misread licence (NC vs Apache) is a legal problem. **The weights have settled; the packaging around them has not — these stay volatile:** quant filenames/sizes, the diffusers stable version (v0.38.0 is *inferred* from source links — verify at pypi), and ComfyUI template details, all of which are republished independently of the model itself. **Re-verify before relying on them, regardless of who said it.**
 
 **Craft — what actually makes a good image.** The photoreal camera/lighting vocabulary, LoRA weights and stacking, multi-reference editing technique, GGUF VRAM trade-offs, and the ControlNet/PuLID identity tooling. **The authoritative source here is the community** — the ComfyUI workflow authors and the people running [dev]/[klein] daily — and for a model this new, *they are often ahead of BFL's own docs*. Stated with confidence; ranges and "verify at time of use" flags mark where the community layer is still forming, not where it's untrustworthy. Specifically third-party/community-tooling to verify before downloading: the Alibaba PAI **Fun Union ControlNet** repo/node names/filenames, the **iFayens PuLID** weights, and the **bryanmcguire** community nodes.
 
-**One genuinely-unresolved fact:** the multi-reference image count — BFL marketing says **10**, the prompting guide says **8**. Discrepancy unresolved across official sources; treat ~8 as the safe working number and test if you need more.
+**One genuinely-unresolved fact:** the multi-reference image count — BFL marketing says **10**, the prompting guide says **8**. Discrepancy unresolved across official sources; treat ~8 as the safe working number and test if you need more `[contested]`.
 
-**Release:** [dev] 25 Nov 2025; [klein] 15 Jan 2026. Re-verify volatile specifics (pricing, quant filenames, diffusers version, LoRA tooling, ComfyUI template details) before relying on them.
+**Facts dated 2026-08-22.** Both release dates are in the intro paragraph; this line dates the *claims*, not the model. What moves fastest and must be re-verified before you rely on it: BFL API pricing and model slugs, the quantised filenames and their sizes, the diffusers stable version, the third-party LoRA / ControlNet / PuLID tooling, and the ComfyUI template details every settings number above is read from.
 
 ---
 
@@ -299,7 +337,7 @@ This skill holds two kinds of claim to two different standards, because they fai
 | File | When to read it |
 |---|---|
 | `references/prompting-guide.md` | Full 4-part prompt anatomy; hex color control with examples; JSON production format; camera vocabulary for photoreal; multi-reference image editing; typography/text-in-image guidance; drop-in templates |
-| `references/api-and-bfl.md` | BFL hosted API: endpoints (global/EU/US), auth, model slugs, parameters, async polling pattern, pricing note, API model capability comparison ([pro] vs [max] vs [flex] vs [klein]) |
+| `references/api-and-hosted.md` | BFL hosted API: endpoints (global/EU/US), auth, model slugs, parameters, async polling pattern, pricing note, API model capability comparison ([pro] vs [max] vs [flex] vs [klein]) |
 | `references/setup-and-workflows.md` | All ComfyUI templates (dev image-edit / klein 9B / klein 9B KV); full diffusers setup and VRAM table; GGUF setup (city96 loader); **§7 Using LoRAs** (`LoraLoaderModelOnly` model-only loading, the [dev]↔[klein] variant-incompatibility rule, weight ranges, why FLUX.2 dislikes trigger words, stacking, the Turbo accel-LoRA); multi-reference workflow patterns |
 | `references/lora-training.md` | **Making** a LoRA (using is setup-and-workflows §7): training bases (base-not-distilled; [klein] 4B for commercial rights), AI-Toolkit YAML, the Civitai klein recipe and its dim-2 floor warning, hyperparameters by target (Herbst's style ablation), prose caption-the-residual and the **contested captionless debate**, style-LoRA specifics (diversity maxim, color-cast lock-in, acceptance test), XY-grid evaluation |
 | `references/characters.md` | Creating a **consistent character**: the path decision (multi-reference vs PuLID vs character LoRA and how they compose), **ReferenceLatent as the character engine** (reference bundles, KV batching), the dataset factory (generate ~60 → curate ~30, 8-point rotation), the detailer LoRA swap, multi-character scenes via core attention masking, failure modes |

@@ -255,11 +255,11 @@ If a LoRA *does* ship text-encoder weights (rare for FLUX.2), switch to the full
 
 **Variant-specific — a [dev] LoRA does not load on [klein], and vice-versa.** Unlike Z-Image (where Base and Turbo share one architecture), FLUX.2's variants are **different model sizes** — [dev] is 32B, [klein] is 4B or 9B — so their LoRAs are **not interchangeable**. Match the LoRA to the exact variant it was trained on. The Klein sizes matter too: **Klein 9B requires the Qwen3-8B encoder** — run it against the 4B encoder and it fails outright. Check the LoRA's stated base model before downloading.
 
-**Weight.** Start ~**0.8**, sweep **0.6–1.2**. Lower for style LoRAs that flatten texture; higher to force a stubborn concept. Read the LoRA's card for the author's tested weight. *(Community; consistent with Flux.1 conventions.)*
+**Weight.** Start ~**0.8**, sweep **0.6–1.2**. Lower for style LoRAs that flatten texture; higher to force a stubborn concept. Read the LoRA's card for the author's tested weight `[community — consistent with Flux.1 conventions]`.
 
 **Trigger words — FLUX.2 mostly doesn't want them.** Because the encoder is a full LLM (Mistral/Qwen3), FLUX.2 reads **natural-language description** far better than bare trigger tokens — trainers report that trigger words "confuse the model" and that semi-long descriptive captions activate a LoRA best. If a LoRA defines a trigger, include it verbatim; otherwise just *describe* what you want in prose. This is the opposite of tag-based SDXL, where the literal trigger token is mandatory.
 
-**Stacking.** Chain `LoraLoaderModelOnly` nodes (MODEL out → MODEL in), or use the rgthree **Power Lora Loader**. Community practice runs **3–4 LoRAs** max and **lowers each strength** as you add them (e.g. a character + a style + an effect, each ~0.5–0.8) so they don't fight or over-bake. Use `strength_model` to make one dominant.
+**Stacking.** Chain `LoraLoaderModelOnly` nodes (MODEL out → MODEL in), or use the rgthree **Power Lora Loader**. Run **3–4 LoRAs** max `[community]` and **lower each strength** as you add them (e.g. a character + a style + an effect, each ~0.5–0.8) so they don't fight or over-bake. Use `strength_model` to make one dominant.
 
 **The Turbo LoRA** (`Flux_2-Turbo-LoRA_comfyui.safetensors`) is a special case — an *acceleration* LoRA that cuts [dev]/[klein] to 8 steps (guidance stays 4), toggled via `ComfySwitchNode`. It stacks with content LoRAs like a speed LoRA, not a style one.
 

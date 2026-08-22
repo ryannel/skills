@@ -1,5 +1,7 @@
 # MiniMax H3 — prompting guide
 
+## Contents
+
 1. [The audio half](#1-the-audio-half)
 2. [Prompt anatomy](#2-prompt-anatomy)
 3. [Soundscape vocabulary](#3-soundscape-vocabulary)
@@ -7,8 +9,12 @@
 5. [Picture and camera](#5-picture-and-camera)
 6. [Approximating H3-Context-IR](#6-approximating-h3-context-ir)
 7. [Worked examples](#7-worked-examples)
+8. [Ordering, timing and the shot list](#8-ordering-timing-and-the-shot-list)
+9. [Prompt tooling](#9-prompt-tooling)
 
-> Most of this file is reasoned from the architecture and the official templates rather than distilled from community practice — the model is days old and that practice does not exist yet. Treat it as a well-grounded starting point, not settled craft.
+> §1–7 are reasoned from the architecture and the official templates rather than distilled from community practice. §8–9 are the opposite: they are community craft from named authors, added 2026-08-22, and they are where the reliability actually comes from.
+
+> **Read the official guides.** There are **two** on the HF model page — one for the **T2V/I2V** model and one for the **Reference** model — and their syntax differs. The single most-repeated piece of advice in the community is that most complaints (wrong speaker, gibberish dialogue, unrequested cuts, prompts ignored) are answered verbatim in them. `[community — GrayingGamer]`
 
 ---
 
@@ -115,3 +121,111 @@ MiniMax also publishes an API that reproduces the official workflow, and officia
 
 > Using the character from images 1–3 and the voice from audio 1: the character sits on a workshop stool and explains a schematic to someone off-camera, gesturing at it twice. Handheld medium shot.
 > Audio: the reference voice, conversational and unhurried; workshop ambience with a distant extractor fan. No music.
+
+### Video editing — replacing a character in existing footage
+
+Ref2VA will swap the person in an existing clip if the prompt is written in the shape the reference guide's keywords expect. The load-bearing finding, from someone who ran 400+ generations to get there: **`retention_analysis` does the work, and `detailed_description` barely matters** — describing the action had no measurable effect. `[community — Darqsat]`
+
+```
+subject_definitions:
+<Subject 1> is the woman in <Picture 1> with red hair and a black tank top.
+<Subject 2> is the woman originally in <Video 1>.
+
+summary:
+[video editing + Audio reuse] The target video is an edited version of <Video 1>.
+<Subject 2> is replaced with <Subject 1>, who takes over her pose and movement.
+
+retention_analysis:
+<Subject 1>: fully_preserved — face, hairstyle and body from <Picture 1> retained
+             throughout. Her clothes are not retained.
+<Subject 2>: attribute_transfer — pose, movement and screen position are transferred
+             to <Subject 1>.
+
+detailed_description:
+The target video keeps <Video 1>'s original style, lighting and camera work unchanged.
+
+overall_soundscape: N/A
+non_diegetic_music: N/A
+```
+
+- `[video editing]` and `[audio reuse]` are **pre-trained summary keywords** from the official reference guide, not free text — the first biases the model toward the source frames instead of a fresh generation. It is **not** frame-for-frame tracking, and the difference is the whole reason SKILL.md's suite table sends exact motion transfer to [`scail-2`](../../scail-2/): H3 takes the source clip as *conditioning* and renders new frames from it, so the output resembles the driving performance rather than following it. That is fine for a character swap in a shot you control and wrong for footage that has to match cut-for-cut. `fully_preserved` and `attribute_transfer` are the retention keywords.
+- **Anchor each Subject on something visually large** — hair, clothing, position in frame. A bare "woman" loses identity roughly half the time in a complex scene, in both directions (reference image *and* reference video).
+- It fails when the driving character is barely legible: close to camera, partial face, fast movement.
+- `[audio reuse]` works, but the model **re-renders** the audio rather than copying it, so a sound it models poorly comes back poorly.
+- **The identity latch is length-limited, and where it breaks is contested.** This skill owns the claim, and the honest version of it is a band rather than a number. Two single community reports disagree: one has subject matching in Ref2VA **degrading sharply past ~5 s**; another reports a **hard latch failure past ~7 s** `[community — Mediocre-Toe3212]`. They differ on severity as well as timing — a slide versus a cliff — and nobody has run them side by side, so treat the whole **5–7 s band** as the region where identity stops being dependable and build shots that end below it. `[contested]`
+- **One of those numbers may not be about the model at all.** Wan2GP issue #2111 (SirusAI, 8 August 2026) reports Ref2VA failing at *exactly* 5 s because the sliding-window inference loops back to the start of the reference video instead of advancing through it — a harness bug, not conditioning decay `[community — deepbeepmeep/Wan2GP#2111, open]`. This matters diagnostically: a gradual slide in likeness is the model running out of conditioning, while a sharp, reproducible wall at a round number is your runner mishandling the window boundary. Check which one you have before shortening every shot.
+- Same report as the 5 s figure, and much less contested: **12–15 steps latch onto the face better than the default 20**, and `ref_image_size` set to `MAX` beats `match`. `[community — single report; re-verify]`
+
+Where exact motion transfer is the point — following the driving movement frame for frame rather than re-generating it — this is the wrong tool. That job belongs to [`scail-2`](../../scail-2/), which tracks the driving footage with SAM3 rather than re-rendering it; SKILL.md's suite table carries the full comparison, including what you give up (H3's audio, which SCAIL-2 neither generates nor consumes).
+
+---
+
+## 8. Ordering, timing and the shot list
+
+Everything in §1–7 assumes the model understands *what* you want. This section is about *when* — and it is where most of the jank in real H3 output comes from. All of it is community-sourced from named authors.
+
+### The ordering rule — the single highest-value thing on this page
+
+**H3 assumes actions are sequential unless you say otherwise.** Two actions joined by "and" will happen one after the other, even when that is obviously wrong, and the result reads as subtly awkward staggering rather than as an outright error — which is why people rarely diagnose it.
+
+| Write | Get |
+|---|---|
+| *She waves at the camera **and** smiles* | The smile arrives after the wave |
+| *She waves at the camera **while** smiling* | What you meant |
+
+Use **"while"** for simultaneous, **"then"** for sequential, "throughout" for something spanning a sequence. `+` also reads as simultaneous. `[community — nsfwVariant]`
+
+> LLM prompt-writers do not do this, because it is not in the official guides. If you are generating prompts with a model, tell it the rule explicitly and check its output for bare "and".
+
+### When the model keeps getting one thing wrong, over-describe *that thing*
+
+H3 is prompt-adherent enough to be instructed through its own weak spots — which is genuinely unusual, and it is the practical argument for writing prompts by hand rather than accepting an LLM's paragraph. The canonical example is clothing and props phasing through limbs. The fix is not a stronger adjective, it is the mechanical path:
+
+> *She pulls her skirt down over her thighs, **then lets go of it so it slides directly down to the floor over her legs**.*
+
+There is no way to misread that, so the model usually gets it right.
+
+### Timestamps
+
+Format is `mm:ss.000`. Two rules:
+
+- **Never timestamp the first shot.** Omitting timestamps entirely lets the model choose its own cuts, which is often fine; using them gives you control of pacing, comic timing and how long a reaction holds.
+- **Position is semantic.** The timestamp binds to the action it sits next to:
+
+| Written | Means |
+|---|---|
+| *at 00:03.000 she lifts her shirt, which exposes her shoulders* | the **lift** starts at 3 s |
+| *she lifts her shirt, which exposes her shoulders at 00:03.000* | the **exposure** happens at 3 s |
+
+### Budget time against content
+
+The model tries to fit everything you asked for into the duration you gave it. Ask for ten seconds of action in five and it crams, overlaps and truncates — which people misread as the model being bad at dialogue. **Allow ~3 s for any fiddly physical action** (removing one garment, opening a stuck door, a prop handoff), and keep dialogue short for 5–7 s clips.
+
+**Draft at 0.2 MP first.** A 608×352 pass takes a few minutes and shows you the timing, the shot order and whether the model understood the brief. Fix the prompt there; spend the long run once.
+
+### The shot list
+
+```
+[Shot 1] A medium close-up of … he opens his mouth as if to speak, then shakes his head.
+[Shot 2] At 00:06:000 the camera cuts to a static shot framing … arms crossed.
+[Shot 3] At 00:10:500 the camera pans quickly back to …, a slow push in to his face.
+```
+
+Shot 2 starting at 6 s and shot 3 at 10.5 s is how you tell the model to hold that glare for four and a half seconds. Field names seen in circulating structured prompts: `integrated_multimodal_description`, `subject_definitions`, `retention_analysis`, `overall_soundscape`, `non_diegetic_music` (write `N/A` or `none` for no score).
+
+### Dialogue tags, restated because they fix two bugs at once
+
+`<d>[Language, in X's voice] line</d>`, with the speaker named — either by name or through the `<Subject N>` system. Wrong-speaker attribution and gibberish dialogue are both this. `[community — GrayingGamer]`
+
+---
+
+## 9. Prompt tooling
+
+Writing H3 prompts by hand is slow and the formatting is fussy; LLMs are good at the content and bad at the syntax, drifting on small revisions. Two community tools split that problem the right way — you make the creative decisions, the tool owns the structure.
+
+| Tool | What it is |
+|---|---|
+| **`BMB12d3/minimax-h3-prompt-composer`** | Offline browser app. All five modes (T2VA, I2VA, FL2VA, L2VA, Ref2VA), reusable characters/environments/voices/continuity frames, camera builder and visual path planner, timed shots and action beats, and **validity checks** for structure, timing, references, camera conflicts, audio and input routing. Runs alongside ComfyUI so you can compose the next shot while one renders |
+| **`duckyshell/ComfyUI-MiniMaxH3-Prompt-Writer`** | In-ComfyUI UI extension. A **local** Gemma 4 multimodal model reads your actual references and writes the prompt against the official guides. Tiers from 8 GB (Gemma 4 E4B Q3) to 32 GB (31B Q4); the author's pick is the 24 GB tier. Video references are analysed as an ordered contact sheet; audio can be tagged `<Audio N>` but the local model cannot hear it, so describe its role. Needs the CUDA build of `llama-cpp-python` |
+
+Both are `[community]`, both are young. The general lesson stands without either: **let a model draft, then fix the ordering words and the timestamps yourself.**

@@ -59,7 +59,7 @@ The honest resolution: **low-noise-only is a legitimate shortcut for appearance,
 
 ## 3. Hyperparameters
 
-Attributed starting points, not settled law. Named authors differ, and the ranges below reflect real disagreement rather than hedging `[community — musubi-tuner discussion #455 and Civitai training articles; re-verify]`.
+Attributed starting points, not settled law. Named authors differ, and the ranges below reflect real disagreement rather than hedging `[community — musubi-tuner #455, Civitai guides; re-verify]`.
 
 | Parameter | Starting point | Notes |
 |---|---|---|
@@ -85,7 +85,7 @@ Attributed starting points, not settled law. Named authors differ, and the range
 
 Single-frame training is the right default for characters and styles, and it composes naturally with the still-first pipeline: the same curated image set you would use to train an image-model character LoRA works here. Reach for video clips only when the thing you are teaching genuinely happens over time.
 
-**Dataset construction** for appearance work follows still-image practice — see [`z-image/references/lora-training.md`](../../z-image/references/lora-training.md) for the underlying craft (caption-the-residual, character vs style captioning inversion, subject diversity for styles, the out-of-set acceptance test). Those principles are model-independent; what changes here is that you run the resulting dataset through training twice.
+**Dataset construction** for appearance work follows still-image practice — see [`character-lora-training`](../../character-lora-training/) for the underlying craft (caption-the-residual, character vs style captioning inversion, subject diversity for styles, the out-of-set acceptance test). Those principles are model-independent; what changes here is that you run the resulting dataset through training twice.
 
 For video clips: keep clips short and consistent in frame rate, sample so the motion of interest is actually present in most clips, and bucket by resolution as you would images. Wan is trained at 16 fps for the 14B — datasets far from that will fight the model's temporal priors.
 

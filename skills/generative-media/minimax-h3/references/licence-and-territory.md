@@ -75,8 +75,8 @@ So the text encoder component carries permissive terms independent of the H3 lic
 
 | Model | Licence position |
 |---|---|
-| **[`wan-2-2`](../../wan-2-2/)** | **Apache 2.0, code and weights**, worldwide, commercial use included. No territory clause. The strongest open video model without this problem, and the suite's recommended default |
-| **LTX-2.5** | Community licence, **gated** behind a contact-information agreement. Terms **not read** for this skill — do not assume they are cleaner without checking `[flagged — re-verify]` |
+| **[`wan-2-2`](../../wan-2-2/)** | **Apache 2.0, code and weights**, worldwide, commercial use included. No territory clause. The strongest open video model without this problem, and the suite's **licence-clean default** — the fallback when a territory or revenue clause has ruled the others out. Not the community's default *generator*: [`wan-2-2`](../../wan-2-2/) hands that position to H3 in its own skill and claims the narrower one deliberately |
+| **[`ltx-2-5`](../../ltx-2-5/)** | **LTX-2.x Community License Agreement** (11 Aug 2026), public ungated text on GitHub; only the weights sit behind a Hugging Face contact-info gate. Free worldwide **below US$10M annual revenue** aggregated across affiliates, paid above it (evaluation and non-production R&D excepted); **LoRA adapters are Derivatives** and inherit the obligation to whoever uses them; Attachment A **¶20 bars competing with Lightricks' own products at any revenue**; the incorporated AUP **prohibits sexually explicit generation**, and its scope reaches on-premises deployments. Different axis of risk from H3's, not a milder one `[official — Lightricks/LTX-2 LICENSE.md + AUP]`. Which licence governs the older **LTX-2.3** weights is unsettled: the repo ships a January-2026 text while its own links point at the August one `[contested]` |
 | **H3 hosted API / app** | `platform.minimax.io`, `hailuoai.video`, `hub.minimax.io`. Governed by their own terms, **not** this Agreement — read those separately before assuming they are more permissive |
 
 ## Re-verify

@@ -1,8 +1,8 @@
 # MiniMax H3 — characters and identity
 
-H3 approaches identity differently from the rest of the suite, because **Ref2VA conditions on references directly** — including audio. There is no mature LoRA path here yet (see `loras-and-training.md`), so reference conditioning is not one option among several; it is essentially the option.
+H3 approaches identity differently from the rest of the suite, because **Ref2VA conditions on references directly** — including audio. There is no mature LoRA path here yet (see [`lora-training.md`](lora-training.md)), so reference conditioning is not one option among several; it is essentially the option.
 
-> This file reasons from the documented Ref2VA capability and the suite's established identity craft. The model is days old and there is no community consensus to draw on — treat the specifics as provisional `[flagged — re-verify]`.
+> Most of this file reasons from the documented Ref2VA capability and the suite's established identity craft `[flagged — re-verify]`. The sections marked `[community]` were added 2026-08-22 from a sweep of named practitioners and are firmer.
 
 ---
 
@@ -38,6 +38,26 @@ The suite's strongest identity work lives on the image side, and it feeds H3 the
 
 Curate for **angle and expression coverage**, not for the nine prettiest images. Nine near-identical frontal portraits pin down one pose; four angles plus two expressions pin down a person.
 
+### Size the references by importance `[community]`
+
+Reference pixel size acts as a weighting. A working allocation: **character ~1000 px, environment ~500 px, prop ~300 px** on the long side. Supply a reference for anything unusual — H3 knows *named* characters and franchises deeply and generic-but-specific objects (an unusual weapon, a particular tool) barely at all. `[community — erioca]`
+
+Related, and easy to miss: **H3's pre-trained knowledge of named characters is broad enough that people maintain lists of it** (a "MiniMax H3 Known Characters" list is being kept on Hugging Face by `malcolmrey`, v2 dated 2026-08-21). If your character is famous, naming them may beat referencing them — and if you are using a *projected* text encoder rather than the full 32B, naming them will actively hurt, because the smaller sibling remembers them wrongly. See `setup-and-workflows.md` §5.
+
+### Let H3 build its own reference sheet `[community]`
+
+H3's own knowledge can bootstrap the reference set: feed up to 9 mediocre images and have it generate a **360° turnaround**, then cut that into a character sheet.
+
+`PoopMan333/H3_Character_Sheet_Generator` does exactly this — your description plus a fixed "B prompt" that spins the character slowly with no hard cuts, output as a 4- or 6-panel sheet plus the individual frames. Caveats from the author, which are the honest part:
+
+- It generates **124 frames to use 6**. The 4-panel variant is ~40% cheaper.
+- Turbo LoRAs speed it up but **cost prompt adherence** — reroll rather than fight it.
+- It is a video model making stills, so **resolution limits detail**. Pair the sheet with dedicated close-ups of face and clothing for close shots; for a one-off clip you may be better off skipping the sheet entirely.
+- The stock B prompt specifies a **neutral A-pose** — delete that clause for anything else.
+- Works for props and objects too, with prompt changes.
+
+Two things follow. First, this is a dataset factory in the [`z-image` sense](../../z-image/references/characters.md) that happens to run on a video model — see [`character-lora-training`](../../character-lora-training/) for what to do with the frames. Second, hybrid FL2VA/Ref2VA checkpoints are prone to **dragging the sheet's white background into the shot**; matte it or state the environment.
+
 ---
 
 ## The voice is part of the identity
@@ -64,19 +84,21 @@ The 15-second ceiling makes any real sequence a multi-shot problem, and identity
 
 ---
 
-## What H3 cannot do here that `wan-2-2` can
+## What H3 cannot do here — and which sibling does
 
 Stated plainly, because the gaps are real and this model is new:
 
-| Capability | H3 | `wan-2-2` |
+| Capability | H3 | [`wan-2-2`](../../wan-2-2/) |
 |---|---|---|
-| Performance transfer from a driving video | Reference clips influence output, but there is no documented motion-transfer mode | **Animate** — purpose-built character animation and replacement |
+| Performance transfer from a driving video | Reference clips influence output, but there is no documented motion-transfer mode | **Animate** — purpose-built, but no longer the first reach; see the note under the table |
 | Pose / depth structural conditioning | No documented ControlNet-equivalent stack | **Fun Control** |
 | Explicit camera trajectories | Prompt-level only | **Fun Camera** — discrete, repeatable moves |
 | Trained character LoRA | Ecosystem too young | Established two-expert LoRA training |
 | Lip-sync to a supplied track | Generates audio; does not follow an existing track | **S2V** consumes an audio track |
 
-If the job is *"make this specific character do this specific thing, repeatably,"* `wan-2-2` currently has the better rig — and it is Apache 2.0. H3's advantage is that the character **speaks**, in a voice you supplied, with the sound of the scene around them, in one pass.
+**The first row is the one where neither column is the answer any more.** For replacing a person in footage that already exists, [`scail-2`](../../scail-2/) has displaced Wan **Animate** in community practice. It tracks the driving clip frame for frame with SAM3 identity masks rather than transferring a performance onto a fresh render — the difference between a cut that *matches* the plate and one that merely resembles it, which is exactly the axis H3 loses on too. Wan **Animate** stays the in-family alternative when you are already running Wan end to end and would rather not add a third checkpoint stack. The price of going to SCAIL-2 is everything this page is about: it has **no audio in either direction**, it cannot originate a shot, and it needs you to lock frame 0 with an image edit first. So the route is *identity → SCAIL-2* when the footage exists, and *identity → H3* when the shot does not yet.
+
+For the rest of the table — pose and depth conditioning, explicit camera paths, a trained character LoRA, lip-sync to a supplied track — the routing is unchanged: if the job is *"make this specific character do this specific thing, repeatably,"* [`wan-2-2`](../../wan-2-2/) currently has the better rig, and it is Apache 2.0. H3's advantage is that the character **speaks**, in a voice you supplied, with the sound of the scene around them, in one pass.
 
 ---
 

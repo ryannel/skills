@@ -1,6 +1,6 @@
 # Krea 2 — API & hosted surfaces
 
-The hosted side: Krea's own API and web app (Medium/Large — the variants you can't download), fal's endpoints for the open models, and the ComfyUI partner nodes. Pricing and params verified against Krea's developer docs and fal's pages 2026-07-06/07 — **pricing and the 1K resolution cap are exactly the kind of fact that moves; re-verify before quoting in a budget.**
+The hosted side: Krea's own API and web app (Medium/Large — the variants you can't download), fal's endpoints for the open models, and the ComfyUI partner nodes. Every figure in this file is read from Krea's developer docs and fal's pages, verified 2026-07-06/07 `[official — Krea developer docs, fal pages]`; community additions are marked where they appear. **Pricing and the 1K resolution cap are exactly the kind of fact that moves — re-verify before quoting in a budget.**
 
 ## Contents
 1. [Hosted vs open — what's actually different](#1-hosted-vs-open--whats-actually-different)
@@ -16,8 +16,8 @@ The hosted side: Krea's own API and web app (Medium/Large — the variants you c
 | | Open (Raw/Turbo) | Hosted (Medium/Large) |
 |---|---|---|
 | Weights | downloadable | no |
-| VAE | Qwen-Image VAE | **Large trained with the FLUX.2 VAE** [official — team statement, HN] — a real fidelity difference, not just scale |
-| Resolution | 1K (Raw) / 1–2K (Turbo) | **1K only via API, currently** [official — API docs] |
+| VAE | Qwen-Image VAE | **Large trained with the FLUX.2 VAE** `[official — team statement, HN]` — a real fidelity difference, not just scale |
+| Resolution | 1K (Raw) / 1–2K (Turbo) | **1K only via API, currently** `[official — API docs]` |
 | Style references / moodboards | not in the open stack (style LoRAs instead) | yes — the flagship feature |
 | Creativity dial | no (analogue: enhancer on/off) | raw / low / medium / high |
 | Sliders (intensity/complexity/movement) | no | −100…100 each |
@@ -32,7 +32,7 @@ Base: `https://api.krea.ai` (docs: krea.ai/docs/developers). Async job pattern: 
 
 **Endpoints:** `POST /generate/image/krea/krea-2/medium` and `…/krea-2/large`.
 
-**Parameters** [official — API overview]:
+**Parameters:**
 
 | Param | Values | Notes |
 |---|---|---|
@@ -46,7 +46,7 @@ Base: `https://api.krea.ai` (docs: krea.ai/docs/developers). Async job pattern: 
 | `styles` | up to 10 preset/LoRA style IDs | |
 | `intensity`, `complexity`, `movement` | −100…100, default 0 | global aesthetic sliders |
 
-**Pricing** [official, verified 2026-07-06 — volatile]:
+**Pricing** `[official — Krea pricing page, 2026-07-06; re-verify]`:
 
 | | base | + style refs | + moodboards |
 |---|---|---|---|
@@ -55,19 +55,19 @@ Base: `https://api.krea.ai` (docs: krea.ai/docs/developers). Async job pattern: 
 
 ## 3. The web app
 
-krea.ai image generator: pick **Medium / Large / Turbo**; up to **4 style references, each with a strength slider**; moodboards ("the most precise way to set a visual direction"); batch up to 4; 1K output [official — user guide]. The app is also where moodboards get created for API use. Krea's broader editor (realtime canvas, upscaler, etc.) wraps the same models but is out of scope here.
+krea.ai image generator: pick **Medium / Large / Turbo**; up to **4 style references, each with a strength slider**; moodboards ("the most precise way to set a visual direction"); batch up to 4; 1K output. The app is also where moodboards get created for API use. Krea's broader editor (realtime canvas, upscaler, etc.) wraps the same models but is out of scope here.
 
 ## 4. ComfyUI partner nodes
 
-Hosted Medium/Large inside ComfyUI via the official **"Krea 2 Image" API node** (launched 2026-05-27): prompt + style refs + moodboard IDs + creativity Raw/Low/Medium/High, billed through API credits [official — Comfy blog]. This is a *different integration* from the local Turbo template (`setup-and-workflows.md §1`) — partner nodes call Krea's servers; nothing loads on your GPU.
+Hosted Medium/Large inside ComfyUI via the official **"Krea 2 Image" API node** (launched 2026-05-27): prompt + style refs + moodboard IDs + creativity Raw/Low/Medium/High, billed through API credits. This is a *different integration* from the local Turbo template (`setup-and-workflows.md §1`) — partner nodes call Krea's servers; nothing loads on your GPU.
 
 ## 5. fal (and other hosts) for the open models
 
-fal is the launch API partner (2026-05-27) [official — press release]:
+fal is the launch API partner (2026-05-27):
 
-- `fal-ai/krea-2/turbo` — open Turbo, hosted: `image_size` presets or custom WxH, `enable_prompt_expansion` (the same expander — same considerations as `prompting-guide.md §6`), acceleration `none/regular`, safety checker toggle, png/jpeg [official-via-host — fal API page].
+- `fal-ai/krea-2/turbo` — open Turbo, hosted: `image_size` presets or custom WxH, `enable_prompt_expansion` (the same expander — same considerations as `prompting-guide.md §6`), acceleration `none/regular`, safety checker toggle, png/jpeg.
 - `fal-ai/krea-2/turbo/lora` — Turbo + your LoRA weights.
 - `fal-ai/krea-2-trainer` — hosted LoRA training (`lora-training.md §4`).
 - Hosted Medium/Large also proxied as `krea/v2/medium|large/text-to-image` on fal.
 
-Other listed inference partners for the open weights: SGLang (cookbook recipe), Replicate, Cloudflare, Together, GCP, AWS, Runware [official — krea-2-open-source page]. Partner param schemas count as official-via-host; where fal and Krea disagree on a default, the GitHub README/CLI is the tiebreaker.
+Other listed inference partners for the open weights: SGLang (cookbook recipe), Replicate, Cloudflare, Together, GCP, AWS, Runware. Partner param schemas count as official-via-host; where fal and Krea disagree on a default, the GitHub README/CLI is the tiebreaker.

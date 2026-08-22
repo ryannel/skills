@@ -59,6 +59,8 @@ Load Diffusion Model (LOW  noise) ─┼─> [LoraLoaderModelOnly low ] ─> Mod
 - I2V: `wan2.2_i2v_lightx2v_4steps_lora_v1_{high,low}_noise.safetensors`
 - T2V: `wan2.2_t2v_lightx2v_4steps_lora_v1.1_{high,low}_noise.safetensors` — note the **v1.1** on the T2V pair
 
+This file covers *loading and stacking* LoRAs. **Making** one — hyperparameters, dataset construction, and the two-expert training question — is [`references/lora-training.md`](./lora-training.md).
+
 **`CreateVideo` fps: 16** for all 14B modes. This is metadata on the output container — it does not change generation, but a mismatch makes correct output play at the wrong speed and is a frequent false alarm in "my video is in slow motion" reports.
 
 ---
@@ -123,9 +125,7 @@ Optional stages are bypassable — preview cheaply, pay for heavy passes once th
 5. **Interpolate** — RIFE to 30/60 fps.
 6. *Optional:* colour match across segments, grade, audio.
 
-**Stages 4 and 5 are order-sensitive.** Restore before you interpolate: interpolating first hands the restorer twice the frames *and* bakes interpolation smear into what it then sharpens. This is the single most common ordering mistake in video post chains.
-
-Cross-model handoff craft — denoise bands, decoding to pixels between VAE families, tiled upscale — lives in [`image-production-workflows`](../../image-production-workflows/).
+**Stages 4 and 5 are order-sensitive: restore before you interpolate.** [`image-production-workflows`](../../image-production-workflows/) owns that rule and why it holds, along with the rest of the cross-model handoff craft — denoise bands, decoding to pixels between VAE families, tiled upscale. Wan's stake in it is stage 5 specifically: at a native 16 fps the interpolation rung is doing more work here than after any other model in the suite, so it is the stage worth getting right rather than the one to skip.
 
 ---
 
