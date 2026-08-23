@@ -63,12 +63,12 @@ Template: **`image_krea2_turbo_t2i.json`** (Comfy-Org/workflow_templates; in-app
 
 | VRAM | Working setup |
 |---|---|
-| 8–12 GB | GGUF Q2–Q4 DiT + fp8 encoder (or encoder on CPU) — expect quality loss at Q2/Q3 |
+| 8–12 GB | GGUF Q2–Q4 DiT + fp8 encoder (or encoder on CPU) — expect quality loss at Q2/Q3. Or full `fp8_scaled` on weight offload if you have the system RAM to hold it: Turbo `fp8_scaled` is reported running on an 8 GB RTX 3070 Ti with 64 GB host RAM `[community — niechta]` — same weights, slower |
 | 12–16 GB | Q4_K_M–Q6_K, or nvfp4 (7.7 GB) on Blackwell |
 | 16–24 GB | fp8_scaled or int8_convrot (13.1–13.5 GB) + fp8 encoder — the comfortable tier |
-| 24 GB+ | fp8/int8 with full headroom; bf16 wants ~46 GB (unified/多-GPU territory) |
+| 24 GB+ | fp8/int8 with full headroom; bf16 wants ~46 GB (unified-memory / multi-GPU territory) |
 
-The memory pattern that matters (documented for musubi, same physics in ComfyUI): the DiT stays resident; the ~5–9 GB encoder and the VAE shuttle on/off the GPU around it. On a 24 GB card, fp8 (or block offloading) is what buys the headroom for the encode/decode — not evacuating the DiT. Koboldcpp's rolling build also runs Krea 2 (with Qwen3-VL + a Wan 2.1 VAE) `[community — u/Eisenstein, HN]`.
+The memory pattern that matters (documented for musubi, same physics in ComfyUI): the DiT stays resident; the ~5–9 GB encoder and the VAE shuttle on/off the GPU around it. On a 24 GB card, fp8 (or block offloading) is what buys the headroom for the encode/decode — not evacuating the DiT. That pattern assumes a card with room to keep the DiT. Where there isn't one, the DiT stops being resident too and its blocks stream in per step — which is what makes 8 GB viable at all, and why on a small card the number to check first is *host* RAM, not VRAM. Offload trades bus time for capacity; GGUF trades precision for capacity. Prefer GGUF when system RAM is the scarce resource, offload when it isn't. Koboldcpp's rolling build also runs Krea 2 (with Qwen3-VL + a Wan 2.1 VAE) `[community — u/Eisenstein, HN]`.
 
 ## 3. The reference CLI
 

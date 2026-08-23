@@ -129,6 +129,16 @@ On the first (high-noise) sampler: `add_noise: enable`, `return_with_leftover_no
 2. **Raise the resolution.** 1280×720 produces normal-speed motion where 832×480 produces slow motion — counter-intuitive, since 480p is the "recommended" band `[community — re-verify]`.
 3. **Fall back to the 20-step quality path** when the shot is motion-critical. Reach for the speed path to find composition and seed, then re-render keepers.
 
+### Community merges, and why their settings contradict the templates
+
+The Apache-2.0 licence has produced a large secondary market of Wan 2.2 merges — speed-distilled, motion-tuned, concept-merged. **Their settings are not the template's settings**, and every way of getting that wrong fails silently. Three differences recur, all of them visible in the published workflow of one studied 10-step I2V merge `[community — RedMimicStudios]`:
+
+- **Asymmetric CFG — 2.0 on the high-noise expert, 1.0 on the low.** Not a typo, and it follows from the merge being **CFG-distilled**: guidance is already baked into the weights, so asking for it again applies it twice, which burns contrast and crisps texture. The residual 2.0 on high is the same repair as the strength split above — distillation flattens dynamism, motion is decided before the expert boundary, so guidance comes back only on the side that decides motion.
+- **`uni_pc` / `normal`, not `euler` / `simple`** — and the author reports this mattered. At 10 total steps (5 per expert) the solver's per-step truncation error is a first-order term in the picture rather than a rounding detail; `uni_pc` is a higher-order multistep solver that stays accurate on a schedule that coarse, where `euler` does not. Wan's own low-step templates already agree: the 10-step S2V path and the 5B both ship `uni_pc`.
+- **No LoRA loaded at all.** A merge with speed or concept LoRAs baked in already carries their deltas. Loading the same LoRA over it applies the delta a second time — `W + 2αBA` where the merge intended `W + αBA` — which puts the weights off the distribution the merge was tuned on: over-baked concept, and for a speed LoRA a doubled dose of the dynamism loss you were trying to avoid.
+
+**Read the workflow JSON, not the post.** Both the asymmetric CFG split and the `uni_pc` choice were present in that merge's published workflow and absent from its description text `[community — RedMimicStudios]`. The full settings block, VRAM and timings, and the measurements that picked the merge: **`references/setup-and-workflows.md §4a`**.
+
 ---
 
 ## Prompting Wan 2.2
@@ -217,11 +227,21 @@ What is specific to Wan is how much weight the last rung carries: the 14B is bui
 | Output looks fine but subtly soft / wrong texture | High and low expert files mismatched, or a LoRA loaded into only one expert | Verify both loaders point at the *same* variant and both LoRA halves are loaded |
 | Second sampler produces a fully re-noised mess | `return_with_leftover_noise` wrong on the high-noise sampler, or `add_noise` left enabled on the low-noise one | First sampler: leftover noise **enable**; second: `add_noise` **disable** |
 | Colour shift or mush across the whole clip | 5B VAE used on a 14B graph (or vice versa) | 14B → `wan_2.1_vae.safetensors`; 5B → `wan2.2_vae.safetensors` |
+| Anatomy warps or collapses partway through the clip; a handful of seeds are clean and most are not, and no setting changes the ratio | The checkpoint's prior does not cover that composition, so which seed lands inside it decides the outcome — steps, shift, frame count, negatives and LoRA strength all steer the trajectory through the *same* prior and cannot widen it | Stop sweeping: swap to a checkpoint or merge trained on that subject matter, then re-run one generation. See [When nothing you change moves the result](#when-nothing-you-change-moves-the-result) |
+| Late frames go smooth and plastic — anatomy holds but linework and texture are gone; upscaling doesn't bring them back | A merge tuned for motion smoothness suppresses high-frequency detail at every step, and I2V compounds that frame-on-frame, so the last frames have nothing left to restore — a restorer can only sharpen detail that survived | Measure edge density first frame vs last before reaching for a restorer; if the decay is deep, change the merge rather than the post chain |
 | Identity morphs partway through the clip | Conditioning influence decays as the clip progresses; no persistent identity anchor past the opening frames | Shorter clips; VACE/Animate reference conditioning; character LoRA |
 | Colour pumping and drift across extended segments | Error accumulation — each extension conditions on an already-degraded final frame, compounded by per-segment VAE round-trips | Re-anchor on a clean keyframe; FLF2V to a known end state; colour-match segments |
 | Visible seam at a segment join | Independently generated segments with a motion discontinuity at the boundary | Overlap frames, or FLF-condition each segment on its neighbour |
 | Negative prompt ignored | You are on the 4-step path at CFG 1.0 — guidance-off, so negatives are inert | Phrase constraints positively, or move to the CFG 3.5–4.0 quality path |
 | Shimmer on fine detail after upscaling | A per-frame image upscaler was used on video — no cross-frame consistency | Use a temporal restorer (SeedVR2 / FlashVSR); upscale before interpolating |
+
+### When nothing you change moves the result
+
+A 27-generation single-variable study into anatomy collapsing mid-clip on I2V is worth carrying in full, because its conclusion generalises well past the symptom it started from `[community — RedMimicStudios]`. With the seed held fixed, none of the following changed the outcome: prompt phrasing and eight anti-distortion negatives; 20 vs 12 steps; an NSFW LoRA at strength 1.0 vs bypassed; 49 vs 33 frames; shift at 6.5, 7.0, 8.0 and 9.0; and three retouched revisions of the source image, each under 1/255 mean pixel delta from the last. The only axis that moved anything at all was the seed — and a 28-run seed batch returned **2 usable clips out of 28**.
+
+> **The diagnostic: when seed variance dominates and nothing deterministic moves the needle, the base model cannot hold that composition — change the checkpoint rather than continuing to roll.** Every deterministic knob steers the trajectory through the same learned prior; none of them widens it. Once the prior does not cover what you are asking for, sweeping settings is just resampling with extra steps. In the study, swapping to an NSFW-merged checkpoint fixed it in a single generation, after 27 generations of tuning had not.
+
+**And measure detail decay rather than eyeballing it.** Edge density on the first frame against the last is a cheap QC proxy for how much high-frequency detail a clip loses as it plays, and it discriminates cleanly: the checkpoint that worked held **−3.2%**, while the two that failed ran **−10.1%** and **−27.3%** — in opposite ways, one breaking anatomy and one dissolving linework. It also settles whether post-processing can rescue a clip: ESRGAN on the −27.3% output moved it to −28.2%, i.e. nowhere, proving by measurement that the late frames had no detail left to recover rather than being merely blurred. Full comparison, and the settings of the merge that fixed it: **`references/setup-and-workflows.md §4a`**.
 
 ---
 
@@ -238,6 +258,7 @@ What is specific to Wan is how much weight the last rung carries: the 14B is bui
 9. Prompt names **motion**, not just a scene? Camera move stated, or `static shot` if you want none?
 10. If motion looks slow: tried strength-split + CFG-on-high before blaming the prompt?
 11. Post chain ordered **restore/upscale → interpolate**, not the reverse?
+12. On a community merge: settings read out of its **workflow JSON** rather than its description, and **no LoRA stacked** on top of one already merged in?
 
 ---
 
@@ -279,7 +300,7 @@ This skill holds two kinds of claim to two different standards, because they fai
 
 **Hard facts — must be exact or it breaks.** The Apache-2.0 licence, the MoE architecture and the `t_moe` = half-SNR_min boundary, 27B total / 14B active, exact filenames, the 14B↔`wan_2.1_vae` / 5B↔`wan2.2_vae` split, node names (`EmptyHunyuanLatentVideo`, `WanImageToVideo`, `WanFirstLastFrameToVideo`, `Wan22ImageToVideoLatent`, `WanSoundImageToVideo`, `ModelSamplingSD3`), the CLIPLoader `wan` type, the diffusers pipeline classes, and **every number in the per-mode settings tables** — all taken from the official Wan2.2 repo/technical report and read **verbatim out of the official ComfyUI template JSONs** (`Comfy-Org/workflow_templates`), not from documentation prose, which omits most of them. A wrong filename 404s; a wrong VAE corrupts output silently. These are also the **volatile** ones — template details, quant filenames and speed-LoRA versions move week to week. **Re-verify before relying on them, regardless of who said it.**
 
-**Craft — what actually makes a good clip.** The slow-motion fixes, the strength-split and CFG-on-high recipe, the resolution effect, LoRA hyperparameters, the restore-before-interpolate ordering, dataset construction, segment-stitching practice. **The authoritative source here is the community** — the trainers and workflow authors named in the markers throughout this skill: **wan27.org**'s guide authors on the size and quantisation trade, **LastCrusaderVHS** on mixed-model production practice, the **musubi-tuner** training discussion (#455) and the **Civitai** training articles on the two-expert LoRA question, and the **lightx2v** HF discussion thread on the speed-LoRA slow-motion tax — people who have run this model thousands of times, not the model card, which ships one example and moves on. Stated with confidence; ranges mean "your resolution and dataset differ from the author's," not "this is unreliable."
+**Craft — what actually makes a good clip.** The slow-motion fixes, the strength-split and CFG-on-high recipe, the resolution effect, LoRA hyperparameters, the restore-before-interpolate ordering, dataset construction, segment-stitching practice. **The authoritative source here is the community** — the trainers and workflow authors named in the markers throughout this skill: **wan27.org**'s guide authors on the size and quantisation trade, **LastCrusaderVHS** on mixed-model production practice, the **musubi-tuner** training discussion (#455) and the **Civitai** training articles on the two-expert LoRA question, the **lightx2v** HF discussion thread on the speed-LoRA slow-motion tax, and **RedMimicStudios** on the anatomy-collapse study, the change-the-checkpoint diagnostic and the edge-density QC proxy — people who have run this model thousands of times, not the model card, which ships one example and moves on. Stated with confidence; ranges mean "your resolution and dataset differ from the author's," not "this is unreliable."
 
 Three points held as genuinely contested or unverified:
 
@@ -296,7 +317,7 @@ Three points held as genuinely contested or unverified:
 | File | When to read it |
 |---|---|
 | `references/prompting-guide.md` | Full prompt anatomy for motion; camera-move vocabulary; the Chinese default negative and when negatives apply; prompt extension; worked examples; carrying a prompt over from an image model |
-| `references/setup-and-workflows.md` | The two-expert graph wired node by node; full quant/GGUF tables and VRAM; the 5B and S2V graphs; the production ladder with per-stage settings; segment stitching for longer pieces; diffusers usage |
+| `references/setup-and-workflows.md` | The two-expert graph wired node by node; full quant/GGUF tables and VRAM; the 5B and S2V graphs; running a community merge whose settings contradict the templates, and choosing between merges by edge-density measurement; the production ladder with per-stage settings; segment stitching for longer pieces; diffusers usage |
 | `references/motion-and-camera.md` | Fun Camera / Fun Control / Fun InP / VACE / Animate — file tables, wiring, which to reach for, and what is not controllable |
 | `references/characters.md` | Holding a character across frames and shots: the still-first handoff, VACE reference conditioning, Animate for motion transfer, character LoRAs, cross-shot continuity and its failure modes |
 | `references/lora-training.md` | Making a LoRA: the two-expert training question, musubi-tuner and diffusion-pipe settings, video-clip vs single-frame datasets, evaluation, and the known one-file-emitted gotcha |

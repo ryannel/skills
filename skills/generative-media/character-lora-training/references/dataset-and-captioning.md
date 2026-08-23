@@ -74,6 +74,10 @@ Two advantages beyond convenience: you get **coverage photography rarely provide
 
 Which edit model to use for step 2 is a per-family question; your model skill names the one for its ecosystem.
 
+**The whole loop has been packaged.** VNCCS 3.0 — the Visual Novel Character Creation Suite — is a ComfyUI character-consistency system that implements steps 1–3 as a wired pipeline `[community — AHEKOT, r/StableDiffusion 892 pts]`. What it gives you over hand-wiring: a **Control Center** that downloads and manages the models the workflows need, an interactive 3D **Pose Studio** for posing, framing, lighting and pose libraries, a **Character Cloner** that builds the anchor from reference images, a **Clothes Designer** that clones an outfit across different characters, an **Emotion Studio** for expression sets, and **per-sprite regeneration**, so one bad frame does not cost the sheet. Install via `github.com/AHEKOT/VNCCS_Easy-Install` `[official — repo README, read 2026-08-23]`.
+
+Two things to settle before training on its output. Its generation stack is reported to be built around **Anima-Base-1.0** `[community — AHEKOT; re-verify]`, so the stills inherit that model's look and its weights-side licence — see [`anima`](../../anima/) before publishing anything trained on them. And its target is a **visual-novel sprite sheet**, which is a different coverage target from §2: expression and outfit variation are what it optimises for, and the rotation and elevation axes are yours to check. Curate its output against §2 rather than assuming a finished sheet is a finished dataset.
+
 ### The video turnaround — a better factory for rotation specifically
 
 An edit model generates each angle independently, so eight edits give you eight chances for the identity to drift. **A video model generates them as one continuous camera move**, which makes the angular coverage internally consistent by construction rather than by curation. That is a categorical improvement on the hardest axis of §2, not a convenience.

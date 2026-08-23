@@ -11,8 +11,9 @@
 7. [Worked examples](#7-worked-examples)
 8. [Ordering, timing and the shot list](#8-ordering-timing-and-the-shot-list)
 9. [Prompt tooling](#9-prompt-tooling)
+10. [Explicit and adult work](#10-explicit-and-adult-work)
 
-> §1–7 are reasoned from the architecture and the official templates rather than distilled from community practice. §8–9 are the opposite: they are community craft from named authors, added 2026-08-22, and they are where the reliability actually comes from.
+> §1–7 are reasoned from the architecture and the official templates rather than distilled from community practice. §8–10 are the opposite: they are community craft from named authors, added 2026-08-22 and extended 2026-08-23, and they are where the reliability actually comes from.
 
 > **Read the official guides.** There are **two** on the HF model page — one for the **T2V/I2V** model and one for the **Reference** model — and their syntax differs. The single most-repeated piece of advice in the community is that most complaints (wrong speaker, gibberish dialogue, unrequested cuts, prompts ignored) are answered verbatim in them. `[community — GrayingGamer]`
 
@@ -166,7 +167,9 @@ Everything in §1–7 assumes the model understands *what* you want. This sectio
 
 ### The ordering rule — the single highest-value thing on this page
 
-**H3 assumes actions are sequential unless you say otherwise.** Two actions joined by "and" will happen one after the other, even when that is obviously wrong, and the result reads as subtly awkward staggering rather than as an outright error — which is why people rarely diagnose it.
+**H3 assumes actions are sequential unless you say otherwise.** Two actions joined by "and" will happen one after the other, even when that is obviously wrong, and the result reads as subtly awkward staggering rather than as an outright error — which is why people rarely diagnose it. The practitioner with the most detailed public H3 prompting notes attributes **"80% of the jank"** to this one ambiguity, which makes it the highest-leverage line on this page by a wide margin. `[community — nsfwVariant]`
+
+**Why it happens, because knowing the mechanism tells you where else to look.** H3's conditioning comes from a language model reading your prompt, and a prompt is a linear sequence of tokens. **Textual order is therefore the strongest — often the only — temporal signal the model has**, and English "and" carries no temporal information whatsoever: *"she waves and smiles"* is genuinely ambiguous between overlapping and consecutive. The model cannot decline to choose, so it takes the reading that a fixed clip length can always accommodate: one beat after another. Two consequences follow directly. First, **any construction that leaves order underspecified inherits the same default** — comma-separated action lists, "as well as", a bare participial clause tacked onto a sentence. Second, **the fix is a word, not a setting**: raising steps or re-rolling the seed cannot supply information the prompt never contained, which is exactly what people spend their time on instead.
 
 | Write | Get |
 |---|---|
@@ -185,6 +188,10 @@ H3 is prompt-adherent enough to be instructed through its own weak spots — whi
 
 There is no way to misread that, so the model usually gets it right.
 
+**People arriving from [`wan-2-2`](../../wan-2-2/) expect this to cost them something, and it does not.** The reported experience is that the same tactic on Wan buys the fix at the price of other detail, where on H3 hand-holding one stubborn element does not visibly degrade the rest — so the correct response to a repeated failure here is *more* words aimed precisely at it. `[community — nsfwVariant]` Wan's own guidance is more precise than that folk version: it warns against **competing** subjects and actions — *"one clear action beats three competing ones"* — rather than against detail as such, and it warns separately that re-describing what an I2V reference already carries pulls the clip away from the reference. Both of those are about demands that contend with each other. Piling clauses onto the single element that keeps failing is not that, which is why it is safe here and why the instinct to keep H3 prompts lean is the wrong import.
+
+Two practical notes on applying it. **Describe the path, not the outcome** — "so it slides directly down to the floor over her legs" is a trajectory the model can follow, "the skirt is removed" is a state change it has to invent a route to. And **pair it with time**: a mechanical description that does not fit the seconds available gets crammed rather than followed, which is the next subsection.
+
 ### Timestamps
 
 Format is `mm:ss.000`. Two rules:
@@ -200,6 +207,8 @@ Format is `mm:ss.000`. Two rules:
 ### Budget time against content
 
 The model tries to fit everything you asked for into the duration you gave it. Ask for ten seconds of action in five and it crams, overlaps and truncates — which people misread as the model being bad at dialogue. **Allow ~3 s for any fiddly physical action** (removing one garment, opening a stuck door, a prop handoff), and keep dialogue short for 5–7 s clips.
+
+**Multi-step sequences are where this compounds, and undressing is the worked case.** The rule is **≥3 s per garment, each item named in its own clause, in order** — three garments is a nine-second clip, not a five-second one with a longer sentence. `[community — nsfwVariant]` The reason it fails so reliably otherwise is the two rules above acting together: one clause covering three items reads as **one beat**, so the time budget allots it one beat's worth of seconds, and the mechanical path for items two and three never gets described at all. Written out item by item you get three beats, three time allocations and three described trajectories, and the garments stop teleporting. The same shape applies to any sequence of similar small actions — unpacking a bag, setting a table, a fight exchange.
 
 **Draft at 0.2 MP first.** A 608×352 pass takes a few minutes and shows you the timing, the shot order and whether the model understood the brief. Fix the prompt there; spend the long run once.
 
@@ -229,3 +238,25 @@ Writing H3 prompts by hand is slow and the formatting is fussy; LLMs are good at
 | **`duckyshell/ComfyUI-MiniMaxH3-Prompt-Writer`** | In-ComfyUI UI extension. A **local** Gemma 4 multimodal model reads your actual references and writes the prompt against the official guides. Tiers from 8 GB (Gemma 4 E4B Q3) to 32 GB (31B Q4); the author's pick is the 24 GB tier. Video references are analysed as an ordered contact sheet; audio can be tagged `<Audio N>` but the local model cannot hear it, so describe its role. Needs the CUDA build of `llama-cpp-python` |
 
 Both are `[community]`, both are young. The general lesson stands without either: **let a model draft, then fix the ordering words and the timestamps yourself.**
+
+---
+
+## 10. Explicit and adult work
+
+**Settle the licence before you read this section.** H3's Community License excludes the US, EU, UK and South Korea from its Applicable Territory, and Exhibit A makes use outside that territory a prohibited use — see SKILL.md's opening section and `licence-and-territory.md`. Nothing below changes that, and the fact that this is the job the community rates H3 highest at is a reason to be more careful about the clause, not less. **Which model to use for this work at all** — across image and video, with the platform and consent constraints that go with it — belongs to [`generative-media-atlas`](../../generative-media-atlas/)'s `references/adult-work.md`. What follows assumes that decision is made and covers only how to drive H3.
+
+**The single requirement: bring a reference image.** Base nudity prompted from text alone is reported as *"inconsistent & low quality"*, and a **nude reference image — or close-up references for the specific anatomy involved — is what makes an undressing sequence work at all**. `[community — nsfwVariant]` This is not a filter being worked around. H3 does not meaningfully refuse (see `setup-and-workflows.md §10`); the failures are gaps in the training distribution, and a gap is not something a prompt can argue with. A reference image puts the missing information into the conditioning directly, which is why it works where adjectives, weighting and encoder swaps all do not. Practically that means **Ref2VA — in its hybrid form** (`setup-and-workflows.md §5`), since plain Ref2VA's quality gap lands hardest on exactly the fine anatomy you are conditioning for. Reference sizing follows the ordinary budget in `characters.md`: the thing you need right gets the pixels.
+
+**Nothing else here is special-cased** — the general rules in §8 simply bite harder, because this content is physically fiddly, multi-step, and involves two bodies interacting:
+
+| Rule | Why it lands harder here |
+|---|---|
+| **`then` / `while`** | Two people acting on each other is the case where sequential-by-default is most visibly wrong, and the staggering reads as bad animation rather than as a prompt bug |
+| **≥3 s per garment, item by item** | Undressing is the canonical multi-step sequence; one clause for three items gets one beat's worth of time and two undescribed trajectories |
+| **Over-describe the mechanical path** | Contact, occlusion and cloth are exactly where H3's physics slips, and it is adherent enough to be hand-held through them |
+| **~30 steps, ~0.8 MP** | Both bands were established on this kind of content: steps buy physics and interaction correctness, and error rates rise above *and* below ~0.8 MP `[community — nsfwVariant]` |
+| **Timestamp beside the action** | Sequences are timed sequences; a timestamp attached to the wrong clause reschedules the wrong beat |
+
+**On dialogue and sound**, the model's defining trait applies unchanged and is worth using rather than suppressing: unspecified audio is invented, so breath, contact sound and the absence of a score are all things to state (§1, §3). Reference *audio* through Ref2VA carries a voice rather than describing one (§4, `characters.md`).
+
+**Real-person likenesses are a separate problem from a technical one**, and the constraint does not come from the model: it is platform policy and law — Civitai's ban on real-person NSFW and the TAKE IT DOWN Act. [`character-lora-training`](../../character-lora-training/references/publishing-and-likeness.md) covers it; do not read H3's lack of refusal as permission.

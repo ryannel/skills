@@ -73,6 +73,16 @@ The consequence: **pruned builds are inference-only.** MiniMax released full wei
 
 **Memory.** The templates defaulting to int8 weights *and* an nvfp4 encoder tells you what you need to know: 33B of transformer plus a 32B VLM encoder is heavy even before latents. No official VRAM figure is published `[flagged — re-verify]`. Community GGUF and NVFP4 repacks appeared within days; expect the low-VRAM story to be community-driven and to move fast.
 
+**The reported floor is much lower than the parameter count implies**, which matters because people rule themselves out on arithmetic:
+
+| Card | Reported | Notes |
+|---|---|---|
+| **3060 Ti 8 GB** | **540p** with the Turbo LoRA + SageAttention | The lowest floor reported anywhere. Below the ~0.8 MP reliability band, so treat it as a drafting rig `[community — r/unstable_diffusion; single report]` |
+| 5070 Ti 16 GB | ~5–7 min for ~10 s at 1056×608 (0.6 MP) | Usable working speed at a modest resolution `[community — r/unstable_diffusion; single report]` |
+| 5060 Ti 16 GB | 864×1536 × 10 s at 60–80 s/it with SLA | The acceleration-stack benchmark in §9 |
+
+Two things make the low end possible at all: pruned int8 weights drop ~13B of parameters that inference never needs (above), and the Turbo LoRA cuts steps from 20 to 6–8 (§9). Neither is optional at 8 GB.
+
 ---
 
 ## 3. Frame count
@@ -163,6 +173,8 @@ Ref2VA is visibly worse than FL2VA at identical settings — swap the FL2VA chec
 
 - Loader node: `github.com/scottmudge/ComfyUI_MinimaxH3HybridLoader` (base = FL2VA, overlay = Ref2VA; use README settings, not node defaults; no memory overhead with mmap on)
 - Baked: `smhfacct/Minimax-H3-fl2va-ref2va-hybrid-models` — `b30-49` first, `b25-49` visually equivalent with slightly better reference retention, `b20-49` more retention / less quality, `b15-49` may lose noticeable quality. `[community — ThatsALovelyShirt]`
+
+**Once the hybrid removes the quality objection, the mode choice inverts for most work.** FL2VA's advantage was always picture and audio quality; its *conditioning* is the more rigid of the two. FL2VA commits a supplied image to a **frame position** and builds the clip to arrive there; Ref2VA takes the same image pinned to nothing, so it **guides content instead of anchoring the timeline** and the rest of the reference budget stays free for further images, audio or video alongside it. Practitioners doing sustained character work start from hybrid Ref2VA for that reason. `[community — nsfwVariant]` Keep FL2VA for the case its rigidity is the feature: a continuity seam between two chained clips, where you need the first frame matched rather than interpreted — which is also the mode the Turbo LoRA was trained against, so the speed recipes are best attested there.
 
 ### Sizing reference images
 
@@ -301,6 +313,17 @@ It works across the quantised builds (int8, convrot, pruned, fp8), and although 
 **The audio tax, and the core fix.** H3 runs **separate video and audio scheduling**, and the original sampler chain mishandled that once the LoRA compressed the step count: picture fine, audio degraded. Kijai's `Comfy-Org/ComfyUI#15243` merged **2026-08-06** and shipped in **ComfyUI v0.31.0 (2026-08-08)**, adding `ModelSamplingAV` / `ModelSamplingMiniMaxH3` with a separate **`audio_shift`** so stochastic samplers and low step counts carry audio correctly on the stock path `[official — Comfy-Org/ComfyUI#15243, ComfyUI v0.31.0]`. Order of preference: update ComfyUI and use that node; on an install you cannot update, larryvrh's `github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo` sampler; failing both, ~10 steps with `euler` rather than `res_multistep` `[community — contested]`.
 
 **Preview decoding** is a cheap extra: a tiny VAE exists — `Kijai/MiniMax-H3-TAE` (`taeh3.safetensors`) → `ComfyUI/models/vae_approx/`. Core does not yet use it for final decode, so it is a preview accelerator via custom node rather than a substitute for the real VAE. `[community — re-verify]`
+
+### Two dials the acceleration work turned up that are not acceleration
+
+Both come out of the same practice as the layers above, and both are quality changes that happen to live on nodes you installed for speed. One named practitioner each, cheap to test, worth trying before anything more elaborate.
+
+| Dial | Stock | Reported | What it is |
+|---|---|---|---|
+| **Scheduler** | `simple` | **`beta`** | Described as a *"huge impact"* change on the ordinary path, not only under the Turbo LoRA where the templates already switch to it. If it holds up, the shipped default is simply wrong rather than conservative — which is a strong claim on one report, so verify it on your own seeds `[community — Revolutionary-Bar766; contested]` |
+| **Sigma shift** (`MiniMax H3 Sigma Shift`, ships with the Spectrum pack) | video 12, audio 3 | **video 15, audio 1.5** | More of the video schedule spent at high noise, less of the audio schedule there. They move in opposite directions because H3 schedules the two streams separately — the same fact that gives the core `ModelSamplingMiniMaxH3` node its own `audio_shift` `[community — Revolutionary-Bar766; single report]` |
+
+Note the dependency: the sigma-shift node arrives with Spectrum, so you can hold this dial without running Spectrum's step-skipping at all. Installing the pack and using only the shift node is a legitimate configuration.
 
 ---
 

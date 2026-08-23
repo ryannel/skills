@@ -81,15 +81,19 @@ will prompt in JSON, caption in JSON.
 
 ## 4. What the community has actually trained
 
-**33 Ideogram 4.0 LoRAs are published on Civitai** (sampled 2026-08-13, `baseModel=Ideogram 4.0` —
+**34 Ideogram 4.0 LoRAs are published on Civitai** (re-censused 2026-08-23, 33 on 2026-08-13;
+`baseModel=Ideogram 4.0` —
 note the `.0`, the obvious spellings return zero). So this is a real, if small, ecosystem rather
 than a proof of concept.
 
 **Read the composition, not just the count** — it is almost entirely **style and aesthetic** work:
 Ghibli, Tintin, vintage anime, fantasy-realism refiners, a `Gray Screen bypass`.
-**Character/likeness LoRAs are essentially absent**, and **none of the 33 are adult-flagged**, which
-is consistent with the model-level safety filter documented in `setup-and-workflows.md § 5` rather
-than with a gap in tooling.
+**Character/likeness LoRAs are essentially absent.** Adult work was absent too at that sampling —
+zero of the 33 adult-flagged — but a re-census ten days later put **~26% of 34 explicit**
+`[community — Civitai baseModel census, 2026-08-23]`. So read the model-level safety filter
+(`setup-and-workflows.md § 5`) as a strong prior rather than a wall: the `Gray Screen bypass` entry
+above is somebody building against it, and enough adult work has now appeared on the shelf that the
+filter is evidently porous. Neither number is a tooling gap; both are downstream of the filter.
 
 A calibration note on download counts: the most-downloaded entry, `Lenovo UltraReal`, shows 152k
 downloads — but it spans **12 base models**, and its **Ideogram 4.0 version has 6,866**. Civitai
@@ -105,10 +109,19 @@ LoRA usually is not an Ideogram number.
   character LoRAs and no identity adapters (below), treat a character run here as **exploratory work
   you are doing first**, not a documented recipe. If you need a likeness this week, build it in
   [`flux-2`](../../flux-2/), [`z-image`](../../z-image/) or [`sdxl`](../../sdxl/) and use Ideogram only for
-  the typography pass.
-- **Adult/NSFW work is blocked upstream of training.** The NSFW filter is in the weights and cannot
-  be disabled (`setup-and-workflows.md § 5`), so a LoRA cannot buy its way past it — which is why
-  none of the 33 published LoRAs are adult-flagged. This is a model choice, not a tooling gap.
+  the typography pass. **Note what this bullet is and is not saying:** training a likeness *into* the
+  weights is undemonstrated; carrying one across a few generations is not, and needs no training at
+  all — the locked half-canvas workflow in `SKILL.md` § *Consistent characters without an adapter*
+  does it with the base model alone `[community — reality_comes, 402 pts]`.
+- **Adult/NSFW work meets the filter before it meets training.** The NSFW filter is in the weights
+  and cannot be disabled (`setup-and-workflows.md § 5`), and that is a model choice rather than a
+  tooling gap. What has *not* held is the stronger claim that a LoRA cannot buy its way past it:
+  adult output has been posted from the open weights with style LoRAs loaded
+  `[community — Ashamed-Ad7403, r/unstable_diffusion; single report]`, and roughly a quarter of the
+  published LoRAs are now explicit (§4). Nobody has shown the mechanism, so treat this as a route
+  others have walked rather than a recipe you can follow, and expect gray screens either way
+  `[flagged — re-verify]`. Cross-model craft:
+  [`character-lora-training`](../../character-lora-training/references/nsfw-training.md).
 - **Still no ControlNet, PuLID, or IP-Adapter** for Ideogram 4, from Ideogram or any community team —
   a Hugging Face discussion on `ideogram-4-fp8` is titled *"No Controlnet Capability."* `[community]`
   **This is a separate axis from LoRA training and it has not moved.** Structural pose/identity

@@ -45,7 +45,24 @@ The practical consequence: **if your base lacks the coverage, do not try to fix 
 
 That layering is the normal production pattern, and it is why the good-citizen advice in `../SKILL.md` matters — a character LoRA that demands 1.0 cannot coexist with the anatomy LoRA it needs.
 
+### The layering is a live constraint, not a solved recipe
+
+One practitioner worked through four published Wan I2V anatomy LoRAs — DASIWA, "Ultimate pussy anus helper", "Edible Anuses" and HearmemanAI's — and reported that each either failed to render at all or *"changes the character lora too much"* `[community — One-Energy5403; unanswered]`. Nothing in the thread resolved it, and no working configuration has been published `[contested]`.
+
+Read that against the paragraph above, because the two are the same situation seen from opposite ends: **stacking a capability LoRA under a character LoRA is exactly what people are doing when this fails.** The mechanism is not mysterious — both adapters write into the same attention weights, and an anatomy LoRA trained on 1,500+ images of bodies is a far broader intervention than a 25-image identity, so it has every opportunity to move the face too. What follows from that:
+
+- **Evaluate the stack, not the LoRA.** A character LoRA that passes its strength sweep alone tells you nothing about whether it survives an anatomy LoRA underneath. The stack test in `../SKILL.md` is the gate here, and on adult work it is not optional — run it before you commit to the base.
+- **A base with the coverage already in it beats the stack.** This is the strongest practical argument for choosing on §2's axis rather than assembling coverage at inference time. On video it is more than an argument: an NSFW-merged checkpoint is the route that has actually been shown to fix anatomy failures a LoRA could not — see the single-variable study in [`generative-media-atlas/references/adult-work.md`](../../generative-media-atlas/references/adult-work.md) §3, which also warns that stacking an NSFW LoRA onto such a merge **double-applies** what is already baked in.
+
 **Merging as an alternative to stacking.** Where several capability LoRAs are being combined, published merge tooling folds them into a single "meta-LoRA" by **rank concatenation** — concatenating the A and B matrices with each contribution scaled by `√(weight × alpha/rank)` `[community — published merge scripts; re-verify]`. Worth knowing two things if you go there: rank adds up, so the merged file is the sum of its parts, and **naming conventions differ** — Kohya-style `.lora_down.weight` / `.lora_up.weight` / `.alpha` versus PEFT-style `.lora_A.weight` / `.lora_B.weight`. A merge script that assumes the wrong one silently finds no modules to merge, reporting success while changing nothing.
+
+### The gap this framing predicts, and nobody has closed
+
+If the limit is data, then whatever the base saw least of is where it fails — and there is a reported instance of that nothing in this suite answers. Across SDXL, [`z-image`](../../z-image/) and [`krea-2`](../../krea-2/) alike, scenes specifying **two women** come back with distorted anatomy and **intrusive male anatomy that was never prompted** `[community — ricovelez; unanswered]`.
+
+The mechanism is the one §1 opened with rather than a new one: the adult data these bases absorbed is overwhelmingly heteronormative, so a same-sex scene sits far enough out of distribution that the model resolves it by falling back on what it saw most. That is why negatives disappoint here — they bias sampling away from a token, which is a weak lever against a prior the model is reaching for structurally.
+
+No verified fix surfaced, and nothing in this suite currently addresses it `[flagged — open gap]`. The two directions with the most behind them are **base choice** — the booru-tagged SDXL finetunes carry explicit act and configuration tags, so you can name the scene rather than hope for it — and **composing instead of generating**: per-face detailer passes or regional conditioning ([`dataset-and-captioning.md`](dataset-and-captioning.md) §5) resolve each figure separately and never ask one sampling pass to hold the whole frame. Training it in is the in-principle answer and inherits the scale above: this is a capability LoRA, not a character one.
 
 ---
 
@@ -53,22 +70,25 @@ That layering is the normal production pattern, and it is why the good-citizen a
 
 Base choice dominates every other decision here — more than rank, more than steps, more than captioning.
 
-**The measurable proxy: the share of a base's published LoRAs that are adult-flagged.** Sampled from Civitai's model API, 2026-08-13, ~100 LoRAs per base `[community — Civitai models API, 2026-08-13]`:
+**The usual proxy is the share of a base's published LoRAs that are adult-flagged — and the two measurements of it disagree, close to inversely, on video.** `[contested]` Both are stated here because picking one silently would hide the more useful lesson, which is about the metric.
 
-| Family | Adult-flagged share | Position |
+| Census | Method | The ordering it produces |
 |---|---|---|
-| **Wan 2.2 I2V** | **90%** | The highest density in the suite by a wide margin |
-| **Wan 2.2 T2V** | **84%** | Active, mature ecosystem |
-| **MiniMax H3** | **62%** | 77 LoRAs within days of release. Corroborates "no meaningful refusal" |
-| **Krea 2** | **52%** | Well supported in practice |
-| **Z-Image** (Turbo and Base alike) | **46–47%** | Well supported, including anatomy-specific LoRAs |
-| **SDXL / Pony / Illustrious** | 29–34% | Lower *share*, far larger absolute ecosystem, and the purpose-built finetunes live here |
-| [`anima`](../../anima/) | 29% | Rising fast — the most common base in a newest-first pull, and `nsfw`/`explicit` are trained rating tags rather than something you fight the model for |
-| **Flux** | 28% | Despite BFL **filtering the pre-training data** — the community-finetune route works |
-| [`ltx-2-5`](../../ltx-2-5/) | — | **Licence, not capability.** Its incorporated acceptable-use policy prohibits sexually explicit content universally, local weights included |
-| **Ideogram 4** | — | Hard model-level filter, in the weights |
+| **2026-08-13** — this file's original figures | ~100 LoRAs per base from Civitai's model API | Wan 2.2 I2V **90%**, Wan 2.2 T2V 84%, MiniMax H3 62%, Krea 2 52%, Z-Image 46–47%, SDXL/Pony/Illustrious 29–34%, Anima 29%, Flux 28% |
+| **2026-08-23** — re-census `[official — Civitai /api/v1/models]` | 600 most-downloaded LoRAs per base, testing the X and XXX bits of the `nsfwLevel` bitmask (1 PG · 2 PG-13 · 4 R · 8 X · 16 XXX) | Pony **67%**, Illustrious 56%, Anima 52%, NoobAI 50%, Krea 2 46%, Z-Image Turbo 45%, Flux.1 dev 37%, SDXL 1.0 31%, Wan 2.2 T2V/I2V 23%/22%, LTX 2.3 14% |
 
-The percentages measure *ecosystem tilt*, not capability ceiling — SDXL's 31% of a much larger library is more absolute material than Wan's 90% of a newer one. What they do establish is that **adult work is the dominant published use of open video models**, which is worth knowing before assuming image-side craft transfers.
+**The most likely reconciliation covers half the gap, and knowing which half matters.** `nsfwLevel` is a bitmask over a model's **preview images**, not over what the LoRA does. A video LoRA's preview is routinely a tame first frame or a motion demo, so an explicit video LoRA can score PG — the metric undercounts video systematically. That accounts for Wan falling from the top of one table to the bottom of the other. It does **not** account for the image half, where Flux rises 28% → 37% and the booru finetunes climb into the fifties and sixties; there the samples differ in what they select for (an unspecified ~100 versus the 600 most-downloaded, and popularity correlates with rating). **Treat neither ordering as settled**, and in particular do not read the video rows of either table as a capability ranking.
+
+**The trap for whoever measures next: the API's `nsfw` boolean is dead.** It returns `false` for every model sampled, including ones whose previews are XXX, so any share built on it is wrong — which is one candidate explanation for the 2026-08-13 numbers. `[flagged — re-verify]` Test bits instead: explicit is `level & (8|16)`, mature is `level & (4|8|16)`; `nsfwLevel > 1` counts PG-13 as adult and inflates everything.
+
+**Reproduce rather than trust.** [`generative-media-atlas`](../../generative-media-atlas/) carries `scripts/civitai_census.py` — `python scripts/civitai_census.py --adult` re-runs the 2026-08-23 measurement exactly — and the full 17-base table with its caveats lives in [`generative-media-atlas/references/adult-work.md`](../../generative-media-atlas/references/adult-work.md) §1. **That file owns model choice; this one owns what to do once you have chosen**, so re-measure there and come back here.
+
+**What survives the disagreement**, because it does not rest on the metric at all:
+
+- **Adult work is a dominant published use of open video models.** The community evidence is direct rather than inferred — r/unstable_diffusion's top-of-month is dominated by video `[community — r/unstable_diffusion sweep, 2026-08-23]` — which is worth knowing before assuming image-side craft transfers.
+- **Either table measures ecosystem tilt, never capability ceiling.** SDXL 1.0's ~31% of a vastly larger library is more absolute material than any newer base's 60%.
+- **One family is ruled out for a reason that is not capability**: [`ltx-2-5`](../../ltx-2-5/), by its incorporated acceptable-use policy, which prohibits sexually explicit content universally, local weights included. That is categorical — no technical workaround changes a licence term.
+- **[`ideogram-4`](../../ideogram-4/) used to sit in that sentence and no longer belongs there**, because a filter and a licence are not the same shape of obstacle. Its model-level filter is real and officially documented, but it is **porous rather than categorical** — see the row below. Grouping a technical barrier with a legal one taught the wrong lesson about both.
 
 What each family actually gives you:
 
@@ -76,10 +96,12 @@ What each family actually gives you:
 |---|---|---|
 | **SDXL ecosystem** | **Deepest by far.** Purpose-built finetunes with mature tooling and enormous existing LoRA libraries | See below |
 | **Flux** | BFL **filtered the pre-training data** for NSFW and unlawful content. Capability comes from community finetunes rather than the base | Community NSFW finetunes; verify licence and lineage |
-| **Ideogram 4** | Hard **model-level** filter that returns a blocked-image response. Not a training problem — the filter is in the weights | Route elsewhere entirely |
+| **Ideogram 4** | **Harder, not closed.** A model-level filter returns a blocked-image response, and it is in the weights rather than in a wrapper you can remove `[official — ideogram-oss/ideogram4]` — so it is not a training problem. But adult output *has* been posted from the open weights with community style LoRAs loaded at 0.4 and a JSON caption `[community — Ashamed-Ad7403; single report]`, and **~26% of its 34 published LoRAs are now explicit**, against zero flagged on 2026-08-13 `[community — Civitai census, 2026-08-23]`. Nobody has shown *why* it gets through — whether a LoRA displaces the filtered behaviour or the reports simply sit in the filter's false-negative margin `[flagged — re-verify]` | Route elsewhere for **reliable** adult work; plan for the gray screen firing. Treat it as unsettled, not impossible — and note the non-commercial weights licence constrains this path regardless. Filter evidence: [`ideogram-4`](../../ideogram-4/references/setup-and-workflows.md) §5 |
 | **MiniMax H3** | Community reports no meaningful refusal; failures present as data gaps and reportedly improve with reference images | Ref2VA reference conditioning before training |
-| **Wan 2.2** | Active ecosystem — 40+ community LoRAs across T2V and I2V, AI-Toolkit support on consumer GPUs | Remember the two-expert rule |
-| **Z-Image, Krea 2** | **Not well documented either way.** Test before committing a run `[flagged — re-verify]` | — |
+| **Wan 2.2** | Active ecosystem — 40+ community LoRAs across T2V and I2V, AI-Toolkit support on consumer GPUs. Its low share in the 2026-08-23 census is the preview-image artefact above, not a verdict | Remember the two-expert rule |
+| [`krea-2`](../../krea-2/) | **Well supported, and the image side's centre of gravity.** Both censuses agree (52% / 46%), and the practice matches: purpose-built adult checkpoints rather than base-plus-LoRA | An NSFW checkpoint over the stock base; Identity Edit for the character |
+| [`z-image`](../../z-image/) | **Well supported**, and both censuses agree (46–47% / 45% Turbo). Anatomy-specific LoRAs exist, so the coverage is not incidental | Train on Base, run on Turbo — that skill's rule, unchanged here |
+| [`anima`](../../anima/) | Rising fast, and unusual in that `nsfw` / `explicit` are **trained rating tags** rather than something you fight the model for | Tag the rating; do not reach for a capability LoRA first |
 
 ### The SDXL finetunes
 
@@ -124,6 +146,8 @@ So:
 | Proportions drift with pose | Narrow pose coverage in the dataset | Broaden pose and shot-size coverage |
 | Output fights the prompt at high LoRA strength | Over-trained, or rank too high for the dataset | Earlier checkpoint; lower strength; reduce rank |
 | Hands degrade specifically | General weakness across this model class, compounded by the resolution the hands occupy | Detailer pass; inpaint; not a training fix |
+| Likeness drops the moment an anatomy LoRA is loaded under it | Two adapters writing the same attention weights, and the broad one wins — see §1 | No settled recipe — test the stack before committing to the base |
+| Two-woman scene grows male anatomy nobody prompted | Heteronormative training distribution; the model falls back on its prior, and negatives are the wrong-shaped lever — see §1 | Base with explicit configuration tags; or compose per figure rather than per frame — no verified fix |
 
 **Detailer stages carry more weight here than in SFW work**, because the failures cluster in small regions — faces at distance, hands, fine anatomy. The production ladder in [`image-production-workflows`](../../image-production-workflows/) applies unchanged; the difference is that skipping the detail stage costs more.
 

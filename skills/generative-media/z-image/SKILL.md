@@ -10,15 +10,16 @@ Z-Image is Alibaba Tongyi Lab's open-weights image generation family — a **6B-
 
 ## Variant selector
 
-| Variant | Distilled | Steps | CFG | Negatives | VRAM | Licence | Use when… |
+| Variant | Distilled | Steps | CFG | Negatives | VRAM ³ | Licence | Use when… |
 |---|---|---|---|---|---|---|---|
-| **Z-Image** | No | 25–50 | 3.0–5.0 | Yes | not published | Apache-2.0 | final renders, LoRA training base, fine-grained negative control |
-| **Z-Image-Turbo** | Yes (Decoupled-DMD) | 8 effective ¹ | 1.0 ² | No ² | ≤16 GB | Apache-2.0 | rapid iteration, dataset generation, drafting |
+| **Z-Image** | No | 25–50 | 3.0–5.0 | Yes | ~16 GB comfortable ³ | Apache-2.0 | final renders, LoRA training base, fine-grained negative control |
+| **Z-Image-Turbo** | Yes (Decoupled-DMD) | 8 effective ¹ | 1.0 ² | No ² | ~16 GB comfortable; 6 GB workable ³ | Apache-2.0 | rapid iteration, dataset generation, drafting |
 | **Z-Image-Edit** | — | — | — | — | — | Apache-2.0 | instruction-based image editing — *announced, not yet released* `[pending release]` |
 | **Z-Image-Omni-Base** | — | — | — | — | — | Apache-2.0 | generation + editing in one model — *announced, not yet released* `[pending release]` |
 
 > ¹ **ComfyUI KSampler: 8 steps** (sampler `res_multistep`, scheduler `simple` per the official template). **diffusers:** `num_inference_steps=9` → "this actually results in 8 DiT forwards" (official model card).
 > ² **CFG 1.0 in a ComfyUI KSampler *is* guidance-off** — it equals `guidance_scale=0` in diffusers, and it's the value in the official template. Never type CFG 0.0 into a KSampler (it outputs the unconditional and ignores the prompt). Negatives are inert here; zero them with `ConditioningZeroOut`. Raising CFG to 1.2–1.5 re-introduces weak negative subtraction at ~2× cost and over-saturation — a community workaround rather than a supported feature `[contested]`; use only for stubborn artefacts.
+> ³ **These are comfort bands, not floors.** Tongyi-MAI publishes no minimum for either variant. 16 GB is where the bf16 DiT and the Qwen-3 encoder both stay resident; below it ComfyUI shuttles weights to system RAM between passes, which costs time rather than the ability to render. Official int8 DiT builds (~6.2 GB) ship for **base as well as Turbo**, and Turbo is reported running end-to-end on an **RTX 2060** `[community — Royal_Carpenter_1338]`. Read a small card as "pull a quantised build and expect it slower", not "unsupported" — see **Setup & ecosystem**.
 
 **Default workflow:** Draft in Turbo (8 steps, CFG 1.0) to find composition and seed. Re-render keepers in Z-Image (40 steps, CFG 4.0) for the final asset `[community — re-verify]`. Same prompt and seed — Z-Image will reinterpret slightly; that's expected. For layered production pipelines, see **Production pipelines & mixing models** below.
 
@@ -64,9 +65,9 @@ The text encoder and VAE are common to every variant — download once. Official
 **Stock node settings** (from the official template): set the **CLIPLoader type to `lumina2`**, use **`EmptySD3LatentImage`** for the latent (not the legacy `EmptyLatentImage`), and put a **`ModelSamplingAuraFlow` node (shift 3)** on the model path before the sampler.
 
 **Low-VRAM / quantisation:**
-- **Official** (in the Comfy-Org repos): NVFP4 DiT `z_image_turbo_nvfp4.safetensors` (~4.5 GB, **Turbo only**); quantised encoders `qwen_3_4b_fp8_mixed` (~5.6 GB) and `qwen_3_4b_fp4_mixed` (~3.5 GB).
+- **Official** (in the Comfy-Org repos): int8 DiT `z_image_int8_convrot.safetensors` / `z_image_turbo_int8_convrot.safetensors` (~6.2 GB each — this build exists for **base as well as Turbo**, and ships with its own ComfyUI templates `image_z_image_int8` and `image_z_image_turbo_int8`); NVFP4 DiT `z_image_turbo_nvfp4.safetensors` (~4.5 GB, **Turbo only**); quantised encoders `qwen_3_4b_fp8_mixed` (~5.6 GB) and `qwen_3_4b_fp4_mixed` (~3.5 GB).
 - **Community** (requants, not official): fp8 DiT (e.g. Kijai's `fp8_scaled_e4m3fn`) and GGUF Q2–Q8 (e.g. unsloth). GGUF requires the `ComfyUI-GGUF` custom node (city96). There is no official fp8 DiT.
-- Quantised builds run on 6–8 GB cards `[community — re-verify]`, but no official sub-16 GB threshold is published.
+- **The 16 GB number is a comfort band, not a floor**, and nothing official states a floor. What 16 GB buys is the bf16 DiT resident alongside the encoder with no offload; under it ComfyUI pages weights in and out per pass, so you lose throughput rather than capability. Quantised builds sit comfortably on 6–8 GB `[community — re-verify]`, and Turbo is reported working on an **RTX 2060** `[community — Royal_Carpenter_1338]` — so treat a small card as a reason to pull an int8 or NVFP4 DiT plus a quantised encoder, not as a reason to skip the model. Base is the harsher variant to run this way for a reason unrelated to size: it wants 25–50 steps where Turbo wants 8, so whatever offload penalty you pay is paid several times over per image.
 
 **diffusers API:** `from diffusers import ZImagePipeline`. Shipped in **stable diffusers ≥ 0.36** (`pip install -U diffusers`) — the model card's `pip install git+…` line is launch-day legacy from before 0.36. Latent-space `ZImageImg2ImgPipeline` and `ZImageInpaintPipeline` also exist; these run on the released base/Turbo weights and are **not** the (still-unreleased) instruction-based Z-Image-Edit.
 
@@ -99,7 +100,7 @@ Decoupled-DMD distillation removes CFG dependency. Fastest path from prompt to d
 - **Resolution:** 1024×1024
 - **Negative prompts:** Do not use — phrase all constraints positively inside the prompt
 - **Seed diversity:** Lower than Z-Image; Turbo converges toward the strongest mode
-- **LoRAs:** start ~0.7–0.8 and sweep 0.5–1.2 — there is **no hard 0.8 cap**; style LoRAs often want 0.3–0.5, character 0.7–1.0. These are per-LoRA tunings read off named authors' cards, not a model-wide ceiling `[community — per-LoRA, not a hard rule]` — so read the card of the LoRA you actually loaded. If a LoRA "does almost nothing," update ComfyUI first — diffusers-format Z-Image LoRAs silently lose their attention weights on builds before core PR #12717. Full loading/stacking/cross-compat guidance: `references/setup-and-workflows.md §6`. Training: `references/lora-training.md`
+- **LoRAs:** start ~0.7–0.8 and sweep 0.5–1.2 — there is **no hard 0.8 cap**; style LoRAs often want 0.3–0.5, character 0.7–1.0. These are per-LoRA tunings read off named authors' cards, not a model-wide ceiling `[community — per-LoRA, not a hard rule]` — so read the card of the LoRA you actually loaded. If a LoRA "does almost nothing," update ComfyUI first — diffusers-format Z-Image LoRAs silently lose their attention weights on builds before core PR #12717. **Check which variant a LoRA you downloaded was trained on before wiring it in**: the published ecosystem is lopsided — ~2,190 LoRAs tagged `ZImageTurbo` against ~670 on base `[community — Civitai census, Aug 2026]` — so the odds are it is a Turbo LoRA even when your graph is a base one. The shared S3-DiT means it loads either way without error, which is exactly what makes the mismatch easy to miss. Full loading/stacking/cross-compat guidance: `references/setup-and-workflows.md §6`. Training: `references/lora-training.md`
 
 ---
 
@@ -119,6 +120,8 @@ For production results, don't render once — **layer passes: ZIB builds structu
 Final resolution ≈ **base × 1.7 × 2**. Keep the **same seed across passes** for consistency.
 
 The ×1.7 and ×2 multipliers and the ~0.23 tiled-upscale denoise come from a widely-shared community layered pipeline `[community — layered ZIB+ZIT graphs; convergent]` whose graphs often run **custom Z-Image finetunes**. The *architecture* — generate small, upscale, refine, detail — transfers to stock weights unchanged; the exact numbers are well-tuned starting points to nudge, not stock requirements. Sourcing and the per-stage table: `references/setup-and-workflows.md §3`.
+
+**The ladder also runs backwards.** Drafting in ZIT and finishing with a low-denoise **base** pass — the ComfyUI Z-Image upscaling template with the base DiT loaded where it normally loads Turbo — is a reported alternative that buys texture with compute `[community — Royal_Carpenter_1338]`. The undistilled weights carry the texture diversity Turbo's 8-step trajectory flattens, and real CFG and real negatives come back with them. It is a finishing pass on keepers rather than a default, because the expensive model is now doing the expensive high-resolution passes — the inverse of why the ladder above is ordered as it is. Settings, the cost, and why it suits a small card: `references/setup-and-workflows.md §3`.
 
 **Character LoRA tip:** generate the base from a *detailed prompt* with **no** character LoRA, then swap the LoRA in at the FaceDetailer stage (match its prompt to the image, or you get the LoRA's generic default face). LoRA on ZIB → structure; on ZIT → detail; load on **both** for maximum likeness `[community — MyAIForce; strong]`.
 
@@ -213,7 +216,7 @@ Choose the model for the job — defaults like realism direction and prompting d
 
 **Release timeline:** Z-Image-Turbo shipped 26 Nov 2025; the undistilled Z-Image base 27 Jan 2026. This is a fast-moving family — re-verify volatile specifics (quant filenames, VRAM numbers, ComfyUI template details, LoRA tooling) before relying on them.
 
-**VRAM for Z-Image (undistilled):** Tongyi-MAI has not published an inference VRAM figure. At 6B parameters in bfloat16 plus the shared encoder and VAE, budget at least 16 GB; a high-VRAM card (24 GB+) gives comfortable headroom for larger batches or resolutions. That floor is inferred from the parameter count, not measured or published `[flagged — re-verify]`.
+**VRAM for Z-Image (undistilled):** Tongyi-MAI has not published an inference VRAM figure. At 6B parameters in bfloat16 plus the shared encoder and VAE, **16 GB is the comfort band** — the point at which the weights stay resident and no offload tax is paid; 24 GB+ adds headroom for larger batches or resolutions. That number is inferred from the parameter count, not measured or published `[flagged — re-verify]`, and it is **not a floor**: an official int8 DiT (~6.2 GB) with its own ComfyUI template ships for base as well as Turbo, and Turbo is reported running on an RTX 2060 `[community — Royal_Carpenter_1338]`. Below the band you lose speed, not the model.
 
 ---
 
@@ -228,7 +231,7 @@ This skill holds two kinds of claim to two different standards, because they fai
 Contested and unresolved points, all greppable as markers:
 - **Turbo negatives:** Tongyi-MAI states negatives are inert at the guidance-free setting (CFG 1.0 KSampler / `guidance_scale=0`); ComfyUI users report CFG 1.2–1.5 re-introduces weak negative subtraction. The official guidance is the fact; CFG > 1 on Turbo is a community workaround, not a supported feature `[contested]`.
 - **LoRA cross-compat & weights:** loads-on-either-variant is a fact (shared S3-DiT); *clean transfer* and the exact per-type weights are contested craft `[contested]` — see `references/setup-and-workflows.md §6`.
-- **Base VRAM:** the "budget 16 GB" figure above is inferred from the parameter count — Tongyi-MAI publishes none `[flagged — re-verify]`.
+- **Base VRAM:** the 16 GB figure above is inferred from the parameter count, not measured — Tongyi-MAI publishes none `[flagged — re-verify]`. Read it as a comfort band rather than a requirement: every *measured* data point is a community one and they run lower, down to quantised Turbo on an RTX 2060 `[community — Royal_Carpenter_1338]`.
 - **Two further open flags live in the references**, both greppable there: no DiT block map exists for block-weighted LoRA application (`references/characters.md §6`), and the style-LoRA rank ceiling is agreed in direction but not in value (`references/lora-training.md §2.1`).
 
 **Facts dated 2026-08-22.** What moves fastest in this family is the *plumbing*, not the craft — quant filenames, ComfyUI template contents, the AI-Toolkit Z-Image config, and the Fun ControlNet file names have all changed inside a release cycle before. Re-verify those against their repos before relying on them, regardless of who said it; the pipeline shapes and prompting craft in the references age far more slowly.

@@ -97,6 +97,8 @@ Wan 2.2 has an **active adult LoRA ecosystem** — 40+ community LoRAs across T2
 
 **Automated captioners fail on adult footage**, so the community captions manually. On a video dataset — where frame count already makes labelling the expensive part — this is a serious cost multiplier and the strongest practical argument for **single-frame training** whenever the target is appearance rather than motion. The same curated stills, ordinary image captioning, a fraction of the labour.
 
+**Check whether a merge has already done it.** Much of this ecosystem also ships as merged checkpoints with the adult LoRAs baked in, and where one covers your subject it is often the better answer than a LoRA — including for failures a LoRA cannot fix, because a LoRA cannot give the base a prior it does not have (SKILL.md § *When nothing you change moves the result*). If you go that route, **do not also load the LoRA**: the merge already carries its delta, and applying it twice puts the weights off the distribution the merge was tuned on. Settings and traps in [`setup-and-workflows.md §4a`](setup-and-workflows.md#4a-running-a-community-merge).
+
 **The two-expert rule still applies.** Appearance lives in the low-noise expert, motion and pose in the high-noise one — so an appearance-only LoRA trained on stills genuinely can skip the high-noise half, while anything about how a body moves cannot. That is the same contested question as §1, and adult work is where it most often comes up.
 
 ## 5. Evaluation

@@ -1,6 +1,6 @@
 # Z-Image Setup & Multi-Stage Workflows
 
-How to build layered rendering pipelines that get production-quality results — generate small, refine, then upscale in passes, using **ZIB for structure and ZIT for detail** — plus everything that hangs off the graph: node settings, **using and stacking LoRAs**, ControlNet, identity methods, and handoffs to other model families. What this file does *not* own: the one-time install and file layout (that is `SKILL.md § Setup & ecosystem`, kept there because you read it once), and **making** a LoRA rather than loading one (`references/lora-training.md`).
+How to build layered rendering pipelines that get production-quality results — generate small, refine, then upscale in passes, using **ZIB for structure and ZIT for detail** (and the reverse ladder for when you want it the other way round) — plus everything that hangs off the graph: node settings, **using and stacking LoRAs**, ControlNet, identity methods, and handoffs to other model families. What this file does *not* own: the one-time install and file layout (that is `SKILL.md § Setup & ecosystem`, kept there because you read it once), and **making** a LoRA rather than loading one (`references/lora-training.md`).
 
 The settings here come from two sources, kept labelled because they are not interchangeable:
 - **Official** — the stock ComfyUI Z-Image-Turbo template (`Comfy-Org/workflow_templates`).
@@ -12,7 +12,7 @@ That split is the reason this file is worth reading in order rather than greppin
 
 1. The minimal build (start here)
 2. The layered pipeline (the full build)
-3. Per-stage settings (community layered pipeline)
+3. Per-stage settings (community layered pipeline) — and the reverse ZIT→ZIB ladder
 4. Resolution strategy — generate small, upscale in layers
 5. Universal node settings
 6. Using LoRAs — wiring, the QKV gotcha, weights, stacking, ZIB↔ZIT cross-compat, the detailer "face-swap" method
@@ -79,6 +79,20 @@ Verified from a representative community ZIB+ZIT graph. CFG values are **ComfyUI
 **Detailer/refine denoise rule:** raise denoise up to ~**0.54** for more prompt- and LoRA-adherence; lower it to preserve the original. Keep the **tiled upscale denoise low (~0.2–0.25)** — high denoise there invents new content per tile.
 
 > The 1st-gen → 2nd-gen handoff in some community graphs uses `return_with_leftover_noise` + `add_noise` across mismatched step schedules. That is one author's hires-fix trick, not a canonical requirement — a clean "decode → latent-upscale → re-noise → refine" chain works fine.
+
+### The reverse ladder: ZIT draft → ZIB finish (Z-Image-SPECIFIC)
+
+The ladder above runs base-first because the expensive high-resolution passes are exactly where you want the *cheap* model. Running it the other way round is also a live pattern: draft in **ZIT**, then push the keepers back through **Z-Image base** as the refinement pass. One low-VRAM report does this with the **ComfyUI Z-Image upscaling node template** — in practice, pointing the template's Load Diffusion Model node at the base DiT instead of the Turbo one — and describes the result as more detail and more realism `[community — Royal_Carpenter_1338]`.
+
+The mechanism is the distillation trade run in reverse. Decoupled-DMD buys Turbo its 8 steps by collapsing toward the strongest mode; that is the same property the variant selector credits base with *not* having ("best texture diversity"). The undistilled weights still carry the full training signal, and they sample with real CFG and real negatives. A **low-denoise** base pass over a Turbo render therefore re-renders skin, fabric and hair micro-texture that Turbo's short trajectory flattened, while leaving the composition Turbo already settled alone — the same bargain §11 strikes when ZIT finishes *another family's* render, only pointed inward.
+
+What it costs, and when that is worth paying:
+
+- **Compute, in the place the base-first ladder deliberately avoids.** The base pass runs 25–50 steps against ZIT's 8, and it runs them at or near output resolution. Treat it as a finishing pass on selected frames — the same logic that makes stage 5 above a face crop rather than a full re-render.
+- **Negatives come back on.** This is a real-CFG pass, so wire an actual negative prompt into it rather than carrying through the `ConditioningZeroOut` the Turbo stages use (§5). Forgetting is not an error, just a wasted pass.
+- **It is kinder to a small card than it looks.** It is a single img2img pass, not a tiled sweep, so peak VRAM is one latent plus the model — which is how the report above runs it on hardware that could not host the full layered graph. Pair it with the int8 base DiT if the bf16 one will not fit.
+
+Starting settings — derived from the official base template plus the refine-denoise rule above, **not** published by the report `[flagged — re-verify]`: `res_multistep` / `simple`, **25–30 steps**, **CFG 3.0–4.0**, **denoise 0.25–0.40**, `ModelSamplingAuraFlow` shift 3, a real negative prompt, same seed as the draft. Below ~0.2 the pass mostly adds noise texture; above ~0.5 base begins re-composing and you lose the draft you were trying to keep.
 
 ---
 
@@ -166,6 +180,8 @@ Z-Image's encoder is the Qwen-3 LLM, not a CLIP tag-matcher, so a trigger genera
 ### Ecosystem (early–mid 2026)
 
 An active Civitai/HF ecosystem tags its uploads **`ZImageTurbo`**: **style** (e.g. "Technically Color Z," trigger `t3chnic4lly`), **realism enhancers** (e.g. "Realistic Snapshot"), and **character/concept** LoRAs. Most are trained with the **Ostris AI-Toolkit** (which ships a dedicated Z-Image-Turbo training adapter), which is why so many ship in diffusers format — tying straight back to the QKV gotcha above. Community "apply any LoRA" ComfyUI workflows exist (Civitai 2194203, Next Diffusion, RunComfy) `[community — Civitai, Ostris HF]`.
+
+**The published ecosystem is lopsidedly Turbo.** A Civitai census on 2026-08-23 counted **2,191+ LoRAs tagged `ZImageTurbo` against 671 tagged `ZImageBase`** `[community — Civitai census, Aug 2026]` — better than 3 to 1. That is the doctrine above surfacing in the tags rather than contradicting it: authors train on base and *deploy* on Turbo, and what they tag is the variant they expect you to generate with, so a tag records intended runtime rather than training variant. Two things follow. The cross-compat question above is not an edge case for anyone loading a downloaded LoRA — it is the default case, so read the author's card for what it was trained on before reaching for a strength number. And a card that says only `ZImageTurbo` leaves open whether it was in fact trained there: if it renders soft at 8 steps, the distillation-trajectory failure above is the first suspect, ahead of your prompt.
 
 ---
 

@@ -4,6 +4,7 @@
 2. [The 5B graph](#2-the-5b-graph)
 3. [The S2V graph](#3-the-s2v-graph)
 4. [Quantisation, VRAM and offload](#4-quantisation-vram-and-offload)
+   - [4a. Running a community merge](#4a-running-a-community-merge)
 5. [The production ladder](#5-the-production-ladder)
 6. [Longer pieces: stitching and drift](#6-longer-pieces-stitching-and-drift)
 7. [diffusers](#7-diffusers)
@@ -111,6 +112,43 @@ Clip length follows the audio. S2V **consumes** audio for lip-sync; it does not 
 **On rented GPUs**, [`comfyui-on-runpod`](../../comfyui-on-runpod/) owns the volume contract and cost guards. Wan-specific: the 14B needs **both expert files on the volume** — a half-populated volume fails in a way that reads like a wiring error rather than a missing file. Pull them on a CPU pod rather than a GPU one, and check your GPU exists in the volume's datacenter before planning around it.
 
 Two experts means **two model loads**. ComfyUI swaps them across the sampler boundary rather than holding both resident, so peak VRAM tracks one expert, but the swap costs wall-clock on every generation. On constrained cards this swap, not the compute, is often what makes 14B feel slow. Block-swap and offload settings in the wrapper node packs trade more of this if you need it.
+
+---
+
+## 4a. Running a community merge
+
+Merges are a large part of how Wan 2.2 is actually run — the licence permits them, and the ones worth using are tuned for something the base checkpoint is weak at (low-step speed, motion smoothness, a concept the base has no prior for). The cost is that **a merge's settings are its own**, and none of the ways of getting them wrong throws an error. SKILL.md § *Community merges, and why their settings contradict the templates* carries the three traps; this section carries one merge's full working configuration, verbatim from its published workflow, as a worked example of what a merge's numbers look like when they diverge `[community — RedMimicStudios]`.
+
+```
+model    Wan 2.2 I2V, 10-step NSFW fp8 merge
+steps    10   (High 0–5 / Low 5–10)
+cfg      2.0 HighNoise / 1.0 LowNoise     ← asymmetric: the merge is CFG-distilled
+sampler  uni_pc / normal                  ← not euler/simple, and the author reports it mattered
+shift    8.0 both stages
+LoRA     none                             ← the NSFW LoRAs are merged in; stacking double-applies
+output   1008×576, 49 frames, 16 fps
+cost     ~41 min on a 3060 12 GB — fp8, 13.3 GB per stage, heavy offload
+```
+
+Two of those — the asymmetric CFG split and the `uni_pc` choice — **were in the workflow JSON and not in its description text**. That is the general lesson for merges: the description is marketing copy for the merge, the JSON is the configuration it was validated at. Load the JSON and read `widgets_values` the same way this file reads the official templates.
+
+Note the resolution and length: 1008×576 is neither of Wan's supported bands and 49 frames is not 81. A merge tuned at a specific resolution and clip length is tuned at *that* resolution and clip length; the base model's 81 @ 16 fps and 480p/720p bands do not carry over automatically.
+
+### Choosing between merges by measurement
+
+The same study picked between three checkpoints on **edge density, first frame against last** — a proxy for how much high-frequency detail the clip loses as it plays. It is cheap to compute (an edge filter over frame 0 and frame N, compare the mean), it needs no reference, and unlike watching the clip it distinguishes the two ways a video degrades:
+
+| Checkpoint | Edge density, first → last | Result |
+|---|---|---|
+| Wan 2.2 Q4_K_M | **−10.1%** | anatomy broken |
+| a "smooth motion" merge | **−27.3%** | anatomy fine, linework dissolved |
+| Wan 2.2 I2V 10-step NSFW fp8 merge | **−3.2%** | both fine |
+
+The two failure modes are independent, which is the point of measuring rather than judging: the Q4_K_M run *held* most of its detail and still broke anatomy, and the smooth merge got anatomy right while dissolving the linework. A single "does it look good" verdict collapses them; the number separates them.
+
+**It also rules out repairs.** ESRGAN restoration on the −27.3% output moved it to **−28.2%** — i.e. nowhere. That is the measurable difference between *blurred* detail, which a restorer can sharpen, and *absent* detail, which it cannot invent: by the late frames there was nothing left to recover. Ruling out a post-process fix by measurement costs one number; ruling it out by trying it costs a restore pass per candidate.
+
+The general version of this lesson — that seed-dominated failure means the base model, not the settings — is in SKILL.md § *When nothing you change moves the result*, and the suite-level write-up is in [`generative-media-atlas`](../../generative-media-atlas/references/adult-work.md).
 
 ---
 

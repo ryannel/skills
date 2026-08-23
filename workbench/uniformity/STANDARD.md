@@ -112,7 +112,7 @@ Every **model skill** carries these four unless the row's exemption applies. Fil
 | `prompting-guide.md` | Prompt anatomy in full, encoder-specific dialect, vocabulary tables (camera / lighting / motion / soundscape), text rendering, common mistakes, drop-in templates. | May be renamed when the model's prompt is not prose — see §7. |
 | `setup-and-workflows.md` | Node-by-node graph walkthrough, full quant/VRAM tables, the CLI, diffusers detail, **using and stacking LoRAs**, the multi-stage ladder with per-stage settings, mixed-model handoffs. | None. |
 | `lora-training.md` | **Making** a LoRA only: trainers, hyperparameters as attributed starting points, dataset architecture, captioning doctrine, style-LoRA specifics, adult/NSFW work, assessing fit, debugging. Links [`character-lora-training`](../character-lora-training/) for what transfers. | Omit only when no training path exists for the model at all; then say so in SKILL.md and route. |
-| `characters.md` | Identity across generations: path selection (adapter vs LoRA vs multi-reference), the dataset protocol, deployment (detailer-stage swap), multi-outfit/multi-character limits, failure modes, and honest routing to a better sibling. | Omit only when the model has no identity tooling *and* SKILL.md's suite table carries an explicit "Consistent characters → reach for X" row. `ideogram-4` qualifies. |
+| `characters.md` | Identity across generations: path selection (adapter vs LoRA vs multi-reference), the dataset protocol, deployment (detailer-stage swap), multi-outfit/multi-character limits, failure modes, and honest routing to a better sibling. | Omit only when the model's identity coverage has **no dataset, deployment or multi-subject dimension to document** *and* SKILL.md carries that coverage in full. `ideogram-4` qualifies. **CORRECTED 2026-08-23:** the clause previously read "no identity tooling *and* an explicit route-away row", which conflated absent tooling with absent capability — the error §7.4 now records. Absence of an adapter is not the test, because a model can reach identity by a workflow rather than a tool; the test is whether there is enough *structure* to fill the slot. |
 
 The **train vs. use** boundary is load-bearing and every skill already states it: *making* a LoRA is
 `lora-training.md`, *loading and stacking* one is `setup-and-workflows.md`. Keep the cross-pointer in
@@ -143,7 +143,7 @@ Anything else takes a descriptive kebab-case name. Do not invent a new name for 
 | `ideogram-4` | `api-and-webapp.md` | `api-and-hosted.md` | **Drift**, low priority (P3). |
 | `ideogram-4` | `self-hosting.md` | `setup-and-workflows.md` | **Drift.** Its contents are exactly the canonical slot — diffusers, the CLI, ComfyUI graph, quant/VRAM, gating. "Self-hosting" reads as a surface, which it is not; the surface pair is `api-and-hosted.md`. |
 | `ideogram-4` | `json-caption-guide.md` | *keep* | **Justified** — see §7. |
-| `ideogram-4` | *(no `characters.md`)* | *keep absent* | **Justified** — §4.1 exemption is met. |
+| `ideogram-4` | *(no `characters.md`)* | *keep absent* | **Justified**, on a re-based reason — see §7.4. The original ground ("no identity tooling") no longer holds; the surviving ground is that the slot's mandated sections have nothing to hold. |
 | `ideogram-4` | *(no `lora-training.md`)* | **add, or expand in place** | **Gap.** The exemption no longer applies: ai-toolkit and fal both ship trainers. 63 words inside `self-hosting.md §6` is not coverage. Either promote to a `lora-training.md` or expand the section and route to [`character-lora-training`](../character-lora-training/). |
 | `sdxl` | `checkpoints-and-loras.md` | *keep* | **Justified** — §7. |
 | `minimax-h3` | `licence-and-territory.md` | *keep* | **Justified** — §7. |
@@ -717,9 +717,27 @@ Each of these looks like drift and is not. An audit that "fixes" one has made th
    is searching for. **Keep** — and keep the `## Reference files` row leading with "Prompting —" so
    the slot is still legible.
 
-4. **`ideogram-4` has no `characters.md`.** No identity adapters, no edit variant, no published
-   character LoRAs. The spec explicitly names this as correct coverage. **Keep absent**, provided the
-   suite table's "Consistent characters" row routes explicitly (it does).
+4. **`ideogram-4` has no `characters.md`.** **Re-based 2026-08-23, and the old reasoning is worth
+   keeping visible because it was wrong in an instructive way.** This entry used to justify the
+   absence by the empty tool shelf — no identity adapters, no edit variant, no published character
+   LoRAs. All three remain true, and the conclusion drawn from them (that the model cannot hold a
+   character) was false: a published workflow gets identity out of it with no adapter and no
+   training, by locking a reference into half a wide canvas and asking for the same person twice
+   `[community — reality_comes, 402 pts]`. **Absent tooling is not absent capability**, and a survey
+   that inventories tools will keep producing that error, because tools are what get catalogued.
+
+   **The exemption still holds, on different ground:** §4.1's slot mandates path selection, a dataset
+   protocol, deployment via the detailer-stage swap, and multi-outfit/multi-character limits.
+   Ideogram 4 has one path, no demonstrated training protocol, **no detailer or refine stage at all**
+   — so the deployment section is structurally impossible, not merely thin — and nothing published on
+   multi-subject work. A file here would be one real section and four empty ones, which is the
+   failure §3 warns against. §5.4 also puts this content in SKILL.md regardless: the default
+   inference from the tool shelf is *incapable*, so it belongs in the file an agent loads unprompted.
+
+   **Revisit and create the file when any of these lands:** a second independent identity route (an
+   adapter, or a demonstrated character LoRA with a recipe); a multi-character or multi-outfit
+   extension of the canvas workflow; or a likeness comparison against PuLID or a trained LoRA that
+   needs a methodology write-up.
 
 5. **`sdxl/checkpoints-and-loras.md`.** SDXL's ecosystem *is* third-party checkpoints and dialects
    (Pony, Illustrious, NoobAI); no other model in the suite has an equivalent. That file has no
