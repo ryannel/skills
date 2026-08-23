@@ -285,7 +285,9 @@ before anything else.
    single highest-leverage step. Adult results come from purpose-built finetunes and merges, not
    from a base plus clever prompting — reported settings on the leading Krea 2 adult checkpoints are
    deliberately plain (Euler or ER SDE, 10 steps, guidance 1.0) precisely because the checkpoint is
-   doing the work.
+   doing the work. One boundary: checkpoint-first governs *scene generation*, not your training
+   base — a photoreal character LoRA destined for adult work still trains on the photoreal winner,
+   with the checkpoint re-entering at scene time ([`adult-work.md`](adult-work.md) §2).
 2. **Settle the licence against what you are shipping**, not against the content.
    [`wan-2-2`](../../wan-2-2/) is the only video path with no acceptable-use clause at all;
    [`minimax-h3`](../../minimax-h3/) is the capability leader **and excludes the US/EU/UK/KR**;

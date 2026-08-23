@@ -61,6 +61,9 @@ network_volume:            # interactive pod
   embeddings: models/embeddings/
   ipadapter: models/ipadapter/
   loras: models/loras/
+  sams: models/sams/                   # ← Impact Pack SAMLoader
+  ultralytics_bbox: models/ultralytics/bbox/   # ← Impact Pack detailer detectors
+  ultralytics_segm: models/ultralytics/segm/
   upscale_models: models/upscale_models/
   vae: models/vae/
   vae_approx: models/vae_approx/       # ← TAE preview decoders
@@ -97,7 +100,8 @@ One canonical tree, keyed by **which loader node reads it**. That is the only or
     │   ├── <base-b>/
     │   └── _shared/               ← works on more than one base
     ├── vae_approx/                ← TAE preview decoders        [only if you want previews]
-    ├── insightface/               ← FaceAnalysis / PuLID / InstantID    [if doing face work]
+    ├── ultralytics/  sams/        ← Impact Pack detailer detectors + SAM   [if detail-passing]
+    ├── insightface/               ← PuLID / InstantID identity nodes — NOT where detailers look
     ├── controlnet/                ← ControlNetLoader
     └── ipadapter/  clip_vision/  embeddings/  style_models/
 ```
@@ -107,6 +111,8 @@ One canonical tree, keyed by **which loader node reads it**. That is the only or
 **Fold LoRAs by base model.** `LoraLoader` shows the subfolder as a path prefix in the dropdown, so `z-image-turbo/amy_v9/…` tells you at a glance what it belongs to — and when you retire a base model, the folder tells you what dies with it.
 
 **But the folder is the human view, not the truth.** A LoRA trained on a base often loads on its distilled sibling at reduced strength. Record the real dependency in your manifest (`compat: [base, turbo]`) and let the folder be its *primary home*. A workflow builder can then check compatibility before wiring a LoRA and skip incompatible ones silently, so one scene definition renders correctly under either base.
+
+**Trainer pods mount this same volume**, and their artifacts get assigned homes too — a volume-resident HF cache at `/workspace/huggingface/`, datasets and run outputs beside (not inside) `models/`, and a size budget that accepts base weights living on the volume twice, in diffusers format for training and single-file for inference: see "Training on the same volume" in the reference below.
 
 Full layout rationale, placement table and LoRA conventions: **`references/volume-and-models.md`**.
 
@@ -181,6 +187,8 @@ Both run ComfyUI; they fail differently and bill very differently.
 - **Two timers on every interactive pod: `--stop-after` at the session ceiling, `--terminate-after` as the backstop.** Both live on `pod create` and do different things: stop *pauses* the pod — GPU billing ends, `runpodctl pod start <id>` resumes it in about a minute — while terminate *deletes* it. Neither alone is right for interactive work: stop-only leaves a paused pod billing its volume disk ($0.20/GB-mo) indefinitely, and terminate-only kills a live session mid-generation the moment the clock runs out. Set the stop a comfortable session length out (4–8 h) and the terminate a day out; hitting the ceiling then costs a one-minute resume instead of lost work. Two caveats that make the volume-as-contract rule matter here too: a stop **wipes the container disk** (the template re-initialises it on resume — anything you installed outside the volume is gone), and a resume is not guaranteed the same GPU if stock ran out, in which case you recreate from the volume in minutes. For unattended batch pods, terminate-only at expected runtime plus margin is right — there is nothing to resume. Verified against `runpodctl 2.3.0` on 2026-08-23.
 
   > **Use `runpodctl pod create`, not `runpodctl create pod`.** Both exist in `runpodctl` 2.3.0 and they are different command surfaces. The legacy verb-noun form (`create pod`) takes `--gpuType`/`--networkVolumeId`/`--imageName` and has **no cost guard at all** — no `--terminate-after`, no `--stop-after`. The modern noun-verb form (`pod create`) takes `--gpu-id`/`--network-volume-id`/`--image` and is the one that carries the guards. Reach for the wrong one and you will conclude the flag doesn't exist and create an unguarded pod. Verified against `runpodctl 2.3.0-be4ced4` on 2026-08-13. Check with `runpodctl pod create --help` before a first run on a new machine.
+  >
+  > **And the CLI version matters more than any version floor stated here can.** RunPod's own skills describe a priced `gpu list` (per-GPU `securePricePerHr`, a per-datacenter availability breakdown) that 2.3.0 does not emit — run `runpodctl update` to close the gap. Until then the working fallback is `runpodctl datacenter list --output json` for per-DC stock (`gpuAvailability.stockStatus` per DC) plus the public GraphQL `gpuTypes` query (`id`, `displayName`, `memoryInGb`, `securePrice`) for pricing — verified working 2026-08-23.
 - **Tear down in order:** remove the pod, *then* delete the volume if it was scratch. The volume can't be deleted while a pod holds it.
 - **Volume data survives pod removal** — only deleting the volume clears it. That's the point: you rebuild pods freely and never re-download.
 - **A billable session is not over until a burn check says it is.** End every session — agent-driven sessions especially — by listing what still exists and bills. One audited account had 37 leaked pods, every one created by agent tooling that skipped the guards; the guards above prevent the overnight bill, this check catches everything else. One call answers it:
@@ -286,11 +294,11 @@ This skill holds two kinds of claim to two different standards, because they fai
 
 **Craft — what actually makes this work day to day.** The volume-as-contract framing, foldering LoRAs by base with a separate compatibility graph, the manifest pattern, downloading on CPU pods, build-interactively-run-in-serverless, and the smoke-test order. **This is house craft distilled from that same single production ComfyUI-on-RunPod deployment**, not vendor documentation — it is what the vendor docs don't tell you because it only shows up after you've rebuilt a volume a few times. Stated with confidence; adapt the specifics to your stack.
 
-One thing deliberately **not** claimed: GPU recommendations and prices. They move constantly and are model-specific — `runpod-usage` owns the general question and each model skill owns its own requirement. Any price you see quoted anywhere in this suite is a stale snapshot; check `runpodctl gpu list`.
+One thing deliberately **not** claimed: GPU recommendations and prices. They move constantly and are model-specific — `runpod-usage` owns the general question and each model skill owns its own requirement. Any price you see quoted anywhere in this suite is a stale snapshot; check `runpodctl gpu list` — on a current CLI, per the version note above.
 
 **Nothing is currently contested or flagged.** The 2026-08-13 pass resolved every open finding (see `freshness.json`); the watchlist there tracks what could still drift.
 
-**Facts dated 2026-08-13; cost-guard timers and the burn-check query re-verified live 2026-08-23.** The `runpodctl` command surface and endpoint knobs are what moves fastest here — re-verify those before relying on them; the ComfyUI-side contract (`extra_model_paths.yaml` keys, loader directories) is stable.
+**Facts dated 2026-08-13; cost-guard timers and the burn-check query re-verified live 2026-08-23, and the Impact Pack detailer paths (`ultralytics_bbox`/`ultralytics_segm`/`sams`) and the priced-`gpu list` CLI fallback verified the same day.** The `runpodctl` command surface and endpoint knobs are what moves fastest here — re-verify those before relying on them; the ComfyUI-side contract (`extra_model_paths.yaml` keys, loader directories) is stable.
 
 ---
 

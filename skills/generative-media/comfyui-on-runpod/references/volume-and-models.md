@@ -7,7 +7,8 @@ Everything ComfyUI needs to find a model on the volume: the dual-root config, th
 3. [LoRA organisation and compatibility](#3-lora-organisation-and-compatibility)
 4. [The manifest schema](#4-the-manifest-schema)
 5. [Populating and rebuilding a volume](#5-populating-and-rebuilding-a-volume)
-6. [Custom nodes](#6-custom-nodes)
+6. [Training on the same volume](#6-training-on-the-same-volume)
+7. [Custom nodes](#7-custom-nodes)
 
 ---
 
@@ -40,7 +41,10 @@ network_volume:
   hypernetworks: models/hypernetworks/
   ipadapter: models/ipadapter/
   loras: models/loras/
+  sams: models/sams/
   style_models: models/style_models/
+  ultralytics_bbox: models/ultralytics/bbox/
+  ultralytics_segm: models/ultralytics/segm/
   upscale_models: models/upscale_models/
   vae: models/vae/
   vae_approx: models/vae_approx/
@@ -61,7 +65,10 @@ runpod_volume:
   hypernetworks: models/hypernetworks/
   ipadapter: models/ipadapter/
   loras: models/loras/
+  sams: models/sams/
   style_models: models/style_models/
+  ultralytics_bbox: models/ultralytics/bbox/
+  ultralytics_segm: models/ultralytics/segm/
   upscale_models: models/upscale_models/
   vae: models/vae/
   vae_approx: models/vae_approx/
@@ -95,6 +102,10 @@ Organised by the loader node that reads it — the only scheme that stays correc
 | CLIP Vision | `models/clip_vision/` | `CLIPVisionLoader` |
 | Textual inversion | `models/embeddings/` | referenced inline in prompts |
 | LoRA | `models/loras/<base>/` | `LoraLoader` / `LoraLoaderModelOnly` |
+| Detailer detector — `face_yolov8m.pt` | `models/ultralytics/bbox/` | Impact Pack `UltralyticsDetectorProvider` |
+| SAM segmenter — `sam_vit_b_01ec64.pth` | `models/sams/` | Impact Pack `SAMLoader` |
+
+**Detailer models have canonical files, and they are not optional if the pipeline detail-passes faces** — which the suite's standard deploy path does. The community-standard pair is `face_yolov8m.pt` (from `Bingsu/adetailer` on Hugging Face) in `models/ultralytics/bbox/` and `sam_vit_b_01ec64.pth` (the facebook SAM release, commonly mirrored) in `models/sams/` — community-sourced picks, but the ones every FaceDetailer tutorial and workflow assumes. The paths themselves are hard fact: Impact Pack resolves detectors through the `ultralytics_bbox` / `ultralytics_segm` / `sams` keys and nowhere else — verified 2026-08-23, when a deployment planned against this file's yaml had no home for them. **`insightface/` is not that home**: it serves PuLID/InstantID-class *identity* nodes (`FaceAnalysis`), and a detector placed there leaves the FaceDetailer dropdowns empty.
 
 **The `CLIPLoader` `type` argument is model-specific and not guessable** — `lumina2`, `wan`, `minimax`, `ltxv`, `flux2` and others all exist. It belongs in your manifest next to the filename, because a workflow builder needs it and getting it wrong produces a confusing encode failure rather than a missing-file error. Each model skill states its own.
 
@@ -159,7 +170,7 @@ models:
       - repo: …
         dest: /workspace/models/loras/z-image-turbo/amy_v9/
 
-custom_nodes:                           # pinned, see §6
+custom_nodes:                           # pinned, see §7
   - repo: …
     commit: …
 ```
@@ -208,7 +219,21 @@ Then any GPU pod or endpoint that mounts the volume is immediately correct.
 
 ---
 
-## 6. Custom nodes
+## 6. Training on the same volume
+
+The layout above is inference-shaped, but the same volume is where LoRA training happens — trainer pods mount it at `/workspace/` like any other pod, and giving trainer artifacts assigned homes is what keeps them from silting up `models/`:
+
+| Purpose | Directory | Why there |
+|---|---|---|
+| HF cache | `/workspace/huggingface/` | Set `HF_HOME=/workspace/huggingface` on trainer pods so downloads land on the volume, not the container disk — a stop wipes the container, and a cache on the volume means the next trainer pod skips the 20 GB re-download entirely |
+| Training data | `/workspace/datasets/<name>/` | One folder per dataset, named for the subject — reusable across runs and bases |
+| Run outputs | `/workspace/training/<run>/` | Checkpoints, samples and optimiser state per run; the *selected* checkpoint then gets promoted into `models/loras/<base>/` (§3), which stays a curated directory rather than a dumping ground |
+
+**Budget for the weights existing twice.** Trainers consume the base model in diffusers format through the HF cache; ComfyUI loads the single-file `.safetensors` from `models/diffusion_models/`. That is roughly 20 GB duplicated for a Z-Image-class model, and it is a format difference, not waste to be deduplicated — size the volume for both rather than trying to make one serve as the other.
+
+---
+
+## 7. Custom nodes
 
 Custom nodes are **code**, not weights, and the distinction decides where they live:
 

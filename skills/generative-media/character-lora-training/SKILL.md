@@ -93,6 +93,8 @@ These are the shape of the consensus, not settings to copy — every model skill
 | Steps | **1500–3000** | Scale with dataset size; ~80–100 steps per image is the durable rule of thumb behind that range |
 | Batch | 1–2 on 16–24 GB | When you drop batch to fit, hold `batch × gradient_accumulation` constant |
 
+On alpha, two conventions are live in the wild: **alpha = rank** trains "louder" per step — it effectively scales the learning rate — while **alpha = rank/2** is the conservative default given here, and because the values interact with LR they are not directly comparable across recipes. When a model skill in this suite pins a different alpha for its trainer, the model skill wins; this row is the cross-model fallback.
+
 **Save checkpoints throughout and evaluate them as a series.** The best epoch is rarely the last, and this is the single highest-value habit in training — a run with intermediate checkpoints gives you a choice; a run with only a final gives you a verdict.
 
 **The home-training floor has moved, and it changes the economics.** 16–24 GB is the band for the suite's mainstream models, which is why renting ([`comfyui-on-runpod`](../comfyui-on-runpod/)) is the usual answer. [`anima`](../anima/) breaks it: LoRA training fits in roughly **6 GB at 768 px** `[community — citronlegacy, Civitai 26217; convergent]`. That matters beyond anime work, because the real bottleneck here is the three failed runs it takes to learn what a dataset is missing — and at 6 GB those are free.

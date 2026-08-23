@@ -81,6 +81,22 @@ an NSFW LoRA is the named pattern for putting a consistent character into adult 
 `[community — Clone-Protocol-66]`. [`z-image`](../../z-image/) and the
 [`sdxl`](../../sdxl/) anime finetunes hold the rest.
 
+**Character LoRAs are the one case where this ranking does not pick the base, because two different
+rankings are answering two different questions.** The stack above is checkpoint-driven — it answers
+*which base generates adult scenes best*. The suite's photoreal ranking (atlas, *Photoreal faces and
+skin*) answers *which base holds a photoreal character LoRA best*, and it is settled on
+[`z-image`](../../z-image/). When the deliverable is a **character LoRA used in adult work**, the
+photoreal ranking wins the base-model choice: train on Z-Image. Switching base to chase the table
+above trades the settled photoreal #1 and the suite's fastest training loop for a checkpoint
+ecosystem that only matters at scene time — and there is no adult handicap to justify the trade:
+both censuses converge on ~45–47% adult share for Turbo, a point behind Krea 2, and anatomy LoRAs
+exist for it. The checkpoint ecosystem re-enters at *scene* time, not training time: if base anatomy
+proves insufficient — the §3 tell, only the seed moves the result — compose the scene on the
+adult-strong checkpoint, then re-assert the character LoRA at the face/detailer pass at ~0.2
+denoise. That is the suite's ordinary cross-family finishing pattern, not an adult special case.
+Derived from the census above plus a live routing test of this suite, 2026-08-23 — community bar
+where it rests on the census numbers rather than a published workflow.
+
 **Video — [`minimax-h3`](../../minimax-h3/), decisively**, and it is not close:
 *"far above LTX and Wan"*, *"the most powerful open source model"*
 `[community — AidenAizawa, Revolutionary-Bar766, Hearmeman98; convergent]`. Reported to run at 540p

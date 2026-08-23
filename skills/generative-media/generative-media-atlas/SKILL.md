@@ -222,6 +222,11 @@ realism, and the difficulty is routinely misdiagnosed.
 | **Video, licence-clean** | [`wan-2-2`](../wan-2-2/) — Apache-2.0, **no acceptable-use clause at all**, the only unencumbered adult path in the suite | Weaker prompt adherence; anatomy needs an NSFW-merged checkpoint (below) |
 | **Ruled out** | [`ltx-2-5`](../ltx-2-5/) — its AUP bars explicit content universally, local weights included. Adult LTX work happens on **2.3**, which is practice, not permission | — |
 
+**One boundary on this table: it ranks adult *scene* generation, not training bases.** If the
+deliverable is a character LoRA used in adult work, the photoreal ranking above wins the base
+choice — train on [`z-image`](../z-image/), and let the checkpoint ecosystem re-enter at scene
+time. The reconciliation: [`references/adult-work.md`](references/adult-work.md) §2.
+
 **The one reframe that saves the most time: the limit is training data, not refusal.** Open-weights
 models do not refuse; they render poor anatomy because the base saw little of it. This is why
 swapping in an abliterated ("heretic") text encoder does nothing — refusal lives in output layers a
