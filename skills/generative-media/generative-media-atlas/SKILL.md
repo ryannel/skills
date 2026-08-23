@@ -280,6 +280,7 @@ at each step, are in [`references/playbooks.md`](references/playbooks.md).
 | **Put my character into footage I already have** | Playbook E — edit frame 0, then track | `krea-2` `scail-2` `character-lora-training` |
 | **Run all this as an API** | Playbook F — API-format workflows on serverless | `comfyui-on-runpod` + RunPod's `runpod`, `flash` |
 | **Adult work, image or video** | Playbook G — checkpoint first, then licence, then anatomy | `krea-2` or `sdxl` (image) / `wan-2-2` or `minimax-h3` (video) + `character-lora-training` |
+| **What's deployed on my RunPod account, and what is it costing me** | `comfyui-on-runpod` *Cost guards that actually work* (burn check, two-timer guards, agent-free teardown) → RunPod's `runpod-mcp`/`runpodctl` to act on it | `comfyui-on-runpod` + RunPod's |
 | **I just want to know which model** | The elimination ladder above, then the rankings | this skill alone |
 
 ---

@@ -349,7 +349,20 @@
           "check": "Check whether anyone has published a Z-Image DiT block map or a block-weighted loader that understands S3-DiT. If one lands, the failure-modes row gains a real fix and stops being a prevention-only entry."
         }
       ],
-      "open_findings": [],
+      "open_findings": [
+        {
+          "id": "qwen-image-edit-uncovered-dependency",
+          "severity": "major",
+          "finding": "Live-use test (media-lab LoRA plan, 2026-08-23): references/characters.md §3 makes Qwen-Image-Edit the preferred dataset factory, but the suite documents none of its operational facts — filenames/sizes (Comfy-Org/Qwen-Image-Edit_ComfyUI), VRAM needs, clip_type (agent had to guess 'qwen_image'), node wiring. Two sharpenings: (1) the Qwen-Edit-2509-Multiple-angles LoRA in that same repo directly solves the 8-point rotation coverage protocol and is mentioned nowhere; (2) nothing says whether Qwen-Image-Edit executes explicit edits, so the factory x NSFW intersection (nsfw-training.md §3 vs characters.md §3) is unowned — an agent must invent the explicit-subset workaround itself. Repair options: a minimal factory setup block in characters.md, or a qwen-image-edit skill; and one sentence on the explicit-edits question once tested.",
+          "found": "2026-08-23"
+        },
+        {
+          "id": "anatomy-loras-named-none",
+          "severity": "minor",
+          "finding": "references/lora-training.md §6 rests the adult-capability claim on 'anatomy-specific LoRAs exist' but names no files, authors, or Civitai links, so a manifest cannot be made concrete from the skill. Repair: name 1-2 verified examples (Civitai JSON API per the house research method), dated, community-bar.",
+          "found": "2026-08-23"
+        }
+      ],
       "resolved": [
         {
           "resolved": "2026-08-23",
@@ -1048,7 +1061,14 @@
           "check": "Mirrors sdxl/sdxl-rank-contested — resolve them together. The two positions may be reconcilable by base model or by whether the LoRA is meant to stack; a published sweep that reports both would settle it, and nothing short of that will."
         }
       ],
-      "open_findings": [],
+      "open_findings": [
+        {
+          "id": "alpha-default-contradiction",
+          "severity": "minor",
+          "finding": "SKILL.md hyperparameter table says alpha = half of rank 'commonly'; z-image lora-training.md §3.2 says alpha = rank to start. Both framed as defaults, silently different; the model-skill-wins rule resolves it but only for readers who know the rule. Repair: one sentence here acknowledging per-model skills may pin alpha=rank and why.",
+          "found": "2026-08-23"
+        }
+      ],
       "resolved": [
         {
           "resolved": "2026-08-23",
@@ -1067,7 +1087,7 @@
       "tier": "active",
       "cadence_days": 14,
       "last_checked": "2026-08-22",
-      "last_drift_found": "2026-08-13",
+      "last_drift_found": "2026-08-23",
       "quiet_streak": 0,
       "why_tier": "Platform surfaces (runpodctl flags, endpoint knobs, S3 endpoint form) change on RunPod's release cadence, not weekly. The ComfyUI-side contract (extra_model_paths.yaml keys, loader dirs) is stable. Deliberately holds no GPU prices.",
       "linked_skills": [
@@ -1152,6 +1172,24 @@
           "finding": "The canonical volume tree prescribed six directories (vae_approx, controlnet, ipadapter, clip_vision, embeddings, style_models) that do NOT exist on a working production volume, and omitted insightface/ which does. The tree was aspirational, presented as observed.",
           "where": "SKILL.md 'Volume layout'",
           "action": "Done - tree now marks a [core] six and explains the rest are created lazily; insightface/ added."
+        },
+        {
+          "id": "detailer-files-fall-between-skills",
+          "severity": "major",
+          "finding": "Live-use test 2026-08-23: the suite's standard deploy path is detailer-based (z-image, flux-2), needing Impact Pack bbox/SAM files, but no skill names them and references/volume-and-models.md §1's canonical extra_model_paths.yaml has no ultralytics_bbox/ultralytics_segm/sams keys; its tree offers insightface/ 'if doing face work', which is not where Impact Pack looks. Agent had to source face_yolov8m.pt (Bingsu/adetailer) and sam_vit_b_01ec64.pth itself. Repair: add the three keys + the two canonical files to the yaml and placement table.",
+          "found": "2026-08-23"
+        },
+        {
+          "id": "trainer-side-volume-layout-unowned",
+          "severity": "major",
+          "finding": "Live-use test 2026-08-23: z-image lora-training.md §4 defers 'deployment mechanics' here, but the volume layout is inference-only — nothing on where the AI-Toolkit/diffusers HF cache, datasets, or training outputs live on a volume, and no skill acknowledges weights are effectively downloaded twice (diffusers format for training, ComfyUI format for inference; ~20 GB duplicated for Z-Image). Agent invented /workspace/huggingface, /workspace/datasets, /workspace/training. Repair: add a training-layout block to volume-and-models.md and one sentence on the dual-format cost.",
+          "found": "2026-08-23"
+        },
+        {
+          "id": "cli-version-floor-unstated",
+          "severity": "minor",
+          "finding": "This skill verifies against runpodctl 2.3.0 while RunPod's own skills describe priced gpu list output (securePricePerHr, dataCenterAvailability) that 2.3.0 does not emit; no skill states a minimum CLI version, and the working fallback (public GraphQL gpuTypes + datacenter list stockStatus) is documented nowhere. CPU-pod pricing is also absent suite-wide. Repair: state the version split and the GraphQL fallback in one footnote.",
+          "found": "2026-08-23"
         }
       ]
     },
@@ -1657,7 +1695,14 @@
           "check": "Assess whether any has open weights and enough ecosystem to justify a skill; if only hosted/closed, note them as out of scope in the atlas rather than leaving the silence ambiguous."
         }
       ],
-      "open_findings": [],
+      "open_findings": [
+        {
+          "id": "adult-vs-photoreal-ranking-unreconciled",
+          "severity": "major",
+          "finding": "NSFW routing test 2026-08-23: SKILL.md adult table and Playbook G name the image stack as krea-2 or sdxl (checkpoint-driven scene work); z-image §6 claims mature adult support with both Civitai censuses converging (~45-47%). For the character-LoRA-on-photoreal intersection the two rankings are never reconciled — an agent reading only Playbook G would switch base away from Z-Image unnecessarily, trading the photoreal crown and fast training loop for a checkpoint ecosystem irrelevant at LoRA-training stage. Repair: one routing sentence in the adult section/Playbook G — 'training a character LoRA for adult use: photoreal ranking wins base choice; checkpoint ecosystems matter at scene-generation, where the trained LoRA re-asserts at the face pass.'",
+          "found": "2026-08-23"
+        }
+      ],
       "resolved": [
         {
           "id": "reddit-sweep-gap",

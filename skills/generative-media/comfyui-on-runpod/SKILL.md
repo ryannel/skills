@@ -178,11 +178,21 @@ Both run ComfyUI; they fail differently and bill very differently.
 
 **Cost guards that actually work** (details in RunPod's skills — this is the ComfyUI-shaped summary):
 
-- **`--terminate-after <iso8601>` at creation.** It *deletes* the pod at that time. Prefer it over `--stop-after`, which merely stops it and keeps billing disk. Set it on every pod, always, even when you're sure you'll be quick.
+- **Two timers on every interactive pod: `--stop-after` at the session ceiling, `--terminate-after` as the backstop.** Both live on `pod create` and do different things: stop *pauses* the pod — GPU billing ends, `runpodctl pod start <id>` resumes it in about a minute — while terminate *deletes* it. Neither alone is right for interactive work: stop-only leaves a paused pod billing its volume disk ($0.20/GB-mo) indefinitely, and terminate-only kills a live session mid-generation the moment the clock runs out. Set the stop a comfortable session length out (4–8 h) and the terminate a day out; hitting the ceiling then costs a one-minute resume instead of lost work. Two caveats that make the volume-as-contract rule matter here too: a stop **wipes the container disk** (the template re-initialises it on resume — anything you installed outside the volume is gone), and a resume is not guaranteed the same GPU if stock ran out, in which case you recreate from the volume in minutes. For unattended batch pods, terminate-only at expected runtime plus margin is right — there is nothing to resume. Verified against `runpodctl 2.3.0` on 2026-08-23.
 
   > **Use `runpodctl pod create`, not `runpodctl create pod`.** Both exist in `runpodctl` 2.3.0 and they are different command surfaces. The legacy verb-noun form (`create pod`) takes `--gpuType`/`--networkVolumeId`/`--imageName` and has **no cost guard at all** — no `--terminate-after`, no `--stop-after`. The modern noun-verb form (`pod create`) takes `--gpu-id`/`--network-volume-id`/`--image` and is the one that carries the guards. Reach for the wrong one and you will conclude the flag doesn't exist and create an unguarded pod. Verified against `runpodctl 2.3.0-be4ced4` on 2026-08-13. Check with `runpodctl pod create --help` before a first run on a new machine.
 - **Tear down in order:** remove the pod, *then* delete the volume if it was scratch. The volume can't be deleted while a pod holds it.
 - **Volume data survives pod removal** — only deleting the volume clears it. That's the point: you rebuild pods freely and never re-download.
+- **A billable session is not over until a burn check says it is.** End every session — agent-driven sessions especially — by listing what still exists and bills. One audited account had 37 leaked pods, every one created by agent tooling that skipped the guards; the guards above prevent the overnight bill, this check catches everything else. One call answers it:
+
+  ```bash
+  curl -s https://api.runpod.io/graphql -H "Authorization: Bearer $RUNPOD_API_KEY" \
+    -H 'content-type: application/json' \
+    -d '{"query":"{ myself { clientBalance pods { id name desiredStatus costPerHr volumeInGb } networkVolumes { id name size dataCenterId } } }"}'
+  ```
+
+  Anything `RUNNING` bills its `costPerHr`; a stopped pod bills only its `volumeInGb` (at ~$0.20/GB-mo — zero for template-only pods); every network volume bills ~$0.07/GB-mo while it exists. `runpodctl pod stop <id>` pauses, `runpodctl pod remove <id>` deletes.
+- **Keep one agent-free path to see and kill spend.** The moments you most need teardown — out of LLM quota, or the agent itself misbehaving — correlate exactly with money flowing, so the kill switch cannot be the agent. The query and the two commands above, pinned in a shell alias or a ten-line script, are the whole requirement; the RunPod web console is the zero-setup fallback.
 
 ---
 
@@ -247,7 +257,8 @@ Use it before you start editing `extra_model_paths.yaml` on a hunch.
 | Endpoint "fails" instantly on dispatch | `/runsync` against a long job | Use `/run` + poll `/status/{id}` |
 | Validation error naming a model file | Workflow filename ≠ volume filename | List the volume directory; fix the manifest `rename` or the workflow |
 | GPU you wanted is unavailable | Volume is DC-locked and that GPU isn't in that DC | Check GPU availability in the volume's DC first, or place the volume deliberately |
-| Surprise bill overnight | Pod created without `--terminate-after` | Always set it; verify teardown with a pod list |
+| Surprise bill overnight | Pod created without `--terminate-after` | Always set both timers; end the session with the burn check |
+| Pod vanished / paused mid-session | A cost-guard timer fired — this is the guard working, not a platform fault | `runpodctl pod start <id>` resumes a stopped pod; a terminated one recreates from the volume in minutes. Size the stop timer to the session next time |
 
 ---
 
@@ -259,11 +270,11 @@ Use it before you start editing `extra_model_paths.yaml` on a hunch.
 4. LoRAs foldered by base, with real compatibility recorded in the manifest rather than implied by the folder?
 5. Downloads run on a **CPU pod or the S3 API**, never a GPU pod?
 6. Volume's datacenter checked against GPU availability *before* planning?
-7. Pod created with **`--terminate-after`** and the port exposed at creation?
+7. Pod created with its cost guards — **`--stop-after` + `--terminate-after`** for interactive, **`--terminate-after`** for batch — and the port exposed at creation?
 8. Workflow exported in **API format** (not UI format) for endpoint use?
 9. Dispatch via **`/run` + poll**, not `/runsync`?
 10. Smoke test passed through **both** the UI and the API before real work?
-11. Teardown verified — pod removed, and volume kept or deleted deliberately?
+11. Teardown verified with a burn check — nothing `RUNNING`, no stopped pod holding volume disk, and every volume kept or deleted deliberately? A session that skips this is not finished.
 
 ---
 
@@ -279,7 +290,7 @@ One thing deliberately **not** claimed: GPU recommendations and prices. They mov
 
 **Nothing is currently contested or flagged.** The 2026-08-13 pass resolved every open finding (see `freshness.json`); the watchlist there tracks what could still drift.
 
-**Facts dated 2026-08-13.** The `runpodctl` command surface and endpoint knobs are what moves fastest here — re-verify those before relying on them; the ComfyUI-side contract (`extra_model_paths.yaml` keys, loader directories) is stable.
+**Facts dated 2026-08-13; cost-guard timers and the burn-check query re-verified live 2026-08-23.** The `runpodctl` command surface and endpoint knobs are what moves fastest here — re-verify those before relying on them; the ComfyUI-side contract (`extra_model_paths.yaml` keys, loader directories) is stable.
 
 ---
 

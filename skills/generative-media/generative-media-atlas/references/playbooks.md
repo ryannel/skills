@@ -63,7 +63,11 @@ choose is also what you train on**, so make this choice before step 2, not after
   pipeline, stay on [`z-image`](../../z-image/) (Apache-2.0, weights and outputs) or
   [`sdxl`](../../sdxl/), and keep every rung of the later ladder clear too.
 - **Budget.** Set a cost guard before you create anything. RunPod's `runpod-usage` for GPU
-  selection; always `--terminate-after`.
+  selection; every pod gets `--stop-after` at the session length plus `--terminate-after` as a
+  backstop (batch pods: `--terminate-after` alone). And a rented-GPU session **ends with a burn
+  check** — nothing `RUNNING`, volumes accounted for — before you call it done; the check and the
+  why are in [`comfyui-on-runpod`](../../comfyui-on-runpod/), *Cost guards that actually work*.
+  Agents running these playbooks: the burn check is a STOP gate, not a suggestion.
 
 ### Step 1 — lock the anchor image
 
