@@ -252,12 +252,12 @@
     },
     "z-image": {
       "path": "skills/generative-media/z-image",
-      "tier": "active",
-      "cadence_days": 7,
-      "last_checked": "2026-08-22",
+      "tier": "hot",
+      "cadence_days": 1,
+      "last_checked": "2026-08-23",
       "last_drift_found": "2026-08-23",
       "quiet_streak": 0,
-      "why_tier": "Released model is settled, but two announced variants (Edit, Omni-Base) could land any week — either landing is a major rewrite trigger (characters reference is built on 'no edit model exists').",
+      "why_tier": "Absorbed the Qwen-Image-Edit factory-setup update on 2026-08-23 (new file facts, fal coverage LoRA, NSFW-factory doctrine); hot for the following week per protocol, then re-tier.",
       "watchlist": [
         {
           "id": "z-image-edit",
@@ -342,29 +342,33 @@
           "claim": "The SDXL-world fix for a character LoRA dragging a style/colour cast — block-weighted LoRA application — has no established equivalent for Z-Image's DiT, so prevention at dataset time is the only lever.",
           "where": "references/characters.md failure-modes row ~L81",
           "check": "Check whether anyone has published a Z-Image DiT block map or a block-weighted loader that understands S3-DiT. If one lands, the failure-modes row gains a real fix and stops being a prevention-only entry."
-        }
-      ],
-      "open_findings": [
-        {
-          "id": "qwen-image-edit-uncovered-dependency",
-          "severity": "major",
-          "finding": "Live-use test (media-lab LoRA plan, 2026-08-23): references/characters.md §3 makes Qwen-Image-Edit the preferred dataset factory, but the suite documents none of its operational facts — filenames/sizes (Comfy-Org/Qwen-Image-Edit_ComfyUI), VRAM needs, clip_type (agent had to guess 'qwen_image'), node wiring. Two sharpenings: (1) the Qwen-Edit-2509-Multiple-angles LoRA in that same repo directly solves the 8-point rotation coverage protocol and is mentioned nowhere; (2) nothing says whether Qwen-Image-Edit executes explicit edits, so the factory x NSFW intersection (nsfw-training.md §3 vs characters.md §3) is unowned — an agent must invent the explicit-subset workaround itself. Repair options: a minimal factory setup block in characters.md, or a qwen-image-edit skill; and one sentence on the explicit-edits question once tested.",
-          "found": "2026-08-23",
-          "staged": "workbench/z-image/freshness-findings.md (2026-08-23) — needs research before authoring"
         },
         {
-          "id": "anatomy-loras-named-none",
-          "severity": "minor",
-          "finding": "references/lora-training.md §6 rests the adult-capability claim on 'anatomy-specific LoRAs exist' but names no files, authors, or Civitai links, so a manifest cannot be made concrete from the skill. Repair: name 1-2 verified examples (Civitai JSON API per the house research method), dated, community-bar.",
-          "found": "2026-08-23",
-          "staged": "workbench/z-image/freshness-findings.md (2026-08-23) — needs research before authoring"
+          "id": "qwen-edit-factory-files",
+          "type": "version-pin",
+          "claim": "Factory setup pins Qwen-Image-Edit-2511 files (fp8mixed, qwen_2.5_vl_7b_fp8_scaled, clip_type qwen_image) and the fal 2511 Multiple-Angles LoRA; Qwen-Image-2.0 is API-only.",
+          "where": "references/characters.md §3 factory-setup block",
+          "check": "Check QwenLM README + Comfy-Org HF repos for a newer open-weights edit release or renamed files; check the fal LoRA still exists and whether back-azimuth identity got benchmarked."
         }
       ],
+      "open_findings": [],
       "resolved": [
         {
           "resolved": "2026-08-23",
           "count": 1,
           "note": "Repaired: VRAM reframed as comfort bands not floors throughout, with the RTX 2060 report. Agent additionally verified OFFICIAL int8 DiT builds (~6.2 GB, z_image_int8_convrot.safetensors, image_z_image_int8 templates) against Comfy-Org/workflow_templates and HF — stronger evidence than the community report the finding cited. New reverse-ladder section (ZIT draft -> ZIB finish), confirmed genuinely absent before adding. Turbo-vs-Base LoRA asymmetry recorded with its silent-failure consequence."
+        },
+        {
+          "id": "qwen-image-edit-uncovered-dependency",
+          "found": "2026-08-23",
+          "resolved": "2026-08-23",
+          "resolution": "characters.md §3 now carries the full factory setup (2511 fp8mixed/bf16 file table, clip_type qwen_image confirmed from the official template, wiring, VRAM bands, Apache-2.0 no-training-clause), the fal 2511 Multiple-Angles LoRA as the 8-point coverage shortcut, and the factory×NSFW doctrine (SFW editing ungated; explicit degrades; explicit subset generated natively)."
+        },
+        {
+          "id": "anatomy-loras-named-none",
+          "found": "2026-08-23",
+          "resolved": "2026-08-23",
+          "resolution": "lora-training.md §6 grounds the claim with named Civitai LoRAs (Peli86 26k dl, GodPussy Turbo/Base pair, er850, Mistermango23) + realism stacking partners, dated 2026-08-23, community-bar; [contested] stacking caution retained."
         }
       ]
     },
