@@ -117,22 +117,6 @@
       ],
       "open_findings": [
         {
-          "id": "ideogram4-lora-ecosystem-exists",
-          "severity": "resolved",
-          "found": "2026-08-13",
-          "finding": "CONFIRMED DRIFT, two independent sources. (1) fal ships a LIVE 'Ideogram V4 LoRA Trainer' - not waitlisted, exposes steps (100-40000, default 1000), LR (1e-6..1e-2, default 1e-4), resolution and default-caption, and emits BOTH a 'fal' and a 'comfy' output format ('same trained weights; only the internal key names differ'). ComfyUI-format output means these LoRAs run on the OPEN weights. (2) ostris/ai-toolkit now lists ideogram-ai/ideogram-4-fp8 in its supported models - directly falsifying self-hosting.md:208 'ai-toolkit's documented support list does not yet formally include Ideogram 4'.",
-          "where": "SKILL.md description ('wrong tool for ... LoRAs on open weights - it routes you to the right model'); SKILL.md:151 consistent-characters routing; SKILL.md:218-219 wrong-tool table; SKILL.md:242 two-bar note; references/lora-training.md:202-210 section 6",
-          "action": "RESOLVED 2026-08-13. self-hosting.md section 6 rewritten with the two trainers, the comfy-format detail, and the Civitai composition. SKILL.md character-routing paragraph, wrong-tool table (now three rows: characters / style LoRAs / character LoRAs) and description all revised. Adapters vs training kept as separate axes throughout. NUANCE FOUND DURING REPAIR: 33 published Ideogram 4.0 LoRAs exist but are near-entirely STYLE work - no character LoRAs - so routing characters elsewhere still stands, for a changed reason."
-        },
-        {
-          "id": "ideogram4-days-old-framing-expired",
-          "severity": "resolved",
-          "found": "2026-08-13",
-          "finding": "Mechanical but pervasive: released 2026-06-03, now 71 days ago. The watchlist said this framing ages out at 4-6 weeks. 'This is a days-old model' and 'at days old the deep practitioner corpus hasn't accumulated yet' now read as wrong.",
-          "where": "SKILL.md:238, :242, :246; references/setup-and-workflows.md:7",
-          "action": "RESOLVED 2026-08-13. 'days-old' replaced in all five places with a dated review stamp."
-        },
-        {
           "id": "ideogram4-flash-still-pending",
           "severity": "none",
           "found": "2026-08-13",
@@ -154,6 +138,18 @@
           "resolved": "2026-08-23",
           "count": 2,
           "note": "Repaired: suite-table verdict changed from 'weak' to 'reachable, by a workflow rather than a tool'; new SKILL.md section documenting the locked half-canvas with its masked-latent mechanism; the falsified 'cannot accept a base image from upstream' claim in the pipelines lede scoped correctly; safety-filter treatment softened to 'in the weights is not the same as absolute'. STANDARD.md §4.1/§4.3/§7.4 re-based the characters.md exemption onto new ground."
+        },
+        {
+          "id": "ideogram4-lora-ecosystem-exists",
+          "found": "2026-08-13",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
+        },
+        {
+          "id": "ideogram4-days-old-framing-expired",
+          "found": "2026-08-13",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
         }
       ]
     },
@@ -244,14 +240,13 @@
           "check": "Has FLUX 3 Dev shipped? If yes it needs its own skill on the VIDEO side of the suite, not an extension of flux-2. Also check whether FLUX 3 Image early access opened."
         }
       ],
-      "open_findings": [
+      "open_findings": [],
+      "resolved": [
         {
           "id": "flux3-announced",
-          "severity": "resolved",
           "found": "2026-08-22",
-          "finding": "FLUX 3 announced by BFL 2026-07-23: multimodal (image+video+audio) foundation model on 'Self-Flow', 20s video with native audio, Early Access via API and private weights only. Launch plan promises 'FLUX 3 Dev' open-weight multimodal backbone with no date. Skill had no forward-looking section.",
-          "where": "SKILL.md new 'FLUX 3' section after the two-bar block",
-          "action": "RESOLVED 2026-08-22 as a pending-release note."
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
         }
       ]
     },
@@ -570,37 +565,30 @@
           "check": "Watch for a Krea statement on the VAE specifically, and for whether the Qwen Image VAE Sharp path (see krea2-vae-options) displaces the Wan 2.1 swap. If a vendor VAE fix ships, this stops being a debate and becomes a settings row."
         }
       ],
-      "open_findings": [
-        {
-          "id": "krea2-identity-edit-matured",
-          "severity": "resolved",
-          "found": "2026-08-22",
-          "finding": "The skill described conradlocke/krea2-identity-edit as 'days old' and experimental. By August 2026 it is at v1.2 and is the community's default identity tool - used well beyond Krea 2 work as the standard first-frame prep for video character-swap models and as the standard undressing tool. Craft rule discovered: one short sentence beats a paragraph.",
-          "where": "SKILL.md character summary; references/characters.md sections 1, 3, 7",
-          "action": "RESOLVED 2026-08-22."
-        },
-        {
-          "id": "krea2-multi-character-dop",
-          "severity": "resolved",
-          "found": "2026-08-22",
-          "finding": "New capability the skill said did not exist: Differential Output Preservation on a LoKr config (class 'woman', 1500 steps) lets up to 4 character LoRAs coexist with minimal bleed. Hard cap 4. Same technique FAILS on Z-Image Base - a real model-selection axis.",
-          "where": "SKILL.md character summary and suite table; references/characters.md section 2; references/lora-training.md section 6; character-lora-training and z-image cross-updated",
-          "action": "RESOLVED 2026-08-22."
-        },
-        {
-          "id": "krea2-training-resolution-768",
-          "severity": "resolved",
-          "found": "2026-08-22",
-          "finding": "A widely-shared 16 GB training writeup trained at 768 and was corrected in its own comments: pretraining spanned 256/512/1024 stages, so 768 was never a trained resolution. Skill had no statement either way.",
-          "where": "references/lora-training.md section 2c",
-          "action": "RESOLVED 2026-08-22 - 2c added with the measured 16 GB run and all four corrections."
-        }
-      ],
+      "open_findings": [],
       "resolved": [
         {
           "resolved": "2026-08-23",
           "count": 2,
           "note": "Repaired: krea2filterbypass promoted from 'circulating [re-verify]' to a stated fact (v3, weight 2, stacked on MysticXXX_KREA2_V4); VRAM band reframed as comfort with the 8 GB / 64 GB report and the offload mechanism; Krea 2 named as the dominant adult image model; the Identity Edit + NSFW LoRA pattern routed before training."
+        },
+        {
+          "id": "krea2-identity-edit-matured",
+          "found": "2026-08-22",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
+        },
+        {
+          "id": "krea2-multi-character-dop",
+          "found": "2026-08-22",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
+        },
+        {
+          "id": "krea2-training-resolution-768",
+          "found": "2026-08-22",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
         }
       ]
     },
@@ -731,14 +719,6 @@
           "finding": "Watchlist item wan-3-0-open-weights checked directly against the Wan-AI HF org: NO Wan 3.0 present; latest is Wan 2.2. A secondary SEO site (wan27.org) claims an April 2026 Wan 3.0 open-weights release - NOT supported by the official org. Skill wording ('pre-announced, unconfirmed') remains correct.",
           "where": "SKILL.md intro; 'Licence and known limitations'",
           "action": "No change needed. Note that wan27.org is an unreliable secondary source for this family - do not cite it."
-        },
-        {
-          "id": "wan-scail2-uncovered",
-          "severity": "resolved",
-          "found": "2026-08-22",
-          "finding": "SCAIL-2, a Wan 2.1-derived character-replacement/motion-transfer model with SAM3 identity tracking, has displaced Wan Animate in community practice for character swaps and was entirely absent from the skill. Bernini-R is a second Wan-family rv2v model in the same rotation.",
-          "where": "SKILL.md 'Motion, camera and structural control' (new SCAIL-2 subsection) and the suite table",
-          "action": "PARTIALLY RESOLVED 2026-08-22 - documented as an ecosystem pointer with the reference-prep craft. The Wan 2.1 lineage claim is community-sourced and flagged; verify against a primary source. A dedicated scail-2 skill is briefed in workbench/scail-2/."
         }
       ],
       "resolved": [
@@ -746,6 +726,12 @@
           "resolved": "2026-08-23",
           "count": 1,
           "note": "Repaired: new 'Community merges' section deriving the asymmetric CFG split from CFG-distillation, uni_pc over euler from solver truncation error at 5 steps/expert, and LoRA-none from W + 2aBA double-application; the anatomy-collapse study written up as a general debugging principle; edge-density QC proxy adopted; 2 failure rows and 1 pre-flight item added."
+        },
+        {
+          "id": "wan-scail2-uncovered",
+          "found": "2026-08-22",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
         }
       ]
     },
@@ -880,53 +866,42 @@
           "check": "Look for a second independent report or an official template change. Rests on one detailed practitioner [community — Revolutionary-Bar766]; if it holds up, promote from [contested] to the stock recommendation."
         }
       ],
-      "open_findings": [
-        {
-          "id": "h3-sparse-attention-shipped-by-community",
-          "severity": "resolved",
-          "found": "2026-08-22",
-          "finding": "CONFIRMED DRIFT, now repaired. SKILL.md asserted 'open inference is full-attention only'. A community SLA node (github.com/PlagueKind/ComfyUI-PlagueKind-Nodes, designed by pl0x) delivers 400 -> 80/60 s/it on a 5060 Ti at 864x1536x10s. Also missing: Spectrum (xmarre) at 34% lower Euler time with an H3-specific audio-feedback failure and its offline_smoothing_replay fix; the CU130 / comfy-kitchen 0.2.10 / nvfp4-encoder runtime traps that silently cost most of the speed.",
-          "where": "SKILL.md 'What open weights means here' and the rewritten 'Going faster - the acceleration stack'",
-          "action": "RESOLVED 2026-08-22. Sparse-attention paragraph reframed as a pending vendor release with the community node documented; acceleration section rebuilt as four layers (runtime traps, SLA, Spectrum, Turbo LoRA)."
-        },
-        {
-          "id": "h3-ref2va-quality-gap-hybrid",
-          "severity": "resolved",
-          "found": "2026-08-22",
-          "finding": "New craft the skill lacked: Ref2VA is visibly worse than FL2VA, divergence localised to *.adaln_proj.* tensors; overlaying ref2va adaln_proj onto an fl2va base for blocks 30-49 fixes it (blocks 0-25 destroy quality). Node ComfyUI_MinimaxH3HybridLoader; baked checkpoints smhfacct/Minimax-H3-fl2va-ref2va-hybrid-models.",
-          "where": "SKILL.md task-mode selector; references/setup-and-workflows.md section 5",
-          "action": "RESOLVED 2026-08-22 - documented in both places with the block-range caveats."
-        },
-        {
-          "id": "h3-new-modes-missing",
-          "severity": "resolved",
-          "found": "2026-08-22",
-          "finding": "Three whole usage modes were absent: long-form via 22-frame context chaining (ethanfel/ComfyUI-MiniMaxH3-Contex-Loop), single-image editing at 1 frame with Mamad8/MiniMax-H3-Image-VAE, and video character replacement via the [video editing] / retention_analysis prompt shape.",
-          "where": "SKILL.md 'Beyond one clip'; references/setup-and-workflows.md sections 7-8; references/characters.md",
-          "action": "RESOLVED 2026-08-22."
-        },
-        {
-          "id": "h3-audio-scheduling-fix-merged",
-          "severity": "resolved",
-          "found": "2026-08-22",
-          "finding": "Watchlist item h3-audio-scheduling-fix resolved as RELEASED. Kijai's Comfy-Org/ComfyUI#15243 merged 2026-08-06 and shipped in ComfyUI v0.31.0 (2026-08-08), so core now schedules video and audio correctly with the Turbo LoRA at low step counts and larryvrh's ComfyUI-MiniMax-H3-Turbo sampler node is no longer required.",
-          "where": "SKILL.md 'Going faster' and the failure-modes table; references/lora-training.md evaluation section",
-          "action": "RESOLVED 2026-08-22 during the 2026-08-22 repair pass; retired from the watchlist. Anyone on a ComfyUI build older than v0.31.0 still needs the custom node — keep that as a version floor, not a standing workaround."
-        },
-        {
-          "id": "h3-ltx-2-5-licence-now-read",
-          "severity": "resolved",
-          "found": "2026-08-22",
-          "finding": "Watchlist item ltx-2-5-licence-unread retired. The LTX-2.x Community License was read in full for the new [ltx-2-5](../ltx-2-5/) skill, including the $10M revenue gate, Attachment A's twenty restrictions, the incorporated AUP and the derivative clauses. The comparison in H3's alternatives table no longer rests on an unread document.",
-          "where": "SKILL.md licence section and suite table; references/licence-and-territory.md alternatives table",
-          "action": "RESOLVED 2026-08-22. IMPORTANT for the next repair pass: LTX-2.5 is a weaker alternative for excluded territories than the unread comparison implied — its AUP bars sexually explicit content and binds local weights, and Attachment A para 20 bars competing products at any revenue. Verify the alternatives table says so."
-        }
-      ],
+      "open_findings": [],
       "resolved": [
         {
           "resolved": "2026-08-23",
           "count": 1,
           "note": "Repaired: then/while ordering rule with its mechanism and the ~80%-of-jank attribution; timestamp placement semantics; over-description tactic; beta-over-simple scheduler and the sigma-shift pair; the nude-reference requirement; 8 GB drafting floor; new prompting-guide §10 on explicit work; adult-video leadership framed as SHARPENING the territory clause. Agent declined to assert 'detail costs you on Wan' because wan-2-2's own guide says something narrower — attributed as practitioner experience instead, avoiding a suite self-contradiction."
+        },
+        {
+          "id": "h3-sparse-attention-shipped-by-community",
+          "found": "2026-08-22",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
+        },
+        {
+          "id": "h3-ref2va-quality-gap-hybrid",
+          "found": "2026-08-22",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
+        },
+        {
+          "id": "h3-new-modes-missing",
+          "found": "2026-08-22",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
+        },
+        {
+          "id": "h3-audio-scheduling-fix-merged",
+          "found": "2026-08-22",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
+        },
+        {
+          "id": "h3-ltx-2-5-licence-now-read",
+          "found": "2026-08-22",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
         }
       ]
     },
@@ -1141,40 +1116,7 @@
           "check": "Re-run 'runpodctl pod create --help' and 'runpodctl create pod --help' after any runpodctl upgrade. If the legacy surface is dropped, delete the warning."
         }
       ],
-      "open_findings": [
-        {
-          "id": "cor-dual-mount-validated",
-          "severity": "resolved",
-          "found": "2026-08-13",
-          "finding": "VALIDATED against live infrastructure - the skill's central claim holds. A serverless worker on the production endpoint enumerated exactly the volume's models/vae/ contents (ae, flux2-vae, sdxl_vae_fp16_fix), matching an S3 listing; RunPod docs confirm serverless mounts at /runpod-volume and pods at /workspace. Full record in skill-testbed/validations/2026-08-13-comfyui-dual-mount-root/.",
-          "where": "SKILL.md 'The one rule that changes everything'",
-          "action": "Done - validation stamp added to the rule and the two-bar section. This was the largest unmeasured claim in the suite; it is now measured."
-        },
-        {
-          "id": "cor-volumemountpath-trap",
-          "severity": "resolved",
-          "found": "2026-08-13",
-          "finding": "NEW TRAP, nearly caused a false negative: RunPod templates carry a volumeMountPath field reading /workspace even on templates used by SERVERLESS endpoints. It is pod-only and serverless ignores it - serverless templates expose no mount-path option because the path is fixed.",
-          "where": "SKILL.md dual-root section; failure-modes table",
-          "action": "Done - documented as a blockquote plus a failure-mode row."
-        },
-        {
-          "id": "cor-runpodctl-command-surfaces",
-          "severity": "resolved",
-          "found": "2026-08-13",
-          "finding": "NEW TRAP, and a cost-safety one. runpodctl 2.3.0 has TWO pod-creation surfaces: legacy 'runpodctl create pod' (--gpuType/--networkVolumeId/--imageName) has NO --terminate-after and NO --stop-after; modern 'runpodctl pod create' (--gpu-id/--network-volume-id/--image) carries both. I hit this myself and briefly concluded the flag did not exist.",
-          "where": "SKILL.md cost-guards section",
-          "action": "Done - documented. Re-verify on runpodctl upgrades; the legacy surface may be removed, which would make the warning obsolete."
-        },
-        {
-          "id": "cor-volume-tree-aspirational",
-          "severity": "resolved",
-          "found": "2026-08-13",
-          "finding": "The canonical volume tree prescribed six directories (vae_approx, controlnet, ipadapter, clip_vision, embeddings, style_models) that do NOT exist on a working production volume, and omitted insightface/ which does. The tree was aspirational, presented as observed.",
-          "where": "SKILL.md 'Volume layout'",
-          "action": "Done - tree now marks a [core] six and explains the rest are created lazily; insightface/ added."
-        }
-      ],
+      "open_findings": [],
       "resolved": [
         {
           "id": "detailer-files-fall-between-skills",
@@ -1193,6 +1135,30 @@
           "found": "2026-08-23",
           "resolved": "2026-08-23",
           "resolution": "Version-split aside added under the command-surface warning with the datacenter-list + GraphQL fallback, verified 2026-08-23."
+        },
+        {
+          "id": "cor-dual-mount-validated",
+          "found": "2026-08-13",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
+        },
+        {
+          "id": "cor-volumemountpath-trap",
+          "found": "2026-08-13",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
+        },
+        {
+          "id": "cor-runpodctl-command-surfaces",
+          "found": "2026-08-13",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
+        },
+        {
+          "id": "cor-volume-tree-aspirational",
+          "found": "2026-08-13",
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
         }
       ]
     },
@@ -1290,22 +1256,20 @@
           "finding": "ADDITION, not contradiction: moonwhaler/comfyui-seedvr2-tilingupscaler combines tiling with SeedVR2 - constant VRAM regardless of output size, 8K on consumer GPUs. The skill treats tiled upscale (UltimateSDUpscale/TTP) and the SeedVR2 finisher as separate ladder stages; this collapses them.",
           "where": "references/production-ladder.md stages 4-5; SKILL.md:25-26 ladder table",
           "action": "Verify maintenance status and real VRAM behaviour, then add as an option at stage 4/5. Low urgency - the existing two-stage chain still works."
-        },
+        }
+      ],
+      "resolved": [
         {
           "id": "ipw-batch-qc-selfinflicted",
-          "severity": "resolved",
           "found": "2026-08-13",
-          "finding": "SELF-INFLICTED, same-day: the batch-QC claim in references/workflows-as-code.md was corrected to name SwarmUI Grid Generator / Efficiency Nodes / rgthree Image Comparer, but SKILL.md:149 still says 'batch-QC tooling is thin (grids + human cull is the actual state of the art)'. The skill body now contradicts its own reference file.",
-          "where": "SKILL.md:149 two-bar section",
-          "action": "RESOLVED 2026-08-13: SKILL.md:149 rewritten to 'tooled for comparison but not for judgement', naming the three tools and the labelled-axes bias. Now consistent with references/workflows-as-code.md."
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
         },
         {
           "id": "video-model-as-image-stage",
-          "severity": "resolved",
           "found": "2026-08-22",
-          "finding": "Two new cross-family paths absent from the skill: MiniMax H3 at one frame used as an image-EDIT stage (reportedly beating Krea 2 Identity Edit, Qwen-Image-Edit and Flux Klein 9B), and ReDetail, a generative video upscaler built on LTX-2.5 run over H3 output.",
-          "where": "SKILL.md 'Tool status that changed recently' plus two new subsections, and the suite map",
-          "action": "RESOLVED 2026-08-22."
+          "resolved": "2026-08-23",
+          "resolution": "Fixed in the 2026-08-23 repair sweep (commit f80d0d2); entry moved out of open_findings during state hygiene."
         }
       ]
     },
