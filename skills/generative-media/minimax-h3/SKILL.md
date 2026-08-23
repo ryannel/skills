@@ -321,6 +321,7 @@ Cross-model production craft is in [`image-production-workflows`](../image-produ
 | Locking a still before animating | Not an image model | [`z-image`](../z-image/) / [`flux-2`](../flux-2/) / [`krea-2`](../krea-2/) / [`sdxl`](../sdxl/) |
 | **Editing a single image** | **Actually good at it** — one-frame generation with the image VAE, see above | [`krea-2`](../krea-2/) Identity Edit for scene-preserving one-sentence edits; Flux Klein 9B / Qwen-Image-Edit otherwise |
 | Post chain — upscale, restore, interpolate, 2K | ❌ 2K is a hosted module only; local output is 768p with an audio track most post nodes will drop | Temporally-aware restorers (SeedVR2, FlashVSR), or **ReDetail** re-rendering H3 clips through the [`ltx-2-5`](../ltx-2-5/) upscaler; restore before you interpolate, then re-mux. See [`image-production-workflows`](../image-production-workflows/) |
+| **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
 
 ---
 

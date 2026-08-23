@@ -25,6 +25,7 @@ RunPod publishes its own skills, and they are good. Do not restate them — rout
 | **ComfyUI as a serverless endpoint, API-format workflows** | **here** |
 | Model-specific files and settings | the model skill — [`wan-2-2`](../wan-2-2/), [`minimax-h3`](../minimax-h3/), [`z-image`](../z-image/), … |
 | Multi-stage pipeline design — which stage does what, denoise bands, mixing models, the decode-to-pixels handoff | [`image-production-workflows`](../image-production-workflows/) — that skill assumes the compute already runs; this one is how it gets there |
+| **Which model to run in the first place, and which skills the job needs** | [`generative-media-atlas`](../generative-media-atlas/) — rankings by job, the elimination ladder, and the install commands for this suite and RunPod's own skills |
 
 ---
 

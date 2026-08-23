@@ -233,6 +233,7 @@ Choose the model for the job — defaults like realism direction and prompting d
 | Commercial local use | Community License: free under $1M revenue | [`z-image`](../z-image/) first — Apache-2.0 on weights *and* outputs, no revenue cap and no gate, the least encumbered licence in the suite; then [`flux-2`](../flux-2/) ([klein] 4B, Apache-2.0) or [`sdxl`](../sdxl/) (OpenRAIL++-M, whose use-restrictions do travel downstream) |
 | Mixed-model pipelines | Aesthetics/composition front-end; Z-Image inpaints its artefact zones | [`image-production-workflows`](../image-production-workflows/) for the cross-model craft |
 | Making it move | Still images only | [`wan-2-2`](../wan-2-2/) or [`ltx-2-5`](../ltx-2-5/) — image-to-video from a still locked here. The debt runs both ways: the **Wan 2.1 VAE swap** central to this skill's realism craft is borrowed from that family |
+| **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
 
 ---
 

@@ -190,6 +190,7 @@ Per-model facts live in the model skills; this skill owns what spans them.
 | [`ltx-2-5`](../ltx-2-5/) | **video + joint audio**; the suite's generative video upscaler | downstream, and the engine behind ReDetail |
 | [`scail-2`](../scail-2/) | **video** — character replacement tracking a driving clip frame-for-frame | downstream, and the strictest consumer: its reference must be the driving clip's own first frame, edited |
 | [`minimax-h3`](../minimax-h3/) | **video + native audio** — omni-modal, reference conditioning | downstream, and the one output this ladder can silently break: most video post nodes are picture-only and drop the audio. **Also upstream now**, at one frame |
+| [`generative-media-atlas`](../generative-media-atlas/) | choosing between everything above — rankings by job, the elimination ladder, install routes | upstream of this ladder: it decides *which* models the chain hires before this skill decides how they hand off |
 
 **Where the ladder feeds backwards — and where it doesn't.** The table reads left-to-right: image skills feed video skills, and exactly one path runs the other way — [`minimax-h3`](../minimax-h3/) at one frame, by the output-modality test above. The [`krea-2`](../krea-2/) → [`scail-2`](../scail-2/) case looks identical and is not: Identity Edit prepares the driving clip's first frame, which is ordinary forward flow, and marks where this skill's job *ends*.
 

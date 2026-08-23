@@ -254,6 +254,7 @@ SCAIL-2 is a **middle** stage — it cannot originate a shot and produces no aud
 | Licence coverage | **Permissive worldwide** — no territory clause | — |
 | Post chain, upscale, interpolation | Restore → interpolate, as elsewhere | [`image-production-workflows`](../image-production-workflows/) |
 | Multi-person scenes | Weak — the known soft spot | Separate shots, or Point-select every character |
+| **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
 
 ### The decision you are actually making: *I have a video and I want a different person in it*
 

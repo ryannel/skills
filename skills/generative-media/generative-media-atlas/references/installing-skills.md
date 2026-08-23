@@ -1,0 +1,159 @@
+# Installing skills — the CLI, the bundles, and why nothing installs transitively
+
+This file owns **getting skills onto a machine**. It covers the `skills` CLI as this suite uses it,
+the per-playbook bundles, and the troubleshooting for the one failure mode that is structural rather
+than a bug.
+
+## Contents
+
+1. [The structural fact: no dependencies](#1-the-structural-fact-no-dependencies)
+2. [The commands you actually need](#2-the-commands-you-actually-need)
+3. [Bundles by playbook](#3-bundles-by-playbook)
+4. [Scope, agents, and how files land](#4-scope-agents-and-how-files-land)
+5. [Reading a skill without installing it](#5-reading-a-skill-without-installing-it)
+6. [Keeping skills current](#6-keeping-skills-current)
+7. [The Claude Code plugin route](#7-the-claude-code-plugin-route)
+8. [Troubleshooting](#8-troubleshooting)
+
+---
+
+## 1. The structural fact: no dependencies
+
+**A `SKILL.md` cannot declare that it needs another skill, and the CLI resolves nothing
+transitively.** Required frontmatter is `name` and `description`; the only meaningful optional field
+is `metadata.internal`. There is no dependency field, no lockfile of dependencies, and no
+install-time resolution.
+
+Two consequences that shape how this suite is written:
+
+- **Cross-skill links resolve only when both skills are installed.** Every link in this repo is
+  relative (`../sibling/`), and installing flattens the domain folder away, so `../z-image/` resolves
+  when `z-image` is installed and dangles otherwise. **A dangling link is not a bug — it is the
+  install command you have not run.**
+- **[`generative-media-atlas`](../) carries what it would otherwise route**, because it is the one
+  skill designed to be installed alone. That is a deliberate deviation from how the rest of the
+  suite is written, and the reason it is longer than its cross-cutting siblings.
+
+---
+
+## 2. The commands you actually need
+
+```bash
+# Browse the catalogue without installing
+npx skills add ryannel/skills --list
+
+# One skill
+npx skills add ryannel/skills --skill generative-media-atlas
+
+# Several, in one command (repeat the flag)
+npx skills add ryannel/skills --skill z-image --skill character-lora-training
+
+# Interactive pick from the full list
+npx skills add ryannel/skills
+
+# Non-interactive, e.g. in CI
+npx skills add ryannel/skills --skill z-image -g -a claude-code -y
+```
+
+**Ask the user before installing** — especially with `-g`, or into a repository they did not ask you
+to modify. Installing writes files into their agent directories; it is a change to their machine,
+not a lookup.
+
+Sources resolve several ways: GitHub shorthand (`ryannel/skills`), a full GitHub/GitLab/git URL, a
+direct tree URL to one skill, a local path, or a `.zip`/`.tar` download. Private repositories use
+whatever Git authentication is already configured — Git credential helper first, then `gh repo
+clone`, then SSH.
+
+---
+
+## 3. Bundles by playbook
+
+From [`playbooks.md`](playbooks.md). Add `-g` for global, `-a claude-code` to target one agent.
+
+| Playbook | Command |
+|---|---|
+| **A** — realistic invented character, on RunPod | `npx skills add ryannel/skills --skill generative-media-atlas --skill z-image --skill character-lora-training --skill comfyui-on-runpod --skill image-production-workflows` then `npx skills add runpod/runpod-plugins-official` |
+| **B** — anime character, local | `npx skills add ryannel/skills --skill anima --skill character-lora-training --skill image-production-workflows` |
+| **C** — design image with text | `npx skills add ryannel/skills --skill ideogram-4 --skill image-production-workflows` |
+| **D** — still into a shot | `npx skills add ryannel/skills --skill wan-2-2 --skill image-production-workflows` (swap `wan-2-2` for `ltx-2-5` or `minimax-h3` per the licence fork) |
+| **E** — replace a person in footage | `npx skills add ryannel/skills --skill krea-2 --skill scail-2 --skill character-lora-training` |
+| **F** — run it as an API | `npx skills add ryannel/skills --skill comfyui-on-runpod --skill image-production-workflows` then `npx skills add runpod/runpod-plugins-official` |
+| **Everything** | `npx skills add ryannel/skills --skill '*'` |
+
+---
+
+## 4. Scope, agents, and how files land
+
+| Flag | Effect |
+|---|---|
+| *(default)* | Project scope — `./<agent>/skills/`, committed with the repo, shared with the team |
+| `-g, --global` | User scope — `~/<agent>/skills/`, available in every project |
+| `-a, --agent <agents…>` | Target named agents (`claude-code`, `codex`, `cursor`, …); `'*'` for all |
+| `-s, --skill <skills…>` | Specific skills by name; `'*'` for all. Quote names containing spaces |
+| `--copy` | Independent copies per agent instead of symlinks to one canonical copy |
+| `-y, --yes` | Skip confirmation prompts |
+| `--all` | Every skill to every agent, no prompts |
+
+**Symlink is the default and the right one** for this suite: one canonical copy per skill, so
+`npx skills update` updates every agent at once. Use `--copy` only where symlinks are not supported.
+
+**Install by skill name, not by path.** Names are stable across repository reorganisation; this repo
+groups skills under `skills/generative-media/`, and that grouping is invisible to the installed
+result.
+
+---
+
+## 5. Reading a skill without installing it
+
+```bash
+npx skills use ryannel/skills@z-image | claude
+npx skills use ryannel/skills --skill z-image --agent claude-code
+```
+
+`skills use` resolves the source the same way `add` does, writes the skill to a temporary directory,
+and prints the generated prompt to stdout — or starts an agent with it when `--agent` is given.
+Useful for a one-off consultation, and for checking whether a skill is what you want before it lands
+in a repository.
+
+---
+
+## 6. Keeping skills current
+
+```bash
+npx skills update                       # all, with a scope prompt
+npx skills update z-image wan-2-2       # named
+npx skills update -g                    # global only
+npx skills list                         # what is installed, where
+```
+
+**Run it against this suite deliberately.** Its subjects move weekly, and every skill here carries a
+`Facts dated …` line in its two-bar section — compare that against your install date rather than
+assuming the copy on disk is current.
+
+---
+
+## 7. The Claude Code plugin route
+
+An alternative to per-skill installation, which installs the whole domain as one plugin:
+
+```bash
+/plugin marketplace add ryannel/skills
+/plugin install generative-media-skills@ryannel-skills
+```
+
+The CLI also reads `.claude-plugin/marketplace.json` when discovering skills in a repository, so
+skills declared there are found at their declared depth rather than by the bounded depth-3 walk.
+
+---
+
+## 8. Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| A link inside a skill 404s | The sibling is not installed; nothing resolves transitively | Install it: `npx skills add ryannel/skills --skill <name>` |
+| `--list` shows more skills than the catalogue | The CLI scans `.agents/skills/` and `.claude/skills/` as standard locations, so a repo's own authoring machinery appears | Repo-side fix: `metadata.internal: true` in that skill's frontmatter hides it unless `INSTALL_INTERNAL_SKILLS=1` |
+| An expected skill is missing from `--list` | It is marked internal | `INSTALL_INTERNAL_SKILLS=1 npx skills add <repo> --list` |
+| Private repo download fails | Git auth not configured for that remote | Configure the credential helper, authenticate `gh`, or use the SSH URL form. `GITHUB_TOKEN`/`GH_TOKEN` work for API access |
+| Skill installs but the agent never uses it | The `description` is the trigger the agent matches on | Check the description actually names the user's vocabulary — the model names, node names and error strings they would type |
+| Updating one agent leaves another stale | Installed with `--copy` | Reinstall with symlinks, or update each agent |
+| A skill's claims are out of date | Skills are snapshots | `npx skills update`, then check the skill's `Facts dated` line |

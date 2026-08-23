@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-08-22",
+  "updated": "2026-08-23",
   "tiers": {
     "hot": 1,
     "active": 7,
@@ -147,6 +147,14 @@
           "finding": "CLAIM HOLDS and is now better sourced: a HF discussion thread on ideogram-ai/ideogram-4-fp8 is titled 'No Controlnet Capability'. No ControlNet, PuLID or IP-Adapter for Ideogram 4 found. NOTE this is what keeps half the routing advice correct even after the LoRA finding - adapters and LoRA training are separate axes and the repair must not conflate them.",
           "where": "SKILL.md:151, :218",
           "action": "None, but see ideogram4-lora-ecosystem-exists - the repair must preserve this distinction."
+        },
+        {
+          "finding": "Consistent-characters verdict is wrong. SKILL.md's suite table says 'Weak on open weights — no identity adapters, no edit variant, no published character LoRAs' and routes away. All three clauses hold, but a published no-training workflow gets identity out of the model anyway: reference on the left half of a wide canvas, that half locked, prompt the model to complete the canvas as 'two photos of the exact same person', crop the right half [community — reality_comes, r/StableDiffusion, 402 pts, ~2026-06; github.com/reality-comes/comyui-workflows]. Rewrite the row, and re-test STANDARD §4.1's exemption that lets this skill omit characters.md — it was granted on 'no identity tooling AND an explicit route-away row', and the first half no longer implies incapability. Mechanism and the general lesson are written up in generative-media-atlas/references/model-rankings.md §3.1.",
+          "found": "2026-08-23"
+        },
+        {
+          "finding": "The NSFW verdict may be too absolute, and it is the same failure shape as the character-reference finding. character-lora-training/references/nsfw-training.md §2 says Ideogram 4 has a 'hard model-level filter, in the weights' and to 'route elsewhere entirely'; ideogram-4/SKILL.md documents the blocked-image response. But a working NSFW generation is posted using ideogram-4 with community LoRAs ('real engine' and 'lenovo' at 0.4 strength, 48 steps) via a JSON caption [community — Ashamed-Ad7403, r/unstable_diffusion, 2026-08]. The 2026-08-23 Civitai census also puts Ideogram 4.0 at 26% explicit across its 34 LoRAs — low n, but not zero. Establish whether community LoRAs actually move past the filter and soften 'route elsewhere entirely' accordingly, in both skills.",
+          "found": "2026-08-23"
         }
       ]
     },
@@ -342,7 +350,12 @@
           "check": "Check whether anyone has published a Z-Image DiT block map or a block-weighted loader that understands S3-DiT. If one lands, the failure-modes row gains a real fix and stops being a prevention-only entry."
         }
       ],
-      "open_findings": []
+      "open_findings": [
+        {
+          "finding": "VRAM floor is likely conservative. SKILL.md infers 'budget at least 16 GB' for Base from parameter count and marks quantised Turbo at 6-8 GB [community — re-verify]. A 1,084-point report runs Z-Image-Turbo on an RTX 2060 [community — Royal_Carpenter_1338], with some images passed through Z-Image-Base via the ComfyUI Z-Image upscaling node template. Re-verify both the floor and that Base-as-upscaler-over-Turbo pattern, which the skill does not describe.",
+          "found": "2026-08-23"
+        }
+      ]
     },
     "sdxl": {
       "path": "skills/generative-media/sdxl",
@@ -565,6 +578,14 @@
           "finding": "A widely-shared 16 GB training writeup trained at 768 and was corrected in its own comments: pretraining spanned 256/512/1024 stages, so 768 was never a trained resolution. Skill had no statement either way.",
           "where": "references/lora-training.md section 2c",
           "action": "RESOLVED 2026-08-22 - 2c added with the measured 16 GB run and all four corrections."
+        },
+        {
+          "finding": "VRAM band may be conservative: SKILL.md sizes fp8_scaled at 13.1 GB + 5.2 GB encoder, 'comfortable on 16-24 GB'. A 600-point report runs Krea 2 Turbo fp8_scaled on an 8 GB RTX 3070 Ti with 64 GB system RAM [community — niechta]. Worth a sentence on offload making 8 GB viable, since the current text implies GGUF is the only sub-16 GB route.",
+          "found": "2026-08-23"
+        },
+        {
+          "finding": "SKILL.md and characters.md discuss bypass LoRAs for the muted-expression tax, and lora-training.md notes a krea2filterbypass line circulating '[community — re-verify]'. The 2026-08-23 r/unstable_diffusion sweep shows it in routine production use at high weight — '<lora:krea2filterbypass3:2>' stacked with MysticXXX_KREA2_V4 [community — KlitoriaPierce] — so it is v3, used at weight 2, and no longer merely circulating. Also corroborated: Krea 2 is the dominant adult IMAGE model by a wide margin (LUSTIFY!, FinePorn v3 TURBO, Moody Krea 2 Mix), and Krea 2 + Identity Edit + an NSFW LoRA is a named pattern for consistent characters in adult scenes [community — Clone-Protocol-66]. Promote the filterbypass note from re-verify to a stated fact with the version and weight.",
+          "found": "2026-08-23"
         }
       ]
     },
@@ -703,6 +724,10 @@
           "finding": "SCAIL-2, a Wan 2.1-derived character-replacement/motion-transfer model with SAM3 identity tracking, has displaced Wan Animate in community practice for character swaps and was entirely absent from the skill. Bernini-R is a second Wan-family rv2v model in the same rotation.",
           "where": "SKILL.md 'Motion, camera and structural control' (new SCAIL-2 subsection) and the suite table",
           "action": "PARTIALLY RESOLVED 2026-08-22 - documented as an ecosystem pointer with the reference-prep craft. The Wan 2.1 lineage claim is community-sourced and flagged; verify against a primary source. A dedicated scail-2 skill is briefed in workbench/scail-2/."
+        },
+        {
+          "finding": "A 27-generation single-variable study on anatomy collapse in I2V is worth carrying [community — RedMimicStudios]: prompt phrasing, 8 negatives, 20-vs-12 steps, NSFW LoRA 1.0-vs-bypass, 49-vs-33 frames, shift 6.5/7.0/8.0/9.0 and three source-image revisions ALL produced no change; a 28-run seed batch gave 2 usable. Generalisable diagnostic: when seed variance dominates and nothing deterministic moves the result, the base cannot hold the composition — change the checkpoint. Swapping to an NSFW-merged checkpoint fixed it in one run. Measurable QC proxy: edge density first frame to last (Wan 2.2 Q4_K_M -10.1% broken; a 'smooth motion' merge -27.3% linework dissolved; Wan 2.2 I2V 10-step NSFW fp8 merge -3.2% fine); ESRGAN on the smooth merge changed nothing (-28.2%), ruling out post-process by measurement. Working settings carry two traps present in the workflow JSON but absent from its description: asymmetric CFG (2.0 HighNoise / 1.0 LowNoise, a CFG-distilled merge) and uni_pc/normal rather than euler; also LoRA none, because NSFW LoRAs are pre-merged and stacking double-applies.",
+          "found": "2026-08-23"
         }
       ]
     },
@@ -870,6 +895,10 @@
           "finding": "Watchlist item ltx-2-5-licence-unread retired. The LTX-2.x Community License was read in full for the new [ltx-2-5](../ltx-2-5/) skill, including the $10M revenue gate, Attachment A's twenty restrictions, the incorporated AUP and the derivative clauses. The comparison in H3's alternatives table no longer rests on an unread document.",
           "where": "SKILL.md licence section and suite table; references/licence-and-territory.md alternatives table",
           "action": "RESOLVED 2026-08-22. IMPORTANT for the next repair pass: LTX-2.5 is a weaker alternative for excluded territories than the unread comparison implied — its AUP bars sexually explicit content and binds local weights, and Attachment A para 20 bars competing products at any revenue. Verify the alternatives table says so."
+        },
+        {
+          "finding": "H3 is the community's decisive choice for adult video ('far above LTX and Wan', 'the most powerful open source model' — AidenAizawa, Revolutionary-Bar766, Hearmeman98, convergent), which sharpens rather than softens the territory clause: the capability leader is one many readers cannot lawfully use. Substantive prompting craft not in the skill, from a 427-point writeup [community — nsfwVariant]: Ref2VA preferred over FL2VA for flexibility; 'then' vs 'while' governs sequential vs simultaneous actions and 'causes 80% of the jank'; timestamps in mm:ss.000 attach to the action they sit beside, allow >=3s per garment; over-describing what the model gets wrong reliably works because H3 is adherent enough to hand-hold; >20 steps (~30) measurably reduces errors AND improves audio quality; ~0.8 MP is the reliability sweet spot; a nude reference image (or close-up anatomy refs) is what makes undressing work. Separately [community — Revolutionary-Bar766]: beta scheduler instead of simple is a 'huge impact' change, plus video sigma shift 12->15 and audio 3->1.5. Hardware floor lower than documented: 540p on a 3060 Ti 8 GB with turbo LoRA + SageAttention.",
+          "found": "2026-08-23"
         }
       ]
     },
@@ -1014,6 +1043,18 @@
           "finding": "Cross-skill contradiction, detected while reconciling freshness state. This skill's NSFW family table says Z-Image and Krea 2 are 'not well documented either way', but the z-image and krea-2 skills both resolved that on 2026-08-13 with Civitai figures (46-47% and ~52% of published LoRAs adult-flagged).",
           "where": "references/nsfw-training.md section 2 table (~L82); SKILL.md flagged bullet ~L207",
           "action": "Replace the 'not well documented either way' row with the two figures and drop the [flagged - re-verify] marker in both places. No research needed — the evidence is already captured in z-image/z-image-nsfw-position and krea-2/krea-nsfw-position."
+        },
+        {
+          "finding": "VNCCS 3.0 (AHEKOT, r/StableDiffusion 892 pts, ~2026-07) is unmentioned anywhere in the suite: a ComfyUI character-consistency suite with auto-downloading ControlCenter, a Pose Studio, a clothing generator that clones outfits across characters, per-sprite regeneration, and full Anima-Base-1.0 integration. Assess whether it belongs in the tooling section here or in anima; note the Easy-Install repo (github.com/AHEKOT/VNCCS_Easy-Install).",
+          "found": "2026-08-23"
+        },
+        {
+          "finding": "nsfw-training.md §2's adult-share table (dated 2026-08-13, ~100 LoRAs per base) is close to the INVERSE of a re-census taken 2026-08-23 over 600 most-downloaded LoRAs per base using Civitai's nsfwLevel bitmask (X|XXX bits): Pony 67%, Illustrious 56%, Anima 52%, NoobAI 50%, Krea 2 46%, Z-Image Turbo 45%, SDXL 1.0 31%, Flux.1 dev 37%, Wan 2.2 T2V/I2V 23%/22%, LTX 2.3 14%. The old table puts Wan 2.2 I2V HIGHEST at 90% and Flux lowest at 28%. Likely cause: nsfwLevel derives from PREVIEW IMAGES, and video LoRA previews are often tame first frames, so the metric systematically undercounts video — which would explain the video half of the inversion but not the Flux/SDXL half. Note also that the API's `nsfw` boolean is dead (false for every model sampled, including XXX ones), so any figure built on it is wrong. Re-derive with a stated method and record it in the file; the qualitative claim that adult work is a dominant published use of open video models is well supported by r/unstable_diffusion regardless of the metric. Full method and caveats in generative-media-atlas/references/adult-work.md §1.",
+          "found": "2026-08-23"
+        },
+        {
+          "finding": "Two adult-work gaps surfaced in the 2026-08-23 r/unstable_diffusion sweep that nsfw-training.md does not cover. (1) Anatomy/capability LoRAs destabilising character LoRAs is a live unsolved constraint, not a solved recipe: one practitioner worked through four published Wan I2V anatomy LoRAs (DASIWA, Ultimate pussy anus helper, Edible Anuses, HearmemanAI) and each either failed to render or 'changes the character lora too much' [community — One-Energy5403]. The file's stack-underneath advice is exactly what people are doing when this happens. (2) Same-sex/non-heteronormative scenes are a documented weak spot across SDXL, Z-Image and Krea 2 — distorted anatomy and intrusive male anatomy in two-woman scenes [community — ricovelez; no answer in thread]. This is dataset composition and fits the file's own limit-is-data framing; nothing in the suite addresses it.",
+          "found": "2026-08-23"
         }
       ]
     },
@@ -1502,6 +1543,124 @@
         }
       ],
       "open_findings": []
+    },
+    "generative-media-atlas": {
+      "path": "skills/generative-media/generative-media-atlas",
+      "tier": "active",
+      "cadence_days": 14,
+      "last_checked": "2026-08-23",
+      "last_drift_found": "2026-08-23",
+      "quiet_streak": 0,
+      "why_tier": "Hub skill authored 2026-08-23. Its own subject — the skills ecosystem — moves in weeks, not days: vendor skill repos add and rename skills without notice (RunPod went 6 to 7 between passes) and the skills CLI ships flags quietly. Its comparative rankings are derived from the sibling skills, so drift there is caught on those skills' own cadences and surfaces here as a consistency check rather than fresh research.",
+      "linked_skills": [
+        "z-image",
+        "sdxl",
+        "flux-2",
+        "ideogram-4",
+        "krea-2",
+        "anima",
+        "wan-2-2",
+        "minimax-h3",
+        "ltx-2-5",
+        "scail-2",
+        "character-lora-training",
+        "comfyui-on-runpod",
+        "image-production-workflows"
+      ],
+      "watchlist": [
+        {
+          "id": "runpod-skill-inventory",
+          "type": "structural",
+          "claim": "RunPod publishes 7 skills (runpod, runpod-usage, runpodctl, runpod-mcp, flash, companion-clis, runpod-migrate) and 24 golden paths including 02-comfyui-pod, 07-network-volume-handoff, 20-model-caching-endpoint, 21-storage-tiers, 25-bake-vs-mount",
+          "where": "SKILL.md 'The ecosystem beyond this suite'; references/ecosystem-map.md §1; also restated in comfyui-on-runpod",
+          "check": "Read the repo tree at runpod/runpod-plugins-official (plugins/runpod/skills and .../runpod/golden-paths). Update both skills if names or counts changed."
+        },
+        {
+          "id": "comfy-skill-inventory",
+          "type": "structural",
+          "claim": "Comfy-Org/comfy-skills ships 12 skills, all Comfy Cloud MCP command wrappers rather than model craft; installed as a Claude Code plugin (comfy-cloud@comfy-skills)",
+          "where": "SKILL.md ecosystem table; references/ecosystem-map.md §2",
+          "check": "Read Comfy-Org/comfy-skills tree and README. Watch specifically for Comfy shipping model-knowledge skills, which would overlap this suite and change the routing story."
+        },
+        {
+          "id": "hf-skill-relevance",
+          "type": "ecosystem-gap",
+          "claim": "Hugging Face's skills repo has no diffusion-LoRA-training skill; only hf-cli and hf-mem are relevant here",
+          "where": "references/ecosystem-map.md §3",
+          "check": "Re-list huggingface/skills. A diffusion trainer landing there would be a real change to the training story."
+        },
+        {
+          "id": "vendors-publish-nothing",
+          "type": "ecosystem-gap",
+          "claim": "None of Black Forest Labs, Stability, Alibaba/Tongyi, Lightricks, MiniMax, Z.ai or Civitai published agent skills as of 2026-08-23",
+          "where": "SKILL.md ecosystem section; references/ecosystem-map.md §4",
+          "check": "Search for official SKILL.md repos from those vendors. If one appears, route to it and delete the overlap rather than maintaining a second copy."
+        },
+        {
+          "id": "skills-cli-surface",
+          "type": "version-pin",
+          "claim": "skills CLI flags (-g/-a/-s/-l/--copy/-y/--all), the use/list/find/update/remove/init commands, metadata.internal + INSTALL_INTERNAL_SKILLS, and the absence of any dependency mechanism",
+          "where": "SKILL.md 'Installing what you need'; references/installing-skills.md §1-2, §8",
+          "check": "Re-read the vercel-labs/skills README. A dependency mechanism landing would materially simplify this skill and the whole suite's dangling-link story — treat it as a rewrite trigger."
+        },
+        {
+          "id": "lora-trainability-podium",
+          "type": "community",
+          "claim": "Character-LoRA trainability podium (Ideogram 4 > Krea 2 > FLUX.1 dev > Z-Image > Klein > FLUX.2 dev DNF) rests on one author's test, MesmerTools 2026-07-14",
+          "where": "SKILL.md rankings; references/model-rankings.md §4.1",
+          "check": "Search for any second independent cross-model LoRA comparison, or a published Ideogram 4 character-LoRA recipe. A second source either promotes this from single-source or contradicts it."
+        },
+        {
+          "id": "ranking-consistency",
+          "type": "structural",
+          "claim": "Every ranking here is derived from the sibling skills; where they disagree the sibling wins",
+          "where": "references/model-rankings.md throughout; SKILL.md two-bar section",
+          "check": "Diff the atlas's per-axis verdicts against the siblings' 'Where X sits in the suite' tables. Any sibling whose verdict moved since its last freshness check makes the atlas stale on that axis."
+        },
+        {
+          "id": "catalogue-completeness",
+          "type": "structural",
+          "claim": "The catalogue table, the rankings and the axis matrix cover exactly the 13 other published skills",
+          "where": "SKILL.md 'The catalogue in one table' and the axis matrix in references/model-rankings.md §10",
+          "check": "Compare against .claude-plugin/marketplace.json. A newly published skill missing from the atlas is a finding on the atlas, not on the new skill."
+        },
+        {
+          "id": "civitai-census",
+          "type": "community",
+          "claim": "LoRA pool sizes measured on the Civitai API 2026-08-23: Z-Image Turbo 2,191+ vs Base 671; Krea 2 2,199+; Anima 2,197+; SDXL family 2,200+ each; FLUX.2 klein 9B 653 vs 4B 133; Ideogram 4.0 exactly 34 total and 1 character-tagged; Wan 2.2 502; MiniMax H3 22; LTX 2.5 3 vs 2.3 168; SCAIL-2 none",
+          "where": "references/model-rankings.md §4.5 and the axis matrix §10; SKILL.md rankings and licence gate",
+          "check": "Re-run the census against civitai.red/api/v1/models (types=LORA, baseModels=<name>, cursor-paginate; tag=character for the character split). Anima and Krea 2 are adding LoRAs weekly, so the ordering can move. Watch specifically for Ideogram 4's character count leaving 1, and for Z-Image Base closing on Turbo."
+        },
+        {
+          "id": "identity-practice-drift",
+          "type": "community",
+          "claim": "The no-training identity ordering (flux-2 > sdxl > krea-2) is a capability ranking; the practice has moved to edit models (Krea 2 Identity Edit, Flux klein 9B, Qwen-Image-Edit) and a 2026-08-23 year-sorted r/StableDiffusion sweep found no top post naming PuLID or InstantID",
+          "where": "SKILL.md rankings; references/model-rankings.md §3.2",
+          "check": "Re-run the sweep (pulid OR instantid OR 'identity edit' OR 'character consistency'). If adapters resurface, or if an edit model is measured against them on likeness, the capability-vs-practice split may collapse into a single ordering."
+        },
+        {
+          "id": "adult-stack",
+          "type": "community",
+          "claim": "Adult stack as of 2026-08-23: Krea 2 checkpoints dominate image (LUSTIFY!, FinePorn v3 TURBO), MiniMax H3 dominates video decisively, Wan 2.2 is the only licence-clean video path, LTX adult work sits on 2.3 not 2.5; Civitai explicit-share census led by Pony 67%",
+          "where": "SKILL.md adult-work ranking; references/adult-work.md",
+          "check": "Re-sweep r/unstable_diffusion top-of-month and re-run the Civitai nsfwLevel census (X|XXX bits over 600 most-downloaded LoRAs per base). H3's lead is weeks old and LoRA-poor — watch for a purpose-built adult video LoRA ecosystem forming, and for anything displacing Krea 2 on the image side."
+        },
+        {
+          "id": "uncovered-models",
+          "type": "gap",
+          "claim": "Seedance 2.5, Seedream 5 and Grok Imagine appear in adult production reports on r/unstable_diffusion and are not covered anywhere in this suite",
+          "where": "not covered — this is a catalogue gap, not a claim in the skill",
+          "check": "Assess whether any has open weights and enough ecosystem to justify a skill; if only hosted/closed, note them as out of scope in the atlas rather than leaving the silence ambiguous."
+        }
+      ],
+      "open_findings": [],
+      "resolved": [
+        {
+          "id": "reddit-sweep-gap",
+          "resolved": "2026-08-23",
+          "note": "Primary r/StableDiffusion sweep run 2026-08-23 via the Chrome extension. Realism ordering held and is convergent with the suite's routing. Identity produced two corrections, both applied to the atlas: the capability-vs-practice split (§3.2) and the Ideogram canvas trick (§3.1), the latter filed as a finding against ideogram-4."
+        }
+      ]
     }
   }
 }

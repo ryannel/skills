@@ -22,6 +22,7 @@ The earlier framing said the repo should stay generative-media-only. The domain 
 
 - `workbench/<skill-name>/` — Staging area for a skill in progress. Holds reference material gathered for the skill and an optional `prompt.md` describing what the skill should do / how to generate it. (Current example: `workbench/z-image/prompt.md`.) Nothing here is published.
 - `skills/<domain>/<skill-name>/` — **The published skills.** This repo *is* the skills.sh marketplace (remote: `github.com/ryannel/skills`). Registration in `.claude-plugin/marketplace.json` and the README table is what actually publishes a skill.
+  - **`generative-media-atlas` is the domain's entry point and the one skill written to work installed alone.** It ranks the models by job, carries the licence-first elimination ladder, routes whole goals through several skills, and holds the install commands — for this suite and for the canonical skills RunPod, Comfy-Org and Hugging Face publish. It is a **hub skill**, a fourth shape alongside the model and cross-cutting shapes in `workbench/uniformity/STANDARD.md`, and it justifies two deviations from that document: it exceeds the cross-cutting SKILL.md word band, because standalone install means it must *carry* what a sibling would route; and it links every published skill, because being the map is its job. When you add a skill to this domain, add it to the atlas's suite map and its rankings, and add the atlas row back to the new skill's suite table.
 - `.agents/skills/` — **Authoring machinery only.** `media-model-skill` (the spec for writing a model skill), `skill-freshness` (the freshness protocol), and vendored `skill-creator` (eval machinery). Symlinked at `.claude/skills` so Claude Code discovers them natively.
 
   **Do not run `skill-creator`'s scripts.** `scripts/run_eval.py` — and everything built on it (`run_loop.py`, `improve_description.py`, the benchmark flows) — spawns a `claude -p` subprocess per query. **`claude -p` is billed through the Anthropic API, not the Claude Code subscription.** Read skill-creator as documentation of the eval *method*; run trigger evals in-session instead. Before running any script here, grep it for `claude -p`.
@@ -44,9 +45,14 @@ The reason for keeping them out of the catalogue is that both are load-bearing o
 
 **Being in `.agents/skills/` is deliberate, not accidental:** that path plus the `.claude/skills` symlink is how Claude Code discovers them when working *in* this repo, which is the only place they make sense.
 
-**Known wart: they still appear in `npx skills add ryannel/skills --list`.** The CLI scans `.agents/skills/` and `.claude/skills/` as standard locations, so the repo reports 12 skills where the catalogue has 10. There is no clean fix today — every path an agent auto-discovers is a path the CLI scans, by design, so the meta-skills cannot be both locally discoverable and hidden. The upstream request for a `metadata.internal` flag is [vercel-labs/skills#572](https://github.com/vercel-labs/skills/issues/572), open and unimplemented as of 2026-08-14.
+**Resolved 2026-08-23: they no longer appear in `npx skills add ryannel/skills --list`.** The CLI scans `.agents/skills/` and `.claude/skills/` as standard locations, so the repo used to report 12 skills where the catalogue had 10. The `metadata.internal` flag has since shipped in the `skills` CLI — a skill carrying
 
-Until it lands, both meta-skill descriptions open with a **REPO-INTERNAL AUTHORING MACHINERY** notice, so anyone who finds them in a listing knows before installing. If #572 ships, add the flag and drop the prefix.
+```yaml
+metadata:
+  internal: true
+```
+
+is hidden from discovery unless `INSTALL_INTERNAL_SKILLS=1` is set. Both meta-skills now carry it, and the shouty **REPO-INTERNAL AUTHORING MACHINERY** prefix their descriptions opened with has been softened to a normal sentence, since the listing no longer needs the warning. **Verified by running `npx skills add ./ --list`:** it now returns exactly the catalogue, while Claude Code still discovers both meta-skills through the `.claude/skills` symlink. ([vercel-labs/skills#572](https://github.com/vercel-labs/skills/issues/572) is still open as an issue; the feature shipped anyway.)
 
 Revisit if either becomes true: the house style is wanted by people outside this repo, or a second factory needs the same machinery. Until then the cost of maintaining a generalised fork outweighs the benefit.
 

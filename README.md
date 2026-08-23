@@ -13,8 +13,20 @@ Image and video models, plus the craft that spans them. The image-to-video hando
 lock a still with an image skill, then drive it with a video model — is why both live
 together rather than in separate marketplaces.
 
+**Start here if you don't know which skill you need.**
+[`generative-media-atlas`](./skills/generative-media/generative-media-atlas/) is the
+entry point: it ranks the models by job, settles most choices with a licence-first
+elimination ladder, and routes a whole goal — *"realistic photos of a character I
+invented, in ComfyUI on RunPod"* — through the skills it needs, with the install
+commands for each. It is written to be useful installed on its own.
+
+```bash
+npx skills add ryannel/skills --skill generative-media-atlas
+```
+
 | Skill | Model | What it covers |
 |---|---|---|
+| [`generative-media-atlas`](./skills/generative-media/generative-media-atlas/) | **Cross-suite** | **Which model, and which skills.** Rankings by job (realism, identity, LoRA trainability, control, typography, anime, licence, video) with the trade behind each; the elimination ladder — licence → territory → hardware → capability → dialect → *then* quality; six end-to-end playbooks; install commands for this suite and for the canonical skills published by RunPod, Comfy-Org and Hugging Face |
 | [`flux-2`](./skills/generative-media/flux-2/) | FLUX.2 (Black Forest Labs) | ComfyUI setup, 4-part prompting, hex color control, ControlNet, PuLID face identity, BFL API, LoRA training |
 | [`ideogram-4`](./skills/generative-media/ideogram-4/) | Ideogram 4 (Ideogram, Inc.) | JSON caption schema, typography, bbox layout, web app / hosted API / self-hosted open weights |
 | [`z-image`](./skills/generative-media/z-image/) | Z-Image (Alibaba Tongyi) | ComfyUI multi-stage pipelines, Fun Union ControlNet, character LoRA via FaceDetailer, LoRA training |
@@ -53,8 +65,10 @@ Several skills cross-reference each other — `flux-2` points at
 `character-lora-training` for shared training craft, the model skills point at
 `comfyui-on-runpod` for deployment. Those links are relative between siblings, and
 installing flattens the domain folder away, so they resolve **once both skills are
-installed** and dangle if only one is. If a skill you installed keeps referring to
-another, install that one too.
+installed** and dangle if only one is. The `skills` CLI has no dependency mechanism,
+so nothing is pulled transitively — if a skill you installed keeps referring to
+another, install that one too. `generative-media-atlas` names the exact command for
+whichever job you are doing.
 
 As a Claude Code plugin instead:
 

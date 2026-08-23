@@ -191,6 +191,7 @@ The boundary table at the top routes *inward* — which per-model trap applies t
 | Training on **Ideogram 4** | [`ideogram-4`](../ideogram-4/) — style LoRAs are a real ecosystem there; character LoRAs are trainable but undemonstrated, so treat it as exploratory |
 | Holding a character in **video** | [`wan-2-2`](../wan-2-2/), [`minimax-h3`](../minimax-h3/), [`ltx-2-5`](../ltx-2-5/). The craft here applies; video adds manual captioning cost and per-architecture rules |
 | Video identity with **no training path** | [`scail-2`](../scail-2/) — identity is a reference image, not an adapter, so nothing on this page applies |
+| **Deciding which base to train on at all** | [`generative-media-atlas`](../generative-media-atlas/) — it splits "easiest to train on" into best likeness, fastest loop and best-documented, which have different winners, and it carries the one published cross-model comparison |
 
 ---
 

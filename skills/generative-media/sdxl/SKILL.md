@@ -219,6 +219,7 @@ Before hitting Queue Prompt:
 | Commercial use under the licence | Base, Lightning and Hyper-SDXL are clean OpenRAIL++-M with no revenue cap — quietly one of SDXL's strongest advantages over most of the newer models. [`z-image`](../z-image/)'s Apache-2.0 is the one that is cleaner still, since OpenRAIL++-M's use-restrictions travel downstream with every redistribution. **Turbo is the exception** `[contested]` | — (verify Turbo directly with Stability before shipping on it) |
 | Mixed-model pipelines | **Front-end (control) and back-end (texture)** roles | [`image-production-workflows`](../image-production-workflows/) for the cross-model craft |
 | Making it move | Still images only | [`wan-2-2`](../wan-2-2/) — image-to-video from a still locked here. SDXL's mature identity stack (InstantID, IP-Adapter FaceID) is a strong upstream for the still that anchors each shot |
+| **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
 
 ---
 
