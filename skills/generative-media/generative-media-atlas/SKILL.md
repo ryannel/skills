@@ -342,6 +342,35 @@ findable as of **2026-08-23** `[flagged — negative result from search; re-veri
 to judge a third-party skill before trusting it:
 [`references/ecosystem-map.md`](references/ecosystem-map.md).
 
+### The compute stack is pluggable — RunPod is the current inventory, not the architecture
+
+Every route in this suite runs on a three-layer stack, and only the bottom layer is vendor-shaped:
+
+1. **Model skills** — what to run and how to prompt, train and judge it. Platform-agnostic.
+2. **Execution surface** — ComfyUI or diffusers. Every model skill carries **both** as first-class
+   surfaces, so "not ComfyUI" is already covered: the diffusers path needs no UI shell at all.
+3. **Compute platform** — where the GPU lives. Today the suite ships one platform skill,
+   [`comfyui-on-runpod`](../comfyui-on-runpod/), and its scoping — *the layer between the vendor's
+   platform skills and the model skills* — is the plug socket, not a RunPod commitment.
+
+**The platform-skill contract.** A skill for any other platform (Modal, Vast.ai, fal, Lambda, a
+homelab) fills the same slot by owning the same four things `comfyui-on-runpod` proved out: where
+models live so a fresh instance finds them out of the box; cost guards and the session-ending burn
+check; deploy-and-smoke-test for both interactive and API execution; and **routing to the vendor's
+own skills for provisioning** rather than restating them. Everything above the slot — model choice,
+prompting, LoRA craft, pipeline design — transfers unchanged.
+
+**Pick one platform, install its one skill.** The skills CLI resolves no dependencies, so
+pluggable means concretely: running on RunPod → `npx skills add ryannel/skills --skill
+comfyui-on-runpod` plus RunPod's own suite, per the table above. A second platform's skill, when it
+exists, slots into this sentence and nothing else in the suite changes.
+
+**Why there is exactly one platform skill today:** `comfyui-on-runpod` was generalised from a real
+production deployment, and that is the bar. A platform skill written from vendor docs alone would
+be the paraphrase this suite refuses to be — so new platform skills get authored the first time
+real work runs on that platform, not speculatively. If you run this suite somewhere else and want
+the skill to exist, that experience is the missing ingredient.
+
 ---
 
 ## Failure modes & QC
