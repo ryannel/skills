@@ -14,7 +14,7 @@ The dataset decides the ceiling. Hyperparameters only decide how close you get t
 
 ## 1. Size and curation
 
-**15–30 well-curated images beat 100 mediocre ones.** One of the more consistent findings across trainers and families — NanashiAnon puts the Illustrious-era single-outfit figure at 20–30, L3n4's crash course at "a well-curated 30–50 beats a poorly curated 500" `[community — NanashiAnon, L3n4/Civitai 25645; convergent]`. It holds because the failure mode of a large dataset is not "too much data" but "uncontrolled variance" — every uncaptioned inconsistency is something the model tries to learn.
+**15–30 well-curated images beat 100 mediocre ones.** This is one of the more consistent findings across trainers and families. NanashiAnon puts the Illustrious-era single-outfit figure at 20–30; L3n4's crash course says "a well-curated 30–50 beats a poorly curated 500" `[community — NanashiAnon, L3n4/Civitai 25645; convergent]`. It holds because a big dataset does not fail by having too much data. It fails by having variance nobody controlled — and every inconsistency you did not caption is something the model tries to learn.
 
 Curate against these, hard `[community — MyAIForce, Civitai guides 5301/6990; convergent]`:
 
@@ -33,7 +33,7 @@ Curate against these, hard `[community — MyAIForce, Civitai guides 5301/6990; 
 
 ## 2. The coverage protocol
 
-Coverage, not count, is what makes an identity generalise. The target is that every axis the model will be asked to vary at generation time appears varied in the dataset.
+Coverage, not count, is what makes an identity generalise. The goal is simple: anything you will later ask the model to change should already vary in the dataset.
 
 **Rotation — the 8-point protocol.** Around the head:
 
@@ -46,17 +46,17 @@ Coverage, not count, is what makes an identity generalise. The target is that ev
 7. Rear three-quarter right
 8. Rear
 
-Rear angles matter more than people expect. Without them the model has no idea what the back of the head looks like and will improvise — usually badly, and usually at the worst moment.
+Rear angles matter more than people expect. Without them the model has no idea what the back of the head looks like, so it improvises — usually badly, and usually at the worst moment.
 
 **Elevation.** At least one above eye level and one below. A dataset shot entirely at eye level produces a character that distorts the moment you ask for a high or low angle.
 
 **Shot size.** Close-up, medium, and full body. A face-only dataset gives you a character with an unreliable body; a full-body-only dataset gives you a face that dissolves at distance.
 
-**Expression.** Neutral plus at least two others. Otherwise expression locks — the character can only ever wear the face it was trained on, which reads as uncanny well before anyone can say why.
+**Expression.** Neutral plus at least two others. Otherwise expression locks, and the character can only ever wear the face it was trained on. That reads as uncanny well before anyone can say why.
 
 **Lighting and setting.** Vary both, or they become part of the identity and every generation inherits the dataset's lighting.
 
-**The one-clause rule.** When generating a dataset, hold the character description **byte-identical** and vary only the clause you are covering — rotation, or shot size, or expression. Anything else that drifts between images is variance the model will try to attribute to the character. `[community — Civitai dataset guides 7777/21257/21114; convergent]`
+**The one-clause rule.** When you generate a dataset, keep the character description **byte-identical** and change only the clause you are covering — rotation, or shot size, or expression. Anything else that drifts between images is variance, and the model will try to attribute it to the character. `[community — Civitai dataset guides 7777/21257/21114; convergent]`
 
 ---
 
@@ -65,14 +65,18 @@ Rear angles matter more than people expect. Without them the model has no idea w
 The now-standard route, and the one to prefer for anything you intend to publish:
 
 1. **Lock an anchor image.** One image that defines the character. Iterate here as long as it takes — everything downstream inherits it, and no amount of training fixes a weak anchor.
-2. **Generate the varied set with an edit model**, driving it from the anchor and varying one clause at a time per §2. Edit models hold identity across an edit far better than a text prompt holds it across generations.
+2. **Generate the varied set with an edit model**, driving it from the anchor and changing one clause at a time, per §2. An edit model holds an identity across an edit far better than a text prompt holds it across separate generations.
 3. **Over-generate and curate down.** Produce roughly twice what you need and cut to the best — perhaps 60 down to 30. Curation is where dataset quality actually comes from.
 4. **Caption per §4.**
 5. **Train, evaluate, and expect to revisit the dataset** rather than the hyperparameters when results disappoint.
 
-Two advantages beyond convenience: you get **coverage photography rarely provides** — a real photoset almost never has all eight rotations at matched lighting — and the character **resembles nobody**, which removes the likeness problem described in [`publishing-and-likeness.md`](publishing-and-likeness.md).
+There are two advantages beyond convenience. You get **coverage photography rarely gives you** — a real photo set almost never has all eight rotations under matched lighting. And the character **resembles nobody**, which removes the likeness problem described in [`publishing-and-likeness.md`](publishing-and-likeness.md) entirely.
 
 Which edit model to use for step 2 is a per-family question; your model skill names the one for its ecosystem.
+
+**Someone has packaged the whole loop.** VNCCS 3.0 — the Visual Novel Character Creation Suite — is a ComfyUI system that wires steps 1–3 together `[community — AHEKOT, r/StableDiffusion 892 pts]`. What you get over building it yourself: a **Control Center** that downloads and manages the models the workflows need, an interactive 3D **Pose Studio** for posing, framing, lighting and pose libraries, a **Character Cloner** that builds the anchor from reference images, a **Clothes Designer** that copies an outfit onto different characters, an **Emotion Studio** for expression sets, and **per-sprite regeneration**, so one bad frame does not cost you the sheet. Install via `github.com/AHEKOT/VNCCS_Easy-Install` `[official — repo README, read 2026-08-23]`.
+
+Settle two things before you train on its output. Its generation stack is reported to be built around **Anima-Base-1.0** `[community — AHEKOT; re-verify]`, so the stills inherit that model's look and its weights-side licence — check [`anima`](../../anima/) before publishing anything trained on them. And it aims at a **visual-novel sprite sheet**, which is a different coverage target from §2: it optimises for expression and outfit variety, and leaves rotation and elevation for you to check. Curate its output against §2 rather than assuming a finished sheet is a finished dataset.
 
 ### Feeding a new LoRA with an old one's pictures — when it helps, when it wrecks the run
 
@@ -87,23 +91,19 @@ Two rules keep this honest:
 
 Seeding earns its place when the old model was strong where you are borrowing and weak somewhere else. That is a different situation, and worth deciding on purpose rather than by whether the pictures happen to be lying around.
 
-**The whole loop has been packaged.** VNCCS 3.0 — the Visual Novel Character Creation Suite — is a ComfyUI character-consistency system that implements steps 1–3 as a wired pipeline `[community — AHEKOT, r/StableDiffusion 892 pts]`. What it gives you over hand-wiring: a **Control Center** that downloads and manages the models the workflows need, an interactive 3D **Pose Studio** for posing, framing, lighting and pose libraries, a **Character Cloner** that builds the anchor from reference images, a **Clothes Designer** that clones an outfit across different characters, an **Emotion Studio** for expression sets, and **per-sprite regeneration**, so one bad frame does not cost the sheet. Install via `github.com/AHEKOT/VNCCS_Easy-Install` `[official — repo README, read 2026-08-23]`.
-
-Two things to settle before training on its output. Its generation stack is reported to be built around **Anima-Base-1.0** `[community — AHEKOT; re-verify]`, so the stills inherit that model's look and its weights-side licence — see [`anima`](../../anima/) before publishing anything trained on them. And its target is a **visual-novel sprite sheet**, which is a different coverage target from §2: expression and outfit variation are what it optimises for, and the rotation and elevation axes are yours to check. Curate its output against §2 rather than assuming a finished sheet is a finished dataset.
-
 ### The video turnaround — a better factory for rotation specifically
 
-An edit model generates each angle independently, so eight edits give you eight chances for the identity to drift. **A video model generates them as one continuous camera move**, which makes the angular coverage internally consistent by construction rather than by curation. That is a categorical improvement on the hardest axis of §2, not a convenience.
+An edit model generates each angle separately, so eight edits give the identity eight chances to drift. **A video model generates them as one continuous camera move.** The angles then come out consistent because of how they were made, not because you curated them. On the hardest axis of §2, that is a different kind of answer — not just a convenience.
 
-The recipe: feed a handful of imperfect references to a reference-conditioned video mode — [`minimax-h3`](../../minimax-h3/)'s Ref2VA is the worked example — with a prompt that spins the character **360° slowly, with no cuts**, then extract frames. A packaged workflow exists: `PoopMan333/H3_Character_Sheet_Generator` `[community — PoopMan333, Civitai]`.
+The recipe: feed a handful of imperfect references into a reference-conditioned video mode — [`minimax-h3`](../../minimax-h3/)'s Ref2VA is the worked example — with a prompt that spins the character **slowly through 360°, with no cuts**. Then pull out the frames. There is a packaged workflow for it: `PoopMan333/H3_Character_Sheet_Generator` `[community — PoopMan333, Civitai]`.
 
 Three caveats decide whether it is worth it:
 
 - **It is expensive in generated frames.** The packaged workflow generates **124 frames to keep 6**. You are paying video-generation cost for a still dataset.
 - **Video stills are lower-detail than image stills.** Pair the turnaround with dedicated close-ups from an image model before training, or the LoRA learns a slightly soft face.
-- **Check the licence of the model you harvest from.** Some open video licences restrict using their output to train other models — [`ltx-2-5`](../../ltx-2-5/)'s Attachment A ¶18 does, with its scope against non-commercial work unsettled `[contested]`. A dataset factory is precisely the use that sits in that gap, and the resulting LoRA is the artefact that carries the problem forward.
+- **Check the licence of the model you harvest from.** Some open video licences restrict using their output to train other models. [`ltx-2-5`](../../ltx-2-5/)'s Attachment A ¶18 does exactly that, and how far it reaches into non-commercial work is unsettled `[contested]`. A dataset factory is precisely the use that sits in that gap, and the LoRA you end up with is the thing that carries the problem forward.
 
-The trick generalises to any video model with reference conditioning; the caveats generalise with it.
+The trick works on any video model with reference conditioning. So do the caveats.
 
 ---
 
@@ -124,7 +124,7 @@ The trick generalises to any video model with reference conditioning; the caveat
 | CLIP-class (SDXL-era, Pony/Illustrious/NoobAI) | Weighted comma-separated tags, booru dialect | **Verbatim rare token**, used literally |
 | LLM/T5-class (Flux, Z-Image, Qwen-class, Krea) | Natural prose clauses | Folded into a phrase, or omitted — bare rare tokens confuse a language encoder |
 
-Getting this backwards is a common cause of a LoRA that "trained fine but won't trigger."
+Getting this backwards is a common reason a LoRA "trained fine but won't trigger".
 
 **When a trait belongs to the person but still changes, caption whatever changes it.** Caption-the-residual has a blind spot the table above hides: some things are clearly part of the identity *and* clearly variable. Freckles are the tidy example. They belong to her, so the rule says never name them — but they fade under foundation, so a set shot over both bare-faced and made-up days contains two versions of her skin.
 
@@ -141,19 +141,19 @@ Caption the **exception, not the rule.** If most of the set is bare-faced, leave
 
 The opposite mistake is common and real: **naming the trait in your generation prompts bakes it in too hard.** One character LoRA whose synthetic set was made with "freckles across her face and body" in every prompt learned heavy, even freckling all over her — far more than the real person had. The words were in the caption *and* the thing was in every image, so it got taught twice. If a trait is part of the identity, let the pictures teach it and control it through its cause.
 
-**Consistency of vocabulary matters more than richness.** If you call it "three-quarter view" in one caption and "angled slightly away" in another, you have split one concept into two. Pick terms and reuse them exactly.
+**Using the same words matters more than using rich ones.** Call it "three-quarter view" in one caption and "angled slightly away" in another, and you have split one concept into two. Pick your terms and reuse them exactly.
 
-**Caption length should be even across the set.** A set where some images have three words and others have forty upweights the sparse ones in ways that are hard to predict.
+**Keep caption length even across the set.** If some images get three words and others get forty, the short ones carry more weight than you intended, in ways that are hard to predict.
 
-**Captionless training is contested.** Some trainers run DiT character LoRAs with no captions at all and report good replication. It works for pure replication and gives up controllability — you cannot vary what you never named. Treat it as a specialised technique, not a default. `[contested]`
+**Training with no captions at all is contested.** Some trainers run DiT character LoRAs that way and report good replication. It does work for pure replication, but you give up control: you cannot vary what you never named. Treat it as a specialised technique, not a default. `[contested]`
 
 ---
 
 ## 5. Multi-outfit and multi-character
 
-**Multi-outfit.** A single character LoRA can hold several distinct outfits if each gets a unique trigger tag, is visually distinct from the others, and has enough coverage of its own. The practical ceiling is around **six outfits** before they start bleeding into each other `[community — Khanykov01, Civitai 6990; strong]`. Beyond that, separate LoRAs, or an outfit LoRA stacked onto the character.
+**Multi-outfit.** One character LoRA can hold several distinct outfits, as long as each gets its own trigger tag, looks clearly different from the others, and has enough coverage of its own. The practical ceiling is around **six outfits** before they start bleeding together `[community — Khanykov01, Civitai 6990; strong]`. Past that, use separate LoRAs, or stack an outfit LoRA onto the character.
 
-The failure is asymmetric: outfits bleed into each other long before the identity degrades. If a character starts wearing a mix of two outfits, that is the ceiling announcing itself.
+The failure is lopsided: outfits bleed into each other long before the identity suffers. If your character starts wearing a mix of two outfits, that is the ceiling announcing itself.
 
 **Multi-character.** Do not train two people into one LoRA. They average. Train separately and compose at generation time:
 
@@ -161,19 +161,19 @@ The failure is asymmetric: outfits bleed into each other long before the identit
 - **Per-face detailer passes** — generate the scene without character LoRAs, then run a detailer per face with the relevant LoRA loaded. This is the most reliable route on image models.
 - **Separate shots and cut between them** on video, where no regional conditioning exists across frames.
 
-**Identity bleed rises with visual similarity.** Two characters of similar age, build and colouring will trade features far more than two who look nothing alike — worth knowing at casting time, when it is still cheap to change.
+**Identity bleed goes up with visual similarity.** Two characters of similar age, build and colouring trade features far more than two who look nothing alike. Worth knowing at casting time, while it is still cheap to change.
 
 ### Differential Output Preservation — a training-time answer, on some models
 
-The advice above assumes composition at generation time is the only lever. As of mid-2026 there is a **training**-side option worth knowing about, though it is model-dependent in a way that matters.
+Everything above assumes composing at generation time is your only lever. Since mid-2026 there is a **training**-side option too, though it depends on the model in a way that matters.
 
-**Differential Output Preservation** (DOP) trains each character LoRA against a **class** — e.g. `"woman"` — preserving the base model's output for the class while learning the individual. Several such LoRAs then load together in one generation with minimal bleed. A reproducible recipe: a LoKr config with DOP enabled, class `"woman"`, **1500 steps** rather than 750 (previews stabilise around 1500) `[community — MASilverHammer, r/StableDiffusion]`.
+**Differential Output Preservation** (DOP) trains each character LoRA against a **class**, such as `"woman"`. It preserves the base model's output for that class while learning the individual. Several such LoRAs can then load together in one generation with very little bleed. A reproducible recipe: a LoKr config with DOP enabled, class `"woman"`, **1500 steps** rather than 750 (previews stabilise around 1500) `[community — MASilverHammer, r/StableDiffusion]`.
 
 Boundaries, from the same source:
 
 - **Hard cap of four characters.** Five falls apart; four holds.
-- Characters **borrow features from each other** — lips are the reported offender — so similar-looking characters converge toward looking related. Section-5's similarity rule still applies, it is just less punishing.
+- Characters **borrow features from each other**, with lips the reported offender, so similar-looking characters drift toward looking related. The similarity rule above still applies. It is just less punishing.
 - **Prompt the distinguishing features.** Naming what separates two characters (a long nose, a jawline) is what keeps them separated at inference.
 - Captioning still matters. The author's lazily-captioned sets (trigger word only) worked; their well-captioned set produced the more resilient LoRA.
 
-**The model-dependence is the important part.** The same technique **failed on Z-Image Base** — DOP there prevented the character being learned at all — and **worked on Krea 2**. Do not assume it transfers. If a multi-character job is the requirement, that is now a reason to choose the base model on this axis specifically: see [`krea-2/references/characters.md`](../../krea-2/references/characters.md). Above four characters, or on a model where DOP does not take, fall back to per-face detailer passes.
+**The model-dependence is the important part.** The same technique **failed on Z-Image Base**, where DOP stopped the character being learned at all, and **worked on Krea 2**. Do not assume it transfers. If a multi-character job is the requirement, that is now a reason to choose the base model on this axis specifically: see [`krea-2/references/characters.md`](../../krea-2/references/characters.md). Above four characters, or on a model where DOP does not take, fall back to per-face detailer passes.

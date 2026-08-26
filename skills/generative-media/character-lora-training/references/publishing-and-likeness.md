@@ -1,10 +1,10 @@
 # Publishing, likeness, and what makes a LoRA distributable
 
-**Orientation, not legal advice.** This records what platforms and statutes actually say, with dates, so you can tell which constraints apply before spending training time. If real money or real exposure rides on it, ask a lawyer.
+**Orientation, not legal advice.** This records what platforms and statutes actually say, with dates, so you can work out which rules apply before you spend training time. If real money or real exposure rides on it, ask a lawyer.
 
-The reason this sits in a training skill at all: **these rules decide whether a finished LoRA can be published, and they constrain the dataset before you assemble it.** Finding out afterwards means the work was wasted.
+Why this sits in a training skill at all: **these rules decide whether a finished LoRA can be published, and they constrain the dataset before you assemble it.** Finding out afterwards means the work was wasted.
 
-**Everything here is dated because it moves.** Platform policy and statute are the two fastest-moving classes of claim in this whole skill, and both changed inside the last eighteen months. **Facts in this file were read on 2026-08-13** and the direction of travel is uniformly toward stricter. Re-verify the specific rule you are relying on before you publish `[flagged — re-verify]`.
+**Everything here is dated, because it moves.** Platform policy and statute are the two fastest-moving kinds of claim in this whole skill, and both changed within the last eighteen months. **Facts in this file were read on 2026-08-13.** The direction of travel is consistently toward stricter. Re-verify the specific rule you are relying on before you publish `[flagged — re-verify]`.
 
 ---
 
@@ -19,22 +19,22 @@ The scope is wider than people expect:
 | Covered | Notes |
 |---|---|
 | Living **and deceased** individuals | Including historical figures |
-| Public figures, celebrities, influencers | No public-interest carve-out |
-| **Private individuals** | Including yourself, for distribution purposes |
-| Fictional characters **as portrayed by a real actor** | The output resembling the actor is what's prohibited, not the character |
-| **SFW as well as NSFW** | This is not an adult-content rule. It is universal |
+| Public figures, celebrities, influencers | No exception for public interest |
+| **Private individuals** | Including yourself, if you want to distribute it |
+| Fictional characters **as played by a real actor** | What is banned is the output resembling the actor, not the character |
+| **SFW as well as NSFW** | This is not an adult-content rule. It applies to everything |
 
-**The arguments the policy explicitly rejects:**
+**The arguments the policy turns down by name:**
 
-- *"They consented to being filmed/photographed."* Consent in one context does not extend to AI generation.
-- *"It's for a fictional character, not the actor."* Training on a real actor's face is prohibited even when the depiction is fictional.
+- *"They agreed to being filmed or photographed."* Agreeing in one context does not extend to AI generation.
+- *"It's for a fictional character, not the actor."* Training on a real actor's face is banned even when the depiction is fictional.
 - *"It's a lookalike, not actually them."* If the result resembles an identifiable person, it is covered.
 
-**The one thing that is allowed:** using a name in a prompt where the result does not resemble that person in any meaningful way. That is a statement about *outputs*, not a licence to train on someone.
+**The one thing that is allowed:** using a name in a prompt, where the result does not meaningfully resemble that person. That is a statement about *outputs*. It is not permission to train on someone.
 
-Civitai frames the rationale as consent and privacy, and as future-proofing against tightening global regulation.
+Civitai explains the rule as being about consent and privacy, and about getting ahead of regulation that keeps tightening.
 
-**Practical consequence:** a character LoRA trained on a real person cannot be published to the main community host, whatever its content rating. Plan for that before assembling the dataset, not after.
+**What this means in practice:** a character LoRA trained on a real person cannot be published to the main community host, at any content rating. Plan for that before you assemble the dataset, not after.
 
 ---
 
@@ -50,59 +50,59 @@ US federal law, and the reason platform policy moved when it did.
 | FTC enforcement began | **19 May 2026** |
 | Civil penalty exposure | ~**$53,088 per violation** |
 
-**What it does:** makes it a federal crime to knowingly share, or threaten to share, non-consensual intimate imagery — **explicitly including AI-generated images depicting real people**, where the depiction is *"indistinguishable from an authentic visual depiction."*
+**What it does:** it makes it a federal crime to knowingly share, or threaten to share, non-consensual intimate imagery. That **explicitly includes AI-generated images of real people**, wherever the depiction is *"indistinguishable from an authentic visual depiction."*
 
-**What platforms must do:** implement notice-and-removal with a **48-hour** response window. "Covered platform" is defined broadly — any website, online service or application serving the public that primarily hosts user-generated content. That definition reaches well past the obvious hosts.
+**What platforms must do:** run a notice-and-removal process with a **48-hour** response window. "Covered platform" is defined broadly — any website, online service or application serving the public that mainly hosts user-generated content. That definition reaches well past the obvious hosts.
 
-**What this means for a trainer:**
+**What it means for a trainer:**
 
-- The exposure attaches to *distribution* of the imagery, not to the existence of a model file — but a published LoRA whose evident purpose is generating NCII of an identifiable person is not a comfortable position under either the statute or any host's terms.
-- **48-hour takedown is fast.** If you run any service that accepts user uploads, you are likely a covered platform and need a process.
-- This is US law. The EU, UK and several other jurisdictions have their own instruments, and state-level deepfake statutes are still landing. **The picture is moving** — re-verify rather than trusting a snapshot.
+- The exposure attaches to *distributing* the imagery, not to a model file existing. But a published LoRA whose obvious purpose is generating NCII of an identifiable person is not a comfortable position to be in, under either the statute or any host's terms.
+- **A 48-hour takedown window is fast.** If you run any service that accepts user uploads, you are probably a covered platform and need a process for it.
+- This is US law. The EU, the UK and several other jurisdictions have their own versions, and state-level deepfake statutes are still arriving. **The picture is still moving**, so re-verify rather than trusting a snapshot.
 
 ---
 
 ## 3. Does a synthetic character count as a real person?
 
-The genuine question people get stuck on: every base model was trained on photographs of real people, so is a character generated from one inherently a real-person likeness?
+Here is the question people genuinely get stuck on. Every base model was trained on photographs of real people. So is a character generated from one automatically a real-person likeness?
 
-**No. The test is resemblance of the output, not provenance of the training data.**
+**No. The test is whether the output resembles someone, not where the training data came from.**
 
-- A character that does not resemble any identifiable individual is fine, even though the base model learned from real photographs. Every synthetic face is in some abstract sense a blend of many.
-- A character that *does* resemble an identifiable individual is covered, even if you never deliberately trained on them. **Accidental resemblance still counts** — and this is a real risk when a dataset is small or a prompt names a celebrity's characteristics.
-- The check is empirical: does anyone looking at it say "that's <name>"? If a reverse image search or a colleague identifies them, treat it as covered.
+- A character who does not resemble any identifiable individual is fine, even though the base model learned from real photographs. Every synthetic face is, in some abstract sense, a blend of many.
+- A character who *does* resemble an identifiable individual is covered, even if you never meant to train on them. **Accidental resemblance still counts.** That is a real risk when a dataset is small, or when a prompt names a celebrity's features.
+- The check is simple: does anyone looking at it say "that's <name>"? If a reverse image search or a colleague identifies them, treat it as covered.
 
-**This is why the synthetic dataset-factory route is worth preferring** for any character intended for distribution. Locking an anchor image that resembles nobody, then generating the varied set from it, gives you a character that is unambiguously yours — better coverage than photography, and no likeness question to answer.
+**This is why the synthetic dataset-factory route is worth preferring** for any character you intend to distribute. Lock an anchor image that resembles nobody, then generate the varied set from it. You get a character that is unambiguously yours, better coverage than photography gives you, and no likeness question to answer.
 
 ---
 
 ## 4. The model's licence follows the LoRA
 
-Likeness is the constraint people expect. This one catches them: **on some models the base licence attaches to the adapter you train, and the obligation travels to whoever you give it to.**
+Likeness is the constraint people expect. This is the one that catches them: **on some models the base licence attaches to the adapter you train, and the obligation travels to whoever you give it to.**
 
-[`ltx-2-5`](../../ltx-2-5/) is the sharp case in this suite. Its Community License names a **LoRA adapter as a Derivative** (§1.5, §3.5), requires any Derivative be distributed *"exclusively under the terms of this Agreement … with a complete copy of this Agreement included"* (§3.2), and then goes further than most licences do: *"If the transferee is a Commercial Entity … it must obtain a paid license from Licensor prior to any use of any Derivative of LTX-2.x, **regardless of who created such Derivative**"* (§3.5). You must notify recipients in writing, and you may not hand a Derivative to a Commercial Entity that lacks the licence. `[official — LTX-2.x Community License, 11 August 2026]`
+[`ltx-2-5`](../../ltx-2-5/) is the sharp case in this suite. Its Community License names a **LoRA adapter as a Derivative** (§1.5, §3.5). It requires any Derivative to be distributed *"exclusively under the terms of this Agreement … with a complete copy of this Agreement included"* (§3.2). Then it goes further than most licences do: *"If the transferee is a Commercial Entity … it must obtain a paid license from Licensor prior to any use of any Derivative of LTX-2.x, **regardless of who created such Derivative**"* (§3.5). You have to notify recipients in writing, and you may not hand a Derivative to a Commercial Entity that lacks the licence. `[official — LTX-2.x Community License, 11 August 2026]`
 
-**What that means for a trainer, concretely:**
+What that means for a trainer, concretely:
 
-- **You cannot publish an LTX LoRA under a permissive licence.** Not MIT, not CC0, not "do what you like with it." The agreement does not give you that power to grant.
-- **Uploading it to a model host is a distribution event**, and the host's default licence picker probably offers nothing that matches. Check what the platform will actually stamp on your upload before you publish.
-- **The obligation is contagious in a way likeness rules are not.** A real-person LoRA is a problem you own. A licence-inheriting LoRA is a problem you *pass on* — a studio that downloads yours and is over the revenue threshold now needs a paid licence, whether or not they ever read the model card.
-- **This is not an LTX peculiarity in principle**, only in degree. Anywhere the base weights are non-permissive — [`anima`](../../anima/)'s dual non-commercial position is another — check what the licence says about derivatives before you train, not after you have something to publish.
+- **You cannot publish an LTX LoRA under a permissive licence.** Not MIT, not CC0, not "do what you like with it". The agreement does not give you the power to grant that.
+- **Uploading it to a model host counts as distribution**, and the host's licence picker probably offers nothing that matches. Check what the platform will actually stamp on your upload before you publish.
+- **The obligation spreads, in a way likeness rules do not.** A real-person LoRA is a problem you own. A licence-inheriting LoRA is a problem you *hand on*: a studio downloads yours, is over the revenue threshold, and now needs a paid licence — whether or not they ever read your model card.
+- **This is not unique to LTX in principle**, only in degree. Wherever the base weights are non-permissive — [`anima`](../../anima/)'s dual non-commercial position is another case — check what the licence says about derivatives before you train, not after you have something to publish.
 
-The contrast worth holding: an **Apache-2.0 base** such as Wan 2.2 lets you publish the adapter on whatever terms you like. That difference costs nothing at training time and everything at distribution time, which is why it belongs on the base-model decision alongside anatomy coverage and VRAM.
+The contrast worth holding on to: an **Apache-2.0 base** such as Wan 2.2 lets you publish the adapter on whatever terms you like. That difference costs nothing at training time and everything at distribution time, which is why it belongs in the base-model decision alongside anatomy coverage and VRAM.
 
 ---
 
 ## 5. Dataset provenance
 
-Even where likeness is not at issue, where the images came from matters:
+Even where likeness is not the issue, where the images came from still matters:
 
-- **Scraped from social media or a paid-content platform** — resemblance aside, this typically breaches those platforms' terms and may involve people who never agreed to anything. It is also the sourcing pattern most likely to produce an accidental identifiable likeness.
-- **Licensed stock** — check whether the licence permits AI training. Many now explicitly do not.
-- **Your own photographs of consenting adults** — the cleanest sourcing, and still not publishable to Civitai under the real-person rule.
-- **Synthetically generated** — cleanest overall. No third-party rights, no likeness question, and full control over coverage.
+- **Scraped from social media or a paid-content platform.** Resemblance aside, this usually breaks those platforms' terms, and may involve people who never agreed to anything. It is also the sourcing pattern most likely to produce an accidental identifiable likeness.
+- **Licensed stock.** Check whether the licence allows AI training. Many now explicitly do not.
+- **Your own photographs of consenting adults.** The cleanest sourcing there is — and still not publishable to Civitai under the real-person rule.
+- **Synthetically generated.** Cleanest overall: no third-party rights, no likeness question, and full control over coverage.
 
-**Keep a record of where a dataset came from.** If a LoRA is ever challenged, provenance is the answer you need to have and cannot reconstruct later.
+**Keep a record of where a dataset came from.** If a LoRA is ever challenged, provenance is the answer you need to have, and you cannot reconstruct it later.
 
 ---
 
@@ -110,8 +110,8 @@ Even where likeness is not at issue, where the images came from matters:
 
 The real-person rule closes one door, not all of them:
 
-- **Original and synthetic characters** publish normally, adult content included, subject to the usual rating and metadata rules. NSFW uploads generally require metadata to stay visible in feeds.
-- **Licensed and public-domain fictional characters** — subject to the actor clause where a live-action portrayal is involved.
-- **Private use** is governed by law and your own judgement, not platform policy. The constraints there are the NCII statutes, which are about intimate imagery of real people regardless of where it is hosted.
+- **Original and synthetic characters** publish normally, adult content included, subject to the usual rating and metadata rules. NSFW uploads generally have to keep their metadata visible in feeds.
+- **Licensed and public-domain fictional characters**, subject to the actor clause where a live-action portrayal is involved.
+- **Private use** is governed by law and your own judgement, not by platform policy. The constraints there are the NCII statutes, which are about intimate imagery of real people wherever it is hosted.
 
-**One rule worth internalising for anything involving a real person:** the direction of travel across every jurisdiction and platform is toward stricter, not looser. A workflow built on real-person likeness has a shortening shelf life independent of anyone's view about whether it should.
+**One thing worth internalising about anything involving a real person:** across every jurisdiction and platform, the rules keep getting stricter, never looser. A workflow built on real-person likeness has a shrinking shelf life, whatever anyone thinks about whether it should.
