@@ -272,8 +272,8 @@ This is the suite's most sequence-sensitive route, and the ordering is not obvio
 ## 8. G — adult work
 
 **Stack:** `krea-2` or `sdxl` (image), `wan-2-2` or `minimax-h3` (video), plus
-`character-lora-training`. Model choice and the census:
-[`adult-work.md`](adult-work.md).
+`character-lora-training`, and [`comfyui-on-runpod`](../../comfyui-on-runpod/) if you are renting the
+GPU. Model choice and the census: [`adult-work.md`](adult-work.md).
 
 **Gate, and it is the one gate here with no trade-off.** Invented adult characters only. Sexual
 content depicting minors, and sexual imagery of real identifiable people without consent, are

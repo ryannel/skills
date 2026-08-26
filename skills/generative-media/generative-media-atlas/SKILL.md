@@ -84,11 +84,12 @@ split by *what leaves the building*.
 | **Adult work** | [`ltx-2-5`](../ltx-2-5/)'s AUP bars it outright; [`wan-2-2`](../wan-2-2/) has no acceptable-use clause at all |
 
 **2. Is the person real?** Say a character resembles an identifiable living or deceased individual.
-**Then Civitai will not host the LoRA — SFW or NSFW, no consent exception.** The TAKE IT DOWN Act has
-been under live FTC enforcement since 19 May 2026. It reaches AI-generated intimate imagery of real
-people. **The test is resemblance, not provenance**: a character you invented is clean, and a
-lookalike is the case the rule was written for. Settle this before you build a dataset —
-[`character-lora-training`](../character-lora-training/).
+**Then Civitai will not host the LoRA — SFW or NSFW, no consent exception.** The TAKE IT DOWN Act is
+in force too, and it reaches AI-generated intimate imagery of real people. **The test is resemblance,
+not provenance**: a character you invented is clean, and a lookalike is the case the rule was written
+for. Settle this before you build a dataset. The enforcement date, the penalty figure and the quoted
+policy text live in [`character-lora-training`](../character-lora-training/), which owns them — read
+them there rather than from this summary.
 
 This gate is where **adult work** gets decided, and it is the one place in this skill where the
 answer is not a trade-off. Adult generation with invented adult characters is a first-class use of
@@ -445,7 +446,9 @@ ways. There is also a third kind, peculiar to a router, worth naming on its own.
 skill here and in the three external sources. It also covers RunPod's seven-skill inventory and its
 golden-path filenames; Comfy-Org's twelve; the `skills` CLI's flags, scopes and the absence of a
 dependency mechanism; `metadata.internal`; the shape of each licence gate (territory, revenue line,
-weights-vs-outputs split); and the Civitai likeness ban and the TAKE IT DOWN enforcement date.
+weights-vs-outputs split); and that a Civitai likeness ban and live TAKE IT DOWN enforcement exist at
+all. The dates and figures behind those two are [`character-lora-training`](../character-lora-training/)'s
+to state, not this skill's.
 **The source of truth is official** — the repository trees read directly, the CLI's README, and the
 model cards and licence texts via the model skills. A wrong install command fails loudly. A misread
 licence gate is a legal problem. Vendor skill repositories add and rename skills without notice, so
