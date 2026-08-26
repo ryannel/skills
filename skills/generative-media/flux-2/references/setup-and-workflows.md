@@ -6,14 +6,14 @@ Source tier: ComfyUI template JSONs (primary, read verbatim), Comfy-Org HF repos
 
 ## Contents
 
-1. [VRAM requirements table](#1-vram)
-2. [ComfyUI — [dev] image-edit template](#2-dev-image-edit)
-3. [ComfyUI — [klein] 9B templates](#3-klein-9b)
-4. [ComfyUI — [klein] 9B KV template](#4-9b-kv)
-5. [ComfyUI — GGUF quants (community)](#5-gguf)
-6. [diffusers — detailed setup](#6-diffusers)
+1. [VRAM requirements table](#1-vram-requirements-table)
+2. [ComfyUI — [dev] image-edit template](#2-comfyui--dev-image-edit-template)
+3. [ComfyUI — [klein] 9B templates](#3-comfyui--klein-9b-templates)
+4. [ComfyUI — [klein] 9B KV template](#4-comfyui--klein-9b-kv-template)
+5. [ComfyUI — GGUF quants (community)](#5-comfyui--gguf-quants-community)
+6. [diffusers — detailed setup](#6-diffusers--detailed-setup)
 7. [Using LoRAs](#7-using-loras)
-8. [LoRA training → moved to `references/lora-training.md`](#8-lora)
+8. [LoRA training → moved to `references/lora-training.md`](#8-lora-training--referenceslora-trainingmd)
 
 ---
 

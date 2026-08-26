@@ -15,7 +15,7 @@ live FTC enforcement since 19 May 2026. Everything below assumes **invented adul
 
 1. [The ecosystem census, and what it does and does not measure](#1-the-ecosystem-census-and-what-it-does-and-does-not-measure)
 2. [The stack people actually use, 2026-08](#2-the-stack-people-actually-use-2026-08)
-3. [The anatomy-collapse study](#3-the-anatomy-collapse-study)
+3. [The anatomy-collapse study](#3-the-anatomy-collapse-study--the-most-transferable-finding-here)
 4. [Two gaps worth knowing before you start](#4-two-gaps-worth-knowing-before-you-start)
 
 ---

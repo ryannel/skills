@@ -7,14 +7,14 @@ Source tier: BFL official prompting guide (primary), BFL blog, HF blog (official
 ## Contents
 
 1. [Anatomy of a FLUX.2 prompt](#1-anatomy)
-2. [What the encoder actually parses](#2-encoder)
-3. [Hex color control](#3-hex-color)
-4. [JSON for production (optional, not required)](#4-json)
-5. [Realism vocabulary: camera, lens, film stock](#5-realism)
-6. [Multi-reference image editing](#6-references)
-7. [Text-in-image guidance](#7-text)
-8. [Drop-in prompt templates](#8-templates)
-9. [Common mistakes and corrections](#9-mistakes)
+2. [What the encoder actually parses](#2-what-the-encoder-actually-parses)
+3. [Hex color control](#3-hex-color-control)
+4. [JSON for production (optional, not required)](#4-json-for-production-optional-not-required)
+5. [Realism vocabulary: camera, lens, film stock](#5-realism-vocabulary-camera-lens-film-stock)
+6. [Multi-reference image editing](#6-multi-reference-image-editing)
+7. [Text-in-image guidance](#7-text-in-image-guidance)
+8. [Drop-in prompt templates](#8-drop-in-prompt-templates)
+9. [Common mistakes and corrections](#9-common-mistakes-and-corrections)
 
 ---
 

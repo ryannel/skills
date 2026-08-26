@@ -696,6 +696,62 @@ sibling. An audit finding is valid for a one-way link.
 - A reference may carry its own short "How to read the claims in this file" section when it is long
   and craft-dense (`character-lora-training/evaluation-and-tooling.md` does). Optional, not required.
 
+### 6.8 Readability — how the sentences read
+
+Everything above governs what a skill contains and how it is laid out. None of it governs whether
+the sentences are easy to read. That gap is why the suite drifted: by 2026-08-26 the prose had
+become dense enough that the repo owner called it out, and a full rewrite followed.
+
+**The failure mode is clause-stacking, not long words.** Technical vocabulary is fine — a reader who
+wants `quantisation` should get `quantisation`. What goes wrong is three ideas welded into one
+sentence with em-dashes and semicolons, plus phrasing that sounds clever and parses slowly. Real
+examples from before the rewrite:
+
+| Before | After |
+|---|---|
+| "The failure this section warns about survives knowing about it." | "Knowing about this bias does not protect you from it." |
+| "That property is worth more than the resolve to ignore one." | "That is worth more than promising yourself you will ignore one." |
+| "Offload is a capacity control, not a speed tax." | "Treat offloading as a way to fit a job on a smaller card, not as something that slows you down." |
+
+**Two numbers, measured on prose only.** Tables, code blocks, headings and frontmatter are excluded,
+because none of them are read as sentences:
+
+- **Average under 17 words per sentence.**
+- **Under 8% of sentences over 30 words.**
+
+`workbench/uniformity/readability.py` measures both, plus em-dash and semicolon density, and rolls
+them into one **tangle** score. Run it on a skill or on the whole suite:
+
+```bash
+python3 workbench/uniformity/readability.py skills/generative-media/krea-2
+```
+
+**Read the score as a smell test, exactly like §5.2's word counts.** Over **15** means go and look;
+it does not mean the file is wrong. Some files score high for honest reasons — a licence reference
+quoting statute, a citation line listing three sources with dates, a sentence enumerating a parallel
+list. Those are legitimately long and should stay. The score cannot tell them apart from real
+tangle, so a human decides.
+
+**Current state, measured 2026-08-26:** median **11.0** across 75 files, with 12 still over 15.
+The worst are `flux-2/prompting-guide.md` (23.8), `anima/SKILL.md` (22.5) and
+`flux-2/lora-training.md` (22.1). Those are known and acceptable, not unfiled findings.
+
+**What the whole-suite pass found, worth knowing before writing a new skill:** tangle clusters by
+file *type*, not by skill. `SKILL.md` and `characters.md` scored worst, prompting guides best. That
+makes sense. Prompting guides are mostly tables and short imperatives. SKILL.md and `characters.md`
+carry the argumentative prose — why this model, what the trade-off is — and that is where clauses
+pile up. Watch those two hardest.
+
+**Three rules that stop the drift coming back:**
+
+- **Split, don't shorten.** A tangled sentence is usually two or three good sentences. Deleting
+  words to hit a number produces something worse than the original.
+- **One idea per sentence, and say who does what.** "The model blames the difference on something"
+  beats "the difference is attributed to some other factor."
+- **Never trade a fact for a shorter sentence.** If the plain version needs an extra sentence to
+  carry the same information, write the extra sentence. §5.3 still governs: a section earns its
+  place by changing what the reader does, not by being brief.
+
 ---
 
 ## 7. Justified deviations — do not flatten these
@@ -930,6 +986,16 @@ trust or navigation, **P2** taxes the reader, **P3** cosmetic.
 37. **P3** — Are unpublished models named in plain bold with a status word, never linked?
 38. **P3** — Tables used for parallel structure, prose for mechanism (§6.6)? Flag any settings block
     written as prose, or any two-row table.
+39. **P2** — Readability (§6.8). Run
+    `python3 workbench/uniformity/readability.py skills/generative-media/<skill>`. Flag any file
+    whose tangle score is over **15**, then read the long sentences it points at before filing.
+    A file scores high for two very different reasons, and only one is a finding: real
+    clause-stacking is, while quoted statute, a citation line, or a sentence enumerating a parallel
+    list is not. Say which you found. Emit the split as a proposed diff, never a word-count cut.
+40. **P1** — Do all in-page anchors resolve? Slugs are the heading lowercased, with punctuation
+    dropped except hyphens and underscores, and spaces turned into hyphens. Hand-shortened anchors
+    in a `## Contents` list are the failure to look for — 26 of them shipped broken until
+    2026-08-26, because they read fine in the source and only break in a browser.
 
 ### E. Registration
 

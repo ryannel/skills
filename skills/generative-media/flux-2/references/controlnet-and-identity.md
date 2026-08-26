@@ -6,11 +6,11 @@ Source tier: Alibaba PAI Fun Union ControlNet — official repos and model cards
 
 ## Contents
 
-1. [Why Flux.1 ControlNets don't work on FLUX.2](#1-why-flux1-wont-work)
-2. [ControlNet (Alibaba PAI Fun Union)](#2-controlnet)
-3. [PuLID — face identity (iFayens)](#3-pulid)
-4. [IP-Adapter face — status](#4-ip-adapter)
-5. [ReferenceLatent — native reference conditioning](#5-referencelatent)
+1. [Why Flux.1 ControlNets don't work on FLUX.2](#1-why-flux1-controlnets-dont-work-on-flux2)
+2. [ControlNet (Alibaba PAI Fun Union)](#2-controlnet-alibaba-pai-fun-union)
+3. [PuLID — face identity (iFayens)](#3-pulid--face-identity-ifayens)
+4. [IP-Adapter face — status](#4-ip-adapter-face--status)
+5. [ReferenceLatent — native reference conditioning](#5-referencelatent--native-reference-conditioning)
 
 ---
 

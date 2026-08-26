@@ -6,14 +6,14 @@ Source tier: BFL official API docs at `docs.bfl.ai` and `docs.bfl.ml` (official-
 
 ## Contents
 
-1. [Endpoints and regions](#1-endpoints)
-2. [Authentication](#2-auth)
-3. [API model slugs and capabilities](#3-models)
-4. [Request format and parameters](#4-request)
-5. [Async polling pattern](#5-polling)
-6. [Python example](#6-python)
-7. [Commercial use via API](#7-commercial)
-8. [API pricing (community-tier)](#8-pricing)
+1. [Endpoints and regions](#1-endpoints-and-regions)
+2. [Authentication](#2-authentication)
+3. [API model slugs and capabilities](#3-api-model-slugs-and-capabilities)
+4. [Request format and parameters](#4-request-format-and-parameters)
+5. [Async polling pattern](#5-async-polling-pattern)
+6. [Python example](#6-python-example)
+7. [Commercial use via API](#7-commercial-use-via-api)
+8. [API pricing (community-tier)](#8-api-pricing-community-tier--verify-at-bflaipricing)
 
 ---
 
