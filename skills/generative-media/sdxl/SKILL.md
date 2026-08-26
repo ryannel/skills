@@ -48,6 +48,11 @@ Base SDXL 1.0 is a strong *foundation*, but it looks undertrained and plasticky 
 
 > **The anime axis now has an option that is not an SDXL checkpoint.** **Anima** (CircleStone Labs, 2B, derived from NVIDIA's Cosmos-Predict2) has its own architecture, loaders and LoRA pool — nothing on this page loads it. But it takes **Danbooru tags and attention weighting**, so it reads to a prompter as a fifth anime "checkpoint". It is now one of the largest base-model ecosystems on Civitai, competing directly with Pony/Illustrious/NoobAI `[flagged — re-verify]`. **The licence differs, but not in the way the phrase "non-commercial" suggests, so read it before you route around it.** Anima's CircleStone Labs NC licence (plus NVIDIA's Open Model License, inherited through Cosmos) restricts the **weights**, not the pictures. §1(a) puts Outputs outside the definition of Derivative, and §2(e) grants use of them *"for any purpose (including for commercial purposes)"*, with the card naming sold images, paid commissions and game/VN assets as allowed — for companies as much as individuals. What you may not do is **ship the weights**. Hosting Anima behind a paid API, or embedding it in a monetised product, needs a separate licence. §2(c)'s carve-out lets an individual sell derivative weights, but only *"solely to the model weights, and not to any larger product"*. So SDXL wins when the **model** is what you are shipping. For paid work whose deliverable is a **picture**, Anima is not disqualified. The other trap for an SDXL reader is weighting: Anima needs weights pushed well past SDXL's ~1.05–1.3 band (`(chibi:2)` is ordinary there and would fry SDXL). Full treatment: [`anima`](../anima/).
 
+> **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
+> page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
+> model fits a job, which skills that job needs, and the commands to install them. It works on its
+> own, so it is the one to add first — `npx skills add ryannel/skills --skill generative-media-atlas`
+
 ---
 
 ## The one rule that changes everything
@@ -220,17 +225,6 @@ Before hitting Queue Prompt:
 | Mixed-model pipelines | **Front-end (control) and back-end (texture)** roles | [`image-production-workflows`](../image-production-workflows/) for the cross-model craft |
 | Making it move | Still images only | [`wan-2-2`](../wan-2-2/) — image-to-video from a still locked here. SDXL's mature identity stack (InstantID, IP-Adapter FaceID) is a strong upstream for the still that anchors each shot |
 | **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
-
-
-> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
-> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
-> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
-> skill covers, which ones a given job needs, and the commands to install them. It is written to be
-> useful on its own, so it is the one to add first if you only want one:
->
-> ```bash
-> npx skills add ryannel/skills --skill generative-media-atlas
-> ```
 
 ---
 

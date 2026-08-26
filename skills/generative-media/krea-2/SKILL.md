@@ -28,6 +28,11 @@ Krea 2 (K2) is Krea AI's first from-scratch foundation image model — a **12B-p
 
 Its defining trait is a deliberate refusal to have a house look. Most models optimise a single polished default. Krea 2 instead "is designed to expose a broad visual space" and be "raw, flexible, unopinionated, and unconstrained". Style is a **control surface**, not a prompt word. References, moodboards, style LoRAs and a creativity dial carry the look, and the prompt carries the content. The flip side is that the default output reads *soft*, and the safety tuning mutes facial expressiveness — confirmed independently by three named community testers. Both have named fixes (see *The anti-AI-look and its two taxes*).
 
+> **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
+> page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
+> model fits a job, which skills that job needs, and the commands to install them. It works on its
+> own, so it is the one to add first — `npx skills add ryannel/skills --skill generative-media-atlas`
+
 ---
 
 ## Variant selector
@@ -234,17 +239,6 @@ Choose the model for the job — defaults like realism direction and prompting d
 | Mixed-model pipelines | Aesthetics/composition front-end; Z-Image inpaints its artefact zones | [`image-production-workflows`](../image-production-workflows/) for the cross-model craft |
 | Making it move | Still images only | [`wan-2-2`](../wan-2-2/) or [`ltx-2-5`](../ltx-2-5/) — image-to-video from a still locked here. The debt runs both ways: the **Wan 2.1 VAE swap** central to this skill's realism craft is borrowed from that family |
 | **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
-
-
-> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
-> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
-> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
-> skill covers, which ones a given job needs, and the commands to install them. It is written to be
-> useful on its own, so it is the one to add first if you only want one:
->
-> ```bash
-> npx skills add ryannel/skills --skill generative-media-atlas
-> ```
 
 ---
 

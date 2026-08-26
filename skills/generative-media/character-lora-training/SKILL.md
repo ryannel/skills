@@ -21,6 +21,11 @@ A character LoRA works when the identity survives prompts it never saw. Everythi
 | [`anima`](../anima/) | **Do not train the LLM adapter** (`llm_adapter_lr 0`) — it rewrites prompt understanding globally and presents as "Anima got worse", not as a broken LoRA |
 | [`ltx-2-5`](../ltx-2-5/) | Your LoRA is a **Derivative** — it inherits the licence, and the obligation travels to whoever you give it to |
 
+> **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
+> page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
+> model fits a job, which skills that job needs, and the commands to install them. It works on its
+> own, so it is the one to add first — `npx skills add ryannel/skills --skill generative-media-atlas`
+
 ---
 
 ## Before anything: can you publish it?
@@ -202,17 +207,6 @@ The boundary table at the top routes *inward*, to the per-model trap that applie
 | Holding a character in **video** | [`wan-2-2`](../wan-2-2/), [`minimax-h3`](../minimax-h3/), [`ltx-2-5`](../ltx-2-5/). The craft here applies; video adds manual captioning cost and per-architecture rules |
 | Video identity with **no training path** | [`scail-2`](../scail-2/) — identity is a reference image, not an adapter, so nothing on this page applies |
 | **Deciding which base to train on at all** | [`generative-media-atlas`](../generative-media-atlas/) — it splits "easiest to train on" into best likeness, fastest loop and best-documented, which have different winners, and it carries the one published cross-model comparison |
-
-
-> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
-> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
-> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
-> skill covers, which ones a given job needs, and the commands to install them. It is written to be
-> useful on its own, so it is the one to add first if you only want one:
->
-> ```bash
-> npx skills add ryannel/skills --skill generative-media-atlas
-> ```
 
 ---
 

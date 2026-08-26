@@ -10,6 +10,11 @@ SCAIL-2 is an open-weights **character animation and character replacement** vid
 
 **The defining trait:** SCAIL-2 is conditioned by a **driving video plus a reference image plus explicit masks**. It **tracks** the driving motion frame by frame instead of re-imagining it. That is why it beat Wan Animate into the default slot for character replacement, and why [`minimax-h3`](../minimax-h3/)'s video-editing mode can only approximate it. Almost every other property follows from this: your output fps matches your *input's* fps, your clip length matches your *input's* length, and the prompt barely matters.
 
+> **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
+> page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
+> model fits a job, which skills that job needs, and the commands to install them. It works on its
+> own, so it is the one to add first — `npx skills add ryannel/skills --skill generative-media-atlas`
+
 ---
 
 ## Its relationship to Wan 2.1 runs at three levels
@@ -266,17 +271,6 @@ SCAIL-2 is a **middle** stage. It cannot originate a shot and produces no audio,
 | **Bernini-R** (ByteDance — announced, not covered by this suite) | Reference-guided video editing | Reference image(s) + prompt | None | Far more resource-hungry; outfit swap reportedly works, face swap reportedly does not `[community — single report; re-verify]` |
 
 **Bernini-R is a sibling in function, not lineage.** It is ByteDance's, built on Wan **2.2** (*"Wan2.2 base — Wan-AI/Wan2.2-T2V-A14B-Diffusers"*), Apache 2.0 `[official — ByteDance/Bernini-R model card]`.
-
-
-> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
-> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
-> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
-> skill covers, which ones a given job needs, and the commands to install them. It is written to be
-> useful on its own, so it is the one to add first if you only want one:
->
-> ```bash
-> npx skills add ryannel/skills --skill generative-media-atlas
-> ```
 
 ---
 

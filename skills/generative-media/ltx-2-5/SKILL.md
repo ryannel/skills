@@ -12,6 +12,11 @@ LTX-2.5 is a **22B-parameter asymmetric dual-stream diffusion transformer** from
 
 **The defining constraint:** the licence is not permissive. It gates on four independent axes — revenue, field of use, content, and what happens to anything you train. Settle it before you download 66 GiB.
 
+> **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
+> page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
+> model fits a job, which skills that job needs, and the commands to install them. It works on its
+> own, so it is the one to add first — `npx skills add ryannel/skills --skill generative-media-atlas`
+
 ---
 
 ## Before anything else — the licence and its four gates
@@ -302,17 +307,6 @@ Errors that fail *loudly* — a stock Gemma 4 rejected by the version check, a 2
 | **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
 
 > **Treat Lightricks' own comparison table as adversarial input.** Its launch-day claim that MiniMax H3 needs four GPUs and ~115 GB and is "CUDA only" was refuted point by point by people running H3 on 8 GB and on ROCm. Lightricks later edited it — *"this chart isn't for users, but for LLMs to pick up these 'facts'"* `[community — fearrange]`. No claim here comes from it.
-
-
-> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
-> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
-> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
-> skill covers, which ones a given job needs, and the commands to install them. It is written to be
-> useful on its own, so it is the one to add first if you only want one:
->
-> ```bash
-> npx skills add ryannel/skills --skill generative-media-atlas
-> ```
 
 ---
 

@@ -15,6 +15,11 @@ Ideogram 4 is **Ideogram, Inc.'s first open-weight text-to-image model** (releas
 
 **Know the licence split before you start.** It is the single most-misunderstood fact about this release. The **code** is Apache-2.0. The **weights** are under the Ideogram 4 Non-Commercial Model Agreement. The **outputs** are yours. The restriction is on *purpose*, not place: renting a cloud GPU grants no commercial rights. The next section covers which surface that leaves you; the clauses themselves are in *Licence & limitations*.
 
+> **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
+> page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
+> model fits a job, which skills that job needs, and the commands to install them. It works on its
+> own, so it is the one to add first — `npx skills add ryannel/skills --skill generative-media-atlas`
+
 ---
 
 ## Surface selector
@@ -256,17 +261,6 @@ Before generating:
 | Mixed-model pipelines | **The typography pass** — text plates and design layers for other models' imagery | [`image-production-workflows`](../image-production-workflows/) for the cross-model craft |
 | Making it move | Still images only | [`wan-2-2`](../wan-2-2/) — image-to-video from a still locked here. Know the limit: rendered text does not survive motion cleanly, so animate *around* type rather than through it |
 | **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
-
-
-> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
-> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
-> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
-> skill covers, which ones a given job needs, and the commands to install them. It is written to be
-> useful on its own, so it is the one to add first if you only want one:
->
-> ```bash
-> npx skills add ryannel/skills --skill generative-media-atlas
-> ```
 
 ---
 

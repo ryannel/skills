@@ -12,6 +12,11 @@ Wan 2.2 is the Alibaba Tongyi Wan team's open-weights video generation family. I
 
 **Wan 2.2 is the last open-weights Wan, and may stay that way.** Wan 2.5, 2.6 and 2.7 exist but are **API-only — the weights were pre-announced as open and never published** `[flagged — re-verify]`. Wan 3.0 has been pre-announced as an Apache-2.0 open-weight release. Treat that as unconfirmed until files appear. If you want a Wan you can download, it is 2.2. Note that this is a claim about the Wan family, not about the open video landscape, which has moved on around it. See [Licence & limitations](#licence--limitations) for where Wan 2.2 now sits against [`minimax-h3`](../minimax-h3/) and [`ltx-2-5`](../ltx-2-5/).
 
+> **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
+> page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
+> model fits a job, which skills that job needs, and the commands to install them. It works on its
+> own, so it is the one to add first — `npx skills add ryannel/skills --skill generative-media-atlas`
+
 ---
 
 ## Task-mode selector
@@ -277,17 +282,6 @@ A 27-generation single-variable study into anatomy collapsing mid-clip on I2V is
 | Post chain: upscale and interpolation | Not built in. The ladder is **restore/upscale first, interpolate second** — SeedVR2 or FlashVSR, then RIFE | [`image-production-workflows`](../image-production-workflows/) for the cross-model craft; [`ltx-2-5`](../ltx-2-5/) doubles as a finishing pass if its licence clears you |
 | Still images | Usable, and its VAE is already borrowed by [`krea-2`](../krea-2/) as an anti-airbrush decode | Any image skill in the suite — this is not what it's for |
 | **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
-
-
-> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
-> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
-> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
-> skill covers, which ones a given job needs, and the commands to install them. It is written to be
-> useful on its own, so it is the one to add first if you only want one:
->
-> ```bash
-> npx skills add ryannel/skills --skill generative-media-atlas
-> ```
 
 ---
 

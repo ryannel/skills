@@ -13,6 +13,11 @@ Two ideas organize everything here:
 1. **Quality is layered, not summoned.** A production image is a pipeline of passes. Each pass is judged on one thing, and is cheap to redo on its own.
 2. **Models are specialists, and a pipeline can hire more than one.** The mechanics are simple once you know the three rules. Which model is good at what is the suite map at the end.
 
+> **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
+> page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
+> model fits a job, which skills that job needs, and the commands to install them. It works on its
+> own, so it is the one to add first — `npx skills add ryannel/skills --skill generative-media-atlas`
+
 ---
 
 ## What this owns, and what it doesn't
@@ -193,17 +198,6 @@ Per-model facts live in the model skills. This skill owns what spans them.
 | [`generative-media-atlas`](../generative-media-atlas/) | choosing between everything above — rankings by job, the elimination ladder, install routes | upstream of this ladder: it decides *which* models the chain hires before this skill decides how they hand off |
 
 **Where the ladder feeds backwards — and where it doesn't.** The table reads left-to-right: image skills feed video skills. Exactly one path runs the other way — [`minimax-h3`](../minimax-h3/) at one frame, by the output-modality test above. The [`krea-2`](../krea-2/) → [`scail-2`](../scail-2/) case looks identical, but is not: Identity Edit prepares the driving clip's first frame, which is ordinary forward flow, and marks where this skill's job *ends*.
-
-
-> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
-> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
-> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
-> skill covers, which ones a given job needs, and the commands to install them. It is written to be
-> useful on its own, so it is the one to add first if you only want one:
->
-> ```bash
-> npx skills add ryannel/skills --skill generative-media-atlas
-> ```
 
 ---
 

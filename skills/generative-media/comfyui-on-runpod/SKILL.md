@@ -27,6 +27,11 @@ RunPod publishes its own skills, and they are good. Do not restate them — rout
 | Multi-stage pipeline design — which stage does what, denoise bands, mixing models, the decode-to-pixels handoff | [`image-production-workflows`](../image-production-workflows/) — that skill assumes the compute already runs; this one is how it gets there |
 | **Which model to run in the first place, and which skills the job needs** | [`generative-media-atlas`](../generative-media-atlas/) — rankings by job, the elimination ladder, and the install commands for this suite and RunPod's own skills |
 
+> **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
+> page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
+> model fits a job, which skills that job needs, and the commands to install them. It works on its
+> own, so it is the one to add first — `npx skills add ryannel/skills --skill generative-media-atlas`
+
 ---
 
 ## The one rule that changes everything
@@ -275,17 +280,6 @@ Use it before you start editing `extra_model_paths.yaml` on a hunch.
 | `--docker-args` rejected on `pod create` | The current API does not accept it through `runpodctl 2.3.0` | Do that work over SSH after boot. No pod gets created, so nothing is charged |
 | Startup `ImportError` after updating ComfyUI in a container | The image's `comfy_kitchen` is older than the ComfyUI you just pulled | Run `pip install -r requirements.txt` after the pull, not just the pull |
 | Torch stops seeing the GPU after you restart ComfyUI by hand | You relaunched under a different interpreter than the template used — `python` instead of `python3` | Relaunch using the interpreter from the original process's command line |
-
-
-> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
-> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
-> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
-> skill covers, which ones a given job needs, and the commands to install them. It is written to be
-> useful on its own, so it is the one to add first if you only want one:
->
-> ```bash
-> npx skills add ryannel/skills --skill generative-media-atlas
-> ```
 
 ---
 

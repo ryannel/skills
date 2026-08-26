@@ -23,6 +23,11 @@ Z-Image is Alibaba Tongyi Lab's open-weights image generation family. It's a **6
 
 **Default workflow:** Draft in Turbo (8 steps, CFG 1.0) to find composition and seed. Re-render keepers in Z-Image (40 steps, CFG 4.0) for the final asset `[community — re-verify]`. Same prompt and seed — but Z-Image will reinterpret it slightly. That's expected. For layered production pipelines, see **Production pipelines & mixing models** below.
 
+> **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
+> page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
+> model fits a job, which skills that job needs, and the commands to install them. It works on its
+> own, so it is the one to add first — `npx skills add ryannel/skills --skill generative-media-atlas`
+
 ---
 
 ## The one rule that changes everything
@@ -207,17 +212,6 @@ Choose the model for the job — defaults like realism direction and prompting d
 | Mixed-model pipelines | **The realism refiner** — ZIT finishing other models' renders (`references/setup-and-workflows.md §11`); the standard face-pass and repair-inpaint partner for [`krea-2`](../krea-2/) scenes (~0.2 denoise `[community]`) | [`image-production-workflows`](../image-production-workflows/) for the cross-model craft itself |
 | Making it move | Still images only | [`wan-2-2`](../wan-2-2/) — image-to-video. Wan's I2V path is much stronger than its text-to-video, so a still locked here (character LoRA + FaceDetailer included) is what actually controls the shot; the character work in `references/characters.md` is the upstream half of consistent characters in video |
 | **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
-
-
-> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
-> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
-> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
-> skill covers, which ones a given job needs, and the commands to install them. It is written to be
-> useful on its own, so it is the one to add first if you only want one:
->
-> ```bash
-> npx skills add ryannel/skills --skill generative-media-atlas
-> ```
 
 ---
 
