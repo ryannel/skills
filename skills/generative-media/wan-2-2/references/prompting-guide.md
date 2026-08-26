@@ -14,7 +14,7 @@
 
 The most common Wan 2.2 failure is a prompt that would be excellent for an image model. umT5 encodes it faithfully, the model renders a beautiful composition, and then **almost nothing happens for five seconds**.
 
-The mechanism: a still-image prompt describes a *state*. Video generation needs a *change of state*. If every clause in your prompt is satisfied by frame one, the model has no reason to move anything, and the cheapest way to satisfy your prompt is to hold still.
+The mechanism: a still-image prompt describes a *state*. Video generation needs a *change of state*. If every clause in your prompt is satisfied by frame one, the model has no reason to move anything. The cheapest way to satisfy your prompt is then to hold still.
 
 This is the single highest-value edit to any Wan prompt: **find the verb.** If there isn't one describing physical change over time, the clip will not move.
 
@@ -25,7 +25,7 @@ This is the single highest-value edit to any Wan prompt: **find the verb.** If t
 
 Note what does *not* change: the visual specificity is still there. You are adding motion, not trading detail for it.
 
-**When you already have the still.** If you are running I2V from an image you locked with an image model, the still already carries composition, identity, lighting and style — so the prompt's job narrows to **motion and camera only**. Re-describing the scene competes with the reference and can pull the first frame away from it. Describe what moves and how the camera behaves; let the image do the rest.
+**When you already have the still.** If you are running I2V from an image you locked with an image model, the still already carries composition, identity, lighting and style. So the prompt's job narrows to **motion and camera only**. Re-describing the scene competes with the reference and can pull the first frame away from it. Describe what moves and how the camera behaves, and let the image do the rest.
 
 ---
 
@@ -41,7 +41,7 @@ For **T2V**, in roughly this order:
 
 For **I2V**, collapse to **Action → Camera**, plus only enough subject reference to disambiguate ("*the woman on the left*") when the frame has several candidates.
 
-**Length.** Wan responds well to detailed prompts, and the official prompt-extension feature exists precisely because longer, richer prompts improve output `[official]`. But every added clause is another state the model must satisfy — so add *detail*, not *more subjects*. One clear action beats three competing ones.
+**Length.** Wan responds well to detailed prompts, and the official prompt-extension feature exists precisely because longer, richer prompts improve output `[official]`. But every added clause is another state the model must satisfy. So add *detail*, not *more subjects* — one clear action beats three competing ones.
 
 ---
 
@@ -57,13 +57,13 @@ Motion needs three components to be legible. Naming only one usually produces a 
 
 Useful qualifiers that read as intended: `slowly`, `gradually`, `abruptly`, `in one continuous motion`, `looping`, `settling`. Secondary motion is what sells a shot — hair, fabric, steam, water, dust, foliage. Naming one secondary element usually does more for realism than another adjective on the subject.
 
-**Physical plausibility helps.** The model has strong priors for real-world dynamics; motion that obeys them comes out cleaner than motion that doesn't. Fighting gravity, inertia or normal gait speed tends to produce the morphing artefacts described in the failure-mode table.
+**Physical plausibility helps.** The model has strong priors for real-world dynamics. Motion that obeys them comes out cleaner than motion that doesn't. Fighting gravity, inertia or normal gait speed tends to produce the morphing artefacts described in the failure-mode table.
 
 ---
 
 ## 4. Camera vocabulary
 
-Camera terms are interpreted literally and reliably — this is one of Wan's genuine strengths.
+Camera terms are interpreted literally and reliably. This is one of Wan's genuine strengths.
 
 | Intent | Phrasing |
 |---|---|
@@ -91,11 +91,11 @@ For *discrete, guaranteed* camera moves rather than prompt-suggested ones, use *
 | S2V | 6.0 | **Work normally** |
 | 4-step lightx2v speed path | 1.0 | **Inert** — guidance-off. Phrase constraints positively |
 
-This is worth internalising because it is the opposite of most of the still-image models in this suite, where the fast variants are the *only* option most people run and negatives are usually inert.
+This is worth internalising because it is the opposite of most of the still-image models in this suite. There, the fast variants are the *only* option most people run, and negatives are usually inert.
 
-**The default negative prompt is Chinese, and should stay Chinese.** Wan ships a long default negative covering over-saturation, overexposure, static frames, blur, subtitles/watermarks, low quality and JPEG artefacts, and the usual anatomy failures. Community consensus is to **use it as shipped rather than translating it** — the encoder saw those tokens in that form during training, and English paraphrases measurably underperform `[community — re-verify]`.
+**The default negative prompt is Chinese, and should stay Chinese.** Wan ships a long default negative covering over-saturation, overexposure, static frames, blur, subtitles/watermarks, low quality and JPEG artefacts, and the usual anatomy failures. Community consensus is to **use it as shipped rather than translating it**. The encoder saw those tokens in that form during training, and English paraphrases measurably underperform `[community — re-verify]`.
 
-Take the exact string from the official repo's inference config or the ComfyUI template rather than retyping it — it is long, and a partial copy silently loses coverage. Append your own terms rather than replacing it.
+Take the exact string from the official repo's inference config or the ComfyUI template rather than retyping it. It is long, and a partial copy silently loses coverage. Append your own terms rather than replacing it.
 
 ---
 
@@ -108,7 +108,7 @@ An official feature, not a community trick `[official]`:
 --use_prompt_extend --prompt_extend_method 'local_qwen'  # Qwen2.5-{14B,7B,3B}-Instruct, VL variants for I2V
 ```
 
-It rewrites a short prompt into a richer one and measurably improves detail. Two caveats: it costs a model load locally, and it will invent specifics — if you are matching a locked still or an established character, extension can pull the clip away from your reference. For controlled work, write the long prompt yourself.
+It rewrites a short prompt into a richer one and measurably improves detail. Two caveats: it costs a model load locally, and it will invent specifics. If you are matching a locked still or an established character, extension can pull the clip away from your reference. For controlled work, write the long prompt yourself.
 
 ---
 

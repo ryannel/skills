@@ -24,7 +24,7 @@ Quotations marked as the vendor's come from the official prompt guide (`ltx.io/b
 
 ## 1. The register the encoder wants
 
-LTX-2.5 conditions on a **custom Gemma 4 12B**, a decoder language model — the same class as [`z-image`](../../z-image/) and [`flux-2`](../../flux-2/) on the image side, with the same consequence: **it reads sentences, not tags.** Comma-delimited keyword strings under-specify it, and negative-style phrasing ("no blur, not cartoon") does nothing on the distilled path, where guidance is 1 and the negative conditioning is inert.
+LTX-2.5 conditions on a **custom Gemma 4 12B**, a decoder language model. That is the same class as [`z-image`](../../z-image/) and [`flux-2`](../../flux-2/) on the image side, and it has the same consequence: **it reads sentences, not tags.** Comma-delimited keyword strings under-specify it. Negative-style phrasing ("no blur, not cartoon") does nothing on the distilled path, where guidance is 1 and the negative conditioning is inert.
 
 The vendor's own rules, verbatim from the README:
 
@@ -34,9 +34,9 @@ The blog adds three universal principles, also verbatim:
 
 > "**Keep the scene focused** — a few clear characters and actions read better than a crowded frame. **Keep lighting consistent** — use one coherent light logic per shot; mixed light sources confuse the result. **Start simple and layer** — begin with the core shot, then add detail as you iterate."
 
-For a single shot the blog asks for **4–8 descriptive sentences**, present tense, camera movement described *relative to the subject*, and detail scaled to shot size. Treat 200 words as the hard edge — the README gives a word cap while the blog says to match length to complexity, so the cap is the safe reading.
+For a single shot, the blog asks for **4–8 descriptive sentences**, present tense. Describe camera movement *relative to the subject*, and scale detail to shot size. Treat 200 words as the hard edge. The README gives a word cap while the blog says to match length to complexity, so the cap is the safe reading.
 
-**One licensed exception to "no screenplay format":** the blog permits screenplay style — scene headers, character cues, quoted dialogue — for scenes with dialogue or precise timing. Read it as applying *within one shot*; it does not license a shot list, because §4's rule against sluglines is about cuts.
+**One licensed exception to "no screenplay format":** the blog permits screenplay style — scene headers, character cues, quoted dialogue — for scenes with dialogue or precise timing. Read it as applying *within one shot*. It does not license a shot list, because §4's rule against sluglines is about cuts.
 
 ---
 
@@ -53,13 +53,13 @@ The blog's checklist, in the order it gives them. Missing elements are not defau
 | **Identify camera movement** | The move, and — the guide is specific — **how subjects appear *after* the movement**, which "helps the model complete the motion accurately" |
 | **Describe the audio** | Dialogue in quotation marks with language and accent named; SFX; music; or their absence |
 
-"Express emotion through physical cues" is the one that changes the most output for the least effort. *"Her jaw tightens and she looks away"* gives the model geometry to animate; *"she is upset"* gives it a label.
+"Express emotion through physical cues" is the one that changes the most output for the least effort. *"Her jaw tightens and she looks away"* gives the model geometry to animate. *"She is upset"* gives it a label.
 
 ---
 
 ## 3. The audio half
 
-LTX denoises audio and video in one sequence, so **audio you do not describe is not silent — it is unspecified**, and the model supplies something. This is the same structural fact [`minimax-h3`](../../minimax-h3/) turns into its one rule, and it applies here for the same reason.
+LTX denoises audio and video in one sequence. So **audio you do not describe is not silent — it is unspecified**, and the model supplies something. [`minimax-h3`](../../minimax-h3/) turns this same structural fact into its one rule, and it applies here for the same reason.
 
 Three consequences specific to LTX:
 
@@ -67,7 +67,7 @@ Three consequences specific to LTX:
 - **Silence is an instruction.** "No music; only wind" is meaningful and often necessary.
 - **A silent *input* clip fails outright** on V2V and upscale runs, because there is no video-only path through the joint sequence. Add a silence track first. `[community — DaLyon92x]`
 
-Worth checking on your own material: in MiniMax H3, stripping `<d>` dialogue tags removed audio glitches at clip start `[community — Thorozar]`. Both models encode audio and video jointly, so LTX may have an analogous artefact — untested here.
+Worth checking on your own material: in MiniMax H3, stripping `<d>` dialogue tags removed audio glitches at clip start `[community — Thorozar]`. Both models encode audio and video jointly. LTX may have a similar artefact — untested here.
 
 ---
 
@@ -86,7 +86,7 @@ There is no node, no flag, no checkpoint and no `--shots` parameter. Multishot i
 3. **Keep identity consistent** — reuse the same visual identifiers for recurring people or objects ("the woman in the red coat, earlier at the table, now…").
 4. **State audio continuity** — "the piano score continues across the cut", or "the dialogue drops; only wind remains."
 
-Rule 3 is the one that tells you what the model is actually doing. **Identity is re-anchored from the text at each cut, not carried by a persistent embedding** — which is why the guide puts the work on you, and why identity drift across cuts is a prompting failure before it is a model failure. That is an inference from the guide's own instruction rather than a vendor statement.
+Rule 3 is the one that tells you what the model is actually doing. **Identity is re-anchored from the text at each cut, not carried by a persistent embedding.** That is why the guide puts the work on you. It is also why identity drift across cuts is a prompting failure before it is a model failure. This is an inference from the guide's own instruction, not a vendor statement.
 
 ### 4.3 Single-shot versus multi-shot, the guide's own contrast
 
@@ -101,13 +101,13 @@ Rule 3 is the one that tells you what the model is actually doing. **Identity is
 
 > "**Prefer 2–4 shots** in one generation; more cuts usually need clearer, shorter beats per shot."
 
-**Count shots, not cuts.** 2–4 shots is **1–3 cuts** — a three-cut sequence is at the ceiling, not comfortably inside it. The distinction matters because the four rules do not all scale the same way: **rule 2 (re-establish) costs you once per shot**, while **rules 1, 3 and 4 (name the transition, re-identify, state audio continuity) cost you once per cut**. So an N-shot prompt spends roughly `N` re-establishments plus `3(N−1)` cut clauses, and at four shots that is nine cut clauses inside a 200-word budget before any of the action is described. That arithmetic is derived from the four rules rather than stated by the vendor, but it is usually what makes four shots feel cramped.
+**Count shots, not cuts.** 2–4 shots means **1–3 cuts**. A three-cut sequence is at the ceiling, not comfortably inside it. The distinction matters because the four rules do not all scale the same way. **Rule 2 (re-establish) costs you once per shot.** **Rules 1, 3 and 4 (name the transition, re-identify, state audio continuity) cost you once per cut.** So an N-shot prompt spends roughly `N` re-establishments plus `3(N−1)` cut clauses. At four shots, that is nine cut clauses inside a 200-word budget before any of the action is described. This arithmetic comes from the four rules, not from the vendor — but it is usually what makes four shots feel cramped.
 
 > "**Avoid conflicting geography or unexplained costume changes** between cuts unless the cut is meant to jump time or place and you say so."
 
 > "Use a single continuous take when you want unbroken camera motion, intimate performance, or dialogue that must stay lip-synced in one framing. **For image-to-video from a first frame, prefer a single continuous take** unless you intentionally describe a cut away from that opening image."
 
-That last one is the interaction people get wrong: **multishot and I2V pull against each other.** The conditioning frame fixes a framing that a cut then has to abandon, so a multishot prompt on an I2V run tends to produce either a refused cut or a discarded reference.
+That last one is the interaction people get wrong: **multishot and I2V pull against each other.** The conditioning frame fixes a framing, and a cut then has to abandon it. So a multishot prompt on an I2V run tends to produce either a refused cut or a discarded reference.
 
 ### 4.5 The vendor's worked example, verbatim — three shots
 
@@ -121,24 +121,24 @@ Worth reading before another good example, because the failure mode is silent �
 
 > *"A woman in a yellow raincoat walks through a rainy intersection at dusk. Close-up on her face, rain on her hood. Low angle on a man's boots in a puddle. He looks up and smiles."*
 
-Four shots are intended. What this produces is **one continuous take** — probably a slow push-in on the woman — and here is why, rule by rule:
+Four shots are intended. What this produces is **one continuous take** — probably a slow push-in on the woman. Here is why, rule by rule:
 
-- **Rule 1 is absent.** "Close-up on her face" is a shot *description*, not a transition. Nothing tells the model an edit occurs, so it interpolates camera movement between the framings instead of cutting. This is the whole failure; the other three compound it.
+- **Rule 1 is absent.** "Close-up on her face" is a shot *description*, not a transition. Nothing tells the model an edit occurs, so it interpolates camera movement between the framings instead of cutting. This is the whole failure. The other three compound it.
 - **Rule 2 is half-done.** The shot scale is named but nothing else is re-established — no angle, no lighting state, no confirmation of who is in frame.
-- **Rule 3 fails at "her face".** The identifier is dropped after the first sentence, so the model has no anchor to re-attach the identity to.
-- **Rule 4 is missing entirely.** No soundscape at all, which on a jointly-denoised model means the audio is unspecified rather than absent.
+- **Rule 3 fails at "her face".** The identifier is dropped after the first sentence. So the model has no anchor to re-attach the identity to.
+- **Rule 4 is missing entirely.** No soundscape at all. On a jointly-denoised model, that means the audio is unspecified rather than absent.
 
-The repair is mechanical: `"…walks through a rainy intersection at dusk; rain hisses on the awnings. **A hard cut transitions to** a medium close-up of **the woman in the yellow raincoat**, hood up, neon catching the raindrops; **the traffic drops to a muffled hum across the cut**. **A second hard cut** drops to a low angle on a man's scuffed boots stepping into a puddle…"* Same content, three cut clauses added, and it now reads as an edit.
+The repair is mechanical: `"…walks through a rainy intersection at dusk; rain hisses on the awnings. **A hard cut transitions to** a medium close-up of **the woman in the yellow raincoat**, hood up, neon catching the raindrops; **the traffic drops to a muffled hum across the cut**. **A second hard cut** drops to a low angle on a man's scuffed boots stepping into a puddle…"* Same content, but with three cut clauses added. Now it reads as an edit.
 
 ### 4.7 Dialogue across cuts
 
-Two things are unresolved and worth knowing before you write a dialogue-heavy sequence. **Where in a shot a quoted line lands is not controllable** — the model places it, and nothing in the vendor guidance exposes timing within a shot. And **what happens when two shots each carry dialogue has no documented behaviour**; the vendor's own worked example puts exactly one line in one shot. Both resolve with the identity question in §4.8.
+Two things are unresolved, and worth knowing before you write a dialogue-heavy sequence. **Where in a shot a quoted line lands is not controllable.** The model places it, and nothing in the vendor guidance exposes timing within a shot. And **what happens when two shots each carry dialogue has no documented behaviour** — the vendor's own worked example puts exactly one line in one shot. Both questions tie back to the identity question in §4.8.
 
 Practical consequence: for a two-line exchange across a cut, expect to generate and select rather than to direct. If lip-sync accuracy matters more than the cut does, the vendor's own advice applies — use a single continuous take, where "dialogue must stay lip-synced in one framing."
 
 ### 4.8 Does identity actually hold?
 
-Unresolved. The vendor claims character, environment, lighting, voice and style all survive the cut. One named practitioner reports it works on 2.5 — *"the multi shots maintain consistency a lot better"* `[community — hidden2u; single report]` — against a documented failure on 2.3: *"as soon as I wanted to make just a few simple shots of the same character with cuts, LTX wasn't even remotely capable of that"* `[community — Dry-Statistician-684]`. Nobody has published a side-by-side, and neither is where a quoted line lands inside a shot (§4.7) settled. `[contested]` Treat the four rules as necessary and not proven sufficient, and see [`characters.md`](characters.md) for what to do when identity slips.
+Unresolved. The vendor claims character, environment, lighting, voice and style all survive the cut. One named practitioner reports it works on 2.5 — *"the multi shots maintain consistency a lot better"* `[community — hidden2u; single report]`. That is set against a documented failure on 2.3: *"as soon as I wanted to make just a few simple shots of the same character with cuts, LTX wasn't even remotely capable of that"* `[community — Dry-Statistician-684]`. Nobody has published a side-by-side, and where a quoted line lands inside a shot (§4.7) is not settled either. `[contested]` Treat the four rules as necessary but not proven sufficient. See [`characters.md`](characters.md) for what to do when identity slips.
 
 ---
 
@@ -152,7 +152,7 @@ The mode changes the prompt's *job*, not its register. `[official — docs.comfy
 
 > "Describe what happens next — write the motion, camera movement, and sounds that follow from the input image; **do not re-describe what is already visible**."
 
-Re-describing the reference costs you words and fights the conditioning. The docs also suggest anchoring explicitly: phrasing like *"Use the provided start image as the first frame"* when writing a continuation. And per §4.4, keep it a single continuous take.
+Re-describing the reference costs you words and fights the conditioning. The docs also suggest anchoring explicitly — phrasing like *"Use the provided start image as the first frame"* when writing a continuation. And per §4.4, keep it a single continuous take.
 
 **FLF2V** — "Describe the transition" rather than either end state, since both are given. Keep the two images at the same aspect ratio; mismatched frames produce a scramble rather than an error.
 
@@ -168,25 +168,25 @@ Two traps. **Auto-duration cannot be combined with a fixed last frame** on I2V �
 
 ## 7. Pacing shots inside a fixed length
 
-Once `--num-frames` is pinned to the lattice you have given up auto-duration — the two are mutually exclusive, since auto-duration works by *omitting* the frame count. Shot balance is then yours, and LTX gives you no timing parameter for it.
+Once `--num-frames` is pinned to the lattice, you have given up auto-duration. The two are mutually exclusive, since auto-duration works by *omitting* the frame count. Shot balance is then yours, and LTX gives you no timing parameter for it.
 
 Three levers, in the order they work:
 
-1. **Fewer shots.** Ten seconds across four shots is 2.5 s each; across two it is five. Beat length is the thing that actually degrades, and the vendor says so ("more cuts usually need clearer, shorter beats per shot").
+1. **Fewer shots.** Ten seconds across four shots is 2.5 s each. Across two, it is five. Beat length is the thing that actually degrades, and the vendor says so ("more cuts usually need clearer, shorter beats per shot").
 2. **Roughly equal sentence weight per shot.** The prose is the only pacing signal the model has, so a shot described in one clause and a shot described in four sentences will not come out equal. Balance the description to the intended balance of screen time.
-3. **Explicit timestamps, with low expectations.** Writing bracketed time ranges into the prompt is the community's pacing tool, and it is the thing LTX is specifically reported to *almost* do — one practitioner comparing models found scene changes landing where intended on a rival and called it "the thing LTX kept almost doing and fumbling" `[community — Moarkush]`. Worth trying on a long clip; not worth relying on.
+3. **Explicit timestamps, with low expectations.** Writing bracketed time ranges into the prompt is the community's pacing tool. It is also the thing LTX is specifically reported to *almost* do — one practitioner comparing models found scene changes landing where intended on a rival and called it "the thing LTX kept almost doing and fumbling" `[community — Moarkush]`. Worth trying on a long clip. Not worth relying on.
 
-**Do not budget shot time by trimming the cut clauses.** They are what holds identity and audio across the edit; cutting them to buy words is how a multishot prompt collapses into one continuous take.
+**Do not budget shot time by trimming the cut clauses.** They are what holds identity and audio across the edit. Cutting them to buy words is how a multishot prompt collapses into one continuous take.
 
 ## 8. Vocabulary
 
 The blog publishes lexicons for categories, lighting, textures, colour palette, atmosphere, ambient sound, dialogue style, volume, camera language, film characteristics, scale and pacing. Two are worth having to hand because the model responds to them most literally. **Camera:** follows · tracks · pans across · circles around · tilts upward · pushes in · pulls back · overhead view · handheld movement · over-the-shoulder · wide establishing shot · static frame. **Volume:** whisper · mutter · shout · scream.
 
-Two usage notes. **"Static frame" is a real instruction** and worth writing when you want it, since the model's default is already close to static and an unstated camera reads as indecision. And per §2, always pair a move with its result state. Film-look vocabulary — grain, halation, anamorphic flare, shallow depth of field — works one or two at a time; a stacked list reads as a preset and flattens the shot.
+Two usage notes. **"Static frame" is a real instruction**, and worth writing when you want it — the model's default is already close to static, and an unstated camera reads as indecision. And per §2, always pair a move with its result state. Film-look vocabulary — grain, halation, anamorphic flare, shallow depth of field — works one or two at a time. A stacked list reads as a preset and flattens the shot.
 
 ## 9. Dub-It dialogue replacement
 
-`DubItPipeline` is a **beta, 2.3-IC-LoRA-only** path — it does not support 2.5. Its prompt is a fixed template, `[Speaker] is speaking [Language/Accent], saying: "[Dialogue]"`, and the validated languages are **English, French, Spanish, German, Russian**. Three requirements the docs are explicit about: supply the **full dialogue text** ("It does not translate dialogue for you"), write it in the **native script**, and use **one speaker only** — "the beta IC-LoRA does not distinguish between multiple speakers." The craft note is timing: match the original's syllable length, erring slightly long, because "prompt too long: the model might skip words. Prompt too short: the output might sound slow and unnatural."
+`DubItPipeline` is a **beta, 2.3-IC-LoRA-only** path — it does not support 2.5. Its prompt is a fixed template, `[Speaker] is speaking [Language/Accent], saying: "[Dialogue]"`. The validated languages are **English, French, Spanish, German, Russian**. The docs are explicit about three requirements: supply the **full dialogue text** ("It does not translate dialogue for you"), write it in the **native script**, and use **one speaker only** — "the beta IC-LoRA does not distinguish between multiple speakers." The craft note is timing. Match the original's syllable length, erring slightly long, because "prompt too long: the model might skip words. Prompt too short: the output might sound slow and unnatural."
 
 ## 10. The prompt enhancer question
 
@@ -194,10 +194,10 @@ The official templates wire a Gemma 4 E2B enhancer (`TextGenerateLTX2Prompt`; `-
 
 It has two documented problems, and they are different in kind:
 
-- **Speed.** *"I had to turn it off cause it was literrally taking 20 minutes… Once I turned it off a 3 sec clip was done in 3 min"* `[community — AniZeee]`, diagnosed as the enhancer model not fitting in VRAM alongside the transformer `[community — MixDistinct1932]`. Not universal — another named user saw only 30 seconds of overhead `[community — rinkusonic; contested]`.
+- **Speed.** *"I had to turn it off cause it was literrally taking 20 minutes… Once I turned it off a 3 sec clip was done in 3 min"* `[community — AniZeee]`. This was diagnosed as the enhancer model not fitting in VRAM alongside the transformer `[community — MixDistinct1932]`. Not universal — another named user saw only 30 seconds of overhead `[community — rinkusonic; contested]`.
 - **Correctness, which matters more.** *"I'm using the template default, but with tougher prompts, I will get a completely random video. Turning off the prompt enhancer fixes the issue at least partially."* `[community — Hans-Wermhatt]`
 
-The pattern that works is the same idea outside the graph: write one line, expand it with a fully-loaded local LLM, then feed the expansion in as a plain prompt. One named user drives `gemma 4 12b` through ComfyUI's qwenvl nodes plus llamacpp for exactly this `[community — intLeon]`. An external enhancer you can inspect is the safer version of the pattern.
+The pattern that works is the same idea outside the graph. Write one line, expand it with a fully-loaded local LLM, then feed the expansion in as a plain prompt. One named user drives `gemma 4 12b` through ComfyUI's qwenvl nodes plus llamacpp for exactly this `[community — intLeon]`. An external enhancer you can inspect is the safer version of the pattern.
 
 **Default position: write the prompt yourself in the §2 form and leave the enhancer off.** Turn it on only when you are exploring and the prompt is deliberately thin.
 
@@ -220,7 +220,7 @@ The pattern that works is the same idea outside the graph: write one line, expan
 
 ## 12. Multishot *and* a consistent character — the composed path
 
-This is the brief most readers actually arrive with, and the two techniques it needs are documented separately with nothing joining them. Here is how they compose.
+This is the brief most readers actually arrive with. The two techniques it needs are documented separately, with nothing joining them. Here is how they compose.
 
 **The collision, stated plainly.** Multishot wants **one flowing chronological paragraph** (§4.1). The Ingredients IC-LoRA — the best no-training identity path (see [`characters.md`](characters.md)) — wants a **two-part string**:
 
@@ -229,11 +229,11 @@ Reference sheet: <what the panels contain>
 Generated video: <the action>
 ```
 
-**They compose by nesting, not by competing.** The two-part string is a *document frame* that tells the adapter which half of the text describes the reference; the multishot rules govern *prose structure* inside the action half. So the entire multishot paragraph — cuts, transitions, re-identification, audio continuity — goes inside `Generated video:`, and `Reference sheet:` stays a plain description of the panels with no cuts in it. **No vendor example of this combination exists**, and this is a reasoned composition rather than a documented one.
+**They compose by nesting, not by competing.** The two-part string is a *document frame* that tells the adapter which half of the text describes the reference. The multishot rules govern *prose structure* inside the action half. So the entire multishot paragraph — cuts, transitions, re-identification, audio continuity — goes inside `Generated video:`. `Reference sheet:` stays a plain description of the panels, with no cuts in it. **No vendor example of this combination exists.** This is a reasoned composition, not a documented one.
 
-**Which pipeline.** `ICLoraPipeline`, on the **distilled** checkpoint — it will not run on dev. The task-mode selector files this under "V2V with control", which undersells it: an IC-LoRA's reference input is whatever it was trained to consume, and Ingredients consumes **reference panels**, not a driving clip.
+**Which pipeline.** `ICLoraPipeline`, on the **distilled** checkpoint — it will not run on dev. The task-mode selector files this under "V2V with control", which undersells it. An IC-LoRA's reference input is whatever it was trained to consume, and Ingredients consumes **reference panels**, not a driving clip.
 
-**The version wrinkle, and it is fine.** Ingredients is a **2.3**-trained adapter and multishot is **2.5**-only, so this path needs the 2.3 adapter loaded onto the 2.5 distilled transformer. That is exactly what Lightricks' own shipped 2.5 IC-LoRA workflows do, verified by tracing the graph — it is not a hack.
+**The version wrinkle, and it is fine.** Ingredients is a **2.3**-trained adapter, and multishot is **2.5**-only. So this path needs the 2.3 adapter loaded onto the 2.5 distilled transformer. That is exactly what Lightricks' own shipped 2.5 IC-LoRA workflows do, verified by tracing the graph. It is not a hack.
 
 **Worked prompt**, two shots and one cut, which is where to start rather than four:
 
@@ -243,12 +243,12 @@ Generated video: <the action>
 
 **Four things that go wrong, in the order they will:**
 
-1. **Identity survives the shot but not the cut.** Ingredients conditions frame-level; a cut replaces the frame. Repeat the identifier phrase *verbatim* at the cut — "the woman in the grey wool coat", not "she" — because prose re-anchoring is doing as much work here as the adapter.
+1. **Identity survives the shot but not the cut.** Ingredients conditions frame-level, and a cut replaces the frame. Repeat the identifier phrase *verbatim* at the cut — "the woman in the grey wool coat", not "she" — because prose re-anchoring is doing as much work here as the adapter.
 2. **The sheet's background bleeds in.** Matte the panels or state the environment explicitly in the action half.
-3. **The adapter fights the cut at high strength.** Start `attention_strength` low, around 0.4–0.6, and raise only if identity slips; at 1.0 the reference can hold the framing against the edit you asked for.
+3. **The adapter fights the cut at high strength.** Start `attention_strength` low, around 0.4–0.6, and raise it only if identity slips. At 1.0, the reference can hold the framing against the edit you asked for.
 4. **Four shots is too many for a first attempt.** Every cut is an opportunity for the adapter and the prose to disagree. Get one cut working, then add.
 
-**If this still drifts, stop composing and split.** Generate one shot per call, each conditioned on the same locked still, and cut them together in post. You lose the single-pass property that makes LTX interesting, but identity stops being a per-cut gamble — and for a character-critical piece that is the right trade.
+**If this still drifts, stop composing and split.** Generate one shot per call, each conditioned on the same locked still, and cut them together in post. You lose the single-pass property that makes LTX interesting. But identity stops being a per-cut gamble — and for a character-critical piece, that is the right trade.
 
 ## 13. Drop-in templates
 
@@ -264,4 +264,4 @@ Generated video: <the action>
 
 > `[Shot 1: scale, location, light]`. `[Character A: full visual identifier]` `[action]`. `[Soundscape]`. `[Named transition]` to `[Shot 2: scale and angle]` of `[Character A, re-identified by the same words]`, `[what has changed]`; `[what the audio does across the cut]`. `[Named transition]` to `[Shot 3]`, `[re-establish]`; `[audio state]`.
 
-For **foley on an existing silent clip** (V2A, video frozen), describe only the sound — surfaces, impacts, room tone, distance — and do not re-describe the picture; the video branch is frozen, so words spent on it are wasted.
+For **foley on an existing silent clip** (V2A, video frozen), describe only the sound — surfaces, impacts, room tone, distance. Do not re-describe the picture. The video branch is frozen, so words spent on it are wasted.

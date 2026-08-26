@@ -19,7 +19,7 @@ Source tier: ComfyUI template JSONs (primary, read verbatim), Comfy-Org HF repos
 
 ## 1. VRAM requirements table
 
-Values are approximate and depend on resolution (1024×1024 unless noted) and batch size 1. Source: HF blog (official-via-docs) + deepwiki architecture analysis (community).
+Values are approximate. They depend on resolution (1024×1024 unless noted) and batch size 1. Source: HF blog (official-via-docs) + deepwiki architecture analysis (community).
 
 | Config | VRAM (approx) | Notes |
 |---|---|---|
@@ -36,7 +36,7 @@ Values are approximate and depend on resolution (1024×1024 unless noted) and ba
 | [klein] 9B fp8 | ~14–16 GB | Fits 3090/4090 |
 | [klein] 9B bf16 full | ~32+ GB | Needs offload or 40 GB+ |
 
-**GGUF note (community-tier):** Exact sizes change as new quants ship. Verify at `city96/FLUX.2-dev-gguf` and `unsloth/FLUX.2-dev-GGUF` on Hugging Face before planning storage.
+**GGUF note (community-tier):** Exact sizes change as new quants ship. Check `city96/FLUX.2-dev-gguf` and `unsloth/FLUX.2-dev-GGUF` on Hugging Face before you plan storage.
 
 ---
 
@@ -55,9 +55,9 @@ Source: `Comfy-Org/workflow_templates/image_flux2_image_editing.json` (verbatim)
 
 **Key nodes added for image editing:**
 - `LoadImage` → feeds into `VAEEncode` (encodes reference image to latent space)
-- `ReferenceLatent` — new FLUX.2 node; takes a latent + optional mask, outputs a reference conditioning token
-- Multiple `ReferenceLatent` nodes are wired in sequence; each accepts one reference image
-- `BasicGuider` and `FluxGuidance=4` remain unchanged; the reference latents are injected into the conditioning stream, not into the guider
+- `ReferenceLatent` — new FLUX.2 node. It takes a latent plus an optional mask, and outputs a reference conditioning token
+- Multiple `ReferenceLatent` nodes are wired in sequence. Each one accepts one reference image
+- `BasicGuider` and `FluxGuidance=4` stay unchanged. The reference latents are injected into the conditioning stream, not into the guider
 
 **Stock settings (image-edit template defaults):**
 
@@ -69,7 +69,7 @@ Source: `Comfy-Org/workflow_templates/image_flux2_image_editing.json` (verbatim)
 | Scheduler | Flux2Scheduler |
 | Edit strength (noise) | Controlled by denoising start/end sliders |
 
-**Practical tip:** Start with denoising strength 0.7–0.85 for content preservation with style change; 0.9–1.0 for near-full regeneration using the reference as composition seed.
+**Practical tip:** Start with denoising strength 0.7–0.85 to keep the content while changing style. Use 0.9–1.0 for near-full regeneration, with the reference as a composition seed.
 
 ---
 
@@ -94,7 +94,7 @@ Downloads from `Comfy-Org/flux2-klein-9B` on Hugging Face.
 | 9B distilled | 4 | CFGGuider | 1 | guidance-off; sampler euler |
 | 9B base | 20 | CFGGuider | 5 | sampler euler |
 
-**Note on 9B vs 4B VAE:** 9B uses `full_encoder_small_decoder.safetensors` (same as [dev] t2i). 4B uses `flux2-vae.safetensors`. Do not mix — the two VAEs have different architectures.
+**Note on 9B vs 4B VAE:** 9B uses `full_encoder_small_decoder.safetensors` (same as [dev] t2i). 4B uses `flux2-vae.safetensors`. Do not mix them. The two VAEs have different architectures.
 
 ---
 
@@ -102,7 +102,7 @@ Downloads from `Comfy-Org/flux2-klein-9B` on Hugging Face.
 
 Source: `Comfy-Org/workflow_templates/image_flux2_klein_9b_kv*.json` (verbatim, exact filename may vary — check the Comfy-Org templates repo for current name).
 
-**Purpose:** KV-caching variant. Caches the reference image's key-value attention states so that repeated inference with the same set of reference images is significantly faster (the reference encoding is computed once and reused). Critical for multi-reference workflows with high reference-image counts.
+**Purpose:** KV-caching variant. It caches the reference image's key-value attention states, so repeated inference with the same set of reference images runs much faster. The reference encoding is computed once and reused. This matters most for multi-reference workflows with many reference images.
 
 **File layout:** Same files as the standard 9B template. No additional model files.
 
@@ -111,9 +111,9 @@ Source: `Comfy-Org/workflow_templates/image_flux2_klein_9b_kv*.json` (verbatim, 
 - Standard `ReferenceLatent` nodes for the actual reference images
 
 **When to use KV vs standard 9B:**
-- Running batch jobs with the same reference image set and varying prompts → use KV (first call pays the reference encoding; subsequent calls reuse the cache)
+- Running batch jobs with the same reference image set and varying prompts → use KV. The first call pays the reference encoding cost; later calls reuse the cache
 - Single-shot generation with one reference → standard 9B is equivalent
-- KV caching provides ~1.5–3× speedup on repeated-reference batches (community-tier estimate)
+- KV caching gives roughly 1.5–3× speedup on repeated-reference batches (community-tier estimate)
 
 ---
 
@@ -121,7 +121,7 @@ Source: `Comfy-Org/workflow_templates/image_flux2_klein_9b_kv*.json` (verbatim, 
 
 **Required custom node:** Install `city96/ComfyUI-GGUF` via ComfyUI Manager before using GGUF models.
 
-**Important path difference:** GGUF `.gguf` files go in `models/unet/` (not `models/diffusion_models/`). The `UnetLoaderGGUF` node (from the custom node) reads from `models/unet/`.
+**Important path difference:** GGUF `.gguf` files go in `models/unet/`, not `models/diffusion_models/`. The `UnetLoaderGGUF` node (from the custom node) reads from `models/unet/`.
 
 **Repositories (community-tier):**
 - `city96/FLUX.2-dev-gguf` — produces Q2_K through Q8_0 quants
@@ -136,9 +136,9 @@ Source: `Comfy-Org/workflow_templates/image_flux2_klein_9b_kv*.json` (verbatim, 
 | `UNETLoader` with `.safetensors` | `UnetLoaderGGUF` with `.gguf` |
 | Everything else | Unchanged |
 
-Text encoder and VAE files remain `.safetensors` — GGUF quantisation applies only to the UNet/DiT; text encoder and VAE run at their usual precision.
+Text encoder and VAE files stay `.safetensors`. GGUF quantisation applies only to the UNet/DiT; the text encoder and VAE keep running at their usual precision.
 
-**Quality expectation:** Q8_0 ≈ fp8 quality; Q4_K_M: mild quality reduction, good for most subjects; Q2_K: noticeable degradation on fine detail and faces. For portrait and skin-heavy work, Q4_K_M or higher.
+**Quality expectation:** Q8_0 is close to fp8 quality. Q4_K_M gives a mild quality reduction and works well for most subjects. Q2_K shows noticeable degradation on fine detail and faces. For portrait and skin-heavy work, use Q4_K_M or higher.
 
 ---
 
@@ -148,7 +148,7 @@ Text encoder and VAE files remain `.safetensors` — GGUF quantisation applies o
 ```bash
 pip install git+https://github.com/huggingface/diffusers -U
 ```
-Version v0.38.0 appears in diffusers source code URLs — verify at `pypi.org/project/diffusers` whether it has landed as a stable pip release before relying on the git-install path.
+Version v0.38.0 appears in diffusers source code URLs. Check `pypi.org/project/diffusers` to see whether it has landed as a stable pip release before you rely on the git-install path.
 
 **[dev] — `Flux2Pipeline`**
 
@@ -211,7 +211,7 @@ pipe = Flux2KleinKVPipeline.from_pretrained(
 )
 ```
 
-**[klein] 4B:** There is no dedicated named pipeline class in the diffusers docs at research time for the 4B variant — load via the same `Flux2KleinPipeline` pattern or directly from the 4B HF repo (check model card for the recommended pipeline at time of use). Community reports indicate `Flux2KleinPipeline` works with appropriate config changes.
+**[klein] 4B:** At research time, the diffusers docs had no dedicated named pipeline class for the 4B variant. Load it via the same `Flux2KleinPipeline` pattern, or directly from the 4B HF repo — check the model card for the recommended pipeline when you use it. Community reports say `Flux2KleinPipeline` works with the right config changes.
 
 **Hardware minimums for diffusers (community-tier):**
 
@@ -243,30 +243,30 @@ pipe = Flux2Pipeline.from_pretrained(
 
 The generic path for any downloaded FLUX.2 LoRA. (Training your own is §8.)
 
-> **Sourcing:** the loader node and the frozen-encoder fact are verified (official template + AI-Toolkit configs); the weight ranges and "FLUX.2 dislikes trigger words" are community craft from named Flux LoRA trainers (apatero, RunComfy, fal.ai, bghira/SimpleTuner). FLUX.2 is new — treat the numbers as starting points.
+> **Sourcing:** the loader node and the frozen-encoder fact are verified (official template + AI-Toolkit configs). The weight ranges and "FLUX.2 dislikes trigger words" are community craft from named Flux LoRA trainers (apatero, RunComfy, fal.ai, bghira/SimpleTuner). FLUX.2 is new — treat the numbers as starting points.
 
-**Node wiring — model-only.** A FLUX.2 LoRA patches the **DiT transformer only**; the text encoders (Mistral 3.2 for [dev], Qwen3 for [klein]) are **frozen** in both training and inference, so there are no encoder weights to apply. Load it with **`LoraLoaderModelOnly`** on the model path:
+**Node wiring — model-only.** A FLUX.2 LoRA patches the **DiT transformer only**. The text encoders (Mistral 3.2 for [dev], Qwen3 for [klein]) stay **frozen** in both training and inference, so there are no encoder weights to apply. Load it with **`LoraLoaderModelOnly`** on the model path:
 
 ```
 (model loader) → LoraLoaderModelOnly → Flux2 sampler chain
 ```
 
-If a LoRA *does* ship text-encoder weights (rare for FLUX.2), switch to the full `LoraLoader` so they apply — but model-only is the norm.
+If a LoRA *does* ship text-encoder weights (rare for FLUX.2), switch to the full `LoraLoader` so they apply. Model-only is still the norm.
 
-**Variant-specific — a [dev] LoRA does not load on [klein], and vice-versa.** Unlike Z-Image (where Base and Turbo share one architecture), FLUX.2's variants are **different model sizes** — [dev] is 32B, [klein] is 4B or 9B — so their LoRAs are **not interchangeable**. Match the LoRA to the exact variant it was trained on. The Klein sizes matter too: **Klein 9B requires the Qwen3-8B encoder** — run it against the 4B encoder and it fails outright. Check the LoRA's stated base model before downloading.
+**Variant-specific — a [dev] LoRA does not load on [klein], and vice-versa.** Unlike Z-Image, where Base and Turbo share one architecture, FLUX.2's variants are **different model sizes**: [dev] is 32B, [klein] is 4B or 9B. So their LoRAs are **not interchangeable**. Match the LoRA to the exact variant it was trained on. The Klein sizes matter too. **Klein 9B needs the Qwen3-8B encoder** — run it against the 4B encoder and it fails outright. Check the LoRA's stated base model before you download it.
 
-**Weight.** Start ~**0.8**, sweep **0.6–1.2**. Lower for style LoRAs that flatten texture; higher to force a stubborn concept. Read the LoRA's card for the author's tested weight `[community — consistent with Flux.1 conventions]`.
+**Weight.** Start around **0.8**, and sweep **0.6–1.2**. Go lower for style LoRAs that flatten texture, and higher to force a stubborn concept. Read the LoRA's card for the author's tested weight `[community — consistent with Flux.1 conventions]`.
 
-**Trigger words — FLUX.2 mostly doesn't want them.** Because the encoder is a full LLM (Mistral/Qwen3), FLUX.2 reads **natural-language description** far better than bare trigger tokens — trainers report that trigger words "confuse the model" and that semi-long descriptive captions activate a LoRA best. If a LoRA defines a trigger, include it verbatim; otherwise just *describe* what you want in prose. This is the opposite of tag-based SDXL, where the literal trigger token is mandatory.
+**Trigger words — FLUX.2 mostly doesn't want them.** The encoder is a full LLM (Mistral/Qwen3), so FLUX.2 reads **natural-language description** far better than bare trigger tokens. Trainers report that trigger words "confuse the model," and that semi-long descriptive captions activate a LoRA best. If a LoRA defines a trigger, include it verbatim. Otherwise just *describe* what you want in prose. This is the opposite of tag-based SDXL, where the literal trigger token is mandatory.
 
-**Stacking.** Chain `LoraLoaderModelOnly` nodes (MODEL out → MODEL in), or use the rgthree **Power Lora Loader**. Run **3–4 LoRAs** max `[community]` and **lower each strength** as you add them (e.g. a character + a style + an effect, each ~0.5–0.8) so they don't fight or over-bake. Use `strength_model` to make one dominant.
+**Stacking.** Chain `LoraLoaderModelOnly` nodes (MODEL out → MODEL in), or use the rgthree **Power Lora Loader**. Run **3–4 LoRAs** max `[community]`, and **lower each strength** as you add them — for example a character plus a style plus an effect, each around 0.5–0.8 — so they don't fight or over-bake. Use `strength_model` to make one dominant.
 
-**The Turbo LoRA** (`Flux_2-Turbo-LoRA_comfyui.safetensors`) is a special case — an *acceleration* LoRA that cuts [dev]/[klein] to 8 steps (guidance stays 4), toggled via `ComfySwitchNode`. It stacks with content LoRAs like a speed LoRA, not a style one.
+**The Turbo LoRA** (`Flux_2-Turbo-LoRA_comfyui.safetensors`) is a special case. It is an *acceleration* LoRA that cuts [dev]/[klein] to 8 steps (guidance stays 4), toggled via `ComfySwitchNode`. It stacks with content LoRAs like a speed LoRA, not a style one.
 
-**Ecosystem (early 2026, fast-moving).** Civitai is the main LoRA source — filter by the **exact FLUX.2 variant** ([dev] vs [klein]); a Flux.1 LoRA won't load. Most are trained with the **Ostris AI-Toolkit**; BFL published an official "fine-tune [klein] in under 60 min" LoRA guide, and fal.ai / RunComfy / bghira's SimpleTuner all support FLUX.2 training. The published pool was still small and growing close to release.
+**Ecosystem (early 2026, fast-moving).** Civitai is the main LoRA source. Filter by the **exact FLUX.2 variant** ([dev] vs [klein]) — a Flux.1 LoRA won't load. Most are trained with the **Ostris AI-Toolkit**. BFL published an official "fine-tune [klein] in under 60 min" LoRA guide, and fal.ai, RunComfy, and bghira's SimpleTuner all support FLUX.2 training. The published pool was still small and growing close to release.
 
 ---
 
 ## 8. LoRA training → `references/lora-training.md`
 
-Training moved to its own file, matching the suite's layout: **`references/lora-training.md`** covers the supported training bases (train on base, never distilled; [klein] 4B Base for commercial rights), the AI-Toolkit YAML and the Civitai klein recipe (including its dim-2 floor warning), hyperparameters by target (character vs style — Herbst's 50+-run ablation), caption-the-residual in prose and the contested captionless debate, **style-LoRA specifics** (diversity maxim, color-cast lock-in, the out-of-set acceptance test), and XY-grid evaluation. The full character pipeline is **`references/characters.md`**. Once trained, **§7** above covers loading, weights, stacking, and variant compatibility.
+Training moved to its own file, matching the suite's layout. **`references/lora-training.md`** covers the supported training bases (train on base, never distilled; [klein] 4B Base for commercial rights), the AI-Toolkit YAML and the Civitai klein recipe (including its dim-2 floor warning), and hyperparameters by target (character vs style — Herbst's 50+-run ablation). It also covers caption-the-residual in prose and the contested captionless debate, **style-LoRA specifics** (diversity maxim, color-cast lock-in, the out-of-set acceptance test), and XY-grid evaluation. The full character pipeline is **`references/characters.md`**. Once trained, **§7** above covers loading, weights, stacking, and variant compatibility.

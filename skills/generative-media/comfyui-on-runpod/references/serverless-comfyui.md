@@ -1,6 +1,6 @@
 # ComfyUI as a serverless endpoint
 
-Running ComfyUI behind a RunPod serverless endpoint — the programmatic path, and where it differs from the interactive pod everyone starts with.
+Running ComfyUI behind a RunPod serverless endpoint is the programmatic path. This is where it differs from the interactive pod everyone starts with.
 
 1. [The four moving pieces](#1-the-four-moving-pieces)
 2. [API format vs UI format](#2-api-format-vs-ui-format)
@@ -12,7 +12,7 @@ Running ComfyUI behind a RunPod serverless endpoint — the programmatic path, a
 
 ## 1. The four moving pieces
 
-Changing one without understanding the others is where most confusion starts.
+Changing one without understanding the others is where most confusion starts:
 
 | Piece | What it is | How you change it |
 |---|---|---|
@@ -21,11 +21,11 @@ Changing one without understanding the others is where most confusion starts.
 | **Image** | ComfyUI plus custom nodes plus `extra_model_paths.yaml` | Rebuild and push, then point the template at the new tag |
 | **Models** | Files on the network volume | Upload/sync — **no rebuild needed** |
 
-The separation is the point: **weights are too big to bake into an image**, so the image carries code and config while the volume carries weights. Adding a LoRA is an upload; adding a custom node is a rebuild.
+The separation is the point: **weights are too big to bake into an image**, so the image carries code and config while the volume carries weights. Adding a LoRA is an upload. Adding a custom node is a rebuild.
 
-**Rollback is a template edit, not a rebuild.** Point the template back at the previous image tag and the endpoint picks it up. Keep old tags around — that is your undo.
+**Rollback is a template edit, not a rebuild.** Point the template back at the previous image tag, and the endpoint picks it up. Keep old tags around — that is your undo.
 
-**Mount root.** Serverless mounts the volume at `/runpod-volume/` by default, though an endpoint can be configured to mount elsewhere. Either way, the image's `extra_model_paths.yaml` should declare **both** roots so the same image works in both contexts — see `volume-and-models.md` §1.
+**Mount root.** Serverless mounts the volume at `/runpod-volume/` by default, though an endpoint can be configured to mount elsewhere. Either way, the image's `extra_model_paths.yaml` should declare **both** roots so the same image works in both contexts. See `volume-and-models.md` §1.
 
 ---
 
@@ -40,11 +40,11 @@ ComfyUI has two JSON serialisations and they are not interchangeable.
 | Loads in the canvas | Yes | No |
 | Accepted by the endpoint | **No** | **Yes** |
 
-Feeding UI-format JSON to an endpoint produces a validation error that doesn't obviously say "wrong format," so check this first when a workflow that "works in the UI" fails over the API.
+Feeding UI-format JSON to an endpoint produces a validation error that doesn't obviously say "wrong format." So check this first when a workflow that "works in the UI" fails over the API.
 
-**Building graphs programmatically** is the better path once you're generating at volume: construct the API-format dict in code, injecting model filenames and `clip_type` **from your manifest** so graphs cannot drift from the volume. Parameterise the handful of values that vary per job — prompt, seed, resolution, length, LoRA and strength — and keep the rest fixed.
+**Building graphs programmatically** is the better path once you're generating at volume. Construct the API-format dict in code, injecting model filenames and `clip_type` **from your manifest** so graphs cannot drift from the volume. Parameterise the handful of values that vary per job — prompt, seed, resolution, length, LoRA and strength — and keep the rest fixed.
 
-**Reference images** go base64-encoded in the request payload, and the `LoadImage` node in the graph must reference the matching filename. A mismatch between the encoded filename and what the node expects is a common and confusing failure — the job runs and fails inside ComfyUI rather than being rejected at dispatch.
+**Reference images** go base64-encoded in the request payload, and the `LoadImage` node in the graph must reference the matching filename. A mismatch between the encoded filename and what the node expects is a common and confusing failure. The job runs and fails inside ComfyUI rather than being rejected at dispatch.
 
 ---
 
@@ -52,33 +52,33 @@ Feeding UI-format JSON to an endpoint produces a validation error that doesn't o
 
 **Use `/run` and poll `/status/{id}`. Do not use `/runsync` for generation.**
 
-`/runsync` holds the connection open for the result, which is fine for short jobs and wrong for image pipelines and anything video. When the job outlives the window you get a connection reset that looks like the endpoint died — it didn't, and the job may even have completed. `/run` returns an id immediately; poll until terminal.
+`/runsync` holds the connection open for the result, which is fine for short jobs and wrong for image pipelines and anything video. When the job outlives the window, you get a connection reset that looks like the endpoint died. It didn't — the job may even have completed. `/run` returns an id immediately; poll until terminal.
 
 A dispatch loop that behaves:
 
 - Submit, get the id, poll on an interval of a few seconds.
-- Treat only terminal states as done; keep polling through queued and in-progress.
+- Treat only terminal states as done. Keep polling through queued and in-progress.
 - **Read the response body on failure.** ComfyUI validation errors — missing model file, unknown node class, bad input — arrive *inside* the status payload, not as an HTTP error. An endpoint that looks healthy while every job fails is almost always a workflow/volume mismatch, and the body says which.
 - **Bound concurrency to max workers.** More in-flight requests than workers just sit in the queue and make timing hard to reason about.
 
-**Cache by config hash.** Hash each job's resolved configuration and skip re-running unchanged jobs. On a batch of hundreds this is the difference between iterating and waiting, and it makes a re-run after a partial failure cheap.
+**Cache by config hash.** Hash each job's resolved configuration and skip re-running unchanged jobs. On a batch of hundreds, this is the difference between iterating and waiting, and it makes a re-run after a partial failure cheap.
 
-**Keep a single-job probe script.** One shot, raw response printed. When the endpoint misbehaves it is far faster than reasoning about a batch, and it's the first thing to reach for after any image or volume change.
+**Keep a single-job probe script.** One shot, raw response printed. When the endpoint misbehaves, it is far faster than reasoning about a batch, and it's the first thing to reach for after any image or volume change.
 
 ---
 
 ## 4. Scaling and cost shape
 
-Workers bill **per second while running**. Idle workers cost nothing once spun down, which is why an abandoned endpoint is safe in a way an abandoned pod is not.
+Workers bill **per second while running**. Idle workers cost nothing once spun down. That is why an abandoned endpoint is safe in a way an abandoned pod is not.
 
 | Knob | Trade |
 |---|---|
 | **Max workers** | Throughput vs concurrent spend. Match your dispatch concurrency |
 | **Idle timeout** | Seconds a warm worker survives after a job. Higher = fewer cold starts, more idle cost |
-| **FlashBoot** | Pre-warms container layers; materially reduces cold start |
+| **FlashBoot** | Pre-warms container layers; clearly reduces cold start |
 | **Queue-delay scaler** | Max seconds queued before adding a worker. Lower = more responsive, more workers |
 
-**Cold start for ComfyUI is dominated by model loading, not container start.** A multi-file DiT plus a large text encoder is tens of gigabytes read from the volume into VRAM. Consequences worth planning around:
+**Cold start for ComfyUI is dominated by model loading, not container start.** A multi-file DiT plus a large text encoder means reading tens of gigabytes from the volume into VRAM. Consequences worth planning around:
 
 - **Idle timeout matters more here than for a small model.** Paying a few idle seconds beats re-loading 30 GB.
 - **Batch work into fewer, longer jobs** where you can — amortise the load across many generations rather than paying it per request.

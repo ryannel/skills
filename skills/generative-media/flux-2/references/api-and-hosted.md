@@ -1,6 +1,6 @@
 # FLUX.2 — BFL Hosted API
 
-Source tier: BFL official API docs at `docs.bfl.ai` and `docs.bfl.ml` (official-via-docs, fetched via research agents); pricing and region endpoints verified via BFL docs/blog. Pricing is community-tier — BFL uses an interactive calculator; verify at `bfl.ai/pricing` before relying on any stated prices.
+Source tier: BFL official API docs at `docs.bfl.ai` and `docs.bfl.ml` (official-via-docs, fetched via research agents). Pricing and region endpoints are verified via BFL docs/blog. Pricing is community-tier: BFL uses an interactive calculator, so verify at `bfl.ai/pricing` before you rely on any stated prices.
 
 ---
 
@@ -100,13 +100,13 @@ Keys are issued at `api.bfl.ai` (account → API keys). There is no OAuth/Bearer
 - Dimensions must be multiples of 16
 - Maximum: 2048 × 2048 (approximately 4 megapixels)
 - Non-square aspect ratios are supported: 512×2048, 1024×576, etc.
-- The model supports up to ~4 MP total; reduce both dimensions if targeting non-standard extreme aspect ratios
+- The model supports up to ~4 MP total. Reduce both dimensions if you target non-standard extreme aspect ratios
 
 ---
 
 ## 5. Async polling pattern
 
-The BFL API is **fully asynchronous** — POST to start a job, then poll `GET /v1/get_result?id=<task_id>` until the job completes. There is no streaming or websocket path.
+The BFL API is **fully asynchronous**. POST to start a job, then poll `GET /v1/get_result?id=<task_id>` until the job completes. There is no streaming or websocket path.
 
 **Job lifecycle:**
 
@@ -128,7 +128,7 @@ GET /v1/get_result?id=<task-id>  →  { "status": "Ready", "result": { "sample":
 | `"Error"` | Failed; check `result.error` |
 | `"Content Moderated"` | Blocked by safety filter; raise `safety_tolerance` if appropriate or revise prompt |
 
-**Polling interval:** 0.5–1 second for fast [klein] jobs; 1–2 seconds for [dev]/[pro]/[max]. The signed URL in `result.sample` is temporary — download promptly.
+**Polling interval:** 0.5–1 second for fast [klein] jobs, and 1–2 seconds for [dev]/[pro]/[max]. The signed URL in `result.sample` is temporary, so download it promptly.
 
 ---
 
@@ -213,7 +213,7 @@ BFL's terms state that you own your API outputs and BFL claims no rights to them
 
 ## 8. API pricing (community-tier — verify at bfl.ai/pricing)
 
-BFL publishes pricing through an interactive calculator rather than a static price table — the numbers below are from research-agent lookups and should be treated as directional only.
+BFL publishes pricing through an interactive calculator rather than a static price table. The numbers below are from research-agent lookups and should be treated as directional only.
 
 **Approximate relative tier ordering** (not published as fixed prices):
 - `flux-2-klein` — cheapest per image

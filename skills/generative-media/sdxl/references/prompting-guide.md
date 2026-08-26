@@ -1,6 +1,6 @@
 # SDXL Prompting Guide
 
-SDXL is a **dual-CLIP, 77-token UNet**. It matches tokens and short phrases, not sentence syntax. Everything below follows from that. The vocabulary lists are the copy-pasteable core; the weights and workflow numbers are SDXL-calibrated (lower than the SD1.5-era guides this vocabulary was mined from — see §9).
+SDXL is a **dual-CLIP, 77-token UNet**. It matches tokens and short phrases, not sentence syntax. Everything below follows from that. The vocabulary lists are the copy-paste core. The weights and workflow numbers are calibrated for SDXL — lower than in the SD1.5-era guides this vocabulary was mined from (see §9).
 
 ## Contents
 1. Prompt anatomy
@@ -39,8 +39,8 @@ This is a *default*, not a law. Anime/booru checkpoints use a different structur
 
 - **Position = weight.** CLIP weights earlier tokens more heavily. Front-load subject + the highest-value concepts. The model "prioritises key/early words and ignores less important ones."
 - **Emphasis syntax:** `(phrase:1.2)` raises, `(phrase:0.9)` lowers. Bare `(phrase)` ≈ 1.1, `[phrase]` ≈ 0.9 in A1111-style UIs.
-- **SDXL-calibrated weight range: ~1.05–1.3** `[community]`. This is the most important recalibration in this guide. SD1.5 photorealism guides routinely use 1.5–1.8; on SDXL those **fry colours, posterise, and over-contrast**. Start at 1.15, nudge in 0.05 steps.
-- **77-token chunks.** Each CLIP chunk is 77 tokens (~60 words). Past that, weight falls off sharply. Keep prompts tight. If you truly need more, insert `BREAK` (ComfyUI/A1111) — each side of `BREAK` is encoded as its own chunk and the embeddings are concatenated, so put a self-contained idea in each chunk rather than splitting mid-phrase.
+- **SDXL-calibrated weight range: ~1.05–1.3** `[community]`. This is the most important recalibration in this guide. SD1.5 photorealism guides routinely use 1.5–1.8. On SDXL those **fry colours, posterise, and over-contrast**. Start at 1.15, nudge in 0.05 steps.
+- **77-token chunks.** Each CLIP chunk is 77 tokens (~60 words). Past that, weight falls off sharply. Keep prompts tight. If you truly need more, insert `BREAK` (ComfyUI/A1111). Each side of `BREAK` is encoded as its own chunk, and the embeddings are concatenated. Put a self-contained idea in each chunk rather than splitting mid-phrase.
 - **No generic booster blocks.** `8k, masterpiece, best quality, ultra detailed, hyperrealistic` are near-inert on SDXL — they consume tokens without earning quality. Replace them with concrete photographic terms (§4).
 
 ---
@@ -83,7 +83,7 @@ Notes: `documentary` → realistic skin, good in B&W. `glamour`/`beauty` → add
 Grain phrasing: `film grain` · `fine grain` · `prominent grain` · `muted low grain`.
 
 ### Lenses
-`50mm` (natural FOV) · `35mm` (reportage) · `85mm` (portrait compression) · `Voigtländer Nokton 50mm f1.1` (dreamy bokeh) · `8mm fisheye` (180° distortion). Note: on a CLIP model, plain focal-length numbers move the image **weakly** — named/iconic lenses and the camera body do more. SDXL's bigG encoder responds somewhat better than SD1.5 did, but don't rely on `f/1.4` alone for bokeh; pair it with `shallow depth of field, bokeh`.
+`50mm` (natural FOV) · `35mm` (reportage) · `85mm` (portrait compression) · `Voigtländer Nokton 50mm f1.1` (dreamy bokeh) · `8mm fisheye` (180° distortion). Note: on a CLIP model, plain focal-length numbers move the image **weakly** — named/iconic lenses and the camera body do more. SDXL's bigG encoder responds somewhat better than SD1.5 did. Still, don't rely on `f/1.4` alone for bokeh — pair it with `shallow depth of field, bokeh`.
 
 ### Quality-via-concrete-detail (instead of "8k masterpiece")
 `detailed skin` · `visible skin pores` · `subsurface scattering` · `fine grain` · `shallow depth of field` · `bokeh` · `wide dynamic range` · `microcontrast` · `smooth tonality` · `crisp details`
@@ -109,7 +109,7 @@ Portraits/fashion: Richard Avedon · Martin Schoeller · George Hurrell · Paolo
 
 ## 6. Negative prompts (variant-aware)
 
-**Negatives only work where guidance is on.** On base and standard finetunes (CFG > 1), use them. On **distilled variants at CFG 1 (ComfyUI) / `guidance_scale=0.0` (diffusers)** — Turbo, Lightning, LCM, Hyper — **negatives are inert**; phrase constraints positively in the main prompt instead.
+**Negatives only work where guidance is on.** On base and standard finetunes (CFG > 1), use them. On **distilled variants at CFG 1 (ComfyUI) / `guidance_scale=0.0` (diffusers)** — Turbo, Lightning, LCM, Hyper — **negatives are inert**. Phrase constraints positively in the main prompt instead.
 
 A practical SDXL negative baseline (base/finetune):
 ```
@@ -130,7 +130,7 @@ The photoreal dialect above is for base/Juggernaut/RealVis/DreamShaper. **Tag-tr
 ```
 score_9, score_8_up, score_7_up, source_anime, rating_safe, 1girl, solo, <booru tags…>
 ```
-The `score_9, score_8_up, score_7_up, score_6_up, …` ladder is near-mandatory; `source_anime` / `source_pony` / `source_furry` and `rating_safe` / `rating_explicit` set the register. Pony LoRAs are a **separate pool** — base-SDXL LoRAs don't transfer.
+The `score_9, score_8_up, score_7_up, score_6_up, …` ladder is near-mandatory. `source_anime` / `source_pony` / `source_furry` and `rating_safe` / `rating_explicit` set the register. Pony LoRAs are a **separate pool** — base-SDXL LoRAs don't transfer.
 
 **Illustrious / NoobAI XL** — **Danbooru booru tags**, comma-separated, no score ladder (or a model-specific quality tag set — check the model card). `1girl, solo, <character>, <series>, <attributes>, masterpiece, best quality`. These quality boosters *do* work here (the model was trained with them), unlike on photoreal SDXL.
 
@@ -167,7 +167,7 @@ Fresh prompts written for SDXL (weights ~1.1–1.3, 1024-area buckets). Assume a
 The vocabulary here was mined from a 2023 photorealism guide written for **SD1.5 checkpoints** (Absolute Reality 1.6 etc.). Carried over: the prompt anatomy and **all the vocabulary** (style tags, camera/film/lens/photographer names, lighting, framing) — these are semantic content the CLIP encoders understand. **Recalibrated or dropped:**
 
 - **Weights lowered** from 1.5–1.8 to ~1.05–1.3 (SDXL fries at high weights).
-- **Resolution advice inverted** — the "generate at 512 then upscale" workflow is SD1.5's 512px-native habit; **SDXL is 1024px-native**, render in a 1024-area bucket directly.
+- **Resolution advice inverted** — the "generate at 512 then upscale" workflow is SD1.5's 512px-native habit. **SDXL is 1024px-native** — render in a 1024-area bucket directly.
 - **SD1.5 tooling dropped** — A1111 HiRes-Fix recipes, `aDetailer` denoise values, and the SD1.5 inpainting numbers are not carried as SDXL gospel (SDXL equivalents are in `references/setup-and-workflows.md`).
 - **SD1.5 negative embeddings dropped** (`UnrealisticDream` etc. won't load).
-- **Lens-spec skepticism softened** — the source found focal-length numbers inert on SD1.5; SDXL's bigG encoder responds a bit better, but still pair numbers with `shallow depth of field, bokeh`.
+- **Lens-spec skepticism softened** — the source found focal-length numbers inert on SD1.5. SDXL's bigG encoder responds a bit better, but still pair numbers with `shallow depth of field, bokeh`.

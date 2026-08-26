@@ -43,13 +43,13 @@ Source tier: BFL official prompting guide (primary), BFL blog, HF blog (official
 | Multi-reference / structured JSON | Any length, but count subjects |
 | Hard cap | 512 tokens (~380 words) |
 
-Front-load subject and key elements — Mistral 3.2 and Qwen3 weight earlier tokens more heavily in their attention mechanism.
+Front-load the subject and key elements. Mistral 3.2 and Qwen3 give more weight to earlier tokens in their attention mechanism.
 
 ---
 
 ## 2. What the encoder actually parses
 
-[dev] uses **Mistral Small 3.2 24B** (a 24-billion-parameter vision-language model). [klein] uses **Qwen3** (4B for [klein] 4B, 8B for [klein] 9B). Both are instruction-following LLMs — the same model family used for code generation and text summarisation.
+[dev] uses **Mistral Small 3.2 24B** (a 24-billion-parameter vision-language model). [klein] uses **Qwen3** (4B for [klein] 4B, 8B for [klein] 9B). Both are instruction-following LLMs. That is the same model family used for code generation and text summarisation.
 
 **What they read well:**
 - Grammatical clause structure (`"a woman who is holding"` > `"woman holding"`)
@@ -60,16 +60,16 @@ Front-load subject and key elements — Mistral 3.2 and Qwen3 weight earlier tok
 - Hex color codes when signalled correctly (see section 3)
 
 **What they parse as noise:**
-- Quality-adjective chains: `masterpiece`, `8k`, `best quality`, `ultra-realistic`, `highly detailed`, `photorealistic`, `trending on artstation` — these are Stable Diffusion 1.5 booru tags with near-zero semantic content for an LLM-class encoder
-- Leading comma-separated tokens with no predicate: `woman, hair, eyes, blue, rain, city, night` — describes noun fields, not a scene
-- Parenthetical emphasis tokens: `(masterpiece:1.2)`, `((eyes))` — AUTOMATIC1111 syntax, meaningless here
-- Negative prompts — there is no CFG path in [dev] and no active guidance in [klein] distilled (see section 9)
+- Quality-adjective chains: `masterpiece`, `8k`, `best quality`, `ultra-realistic`, `highly detailed`, `photorealistic`, `trending on artstation`. These are Stable Diffusion 1.5 booru tags. They carry almost no meaning for an LLM-class encoder.
+- Leading comma-separated tokens with no predicate: `woman, hair, eyes, blue, rain, city, night`. This describes noun fields, not a scene.
+- Parenthetical emphasis tokens: `(masterpiece:1.2)`, `((eyes))`. This is AUTOMATIC1111 syntax, and it means nothing here.
+- Negative prompts. There is no CFG path in [dev] and no active guidance in [klein] distilled (see section 9).
 
 ---
 
 ## 3. Hex color control
 
-FLUX.2 introduced explicit hex-color conditioning, absent from Flux.1. The mechanism requires a keyword trigger before the hex code so the encoder routes it to the color-conditioning pathway.
+FLUX.2 introduced explicit hex-color conditioning. Flux.1 had none. The mechanism needs a keyword trigger before the hex code, so the encoder routes it to the color-conditioning pathway.
 
 **Format: `"...in color #XXXXXX"` or `"...in hex #XXXXXX"`**
 
@@ -82,8 +82,8 @@ FLUX.2 introduced explicit hex-color conditioning, absent from Flux.1. The mecha
 Multiple hex codes work in one prompt. Each needs its own `"in color"` or `"in hex"` signal.
 
 **Use cases:**
-- Brand colour consistency across a campaign: define a `color_palette` array in the JSON format (section 4) and reference elements with hex codes inline
-- Logo and type-on-image generation: pair hex color conditioning with the JSON `subjects` format and wrap text in quotes
+- Brand colour consistency across a campaign: define a `color_palette` array in the JSON format (section 4), then reference elements with hex codes inline
+- Logo and type-on-image generation: pair hex color conditioning with the JSON `subjects` format, and wrap text in quotes
 - Replicating a film still's specific colour grading: hex-code the primary midtone and shadow colour
 
 ---
@@ -136,7 +136,7 @@ FLUX.2 was trained on natural language. JSON is a workflow tool for situations w
 
 ## 5. Realism vocabulary: camera, lens, film stock
 
-FLUX.2's default tendency (especially [klein]) is over-processed sharpness. Camera vocabulary works because Mistral/Qwen3 have strong priors on what images these setups produce — they're not just keywords, they're world-model activations.
+FLUX.2 tends by default toward over-processed sharpness, especially in [klein]. Camera vocabulary works because Mistral/Qwen3 have strong priors on what images these setups produce. They are not just keywords; they activate the model's world model.
 
 ### Camera bodies (photoreal signal strength: high) `[community — fal.ai prompting guide; convergent]`
 
@@ -199,9 +199,9 @@ Do **not** add: `"realistic"`, `"ultra-realistic"`, `"photorealistic"`, `"8K"`, 
 
 ## 6. Multi-reference image editing
 
-FLUX.2 [dev] and [klein] 9B KV support **reference-based image editing** — provide one or more reference images and the model integrates them into the generated composition. This capability uses `ReferenceLatent` nodes in ComfyUI (this is a FLUX.2-native node, not the older IPAdapter approach).
+FLUX.2 [dev] and [klein] 9B KV support **reference-based image editing**. Provide one or more reference images, and the model integrates them into the generated composition. This capability uses `ReferenceLatent` nodes in ComfyUI — a FLUX.2-native node, not the older IPAdapter approach.
 
-**Supported reference count:** marketing documentation states up to 10; the official prompting guide states up to 8. Both 4B and 9B documentation mention approximately 4 in some configurations. Use the lower bounds as safe targets until you verify your specific variant's model card.
+**Supported reference count:** marketing documentation states up to 10. The official prompting guide states up to 8. Both 4B and 9B documentation mention approximately 4 in some configurations. Use the lower bounds as safe targets until you verify your specific variant's model card.
 
 **Suggested supported counts by variant (verify at time of use):**
 - [dev]: up to ~8–10 reference images
@@ -241,7 +241,7 @@ FLUX.2 improved text rendering significantly over Flux.1. Suitable for: short te
 5. Combine hex color control for text colour: `"Sign text 'ACME' in color #FF5733"`
 6. Generate 3–5 candidates and select — text rendering has higher variance than scene composition
 
-For anything heavier (labels on product packaging, business cards, poster layouts, UI mockups): FLUX.2 text rendering is not reliable for dense multi-line copy or layout-driven design — use a model purpose-built for typography.
+For anything heavier — labels on product packaging, business cards, poster layouts, UI mockups — FLUX.2 text rendering is not reliable for dense multi-line copy or layout-driven design. Use a model purpose-built for typography instead.
 
 ---
 
@@ -334,5 +334,5 @@ Sony A7R V, 50mm f/1.8, available street lighting, puddles on the pavement.
 | Bare hex code without keyword | `"...#0047AB"` routes as text noise; doesn't trigger color conditioning | `"...in color #0047AB"` |
 | Subject buried mid-prompt | LLM encoders front-weight tokens | Front-load subject in first clause |
 | Treating JSON as required ("plain text fails") | FLUX.2 was trained on natural language; JSON is optional and a workflow tool | Use plain language for single subjects; JSON for complex multi-subject |
-| Dropping camera gear to avoid the "AI look" | Some models benefit from removing DSLR markers; FLUX.2 is the opposite — Mistral/Qwen3 treat camera vocabulary as semantic context | Keep camera body + lens + film stock in FLUX.2 prompts for photoreal results |
-| `(text:1.5)` parenthetical weight syntax | AUTOMATIC1111 syntax; meaningless *here* — FLUX.2's Mistral/Qwen3 conditioning has no per-token weight channel. Not a rule about LLM encoders as a class: [`anima`](../../anima/) has one and ships officially documented weighting | No parenthetical weighting; rephrase the sentence instead |
+| Dropping camera gear to avoid the "AI look" | Some models benefit from removing DSLR markers. FLUX.2 is the opposite: Mistral/Qwen3 treat camera vocabulary as semantic context | Keep camera body + lens + film stock in FLUX.2 prompts for photoreal results |
+| `(text:1.5)` parenthetical weight syntax | This is AUTOMATIC1111 syntax, and it means nothing *here* — FLUX.2's Mistral/Qwen3 conditioning has no per-token weight channel. This is not a rule about LLM encoders as a class: [`anima`](../../anima/) has one and ships officially documented weighting | No parenthetical weighting; rephrase the sentence instead |

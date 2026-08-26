@@ -1,8 +1,8 @@
 # Anima Prompting Guide
 
-This file owns *writing* an Anima prompt: the tag grammar, the vocabularies, weight calibration, the natural-language and dataset-tag modes, per-variant differences, worked examples. Node wiring, samplers and LoRA loading are [`setup-and-workflows.md`](setup-and-workflows.md); holding a character steady is [`characters.md`](characters.md).
+This file explains how to write an Anima prompt: tag grammar, vocabularies, weight calibration, natural-language and dataset-tag modes, per-variant differences, and worked examples. For node wiring, samplers and LoRA loading, see [`setup-and-workflows.md`](setup-and-workflows.md). For holding a character steady, see [`characters.md`](characters.md).
 
-Everything here follows from one model-card sentence: Anima's captions were *"Danbooru-style tags, natural language captions, and combinations of tags and captions."* It reads tags natively because it was taught in tags — even though the thing doing the reading is a Qwen3-0.6B LLM behind an adapter.
+Everything here follows from one sentence in the model card: Anima's captions were *"Danbooru-style tags, natural language captions, and combinations of tags and captions."* It reads tags natively because it was trained on tags. That is true even though a Qwen3-0.6B LLM behind an adapter is doing the reading.
 
 ## Contents
 
@@ -25,11 +25,11 @@ Everything here follows from one model-card sentence: Anima's captions were *"Da
 
 ## 1. The dialect, and why an LLM encoder ended up here
 
-SKILL.md's *one rule* carries the argument: Anima has an LLM encoder ([`z-image`](../../z-image/), [`flux-2`](../../flux-2/), [`krea-2`](../../krea-2/) territory) and a booru dialect with attention weighting ([`sdxl`](../../sdxl/) territory), because **dialect follows the caption corpus, while the encoder only sets the ceiling on what a dialect can express** — and because weighting rides a separate **T5 token stream** the adapter multiplies into its output. Three consequences at the keyboard:
+SKILL.md's *one rule* explains this: Anima has an LLM encoder ([`z-image`](../../z-image/), [`flux-2`](../../flux-2/), [`krea-2`](../../krea-2/) territory) and a booru dialect with attention weighting ([`sdxl`](../../sdxl/) territory). That is because **dialect follows the caption corpus, while the encoder only sets the ceiling on what a dialect can express**. It is also because weighting rides a separate **T5 token stream** that the adapter multiplies into its output. Three consequences follow at the keyboard:
 
-- **No 77-token cliff.** SDXL's tag prompts are shaped by CLIP's chunk boundary; Anima's are not. Forty-tag prompts behave and the card's own runs past fifty. Position still matters (§2), but for *grammatical* reasons — the slot order was trained — not because attention falls off a ledge. There is no `BREAK` here and nothing to use it for.
-- **Tags and prose mix freely.** *"You can mix tags and natural language in arbitrary order"* — not usefully possible on a CLIP model.
-- **A real ceiling.** 0.6B is small. Clause-heavy relational prose ("the taller girl handing the smaller one a book while looking away") degrades faster than on a Qwen3-4B or Mistral-class encoder; `u/Time-Teaching1926` names this as the model's limit. Express relations as explicit per-character description (§8).
+- **No 77-token cliff.** SDXL's tag prompts are shaped by CLIP's chunk boundary. Anima's are not. Forty-tag prompts work fine, and the card's own example runs past fifty. Position still matters (§2), but for *grammatical* reasons: the slot order was trained. It is not because attention falls off a ledge. There is no `BREAK` here, and nothing to use it for.
+- **Tags and prose mix freely.** *"You can mix tags and natural language in arbitrary order"* — this is not usefully possible on a CLIP model.
+- **A real ceiling.** 0.6B is small. Clause-heavy relational prose ("the taller girl handing the smaller one a book while looking away") degrades faster than it would on a Qwen3-4B or Mistral-class encoder. `u/Time-Teaching1926` names this as the model's limit. Express relations as explicit per-character description instead (§8).
 
 ---
 
@@ -49,7 +49,7 @@ Two formatting rules that are easy to get wrong and produce no error:
 - **Lowercase, spaces not underscores.** *"Score tags are the only tags that use underscores"* — `score_7` keeps its underscore, `blunt bangs` does not become `blunt_bangs`.
 - **When Danbooru and Gelbooru disagree on a tag name, prefer the Gelbooru version**. If a tag seems inert, check whether you used the other site's name.
 
-**Tag dropout was trained in.** *"You don't need to include every single relevant tag."* The model was trained with tags randomly dropped, so it fills gaps rather than reading absence as a negative — which is why Anima does not need the exhaustive 60-tag walls Illustrious users write out of habit.
+**Tag dropout was trained in.** *"You don't need to include every single relevant tag."* The model was trained with tags randomly dropped. So it fills gaps rather than reading absence as a negative. That is why Anima does not need the exhaustive 60-tag walls Illustrious users write out of habit.
 
 ---
 
@@ -62,7 +62,7 @@ Anima ships **two separate quality systems, and they compose**: *"You can use ei
 | **Human score** | `masterpiece` · `best quality` · `good quality` · `normal quality` · `low quality` · `worst quality` | booru aesthetic labels |
 | **Aesthetic model score** | `score_9` … `score_1` | derived from the PonyV7 aesthetic model |
 
-The card's recommended positive prefix uses one of each: `masterpiece, best quality, score_7, safe`. Note `score_7`, not `score_9` — unlike Pony's `score_9, score_8_up…` stack, Anima's score tags are a **descriptive axis you set**, not a "more is better" ladder. `score_9` biases toward whatever the aesthetic model rated highest: narrower and glossier.
+The card's recommended positive prefix uses one of each: `masterpiece, best quality, score_7, safe`. Note `score_7`, not `score_9`. Unlike Pony's `score_9, score_8_up…` stack, Anima's score tags are a **descriptive axis you set**, not a "more is better" ladder. `score_9` biases toward whatever the aesthetic model rated highest, which is narrower and glossier.
 
 **On Anima-Aesthetic, use neither ladder.** Its captions had quality tags stripped, and the authors are explicit: *"You don't need to use quality tags in the positive at all… I recommend not using `score_*` tags in both the positive and negative prompt. It is already high quality enough and the score tags can push it too hard into slop territory."* Both ladders, both sides, gone.
 
@@ -72,10 +72,10 @@ The card's recommended positive prefix uses one of each: `masterpiece, best qual
 
 `safe` · `sensitive` · `nsfw` · `explicit` `[official]`
 
-**Trained conditioning tokens occupying the same prompt slot as quality and year tags**, working in the positive or the negative. No refusal layer to route around, no separate "uncensored" checkpoint to find — the graded axis is in the base model. The consequence runs both ways:
+**These are trained conditioning tokens that occupy the same prompt slot as quality and year tags**, and they work in the positive or the negative. There is no refusal layer to route around and no separate "uncensored" checkpoint to find — the graded axis is in the base model. The consequence runs both ways:
 
-- **If you want SFW output you must say so.** The card warns that *"the model may generate undesired content, especially if the prompt is short or lacking details. Avoid this by using the appropriate safety tags in the positive and negative prompts."* This is why the recommended prefix ships with `safe,` in it. With no rating token the model samples across the whole distribution.
-- **If you want adult output, the tag is the lever**, and `sensitive` is a genuinely useful middle rung — suggestive without explicit content — that a binary SFW/NSFW switch cannot express.
+- **If you want SFW output, you must say so.** The card warns that *"the model may generate undesired content, especially if the prompt is short or lacking details. Avoid this by using the appropriate safety tags in the positive and negative prompts."* This is why the recommended prefix ships with `safe,` in it. With no rating token, the model samples across the whole distribution.
+- **If you want adult output, the tag is the lever.** `sensitive` is a genuinely useful middle rung: suggestive without explicit content, something a binary SFW/NSFW switch cannot express.
 
 On **Turbo** at CFG 1 the negative prompt is inert, so the positive rating tag is doing all the work. That is the one variant where getting this tag right actually matters rather than merely helping. Licence terms and the adult-work craft are in [`characters.md`](characters.md) §6.
 
@@ -83,11 +83,11 @@ On **Turbo** at CFG 1 the negative prompt is inert, so the positive rating tag i
 
 ## 5. Year, meta and general tags
 
-**Year and era tags** — `year 2025`, `year 2024`, … plus `newest`, `recent`, `mid`, `early`, `old`. An unusually strong style lever, because anime style is time-stratified and the training data spans a long period. `u/RevolutionaryWater31`, who has finetuned the model: *"the year tags — this has very strong influence on the generated image."* Reach for these before a stack of adjectives — `year 2025, newest` and `old` produce different line weights, shading and palettes from identical content tags.
+**Year and era tags** — `year 2025`, `year 2024`, … plus `newest`, `recent`, `mid`, `early`, `old`. This is an unusually strong style lever, because anime style is time-stratified and the training data spans a long period. `u/RevolutionaryWater31`, who has finetuned the model: *"the year tags — this has very strong influence on the generated image."* Reach for these before a stack of adjectives. `year 2025, newest` and `old` produce different line weights, shading and palettes from identical content tags.
 
 **Meta tags** — `highres`, `absurdres`, `anime screenshot`, `jpeg artifacts`, `official art`. The two that most change register are `anime screenshot` (flat cel shading, TV-anime composition) and `official art` (illustration polish).
 
-**General tags** are ordinary Danbooru content tags and carry the bulk of a prompt. Two additions from `u/RevolutionaryWater31`: composition tags earn their place — *"use keywords such as `cinematic composition` and `dynamic angle` [to] improve your image significantly"* — while resolution-marketing tags are harmful, *"You can throw away garbage such as 'raytracing' or '4k' and '8k', these has never done anything and will just poison your output."* For tag discovery, `tags.latent.moe` is a Danbooru browser with per-model image references, ~70% populated for Anima `[community — u/Chemical-Nose-2985]`.
+**General tags** are ordinary Danbooru content tags and carry the bulk of a prompt. `u/RevolutionaryWater31` adds two points. Composition tags earn their place: *"use keywords such as `cinematic composition` and `dynamic angle` [to] improve your image significantly."* Resolution-marketing tags are harmful: *"You can throw away garbage such as 'raytracing' or '4k' and '8k', these has never done anything and will just poison your output."* For tag discovery, `tags.latent.moe` is a Danbooru browser with per-model image references, about 70% populated for Anima `[community — u/Chemical-Nose-2985]`.
 
 ---
 
@@ -97,11 +97,11 @@ On **Turbo** at CFG 1 the negative prompt is inert, so the positive rating tag i
 
 > *"Prefix artist with @. E.g. `@big chungus`. **You must put @ in front of the artist. The effect will be very weak if you don't.**"* `[official]`
 
-It fails silently: a bare artist name tokenises as ordinary general tags, the image still renders, nothing errors, and the style you asked for is simply not there. Check this first against every "Anima doesn't do styles well" report.
+It fails silently. A bare artist name tokenises as an ordinary general tag. The image still renders, nothing errors, and the style you asked for is simply not there. Check this first against every "Anima doesn't do styles well" report.
 
 **The vocabulary is Anima's deepest asset.** ThetaCursed's Style Explorer indexes **42k+ artist styles for Anima Base** against 16k+ for Illustrious/NoobAI and ~1.5k for Krea 2 Turbo `[community — ThetaCursed, animastyles.thetacursed.com]`. His GitHub was suspended, so the hosted explorers are mirrors and the URLs are volatile `[flagged — re-verify]`.
 
-**Craft:** stack two or three artists to blend rather than hunting for one exactly-right name — blends are where the large vocabulary pays off. Weight them like anything else (`(@artist name:1.6)` to push, lower to dilute one member of a blend, §7), and keep them in the trained slot, after character and series and before general tags. Separately, **`artist name` belongs in the negative** and does not conflict with `@`-prefixed artists in the positive: it suppresses rendered signatures and watermarks, which the training data is full of.
+**Craft:** stack two or three artists to blend, rather than hunting for one exactly-right name. Blends are where the large vocabulary pays off. Weight them like anything else (`(@artist name:1.6)` to push, lower to dilute one member of a blend, §7), and keep them in the trained slot: after character and series, before general tags. Separately, **`artist name` belongs in the negative**, and it does not conflict with `@`-prefixed artists in the positive. It suppresses rendered signatures and watermarks, which the training data is full of.
 
 ---
 
@@ -116,32 +116,32 @@ Standard ComfyUI attention weighting works: `(term:1.5)`, `(term)` ≈ 1.1, nest
 | SDXL | ~1.05–1.3 | fried colours, posterisation |
 | **Anima** | **~1.5–2.0+**, `(chibi:2)` as the card's own example | degrades gracefully; `(at night:2.0)` is reported stable |
 
-**Why the scale differs.** ComfyUI tokenises an Anima prompt twice — Qwen3 and T5-XXL — forces the Qwen weights to `1.0`, and applies your emphasis as `out = out * t5xxl_weights` on the **adapter's output embeddings**. That is a flat multiplicative scale. CLIP weighting instead *interpolates toward the mean* embedding, which moves conditioning further per unit. Same syntax, blunter instrument, hence bigger numbers.
+**Why the scale differs.** ComfyUI tokenises an Anima prompt twice, once for Qwen3 and once for T5-XXL. It forces the Qwen weights to `1.0`, and applies your emphasis as `out = out * t5xxl_weights` on the **adapter's output embeddings**. That is a flat multiplicative scale. CLIP weighting instead *interpolates toward the mean* embedding, which moves conditioning further per unit. Same syntax, blunter instrument, hence bigger numbers.
 
-`u/arthan1011`, who has published more Anima workflow craft than anyone: *"Anima can handle prompt weights like `(at night:2.0)` without breaking — use them to push your generation when needed."* His published prompts run `(at night:2.0)` and `(split screen, multiple views:1.2)` — and by the card's own norms that 1.2 is *low*, worth remembering when you copy community prompts from people carrying SDXL habits.
+`u/arthan1011`, who has published more Anima workflow craft than anyone: *"Anima can handle prompt weights like `(at night:2.0)` without breaking — use them to push your generation when needed."* His published prompts run `(at night:2.0)` and `(split screen, multiple views:1.2)`. By the card's own norms, that 1.2 is *low* — worth remembering when you copy community prompts from people carrying SDXL habits.
 
-**Working method:** start at 1.5 for an ignored term, step by 0.25, stop when composition rather than colour starts distorting. A term still inert at 2.0 is usually a vocabulary problem — wrong booru spelling, or a concept the model lacks — not a weight problem.
+**Working method:** start at 1.5 for an ignored term, step by 0.25, and stop when composition (rather than colour) starts distorting. A term still inert at 2.0 is usually a vocabulary problem — wrong booru spelling, or a concept the model lacks — not a weight problem.
 
 ---
 
 ## 8. Natural-language mode
 
-**Both dialects are first-class — this is not a tags-with-a-prose-fallback model.** The captions were tags, natural language *and* mixtures, so prose is a trained register, not a degraded path. §1's claim is narrower: tags map more tightly onto the model's *vocabulary* (characters, artists, poses, ratings all have exact tokens), so tags win wherever a tag exists and prose wins wherever one does not. Most good Anima prompts use both.
+**Both dialects are first-class. This is not a tags-with-a-prose-fallback model.** The captions were tags, natural language, *and* mixtures of both, so prose is a trained register, not a degraded path. §1's claim is narrower: tags map more tightly onto the model's *vocabulary* (characters, artists, poses and ratings all have exact tokens). So tags win wherever a tag exists, and prose wins wherever one does not. Most good Anima prompts use both.
 
 Prose has its own rules:
 
 - ***"Aim for at least 2 sentences. Extremely short prompts can give unexpected results."*** A one-line prose prompt is the worst of both worlds: too little signal for the LLM path and no tag structure to fall back on.
-- **Follow standard English capitalisation for character and series names** — the opposite of the lowercase tag rule, because these arrived in the prose captions capitalised.
-- **Mix freely with tags:** `masterpiece, best quality, @big chungus. An anime girl with medium-length blonde hair is…`. The common shape is a tag prefix carrying quality/rating/artist, then prose carrying the scene. **Keep artist tags in that tag prefix**, as the card's own example does — whether `@` still binds inside a sentence is not documented and not established, so do not find out the hard way on a prompt you care about.
+- **Follow standard English capitalisation for character and series names.** This is the opposite of the lowercase tag rule, because these names arrived in the prose captions capitalised.
+- **Mix freely with tags:** `masterpiece, best quality, @big chungus. An anime girl with medium-length blonde hair is…`. The common shape is a tag prefix carrying quality, rating and artist, then prose carrying the scene. **Keep artist tags in that tag prefix**, as the card's own example does. Whether `@` still binds inside a sentence is not documented and not established, so do not find out the hard way on a prompt you care about.
 - **Name a character, then describe them.** *"`Digital artwork of Fern from Sousou no Frieren, with long purple hair and purple eyes, wearing a black coat over a white dress with puffy sleeves…` This is extra important when prompting for multiple characters. If you just list off character names with no description of appearance, the model can get confused."*
 
-**Prose over tags** for relations and spatial description tags cannot express ("standing behind and slightly to the left of"), unusual object interactions, and scenes with no booru tag. **Tags** for anything the vocabulary covers — poses, expressions, clothing, framing — because a trained tag is a tighter handle than a paraphrase.
+**Use prose** for relations and spatial description that tags cannot express ("standing behind and slightly to the left of"), for unusual object interactions, and for scenes with no booru tag. **Use tags** for anything the vocabulary covers — poses, expressions, clothing, framing — because a trained tag is a tighter handle than a paraphrase.
 
 ---
 
 ## 9. Dataset-tag mode (ye-pop and DeviantArt)
 
-An unusual mechanism most Anima users never discover. Anima was also trained on filtered **LAION-POP (ye-pop)** and **DeviantArt** subsets whose captions carried a **dataset tag at the very start of the prompt, followed by a newline** — optionally with the alt-text (ye-pop) or the work's title (DeviantArt) on the second line. The card's example:
+An unusual mechanism most Anima users never discover. Anima was also trained on filtered **LAION-POP (ye-pop)** and **DeviantArt** subsets. Their captions carried a **dataset tag at the very start of the prompt, followed by a newline**, optionally with the alt-text (ye-pop) or the work's title (DeviantArt) on the second line. The card's example:
 
 ```
 ye-pop
@@ -164,10 +164,10 @@ worst quality, low quality, score_1, score_2, score_3, artist name, blurry,
 jpeg artifacts, chromatic aberration
 ```
 
-Read what it does: the bottom rungs of *both* quality ladders, `artist name` to kill rendered signatures, three specific degradation artefacts. Not a wall of anatomy terms — that is not the Anima idiom; quality-ladder negatives do the job more efficiently.
+Read what it does: the bottom rungs of *both* quality ladders, `artist name` to kill rendered signatures, and three specific degradation artefacts. This is not a wall of anatomy terms — that is not the Anima idiom. Quality-ladder negatives do the job more efficiently.
 
 - **Base / Aesthetic** — guidance is live at CFG 3–6, negatives work normally. On **Aesthetic**, strip `score_1, score_2, score_3` along with the positive score tags.
-- **Turbo** — CFG 1 is guidance-off and **negatives are inert**. Move every constraint into the positive as a tag: `safe` rather than negating `nsfw`, `simple background` rather than negating `detailed background`, `solo` rather than negating extra characters. Anima's tag vocabulary makes this far less painful than on a prose model, because most negatives have a positive tag meaning the opposite.
+- **Turbo** — CFG 1 means guidance is off, and **negatives are inert**. Move every constraint into the positive as a tag: `safe` rather than negating `nsfw`, `simple background` rather than negating `detailed background`, `solo` rather than negating extra characters. Anima's tag vocabulary makes this far less painful than on a prose model, because most negatives have a positive tag that means the opposite.
 
 ---
 
@@ -180,7 +180,7 @@ Read what it does: the bottom rungs of *both* quality ladders, `artist name` to 
 | Artist tags | strongest response | works, but competes with the baked style | works; distillation narrows the range |
 | Negatives | full baseline | baseline minus quality tags | inert |
 
-**Base rewards a rich, artist-heavy prompt because it supplies no style of its own; Aesthetic and Turbo already have one, so an elaborate style prompt on them partly fights the checkpoint.**
+**Base rewards a rich, artist-heavy prompt, because it supplies no style of its own. Aesthetic and Turbo already have one, so an elaborate style prompt on them partly fights the checkpoint.**
 
 ---
 

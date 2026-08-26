@@ -1,6 +1,6 @@
 # Krea 2 — API & hosted surfaces
 
-The hosted side: Krea's own API and web app (Medium/Large — the variants you can't download), fal's endpoints for the open models, and the ComfyUI partner nodes. Every figure in this file is read from Krea's developer docs and fal's pages, verified 2026-07-06/07 `[official — Krea developer docs, fal pages]`; community additions are marked where they appear. **Pricing and the 1K resolution cap are exactly the kind of fact that moves — re-verify before quoting in a budget.**
+The hosted side covers Krea's own API and web app (Medium/Large — the variants you can't download), fal's endpoints for the open models, and the ComfyUI partner nodes. Every figure in this file is read from Krea's developer docs and fal's pages, verified 2026-07-06/07 `[official — Krea developer docs, fal pages]`. Community additions are marked where they appear. **Pricing and the 1K resolution cap are exactly the kind of fact that moves — re-verify before quoting in a budget.**
 
 ## Contents
 1. [Hosted vs open — what's actually different](#1-hosted-vs-open--whats-actually-different)
@@ -24,11 +24,11 @@ The hosted side: Krea's own API and web app (Medium/Large — the variants you c
 | Cost | your GPU | $0.030–0.070/img (§2) |
 | Licence | Community License (revenue-gated) | Krea ToS; you own outputs |
 
-No independent hosted-vs-open quality shootout has been published yet — assume Large > Turbo on fidelity (Krea's own positioning: "richest output", photorealism) but treat magnitude as unknown.
+No independent hosted-vs-open quality shootout has been published yet. Assume Large beats Turbo on fidelity (Krea's own positioning: "richest output", photorealism), but treat the size of the gap as unknown.
 
 ## 2. The Krea API
 
-Base: `https://api.krea.ai` (docs: krea.ai/docs/developers). Async job pattern: `POST` returns a `job_id`; poll `GET /jobs/{job_id}` or register a webhook.
+Base: `https://api.krea.ai` (docs: krea.ai/docs/developers). It uses an async job pattern: `POST` returns a `job_id`, then you poll `GET /jobs/{job_id}` or register a webhook.
 
 **Endpoints:** `POST /generate/image/krea/krea-2/medium` and `…/krea-2/large`.
 
@@ -55,11 +55,11 @@ Base: `https://api.krea.ai` (docs: krea.ai/docs/developers). Async job pattern: 
 
 ## 3. The web app
 
-krea.ai image generator: pick **Medium / Large / Turbo**; up to **4 style references, each with a strength slider**; moodboards ("the most precise way to set a visual direction"); batch up to 4; 1K output. The app is also where moodboards get created for API use. Krea's broader editor (realtime canvas, upscaler, etc.) wraps the same models but is out of scope here.
+The krea.ai image generator lets you pick **Medium / Large / Turbo**. It offers up to **4 style references, each with a strength slider**, moodboards ("the most precise way to set a visual direction"), batches up to 4, and 1K output. The app is also where moodboards get created for API use. Krea's broader editor (realtime canvas, upscaler, etc.) wraps the same models but is out of scope here.
 
 ## 4. ComfyUI partner nodes
 
-Hosted Medium/Large inside ComfyUI via the official **"Krea 2 Image" API node** (launched 2026-05-27): prompt + style refs + moodboard IDs + creativity Raw/Low/Medium/High, billed through API credits. This is a *different integration* from the local Turbo template (`setup-and-workflows.md §1`) — partner nodes call Krea's servers; nothing loads on your GPU.
+Hosted Medium/Large run inside ComfyUI via the official **"Krea 2 Image" API node** (launched 2026-05-27): prompt, style refs, moodboard IDs, and creativity Raw/Low/Medium/High, billed through API credits. This is a *different integration* from the local Turbo template (`setup-and-workflows.md §1`). Partner nodes call Krea's servers, so nothing loads on your GPU.
 
 ## 5. fal (and other hosts) for the open models
 
@@ -70,4 +70,4 @@ fal is the launch API partner (2026-05-27):
 - `fal-ai/krea-2-trainer` — hosted LoRA training (`lora-training.md §4`).
 - Hosted Medium/Large also proxied as `krea/v2/medium|large/text-to-image` on fal.
 
-Other listed inference partners for the open weights: SGLang (cookbook recipe), Replicate, Cloudflare, Together, GCP, AWS, Runware. Partner param schemas count as official-via-host; where fal and Krea disagree on a default, the GitHub README/CLI is the tiebreaker.
+Other listed inference partners for the open weights: SGLang (cookbook recipe), Replicate, Cloudflare, Together, GCP, AWS, Runware. Partner param schemas count as official-via-host. Where fal and Krea disagree on a default, the GitHub README/CLI is the tiebreaker.

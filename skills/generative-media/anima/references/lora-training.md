@@ -1,6 +1,6 @@
 # Training LoRAs on Anima
 
-This file owns **making** a LoRA for Anima: trainers, the one rule that matters more than every hyperparameter, dataset architecture, captioning in a tag dialect, style and adult work, and how to tell whether it worked. **Loading and stacking** a finished LoRA is [`setup-and-workflows.md`](setup-and-workflows.md) §7. What transfers across every model in this suite — dataset construction, evaluation method, the likeness and publishing gate — is [`character-lora-training`](../../character-lora-training/); this file carries only what is Anima-specific.
+This file owns **making** a LoRA for Anima: trainers, the one rule that matters more than every hyperparameter, dataset architecture, captioning in a tag dialect, style and adult work, and how to tell whether it worked. **Loading and stacking** a finished LoRA is covered in [`setup-and-workflows.md`](setup-and-workflows.md) §7 instead. What transfers across every model in this suite — dataset construction, evaluation method, the likeness and publishing gate — lives in [`character-lora-training`](../../character-lora-training/). This file carries only what is Anima-specific.
 
 ## Contents
 
@@ -19,15 +19,15 @@ This file owns **making** a LoRA for Anima: trainers, the one rule that matters 
 
 ## 1. Do not train the LLM adapter
 
-The load-bearing Anima-specific fact. It comes from the model's own author, and getting it wrong degrades everything you train without producing an error.
+This is the one Anima-specific fact that matters most. It comes from the model's own author. Get it wrong and everything you train gets worse, with no error message to warn you.
 
 > *"**Don't train the LLM adapter.** My own training script, diffusion-pipe, lets you set `llm_adapter_lr=0` to completely disable training it, and the example config has this as a default. Other trainers like sd-scripts have similar options that should be used. The LLM adapter processes the text embeddings before they get to the diffusion model, and therefore has an **outsized influence on the generated images**. The adapter itself contains a surprising amount of knowledge and is easy to degrade by training it."* `[official]`
 
-**The mechanism:** Anima's Qwen3-0.6B encoder does not feed the backbone directly. Its output passes through a learned adapter (`LLMAdapter` / `AnimaTextConditioner`, ~269 MB) mapping LLM embeddings into the diffusion model's conditioning space — and that adapter is where much of Anima's tag knowledge lives, artist vocabulary and character priors included. Every step that touches it rewrites the model's *understanding of prompts*, globally, from gradients derived from your twenty images. The result reproduces your subject and quietly damages everything else, presenting as "Anima got worse" rather than "my LoRA is broken."
+**Here is why.** Anima's Qwen3-0.6B encoder does not feed the backbone directly. Its output passes through a learned adapter (`LLMAdapter` / `AnimaTextConditioner`, ~269 MB) that maps LLM embeddings into the diffusion model's conditioning space. That adapter holds much of Anima's tag knowledge, including artist vocabulary and character priors. Any training step that touches it rewrites how the model understands prompts, globally, using gradients from just your twenty images. The result reproduces your subject but quietly damages everything else. It shows up as "Anima got worse," not "my LoRA is broken."
 
-**What to check before your first run:** in **diffusion-pipe**, `llm_adapter_lr=0` (the shipped example config has it — confirm it survived your edits); in **sd-scripts**, find and set the equivalent option rather than assuming the default is safe; in **any GUI wrapper**, read the config it generates, and do not trust a wrapper that does not expose the setting at all.
+**Check this before your first run.** In **diffusion-pipe**, confirm `llm_adapter_lr=0` (the shipped example config has it, but check it survived your edits). In **sd-scripts**, find and set the equivalent option yourself rather than trusting the default. In **any GUI wrapper**, read the config it generates. Do not trust a wrapper that hides this setting.
 
-This is the suite's closest analogue to SDXL's contested text-encoder-training question — except that here it is not contested. The vendor's answer is unambiguous: leave it frozen.
+SDXL has a similar debate about training its text encoder, and there the answer is contested. Here it is not. The vendor's answer is unambiguous: leave the adapter frozen.
 
 ---
 
@@ -44,21 +44,21 @@ This is the suite's closest analogue to SDXL's contested text-encoder-training q
 | **LoRA Dataset Studio** (perfectgf) | Dataset tooling; lists Anima in its ai-toolkit presets alongside Z-Image, Krea 2, FLUX and SDXL `[community]` |
 | **OneTrainer** | No Anima support found either way — check its changelog before planning around it |
 
-**Train on Anima-Base.** *"LoRAs should be trained using this version"* — Base is unrefined, has no aesthetic tuning to fight, and produces LoRAs that then run on Aesthetic, Turbo and community checkpoints. Training on Aesthetic or Turbo bakes their style into your LoRA and narrows where it can be used.
+**Train on Anima-Base.** *"LoRAs should be trained using this version"* — Base is unrefined and has no aesthetic tuning to fight. LoRAs trained on it also run on Aesthetic, Turbo and community checkpoints. Training on Aesthetic or Turbo instead bakes their style into your LoRA and narrows where it can be used.
 
 ---
 
 ## 3. Hyperparameters
 
-Attributed starting points, not laws. The one number the author gives explicitly:
+These are attributed starting points, not laws. The one number the author gives explicitly:
 
 > *"Use a low learning rate. **For a rank 32 LoRA, start with 2e-5.**"* `[official]`
 
-That is notably low — an order of magnitude below SDXL guides' 1e-4/3e-4 — and the reason is in the same passage:
+That is notably low — an order of magnitude below SDXL guides' 1e-4/3e-4. The reason is in the same passage:
 
 > *"As a base model, there is no aggressive aesthetic tuning or RLHF you need to overcome when finetuning… **A light touch is all you need.**"*
 
-The opposite of the SDXL-anime situation, where much of a LoRA's LR budget goes into overpowering the checkpoint's baked-in style. On Anima-Base there is nothing to overpower, so a high LR mostly buys overfitting.
+This is the opposite of the SDXL-anime situation, where much of a LoRA's learning-rate budget goes into overpowering the checkpoint's baked-in style. On Anima-Base there is nothing to overpower, so a high learning rate mostly just buys overfitting.
 
 | Setting | Starting point | Note |
 |---|---|---|
@@ -68,7 +68,7 @@ The opposite of the SDXL-anime situation, where much of a LoRA's LR budget goes 
 | Adapter LR | **0** | §1 |
 | Optimiser | trainer default; the community forks report Muon-family experiments `[community]` | no settled Anima consensus — follow your trainer's default |
 
-Everything not listed — epochs, repeats, batch size, scheduler — has no Anima-specific consensus; follow [`character-lora-training`](../../character-lora-training/). Treat any confident number online without a named author as SEO laundering.
+Everything not listed — epochs, repeats, batch size, scheduler — has no Anima-specific consensus. Follow [`character-lora-training`](../../character-lora-training/) instead. Treat any confident number you find online without a named author as SEO laundering.
 
 ---
 
@@ -78,7 +78,7 @@ Everything not listed — epochs, repeats, batch size, scheduler — has no Anim
 
 **Full finetuning fits in ~11.4 GB at 1152²** — `u/RealOminousHvh`'s Aozora trainer: *"It can train 100% of Anima at 1152×1152 resolution while using approximately 11.4 GB of VRAM at around 2.67 seconds per iteration."* `[community — u/RealOminousHvh; single report]`
 
-**Why this is a story and not a footnote.** No other model this suite covers can be *fully finetuned* on a 12 GB consumer card. That is why Anima accumulated dozens of community checkpoints within months while comparable models accumulate LoRAs only — the barrier to a whole checkpoint fell below the price of a mid-range GPU. If you are picking a model to build a custom anime checkpoint on, this is the decisive fact.
+**Why this matters more than it looks.** No other model this suite covers can be *fully finetuned* on a 12 GB consumer card. That is why Anima picked up dozens of community checkpoints within months, while comparable models only pick up LoRAs. The barrier to building a whole checkpoint fell below the price of a mid-range GPU. If you are choosing a model to build a custom anime checkpoint on, this is the fact that should decide it.
 
 ---
 
@@ -86,18 +86,18 @@ Everything not listed — epochs, repeats, batch size, scheduler — has no Anim
 
 The model-agnostic craft — set size, rotation and elevation coverage, curation, the identity ratio, regularisation — lives in [`character-lora-training`](../../character-lora-training/) and [`dataset-and-captioning.md`](../../character-lora-training/references/dataset-and-captioning.md). Anima-specific deltas:
 
-- **The edit-model dataset-factory pattern is not really available here** — Anima's editing tooling is weak ([`setup-and-workflows.md`](setup-and-workflows.md) §8), unlike [`flux-2`](../../flux-2/) or [`z-image`](../../z-image/). Build the set with the ReStyler trick at its ~85% hit rate, or sweep prompts and seeds and curate hard.
-- **Post-cutoff subjects need more data.** Anima's knowledge stops at September 2025; teaching something genuinely absent takes a larger, more varied set than sharpening something the model half-knows.
-- **Train at or above 768 px.** Anima's band runs to 1536², and a 512-px-trained LoRA visibly under-delivers at the resolutions people generate at.
-- **Do not mix a character and a heavy art style in one small dataset** unless you want them inseparable — that is the shape of the failure in §10.
+- **The edit-model dataset-factory pattern does not really work here.** Anima's editing tooling is weak ([`setup-and-workflows.md`](setup-and-workflows.md) §8), unlike [`flux-2`](../../flux-2/) or [`z-image`](../../z-image/). Build the set with the ReStyler trick at its ~85% hit rate instead, or sweep prompts and seeds and curate hard.
+- **Post-cutoff subjects need more data.** Anima's knowledge stops at September 2025. Teaching something the model has never seen takes a larger, more varied set than sharpening something it half-knows.
+- **Train at or above 768 px.** Anima's band runs to 1536², and a LoRA trained at 512 px visibly under-delivers at the resolutions people actually generate at.
+- **Do not mix a character and a heavy art style in one small dataset**, unless you want the two fused together — that is the shape of the failure in §10.
 
 ---
 
 ## 6. Captioning in the tag dialect
 
-**Caption in the dialect the model was trained in.** Anima's captions were Danbooru tags, natural language, and hybrids, so tag captions are native and prose captions are also legitimate. Practically, for a character or style LoRA, **tag captions in the trained slot order** (`prompting-guide.md` §2) are the safer default: they match the register readers will prompt in, and they make the caption-the-residual discipline mechanical.
+**Caption in the dialect the model was trained in.** Anima's captions were Danbooru tags, natural language, and hybrids, so tag captions are native and prose captions are also legitimate. In practice, for a character or style LoRA, **tag captions in the trained slot order** (`prompting-guide.md` §2) are the safer default. They match the register people will prompt in, and they make the caption-the-residual discipline mechanical.
 
-**Caption the residual, in tags** — the rule that transfers from every model in this suite: caption what *varies* and what you want to be able to *change*, omit what you want fused into the trigger. For a **character LoRA** that means tagging pose, expression, clothing, background and framing while leaving permanent identity features untagged; for a **style LoRA** it inverts — tag the subjects thoroughly, say as little as possible about the rendering.
+**Caption the residual, in tags.** This rule transfers from every model in this suite: caption what *varies* and what you want to be able to *change*, and leave out what you want fused into the trigger. For a **character LoRA**, that means tagging pose, expression, clothing, background and framing, while leaving permanent identity features untagged. For a **style LoRA** it flips — tag the subjects thoroughly and say as little as possible about the rendering.
 
 **Anima-specific caption notes:**
 
@@ -110,27 +110,27 @@ The model-agnostic craft — set size, rotation and elevation coverage, curation
 
 ## 7. Style LoRAs
 
-Anima has the deepest built-in artist vocabulary in the suite — 42k+ styles by the Style Explorer count `[community — ThetaCursed]` — so the first question for any style LoRA is **whether the style is already in the model under an `@` tag.** Check before training. A great many "I need a style LoRA" cases on Anima are actually "I did not know the `@` prefix was mandatory" (`prompting-guide.md` §6).
+Anima has the deepest built-in artist vocabulary in the suite — 42k+ styles by the Style Explorer count `[community — ThetaCursed]`. So the first question for any style LoRA is **whether the style is already in the model under an `@` tag.** Check before training. Many "I need a style LoRA" cases on Anima are really "I did not know the `@` prefix was mandatory" (`prompting-guide.md` §6).
 
-When training is genuinely warranted: **subject diversity is the whole game** — twenty portraits produce a portrait LoRA, so spread across subjects, compositions and shot sizes. The **acceptance test** is that the style is recognisable on *out-of-set subjects*; if it only looks right on things resembling your dataset it memorised composition, and the two overfit signals are composition memorisation and colour-cast lock-in. **Rank** starts lower than for characters — 8–16 is often enough; rank-for-style is a wider-community dispute rather than an Anima one, and [`character-lora-training`](../../character-lora-training/) owns it. On **ethics**, single-living-artist datasets are where the licence is the least of the constraints ([`publishing-and-likeness.md`](../../character-lora-training/references/publishing-and-likeness.md)); note also that Anima's licence forbids implying CircleStone endorsement of a derivative and bars training models for *commercial* use.
+When training is genuinely warranted, **subject diversity is the whole game.** Twenty portraits produce a portrait LoRA, so spread your set across subjects, compositions and shot sizes. The **acceptance test** is that the style is recognisable on *out-of-set subjects*. If it only looks right on things resembling your dataset, it memorised composition instead of style. The two overfit signals to watch for are composition memorisation and colour-cast lock-in. **Rank** starts lower than for characters — 8–16 is often enough. Rank-for-style is a wider-community dispute rather than an Anima-specific one, and [`character-lora-training`](../../character-lora-training/) owns that discussion. On **ethics**, single-living-artist datasets are where the licence is the least of your constraints ([`publishing-and-likeness.md`](../../character-lora-training/references/publishing-and-likeness.md)). Anima's licence also forbids implying CircleStone endorsement of a derivative, and bars training models for *commercial* use.
 
 ---
 
 ## 8. Adult and NSFW training
 
-Anima treats adult content as a **trained conditioning axis**, not a filtered edge case: `safe`, `sensitive`, `nsfw`, `explicit` are four tokens in the same prompt slot as quality and year tags. There is no refusal layer to defeat and no separate uncensored checkpoint to hunt for, which materially simplifies adult LoRA work compared with models that gate it.
+Anima treats adult content as a **trained conditioning axis**, not a filtered edge case: `safe`, `sensitive`, `nsfw`, `explicit` are four tokens in the same prompt slot as quality and year tags. There is no refusal layer to defeat and no separate uncensored checkpoint to hunt for. That makes adult LoRA work much simpler than on models that gate it.
 
 Consequences for training:
 
-- **Caption the rating honestly on every image.** Explicit images all captioned `safe` teach the model to ignore the axis, and your LoRA then leaks explicit output into `safe` prompts.
-- **Train on Base.** The adult-oriented community merges (`MiaoMiao Harem`, `Hassaku (Anima)`, the `uwumerge`/`uwustyle` furry line) already carry strong content priors; training on one bakes them in and narrows portability.
-- **The licence's actual stance:** it prohibits *"unlawful content, including child sexual abuse material, or non-consensual intimate images"* and states no general adult prohibition beyond that. The binding constraints on publishing are therefore platform rules and the law on real-person likeness — Civitai's real-person ban and the TAKE IT DOWN Act — not this licence. [`nsfw-training.md`](../../character-lora-training/references/nsfw-training.md) and [`publishing-and-likeness.md`](../../character-lora-training/references/publishing-and-likeness.md) own that decision; read them before you train, not before you upload.
+- **Caption the rating honestly on every image.** If you caption explicit images as `safe`, you teach the model to ignore the axis, and your LoRA then leaks explicit output into `safe` prompts.
+- **Train on Base.** The adult-oriented community merges (`MiaoMiao Harem`, `Hassaku (Anima)`, the `uwumerge`/`uwustyle` furry line) already carry strong content priors. Training on one of these bakes those priors in and narrows where your LoRA can be used.
+- **The licence's actual stance:** it prohibits *"unlawful content, including child sexual abuse material, or non-consensual intimate images"* and states no general adult prohibition beyond that. The binding constraints on publishing come from platform rules and the law on real-person likeness — Civitai's real-person ban and the TAKE IT DOWN Act — not from this licence. [`nsfw-training.md`](../../character-lora-training/references/nsfw-training.md) and [`publishing-and-likeness.md`](../../character-lora-training/references/publishing-and-likeness.md) own that decision. Read them before you train, not before you upload.
 
 ---
 
 ## 9. Assessing fit and debugging
 
-Evaluate with an **XY grid of epoch × LoRA strength** on prompts that were *not* in the dataset; loss is a weak signal and should not be your stopping criterion ([`evaluation-and-tooling.md`](../../character-lora-training/references/evaluation-and-tooling.md)). Anima-specific reading:
+Evaluate with an **XY grid of epoch × LoRA strength** on prompts that were *not* in the dataset. Loss is a weak signal and should not be your stopping criterion ([`evaluation-and-tooling.md`](../../character-lora-training/references/evaluation-and-tooling.md)). Anima-specific reading:
 
 | Symptom | Likely cause |
 |---|---|
@@ -150,6 +150,6 @@ The vendor says *"a light touch is all you need."* A named practitioner's experi
 
 > `u/justbob9` — *"I was defeated by a character LORA training for anima"*: **100+ hours, a week of 24/7 training**, across AI Toolkit and Anima Standalone Trainer, multiple datasets and multiple captioning schemes, targeting a webtoon character **plus that webtoon's art style**, and never reached a satisfying result. Nobody in the thread diagnosed it.
 
-Both can be true, and the likely reconciliation is in the target rather than the model: **character + a specific non-anime art style in one LoRA** is the hardest configuration for any model, and it is the one that went wrong. Anima's own strength — a huge baked artist vocabulary — works against you here, because the base keeps asserting its rendering conventions over the webtoon style you are teaching.
+Both can be true. The likely explanation lies in the target, not the model: **character + a specific non-anime art style in one LoRA** is the hardest configuration for any model, and it is the one that went wrong here. Anima's own strength — a huge baked-in artist vocabulary — works against you in this case, because the base keeps asserting its own rendering conventions over the webtoon style you are trying to teach it.
 
-Practical reading, until someone diagnoses it properly: **separate the concerns** — train the character on Anima-Base with the style captioned *out*, and get the style from `@` artist tags or a second, separately trained style LoRA, because two LoRAs at moderate strength are far easier to debug than one doing both. And **do not escalate hyperparameters first**: the failure above already involved a week of training, so more steps is the least likely fix on a model whose author recommends 2e-5. Treat this as an open question in the Anima community rather than settled knowledge.
+Until someone diagnoses this properly, here is the practical reading: **separate the concerns.** Train the character on Anima-Base with the style captioned *out*, and get the style instead from `@` artist tags or a second, separately trained style LoRA. Two LoRAs at moderate strength are far easier to debug than one doing both jobs. And **do not escalate hyperparameters first** — the failure above already involved a week of training, so more steps is the least likely fix on a model whose author recommends 2e-5. Treat this as an open question in the Anima community, not settled knowledge.

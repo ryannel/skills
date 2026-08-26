@@ -1,6 +1,6 @@
 # Volume layout, `extra_model_paths.yaml`, and the model manifest
 
-Everything ComfyUI needs to find a model on the volume: the dual-root config, the placement table, LoRA foldering, and the manifest that makes a volume reproducible. Deployment mechanics (pods, endpoints, dispatch) are `serverless-comfyui.md`.
+Everything ComfyUI needs to find a model on the volume: the dual-root config, the placement table, LoRA foldering, and the manifest that makes a volume reproducible. Deployment mechanics — pods, endpoints, dispatch — are covered in `serverless-comfyui.md`.
 
 1. [The dual mount root, in full](#1-the-dual-mount-root-in-full)
 2. [Placement table — file type → directory → loader](#2-placement-table)
@@ -14,7 +14,7 @@ Everything ComfyUI needs to find a model on the volume: the dual-root config, th
 
 ## 1. The dual mount root, in full
 
-The single fact that explains most "ComfyUI can't find my model" confusion: **the same volume has three addresses.**
+The single fact that explains most "ComfyUI can't find my model" confusion is this: **the same volume has three addresses.**
 
 | Where code runs | Volume root | Example |
 |---|---|---|
@@ -74,7 +74,7 @@ runpod_volume:
   vae_approx: models/vae_approx/
 ```
 
-**Where the file goes.** ComfyUI reads it from its own install directory. On a pod that means writing it next to the ComfyUI checkout (`…/ComfyUI/extra_model_paths.yaml`); for serverless, bake it into the image so every worker gets it. Deploy it programmatically on boot rather than editing by hand — a hand-edited copy on one pod is a config that doesn't survive the next rebuild.
+**Where the file goes.** ComfyUI reads it from its own install directory. On a pod that means writing it next to the ComfyUI checkout (`…/ComfyUI/extra_model_paths.yaml`). For serverless, bake it into the image so every worker gets it. Deploy it programmatically on boot rather than editing by hand — a hand-edited copy on one pod is a config that doesn't survive the next rebuild.
 
 **Diagnostic order** when a model won't resolve:
 
@@ -105,9 +105,9 @@ Organised by the loader node that reads it — the only scheme that stays correc
 | Detailer detector — `face_yolov8m.pt` | `models/ultralytics/bbox/` | Impact Pack `UltralyticsDetectorProvider` |
 | SAM segmenter — `sam_vit_b_01ec64.pth` | `models/sams/` | Impact Pack `SAMLoader` |
 
-**Detailer models have canonical files, and they are not optional if the pipeline detail-passes faces** — which the suite's standard deploy path does. The community-standard pair is `face_yolov8m.pt` (from `Bingsu/adetailer` on Hugging Face) in `models/ultralytics/bbox/` and `sam_vit_b_01ec64.pth` (the facebook SAM release, commonly mirrored) in `models/sams/` — community-sourced picks, but the ones every FaceDetailer tutorial and workflow assumes. The paths themselves are hard fact: Impact Pack resolves detectors through the `ultralytics_bbox` / `ultralytics_segm` / `sams` keys and nowhere else — verified 2026-08-23, when a deployment planned against this file's yaml had no home for them. **`insightface/` is not that home**: it serves PuLID/InstantID-class *identity* nodes (`FaceAnalysis`), and a detector placed there leaves the FaceDetailer dropdowns empty.
+**Detailer models have canonical files, and they are not optional if the pipeline detail-passes faces** — which the suite's standard deploy path does. The community-standard pair is `face_yolov8m.pt` (from `Bingsu/adetailer` on Hugging Face) in `models/ultralytics/bbox/` and `sam_vit_b_01ec64.pth` (the facebook SAM release, commonly mirrored) in `models/sams/`. These are community-sourced picks, but they are the ones every FaceDetailer tutorial and workflow assumes. The paths themselves are hard fact: Impact Pack resolves detectors through the `ultralytics_bbox` / `ultralytics_segm` / `sams` keys and nowhere else. This was verified 2026-08-23, when a deployment planned against this file's yaml had no home for them. **`insightface/` is not that home.** It serves PuLID/InstantID-class *identity* nodes (`FaceAnalysis`), and a detector placed there leaves the FaceDetailer dropdowns empty.
 
-**The `CLIPLoader` `type` argument is model-specific and not guessable** — `lumina2`, `wan`, `minimax`, `ltxv`, `flux2` and others all exist. It belongs in your manifest next to the filename, because a workflow builder needs it and getting it wrong produces a confusing encode failure rather than a missing-file error. Each model skill states its own.
+**The `CLIPLoader` `type` argument is model-specific and not guessable.** `lumina2`, `wan`, `minimax`, `ltxv`, `flux2` and others all exist. It belongs in your manifest next to the filename, because a workflow builder needs it, and getting it wrong produces a confusing encode failure rather than a missing-file error. Each model skill states its own.
 
 **Multi-file models are normal now.** A modern DiT is typically a diffusion model *plus* a separate text encoder *plus* a VAE — three directories, three loaders. Some go further: a model with native audio may ship **two** VAEs (video and audio) landing in the same `models/vae/` directory, and a mixture-of-experts model ships **two** diffusion files. Plan the manifest around files, not models.
 
@@ -130,7 +130,7 @@ Two reasons this beats a flat directory:
 1. **Visible in the UI.** `LoraLoader` renders the subfolder as a dropdown prefix, so you can see a LoRA's lineage without opening anything.
 2. **Clean retirement.** When you drop a base model, the folder tells you exactly what was built for it.
 
-**The folder is the human view; the manifest is the truth.** A LoRA trained on a base model frequently loads on its distilled sibling at reduced strength — its *home* is one folder, its *capability* is a list. Record that list (`compat: [base, turbo]`) and have your workflow builder check it before wiring, skipping incompatible LoRAs silently. Then a single scene definition listing several LoRAs renders correctly under any base, wiring only the ones that apply.
+**The folder is the human view; the manifest is the truth.** A LoRA trained on a base model frequently loads on its distilled sibling at reduced strength. Its *home* is one folder, but its *capability* is a list. Record that list (`compat: [base, turbo]`) and have your workflow builder check it before wiring, skipping incompatible LoRAs silently. Then a single scene definition listing several LoRAs renders correctly under any base, wiring only the ones that apply.
 
 To answer *"if I retire base X, what dies?"* — query the manifest for entries whose `compat` lists **only** X. Anything listing another base survives.
 
@@ -177,7 +177,7 @@ custom_nodes:                           # pinned, see §7
 
 Why each field earns its place:
 
-- **`files[].rename`** — upstream repos nest under `split_files/…` and use long descriptive names. Your workflows reference a flat, stable name. `rename` is where those two worlds are reconciled, and it is the reason a re-pull doesn't break every graph.
+- **`files[].rename`** — upstream repos nest under `split_files/…` and use long descriptive names. Your workflows reference a flat, stable name. `rename` is where those two worlds meet, and it is the reason a re-pull doesn't break every graph.
 - **`dest`** — absolute, so the downloader can `mkdir -p` and place correctly without inference.
 - **`clip_type`** — the one workflow value that cannot be derived from a filename.
 - **`compat`** — the dependency graph (§3).
@@ -203,9 +203,9 @@ aws s3 cp ./my_lora.safetensors \
   --region "$DC" --endpoint-url "https://s3api-$DC.runpod.io/"
 ```
 
-The S3 route is also the cheapest way to **audit** a volume — list its contents with no pod running at all, which is the fastest answer to "is the file actually there?"
+The S3 route is also the cheapest way to **audit** a volume. List its contents with no pod running at all — that is the fastest answer to "is the file actually there?"
 
-**Never `wget`.** `hf download` gives resume, parallel chunks and correct revision pinning; a 20 GB `wget` that dies at 90% costs you the whole download again.
+**Never `wget`.** `hf download` gives resume, parallel chunks and correct revision pinning. A 20 GB `wget` that dies at 90% costs you the whole download again.
 
 **Check the size, because `hf download` can exit successfully having fetched almost nothing.** Its Xet transfer backend (`hf_xet`, which is used automatically once installed) fails in two ways that both look like success:
 
@@ -236,7 +236,7 @@ Then any GPU pod or endpoint that mounts the volume is immediately correct.
 
 ## 6. Training on the same volume
 
-The layout above is inference-shaped, but the same volume is where LoRA training happens — trainer pods mount it at `/workspace/` like any other pod, and giving trainer artifacts assigned homes is what keeps them from silting up `models/`:
+The layout above is inference-shaped, but the same volume is where LoRA training happens. Trainer pods mount it at `/workspace/` like any other pod, and giving trainer artifacts assigned homes is what keeps them from silting up `models/`:
 
 | Purpose | Directory | Why there |
 |---|---|---|
@@ -244,9 +244,9 @@ The layout above is inference-shaped, but the same volume is where LoRA training
 | Training data | `/workspace/datasets/<name>/` | One folder per dataset, named for the subject — reusable across runs and bases |
 | Run outputs | `/workspace/training/<run>/` | Checkpoints, samples and optimiser state per run; the *selected* checkpoint then gets promoted into `models/loras/<base>/` (§3), which stays a curated directory rather than a dumping ground |
 
-**Budget for the weights existing twice.** Trainers read the base model in diffusers format out of the HF cache; ComfyUI loads a single-file `.safetensors` from `models/diffusion_models/`. For a Z-Image-class model that is roughly 20 GB stored twice. It is a format difference, not waste you can deduplicate — size the volume for both rather than trying to make one file serve both jobs.
+**Budget for the weights existing twice.** Trainers read the base model in diffusers format out of the HF cache. ComfyUI loads a single-file `.safetensors` from `models/diffusion_models/`. For a Z-Image-class model that is roughly 20 GB stored twice. It is a format difference, not waste you can deduplicate — size the volume for both rather than trying to make one file serve both jobs.
 
-The text encoder is the usual surprise here. You can have a complete ComfyUI model set already on the volume and the trainer will still fetch its own ~9 GB diffusers copy. Where the trainer lets you name paths (AI-Toolkit's `model_kwargs.text_encoder_path` and `vae_path`), pointing at a copy you already have beats storing either duplicate.
+The text encoder is the usual surprise here. You can have a complete ComfyUI model set already on the volume, and the trainer will still fetch its own ~9 GB diffusers copy. Where the trainer lets you name paths (AI-Toolkit's `model_kwargs.text_encoder_path` and `vae_path`), pointing at a copy you already have beats storing either duplicate.
 
 ### The volume quota is a hard wall, and you hit it late
 
@@ -276,6 +276,6 @@ Custom nodes are **code**, not weights, and the distinction decides where they l
 - **Bake them into the image** for serverless. Workers must start deterministically, and a worker that clones a repo on boot is slow and fragile.
 - **Install them on the pod** for interactive work, where you're iterating anyway.
 
-**Pin them.** Custom nodes are the least stable part of the stack — an unpinned node that updates between two runs is a leading cause of "the same workflow produced different output." Record repo plus commit in the manifest.
+**Pin them.** Custom nodes are the least stable part of the stack. An unpinned node that updates between two runs is a leading cause of "the same workflow produced different output." Record repo plus commit in the manifest.
 
 A workflow JSON referencing a node class that isn't installed fails at load with a red node, not a helpful message. When a graph won't open on a fresh instance and the models all resolve, missing custom nodes are the next place to look.

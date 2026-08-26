@@ -6,7 +6,7 @@ description: >
 
 # ComfyUI on RunPod
 
-The goal this skill serves: **a fresh ComfyUI instance, pointed at your network volume, opens your workflow JSON and every node resolves — no missing-model dialogs, no re-downloads, no manual fixups.** Everything below is in service of that.
+The goal this skill serves: **a fresh ComfyUI instance, pointed at your network volume, opens your workflow JSON and every node resolves. No missing-model dialogs, no re-downloads, no manual fixups.** Everything below works toward that goal.
 
 ## What this owns, and what it doesn't
 
@@ -43,9 +43,9 @@ The same network volume is mounted at a different path depending on where ComfyU
 
 So `extra_model_paths.yaml` must declare **both roots with identical key sets**. Miss one and you get the single most confusing failure in this stack: **it works in the studio and breaks in serverless**, with a model-not-found error for a file you can see on the volume.
 
-**Verified on live infrastructure 2026-08-13** — a serverless worker enumerated exactly the volume's `models/vae/` contents, and RunPod's docs are explicit: serverless mounts at `/runpod-volume`, pods at `/workspace`.
+**Verified on live infrastructure 2026-08-13.** A serverless worker enumerated exactly the volume's `models/vae/` contents. RunPod's docs are explicit too: serverless mounts at `/runpod-volume`, pods at `/workspace`.
 
-> **The trap that makes people disbelieve this.** A RunPod **template** carries a `volumeMountPath` field, and it commonly reads `/workspace` — *including on templates used by serverless endpoints.* It is a **pod-only field, and serverless ignores it**: serverless templates do not expose a mount-path option at all, because the path is fixed and uncustomisable. Reading `volumeMountPath: /workspace` off a serverless template and concluding the second block is unnecessary is exactly the wrong inference, and it is an easy one to make from the console.
+> **The trap that makes people disbelieve this.** A RunPod **template** carries a `volumeMountPath` field, and it commonly reads `/workspace` — *including on templates used by serverless endpoints.* But that field is **pod-only, and serverless ignores it**. Serverless templates do not expose a mount-path option at all, because the path is fixed and cannot be changed. So reading `volumeMountPath: /workspace` on a serverless template and concluding the second block is unnecessary is exactly the wrong conclusion — and it is an easy one to reach from the console.
 
 ```yaml
 network_volume:            # interactive pod
@@ -75,11 +75,11 @@ runpod_volume:             # serverless worker — SAME KEYS, different base
 
 Three details in there that cost people hours:
 
-- **`text_encoders` and `clip` can point at the same directory.** Modern DiT models load their encoder through a `CLIPLoader` that searches `text_encoders`; older configs only declare `clip`. Declare both at one path and either style resolves.
+- **`text_encoders` and `clip` can point at the same directory.** Modern DiT models load their encoder through a `CLIPLoader` that searches `text_encoders`. Older configs only declare `clip`. Declare both at one path, and either style resolves.
 - **`diffusion_models` takes multiple paths** as a block scalar. `models/unet/` is the legacy name and some downloads still land there.
-- **`vae_approx` is not optional** if you want fast previews — it's where TAE decoders live (e.g. H3's `taeh3.safetensors`).
+- **`vae_approx` is not optional** if you want fast previews. It's where TAE decoders live (for example H3's `taeh3.safetensors`).
 
-Deploy this file to ComfyUI's install directory on boot, not by hand. On a pod that is typically `…/ComfyUI/extra_model_paths.yaml`; in a serverless image, bake it in.
+Deploy this file to ComfyUI's install directory on boot, not by hand. On a pod that is typically `…/ComfyUI/extra_model_paths.yaml`. In a serverless image, bake it in.
 
 ---
 
@@ -106,13 +106,13 @@ One canonical tree, keyed by **which loader node reads it**. That is the only or
     └── ipadapter/  clip_vision/  embeddings/  style_models/
 ```
 
-**Create the `[core]` six; add the rest when a node actually needs them.** A single production ComfyUI-on-RunPod deployment external to this repo, inspected on 2026-08-13, had exactly the core six plus `insightface/` — no `controlnet/`, `vae_approx/`, `ipadapter/`, `clip_vision/`, `embeddings/` or `style_models/`, because nothing in its pipelines loaded them. An absent directory is not a fault; a directory absent from `extra_model_paths.yaml` *while a node needs it* is. Declare the keys generously in the yaml, create the folders lazily.
+**Create the `[core]` six. Add the rest when a node actually needs them.** A single production ComfyUI-on-RunPod deployment external to this repo, inspected on 2026-08-13, had exactly the core six plus `insightface/`. It had no `controlnet/`, `vae_approx/`, `ipadapter/`, `clip_vision/`, `embeddings/` or `style_models/`, because nothing in its pipelines loaded them. An absent directory is not a fault. A directory absent from `extra_model_paths.yaml` *while a node needs it* is a fault. Declare the keys generously in the yaml, create the folders lazily.
 
-**Fold LoRAs by base model.** `LoraLoader` shows the subfolder as a path prefix in the dropdown, so `z-image-turbo/amy_v9/…` tells you at a glance what it belongs to — and when you retire a base model, the folder tells you what dies with it.
+**Fold LoRAs by base model.** `LoraLoader` shows the subfolder as a path prefix in the dropdown, so `z-image-turbo/amy_v9/…` tells you at a glance what it belongs to. And when you retire a base model, the folder tells you what dies with it.
 
-**But the folder is the human view, not the truth.** A LoRA trained on a base often loads on its distilled sibling at reduced strength. Record the real dependency in your manifest (`compat: [base, turbo]`) and let the folder be its *primary home*. A workflow builder can then check compatibility before wiring a LoRA and skip incompatible ones silently, so one scene definition renders correctly under either base.
+**But the folder is the human view, not the truth.** A LoRA trained on a base often loads on its distilled sibling at reduced strength. Record the real dependency in your manifest (`compat: [base, turbo]`) and let the folder be its *primary home*. A workflow builder can then check compatibility before wiring a LoRA, and skip incompatible ones silently. That way, one scene definition renders correctly under either base.
 
-**Trainer pods mount this same volume**, and their artifacts get assigned homes too — a volume-resident HF cache at `/workspace/huggingface/`, datasets and run outputs beside (not inside) `models/`, and a size budget that accepts base weights living on the volume twice, in diffusers format for training and single-file for inference: see "Training on the same volume" in the reference below.
+**Trainer pods mount this same volume**, and their artifacts get assigned homes too. A volume-resident HF cache lives at `/workspace/huggingface/`, and datasets and run outputs sit beside (not inside) `models/`. Budget for base weights living on the volume twice — in diffusers format for training and single-file for inference. See "Training on the same volume" in the reference below.
 
 Full layout rationale, placement table and LoRA conventions: **`references/volume-and-models.md`**.
 
@@ -145,9 +145,9 @@ models:
 What this buys you:
 
 - **Rebuild a volume from nothing** with one command, in a known-good state.
-- **Workflow builders read the same file** — `unet_filename`, `clip_type` and `vae_filename` are exactly the values a graph needs, so workflows and downloads can't drift apart.
+- **Workflow builders read the same file.** `unet_filename`, `clip_type` and `vae_filename` are exactly the values a graph needs, so workflows and downloads can't drift apart.
 - **Answer "if I remove X, what breaks?"** by querying `compat`, instead of guessing.
-- **Renames are explicit.** Upstream repos nest files under `split_files/…` and use long names; `rename` pins the flat name your workflows reference.
+- **Renames are explicit.** Upstream repos nest files under `split_files/…` and use long names. `rename` pins the flat name your workflows reference.
 
 ---
 
@@ -164,13 +164,13 @@ Model downloads are I/O, not compute. **Never do them on a GPU pod.**
 Two rules worth stating plainly:
 
 - **Use `hf download` (or the S3 API), never `wget`.** You get resume, parallel chunks, and the correct revision. A 20 GB `wget` that dies at 90% is a wasted half hour.
-- **The volume is pinned to one datacenter.** Your pod must be created in that same DC, which narrows GPU availability — check the GPU exists there *before* you plan around it. This is the most common reason a "just spin one up" plan stalls.
+- **The volume is pinned to one datacenter.** Your pod must be created in that same DC, which narrows GPU availability. Check the GPU exists there *before* you plan around it. This is the most common reason a "just spin one up" plan stalls.
 
 ---
 
 ## Pod or serverless?
 
-Both run ComfyUI; they fail differently and bill very differently.
+Both run ComfyUI. They fail differently, and they bill very differently.
 
 | | Interactive pod | Serverless endpoint |
 |---|---|---|
@@ -180,19 +180,19 @@ Both run ComfyUI; they fail differently and bill very differently.
 | Cold start | Once, then it's warm | Per scale-up; mitigate with FlashBoot and idle timeout |
 | Mount root | `/workspace/` | `/runpod-volume/` |
 
-**Default: build interactively, run in serverless.** The web UI is where graphs get made; the endpoint is where they get executed a thousand times.
+**Default: build interactively, run in serverless.** The web UI is where graphs get made. The endpoint is where they get executed a thousand times.
 
 **Cost guards that actually work** (details in RunPod's skills — this is the ComfyUI-shaped summary):
 
 - **Two timers on every interactive pod: `--stop-after` at the session ceiling, `--terminate-after` as the backstop.** Both live on `pod create` and do different things: stop *pauses* the pod — GPU billing ends, `runpodctl pod start <id>` resumes it in about a minute — while terminate *deletes* it. Neither alone is right for interactive work: stop-only leaves a paused pod billing its volume disk ($0.20/GB-mo) indefinitely, and terminate-only kills a live session mid-generation the moment the clock runs out. Set the stop a comfortable session length out (4–8 h) and the terminate a day out; hitting the ceiling then costs a one-minute resume instead of lost work. Two caveats that make the volume-as-contract rule matter here too: a stop **wipes the container disk** (the template re-initialises it on resume — anything you installed outside the volume is gone), and a resume is not guaranteed the same GPU if stock ran out, in which case you recreate from the volume in minutes. For unattended batch pods, terminate-only at expected runtime plus margin is right — there is nothing to resume. Verified against `runpodctl 2.3.0` on 2026-08-23.
 
-  > **Use `runpodctl pod create`, not `runpodctl create pod`.** Both exist in `runpodctl` 2.3.0 and they are different command surfaces. The legacy verb-noun form (`create pod`) takes `--gpuType`/`--networkVolumeId`/`--imageName` and has **no cost guard at all** — no `--terminate-after`, no `--stop-after`. The modern noun-verb form (`pod create`) takes `--gpu-id`/`--network-volume-id`/`--image` and is the one that carries the guards. Reach for the wrong one and you will conclude the flag doesn't exist and create an unguarded pod. Verified against `runpodctl 2.3.0-be4ced4` on 2026-08-13. Check with `runpodctl pod create --help` before a first run on a new machine.
+  > **Use `runpodctl pod create`, not `runpodctl create pod`.** Both exist in `runpodctl` 2.3.0, and they are different command surfaces. The legacy verb-noun form (`create pod`) takes `--gpuType`/`--networkVolumeId`/`--imageName` and has **no cost guard at all** — no `--terminate-after`, no `--stop-after`. The modern noun-verb form (`pod create`) takes `--gpu-id`/`--network-volume-id`/`--image`, and it is the one that carries the guards. Reach for the wrong one, and you will conclude the flag doesn't exist and create an unguarded pod. Verified against `runpodctl 2.3.0-be4ced4` on 2026-08-13. Check with `runpodctl pod create --help` before a first run on a new machine.
   >
-  > **And the CLI version matters more than any version floor stated here can.** RunPod's own skills describe a priced `gpu list` (per-GPU `securePricePerHr`, a per-datacenter availability breakdown) that 2.3.0 does not emit — run `runpodctl update` to close the gap. Until then the working fallback is `runpodctl datacenter list --output json` for per-DC stock (`gpuAvailability.stockStatus` per DC) plus the public GraphQL `gpuTypes` query (`id`, `displayName`, `memoryInGb`, `securePrice`) for pricing — verified working 2026-08-23.
-- **You can set the timers but not read them back, and they count from pod creation — so size them for the whole session, not the first job.** Nothing reads `--terminate-after` back: not the REST API, not the public GraphQL, and introspection is off, so `pod get` cannot confirm what you set. The API accepting the flag is all the evidence you get. That has two consequences. If you need the auto-off to be *provable*, add a **watchdog on the pod itself** — a detached `sleep N && <delete-self>`. You can check that it is running, and it survives your own session dying. And since the clock starts at creation and **cannot be extended later**, a pod created with a 4-hour terminate for a 3.4-hour training run will die partway through the eval that follows. You survive that only because the checkpoints are on the volume — which is the volume-as-contract rule earning its keep, not a reason to set a looser timer. Verified 2026-08-24.
+  > **And the CLI version matters more than any version floor stated here can.** RunPod's own skills describe a priced `gpu list` — per-GPU `securePricePerHr`, a per-datacenter availability breakdown — that 2.3.0 does not emit. Run `runpodctl update` to close the gap. Until then, the working fallback is `runpodctl datacenter list --output json` for per-DC stock (`gpuAvailability.stockStatus` per DC), plus the public GraphQL `gpuTypes` query (`id`, `displayName`, `memoryInGb`, `securePrice`) for pricing. Verified working 2026-08-23.
+- **You can set the timers but not read them back. They count from pod creation, so size them for the whole session, not the first job.** Nothing reads `--terminate-after` back: not the REST API, not the public GraphQL, and introspection is off, so `pod get` cannot confirm what you set. The API accepting the flag is all the evidence you get. That has two consequences. If you need the auto-off to be *provable*, add a **watchdog on the pod itself** — a detached `sleep N && <delete-self>`. You can check that it is running, and it survives your own session dying. And the clock starts at creation and **cannot be extended later**. So a pod created with a 4-hour terminate for a 3.4-hour training run will die partway through the eval that follows. You survive that only because the checkpoints are on the volume. That is the volume-as-contract rule earning its keep — not a reason to set a looser timer. Verified 2026-08-24.
 - **Tear down in order:** remove the pod, *then* delete the volume if it was scratch. The volume can't be deleted while a pod holds it.
 - **Volume data survives pod removal** — only deleting the volume clears it. That's the point: you rebuild pods freely and never re-download.
-- **A billable session is not over until a burn check says it is.** End every session — agent-driven sessions especially — by listing what still exists and bills. One audited account had 37 leaked pods, every one created by agent tooling that skipped the guards; the guards above prevent the overnight bill, this check catches everything else. One call answers it:
+- **A billable session is not over until a burn check says it is.** End every session — agent-driven sessions especially — by listing what still exists and bills. One audited account had 37 leaked pods, every one created by agent tooling that skipped the guards. The guards above prevent the overnight bill. This check catches everything else. One call answers it:
 
   ```bash
   curl -s https://api.runpod.io/graphql -H "Authorization: Bearer $RUNPOD_API_KEY" \
@@ -200,21 +200,21 @@ Both run ComfyUI; they fail differently and bill very differently.
     -d '{"query":"{ myself { clientBalance pods { id name desiredStatus costPerHr volumeInGb } networkVolumes { id name size dataCenterId } } }"}'
   ```
 
-  Anything `RUNNING` bills its `costPerHr`; a stopped pod bills only its `volumeInGb` (at ~$0.20/GB-mo — zero for template-only pods); every network volume bills ~$0.07/GB-mo while it exists. `runpodctl pod stop <id>` pauses, `runpodctl pod remove <id>` deletes.
-- **Keep one agent-free path to see and kill spend.** The moments you most need teardown — out of LLM quota, or the agent itself misbehaving — correlate exactly with money flowing, so the kill switch cannot be the agent. The query and the two commands above, pinned in a shell alias or a ten-line script, are the whole requirement; the RunPod web console is the zero-setup fallback.
+  Anything `RUNNING` bills its `costPerHr`. A stopped pod bills only its `volumeInGb` (at ~$0.20/GB-mo — zero for template-only pods). Every network volume bills ~$0.07/GB-mo while it exists. `runpodctl pod stop <id>` pauses, `runpodctl pod remove <id>` deletes.
+- **Keep one agent-free path to see and kill spend.** The moments you most need teardown — out of LLM quota, or the agent itself misbehaving — correlate exactly with money flowing. So the kill switch cannot be the agent. The query and the two commands above, pinned in a shell alias or a ten-line script, are the whole requirement. The RunPod web console is the zero-setup fallback.
 
 ---
 
 ## Deploying and running workflows
 
-Two formats, and mixing them up is a common early error: the **UI format** you save from the ComfyUI canvas is *not* the **API format** the endpoint accepts. Export via *Save (API Format)* — or build the graph programmatically.
+Two formats exist, and mixing them up is a common early error. The **UI format** you save from the ComfyUI canvas is *not* the **API format** the endpoint accepts. Export via *Save (API Format)* — or build the graph programmatically.
 
 Against a serverless endpoint:
 
-- **`POST /run` and poll `/status/{id}`.** Do **not** use `/runsync` for generation — video and multi-stage image jobs exceed its window and you get connection resets that look like endpoint failures.
+- **`POST /run` and poll `/status/{id}`.** Do **not** use `/runsync` for generation. Video and multi-stage image jobs exceed its window, and you get connection resets that look like endpoint failures.
 - **Input images go base64-encoded** in the request payload, and `LoadImage` in the graph must reference the matching filename.
-- **Model filenames in the workflow must exactly match the volume.** A mismatch surfaces as a validation error inside the `/status` response body, not as a transport error — so check the response body before assuming the endpoint is broken.
-- **Bound your concurrency** to the endpoint's max workers; more in-flight requests than workers just queues and confuses timing.
+- **Model filenames in the workflow must exactly match the volume.** A mismatch surfaces as a validation error inside the `/status` response body, not as a transport error. So check the response body before assuming the endpoint is broken.
+- **Bound your concurrency** to the endpoint's max workers. More in-flight requests than workers just queues up and confuses timing.
 
 Endpoint knobs worth knowing: max workers, idle timeout (trades cold-start latency against idle cost), FlashBoot (pre-warms layers), and the queue-delay scaler. Full patterns: **`references/serverless-comfyui.md`**.
 
@@ -227,7 +227,7 @@ On rented hardware, find out in two minutes rather than twenty. Run this after a
 1. **UI answers.** Poll the proxy URL until it loads. Expect 502s during warm-up — that is normal, keep polling. *"Running" is not "ready."*
 2. **Every loader dropdown is populated** — diffusion model, text encoder, VAE, and your LoRA folders. An empty dropdown means `extra_model_paths.yaml` isn't being read, not that the file is missing.
 3. **Smallest possible generation.** Lowest resolution, fewest steps, shortest length. You are testing wiring, not quality.
-4. **Check every output branch.** If the model emits more than one modality, verify each one — a video model with audio can produce a perfect-looking silent file, and frames alone won't tell you.
+4. **Check every output branch.** If the model emits more than one modality, verify each one. A video model with audio can produce a perfect-looking silent file, and frames alone won't tell you.
 5. **Then the same graph through the API**, if serverless is the target — this is where the second mount root gets exercised.
 
 Fail at step 2 and it's `extra_model_paths.yaml`. Fail at step 5 having passed step 3 and it's the `runpod_volume` block.
@@ -245,7 +245,7 @@ A populated list means the volume is mounted and that key resolves. An empty or 
 
 Two things that make this work:
 
-- **The graph needs an output node.** Without one, ComfyUI returns `prompt_no_outputs` and never validates inputs — you burn a worker spin-up and learn nothing. Wire a `SaveImage`.
+- **The graph needs an output node.** Without one, ComfyUI returns `prompt_no_outputs` and never validates inputs. You burn a worker spin-up and learn nothing. Wire a `SaveImage`.
 - **Validation runs before sampling**, so the job fails in well under a second of execution once the worker is warm. No GPU work happens.
 
 Use it before you start editing `extra_model_paths.yaml` on a hunch.
@@ -299,17 +299,17 @@ Use it before you start editing `extra_model_paths.yaml` on a hunch.
 
 This skill holds two kinds of claim to two different standards, because they fail in two different ways.
 
-**Hard facts — must be exact or it breaks.** The dual mount roots (`/workspace/` vs `/runpod-volume/`), the `extra_model_paths.yaml` key set and its multi-path `diffusion_models` block, which loader reads which directory, the S3 endpoint form `s3api-<dc>.runpod.io`, `--terminate-after` deleting versus `--stop-after` stopping, ports being fixed at pod creation, volumes being datacenter-locked, and API-format-not-UI-format for endpoints. **Source of truth is official** — RunPod's own skills and docs — plus a single production ComfyUI-on-RunPod deployment external to this repo, which these were read out of. **The dual mount root was validated against live infrastructure on 2026-08-13** (a serverless worker enumerated exactly the volume's `models/vae/`), and the `runpodctl` command-surface split was verified against `2.3.0-be4ced4`. A wrong path silently hides a model; a missing cost guard bills all night. **Re-verify the CLI flags and pricing against `runpodctl` before relying on them**; platform surfaces change.
+**Hard facts — must be exact or it breaks.** The dual mount roots (`/workspace/` vs `/runpod-volume/`), the `extra_model_paths.yaml` key set and its multi-path `diffusion_models` block, which loader reads which directory, the S3 endpoint form `s3api-<dc>.runpod.io`, `--terminate-after` deleting versus `--stop-after` stopping, ports being fixed at pod creation, volumes being datacenter-locked, and API-format-not-UI-format for endpoints. **Source of truth is official** — RunPod's own skills and docs — plus a single production ComfyUI-on-RunPod deployment external to this repo, which these were read out of. **The dual mount root was validated against live infrastructure on 2026-08-13.** A serverless worker enumerated exactly the volume's `models/vae/`, and the `runpodctl` command-surface split was verified against `2.3.0-be4ced4`. A wrong path silently hides a model. A missing cost guard bills all night. **Re-verify the CLI flags and pricing against `runpodctl` before relying on them** — platform surfaces change.
 
-**Craft — what actually makes this work day to day.** The volume-as-contract framing, foldering LoRAs by base with a separate compatibility graph, the manifest pattern, downloading on CPU pods, build-interactively-run-in-serverless, the smoke-test order, and the durability split that decides what goes on the container disk versus the volume. **This is house craft distilled from that same single production ComfyUI-on-RunPod deployment**, not vendor documentation — it is what the vendor docs don't tell you because it only shows up after you've rebuilt a volume a few times. Stated with confidence; adapt the specifics to your stack.
+**Craft — what actually makes this work day to day.** The volume-as-contract framing, foldering LoRAs by base with a separate compatibility graph, the manifest pattern, downloading on CPU pods, build-interactively-run-in-serverless, the smoke-test order, and the durability split that decides what goes on the container disk versus the volume. **This is house craft distilled from that same single production ComfyUI-on-RunPod deployment**, not vendor documentation. It is what the vendor docs don't tell you, because it only shows up after you've rebuilt a volume a few times. Stated with confidence — adapt the specifics to your stack.
 
-One thing deliberately **not** claimed: GPU recommendations and prices. They move constantly and are model-specific — `runpod-usage` owns the general question and each model skill owns its own requirement. Any price you see quoted anywhere in this suite is a stale snapshot; check `runpodctl gpu list` — on a current CLI, per the version note above.
+One thing is deliberately **not** claimed here: GPU recommendations and prices. They move constantly and are model-specific. `runpod-usage` owns the general question, and each model skill owns its own requirement. Any price quoted anywhere in this suite is a stale snapshot. Check `runpodctl gpu list` — on a current CLI, per the version note above.
 
-**Nothing is currently contested or flagged.** The 2026-08-13 pass resolved every open finding (see `freshness.json`); the watchlist there tracks what could still drift.
+**Nothing is currently contested or flagged.** The 2026-08-13 pass resolved every open finding (see `freshness.json`). The watchlist there tracks what could still drift.
 
-**A second live pass — a LoRA training run plus its ComfyUI eval, 2026-08-24/25 — added the download, quota and timer-readback findings.** Those were measured on one account in `eu-ro-1` against `runpodctl 2.3.0`. The mechanisms behind them are general; the specific S3-compat gaps are one endpoint's behaviour on one date. `HF_HUB_DISABLE_XET`, and the bug where it is sometimes ignored, are official `huggingface_hub` facts rather than ours.
+**A second live pass — a LoRA training run plus its ComfyUI eval, 2026-08-24/25 — added the download, quota and timer-readback findings.** Those were measured on one account in `eu-ro-1` against `runpodctl 2.3.0`. The mechanisms behind them are general. The specific S3-compat gaps are one endpoint's behaviour on one date. `HF_HUB_DISABLE_XET`, and the bug where it is sometimes ignored, are official `huggingface_hub` facts rather than ours.
 
-**Facts dated 2026-08-13; cost-guard timers and the burn-check query re-verified live 2026-08-23, and the Impact Pack detailer paths (`ultralytics_bbox`/`ultralytics_segm`/`sams`) and the priced-`gpu list` CLI fallback verified the same day; download/quota/timer findings added 2026-08-25.** The `runpodctl` command surface and endpoint knobs are what moves fastest here — re-verify those before relying on them; the ComfyUI-side contract (`extra_model_paths.yaml` keys, loader directories) is stable.
+**Facts dated 2026-08-13. Cost-guard timers and the burn-check query were re-verified live on 2026-08-23, along with the Impact Pack detailer paths (`ultralytics_bbox`/`ultralytics_segm`/`sams`) and the priced-`gpu list` CLI fallback. Download, quota and timer findings were added 2026-08-25.** The `runpodctl` command surface and endpoint knobs are what moves fastest here — re-verify those before relying on them. The ComfyUI-side contract (`extra_model_paths.yaml` keys, loader directories) is stable.
 
 ---
 

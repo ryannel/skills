@@ -6,12 +6,12 @@ description: >
 
 # Image Production Workflows
 
-This is the **cross-model** skill of the suite: getting professional results out of open image models by *layering passes* and *mixing models*, rather than hoping one render comes out perfect. It assumes you run models directly — ComfyUI, diffusers, or ComfyScript — and it complements the per-model skills ([`sdxl`](../sdxl/), [`z-image`](../z-image/), [`flux-2`](../flux-2/), [`ideogram-4`](../ideogram-4/), [`krea-2`](../krea-2/), [`anima`](../anima/)), which own their node settings, prompting dialects and LoRA ecosystems.
+This is the **cross-model** skill of the suite. It shows you how to get professional results from open image models by *layering passes* and *mixing models*, instead of hoping one render comes out perfect. It assumes you run models directly — in ComfyUI, diffusers, or ComfyScript. It complements the per-model skills ([`sdxl`](../sdxl/), [`z-image`](../z-image/), [`flux-2`](../flux-2/), [`ideogram-4`](../ideogram-4/), [`krea-2`](../krea-2/), [`anima`](../anima/)), which own their own node settings, prompting dialects and LoRA ecosystems.
 
 Two ideas organize everything here:
 
-1. **Quality is layered, not summoned.** A production image is a pipeline of passes, each judged on one thing and cheap to redo in isolation.
-2. **Models are specialists, and a pipeline can hire more than one.** The mechanics are simple once you know the three rules; which model is good at what is the suite map at the end.
+1. **Quality is layered, not summoned.** A production image is a pipeline of passes. Each pass is judged on one thing, and is cheap to redo on its own.
+2. **Models are specialists, and a pipeline can hire more than one.** The mechanics are simple once you know the three rules. Which model is good at what is the suite map at the end.
 
 ---
 
@@ -20,7 +20,7 @@ Two ideas organize everything here:
 Three skills can plausibly answer "how do I build this pipeline?" Two tests settle almost every case.
 
 - **Versus a model skill's `setup-and-workflows.md`**, which owns the ladder *as one model runs it*: **if changing the model changes the answer, it is the model skill's.**
-- **Versus [`comfyui-on-runpod`](../comfyui-on-runpod/)**, which owns whether the graph runs at all: **if the answer is the same on your laptop and on a rented H100, it is here; if renting changes it, it is there.**
+- **Versus [`comfyui-on-runpod`](../comfyui-on-runpod/)**, which owns whether the graph runs at all: **if the answer is the same on your laptop and on a rented H100, it belongs here. If renting changes the answer, it belongs there.**
 
 | Question | Where it belongs |
 |---|---|
@@ -38,7 +38,7 @@ Three skills can plausibly answer "how do I build this pipeline?" Two tests sett
 
 ## The one rule that changes everything
 
-**After the base pass, everything is img2img — and denoise is the master knob.** Every ladder stage, cross-model handoff, detailer and tile pass is the same operation: re-render this image, keeping `1 − denoise` of it. Internalize the bands and the pipeline becomes predictable:
+**After the base pass, everything is img2img. Denoise is the master knob.** Every ladder stage, cross-model handoff, detailer and tile pass does the same thing: re-render this image, keeping `1 − denoise` of it. Learn the bands, and the pipeline becomes predictable:
 
 | Denoise | What the pass does `[community — named recipes in mixed-model-recipes.md §2; convergent]` |
 |---|---|
@@ -47,7 +47,7 @@ Three skills can plausibly answer "how do I build this pipeline?" Two tests sett
 | 0.4–0.5 | stronger restyle; faces start to drift — re-assert identity afterward |
 | > ~0.6 | re-composes; you're treating the input as an init image |
 
-They are bands rather than settings because they are where independent recipes land, not one author's numbers. Most pipeline failures are a denoise mismatch (*Failure modes*, below); the most-misunderstood is the asymmetry between the two hires routes — latent interpolation *needs* ≥ ~0.5 denoise to repair itself, while the pixel route wants 0.25–0.35.
+These are bands, not fixed settings, because they mark where independent recipes agree — not one author's numbers. Most pipeline failures come from a denoise mismatch (see *Failure modes*, below). The most misunderstood point is the asymmetry between the two hires routes: latent interpolation *needs* ≥ ~0.5 denoise to repair itself, while the pixel route wants 0.25–0.35.
 
 ---
 
@@ -61,25 +61,25 @@ They are bands rather than settings because they are where independent recipes l
 | 4 | **Tiled upscale** | `UltimateSDUpscale` (denoise 0.2–0.35, simplified prompt) `[community — Civitai USDU conventions; convergent]` — DiTs: **TTP Toolset**, per-tile captions `[official — TTPlanet repos]` | resolution + micro-detail |
 | 5 | **Finish** | **ColorMatch** vs the post-refine reference; **SeedVR2** restorer `[community — MyAIForce]` | color truth; final 4K push |
 
-Every stage past 1 is **bypassable** — preview after stages 1 and 2 before paying for the heavy passes. Climb only the rungs your model needs: SDXL-family work uses the full ladder, while Flux/Z-Image generate 1–2 MP natively, so their stage 2 refines rather than jumping resolution. Settings: [`references/production-ladder.md`](references/production-ladder.md).
+Every stage past 1 is **bypassable**. Preview after stages 1 and 2 before you pay for the heavy passes. Climb only the rungs your model needs. SDXL-family work uses the full ladder. Flux and Z-Image generate 1–2 MP natively, so their stage 2 refines detail rather than jumping resolution. Settings: [`references/production-ladder.md`](references/production-ladder.md).
 
 ---
 
 ## Restore before you interpolate
 
-One more ordering choice belongs here, stated seven times over across the video skills before now: **restore or upscale before you interpolate, never after** `[community — convergent]`.
+One more ordering choice belongs here. The video skills already state it seven times over: **restore or upscale before you interpolate, never after** `[community — convergent]`.
 
-A temporal restorer (SeedVR2, FlashVSR) reads neighbouring *real* frames as evidence to fix real degradation. An interpolator (RIFE) warps between two real frames to invent new ones, and the warp carries forward whatever is in the source — noise included — plus a smear of its own wherever the flow estimate is wrong. **Interpolate first and the restorer inherits both defects across roughly double the frame count; restore first and the interpolator warps between frames that are already clean.** The same reasoning rules out a per-frame image upscaler as the restore step at either position in the order — no cross-frame consistency, so the result shimmers regardless.
+A temporal restorer (SeedVR2, FlashVSR) reads neighbouring *real* frames as evidence to fix real degradation. An interpolator (RIFE) warps between two real frames to invent new ones. That warp carries forward whatever is in the source — noise included — plus a smear of its own wherever the flow estimate is wrong. **Interpolate first, and the restorer inherits both defects across roughly double the frame count. Restore first, and the interpolator warps between frames that are already clean.** The same reasoning rules out a per-frame image upscaler as the restore step, at either position in the order: it has no cross-frame consistency, so the result shimmers regardless.
 
-Full derivation, and the per-model frame-count/dimension constraints that turn a reversed order into a silent-failure trap: [`references/production-ladder.md`](references/production-ladder.md) §5; named per model in [`wan-2-2`](../wan-2-2/), [`minimax-h3`](../minimax-h3/), [`ltx-2-5`](../ltx-2-5/), [`scail-2`](../scail-2/).
+Full derivation, and the per-model frame-count and dimension constraints that turn a reversed order into a silent-failure trap: [`references/production-ladder.md`](references/production-ladder.md) §5. Named per model in [`wan-2-2`](../wan-2-2/), [`minimax-h3`](../minimax-h3/), [`ltx-2-5`](../ltx-2-5/), [`scail-2`](../scail-2/).
 
 ---
 
 ## Mixing models — the three handoff rules
 
-1. **Decode to pixels between families.** Latent spaces are family-specific (FLUX.2's VAE is its own; SDXL's is not Z-Image's; Anima's is Qwen-Image's). Foreign latents → garbage, sometimes subtle. Always `VAE Decode (A) → image → VAE Encode (B)`; diffusers does it by construction.
+1. **Decode to pixels between families.** Latent spaces are family-specific: FLUX.2's VAE is its own, SDXL's is not Z-Image's, and Anima's is Qwen-Image's. A foreign latent produces garbage — sometimes subtle garbage. Always go `VAE Decode (A) → image → VAE Encode (B)`. diffusers does this by construction.
 2. **Identity-preserving refines live at denoise ~0.2–0.5** (the bands above; 0.25–0.35 is the sweet spot).
-3. **Match resolution to the refining model's native range** — downscale-refine-upscale or tile, don't feed 4 MP raw to a 1024-class model.
+3. **Match resolution to the refining model's native range.** Downscale, refine, then upscale or tile — don't feed 4 MP raw to a 1024-class model.
 
 The recipes that earn the trouble (details and sources in [`references/mixed-model-recipes.md`](references/mixed-model-recipes.md)):
 
@@ -93,7 +93,7 @@ The recipes that earn the trouble (details and sources in [`references/mixed-mod
 
 The pattern behind all of them: **compose where control is deepest, render where quality is highest, finish where the finisher is best.**
 
-**Licence travels with the chain, and it constrains the pipeline, not the picture.** A non-commercial rung usually doesn't poison the *output* — [`anima`](../anima/) puts Outputs outside its Derivative definition, so anyone may sell what they make with it. **Selling pictures asks whether you may use each model; selling the pipeline asks whether each may ship** — and there, one non-commercial checkpoint stops the whole chain, first rung or last. Swap it early ([`flux-2`](../flux-2/)'s klein 4B, Apache-2.0). Per model: [`references/mixed-model-recipes.md`](references/mixed-model-recipes.md) §6.
+**Licence travels with the chain, and it constrains the pipeline, not the picture.** A non-commercial rung usually doesn't poison the *output* — [`anima`](../anima/) puts Outputs outside its Derivative definition, so anyone may sell what they make with it. **Selling pictures asks whether you may use each model. Selling the pipeline asks whether each model may ship.** There, one non-commercial checkpoint stops the whole chain, whether it sits first or last. Swap it out early ([`flux-2`](../flux-2/)'s klein 4B, Apache-2.0). Per model: [`references/mixed-model-recipes.md`](references/mixed-model-recipes.md) §6.
 
 ---
 
@@ -101,10 +101,10 @@ The pattern behind all of them: **compose where control is deepest, render where
 
 Four routes, by intent (comparison and examples: [`references/workflows-as-code.md`](references/workflows-as-code.md)):
 
-- **ComfyScript** — workflows *as Python* (loops, sweeps, conditionals), with a transpiler from existing workflow JSON. Alive at v0.6.x but single-maintainer: **pin versions** `[official — Chaoses-Ib/ComfyScript]`.
-- **Export (API) + `/prompt` + WebSocket** — the most production-proven route `[community — ViewComfy production-API guide; strong]`: build in the GUI, export API-format JSON, parametrize its inputs, POST. **comfy-cli** wraps it for shell/CI.
-- **diffusers** — no ComfyUI at all; pipelines as testable Python, handoffs pixels by construction. The trade: no detailer/tiled-upscale node ecosystem.
-- **Hosted wrappers** (ComfyDeploy, RunComfy serverless) — productized API-format workflows; rolling your own on rented GPUs is [`comfyui-on-runpod`](../comfyui-on-runpod/)'s job.
+- **ComfyScript** — workflows *as Python* (loops, sweeps, conditionals), with a transpiler from existing workflow JSON. Alive at v0.6.x, but single-maintainer, so **pin versions** `[official — Chaoses-Ib/ComfyScript]`.
+- **Export (API) + `/prompt` + WebSocket** — the most production-proven route `[community — ViewComfy production-API guide; strong]`. Build in the GUI, export API-format JSON, parametrize its inputs, then POST. **comfy-cli** wraps it for shell/CI.
+- **diffusers** — no ComfyUI at all. Pipelines are testable Python, and handoffs pass pixels by construction. The trade-off: no detailer or tiled-upscale node ecosystem.
+- **Hosted wrappers** (ComfyDeploy, RunComfy serverless) — productized API-format workflows. Rolling your own on rented GPUs is [`comfyui-on-runpod`](../comfyui-on-runpod/)'s job.
 
 At scale, add **subgraphs** per stage, **rgthree** plumbing (Context pipes, Fast Muter, global Seed), **wildcards**, and a saved intermediate per stage so a bad final diagnoses to a stage.
 
@@ -112,7 +112,7 @@ At scale, add **subgraphs** per stage, **rgthree** plumbing (Context pipes, Fast
 
 ## Tool status that changed recently (mid-2026)
 
-Stale tutorials outnumber current ones; these are the load-bearing changes:
+Stale tutorials outnumber current ones. These are the load-bearing changes:
 
 | Tool | Status |
 |---|---|
@@ -124,19 +124,19 @@ Stale tutorials outnumber current ones; these are the load-bearing changes:
 
 ### The test is output modality, not training modality
 
-**A checkpoint trained on video still belongs to *this* ladder whenever the stage takes pixels in and puts pixels out — one frame, one edit, no motion.** That follows from rule 1, which was always about *latent* families, not model families. The instant a stage's output is a clip it moves to [`wan-2-2`](../wan-2-2/)'s, [`minimax-h3`](../minimax-h3/)'s, [`ltx-2-5`](../ltx-2-5/)'s or [`scail-2`](../scail-2/)'s ladder — even when the input frame was prepared here.
+**A checkpoint trained on video still belongs to *this* ladder whenever the stage takes pixels in and puts pixels out — one frame, one edit, no motion.** That follows from rule 1, which was always about *latent* families, not model families. The instant a stage's output is a clip, it moves to [`wan-2-2`](../wan-2-2/)'s, [`minimax-h3`](../minimax-h3/)'s, [`ltx-2-5`](../ltx-2-5/)'s or [`scail-2`](../scail-2/)'s ladder — even when the input frame was prepared here.
 
 ### A video model is now a legitimate stage in an image pipeline
 
-**[`minimax-h3`](../minimax-h3/) generating exactly one frame is an image editor**, and by multiple reports a better one than Krea 2 + Identity Edit, Qwen-Image-Edit or Flux Klein 9B for character fidelity, 3D scene understanding, mirrors and composition — around 8 s per edit on a 5090 `[community — Patient_Ratio4177]`. It wins there because **a model trained on multi-reference video conditioning has learned spatial and physical relationships an image editor has not**.
+**[`minimax-h3`](../minimax-h3/) generating exactly one frame is an image editor.** By multiple reports, it beats Krea 2 + Identity Edit, Qwen-Image-Edit and Flux Klein 9B for character fidelity, 3D scene understanding, mirrors and composition — around 8 s per edit on a 5090 `[community — Patient_Ratio4177]`. It wins there because **a model trained on multi-reference video conditioning has learned spatial and physical relationships an image editor has not**.
 
-Two requirements make it work, and skipping either produces garbage rather than an error: a **dedicated image VAE** (`Mamad8/MiniMax-H3-Image-VAE`) and **exactly one frame** (5 frames through that VAE grids). Rule 1 applies unchanged: an H3 latent is not a Qwen-Image or Flux latent, so decode to pixels and it drops into the ladder cleanly.
+Two requirements make it work, and skipping either produces garbage instead of an error: a **dedicated image VAE** (`Mamad8/MiniMax-H3-Image-VAE`) and **exactly one frame** (5 frames through that VAE grids). Rule 1 applies unchanged: an H3 latent is not a Qwen-Image or Flux latent. Decode it to pixels, and it drops into the ladder cleanly.
 
 ### Generative upscaling versus restoration
 
-`ReDetail` (`Bambushu/redetail`) drives the [`ltx-2-5`](../ltx-2-5/) video upscaler as a **generative re-render**, mostly on [`minimax-h3`](../minimax-h3/) output — the video-side analogue of this ladder's detail-preserving-vs-detail-*inventing* choice. **It invents**: it redraws jersey graphics, number plates, logos and text. Right for AI-generated or genuinely soft footage with nothing real to recover; wrong wherever a face, label or logo must stay exact.
+`ReDetail` (`Bambushu/redetail`) drives the [`ltx-2-5`](../ltx-2-5/) video upscaler as a **generative re-render**, mostly on [`minimax-h3`](../minimax-h3/) output. It is the video-side analogue of this ladder's detail-preserving-versus-detail-*inventing* choice. **It invents:** it redraws jersey graphics, number plates, logos and text. That is right for AI-generated or genuinely soft footage with nothing real to recover, and wrong wherever a face, label or logo must stay exact.
 
-Three hard constraints, all of which fail quietly: **both output dimensions must divide by 64** (not 32), clip length must be **`8n + 1` frames** or the tail is silently dropped, and **a silent clip fails outright** because LTX-2.5 encodes audio and video jointly — add a silence track first. Prefer **1.5× over 2×**: most of 2×'s extra detail is invented rather than recovered, at more than double the time and VRAM (measurements: [`references/production-ladder.md`](references/production-ladder.md) §5) `[community — DaLyon92x]`.
+Three hard constraints, and all of them fail quietly. **Both output dimensions must divide by 64** (not 32). Clip length must be **`8n + 1` frames**, or the tail is silently dropped. **A silent clip fails outright**, because LTX-2.5 encodes audio and video jointly — add a silence track first. Prefer **1.5× over 2×**: most of 2×'s extra detail is invented rather than recovered, at more than double the time and VRAM (measurements: [`references/production-ladder.md`](references/production-ladder.md) §5) `[community — DaLyon92x]`.
 
 ---
 
@@ -176,7 +176,7 @@ Before committing to the expensive passes:
 
 ## The suite map
 
-Per-model facts live in the model skills; this skill owns what spans them.
+Per-model facts live in the model skills. This skill owns what spans them.
 
 | Skill | Its specialty | Its mixed-pipeline role |
 |---|---|---|
@@ -192,7 +192,7 @@ Per-model facts live in the model skills; this skill owns what spans them.
 | [`minimax-h3`](../minimax-h3/) | **video + native audio** — omni-modal, reference conditioning | downstream, and the one output this ladder can silently break: most video post nodes are picture-only and drop the audio. **Also upstream now**, at one frame |
 | [`generative-media-atlas`](../generative-media-atlas/) | choosing between everything above — rankings by job, the elimination ladder, install routes | upstream of this ladder: it decides *which* models the chain hires before this skill decides how they hand off |
 
-**Where the ladder feeds backwards — and where it doesn't.** The table reads left-to-right: image skills feed video skills, and exactly one path runs the other way — [`minimax-h3`](../minimax-h3/) at one frame, by the output-modality test above. The [`krea-2`](../krea-2/) → [`scail-2`](../scail-2/) case looks identical and is not: Identity Edit prepares the driving clip's first frame, which is ordinary forward flow, and marks where this skill's job *ends*.
+**Where the ladder feeds backwards — and where it doesn't.** The table reads left-to-right: image skills feed video skills. Exactly one path runs the other way — [`minimax-h3`](../minimax-h3/) at one frame, by the output-modality test above. The [`krea-2`](../krea-2/) → [`scail-2`](../scail-2/) case looks identical, but is not: Identity Edit prepares the driving clip's first frame, which is ordinary forward flow, and marks where this skill's job *ends*.
 
 ---
 
@@ -200,14 +200,14 @@ Per-model facts live in the model skills; this skill owns what spans them.
 
 This skill holds two kinds of claim to two different standards, because they fail in two different ways.
 
-**Hard facts — must be exact or it breaks.** Node and repo names, the latent-incompatibility mechanism, tool maintenance statuses, ReDetail's dimension and frame-lattice constraints, and the licence terms a chain's shipping rights depend on. **Source of truth is official** — the repos, the model cards, ComfyUI core — and these are the volatile ones: a tool marked "current" can freeze in a month. **Re-verify statuses, versions and licence text before building production pipelines on them.**
+**Hard facts — must be exact or it breaks.** Node and repo names, the latent-incompatibility mechanism, tool maintenance statuses, ReDetail's dimension and frame-lattice constraints, and the licence terms a chain's shipping rights depend on. **Source of truth is official** — the repos, the model cards, ComfyUI core. These are the volatile ones: a tool marked "current" can freeze in a month. **Re-verify statuses, versions and licence text before building production pipelines on them.**
 
-**Craft — what actually makes a good image.** The denoise bands, per-stage settings, the handoff rules, the named recipes, the QC habits. **The authoritative source here is the community** — named workflow authors (Cordina, Enzino, nsfwVariant, TTPlanet, ltdrdata, MyAIForce, myByways, sandner.art, u/Alekite, DaLyon92x) whose graphs have run at scale — stated with confidence; ranges mean "your checkpoint and resolution differ," not "unverified." One limit worth naming: **batch QC is tooled for comparison but not for judgement**, so the cull stays human and stays biased.
+**Craft — what actually makes a good image.** The denoise bands, per-stage settings, the handoff rules, the named recipes, the QC habits. **The authoritative source here is the community** — named workflow authors (Cordina, Enzino, nsfwVariant, TTPlanet, ltdrdata, MyAIForce, myByways, sandner.art, u/Alekite, DaLyon92x) whose graphs have run at scale. It is stated with confidence: ranges mean "your checkpoint and resolution differ," not "unverified." One limit worth naming: **batch QC is tooled for comparison but not for judgement**, so the cull stays human, and stays biased.
 
 **Contested / unresolved points:**
 
 - The Ideogram typography-pass pattern is practiced, but the composite step is reconstructed craft rather than a graph someone published `[flagged — no canonical workflow]`.
-- Per-region *LoRA* application on DiT regional-attention setups is unsettled; it works on SDXL and does not transfer `[contested]`.
+- Per-region *LoRA* application on DiT regional-attention setups is unsettled. It works on SDXL and does not transfer `[contested]`.
 
 **Facts dated 2026-06-12**; community craft refreshed 2026-08-22. Fastest-moving: finishers (SeedVR2's successors and the generative video upscalers), DiT regional and per-region-LoRA tooling, the video-model-as-image-editor path, new weights' licence terms, and ComfyScript/frontend compatibility.
 

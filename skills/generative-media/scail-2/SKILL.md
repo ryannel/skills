@@ -6,27 +6,27 @@ description: >
 
 # SCAIL-2
 
-SCAIL-2 is an open-weights **character animation and character replacement** video model from **zai-org — Z.ai / Zhipu AI, the lab behind GLM and CogVideoX.** It is **not an Alibaba release and not a Wan-team model**, despite the `Wan` in its node names and the "Wan SCAIL-2" label on community workflows. It runs on **umT5-XXL** and the **Wan 2.1 VAE**, optionally alongside Wan's I2V CLIP vision tower, and carries a **split licence — Apache 2.0 code, MIT weights card**. Paper: arXiv 2606.10804, *"Unifying Controlled Character Animation with End-to-End In-Context Conditioning"* (Yan, Guo, Yang, Tang; v1 9 June 2026, **v3 5 August 2026**), successor to zai-org's own SCAIL-1. No source glosses "SCAIL" as an acronym; treat it as a name.
+SCAIL-2 is an open-weights **character animation and character replacement** video model from **zai-org — Z.ai / Zhipu AI, the lab behind GLM and CogVideoX.** It is **not an Alibaba release and not a Wan-team model**, despite the `Wan` in its node names and the "Wan SCAIL-2" label on community workflows. It runs on **umT5-XXL** and the **Wan 2.1 VAE**, optionally alongside Wan's I2V CLIP vision tower. It carries a **split licence — Apache 2.0 code, MIT weights card**. Paper: arXiv 2606.10804, *"Unifying Controlled Character Animation with End-to-End In-Context Conditioning"* (Yan, Guo, Yang, Tang; v1 9 June 2026, **v3 5 August 2026**), successor to zai-org's own SCAIL-1. No source glosses "SCAIL" as an acronym; treat it as a name.
 
-**The defining trait:** SCAIL-2 is conditioned by a **driving video plus a reference image plus explicit masks**, and it **tracks** the driving motion frame for frame rather than re-imagining it. That is the axis on which it beat Wan Animate into the default slot for character replacement, and the axis on which [`minimax-h3`](../minimax-h3/)'s video-editing mode can only approximate. Almost every other property follows: your output fps is your *input's* fps, your clip length is your *input's* length, and the prompt is nearly vestigial.
+**The defining trait:** SCAIL-2 is conditioned by a **driving video plus a reference image plus explicit masks**. It **tracks** the driving motion frame by frame instead of re-imagining it. That is why it beat Wan Animate into the default slot for character replacement, and why [`minimax-h3`](../minimax-h3/)'s video-editing mode can only approximate it. Almost every other property follows from this: your output fps matches your *input's* fps, your clip length matches your *input's* length, and the prompt barely matters.
 
 ---
 
 ## Its relationship to Wan 2.1 runs at three levels
 
-Keeping them apart is what decides whether your Wan LoRAs load:
+Keeping them apart tells you whether your Wan LoRAs will load:
 
-- **Weights** — a **full fine-tune of the `Wan2.1-14B-I2V` checkpoint**, stated outright in the paper: *"adapted from the Wan2.1-14B-I2V backbone"*, which they *"fully fine-tune … for 3,500 steps with a batch size of 128 and a learning rate of 10⁻⁵"* `[official — arXiv 2606.10804v3 §4.1]`, then a DPO stage that freezes the backbone and trains rank-128 LoRA adapters. It inherits Wan 2.1's motion prior wholesale.
-- **Architecture** — Wan 2.1's DiT, **modified**: an additive mask stream stacking **`4(K+1)` extra in-context conditioning channels** onto the patch embedding — **28** at the shipped K=6 — plus **Mode-Specific RoPE**. Not an unmodified Wan 2.1.
-- **Code** — descends from the Wan 2.1 repo. The README's *"the overall project architecture is inherited from SCAIL"* means the **codebase**, not the network — the same lab's SCAIL-1 README uses that phrase for SAT, a training framework `[official — wan-scail2 README, Acknowledgements]`.
+- **Weights** — a **full fine-tune of the `Wan2.1-14B-I2V` checkpoint**. The paper says so outright: *"adapted from the Wan2.1-14B-I2V backbone"*, which they *"fully fine-tune … for 3,500 steps with a batch size of 128 and a learning rate of 10⁻⁵"* `[official — arXiv 2606.10804v3 §4.1]`. A DPO stage follows that freezes the backbone and trains rank-128 LoRA adapters. It inherits Wan 2.1's motion prior wholesale.
+- **Architecture** — Wan 2.1's DiT, **modified**: an additive mask stream stacks **`4(K+1)` extra in-context conditioning channels** onto the patch embedding — **28** at the shipped K=6 — plus **Mode-Specific RoPE**. It is not an unmodified Wan 2.1.
+- **Code** — descends from the Wan 2.1 repo. The README's *"the overall project architecture is inherited from SCAIL"* means the **codebase**, not the network. The same lab's SCAIL-1 README uses that phrase for SAT, a training framework `[official — wan-scail2 README, Acknowledgements]`.
 
-ComfyUI corroborates the base independently as `WAN21_SCAIL2` with `image_model: "wan2.1"` `[official — PR #14373 diff]`. It is Wan **2.1**, not 2.2, and **no primary source names a 480P or 720P base variant**. The `480p` on community workflows is inherited from the official speed LoRA's filename, `lightx2v_I2V_14B_480p_…`, which names *Wan 2.1's* I2V variant — what a workflow loads, not what SCAIL-2 trained from.
+ComfyUI backs up the base independently, labelling it `WAN21_SCAIL2` with `image_model: "wan2.1"` `[official — PR #14373 diff]`. It is Wan **2.1**, not 2.2, and **no primary source names a 480P or 720P base variant**. The `480p` label on community workflows comes from the official speed LoRA's filename, `lightx2v_I2V_14B_480p_…`, which names *Wan 2.1's* I2V variant. That is what a workflow loads, not what SCAIL-2 trained from.
 
 ---
 
 ## Task-mode selector
 
-One checkpoint, four operating shapes, unified inside the weights by **In-Context Mask Conditioning** and **Mode-Specific RoPE** rather than by separate heads or downloads. All four modes, their inputs and the vendor's recommendation among them are vendor-defined `[official — arXiv 2606.10804v3, wan-scail2 README, PR #14373 diff]`. You do not download a mode — you set a `replacement_mode` boolean and match your driving mask's background colour to it, on two nodes at once. That is the model's single largest footgun; see below.
+One checkpoint gives you four operating shapes. **In-Context Mask Conditioning** and **Mode-Specific RoPE** unify them inside the weights, instead of using separate heads or downloads. All four modes, their inputs and the vendor's recommendation among them are vendor-defined `[official — arXiv 2606.10804v3, wan-scail2 README, PR #14373 diff]`. You do not download a mode. Instead, you set a `replacement_mode` boolean and match your driving mask's background colour to it, on two nodes at once. That is the model's single largest footgun; see below.
 
 | Mode | Inputs | Use when… |
 |---|---|---|
@@ -35,7 +35,7 @@ One checkpoint, four operating shapes, unified inside the weights by **In-Contex
 | **Replacement** | As above, but the driving mask has a **white** background and `replacement_mode: True` | You keep the original footage — camera, framing, lighting, everything outside the masked person — and swap only the tracked person. The "Wan Animate replacement" job |
 | **Multi-reference** | **One composited reference image** carrying every character, plus one coloured mask giving each an identity colour | More than one character, or front-and-back views of one. The node is explicit: *"for multiple references composite all on single image"*. **Vendor-marked unoptimised**: *"video qualities may degrade even though additional information do get referenced"* |
 
-**There is no text-to-video mode and no image-to-video mode** — SCAIL-2 cannot originate motion. Without footage you must manufacture some (Mixamo, a SnapMoGen mocap export, or a clip from [`wan-2-2`](../wan-2-2/) or [`ltx-2-5`](../ltx-2-5/)) and drive SCAIL-2 with it. See [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §4.
+**There is no text-to-video mode and no image-to-video mode.** SCAIL-2 cannot originate motion. Without footage, you must manufacture some (Mixamo, a SnapMoGen mocap export, or a clip from [`wan-2-2`](../wan-2-2/) or [`ltx-2-5`](../ltx-2-5/)) and drive SCAIL-2 with it. See [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §4.
 
 ---
 
@@ -43,9 +43,9 @@ One checkpoint, four operating shapes, unified inside the weights by **In-Contex
 
 **Edit the driving video's actual first frame into your new character, and feed *that* as the reference image — not a portrait, not a character sheet.**
 
-This is a **preparation** rule, it happens outside SCAIL-2, and it appears in none of the zai-org sources read here — neither branch README, the paper, nor the ComfyUI tutorial. It is community craft, and the difference practitioners describe between mediocre and excellent output `[community — blackmixture, LucidFir, ChairQueen; convergent]`.
+This is a **preparation** rule. It happens outside SCAIL-2, and it appears in none of the zai-org sources read here — not the branch READMEs, not the paper, not the ComfyUI tutorial. It is community craft, and practitioners describe it as the difference between mediocre and excellent output `[community — blackmixture, LucidFir, ChairQueen; convergent]`.
 
-The mechanism tells you when it matters most. SCAIL-2 must solve two problems at once: *who is this person*, and *how do they map onto the driving performer's pose, scale and framing at frame 0*. A generic portrait forces both into the same first denoising steps, and identity loses. Give it a reference that already *is* the opening frame with the person swapped, and the second problem is pre-solved — pose, scale, screen position, lens and lighting all match. All SCAIL-2 has left to do is track.
+The mechanism tells you when it matters most. SCAIL-2 must solve two problems at once: *who is this person*, and *how do they map onto the driving performer's pose, scale and framing at frame 0*. A generic portrait forces both problems into the same first denoising steps, and identity loses out. Give it a reference that already *is* the opening frame with the person swapped, and the second problem is pre-solved: pose, scale, screen position, lens and lighting all match. All SCAIL-2 has left to do is track.
 
 | Don't | Do |
 |---|---|
@@ -56,13 +56,13 @@ The mechanism tells you when it matters most. SCAIL-2 must solve two problems at
 
 **What to edit with:** [`krea-2`](../krea-2/)'s Identity Edit LoRA, Flux 2 Klein 9B, or Qwen-Image-Edit, image-to-image on the extracted frame `[community — blackmixture, DeerWoodStudios]`.
 
-**The rule generalises into a family of positional hints** — screen position, zoom level, reference ordering in a batch — all the same idea: pre-solve the correspondence rather than making the model infer it `[community — nsfwVariant]`. Step-by-step: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §2.
+**The rule generalises into a family of positional hints** — screen position, zoom level, reference ordering in a batch. They all follow the same idea: pre-solve the correspondence instead of making the model infer it `[community — nsfwVariant]`. Step-by-step: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §2.
 
 ---
 
 ## Masks are the control surface
 
-*This precedes setup and settings because it decides which mode you are actually running — no number below matters if the masks are wrong.*
+*This comes before setup and settings because it decides which mode you are actually running. No number below matters if the masks are wrong.*
 
 Prompting is not how you steer this model. **Two coloured masks are**, and they are different objects with different rules. Both come from `SCAIL2ColoredMask` and enter `WanSCAILToVideo` on their own inputs `[official — PR #14373 diff]`:
 
@@ -71,9 +71,9 @@ Prompting is not how you steer this model. **Two coloured masks are**, and they 
 | **Reference mask** | `reference_image_mask` | **Always black**, both modes | Which identity each region of the reference is |
 | **Driving mask** | `pose_video_mask` — *"Colored per-identity SAM3 mask video"* | **Black = Animation, white = Replacement** | The same palette, so a colour maps a reference region to a tracked person |
 
-**The driving mask's background colour *is* the mode switch, and it must agree with a boolean in two places.** `SCAIL2ColoredMask` and `WanSCAILToVideo` each carry a `replacement_mode` flag, and the tooltip says to set them together: *"False = mask_video has black bg (Animation Mode). True = white bg (Replacement Mode). Set the matching `replacement_mode` on `WanSCAILToVideo`. `reference_image_mask` is always black-bg regardless."*
+**The driving mask's background colour *is* the mode switch, and it must agree with a boolean in two places.** `SCAIL2ColoredMask` and `WanSCAILToVideo` each carry a `replacement_mode` flag. The tooltip tells you to set them together: *"False = mask_video has black bg (Animation Mode). True = white bg (Replacement Mode). Set the matching `replacement_mode` on `WanSCAILToVideo`. `reference_image_mask` is always black-bg regardless."*
 
-> Get the pair out of step and you hit the vendor's documented failure: *"Without a correct mask, Animation mode collapses into Replacement-mode behavior in certain inputs."* You get a plausible clip doing the wrong job — keeping the source scene when you asked for a new one, with no error message.
+> Get the pair out of step and you hit the vendor's documented failure: *"Without a correct mask, Animation mode collapses into Replacement-mode behavior in certain inputs."* You get a plausible clip doing the wrong job: it keeps the source scene when you asked for a new one, with no error message.
 
 **Identity selection is a core-node input, not a custom pack.** `SCAIL2ColoredMask` exposes `object_indices` (*"Empty = all"*) and `sort_by`, which keeps each identity the same colour across both masks. Full treatment: [`references/masks-and-tracking.md`](references/masks-and-tracking.md).
 
@@ -85,7 +85,7 @@ SCAIL-2 runs in **ComfyUI core** — PR **#14373** (`WanSCAILToVideo`), multi-re
 
 ### File layout
 
-Verbatim from the official ComfyUI tutorial's model table, except the last row `[official — docs.comfy.org/tutorials/video/zai/scail2]`. Most are Wan 2.1's own, so [`wan-2-2`](../wan-2-2/) users are nearly complete already.
+This is verbatim from the official ComfyUI tutorial's model table, except the last row `[official — docs.comfy.org/tutorials/video/zai/scail2]`. Most files are Wan 2.1's own, so [`wan-2-2`](../wan-2-2/) users already have nearly everything.
 
 | File | ComfyUI folder | Loader node |
 |---|---|---|
@@ -98,9 +98,9 @@ Verbatim from the official ComfyUI tutorial's model table, except the last row `
 | `lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors` — speed path | `models/loras/` | LoraLoaderModelOnly |
 | **Relighting LoRA** — `model/relighting-lora.pt`, **SAT-format; convert first**. Not in the tutorial's table | `models/loras/` | LoraLoaderModelOnly |
 
-> **The VAE trap.** It is `Wan2_1_VAE_bf16.safetensors` — *not* the `wan_2.1_vae.safetensors` a Wan 2.2 graph uses, and *not* the repo's SAT-format `Wan2.1_VAE.pth`. The same weights ship under three names across three distributions; only one is what ComfyUI loads, and a wrong-family VAE corrupts colour rather than erroring.
+> **The VAE trap.** It is `Wan2_1_VAE_bf16.safetensors` — *not* the `wan_2.1_vae.safetensors` a Wan 2.2 graph uses, and *not* the repo's SAT-format `Wan2.1_VAE.pth`. The same weights ship under three names across three distributions. Only one is what ComfyUI loads, and a wrong-family VAE corrupts colour instead of throwing an error.
 
-**CLIP vision is optional at the node level** — `clip_vision_output … optional=True` `[official — PR #14373 diff]`, so a graph without it runs. The official template supplies it; omitting it is a quality choice, not a hard failure.
+**CLIP vision is optional at the node level** — `clip_vision_output … optional=True` `[official — PR #14373 diff]` — so a graph without it still runs. The official template supplies it; leaving it out is a quality choice, not a hard failure.
 
 **One set of weights, two branches:** **`wan-scail2`** (default) is the Wan-framework inference port ComfyUI builds on; **`sat-scail2`** is the original **SAT** implementation behind the paper's results. Weights: HF `zai-org/SCAIL-2`, mirrored as ModelScope `ZhipuAI/SCAIL-2`.
 
@@ -108,7 +108,7 @@ Verbatim from the official ComfyUI tutorial's model table, except the last row `
 
 ### Stock node settings
 
-Sampler rows are the repo's generation flags; geometry rows are `WanSCAILToVideo`'s own widget defaults from the PR diff — and the node is what a ComfyUI reader sees `[official — repo generation flags, PR #14373 diff]`.
+Sampler rows are the repo's generation flags. Geometry rows are `WanSCAILToVideo`'s own widget defaults from the PR diff, and the node is what a ComfyUI reader sees `[official — repo generation flags, PR #14373 diff]`.
 
 | Setting | Full-quality path | LightX2V distilled |
 |---|---|---|
@@ -121,17 +121,17 @@ Sampler rows are the repo's generation flags; geometry rows are `WanSCAILToVideo
 | Negatives | Live at guidance 5.0 | **Inert at 1.0** — guidance off |
 | Seed | Lower-impact than on a T2V model: motion is tracked, not sampled | same |
 
-**No scheduler is named by any source** — the repo exposes a solver, not a scheduler. And the vendor documenting a LightX2V path confirms LightX2V only; **Pusa is a separate community claim** `[community — Dzugavili]`.
+**No scheduler is named by any source** — the repo exposes a solver, not a scheduler. The vendor documents a LightX2V path, and that confirms LightX2V only; **Pusa is a separate community claim** `[community — Dzugavili]`.
 
-**Divisibility is contested, but not evenly.** **Two** official sources say **32** (README and HF card, both with the worked example 704×1280); the ComfyUI docs page alone says **16** `[contested]`. Use multiples of **32** — it satisfies both readings and is where the evidence weighs.
+**Divisibility is contested, but not evenly.** **Two** official sources say **32** (README and HF card, both with the worked example 704×1280). The ComfyUI docs page alone says **16** `[contested]`. Use multiples of **32** — it satisfies both readings, and it is where the evidence weighs.
 
 ### Quantisation & VRAM
 
-**No vendor VRAM figure exists**, so every figure is community-measured against no baseline `[community — no official baseline; re-verify]`. **fp8_scaled** clears 16 GB; **GGUF** plus chunking reaches **8–12 GB**, though whether GGUF helps at 16 GB is disputed `[contested]`. One trap belongs up here because it costs speed without erroring: **`int8_convrot` can be *slower* than fp8** on a mismatched CUDA/PyTorch build — the CU130 trap [`minimax-h3`](../minimax-h3/) documents `[community — kayteee1995]`. Measured runs and offload guidance: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §3.
+**No vendor VRAM figure exists**, so every figure here is community-measured against no baseline `[community — no official baseline; re-verify]`. **fp8_scaled** clears 16 GB. **GGUF** plus chunking reaches **8–12 GB**, though whether GGUF helps at 16 GB is disputed `[contested]`. One trap belongs up here because it costs speed without throwing an error: **`int8_convrot` can be *slower* than fp8** on a mismatched CUDA/PyTorch build. It is the same CU130 trap [`minimax-h3`](../minimax-h3/) documents `[community — kayteee1995]`. Measured runs and offload guidance: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §3.
 
 ### diffusers
 
-**There is no diffusers pipeline**, and **no first-party hosted API** — run ComfyUI or the repo CLI. Third-party hosts resell it, on a single unverified report.
+**There is no diffusers pipeline**, and **no first-party hosted API.** Run ComfyUI or the repo CLI instead. Third-party hosts resell it, on a single unverified report.
 
 ---
 
@@ -141,7 +141,7 @@ Deltas from the stock table above.
 
 ### Animation — end-to-end driven
 
-The default: stock numbers, **raw** driving frames, coloured driving mask on a **black** background, `replacement_mode: False` on both nodes. Re-seeding is the first escape hatch when a run goes wrong `[community — External_Trainer_213]`.
+The default: stock numbers, **raw** driving frames, coloured driving mask on a **black** background, `replacement_mode: False` on both nodes. If a run goes wrong, re-seeding is the first thing to try `[community — External_Trainer_213]`.
 
 ### Animation — pose-driven
 
@@ -149,7 +149,7 @@ Stock numbers, with an SMPL pose render substituting for the driving frames. The
 
 ### Replacement
 
-Stock numbers; the driving mask flips to a **white** background and `replacement_mode: True` on both nodes. Here the prompt earns what little it earns: describe the replacement character's **clothing** and **what they interact with**, the attributes the model has no reference for once the region is masked `[official — wan-scail2 README]`. Load the **Relighting LoRA** — it is mode-specific to this one.
+Stock numbers; the driving mask flips to a **white** background and `replacement_mode: True` on both nodes. Here the prompt earns what little it earns: describe the replacement character's **clothing** and **what they interact with**. Those are the attributes the model has no reference for once the region is masked `[official — wan-scail2 README]`. Load the **Relighting LoRA** — it is mode-specific to this one.
 
 ### The LightX2V distilled path
 
@@ -159,25 +159,25 @@ Stock numbers; the driving mask flips to a **white** background and `replacement
 
 ## Signature quality — it tracks, and then it embellishes
 
-**Per-frame aesthetic — the swap reads as composited**, the character too bright and too clear for the plate `[community — nsfwVariant]`. **The override is the vendor's Relighting LoRA**, which exists for exactly this; grade in post only as the fallback. **Text** is the clear weakness — keep signage and readable screens out of the masked region ([`references/characters.md`](references/characters.md) §6).
+**Per-frame aesthetic — the swap reads as composited.** The character looks too bright and too clear for the plate `[community — nsfwVariant]`. **The fix is the vendor's Relighting LoRA**, which exists for exactly this; grade in post only as a fallback. **Text** is the clear weakness — keep signage and readable screens out of the masked region ([`references/characters.md`](references/characters.md) §6).
 
-**Default motion character — it does not invent choreography.** *"SCAIL-2 tracks the movement sequences and does not invent its own"* `[community — External_Trainer_213]`. Hand it a staged, unconvincing fight and you get a staged, unconvincing fight in a different body: **output quality is capped by the driving performance**, a directing problem rather than a prompting one. There is no prompt-side override; the lever is the footage you shoot.
+**Default motion character — it does not invent choreography.** *"SCAIL-2 tracks the movement sequences and does not invent its own"* `[community — External_Trainer_213]`. Hand it a staged, unconvincing fight and you get a staged, unconvincing fight in a different body. **Output quality is capped by the driving performance** — a directing problem, not a prompting one. There is no prompt-side override; the lever is the footage you shoot.
 
-What it *does* invent is **physically consistent embellishment on top of tracked motion** — fire arcing off a fist with zero fire data in the driving clip, cloth and hair following through, liquid sloshing inside a swapped-in wine glass `[community — blackmixture]`. **Motion is tracked; secondary physics is generated.** The limit: permanence belongs to the *tracked* subject, not the scene — untracked background figures merge identities `[community — Draco18s]`.
+What it *does* invent is **physically consistent embellishment on top of tracked motion**: fire arcing off a fist with zero fire data in the driving clip, cloth and hair following through, liquid sloshing inside a swapped-in wine glass `[community — blackmixture]`. **Motion is tracked; secondary physics is generated.** The limit is that permanence belongs to the *tracked* subject, not the scene — untracked background figures merge identities `[community — Draco18s]`.
 
 ---
 
 ## Length, fps and resolution
 
-This budget works differently from every other video model in the suite: **two of the three axes are set by your input, not by you.**
+This budget works differently from every other video model in the suite. **Two of the three axes are set by your input, not by you.**
 
 | Axis | What sets it |
 |---|---|
 | **fps** | **Your driving video's fps** — motion is tracked frame for frame, so a 24 fps source gives 24 fps out. Action footage downframed to 16 fps looks wrong and the model cannot fix it `[community — nsfwVariant]` |
 | **Length** | Your driving clip's, via chunking. Native window **81 frames**; longer output chunks as **81-frame segments, 76-frame stride** `[official — PR #14373 diff]` |
-| **Resolution** | Yours, in multiples of 32, inside the documented **512p/704p** band. Practitioners cite a **720p** ceiling, but 720 is not a multiple of 32 — treat **704p** as the real top and anything above as post-upscale `[flagged — re-verify]` |
+| **Resolution** | Yours, in multiples of 32, inside the documented **512p/704p** band. Practitioners cite a **720p** ceiling, but 720 is not a multiple of 32. Treat **704p** as the real top, and anything above it as post-upscale `[flagged — re-verify]` |
 
-**Whether sliding context windows restore quality or degrade adherence is contested** `[contested]` — plan as if adherence decays. The guardrail is **blast radius**: a fault chains downstream, so stay under **~161 frames** per shot `[community — nsfwVariant]`. That is a *risk* limit, not a capacity one. The dispute in full: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §5.
+**Whether sliding context windows restore quality or degrade adherence is contested** `[contested]` — plan as if adherence decays. The guardrail here is **blast radius**: a fault chains downstream, so stay under **~161 frames** per shot `[community — nsfwVariant]`. That is a *risk* limit, not a capacity one. The dispute in full: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §5.
 
 ---
 
@@ -185,9 +185,9 @@ This budget works differently from every other video model in the suite: **two o
 
 **SCAIL-2 has no LoRA-training path today, and this skill deliberately ships no `lora-training.md`.** A Civitai search returns **workflows only** — no checkpoint, no LoRA, no ControlNet `[community — Civitai models API, 2026-08-22]` — and no community trainer documents support `[flagged — re-verify]`. Vendor training code exists on `sat-scail2`, but it is the SAT framework that *produced* the model, not a fine-tuning path with published results. That is coverage rather than a gap: **SCAIL-2's identity mechanism is a reference image, not an adapter.**
 
-**Three vendor LoRAs ship with the model** — **Relighting**, **Bias-Aware DPO**, **LightX2V**. The one to know is **Relighting**, the vendor's answer to this skill's most-reported artefact: *"designed for **replacement mode** … making the reference character blend more naturally into the target video with consistent lighting and shadows"*. It ships SAT-format as `model/relighting-lora.pt` and **must be converted to safetensors** for the wan branch — it is absent from the ComfyUI tutorial's model table, the likeliest reason one practitioner *"couldn't get anything good out of it"* `[community — nsfwVariant; single report]`. Filenames and load order: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §6.
+**Three vendor LoRAs ship with the model** — **Relighting**, **Bias-Aware DPO**, **LightX2V**. The one to know is **Relighting**, the vendor's answer to this skill's most-reported artefact: *"designed for **replacement mode** … making the reference character blend more naturally into the target video with consistent lighting and shadows"*. It ships SAT-format as `model/relighting-lora.pt` and **must be converted to safetensors** for the wan branch. It is absent from the ComfyUI tutorial's model table, which is likely why one practitioner *"couldn't get anything good out of it"* `[community — nsfwVariant; single report]`. Filenames and load order: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §6.
 
-**Will your Wan 2.1 LoRAs load?** Partly, and the architecture says where the line falls: the weights *are* a Wan2.1-14B-I2V fine-tune, so block-level shapes should match, but the **28 extra patch-embedding channels** mean **any LoRA touching the patch embedding cannot transfer** — erroring or being silently skipped depending on your loader. Nobody has tested it `[flagged — re-verify]`; try a throwaway generation first.
+**Will your Wan 2.1 LoRAs load?** Partly. The architecture says where the line falls: the weights *are* a Wan2.1-14B-I2V fine-tune, so block-level shapes should match. But the **28 extra patch-embedding channels** mean **any LoRA touching the patch embedding cannot transfer** — it will either error or be silently skipped, depending on your loader. Nobody has tested it `[flagged — re-verify]`, so try a throwaway generation first.
 
 Need a trained identity — a character in *new* scenes rather than existing footage? Go upstream: [`character-lora-training`](../character-lora-training/) owns the craft, [`wan-2-2`](../wan-2-2/) the video-side training.
 
@@ -195,15 +195,15 @@ Need a trained identity — a character in *new* scenes rather than existing foo
 
 ## Production pipelines & mixing models
 
-SCAIL-2 is a **middle** stage — it cannot originate a shot and produces no audio, so it sits between an image model and a finishing chain:
+SCAIL-2 is a **middle** stage. It cannot originate a shot and produces no audio, so it sits between an image model and a finishing chain:
 
 > **1.** extract driving-clip frame 0 → **2.** edit the character in ([`krea-2`](../krea-2/) Identity Edit / Flux 2 Klein 9B / Qwen-Image-Edit) → **3.** **SCAIL-2** (edited frame + *original* driving video + masks) → **4.** restore/upscale → **5.** interpolate → **6.** audio and finish
 
 **Stage 4 before stage 5, always.** Interpolating first doubles the restorer's workload and bakes smear into the frames it then has to sharpen. Use a temporal restorer (SeedVR2, FlashVSR), never a per-frame image upscaler — that has no cross-frame consistency and shimmers.
 
-**Small subjects mush, so give the subject the pixels before you generate** — pre-crop a wide plate's figures into a tall clip, generate there, composite back `[community — spiderofmars]`. Worked method: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §5.
+**Small subjects mush, so give the subject the pixels before you generate.** Pre-crop a wide plate's figures into a tall clip, generate there, then composite back `[community — spiderofmars]`. Worked method: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §5.
 
-**Audio comes from elsewhere** — SCAIL-2 neither generates nor consumes it. Pair with [`ltx-2-5`](../ltx-2-5/), [`minimax-h3`](../minimax-h3/), or an NLE. Cross-model craft is [`image-production-workflows`](../image-production-workflows/).
+**Audio comes from elsewhere** — SCAIL-2 neither generates nor consumes it. Pair it with [`ltx-2-5`](../ltx-2-5/), [`minimax-h3`](../minimax-h3/), or an NLE. Cross-model craft lives in [`image-production-workflows`](../image-production-workflows/).
 
 ---
 
@@ -265,7 +265,7 @@ SCAIL-2 is a **middle** stage — it cannot originate a shot and produces no aud
 | **[`minimax-h3`](../minimax-h3/)** video-editing mode | **Re-generated**, not tracked | Prompt-anchored via `retention_analysis` | ✅ native | Approximate motion; a licence excluding US/EU/UK/KR; and an identity latch that gives out somewhere in the **5–7 s** band — two community reports disagree on where and how hard. [`minimax-h3`](../minimax-h3/references/prompting-guide.md) owns that claim and carries both reports plus the reason the 5 s figure may be a harness bug |
 | **Bernini-R** (ByteDance — announced, not covered by this suite) | Reference-guided video editing | Reference image(s) + prompt | None | Far more resource-hungry; outfit swap reportedly works, face swap reportedly does not `[community — single report; re-verify]` |
 
-**Bernini-R is a sibling in function, not lineage** — ByteDance's, on Wan **2.2** (*"Wan2.2 base — Wan-AI/Wan2.2-T2V-A14B-Diffusers"*), Apache 2.0 `[official — ByteDance/Bernini-R model card]`.
+**Bernini-R is a sibling in function, not lineage.** It is ByteDance's, built on Wan **2.2** (*"Wan2.2 base — Wan-AI/Wan2.2-T2V-A14B-Diffusers"*), Apache 2.0 `[official — ByteDance/Bernini-R model card]`.
 
 ---
 
@@ -278,15 +278,15 @@ SCAIL-2 is a **middle** stage — it cannot originate a shot and produces no aud
 | **Code** — `zai-org/SCAIL-2`, both branches | **Apache License 2.0** | Three independent confirmations: GitHub API `license.spdx_id`, the `LICENSE` file's literal Apache 2.0 text, and the README's own License section |
 | **Weights** — `zai-org/SCAIL-2` on Hugging Face | **MIT** | Two: the model card's YAML frontmatter (`license: mit`) and the HF API `cardData` |
 
-Both permit commercial use, so this is not the trap a non-commercial or territorial clause would be — but they are **different texts with different notice obligations**, so a product shipping both artefacts carries both.
+Both permit commercial use, so this is not the trap a non-commercial or territorial clause would be. But they are **different texts with different notice obligations**, so a product shipping both artefacts carries both.
 
-**The genuine ambiguity is upstream.** The weights are a full fine-tune of `Wan2.1-14B-I2V`, yet the HF card carries **no `base_model:` field and no Wan 2.1 licence passthrough**. Risk is low — Wan 2.1 is Apache 2.0 and imposes nothing MIT would violate — but a compliance chain here is **inferred, not read**, and **why the split exists at all is unexplained** `[flagged — re-verify]`.
+**The genuine ambiguity is upstream.** The weights are a full fine-tune of `Wan2.1-14B-I2V`, yet the HF card carries **no `base_model:` field and no Wan 2.1 licence passthrough**. Risk is low — Wan 2.1 is Apache 2.0 and imposes nothing MIT would violate — but a compliance chain here is **inferred, not read**. **Why the split exists at all is unexplained** `[flagged — re-verify]`.
 
 **Vendor-admitted limitations:** a wrong mask silently changes the mode; multi-reference is unoptimised — *"video qualities may degrade even though additional information do get referenced"*; pose-driven wants 704p.
 
 **Limitations the vendor does not discuss**, all community-observed and marked at their point of use: text mush, small-subject mush, the multi-person outline/glow, Replacement mode altering backgrounds, clothing morph past ~5 s. Also **not real-time**.
 
-**Release & stability:** SCAIL-2 (arXiv 2606.10804, v3 August 2026) is new enough that everything around the weights moves weekly. The front-end **Mix Studio** is the frame-0 rule made into UI, but it is **unaudited** and an unsubstantiated telemetry accusation against it went unanswered `[flagged — re-verify]`. Do not repeat that as fact; do not recommend it uncaveated.
+**Release & stability:** SCAIL-2 (arXiv 2606.10804, v3 August 2026) is new enough that everything around the weights moves weekly. The front-end **Mix Studio** turns the frame-0 rule into UI, but it is **unaudited**, and an unsubstantiated telemetry accusation against it went unanswered `[flagged — re-verify]`. Do not repeat that as fact, and do not recommend it uncaveated.
 
 ---
 
@@ -294,21 +294,25 @@ Both permit commercial use, so this is not the trap a non-commercial or territor
 
 This skill holds two kinds of claim to two different standards, because they fail in two different ways.
 
-**Hard facts — must be exact or it breaks.** zai-org as the maker; the **three-level Wan 2.1 lineage** (full fine-tune of `Wan2.1-14B-I2V`, a modified DiT with 28 extra in-context channels plus Mode-Specific RoPE, code from the Wan 2.1 repo); the SCAIL-1 predecessor; umT5-XXL and the Wan 2.1 VAE; the four modes; **every filename in the file-layout table**; the **two-mask contract and the `replacement_mode` pairing**; `WanSCAILToVideo`, `SCAIL2ColoredMask`, `SCAIL2WanModel` and their input names; the three vendor LoRAs; the 40/5.0/3.0 and 8/1.0/1 pairs; 81 frames, the 76-frame stride, the 512×896 node defaults; and **both halves of the licence split**. **Source of truth is official** — arXiv 2606.10804v3 §4.1 (which outranks the README on lineage), both branch READMEs read raw, the `LICENSE` file, the HF card frontmatter and API `cardData`, the **PR #14373 file diff**, and `docs.comfy.org/tutorials/video/zai/scail2`. A wrong filename 404s; a misread licence is a legal problem; a mismatched `replacement_mode` yields a plausible clip doing the wrong job. **Two facts circulate wrongly**: the README's "project architecture" clause means *codebase* and attaches to SCAIL-1, not Wan 2.1; and the `480p` tag comes from the speed LoRA's filename, naming Wan 2.1's I2V variant. Repack filenames, the template and the quant landscape move weekly — **re-verify before relying on them, regardless of who said it.**
+**Hard facts — must be exact or it breaks.** These include: zai-org as the maker; the **three-level Wan 2.1 lineage** (full fine-tune of `Wan2.1-14B-I2V`, a modified DiT with 28 extra in-context channels plus Mode-Specific RoPE, code from the Wan 2.1 repo); the SCAIL-1 predecessor; umT5-XXL and the Wan 2.1 VAE; the four modes; **every filename in the file-layout table**; the **two-mask contract and the `replacement_mode` pairing**; `WanSCAILToVideo`, `SCAIL2ColoredMask`, `SCAIL2WanModel` and their input names; the three vendor LoRAs; the 40/5.0/3.0 and 8/1.0/1 pairs; 81 frames, the 76-frame stride, the 512×896 node defaults; and **both halves of the licence split**.
 
-**Craft — what actually makes a good clip.** The first-frame edit rule and its positional-hint family; zoom-crop-composite; the reverse-the-shot trick; the "SCAIL Auto Extend" sampler; the ~161-frame guardrail; every VRAM and timing figure; front-and-back reference practice. **The authoritative source here is the community** — practitioners who have run this on real shots: **blackmixture**, **nsfwVariant**, **spiderofmars**, **External_Trainer_213**, **LucidFir**, **ChairQueen**, **kayteee1995**, **DeerWoodStudios**, **develm0** — not the vendor docs, which cover none of it. Stated with confidence; ranges mean "your footage and hardware differ from the author's," not "unreliable." **The one rule is community-only and essential — exactly why it leads this skill.** This skill marks at the top of the suite's density band, and the reason is structural rather than stylistic: nine named practitioners carry craft the vendor documents nowhere, so most craft sentences need their own source.
+**Source of truth is official**: arXiv 2606.10804v3 §4.1 (which outranks the README on lineage), both branch READMEs read raw, the `LICENSE` file, the HF card frontmatter and API `cardData`, the **PR #14373 file diff**, and `docs.comfy.org/tutorials/video/zai/scail2`. A wrong filename 404s. A misread licence is a legal problem. A mismatched `replacement_mode` yields a plausible clip doing the wrong job. **Two facts circulate wrongly.** The README's "project architecture" clause means *codebase* and attaches to SCAIL-1, not Wan 2.1. The `480p` tag comes from the speed LoRA's filename, which names Wan 2.1's I2V variant. Repack filenames, the template and the quant landscape move weekly — **re-verify before relying on them, regardless of who said it.**
+
+**Craft — what actually makes a good clip.** This covers: the first-frame edit rule and its positional-hint family; zoom-crop-composite; the reverse-the-shot trick; the "SCAIL Auto Extend" sampler; the ~161-frame guardrail; every VRAM and timing figure; front-and-back reference practice.
+
+**The authoritative source here is the community** — practitioners who have run this on real shots: **blackmixture**, **nsfwVariant**, **spiderofmars**, **External_Trainer_213**, **LucidFir**, **ChairQueen**, **kayteee1995**, **DeerWoodStudios**, **develm0**. The vendor docs cover none of it. Claims here are stated with confidence. Ranges mean "your footage and hardware differ from the author's," not "unreliable." **The one rule is community-only and essential — exactly why it leads this skill.** This skill sits at the top of the suite's density band, and the reason is structural rather than stylistic: nine named practitioners carry craft the vendor documents nowhere, so most craft sentences need their own source.
 
 Held as genuinely contested or unverified:
 
-- **Do sliding context windows restore quality or degrade adherence?** Two credible practitioners report opposite results on minute-plus shots; they may be measuring different things. `[contested]`
+- **Do sliding context windows restore quality or degrade adherence?** Two credible practitioners report opposite results on minute-plus shots. They may be measuring different things. `[contested]`
 - **Dimension divisibility, 32 or 16** — README and HF card say 32, the ComfyUI docs page says 16. `[contested]`
 - **fp8 versus GGUF on 16 GB**, and an **order-of-magnitude time spread on identical hardware** (2–3 min against ~20 on the same RTX PRO 6000 class) — no settings dump either side. `[contested]`
-- **Whether general Wan 2.1 LoRAs transfer** — block-level tensors are plausible, but the 28 extra patch-embedding channels rule out any LoRA touching that layer, and nobody has tested it. Likewise the **4-step** Wan speed LoRAs against the documented 8-step path. `[flagged — re-verify]`
+- **Whether general Wan 2.1 LoRAs transfer.** Block-level tensors are plausible, but the 28 extra patch-embedding channels rule out any LoRA touching that layer, and nobody has tested it. The same question applies to the **4-step** Wan speed LoRAs against the documented 8-step path. `[flagged — re-verify]`
 - **Why the Apache-2.0 / MIT split exists**, and the HF card's **missing `base_model:` field and absent Wan 2.1 licence passthrough**. The facts are confirmed; only the reason is not. `[flagged — re-verify]`
 - **The multi-person outline/glow artefact**, never vendor-acknowledged and absent from the latest sweep; and **the 720p working ceiling** practitioners describe, which conflicts with both the 704p band and the /32 rule. `[flagged — re-verify]`
 - **Replacement mode altering backgrounds**, **Bernini-R's reported face-swap failure**, and the **Mix Studio telemetry accusation** — each raised publicly, each answered by nobody, none checked against a primary source. `[community — single report; re-verify]`
 
-**Facts dated 2026-08-22**. Fastest-moving: the ComfyUI repack filenames, the quant landscape, and the community chunking nodes — re-verify all three. The mask contract and the licence texts are the stable core.
+**Facts dated 2026-08-22**. The fastest-moving parts are the ComfyUI repack filenames, the quant landscape, and the community chunking nodes — re-verify all three. The mask contract and the licence texts are the stable core.
 
 ---
 

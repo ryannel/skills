@@ -15,7 +15,7 @@ All node settings below come from the official ComfyUI templates in `Comfy-Org/w
 
 ## 1. The two-expert graph, node by node
 
-The 14B graph is the standard one plus a **duplicated model path**. Everything from the text encoder and VAE is shared; the model path forks and rejoins at the latent.
+The 14B graph is the standard one plus a **duplicated model path**. Everything from the text encoder and VAE is shared. The model path forks and rejoins at the latent.
 
 ```
 CLIPLoader (umt5_xxl_fp8_e4m3fn_scaled, type: wan)
@@ -38,7 +38,7 @@ Load Diffusion Model (LOW  noise) ─┼─> [LoraLoaderModelOnly low ] ─> Mod
 | S2V | `WanSoundImageToVideo` | 640 × 640, 77 frames |
 | 5B TI2V | `Wan22ImageToVideoLatent` | 1280 × 704, 121 frames |
 
-`EmptyHunyuanLatentVideo` on a Wan graph looks like a mistake and isn't — ComfyUI reuses the Hunyuan video latent for Wan T2V. Don't "fix" it.
+`EmptyHunyuanLatentVideo` on a Wan graph looks like a mistake. It isn't. ComfyUI reuses the Hunyuan video latent for Wan T2V. Don't "fix" it.
 
 **The two samplers.** Both are `KSamplerAdvanced`. The widget order is `add_noise, noise_seed, control_after_generate, steps, cfg, sampler_name, scheduler, start_at_step, end_at_step, return_with_leftover_noise`.
 
@@ -51,9 +51,9 @@ Load Diffusion Model (LOW  noise) ─┼─> [LoraLoaderModelOnly low ] ─> Mod
 | steps / cfg (4-step LoRA) | 4 / 1.0 | 4 / 1.0 |
 | sampler / scheduler | `euler` / `simple` | `euler` / `simple` |
 
-`steps` is the **total schedule length** on both nodes, not a per-sampler count — the split is expressed through `start_at_step`/`end_at_step`. Setting sampler #2's `steps` to 10 because "it only does the second half" is a common and quiet mistake.
+`steps` is the **total schedule length** on both nodes, not a per-sampler count. The split is expressed through `start_at_step`/`end_at_step` instead. Setting sampler #2's `steps` to 10 because "it only does the second half" is a common and quiet mistake.
 
-**`ModelSamplingSD3` shift: 8 on the full-step path, 5 on the 4-step LoRA path.** One node per model path. The official templates change this along with the LoRA and it is easy to carry over the wrong value when switching.
+**`ModelSamplingSD3` shift: 8 on the full-step path, 5 on the 4-step LoRA path.** One node per model path. The official templates change this along with the LoRA, and it is easy to carry over the wrong value when switching.
 
 **Speed LoRAs** are `LoraLoaderModelOnly` (model-only — there is no text-encoder half), one per expert, strength 1.0 in the templates:
 
@@ -62,7 +62,7 @@ Load Diffusion Model (LOW  noise) ─┼─> [LoraLoaderModelOnly low ] ─> Mod
 
 This file covers *loading and stacking* LoRAs. **Making** one — hyperparameters, dataset construction, and the two-expert training question — is [`references/lora-training.md`](./lora-training.md).
 
-**`CreateVideo` fps: 16** for all 14B modes. This is metadata on the output container — it does not change generation, but a mismatch makes correct output play at the wrong speed and is a frequent false alarm in "my video is in slow motion" reports.
+**`CreateVideo` fps: 16** for all 14B modes. This is metadata on the output container, not something that changes generation. But a mismatch makes correct output play at the wrong speed, and that is a frequent false alarm in "my video is in slow motion" reports.
 
 ---
 
@@ -77,7 +77,7 @@ Simpler in every respect — one model, one sampler, one LoRA if any.
 - `ModelSamplingSD3` shift **8**
 - `CreateVideo` fps **24**
 
-The VAE is higher-compression (4×16×16, ×64 overall with patchification), which is why the 5B can hold 121 frames at 720p in far less memory. It is a different reconstruction character, not just a smaller model — expect a different texture feel, and do not mix its VAE with 14B latents.
+The VAE is higher-compression (4×16×16, ×64 overall with patchification), which is why the 5B can hold 121 frames at 720p in far less memory. It is a different reconstruction character, not just a smaller model. Expect a different texture feel, and do not mix its VAE with 14B latents.
 
 ---
 
@@ -91,7 +91,7 @@ Audio-driven, and **dense — a single 14B model, not an expert pair**:
 - `ModelSamplingSD3` shift **8**, `CreateVideo` fps **16**
 - VAE: `wan_2.1_vae.safetensors`
 
-Clip length follows the audio. S2V **consumes** audio for lip-sync; it does not generate any.
+Clip length follows the audio. S2V **consumes** audio for lip-sync. It does not generate any.
 
 ---
 
@@ -106,18 +106,18 @@ Clip length follows the audio. S2V **consumes** audio for lip-sync; it does not 
 **Practical guidance** `[community — re-verify, these figures move]`:
 
 - **12 GB:** 14B at **Q4_K_M** is the usual quality-per-GB sweet spot.
-- **~8 GB:** prefer **5B fp16 over 14B Q3_K**. A purpose-built dense 5B beats a 14B crushed to 3 bits — the quantisation damage at that level costs more than the parameter gap gains.
+- **~8 GB:** prefer **5B fp16 over 14B Q3_K**. A purpose-built dense 5B beats a 14B crushed to 3 bits. At that level, the quantisation damage costs more than the parameter gap gains.
 - **16–24 GB:** fp8-scaled 14B comfortably, including LoRA training at rank 32.
 
-**On rented GPUs**, [`comfyui-on-runpod`](../../comfyui-on-runpod/) owns the volume contract and cost guards. Wan-specific: the 14B needs **both expert files on the volume** — a half-populated volume fails in a way that reads like a wiring error rather than a missing file. Pull them on a CPU pod rather than a GPU one, and check your GPU exists in the volume's datacenter before planning around it.
+**On rented GPUs**, [`comfyui-on-runpod`](../../comfyui-on-runpod/) owns the volume contract and cost guards. Wan-specific: the 14B needs **both expert files on the volume**. A half-populated volume fails in a way that reads like a wiring error rather than a missing file. Pull them on a CPU pod rather than a GPU one, and check your GPU exists in the volume's datacenter before planning around it.
 
-Two experts means **two model loads**. ComfyUI swaps them across the sampler boundary rather than holding both resident, so peak VRAM tracks one expert, but the swap costs wall-clock on every generation. On constrained cards this swap, not the compute, is often what makes 14B feel slow. Block-swap and offload settings in the wrapper node packs trade more of this if you need it.
+Two experts means **two model loads**. ComfyUI swaps them across the sampler boundary rather than holding both resident, so peak VRAM tracks one expert. But the swap costs wall-clock on every generation. On constrained cards this swap, not the compute, is often what makes 14B feel slow. Block-swap and offload settings in the wrapper node packs trade more of this if you need it.
 
 ---
 
 ## 4a. Running a community merge
 
-Merges are a large part of how Wan 2.2 is actually run — the licence permits them, and the ones worth using are tuned for something the base checkpoint is weak at (low-step speed, motion smoothness, a concept the base has no prior for). The cost is that **a merge's settings are its own**, and none of the ways of getting them wrong throws an error. SKILL.md § *Community merges, and why their settings contradict the templates* carries the three traps; this section carries one merge's full working configuration, verbatim from its published workflow, as a worked example of what a merge's numbers look like when they diverge `[community — RedMimicStudios]`.
+Merges are a large part of how Wan 2.2 is actually run. The licence permits them. The ones worth using are tuned for something the base checkpoint is weak at (low-step speed, motion smoothness, a concept the base has no prior for). The cost is that **a merge's settings are its own**, and none of the ways of getting them wrong throws an error. SKILL.md § *Community merges, and why their settings contradict the templates* carries the three traps. This section carries one merge's full working configuration, verbatim from its published workflow, as a worked example of what a merge's numbers look like when they diverge `[community — RedMimicStudios]`.
 
 ```
 model    Wan 2.2 I2V, 10-step NSFW fp8 merge
@@ -130,13 +130,13 @@ output   1008×576, 49 frames, 16 fps
 cost     ~41 min on a 3060 12 GB — fp8, 13.3 GB per stage, heavy offload
 ```
 
-Two of those — the asymmetric CFG split and the `uni_pc` choice — **were in the workflow JSON and not in its description text**. That is the general lesson for merges: the description is marketing copy for the merge, the JSON is the configuration it was validated at. Load the JSON and read `widgets_values` the same way this file reads the official templates.
+Two of those settings — the asymmetric CFG split and the `uni_pc` choice — were in the workflow JSON and not in its description text. That is the general lesson for merges: the description is marketing copy for the merge, and the JSON is the configuration it was validated at. Load the JSON and read `widgets_values` the same way this file reads the official templates.
 
-Note the resolution and length: 1008×576 is neither of Wan's supported bands and 49 frames is not 81. A merge tuned at a specific resolution and clip length is tuned at *that* resolution and clip length; the base model's 81 @ 16 fps and 480p/720p bands do not carry over automatically.
+Note the resolution and length: 1008×576 is neither of Wan's supported bands, and 49 frames is not 81. A merge tuned at a specific resolution and clip length is tuned at *that* resolution and clip length. The base model's 81 @ 16 fps and 480p/720p bands do not carry over automatically.
 
 ### Choosing between merges by measurement
 
-The same study picked between three checkpoints on **edge density, first frame against last** — a proxy for how much high-frequency detail the clip loses as it plays. It is cheap to compute (an edge filter over frame 0 and frame N, compare the mean), it needs no reference, and unlike watching the clip it distinguishes the two ways a video degrades:
+The same study picked between three checkpoints on **edge density, first frame against last** — a proxy for how much high-frequency detail the clip loses as it plays. It is cheap to compute: an edge filter over frame 0 and frame N, compare the mean. It needs no reference, and unlike watching the clip, it distinguishes the two ways a video degrades:
 
 | Checkpoint | Edge density, first → last | Result |
 |---|---|---|
@@ -144,11 +144,11 @@ The same study picked between three checkpoints on **edge density, first frame a
 | a "smooth motion" merge | **−27.3%** | anatomy fine, linework dissolved |
 | Wan 2.2 I2V 10-step NSFW fp8 merge | **−3.2%** | both fine |
 
-The two failure modes are independent, which is the point of measuring rather than judging: the Q4_K_M run *held* most of its detail and still broke anatomy, and the smooth merge got anatomy right while dissolving the linework. A single "does it look good" verdict collapses them; the number separates them.
+The two failure modes are independent, which is the point of measuring rather than judging. The Q4_K_M run *held* most of its detail and still broke anatomy. The smooth merge got anatomy right while dissolving the linework. A single "does it look good" verdict collapses them; the number separates them.
 
-**It also rules out repairs.** ESRGAN restoration on the −27.3% output moved it to **−28.2%** — i.e. nowhere. That is the measurable difference between *blurred* detail, which a restorer can sharpen, and *absent* detail, which it cannot invent: by the late frames there was nothing left to recover. Ruling out a post-process fix by measurement costs one number; ruling it out by trying it costs a restore pass per candidate.
+**It also rules out repairs.** ESRGAN restoration on the −27.3% output moved it to **−28.2%** — in other words, nowhere. That is the measurable difference between *blurred* detail, which a restorer can sharpen, and *absent* detail, which it cannot invent. By the late frames there was nothing left to recover. Ruling out a post-process fix by measurement costs one number. Ruling it out by trying it costs a restore pass per candidate.
 
-The general version of this lesson — that seed-dominated failure means the base model, not the settings — is in SKILL.md § *When nothing you change moves the result*, and the suite-level write-up is in [`generative-media-atlas`](../../generative-media-atlas/references/adult-work.md).
+The general version of this lesson — that seed-dominated failure means the base model, not the settings — is in SKILL.md § *When nothing you change moves the result*. The suite-level write-up is in [`generative-media-atlas`](../../generative-media-atlas/references/adult-work.md).
 
 ---
 
@@ -163,7 +163,7 @@ Optional stages are bypassable — preview cheaply, pay for heavy passes once th
 5. **Interpolate** — RIFE to 30/60 fps.
 6. *Optional:* colour match across segments, grade, audio.
 
-**Stages 4 and 5 are order-sensitive: restore before you interpolate.** [`image-production-workflows`](../../image-production-workflows/) owns that rule and why it holds, along with the rest of the cross-model handoff craft — denoise bands, decoding to pixels between VAE families, tiled upscale. Wan's stake in it is stage 5 specifically: at a native 16 fps the interpolation rung is doing more work here than after any other model in the suite, so it is the stage worth getting right rather than the one to skip.
+**Stages 4 and 5 are order-sensitive: restore before you interpolate.** [`image-production-workflows`](../../image-production-workflows/) owns that rule and why it holds, along with the rest of the cross-model handoff craft — denoise bands, decoding to pixels between VAE families, tiled upscale. Wan's stake in it is stage 5 specifically. At a native 16 fps, the interpolation rung is doing more work here than after any other model in the suite, so it is the stage worth getting right rather than the one to skip.
 
 ---
 
@@ -171,13 +171,13 @@ Optional stages are bypassable — preview cheaply, pay for heavy passes once th
 
 The 14B is built around ~5 s (81 frames @ 16 fps). Longer output is a stitching problem.
 
-The failure is **accumulation**: each segment conditioned on the previous segment's final frame inherits that frame's degradation, and the error compounds — colour drifts, detail softens, identity slides. Three mitigations, in order of reliability:
+The failure is **accumulation**: each segment is conditioned on the previous segment's final frame, so it inherits that frame's degradation, and the error compounds — colour drifts, detail softens, identity slides. Three mitigations, in order of reliability:
 
 1. **Re-anchor on clean keyframes.** Generate stills for each beat with an image model and run each segment as its own I2V from a clean frame. Drift resets every segment.
 2. **FLF2V to a known end state.** Give each segment both endpoints so it cannot wander.
 3. **Overlap and blend.** Generate overlapping frames at the joins and cross-dissolve. Hides discontinuity; does not stop drift.
 
-Colour-match segments in post regardless — even well-anchored segments drift slightly, and a global match is cheap.
+Colour-match segments in post regardless. Even well-anchored segments drift slightly, and a global match is cheap.
 
 ---
 
@@ -190,4 +190,4 @@ from diffusers import WanPipeline, WanImageToVideoPipeline
 # TI2V-5B equivalent also integrated
 ```
 
-T2V, I2V and TI2V are integrated `[official-via-docs]`. The MoE boundary is handled inside the pipeline rather than by wiring two samplers yourself — convenient, but it also means the per-expert control you get in ComfyUI (different LoRA strengths, CFG on high only) is not directly exposed. **For the slow-motion fixes in SKILL.md, ComfyUI is the surface that lets you apply them.** Check the current pipeline signature for the parameter that exposes the expert boundary before assuming it is tunable.
+T2V, I2V and TI2V are integrated `[official-via-docs]`. The MoE boundary is handled inside the pipeline rather than by wiring two samplers yourself. That's convenient, but it also means the per-expert control you get in ComfyUI (different LoRA strengths, CFG on high only) is not directly exposed. **For the slow-motion fixes in SKILL.md, ComfyUI is the surface that lets you apply them.** Check the current pipeline signature for the parameter that exposes the expert boundary before assuming it is tunable.

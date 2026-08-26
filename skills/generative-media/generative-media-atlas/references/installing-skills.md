@@ -1,8 +1,7 @@
 # Installing skills — the CLI, the bundles, and why nothing installs transitively
 
 This file owns **getting skills onto a machine**. It covers the `skills` CLI as this suite uses it,
-the per-playbook bundles, and the troubleshooting for the one failure mode that is structural rather
-than a bug.
+the per-playbook bundles, and troubleshooting for the one failure mode that is structural, not a bug.
 
 ## Contents
 
@@ -20,19 +19,19 @@ than a bug.
 ## 1. The structural fact: no dependencies
 
 **A `SKILL.md` cannot declare that it needs another skill, and the CLI resolves nothing
-transitively.** Required frontmatter is `name` and `description`; the only meaningful optional field
+transitively.** Required frontmatter is `name` and `description`. The only meaningful optional field
 is `metadata.internal`. There is no dependency field, no lockfile of dependencies, and no
 install-time resolution.
 
-Two consequences that shape how this suite is written:
+Two consequences shape how this suite is written:
 
 - **Cross-skill links resolve only when both skills are installed.** Every link in this repo is
-  relative (`../sibling/`), and installing flattens the domain folder away, so `../z-image/` resolves
-  when `z-image` is installed and dangles otherwise. **A dangling link is not a bug — it is the
+  relative (`../sibling/`), and installing flattens the domain folder away. So `../z-image/` resolves
+  when `z-image` is installed, and dangles otherwise. **A dangling link is not a bug. It is the
   install command you have not run.**
 - **[`generative-media-atlas`](../) carries what it would otherwise route**, because it is the one
   skill designed to be installed alone. That is a deliberate deviation from how the rest of the
-  suite is written, and the reason it is longer than its cross-cutting siblings.
+  suite is written, and it is why this skill runs longer than its cross-cutting siblings.
 
 ---
 
@@ -56,12 +55,12 @@ npx skills add ryannel/skills --skill z-image -g -a claude-code -y
 ```
 
 **Ask the user before installing** — especially with `-g`, or into a repository they did not ask you
-to modify. Installing writes files into their agent directories; it is a change to their machine,
+to modify. Installing writes files into their agent directories. It is a change to their machine,
 not a lookup.
 
 Sources resolve several ways: GitHub shorthand (`ryannel/skills`), a full GitHub/GitLab/git URL, a
 direct tree URL to one skill, a local path, or a `.zip`/`.tar` download. Private repositories use
-whatever Git authentication is already configured — Git credential helper first, then `gh repo
+whatever Git authentication is already configured: the Git credential helper first, then `gh repo
 clone`, then SSH.
 
 ---
@@ -94,11 +93,11 @@ From [`playbooks.md`](playbooks.md). Add `-g` for global, `-a claude-code` to ta
 | `-y, --yes` | Skip confirmation prompts |
 | `--all` | Every skill to every agent, no prompts |
 
-**Symlink is the default and the right one** for this suite: one canonical copy per skill, so
+**Symlink is the default, and it is the right one** for this suite: one canonical copy per skill, so
 `npx skills update` updates every agent at once. Use `--copy` only where symlinks are not supported.
 
-**Install by skill name, not by path.** Names are stable across repository reorganisation; this repo
-groups skills under `skills/generative-media/`, and that grouping is invisible to the installed
+**Install by skill name, not by path.** Names stay stable across repository reorganisation. This repo
+groups skills under `skills/generative-media/`, but that grouping is invisible to the installed
 result.
 
 ---
@@ -111,7 +110,7 @@ npx skills use ryannel/skills --skill z-image --agent claude-code
 ```
 
 `skills use` resolves the source the same way `add` does, writes the skill to a temporary directory,
-and prints the generated prompt to stdout — or starts an agent with it when `--agent` is given.
+and prints the generated prompt to stdout, or starts an agent with it when `--agent` is given.
 Useful for a one-off consultation, and for checking whether a skill is what you want before it lands
 in a repository.
 
@@ -127,22 +126,22 @@ npx skills list                         # what is installed, where
 ```
 
 **Run it against this suite deliberately.** Its subjects move weekly, and every skill here carries a
-`Facts dated …` line in its two-bar section — compare that against your install date rather than
+`Facts dated …` line in its two-bar section. Compare that against your install date instead of
 assuming the copy on disk is current.
 
 ---
 
 ## 7. The Claude Code plugin route
 
-An alternative to per-skill installation, which installs the whole domain as one plugin:
+This is an alternative to per-skill installation: it installs the whole domain as one plugin.
 
 ```bash
 /plugin marketplace add ryannel/skills
 /plugin install generative-media-skills@ryannel-skills
 ```
 
-The CLI also reads `.claude-plugin/marketplace.json` when discovering skills in a repository, so
-skills declared there are found at their declared depth rather than by the bounded depth-3 walk.
+The CLI also reads `.claude-plugin/marketplace.json` when discovering skills in a repository. Skills
+declared there are found at their declared depth, rather than by the bounded depth-3 walk.
 
 ---
 

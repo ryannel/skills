@@ -1,6 +1,6 @@
 # Krea 2 — Prompting guide
 
-Everything here follows from two facts: the encoder is **Qwen3-VL 4B Instruct** (an instruction-following VLM that parses clause structure — tapped at twelve decoder layers, so both coarse gist and fine wording reach the DiT), and Krea's design thesis that **style is a control surface, not a prompt word**. Sources: the official `docs/prompting.md`, template JSON and tech report `[official — docs/prompting.md, template JSON, tech report]`, and named community authors [attributed inline]. Verified 2026-07-07.
+Everything here follows from two facts. The encoder is **Qwen3-VL 4B Instruct**, an instruction-following VLM that parses clause structure. It is tapped at twelve decoder layers, so both coarse gist and fine wording reach the DiT. And Krea's design thesis is that **style is a control surface, not a prompt word**. Sources: the official `docs/prompting.md`, template JSON and tech report `[official — docs/prompting.md, template JSON, tech report]`, and named community authors [attributed inline]. Verified 2026-07-07.
 
 ## Contents
 1. [The two registers that work](#1-the-two-registers-that-work)
@@ -25,15 +25,15 @@ The official example set `[official — docs/prompting.md, all generated at 2K w
 
 > *high-fashion editorial portrait of a young East Asian woman, short choppy platinum blonde bob with heavy bangs, looking over her bare shoulder to the right, lips playfully pursed, wearing a structured black top with an architectural protruding bust detail…, solid striking crimson red background, soft directional studio lighting, cinematic color palette, medium close-up shot*
 
-A VLM parses either. What it does **not** reward is incantations: `masterpiece, 8k, best quality, ultra-detailed` are near-zero-signal to an instruction-tuned encoder. The test for every fragment: *could a human art director act on it?* "blocky painterly brushstrokes" passes; "masterpiece" doesn't.
+A VLM parses either register. What it does **not** reward is incantations: `masterpiece, 8k, best quality, ultra-detailed` carries near-zero signal for an instruction-tuned encoder. Test every fragment this way: *could a human art director act on it?* "blocky painterly brushstrokes" passes; "masterpiece" doesn't.
 
-Also official: minimal prompts work (`immense rocket launch exhaust as seen from extremely close up` is an official example), but "long detailed prompts yield best results." Length ceiling: **512 tokens** (`max_sequence_length`, padded/truncated); front-load the subject.
+Also official: minimal prompts work — `immense rocket launch exhaust as seen from extremely close up` is an official example. But "long detailed prompts yield best results." The length ceiling is **512 tokens** (`max_sequence_length`, padded/truncated), so front-load the subject.
 
 ## 2. Prompt anatomy
 
-A reliable assembly order (synthesised from the official examples' consistent internal structure):
+Here is a reliable assembly order, synthesised from the official examples' consistent internal structure:
 
-1. **Medium + shot** — "macro photograph", "stylized digital painting", "1990s vintage anime style cel animation", "high-fashion editorial portrait, medium close-up". Naming the medium *first* matters more here than on most models because of the render-bias (see §3).
+1. **Medium + shot** — "macro photograph", "stylized digital painting", "1990s vintage anime style cel animation", "high-fashion editorial portrait, medium close-up". Naming the medium *first* matters more here than on most models, because of the render-bias (see §3).
 2. **Subject** — concrete, specific, with material detail ("soft textured fur, glossy black eyes, fine whiskers").
 3. **Action / pose / gaze** — "looking over her bare shoulder to the right, lips playfully pursed".
 4. **Environment & spatial layout** — official examples are unusually explicit about placement: "A dark, jagged rock rests in the lower left foreground near a pale grey shoreline."
@@ -41,27 +41,27 @@ A reliable assembly order (synthesised from the official examples' consistent in
 6. **Palette & finish** — "muted earthy color palette, sepia-toned warmth", "vibrant warm color palette, sharp graphic shadows".
 7. **Optics (photo work)** — "macro lens, shallow depth of field, distinct film grain texture".
 
-One medium, one mood, one lighting scheme per prompt — the encoder resolves contradictions as uncanny blends, not averages (same failure as every LLM-encoder model).
+Use one medium, one mood, and one lighting scheme per prompt. The encoder resolves contradictions as uncanny blends, not averages — the same failure every LLM-encoder model has.
 
-**Negatives:** on Turbo there is no negative channel (guidance off; the template zeroes the negative branch). Phrase constraints positively: not "no clutter" but "clean, minimal background". On Raw at cfg ~3.5 (or Turbo at the community cfg-2.0 workaround), a short negative string works normally.
+**Negatives:** on Turbo there is no negative channel (guidance is off, and the template zeroes the negative branch). Phrase constraints positively: not "no clutter" but "clean, minimal background". On Raw at cfg ~3.5 (or Turbo at the community cfg-2.0 workaround), a short negative string works normally.
 
 ## 3. Realism & texture vocabulary
 
-Krea 2's aesthetic prior leans soft, and it has a mild **3D-render/digital-art bias** — an underspecified portrait prompt will happily come back as a render `[community — nsfwVariant, Civitai]`. For photographs:
+Krea 2's aesthetic prior leans soft, and it has a mild **3D-render/digital-art bias**: an underspecified portrait prompt will happily come back as a render `[community — nsfwVariant, Civitai]`. For photographs:
 
-- **Declare the photograph early and concretely.** Medium first ("editorial photograph", "35mm street photograph"), then stack the usual LLM-encoder camera anchors: real body ("Canon EOS R5", "Hasselblad X2D"), lens + aperture ("85mm f/1.4"), film stock or grain ("Kodak Portra 400", "distinct film grain texture" — the last is verbatim from an official example).
-- **Anchor texture explicitly** — the working anti-airbrush string is "natural skin texture, visible pores, subtle skin imperfections" `[community — amida168, kombitz.com]`. Official examples do the same for non-skin surfaces ("grainy paper texture", "tactile quality", "smooth vinyl texture") — the model responds well to named textures generally.
-- **Know what prompting can't fix.** Residual softness after all of the above is the VAE's rendering character — the fix is the Wan 2.1 VAE swap or a detailer pass, not more words (`setup-and-workflows.md §5`). Muted facial expressions are the safety-tuning tax — bypass LoRA / Rebalance nodes / a Z-Image face pass, not adjectives (`SKILL.md`, *two taxes*).
+- **Declare the photograph early and concretely.** Name the medium first ("editorial photograph", "35mm street photograph"). Then stack the usual LLM-encoder camera anchors: real body ("Canon EOS R5", "Hasselblad X2D"), lens + aperture ("85mm f/1.4"), film stock or grain ("Kodak Portra 400", "distinct film grain texture" — the last is verbatim from an official example).
+- **Anchor texture explicitly.** The working anti-airbrush string is "natural skin texture, visible pores, subtle skin imperfections" `[community — amida168, kombitz.com]`. Official examples do the same for non-skin surfaces ("grainy paper texture", "tactile quality", "smooth vinyl texture"). The model responds well to named textures generally.
+- **Know what prompting can't fix.** Residual softness after all of the above comes from the VAE's rendering character. The fix is the Wan 2.1 VAE swap or a detailer pass, not more words (`setup-and-workflows.md §5`). Muted facial expressions are the safety-tuning tax: bypass a LoRA, use Rebalance nodes, or add a Z-Image face pass — not adjectives (`SKILL.md`, *two taxes*).
 
-Prompt-only expression coaxing that helps at the margin: name the *physical* expression, not the emotion — "eyes crinkled, mouth open mid-laugh, head thrown slightly back" beats "laughing joyfully" — but expect the ceiling to be lower than on Z-Image — one named tester's summary of the untooled base model is that "only neutral and smile remain" `[community — liutyi]`.
+Prompt-only expression coaxing helps at the margin. Name the *physical* expression, not the emotion — "eyes crinkled, mouth open mid-laugh, head thrown slightly back" beats "laughing joyfully" — but expect the ceiling to be lower than on Z-Image. One named tester's summary of the untooled base model is that "only neutral and smile remain" `[community — liutyi]`.
 
 ## 4. Text rendering
 
-Official guidance: **wrap the words to render in quotes** — `a neon sign reading "OPEN LATE"`. Reality check: text rendering is a genuine weakness — "some text appears but not reliably" `[community — liutyi]`. Keep it short (a few words), straight double quotes, generate several candidates and select. For typography-led work (posters, logos, dense lettering), route to [`ideogram-4`](../../ideogram-4/) — that's what it's for.
+Official guidance: **wrap the words to render in quotes** — `a neon sign reading "OPEN LATE"`. Reality check: text rendering is a genuine weakness. "Some text appears but not reliably" `[community — liutyi]`. Keep it short (a few words), use straight double quotes, and generate several candidates before selecting. For typography-led work (posters, logos, dense lettering), route to [`ideogram-4`](../../ideogram-4/) — that's what it's for.
 
 ## 5. Style: LoRAs, references, moodboards, creativity
 
-**Local: the official style-LoRA line.** Nine style LoRAs ship in `Comfy-Org/Krea-2/loras` (0.47 GB each, `LoraLoaderModelOnly`). The trigger is a **natural descriptive phrase appended to the prompt** — exactly what an LLM encoder wants (a describable concept, not a rare token). The official template auto-appends it via a `CustomCombo` + `StringConcatenate`. Verbatim from the template's trigger table:
+**Local: the official style-LoRA line.** Nine style LoRAs ship in `Comfy-Org/Krea-2/loras` (0.47 GB each, `LoraLoaderModelOnly`). The trigger is a **natural descriptive phrase appended to the prompt** — exactly what an LLM encoder wants: a describable concept, not a rare token. The official template auto-appends it via a `CustomCombo` + `StringConcatenate`. This is verbatim from the template's trigger table:
 
 | LoRA file | Trigger phrase | Strength |
 |---|---|---|
@@ -75,17 +75,17 @@ Official guidance: **wrap the words to render in quotes** — `a neon sign readi
 | `krea2_sunsetblur` | `ethereal motion blur style` | 1.0 |
 | `krea2_vintagetarot` | `vintage tarot style` | 1.0 |
 
-(The docs.comfy.org tutorial lists a few additional LoRAs at 0.8 — `krea2_coolblue`, `krea2_plasmoid`, `krea2_warmpastel`; the loader default in the template is 0.8. Treat 0.8–1.0 as the working band and the per-LoRA table value as the starting point.) More styles in Krea's HF collection (`krea/krea-2-loras`). Trained-LoRA triggers follow the same doctrine: fold a describable phrase into the caption/prompt; don't invent `ohwx`-style rare tokens (encoder-class rule — see the SKILL.md one-rule section).
+(The docs.comfy.org tutorial lists a few additional LoRAs at 0.8 — `krea2_coolblue`, `krea2_plasmoid`, `krea2_warmpastel` — and the loader default in the template is 0.8. Treat 0.8–1.0 as the working band, and the per-LoRA table value as the starting point.) More styles live in Krea's HF collection (`krea/krea-2-loras`). Trained-LoRA triggers follow the same doctrine: fold a describable phrase into the caption/prompt, and don't invent `ohwx`-style rare tokens (encoder-class rule — see the SKILL.md one-rule section).
 
-**Hosted: style references and moodboards.** The web app takes up to **4 style reference images, each with its own strength slider**; the API takes up to 10 (`image_style_references`, with per-ref strength) plus one moodboard `[official — user guide / API docs]`. The tech report claims "smooth semantic mixing of multiple styles" with continuous strength — this is the flagship feature and the practical replacement for style words. Moodboards are "the most precise way to set a visual direction".
+**Hosted: style references and moodboards.** The web app takes up to **4 style reference images, each with its own strength slider**. The API takes up to 10 (`image_style_references`, with per-ref strength) plus one moodboard `[official — user guide / API docs]`. The tech report claims "smooth semantic mixing of multiple styles" with continuous strength. This is the flagship feature, and the practical replacement for style words. Moodboards are "the most precise way to set a visual direction".
 
-**Creativity dial (hosted only):** `raw` renders "only explicit descriptions without expansion" — the literal mode, use it when your prompt is complete; `high` takes "meaningful creative liberty" — use it for exploration from thin prompts `[official — user guide]`. Default is `medium`. No local equivalent exists; locally the analogue is enhancer-off (literal) vs enhancer-on (liberal).
+**Creativity dial (hosted only):** `raw` renders "only explicit descriptions without expansion" — this is the literal mode, so use it when your prompt is complete. `high` takes "meaningful creative liberty" — use it for exploration from thin prompts `[official — user guide]`. Default is `medium`. There is no local equivalent; locally the analogue is enhancer-off (literal) versus enhancer-on (liberal).
 
 ## 6. The prompt expander
 
-Krea trained a dedicated expander LLM (SFT + RL with image-level and prompt-level rewards, plus a diversity reward) `[official — tech report]`. It surfaces as: the ComfyUI template's `TextGenerate` subgraph (**on by default**), fal's `enable_prompt_expansion`, and the hosted creativity dial. The template's system prompt is readable in the template JSON and is genuinely well-designed (faithfulness-first, groups subjects with their attributes, wraps requested text in quotes, respects a stated medium) — and Krea publishes a copy as `docs/expansion.txt` for use with any LLM.
+Krea trained a dedicated expander LLM (SFT + RL with image-level and prompt-level rewards, plus a diversity reward) `[official — tech report]`. It surfaces in three places: the ComfyUI template's `TextGenerate` subgraph (**on by default**), fal's `enable_prompt_expansion`, and the hosted creativity dial. The template's system prompt is readable in the template JSON and is genuinely well designed. It is faithfulness-first: it groups subjects with their attributes, wraps requested text in quotes, and respects a stated medium. Krea also publishes a copy as `docs/expansion.txt` for use with any LLM.
 
-Use it when your prompt is one line and you want the model's idea of a good expansion. Turn it off when: you wrote a full prompt already (rule 7 of its own system prompt says it should only lightly polish, but you lose determinism); you're iterating on exact wording; or it *refuses your benign prompt* — the shipped enhancer moralises (documented: "photo of a dog on a kitchen table" → ethics refusal) `[community — 808charlie, Comfy-Org/ComfyUI#14631]`. Community workflows replace it with an abliterated Qwen3-VL GGUF `[community — lonecatone23]` or with OpenAI/Gemini API nodes (the template explicitly supports the swap).
+Use it when your prompt is one line and you want the model's idea of a good expansion. Turn it off in three cases: you already wrote a full prompt (rule 7 of its own system prompt says it should only lightly polish, but you still lose determinism); you're iterating on exact wording; or it *refuses your benign prompt*. The shipped enhancer moralises. Documented case: "photo of a dog on a kitchen table" triggers an ethics refusal `[community — 808charlie, Comfy-Org/ComfyUI#14631]`. Community workflows replace it with an abliterated Qwen3-VL GGUF `[community — lonecatone23]` or with OpenAI/Gemini API nodes, since the template explicitly supports the swap.
 
 ## 7. Common mistakes
 
