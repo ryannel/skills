@@ -1,7 +1,29 @@
 ---
 name: ltx-2-5
 description: >
-  Authoritative guide for LTX-2.5 and LTX-2.3 (Lightricks), the open-weights 22B audio-video diffusion transformer that generates picture and synchronised 24 kHz stereo sound in a single joint pass — in ComfyUI, the `ltx-pipelines` CLI, or the hosted LTX API. **Read the licence block first: the LTX-2.x Community License is free commercially only below $10,000,000 annual revenue aggregated across affiliates; Attachment A ¶20 bars any product competing with Lightricks' commercial products or services — photo and design apps included, not only video — at any revenue level; every derivative including a LoRA inherits the licence and carries the revenue obligation to whoever receives it; and the incorporated Acceptable Use Policy prohibits sexually explicit content universally, local weights included.** Use this whenever the user touches LTX in any way, even obliquely: choosing between 2.5 and 2.3 and actually setting either up (different checkpoint layouts, different text encoders, an unsettled question over which licence text governs 2.3, and the LoRA and IC-LoRA ecosystem still on 2.3 — 168 Civitai LoRAs against 3), installing it (the split per-component files, the custom Gemma 4 12B a stock Gemma cannot substitute for, the 66 GiB download, VRAM), writing prompts, **writing a multishot prompt** — the headline capability, which is a prose technique with no node and no flag behind it — hitting the `8k+1` frame lattice or the multiple-of-32 dimension rule, picking a legal fps, running the distilled pipeline at CFG 1 where the shipped negative prompt does nothing, choosing between the conv and diffusion video decoders (the usual first-run OOM is at *decode*), Diffusion Fidelity Rendering, IC-LoRAs, training a LoRA with `ltx-trainer`, holding a character across cuts, generating or freezing audio, using LTX as the finishing upscaler on [`minimax-h3`](../minimax-h3/) output, debugging smearing, skipped motion beats, face drift, silent-clip failures or dropped tail frames, or comparing it against Wan 2.2 and MiniMax H3. Also covers who should reach for something else instead.
+  Authoritative guide for LTX-2.5 and LTX-2.3 (Lightricks), the open-weights 22B audio-video diffusion
+  transformer that generates picture and synchronised 24 kHz stereo sound in a single joint pass — in ComfyUI,
+  the `ltx-pipelines` CLI, or the hosted LTX API. **Read the licence block first: the LTX-2.x Community
+  License is free commercially only below $10,000,000 annual revenue aggregated across affiliates; Attachment
+  A ¶20 bars any product competing with Lightricks' commercial products or services — photo and design apps
+  included, not only video — at any revenue level; every derivative including a LoRA inherits the licence and
+  carries the revenue obligation to whoever receives it; and the incorporated Acceptable Use Policy prohibits
+  sexually explicit content universally, local weights included.** Use this whenever the user touches LTX in
+  any way, even obliquely: choosing between 2.5 and 2.3 and actually setting either up (different checkpoint
+  layouts, different text encoders, an unsettled question over which licence text governs 2.3, and the LoRA
+  and IC-LoRA ecosystem still on 2.3 — 168 Civitai LoRAs against 3), installing it (the split per-component
+  files, the custom Gemma 4 12B a stock Gemma cannot substitute for, the 66 GiB download, VRAM), writing
+  prompts, **writing a multishot prompt** — the headline capability, which is a prose technique with no node
+  and no flag behind it — hitting the `8k+1` frame lattice or the multiple-of-32 dimension rule, picking a
+  legal fps, running the distilled pipeline at CFG 1 where the shipped negative prompt does nothing, choosing
+  between the conv and diffusion video decoders (the usual first-run OOM is at *decode*), Diffusion Fidelity
+  Rendering, IC-LoRAs, training a LoRA with `ltx-trainer`, holding a character across cuts, generating or
+  freezing audio, using LTX as the finishing upscaler on [`minimax-h3`](../minimax-h3/) output, debugging
+  smearing, skipped motion beats, face drift, silent-clip failures or dropped tail frames, or comparing it
+  against Wan 2.2 and MiniMax H3. Also covers who should reach for something else instead. Choosing between
+  models, comparing them, or working out which skills and install commands a job needs is
+  [`generative-media-atlas`](../generative-media-atlas/)'s job — start there when the model is not already
+  settled.
 ---
 
 # LTX-2.5

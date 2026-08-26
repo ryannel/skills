@@ -1,7 +1,28 @@
 ---
 name: sdxl
 description: >
-  Authoritative guide for Stable Diffusion XL (SDXL 1.0, Stability AI) and its ecosystem — base + refiner, the distilled fast variants (Turbo, Lightning, LCM, Hyper-SDXL), and the community finetunes (Juggernaut, RealVisXL, DreamShaper, Pony, Illustrious/NoobAI) — in ComfyUI or the diffusers API. Use this whenever the user touches SDXL in any way, even obliquely: choosing a checkpoint or fast variant (base vs Turbo vs Lightning vs LCM vs Hyper, or which photoreal/anime finetune), installing or setting it up in ComfyUI (single-checkpoint loader, the fp16-fix VAE, file layout, base+refiner ensemble graph), writing or fixing prompts (SDXL is a dual-CLIP 77-token model — weighted comma-separated keyword phrases, not LLM sentences and not generic "masterpiece 8k"; matching the prompt dialect to the checkpoint; the text_g/text_l split; negative prompts and CFG), getting photoreal results (use a photoreal finetune, then stack camera body + film stock + lens + lighting vocabulary), choosing steps/CFG/sampler/scheduler/resolution per variant, running ControlNet / IP-Adapter / LoRA, training a LoRA (kohya_ss / OneTrainer) including style LoRAs (the Illustrious recipe, dataset diversity, XY-grid evaluation), creating a consistent character (InstantID vs IP-Adapter FaceID vs HyperLoRA vs a trained character LoRA, the detailer LoRA swap, ADetailer [SEP] multi-character routing, block-weighted LoRA to stop style bleed), building multi-stage production pipelines (hires-fix, tiled upscale, detailers) or using SDXL as the controllable front-end / texture back-end in mixed-model workflows, or debugging artefacts (fried colours, cut-off heads, plastic skin, mangled hands, unreadable text). It also covers the licence picture (OpenRAIL++-M is commercially clean; Turbo's licence is contested) and when to leave the SDXL family entirely — including Anima, the anime-native base that speaks the same booru dialect but whose *weights* are non-commercial, even though its outputs are not. Use this for any question about SDXL in any context.
+  Authoritative guide for Stable Diffusion XL (SDXL 1.0, Stability AI) and its ecosystem — base + refiner, the
+  distilled fast variants (Turbo, Lightning, LCM, Hyper-SDXL), and the community finetunes (Juggernaut,
+  RealVisXL, DreamShaper, Pony, Illustrious/NoobAI) — in ComfyUI or the diffusers API. Use this whenever the
+  user touches SDXL in any way, even obliquely: choosing a checkpoint or fast variant (base vs Turbo vs
+  Lightning vs LCM vs Hyper, or which photoreal/anime finetune), installing or setting it up in ComfyUI
+  (single-checkpoint loader, the fp16-fix VAE, file layout, base+refiner ensemble graph), writing or fixing
+  prompts (SDXL is a dual-CLIP 77-token model — weighted comma-separated keyword phrases, not LLM sentences
+  and not generic "masterpiece 8k"; matching the prompt dialect to the checkpoint; the text_g/text_l split;
+  negative prompts and CFG), getting photoreal results (use a photoreal finetune, then stack camera body +
+  film stock + lens + lighting vocabulary), choosing steps/CFG/sampler/scheduler/resolution per variant,
+  running ControlNet / IP-Adapter / LoRA, training a LoRA (kohya_ss / OneTrainer) including style LoRAs (the
+  Illustrious recipe, dataset diversity, XY-grid evaluation), creating a consistent character (InstantID vs
+  IP-Adapter FaceID vs HyperLoRA vs a trained character LoRA, the detailer LoRA swap, ADetailer [SEP]
+  multi-character routing, block-weighted LoRA to stop style bleed), building multi-stage production pipelines
+  (hires-fix, tiled upscale, detailers) or using SDXL as the controllable front-end / texture back-end in
+  mixed-model workflows, or debugging artefacts (fried colours, cut-off heads, plastic skin, mangled hands,
+  unreadable text). It also covers the licence picture (OpenRAIL++-M is commercially clean; Turbo's licence is
+  contested) and when to leave the SDXL family entirely — including Anima, the anime-native base that speaks
+  the same booru dialect but whose *weights* are non-commercial, even though its outputs are not. Use this for
+  any question about SDXL in any context. Choosing between models, comparing them, or working out which skills
+  and install commands a job needs is [`generative-media-atlas`](../generative-media-atlas/)'s job — start
+  there when the model is not already settled.
 ---
 
 # Stable Diffusion XL (SDXL)

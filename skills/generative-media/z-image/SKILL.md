@@ -1,7 +1,26 @@
 ---
 name: z-image
 description: >
-  Authoritative guide for the Z-Image model family (Z-Image and Z-Image-Turbo, Alibaba Tongyi Lab) in ComfyUI or the diffusers API. Use this whenever the user touches Z-Image in any way, even obliquely: choosing between Z-Image and Turbo (or weighing Z-Image against other models), installing or setting it up in ComfyUI (file layout, loaders, quantisation, ControlNet), writing or fixing prompts (the Qwen-3 LLM encoder needs sentences not tags; realism, killing plastic/waxy stock-photo skin, bilingual text rendering, high/low-angle gaze control), pose control and structural conditioning (Fun Union ControlNet — Pose, Depth, Canny, HED, Scribble; ModelPatchLoader + QwenImageDiffsynthControlnet nodes; Turbo-only; V2.1 model files), face identity (no PuLID for Z-Image — character LoRA via FaceDetailer is the standard approach), building single- or multi-stage workflows (hires refine, tiled upscale, face detailer, img2img/inpaint) with practical sampler/CFG/denoise/resolution/step settings, using LoRAs (loading any downloaded style/realism/character LoRA with the right node, weight-by-type tuning, stacking with rgthree, the diffusers-format QKV silent-failure gotcha, Base↔Turbo cross-compatibility), generating a dataset and training a LoRA with the Ostris AI-Toolkit, creating a consistent original character (anchor image → edit-model dataset factory → character LoRA → FaceDetailer deployment; multi-outfit and multi-character limits), training a style LoRA (diverse-subject datasets, prose captions, XY-grid evaluation), using Z-Image-Turbo as the realism refiner in a mixed-model pipeline (e.g. refining SDXL renders), or checking what the family's Apache-2.0 licence permits for commercial work compared with the gated models in this suite. Use this for any question about Z-Image in any context.
+  Authoritative guide for the Z-Image model family (Z-Image and Z-Image-Turbo, Alibaba Tongyi Lab) in ComfyUI
+  or the diffusers API. Use this whenever the user touches Z-Image in any way, even obliquely: choosing
+  between Z-Image and Turbo (or weighing Z-Image against other models), installing or setting it up in ComfyUI
+  (file layout, loaders, quantisation, ControlNet), writing or fixing prompts (the Qwen-3 LLM encoder needs
+  sentences not tags; realism, killing plastic/waxy stock-photo skin, bilingual text rendering, high/low-angle
+  gaze control), pose control and structural conditioning (Fun Union ControlNet — Pose, Depth, Canny, HED,
+  Scribble; ModelPatchLoader + QwenImageDiffsynthControlnet nodes; Turbo-only; V2.1 model files), face
+  identity (no PuLID for Z-Image — character LoRA via FaceDetailer is the standard approach), building single-
+  or multi-stage workflows (hires refine, tiled upscale, face detailer, img2img/inpaint) with practical
+  sampler/CFG/denoise/resolution/step settings, using LoRAs (loading any downloaded style/realism/character
+  LoRA with the right node, weight-by-type tuning, stacking with rgthree, the diffusers-format QKV
+  silent-failure gotcha, Base↔Turbo cross-compatibility), generating a dataset and training a LoRA with the
+  Ostris AI-Toolkit, creating a consistent original character (anchor image → edit-model dataset factory →
+  character LoRA → FaceDetailer deployment; multi-outfit and multi-character limits), training a style LoRA
+  (diverse-subject datasets, prose captions, XY-grid evaluation), using Z-Image-Turbo as the realism refiner
+  in a mixed-model pipeline (e.g. refining SDXL renders), or checking what the family's Apache-2.0 licence
+  permits for commercial work compared with the gated models in this suite. Use this for any question about
+  Z-Image in any context. Choosing between models, comparing them, or working out which skills and install
+  commands a job needs is [`generative-media-atlas`](../generative-media-atlas/)'s job — start there when the
+  model is not already settled.
 ---
 
 # Z-Image Family

@@ -1,7 +1,25 @@
 ---
 name: image-production-workflows
 description: >
-  Model-agnostic guide to professional image production with open image models — multi-stage pipelines and mixed-model workflows in ComfyUI, diffusers, or ComfyScript. Use this whenever the user wants production/professional quality rather than a single render, even obliquely: building a multi-stage pipeline (base gen → refine/hires pass → FaceDetailer → tiled upscale → final restorer), upscaling to print/4K (UltimateSDUpscale, TTP tiles, SeedVR2, SUPIR status, ESRGAN models), fixing pipeline artefacts (tile seams, per-tile hallucinations, color shift between passes, identity drift in a refine pass, black/garbage output after feeding one model's latent to another), combining or chaining different models ("refine my SDXL render with Flux/Z-Image", "use SDXL ControlNet then render in a DiT", "add Ideogram text to this", "compose in Anima then refine"), the cross-family handoff rules (decode to pixels, denoise bands, resolution matching), whether the **licences of every model in a chain** allow the finished pipeline to ship, using a **video model as an image-edit stage** (MiniMax H3 at one frame) or an image edit as the **first frame of a video job**, choosing between restoring and **generatively re-rendering** an upscale, regional prompting and inpainting craft (crop-and-stitch, Differential Diffusion), or automating/parametrizing workflows as code (ComfyScript, Export-API JSON + /prompt, comfy-cli, diffusers multi-stage pipelines, wildcards, batch QC, subgraphs, rgthree). Model-specific numbers live in the z-image, sdxl, flux-2, ideogram-4, krea-2 and anima skills; video handoffs belong to wan-2-2, minimax-h3, ltx-2-5 and scail-2 — this skill owns the craft that spans them.
+  Model-agnostic guide to professional image production with open image models — multi-stage pipelines and
+  mixed-model workflows in ComfyUI, diffusers, or ComfyScript. Use this whenever the user wants
+  production/professional quality rather than a single render, even obliquely: building a multi-stage pipeline
+  (base gen → refine/hires pass → FaceDetailer → tiled upscale → final restorer), upscaling to print/4K
+  (UltimateSDUpscale, TTP tiles, SeedVR2, SUPIR status, ESRGAN models), fixing pipeline artefacts (tile seams,
+  per-tile hallucinations, color shift between passes, identity drift in a refine pass, black/garbage output
+  after feeding one model's latent to another), combining or chaining different models ("refine my SDXL render
+  with Flux/Z-Image", "use SDXL ControlNet then render in a DiT", "add Ideogram text to this", "compose in
+  Anima then refine"), the cross-family handoff rules (decode to pixels, denoise bands, resolution matching),
+  whether the **licences of every model in a chain** allow the finished pipeline to ship, using a **video
+  model as an image-edit stage** (MiniMax H3 at one frame) or an image edit as the **first frame of a video
+  job**, choosing between restoring and **generatively re-rendering** an upscale, regional prompting and
+  inpainting craft (crop-and-stitch, Differential Diffusion), or automating/parametrizing workflows as code
+  (ComfyScript, Export-API JSON + /prompt, comfy-cli, diffusers multi-stage pipelines, wildcards, batch QC,
+  subgraphs, rgthree). Model-specific numbers live in the z-image, sdxl, flux-2, ideogram-4, krea-2 and anima
+  skills; video handoffs belong to wan-2-2, minimax-h3, ltx-2-5 and scail-2 — this skill owns the craft that
+  spans them. Choosing between models, comparing them, or working out which skills and install commands a job
+  needs is [`generative-media-atlas`](../generative-media-atlas/)'s job — start there when the model is not
+  already settled.
 ---
 
 # Image Production Workflows

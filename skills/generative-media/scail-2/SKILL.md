@@ -1,7 +1,28 @@
 ---
 name: scail-2
 description: >
-  Authoritative guide for SCAIL-2, the open-weights character-animation and character-replacement video model from **zai-org (Z.ai / Zhipu AI — not Alibaba)**, built on the Wan 2.1 foundation and released with paper arXiv 2606.10804. Use this whenever the user touches SCAIL-2 in any way, even obliquely: replacing a person in existing footage while following their motion exactly, transferring a performance from a driving video onto a reference character, choosing between Animation mode and Replacement mode (and between end-to-end-driven and pose-driven animation), installing it in ComfyUI (the `WanSCAILToVideo` node, `SCAIL2ColoredMask`, SAM3 tracking, the umT5-XXL encoder and Wan 2.1 VAE, GGUF and fp8 quants, VRAM on 8–16 GB cards), preparing inputs (reference image, the two coloured masks, the `replacement_mode` pairing — and **the first-frame edit that decides whether the whole job works**), **writing or fixing the prompt** (and learning why it barely matters here) and the upstream image-edit prompt that does, picking steps/CFG/shift/solver, running the LightX2V distilled speed path, loading the vendor's Relighting / Bias-Aware DPO / LightX2V LoRAs, **asking whether you can train a SCAIL-2 LoRA at all** (you cannot — the skill says so and routes you), generating clips longer than 81 frames with context windows or chained segments, holding identity and clothing steady across a shot, handling multi-person scenes and multiple reference images, understanding the split licence (Apache 2.0 code, MIT weights card), or debugging a named artefact — mushed faces on small subjects, a tracker that refuses to lock, clothes morphing past five seconds, backgrounds changing in replacement mode, an inserted character that is too bright for the plate, or Animation mode silently collapsing into Replacement behaviour. Also covers when to reach for something else: Wan Animate, MiniMax H3's video-editing mode, or Bernini-R. Use this for any question about SCAIL-2 in any context.
+  Authoritative guide for SCAIL-2, the open-weights character-animation and character-replacement video model
+  from **zai-org (Z.ai / Zhipu AI — not Alibaba)**, built on the Wan 2.1 foundation and released with paper
+  arXiv 2606.10804. Use this whenever the user touches SCAIL-2 in any way, even obliquely: replacing a person
+  in existing footage while following their motion exactly, transferring a performance from a driving video
+  onto a reference character, choosing between Animation mode and Replacement mode (and between
+  end-to-end-driven and pose-driven animation), installing it in ComfyUI (the `WanSCAILToVideo` node,
+  `SCAIL2ColoredMask`, SAM3 tracking, the umT5-XXL encoder and Wan 2.1 VAE, GGUF and fp8 quants, VRAM on 8–16
+  GB cards), preparing inputs (reference image, the two coloured masks, the `replacement_mode` pairing — and
+  **the first-frame edit that decides whether the whole job works**), **writing or fixing the prompt** (and
+  learning why it barely matters here) and the upstream image-edit prompt that does, picking
+  steps/CFG/shift/solver, running the LightX2V distilled speed path, loading the vendor's Relighting /
+  Bias-Aware DPO / LightX2V LoRAs, **asking whether you can train a SCAIL-2 LoRA at all** (you cannot — the
+  skill says so and routes you), generating clips longer than 81 frames with context windows or chained
+  segments, holding identity and clothing steady across a shot, handling multi-person scenes and multiple
+  reference images, understanding the split licence (Apache 2.0 code, MIT weights card), or debugging a named
+  artefact — mushed faces on small subjects, a tracker that refuses to lock, clothes morphing past five
+  seconds, backgrounds changing in replacement mode, an inserted character that is too bright for the plate,
+  or Animation mode silently collapsing into Replacement behaviour. Also covers when to reach for something
+  else: Wan Animate, MiniMax H3's video-editing mode, or Bernini-R. Use this for any question about SCAIL-2 in
+  any context. Choosing between models, comparing them, or working out which skills and install commands a job
+  needs is [`generative-media-atlas`](../generative-media-atlas/)'s job — start there when the model is not
+  already settled.
 ---
 
 # SCAIL-2

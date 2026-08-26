@@ -1,7 +1,27 @@
 ---
 name: anima
 description: >
-  Authoritative guide for Anima (CircleStone Labs, funded and distributed by Comfy Org) — the 2B open-weights anime image model built on NVIDIA's Cosmos-Predict2 lineage, covering Anima-Base, Anima-Aesthetic and Anima-Turbo in ComfyUI and diffusers. **The licence is not the shape most people assume: generated images are commercially free for anyone — the card states the non-commercial restriction "applies only to the Model, and not to Outputs" — while the weights are non-commercial, and even the individual carve-out for selling weights extends "solely to the model weights, and not to any larger product."** Use this whenever the user touches Anima in any way, even obliquely: choosing between Base, Aesthetic and Turbo (or weighing Anima against Illustrious, NoobAI, Pony or Z-Image), installing it in ComfyUI (`anima-base-v1.0.safetensors`, `qwen_3_06b_base.safetensors`, `qwen_image_vae.safetensors`, UNETLoader/CLIPLoader/VAELoader, `euler`/`simple`), writing or fixing prompts (Anima has a Qwen3-0.6B LLM encoder but prompts in Danbooru tags — tag order, `score_*` and `masterpiece` ladders, `safe`/`nsfw`/`explicit` rating tags, `year 2025` tags, the mandatory `@` artist prefix, weights pushed far past SDXL norms, `(chibi:2)`, natural-language mode), picking steps/CFG/sampler/scheduler/resolution, image conditioning (Anima-LLLite via `ModelPatchLoader`/`AnimaLLLiteApply`, Cosmos-Reference, the ReStyler trick), training a LoRA (sd-scripts, diffusion-pipe, ~6 GB VRAM, the do-not-train-the-LLM-adapter rule), consistent characters and adult/NSFW work via rating tags, mixed-model pipelines and stills feeding image-to-video, licensing, or debugging artefacts (fried hi-res chains, seed instability, weak artist styles). Use this for any question about Anima in any context; it also covers who should reach for something else instead.
+  Authoritative guide for Anima (CircleStone Labs, funded and distributed by Comfy Org) — the 2B open-weights
+  anime image model built on NVIDIA's Cosmos-Predict2 lineage, covering Anima-Base, Anima-Aesthetic and
+  Anima-Turbo in ComfyUI and diffusers. **The licence is not the shape most people assume: generated images
+  are commercially free for anyone — the card states the non-commercial restriction "applies only to the
+  Model, and not to Outputs" — while the weights are non-commercial, and even the individual carve-out for
+  selling weights extends "solely to the model weights, and not to any larger product."** Use this whenever
+  the user touches Anima in any way, even obliquely: choosing between Base, Aesthetic and Turbo (or weighing
+  Anima against Illustrious, NoobAI, Pony or Z-Image), installing it in ComfyUI
+  (`anima-base-v1.0.safetensors`, `qwen_3_06b_base.safetensors`, `qwen_image_vae.safetensors`,
+  UNETLoader/CLIPLoader/VAELoader, `euler`/`simple`), writing or fixing prompts (Anima has a Qwen3-0.6B LLM
+  encoder but prompts in Danbooru tags — tag order, `score_*` and `masterpiece` ladders,
+  `safe`/`nsfw`/`explicit` rating tags, `year 2025` tags, the mandatory `@` artist prefix, weights pushed far
+  past SDXL norms, `(chibi:2)`, natural-language mode), picking steps/CFG/sampler/scheduler/resolution, image
+  conditioning (Anima-LLLite via `ModelPatchLoader`/`AnimaLLLiteApply`, Cosmos-Reference, the ReStyler trick),
+  training a LoRA (sd-scripts, diffusion-pipe, ~6 GB VRAM, the do-not-train-the-LLM-adapter rule), consistent
+  characters and adult/NSFW work via rating tags, mixed-model pipelines and stills feeding image-to-video,
+  licensing, or debugging artefacts (fried hi-res chains, seed instability, weak artist styles). Use this for
+  any question about Anima in any context; it also covers who should reach for something else instead.
+  Choosing between models, comparing them, or working out which skills and install commands a job needs is
+  [`generative-media-atlas`](../generative-media-atlas/)'s job — start there when the model is not already
+  settled.
 ---
 
 # Anima

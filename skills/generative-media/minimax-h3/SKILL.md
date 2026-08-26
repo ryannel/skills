@@ -1,7 +1,30 @@
 ---
 name: minimax-h3
 description: >
-  Authoritative guide for MiniMax H3, the open-weights omni-modal video-with-native-audio model (MiniMax / Nanonoble Pte. Ltd., released 2 August 2026), in ComfyUI or diffusers. **Read the licence section first: the MiniMax H3 Community License excludes the United States, the European Union, the United Kingdom and South Korea from its Applicable Territory, and use outside that territory is an explicitly prohibited use.** Use this whenever the user touches MiniMax H3 in any way, even obliquely: asking whether they may legally use it at all, choosing between the FL2VA and Ref2VA checkpoints, installing it in ComfyUI (the dual video+audio VAE, the two decode nodes, the Qwen3-VL-32B encoder, quantised builds, VRAM), writing prompts (the prompt drives dialogue, sound effects and music as well as picture — that is the whole point of the model; plus the sequential-vs-simultaneous rule that causes most of the jank, timestamp placement, and when to over-describe), hitting the frame-count rule, picking resolution from the megapixel table, generating video with synchronised stereo audio, first/last-frame and multi-reference conditioning, **making it fast** (the sparse-attention/SLA node, Spectrum and its audio-feedback trap, the lightx2v Turbo LoRA, and the CU130 / comfy-kitchen / nvfp4-encoder traps that silently cost most of the speed), **fixing Ref2VA's quality gap with the `adaln_proj` hybrid checkpoints**, **generating minute-plus video by context chaining**, **using it as a single-image edit model** (one frame + the dedicated image VAE), **replacing a character in existing footage** with the `[video editing]` / `retention_analysis` prompt shape, building character reference sheets, **explicit or adult work** (where the community rates it decisively above the alternatives — which sharpens the territory question rather than softening it), understanding what is *not* in the open release (Context-IR and Regenerate-2K are hosted-only, so local output is 768p and 2K is API-only), debugging audio/video desync or artefacts, or comparing it against Wan 2.2, SCAIL-2 and LTX-2.5. Also covers who should reach for something else instead — which, on licence grounds, is a large share of readers.
+  Authoritative guide for MiniMax H3, the open-weights omni-modal video-with-native-audio model (MiniMax /
+  Nanonoble Pte. Ltd., released 2 August 2026), in ComfyUI or diffusers. **Read the licence section first: the
+  MiniMax H3 Community License excludes the United States, the European Union, the United Kingdom and South
+  Korea from its Applicable Territory, and use outside that territory is an explicitly prohibited use.** Use
+  this whenever the user touches MiniMax H3 in any way, even obliquely: asking whether they may legally use it
+  at all, choosing between the FL2VA and Ref2VA checkpoints, installing it in ComfyUI (the dual video+audio
+  VAE, the two decode nodes, the Qwen3-VL-32B encoder, quantised builds, VRAM), writing prompts (the prompt
+  drives dialogue, sound effects and music as well as picture — that is the whole point of the model; plus the
+  sequential-vs-simultaneous rule that causes most of the jank, timestamp placement, and when to
+  over-describe), hitting the frame-count rule, picking resolution from the megapixel table, generating video
+  with synchronised stereo audio, first/last-frame and multi-reference conditioning, **making it fast** (the
+  sparse-attention/SLA node, Spectrum and its audio-feedback trap, the lightx2v Turbo LoRA, and the CU130 /
+  comfy-kitchen / nvfp4-encoder traps that silently cost most of the speed), **fixing Ref2VA's quality gap
+  with the `adaln_proj` hybrid checkpoints**, **generating minute-plus video by context chaining**, **using it
+  as a single-image edit model** (one frame + the dedicated image VAE), **replacing a character in existing
+  footage** with the `[video editing]` / `retention_analysis` prompt shape, building character reference
+  sheets, **explicit or adult work** (where the community rates it decisively above the alternatives — which
+  sharpens the territory question rather than softening it), understanding what is *not* in the open release
+  (Context-IR and Regenerate-2K are hosted-only, so local output is 768p and 2K is API-only), debugging
+  audio/video desync or artefacts, or comparing it against Wan 2.2, SCAIL-2 and LTX-2.5. Also covers who
+  should reach for something else instead — which, on licence grounds, is a large share of readers. Choosing
+  between models, comparing them, or working out which skills and install commands a job needs is
+  [`generative-media-atlas`](../generative-media-atlas/)'s job — start there when the model is not already
+  settled.
 ---
 
 # MiniMax H3

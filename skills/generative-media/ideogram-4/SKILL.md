@@ -1,8 +1,28 @@
 ---
 name: ideogram-4
 description: >
-  Authoritative guide for running Ideogram 4.0 (Ideogram, Inc.) — Ideogram's first open-weight text-to-image model — yourself, on your own GPU or a rented cloud GPU (RunPod, Vast.ai), via ComfyUI, the diffusers Ideogram4Pipeline, or the run_inference.py CLI; the hosted API and web app are covered as the secondary, commercial-clean surface. **The open weights are non-commercial wherever you run them — for commercial output, route through the hosted API or web app instead.** Use this whenever the user touches Ideogram 4 in any way, even obliquely: choosing a surface and understanding the licence split (non-commercial weights, Apache code, outputs yours), writing or fixing prompts (the model is trained exclusively on structured JSON captions — schema, key ordering, the CaptionVerifier, plain-text vs JSON, Magic Prompt expansion), text rendering and typography (its headline strength — multi-line stacking, multilingual, editable text layers, transparency), bounding-box layout and hex color-palette control, getting photoreal results the Ideogram way (neutral white balance, killing the "warm"/amber look), choosing rendering speed / sampler preset (Quality 48 / Default 20 / Turbo 12) and resolution, setting up the open weights (nf4/fp8 quant, VRAM, HF gating, ComfyUI nodes and file layout, DualModelGuider, the gemma4 gotcha), training a LoRA on it (ai-toolkit and fal's trainer, which emits ComfyUI-format weights; style LoRAs work, character LoRAs are trainable but undemonstrated), using it as the typography/design pass in a mixed-model pipeline, routing through the hosted API/web app when commercial use or the web-only Character/Style Reference features require it, and debugging the safety filter, verifier aborts and layout failures. Also use it for consistent characters on open weights, where no identity adapter, edit variant or published character LoRA exists and identity comes instead from a locked half-canvas workflow. Use this for any question about Ideogram 4 in any context.
-
+  Authoritative guide for running Ideogram 4.0 (Ideogram, Inc.) — Ideogram's first open-weight text-to-image
+  model — yourself, on your own GPU or a rented cloud GPU (RunPod, Vast.ai), via ComfyUI, the diffusers
+  Ideogram4Pipeline, or the run_inference.py CLI; the hosted API and web app are covered as the secondary,
+  commercial-clean surface. **The open weights are non-commercial wherever you run them — for commercial
+  output, route through the hosted API or web app instead.** Use this whenever the user touches Ideogram 4 in
+  any way, even obliquely: choosing a surface and understanding the licence split (non-commercial weights,
+  Apache code, outputs yours), writing or fixing prompts (the model is trained exclusively on structured JSON
+  captions — schema, key ordering, the CaptionVerifier, plain-text vs JSON, Magic Prompt expansion), text
+  rendering and typography (its headline strength — multi-line stacking, multilingual, editable text layers,
+  transparency), bounding-box layout and hex color-palette control, getting photoreal results the Ideogram way
+  (neutral white balance, killing the "warm"/amber look), choosing rendering speed / sampler preset (Quality
+  48 / Default 20 / Turbo 12) and resolution, setting up the open weights (nf4/fp8 quant, VRAM, HF gating,
+  ComfyUI nodes and file layout, DualModelGuider, the gemma4 gotcha), training a LoRA on it (ai-toolkit and
+  fal's trainer, which emits ComfyUI-format weights; style LoRAs work, character LoRAs are trainable but
+  undemonstrated), using it as the typography/design pass in a mixed-model pipeline, routing through the
+  hosted API/web app when commercial use or the web-only Character/Style Reference features require it, and
+  debugging the safety filter, verifier aborts and layout failures. Also use it for consistent characters on
+  open weights, where no identity adapter, edit variant or published character LoRA exists and identity comes
+  instead from a locked half-canvas workflow. Use this for any question about Ideogram 4 in any context.
+  Choosing between models, comparing them, or working out which skills and install commands a job needs is
+  [`generative-media-atlas`](../generative-media-atlas/)'s job — start there when the model is not already
+  settled.
 ---
 
 # Ideogram 4

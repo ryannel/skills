@@ -12,14 +12,17 @@ description: >
   hosted surfaces, using and stacking the official style LoRAs (trigger phrases, strengths), calling the Krea
   API or fal endpoints (medium/large slugs, pricing, aspect ratios), running it in diffusers (Krea2Pipeline,
   the guidance-scale convention trap), quantisation and VRAM (fp8 vs int8-convrot vs nvfp4 vs community GGUF),
-  training a LoRA (TRAIN on Raw, RUN on Turbo — and the contested Ostris turbo-adapter alternative; musubi-tuner
-  and AI-Toolkit settings, plus measured 12 GB and 16 GB configs and why you must train at 1024 not 768),
-  building a consistent character (the character-LoRA path, the mature Identity Edit LoRA for mask-free
-  scene-preserving edits, and Differential Output Preservation for running up to four character LoRAs at
-  once without bleed), preparing a first frame for a video character-swap model, choosing a VAE (Wan 2.1 vs
-  Qwen Image VAE Sharp/Sharp Plus), multi-stage and mixed-model pipelines (the Raw+Turbo-LoRA two-stage recipe, Z-Image as the inpaint partner), or
-  debugging muted facial expressions, halftone/grid artefacts, dark-area noise, weak text rendering, or
-  prompts the stock enhancer refuses. Use this for any question about Krea 2 in any context.
+  training a LoRA (TRAIN on Raw, RUN on Turbo — and the contested Ostris turbo-adapter alternative;
+  musubi-tuner and AI-Toolkit settings, plus measured 12 GB and 16 GB configs and why you must train at 1024
+  not 768), building a consistent character (the character-LoRA path, the mature Identity Edit LoRA for
+  mask-free scene-preserving edits, and Differential Output Preservation for running up to four character
+  LoRAs at once without bleed), preparing a first frame for a video character-swap model, choosing a VAE (Wan
+  2.1 vs Qwen Image VAE Sharp/Sharp Plus), multi-stage and mixed-model pipelines (the Raw+Turbo-LoRA two-stage
+  recipe, Z-Image as the inpaint partner), or debugging muted facial expressions, halftone/grid artefacts,
+  dark-area noise, weak text rendering, or prompts the stock enhancer refuses. Use this for any question about
+  Krea 2 in any context. Choosing between models, comparing them, or working out which skills and install
+  commands a job needs is [`generative-media-atlas`](../generative-media-atlas/)'s job — start there when the
+  model is not already settled.
 ---
 
 # Krea 2

@@ -1,7 +1,22 @@
 ---
 name: character-lora-training
 description: >
-  Train a character LoRA that holds an identity across prompts, poses and models — the cross-model craft that every model skill in this suite otherwise repeats. Use this whenever the user is building, debugging or planning a LoRA, even obliquely: assembling and curating a dataset, deciding how many images, captioning (and the character-vs-style inversion that decides what a LoRA actually learns), picking rank/alpha/LR/steps as starting points, **evaluating a finished run** — which checkpoint to ship, how to build and read an XY/checkpoint grid, which comparison tool to use, whether a run over- or under-fit, how to score likeness objectively — holding likeness across a multi-stage pipeline or into video, or choosing which base model to train on in the first place. It covers **adult/NSFW work as a first-class case** — which base models actually have the training data (the limit is nearly always data, not refusal), why explicit captioning is mandatory rather than optional, anatomy failure modes, and why automated captioners fail on adult video. It also covers what determines whether a LoRA is **publishable at all**: Civitai's total ban on real-person likeness (SFW and NSFW alike) and the TAKE IT DOWN Act's live FTC enforcement, both of which constrain dataset sourcing and distribution. Per-model hyperparameters, trainer flags and quirks live in the model skills — this owns what transfers.
+  Train a character LoRA that holds an identity across prompts, poses and models — the cross-model craft that
+  every model skill in this suite otherwise repeats. Use this whenever the user is building, debugging or
+  planning a LoRA, even obliquely: assembling and curating a dataset, deciding how many images, captioning
+  (and the character-vs-style inversion that decides what a LoRA actually learns), picking rank/alpha/LR/steps
+  as starting points, **evaluating a finished run** — which checkpoint to ship, how to build and read an
+  XY/checkpoint grid, which comparison tool to use, whether a run over- or under-fit, how to score likeness
+  objectively — holding likeness across a multi-stage pipeline or into video, or choosing which base model to
+  train on in the first place. It covers **adult/NSFW work as a first-class case** — which base models
+  actually have the training data (the limit is nearly always data, not refusal), why explicit captioning is
+  mandatory rather than optional, anatomy failure modes, and why automated captioners fail on adult video. It
+  also covers what determines whether a LoRA is **publishable at all**: Civitai's total ban on real-person
+  likeness (SFW and NSFW alike) and the TAKE IT DOWN Act's live FTC enforcement, both of which constrain
+  dataset sourcing and distribution. Per-model hyperparameters, trainer flags and quirks live in the model
+  skills — this owns what transfers. Choosing between models, comparing them, or working out which skills and
+  install commands a job needs is [`generative-media-atlas`](../generative-media-atlas/)'s job — start there
+  when the model is not already settled.
 ---
 
 # Character LoRA training

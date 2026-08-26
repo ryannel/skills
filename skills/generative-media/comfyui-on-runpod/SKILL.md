@@ -1,7 +1,20 @@
 ---
 name: comfyui-on-runpod
 description: >
-  Run ComfyUI on RunPod so that a fresh instance loads your workflows and finds every model **out of the box** — the layer between RunPod's platform skills and the model skills. Use this whenever the user is deploying, debugging or budgeting ComfyUI on rented GPUs, even obliquely: laying out a network volume, writing `extra_model_paths.yaml`, deciding where a checkpoint / text encoder / VAE / LoRA / upscaler actually goes, getting tens of gigabytes of weights onto a volume without burning GPU hours, keeping a model manifest so a new pod reproduces the old one, choosing between an interactive pod and a serverless endpoint for ComfyUI, deploying API-format workflow JSON and polling it correctly, smoke-testing an install before spending real time on it, or debugging the classics — "ComfyUI can't find my model", "it works in the studio but breaks in serverless", "the proxy URL 502s", "my LoRA isn't in the dropdown", "why did my pod bill all night". Owns the **ComfyUI-specific** layer only: for provisioning, GPU selection, pod lifecycle, `runpodctl`/MCP commands and networking, it routes to RunPod's own official skills rather than restating them.
+  Run ComfyUI on RunPod so that a fresh instance loads your workflows and finds every model **out of the box**
+  — the layer between RunPod's platform skills and the model skills. Use this whenever the user is deploying,
+  debugging or budgeting ComfyUI on rented GPUs, even obliquely: laying out a network volume, writing
+  `extra_model_paths.yaml`, deciding where a checkpoint / text encoder / VAE / LoRA / upscaler actually goes,
+  getting tens of gigabytes of weights onto a volume without burning GPU hours, keeping a model manifest so a
+  new pod reproduces the old one, choosing between an interactive pod and a serverless endpoint for ComfyUI,
+  deploying API-format workflow JSON and polling it correctly, smoke-testing an install before spending real
+  time on it, or debugging the classics — "ComfyUI can't find my model", "it works in the studio but breaks in
+  serverless", "the proxy URL 502s", "my LoRA isn't in the dropdown", "why did my pod bill all night". Owns
+  the **ComfyUI-specific** layer only: for provisioning, GPU selection, pod lifecycle, `runpodctl`/MCP
+  commands and networking, it routes to RunPod's own official skills rather than restating them. Choosing
+  between models, comparing them, or working out which skills and install commands a job needs is
+  [`generative-media-atlas`](../generative-media-atlas/)'s job — start there when the model is not already
+  settled.
 ---
 
 # ComfyUI on RunPod

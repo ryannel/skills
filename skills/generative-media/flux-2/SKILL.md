@@ -1,7 +1,28 @@
 ---
 name: flux-2
 description: >
-  Authoritative guide for FLUX.2 by Black Forest Labs (BFL) across all variants and surfaces. Use this whenever the user touches FLUX.2 in any way, even obliquely: choosing a variant ([dev] vs [klein] 4B vs [klein] 9B vs the API-only [pro]/[max]/[flex]) and understanding the licence split (Non-Commercial dev/9B weights, Apache 2.0 klein-4B weights, commercially-usable API outputs), installing in ComfyUI (the new Flux2Scheduler, EmptyFlux2LatentImage, CLIPLoader type "flux2", FluxGuidance+BasicGuider vs CFGGuider, exact file names and folders from the official templates), writing or fixing prompts (Mistral-24B and Qwen3 LLM encoders reward the four-part Subject→Action→Style→Context structure, not tag lists; hex color control; JSON for production consistency; no negative prompts — phrase constraints positively), getting photoreal results (camera gear stacking, avoiding the over-AI'd over-sharpened look on klein), multi-reference image editing (ReferenceLatent nodes, up to ~8–10 references), pose control (Alibaba PAI Fun Union ControlNet — Pose, Depth, Canny, HED and more; why Flux.1 ControlNets are incompatible), face identity preservation (PuLID via iFayens nodes; InsightFace + EVA-CLIP pipeline), calling the BFL hosted API (flux-2-pro, flux-2-max, flux-2-flex, flux-2-klein endpoints, async polling pattern, pricing), setting up diffusers (Flux2Pipeline, Flux2KleinPipeline), training a LoRA with AI-Toolkit/Kohya including style LoRAs (rank ablations, prose captions, the captionless debate, XY-grid evaluation), creating a consistent character (the ReferenceLatent multi-reference character engine, PuLID, the character-LoRA dataset factory and detailer deployment, multi-character scenes via attention masking), building production pipelines (refine passes, tiled upscale for DiTs, Klein as the img2img refiner for SDXL renders in mixed-model workflows), or debugging spatial logic failures, missing elements, over-sharpening, wrong hex colours, or text rendering issues. Use this for any question about FLUX.2 in any context.
+  Authoritative guide for FLUX.2 by Black Forest Labs (BFL) across all variants and surfaces. Use this
+  whenever the user touches FLUX.2 in any way, even obliquely: choosing a variant ([dev] vs [klein] 4B vs
+  [klein] 9B vs the API-only [pro]/[max]/[flex]) and understanding the licence split (Non-Commercial dev/9B
+  weights, Apache 2.0 klein-4B weights, commercially-usable API outputs), installing in ComfyUI (the new
+  Flux2Scheduler, EmptyFlux2LatentImage, CLIPLoader type "flux2", FluxGuidance+BasicGuider vs CFGGuider, exact
+  file names and folders from the official templates), writing or fixing prompts (Mistral-24B and Qwen3 LLM
+  encoders reward the four-part Subject→Action→Style→Context structure, not tag lists; hex color control; JSON
+  for production consistency; no negative prompts — phrase constraints positively), getting photoreal results
+  (camera gear stacking, avoiding the over-AI'd over-sharpened look on klein), multi-reference image editing
+  (ReferenceLatent nodes, up to ~8–10 references), pose control (Alibaba PAI Fun Union ControlNet — Pose,
+  Depth, Canny, HED and more; why Flux.1 ControlNets are incompatible), face identity preservation (PuLID via
+  iFayens nodes; InsightFace + EVA-CLIP pipeline), calling the BFL hosted API (flux-2-pro, flux-2-max,
+  flux-2-flex, flux-2-klein endpoints, async polling pattern, pricing), setting up diffusers (Flux2Pipeline,
+  Flux2KleinPipeline), training a LoRA with AI-Toolkit/Kohya including style LoRAs (rank ablations, prose
+  captions, the captionless debate, XY-grid evaluation), creating a consistent character (the ReferenceLatent
+  multi-reference character engine, PuLID, the character-LoRA dataset factory and detailer deployment,
+  multi-character scenes via attention masking), building production pipelines (refine passes, tiled upscale
+  for DiTs, Klein as the img2img refiner for SDXL renders in mixed-model workflows), or debugging spatial
+  logic failures, missing elements, over-sharpening, wrong hex colours, or text rendering issues. Use this for
+  any question about FLUX.2 in any context. Choosing between models, comparing them, or working out which
+  skills and install commands a job needs is [`generative-media-atlas`](../generative-media-atlas/)'s job —
+  start there when the model is not already settled.
 ---
 
 # FLUX.2
