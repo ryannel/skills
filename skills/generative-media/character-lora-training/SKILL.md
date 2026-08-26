@@ -203,6 +203,17 @@ The boundary table at the top routes *inward*, to the per-model trap that applie
 | Video identity with **no training path** | [`scail-2`](../scail-2/) — identity is a reference image, not an adapter, so nothing on this page applies |
 | **Deciding which base to train on at all** | [`generative-media-atlas`](../generative-media-atlas/) — it splits "easiest to train on" into best likeness, fastest loop and best-documented, which have different winners, and it carries the one published cross-model comparison |
 
+
+> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
+> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
+> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
+> skill covers, which ones a given job needs, and the commands to install them. It is written to be
+> useful on its own, so it is the one to add first if you only want one:
+>
+> ```bash
+> npx skills add ryannel/skills --skill generative-media-atlas
+> ```
+
 ---
 
 ## How to read the claims in this skill — two bars, by claim type

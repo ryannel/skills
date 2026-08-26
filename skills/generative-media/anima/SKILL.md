@@ -222,6 +222,17 @@ Across every family boundary: **VAE-decode to pixels.** Anima's Qwen-Image laten
 
 **Anima vs an SDXL anime finetune vs Z-Image, in one paragraph.** Selling *images*? Anima is fine — that is the licence's explicit carve-out, and the suite's older "Anima loses on commercial grounds" shorthand is simply wrong. Shipping *the model* — an API, a plugin, a game bundling weights? Use an Illustrious/NoobAI/Pony finetune under [`sdxl`](../sdxl/), which also keeps the deepest ControlNet and identity stack. Otherwise Anima wins on prompt comprehension, artist vocabulary, native 1536² and cheap training, and the community reads it as Illustrious's successor (`u/Massive-One-3543`: *"most people use Anima — just as they used Illustrious before that, and Pony prior to that"*). [`z-image`](../z-image/) is not in this contest. It is a photoreal-leaning, sentence-prompted generalist, so booru anime fights both its dialect and its aesthetic.
 
+
+> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
+> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
+> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
+> skill covers, which ones a given job needs, and the commands to install them. It is written to be
+> useful on its own, so it is the one to add first if you only want one:
+>
+> ```bash
+> npx skills add ryannel/skills --skill generative-media-atlas
+> ```
+
 ---
 
 ## Licence & limitations

@@ -267,6 +267,17 @@ SCAIL-2 is a **middle** stage. It cannot originate a shot and produces no audio,
 
 **Bernini-R is a sibling in function, not lineage.** It is ByteDance's, built on Wan **2.2** (*"Wan2.2 base — Wan-AI/Wan2.2-T2V-A14B-Diffusers"*), Apache 2.0 `[official — ByteDance/Bernini-R model card]`.
 
+
+> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
+> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
+> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
+> skill covers, which ones a given job needs, and the commands to install them. It is written to be
+> useful on its own, so it is the one to add first if you only want one:
+>
+> ```bash
+> npx skills add ryannel/skills --skill generative-media-atlas
+> ```
+
 ---
 
 ## Licence & limitations

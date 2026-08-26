@@ -336,6 +336,17 @@ Cross-model production craft is in [`image-production-workflows`](../image-produ
 | Post chain — upscale, restore, interpolate, 2K | ❌ 2K is a hosted module only; local output is 768p with an audio track most post nodes will drop | Temporally-aware restorers (SeedVR2, FlashVSR), or **ReDetail** re-rendering H3 clips through the [`ltx-2-5`](../ltx-2-5/) upscaler; restore before you interpolate, then re-mux. See [`image-production-workflows`](../image-production-workflows/) |
 | **Choosing between all of these in the first place** | — this table is one model's view of the suite | [`generative-media-atlas`](../generative-media-atlas/) — the whole suite ranked by job (realism, identity, LoRA trainability, control, licence, video), the elimination ladder that settles most choices, and end-to-end routes across several skills |
 
+
+> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
+> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
+> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
+> skill covers, which ones a given job needs, and the commands to install them. It is written to be
+> useful on its own, so it is the one to add first if you only want one:
+>
+> ```bash
+> npx skills add ryannel/skills --skill generative-media-atlas
+> ```
+
 ---
 
 ## How to read the claims in this skill — two bars, by claim type

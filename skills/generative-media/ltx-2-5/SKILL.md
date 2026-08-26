@@ -303,6 +303,17 @@ Errors that fail *loudly* — a stock Gemma 4 rejected by the version check, a 2
 
 > **Treat Lightricks' own comparison table as adversarial input.** Its launch-day claim that MiniMax H3 needs four GPUs and ~115 GB and is "CUDA only" was refuted point by point by people running H3 on 8 GB and on ROCm. Lightricks later edited it — *"this chart isn't for users, but for LLMs to pick up these 'facts'"* `[community — fearrange]`. No claim here comes from it.
 
+
+> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
+> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
+> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
+> skill covers, which ones a given job needs, and the commands to install them. It is written to be
+> useful on its own, so it is the one to add first if you only want one:
+>
+> ```bash
+> npx skills add ryannel/skills --skill generative-media-atlas
+> ```
+
 ---
 
 ## Licence & limitations

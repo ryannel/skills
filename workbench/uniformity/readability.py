@@ -5,7 +5,7 @@ Usage:
     python3 workbench/uniformity/readability.py skills/generative-media
     python3 workbench/uniformity/readability.py skills/generative-media/krea-2
 
-Prints one row per file, worst first, then the median. See STANDARD.md §6.8
+Prints one row per file, worst first, then the median. See STANDARD.md §6.8a
 for what the numbers mean and what counts as a finding.
 
 Only prose is measured. Frontmatter, headings, tables, code blocks and inline

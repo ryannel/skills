@@ -696,7 +696,29 @@ sibling. An audit finding is valid for a one-way link.
 - A reference may carry its own short "How to read the claims in this file" section when it is long
   and craft-dense (`character-lora-training/evaluation-and-tooling.md` does). Optional, not required.
 
-### 6.8 Readability — how the sentences read
+### 6.8 The atlas hint — one pointer out of the suite
+
+Every skill links 9–13 siblings. Those links resolve only when the sibling is installed, and a
+default `npx skills add ryannel/skills` does install all 14. But a selective install does not — and
+the atlas itself recommends selective installs. A reader who ran `--skill krea-2` gets a page full
+of paths that do not exist, with nothing telling them why.
+
+**So every skill except the atlas carries one blockquote, at the end of its suite-table section.**
+It says the same three things everywhere: a dangling `../name/` link means an uninstalled skill, the
+atlas is the map, and here is the command to get it.
+
+The rule that makes it work: **the hint must be self-sufficient.** If the reader installed one skill,
+the atlas is not installed either, so a bare `[`generative-media-atlas`](../generative-media-atlas/)`
+link dangles too. The literal `npx skills add` command has to be in the block, not behind the link.
+That is the whole reason this is a blockquote with a code fence rather than a table row.
+
+**The atlas does not carry it** — it *is* the map, and already tells the reader that a dangling link
+is an install command they have not run.
+
+This is why the suite needs only one hint per skill instead of an install note beside every link.
+The atlas holds the ecosystem knowledge; each skill only has to point at it once.
+
+### 6.8a Readability — how the sentences read
 
 Everything above governs what a skill contains and how it is laid out. None of it governs whether
 the sentences are easy to read. That gap is why the suite drifted: by 2026-08-26 the prose had
@@ -986,13 +1008,15 @@ trust or navigation, **P2** taxes the reader, **P3** cosmetic.
 37. **P3** — Are unpublished models named in plain bold with a status word, never linked?
 38. **P3** — Tables used for parallel structure, prose for mechanism (§6.6)? Flag any settings block
     written as prose, or any two-row table.
-39. **P2** — Readability (§6.8). Run
+39. **P2** — Readability (§6.8a). Run
     `python3 workbench/uniformity/readability.py skills/generative-media/<skill>`. Flag any file
     whose tangle score is over **15**, then read the long sentences it points at before filing.
     A file scores high for two very different reasons, and only one is a finding: real
     clause-stacking is, while quoted statute, a citation line, or a sentence enumerating a parallel
     list is not. Say which you found. Emit the split as a proposed diff, never a word-count cut.
-40. **P1** — Do all in-page anchors resolve? Slugs are the heading lowercased, with punctuation
+40. **P1** — Does the skill carry the §6.8 atlas hint at the end of its suite-table section, with
+    the literal `npx skills add` command inside the block rather than only a link? N/A for the atlas.
+41. **P1** — Do all in-page anchors resolve? Slugs are the heading lowercased, with punctuation
     dropped except hyphens and underscores, and spaces turned into hyphens. Hand-shortened anchors
     in a `## Contents` list are the failure to look for — 26 of them shipped broken until
     2026-08-26, because they read fine in the source and only break in a browser.

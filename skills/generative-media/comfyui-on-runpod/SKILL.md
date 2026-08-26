@@ -276,6 +276,17 @@ Use it before you start editing `extra_model_paths.yaml` on a hunch.
 | Startup `ImportError` after updating ComfyUI in a container | The image's `comfy_kitchen` is older than the ComfyUI you just pulled | Run `pip install -r requirements.txt` after the pull, not just the pull |
 | Torch stops seeing the GPU after you restart ComfyUI by hand | You relaunched under a different interpreter than the template used — `python` instead of `python3` | Relaunch using the interpreter from the original process's command line |
 
+
+> **Every `../name/` link on this page is a separate skill, and it dangles if that skill is not
+> installed.** A dead link here is not a broken page. It is a skill you have not pulled yet.
+> [`generative-media-atlas`](../generative-media-atlas/) is the map of the whole suite: what each
+> skill covers, which ones a given job needs, and the commands to install them. It is written to be
+> useful on its own, so it is the one to add first if you only want one:
+>
+> ```bash
+> npx skills add ryannel/skills --skill generative-media-atlas
+> ```
+
 ---
 
 ## Pre-flight checklist
