@@ -3,7 +3,7 @@
 > **Shared craft lives in [`character-lora-training`](../../character-lora-training/)** — dataset coverage, caption-the-residual, evaluation, adult/NSFW base selection, and the real-person likeness rules that decide whether a LoRA is publishable. This file covers what is specific to this model.
 
 
-**Making** a LoRA for Krea 2. Using/stacking one is `setup-and-workflows.md §6`; the character pipeline end-to-end is `characters.md`. Open weights landed 2026-06-22; the official doctrine is unusually explicit, several full named recipes now exist, and the biggest question is genuinely contested. Verified 2026-07-07; community sections refreshed 2026-08-22.
+**Making** a LoRA for Krea 2. Using/stacking one is `setup-and-workflows.md §6`; the character pipeline end-to-end is `characters.md`. Open weights landed 2026-06-22; the official doctrine is unusually explicit, several full named recipes now exist, and the biggest question is genuinely contested. Verified 2026-07-07; community sections refreshed 2026-08-22; §3/§3a re-verified and extended 2026-08-26.
 
 ## Contents
 1. [The doctrine — and the dispute](#1-the-doctrine--and-the-dispute)
@@ -12,6 +12,7 @@
    - [2b. Adult / NSFW work](#2b-adult--nsfw-work)
    - [2c. 16 GB, measured — and four corrections](#2c-16-gb-measured--and-four-corrections-that-came-out-of-it)
 3. [AI-Toolkit and the Ostris turbo-adapter path](#3-ai-toolkit-and-the-ostris-turbo-adapter-path)
+   - [3a. A working AI-Toolkit Raw config](#3a-a-working-ai-toolkit-raw-config-and-where-the-trainer-gets-its-encoder)
 4. [fal hosted trainer](#4-fal-hosted-trainer)
 5. [Captioning doctrine](#5-captioning-doctrine)
 6. [Character LoRAs: two named recipes](#6-character-loras-two-named-recipes)
@@ -154,12 +155,56 @@ Dataset toml: `resolution = [1024, 1024]`, `batch_size = 1`, `enable_bucket = tr
 
 ## 3. AI-Toolkit and the Ostris turbo-adapter path
 
-Krea's README lists Ostris AI-Toolkit as a recommended trainer; the architecture key is `krea2`. As of 2026-07-07 there is **no krea2 example YAML in the repo's `config/examples/`** — configure through the UI or adapt a nearby DiT config:
+Krea's README lists Ostris AI-Toolkit as a recommended trainer; the architecture key is `krea2`. There is still **no krea2 example YAML in the repo's `config/examples/`** — the directory's newest DiT entries remain the Qwen-Image and Wan 2.2 configs `[official — repo listing, re-verified 2026-08-26]`. So configure through the UI, adapt a nearby DiT config, or start from §3a's working file:
 
 - **Raw path:** standard AI-Toolkit LoRA run against Raw. Hardware gotcha with a named fix: Raw training **OOMs early on a 24 GB RTX 3090 even in Low-VRAM mode** (fails around 3 GB allocated, 32 GB system RAM) until **Layer Offloading is set to ~10%** (5% also works and is slightly faster) `[community — Fast-Cash1522, r/StableDiffusion, marked SOLVED]`.
 - **The best-replicated character recipe** runs on this path: **LoKr factor 4, Automagic3 optimizer, sigmoid scheduling, "Balanced", LR 1e-4 + weight decay, 1024-only, ~50-image datasets, 2–3k steps** — likeness rated above the author's Z-Image results across multiple characters `[community — Any_Tea_3499]`. Note it's LoKr, not classic LoRA — factor 4 is the capacity knob standing in for rank.
 - **Turbo-adapter path:** load `ostris/krea2_turbo_training_adapter` as the training adapter over Turbo; train your LoRA; the adapter is dropped at inference. Made for short runs — styles, concepts, characters. Lighter than Raw on the same hardware (the 3090 user above trained Turbo+adapter "without any issues" on the settings that OOM'd Raw).
 - Ostris also ships a Krea 2 **edit-training** stack (paired-data edit LoRAs + a 3-reference-image ComfyUI node) — that's `characters.md §3`, not classic LoRA training.
+
+## 3a. A working AI-Toolkit Raw config, and where the trainer gets its encoder
+
+Two sources arrived at the same plain-LoRA recipe independently, which makes it a safer first attempt than §3's LoKr run: a **community-calibrated workflow** published as a repo `[community — chengyansen-ai/krea2-lora-training v0.4.0, read 2026-08-26]`, and a **finished private character run** — 25 photographs, 2250 steps on a 32 GB RTX PRO 4500 Blackwell, likeness landed and shipped `[community — production run, 2026-08-24]`.
+
+| Setting | Value | Why |
+|---|---|---|
+| `arch` | `krea2` | Built in. `name_or_path` takes a local single-file `.safetensors` for the DiT |
+| Network | **LoRA, `linear` 32 / `linear_alpha` 32** | The all-Linear rank and alpha both sources use; matches the musubi default in §2 |
+| Optimizer / LR | `adamw8bit`, **1e-4** | Drop to 5e-5 if you want to run past about 3k steps without overfitting `[community — chengyansen-ai]` |
+| `noise_scheduler` | `flowmatch` | — |
+| `timestep_type` | **`linear`** | Called out specifically as *not* Flux's sigmoid — this is what pairs with flowmatch here `[community — chengyansen-ai]`. §3's best-replicated LoKr recipe uses sigmoid instead, so pick per recipe rather than assuming one is right `[contested]` |
+| `train_text_encoder` | **`false`** | Qwen3-VL stays frozen. Saves VRAM and keeps prompt understanding intact |
+| `quantize` / `qtype` | `true` / `qfloat8`, encoder too | fp8 on both sides is what makes 32 GB comfortable |
+| `resolution` | **`[1024]`** | Per §2c's correction. The community workflow buckets 512+768+1024 to build composition first and detail later, but 768 was never a trained stage — treat that as its author's practice, not a settled answer `[contested]` |
+| `caption_dropout_rate` | `0.05` | Both sources |
+| Steps | **~90 per image**, `save_every` 250 | 2250 for 25 images; 2500 for a first run on a bigger set `[community — chengyansen-ai]` |
+
+**`cache_text_embeddings: true` is only safe if the trigger word is written into the captions themselves.** It encodes each caption once and reuses that, so anything the trainer would normally swap in later — such as a `trigger_word` field it injects per step — gets frozen at the wrong value. Type the trigger into the `.txt` sidecars yourself, leave `trigger_word` unset, and the cache is free speed. It also takes the text encoder out of the step loop, which is what frees up the VRAM the next paragraph relies on.
+
+**You do not need layer offloading at 32 GB, and §3's out-of-memory report does not scale up to bigger cards.** With fp8 on both sides, text embeddings cached and gradient checkpointing on, the measured run used **15.8 of 32 GB with `low_vram` off**, at batch 1 and 1024 px.
+
+Turning offloading *off* also gained nothing, which is worth knowing. The run sat at **about 5.5 s/step either way** — roughly 3.4 hours for 2250 steps on a 12B model — because the card was the limit, not memory traffic. So treat offloading as a way to fit a job on a smaller card, not as something that slows you down. On a card with room it is neither needed nor harmful, and it is not where a slow run's time is going.
+
+**The trainer wants HuggingFace-format folders for the encoder and VAE, not the ComfyUI single files.** This catches out anyone who has just downloaded the ComfyUI model set. Those single files — `qwen3vl_4b_*.safetensors` and `qwen_image_vae.safetensors` — are for generating images. AI-Toolkit will still go and fetch its own diffusers-format `Qwen3-VL-4B-Instruct` (about 9 GB) and Qwen-Image VAE on top of them. Budget disk for both, and if you already have the folders, point at them instead of downloading again:
+
+```yaml
+model:
+  arch: "krea2"
+  name_or_path: "/workspace/models/diffusion_models/krea2_raw_bf16.safetensors"
+  model_kwargs:
+    text_encoder_path: "/path/to/Qwen3-VL-4B-Instruct"
+    vae_path: "/path/to/Qwen-Image"
+```
+
+`[community — chengyansen-ai/krea2-lora-training]`. On rented hardware this is also how you rescue a nearly-full network volume. The encoder can always be downloaded again, so send it and the HF cache to the pod's throwaway container disk and keep the volume for checkpoints — see [`comfyui-on-runpod`](../../comfyui-on-runpod/references/volume-and-models.md) §6.
+
+**Previews on Raw cost enough to take over the run, and they make the likeness look worse than it is.** They render on the undistilled model at guidance 4, which is slow — about 90 seconds each, so a 6-prompt set every 250 steps burns more time than the training it is watching. They are also washed out in exactly the fine skin and bone detail a face is recognised by. In the measured run the face was still generic at step 750 of 2250, unmistakable by 1500, and sharper again on Turbo than any Raw preview had been. Reading those step-750 previews as a failure would have thrown away a perfectly good run.
+
+So keep `save_every` at 250 to build the checkpoint series, but preview only every 750, skip the step-0 preview, and cut the preview step count. The real answer comes from a Turbo grid afterwards anyway (§8). The 8-step Turbo settings the community workflow uses to accept a run: **CFG 0, mu 1.15**.
+
+**This is the one place musubi beats AI-Toolkit on this model.** musubi's `--turbo_dit` (§2) previews the in-training LoRA on Turbo weights directly, which removes the problem instead of asking you to allow for it. AI-Toolkit has nothing equivalent, so here you fix it by habit: preview rarely, judge on Turbo.
+
+Two failures specific to this path can cost you a whole run, both from the community workflow's pitfall list `[community — chengyansen-ai; unverified here]`. **The character bleeds into prompts that never mention the trigger** — fix that by picking an earlier checkpoint, not by retraining. And **`res_2s`-family samplers drift** when you generate. That workflow also recommends DOP with the class `"person"`, which is the same technique `characters.md` records as working on Krea 2 and failing on Z-Image.
 
 ## 4. fal hosted trainer
 

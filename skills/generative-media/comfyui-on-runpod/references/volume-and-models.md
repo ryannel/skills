@@ -207,6 +207,21 @@ The S3 route is also the cheapest way to **audit** a volume — list its content
 
 **Never `wget`.** `hf download` gives resume, parallel chunks and correct revision pinning; a 20 GB `wget` that dies at 90% costs you the whole download again.
 
+**Check the size, because `hf download` can exit successfully having fetched almost nothing.** Its Xet transfer backend (`hf_xet`, which is used automatically once installed) fails in two ways that both look like success:
+
+- **It hangs.** The process stays alive, the GPU sits at 0%, and the cache stops growing part-way through.
+- **It lies.** After a cleared or interrupted Xet cache, a run reports success having pulled only the config and tokenizer, skipping the multi-gigabyte weight files.
+
+A pod that looks like it is training but is really waiting on a dead download bills exactly the same per hour as one that is working. Three defences, cheapest first:
+
+- **Check bytes, never exit codes.** Write your DONE marker only after confirming the downloaded folder is the size you expected. One `du` comparison turns both failures into loud ones.
+- **Turn Xet off for big weight downloads**: `HF_HUB_DISABLE_XET=1` `[official — huggingface_hub environment-variable docs]`. Plain LFS over HTTPS is less clever and, for these files, more reliable.
+- **If that variable seems to be ignored, uninstall `hf_xet`.** It does not always take effect, which is a reported bug `[official — huggingface_hub#3266]`, and removing the package leaves no doubt. On a throwaway container that is a fine thing to do.
+
+If a Xet cache is already in a bad state, delete that model's cache completely before retrying. Downloading on top of stale index files is what produces the false success.
+
+**PEP 668 blocks `pip install` on recent base images**, because their system Python is marked externally-managed. On a throwaway container, `--break-system-packages` is the right answer rather than a hack. In anything you plan to keep, use a virtualenv.
+
 **Rebuild procedure**, which should be one command in your tooling:
 
 1. Create the volume in a DC where your GPUs actually exist.
@@ -225,11 +240,32 @@ The layout above is inference-shaped, but the same volume is where LoRA training
 
 | Purpose | Directory | Why there |
 |---|---|---|
-| HF cache | `/workspace/huggingface/` | Set `HF_HOME=/workspace/huggingface` on trainer pods so downloads land on the volume, not the container disk — a stop wipes the container, and a cache on the volume means the next trainer pod skips the 20 GB re-download entirely |
+| HF cache | `/workspace/huggingface/` **if the volume has room** | Set `HF_HOME=/workspace/huggingface` so the next trainer pod skips the 20 GB re-download — a stop wipes the container disk, the volume survives. **Check free space first**: on a volume near its quota this is the setting that kills the run (see below) |
 | Training data | `/workspace/datasets/<name>/` | One folder per dataset, named for the subject — reusable across runs and bases |
 | Run outputs | `/workspace/training/<run>/` | Checkpoints, samples and optimiser state per run; the *selected* checkpoint then gets promoted into `models/loras/<base>/` (§3), which stays a curated directory rather than a dumping ground |
 
-**Budget for the weights existing twice.** Trainers consume the base model in diffusers format through the HF cache; ComfyUI loads the single-file `.safetensors` from `models/diffusion_models/`. That is roughly 20 GB duplicated for a Z-Image-class model, and it is a format difference, not waste to be deduplicated — size the volume for both rather than trying to make one serve as the other.
+**Budget for the weights existing twice.** Trainers read the base model in diffusers format out of the HF cache; ComfyUI loads a single-file `.safetensors` from `models/diffusion_models/`. For a Z-Image-class model that is roughly 20 GB stored twice. It is a format difference, not waste you can deduplicate — size the volume for both rather than trying to make one file serve both jobs.
+
+The text encoder is the usual surprise here. You can have a complete ComfyUI model set already on the volume and the trainer will still fetch its own ~9 GB diffusers copy. Where the trainer lets you name paths (AI-Toolkit's `model_kwargs.text_encoder_path` and `vae_path`), pointing at a copy you already have beats storing either duplicate.
+
+### The volume quota is a hard wall, and you hit it late
+
+**Every network volume has a size limit that `df` will not show you.** Run `df -h /workspace` and it reports the cluster filesystem underneath — terabytes free — while your writes start failing at your volume's actual size. Measure what is on the volume instead: an `aws s3 ls` walk, or `du` on the pod. Never `df`.
+
+**Work out free space before you launch, because the write that fails is the last one.** Training saves checkpoints as it goes, and its biggest write is the *final* save. So a run that fits right up until the end still loses its last checkpoint to a quota error — after you have paid for the whole thing. You only recover because the earlier checkpoints landed, which is one more reason to save a series instead of a single result. In one measured run the failures arrived in this order: the encoder download hit the quota, then latent caching, then the final save `[community — production run, 2026-08-24]`.
+
+**The fix is to sort files by whether losing them matters, not to delete models.** Ask of each one: if the pod stopped right now and this vanished, what would it cost?
+
+| What | Put it on | Why |
+|---|---|---|
+| HF cache, encoder, dataset copy, latent and text caches | **Container disk** (`HF_HOME=/root/hf` or similar) | All rebuildable in minutes. A stop wipes them and that is fine |
+| Checkpoints, the curated `models/` tree, datasets of record | **Volume** | The only things whose loss costs real work |
+
+Container disks are usually 40 GB and mostly empty — enough for an encoder plus caches. This deliberately flips the default in the table above: putting the cache on the volume is right when there is room and wrong when there is not, and "how full is the volume?" is the question that settles it.
+
+**Clear space before a run, not during one.** Firefighting a quota mid-run is the expensive kind, because the GPU bills while you decide what to delete. Two habits make it a non-event: check free space as a pre-flight step, and know which of your big files can simply be downloaded again — a training base, once training is finished, is 24 GB you can drop without losing anything.
+
+**RunPod's S3-compatible endpoint is not a full S3, and the gaps bite right here.** Listing with `--recursive` returns nothing for directories it will happily list one level at a time. **Server-side copy does not work** — it fails with a tagging 500 — so moving a file from one volume path to another means doing it on a pod with `cp`, not over the API. The region has to be lowercase and set on every call. And a deleted directory keeps showing up as an empty `PRE` marker, which looks like a failed delete but is not `[community — measured against `eu-ro-1`, 2026-08-24]`.
 
 ---
 

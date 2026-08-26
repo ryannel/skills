@@ -56,6 +56,8 @@ A LoRA learns whatever is *constant across the dataset and absent from the capti
 
 Caption the face and you teach the model that this face is optional. Fail to caption the red jacket the subject wears in twenty of thirty images and the jacket becomes part of the character.
 
+**When a trait is part of the person but still changes, caption what changes it.** Freckles are hers, so never name them — but they fade under foundation. A set holding both versions forces the model to blame the difference on something, and if you name nothing it blames a bystander: the formal dress, the indoor light. Caption the **makeup** instead. The freckles stay part of the trigger, and their fading becomes a switch you can flip when you generate. Same shape for tan lines, glasses, hair up or down: name the cause, never the trait, and caption the exception rather than the rule. `references/dataset-and-captioning.md` §4.
+
 **A trigger token gives you a handle.** On CLIP-class encoders it wants to be a rare literal token used verbatim. On LLM/T5-class encoders it belongs folded into a natural phrase, or omitted entirely — bare rare tokens confuse a language encoder. This is determined by the encoder class, not by preference; see the conditioning doctrine in your model skill.
 
 ---
@@ -105,9 +107,13 @@ On alpha, two conventions are live in the wild: **alpha = rank** trains "louder"
 
 **Loss is a weak signal.** It tells you the model is fitting; it does not tell you whether the identity generalises. Judge on images, in three layers, cheapest first:
 
-1. **Training samples** — free, already on. Fix the seed, use 3–5 prompts, and read them only to find *roughly where the useful region is*, so the next layer can be small. Never pick a final checkpoint here: the trainer's sampler is not your production one.
+1. **Training previews** — already on, and *not* free on a rented GPU: they run on the clock you are paying for, and on an undistilled training model they can eat more time than the training. Fix the seed, use 3–5 prompts, save checkpoints often but preview rarely, and read them only to find *roughly where the good region is*. Never pick your final checkpoint here — the trainer's sampler is not the one you ship with.
 2. **A grid: checkpoint × strength**, fixed prompts and seed, generated in the tool you will ship from. The only step that costs real compute — narrow the range with layer 1 first.
-3. **Judge it blind.** The grid is labelled by design, so you know which cell trained longer before you look. Shuffle the candidates unlabelled, pick, then reveal. Costs nothing, and routinely reverses the labelled grid's answer.
+3. **Judge it blind, and set it up that way from the start.** A grid is labelled on purpose, so you know which cell trained longer before you even look. Knowing that does not protect you — the labelled sheet is still the easiest thing to open. Have whatever draws the grid write **coded cells plus a key file you leave shut** until your pick is written down, then open it. Same cost, and it often flips the answer the labelled grid gave you.
+
+**When a model comes in two halves, previews lie in a predictable direction.** If the trainer previews on the slow half (Krea 2 Raw, Z-Image Base, Flux dev) and you deploy on the fast one, those high-guidance previews smear the fine detail a face is recognised by, so the likeness looks weaker than it is. Do not restart because of a preview. Wait until about 60–70% of the run before you worry, and check on the model you actually deploy on — one image at real settings costs far less than a restart.
+
+**Nothing goes into the LoRA library until the blind pick is settled**, and **if the subject is a real person, the pick belongs to whoever knows that face.** How much a picture looks like a stranger is not something an outside eye or a metric can judge. So whoever ran the training builds the blind set, and whoever knows the subject chooses. A checkpoint handed over early gets used forever, so label it provisional and keep the other candidates until it is settled.
 
 **Three habits decide whether any of that is worth anything** `[community — production practice; convergent]`:
 
@@ -174,8 +180,8 @@ Most training checklists start at the config file. This one starts three steps e
 7. **Trigger token matched to the encoder class**: a rare literal token on CLIP-class; folded into a phrase or omitted on LLM-class.
 8. **Checkpoint saving on**, at an interval that gives you a series rather than a verdict.
 9. **Probe prompts written before the run**, saved in the run folder, carried over from last time so the runs compare. At least one out-of-distribution.
-10. **Evaluation planned** — which grid tool, where the blind pass happens, and the `FaceEmbedDistance` baseline calibrated now if you intend to use it.
-11. **Budget estimated in cells** if renting: checkpoints × strengths × prompts × seeds × seconds-per-image, read *before* rendering starts.
+10. **Evaluation planned** — which grid tool, how the cells come out **coded instead of labelled**, who makes the likeness pick, and the `FaceEmbedDistance` baseline calibrated now if you plan to use it.
+11. **Budget counted in cells** if renting: checkpoints × strengths × prompts × seeds × seconds per image, worked out *before* rendering starts — and count the **training previews** the same way (`prompts × seconds per preview × steps ÷ sample_every`), because that cost stays invisible until the bill arrives.
 
 ---
 
@@ -205,7 +211,7 @@ This skill holds two kinds of claim to two different standards, because they fai
 
 **Hard facts — must be exact or it breaks.** Civitai's real-person policy (quoted from their published rules), the TAKE IT DOWN Act's dates, enforcement start and penalty scale, the DreamBench++ result on DINO/CLIP-I misalignment, LTX-2.x's derivative-inheritance clauses, and the mechanism by which abliteration fails as an encoder swap. **Sources are official or primary** — platform policy pages, the published benchmark, licence text, and legal-practice summaries of the statute. These carry legal and account consequences, and the regulatory picture is **moving**: state deepfake law is still landing and platform policy follows it. **Re-verify before relying on any of it, regardless of who said it, and treat this as orientation rather than legal advice.**
 
-**Craft — what actually makes a good LoRA.** Caption-the-residual and its inversion, the coverage protocol, 15–30 curated images beating 100, the hyperparameter ranges, the dataset factory, XY-grid evaluation, the blind pass, the overfit signals. **The authoritative source here is the community** — named trainers who have run hundreds of these: neonkisu, QuantumBogoSort, Khanykov01, NanashiAnon, L3n4, Ainara, MyAIForce and the Civitai dataset guides, plus `-p-e-w-` on abliteration and MASilverHammer on Differential Output Preservation. Stated with confidence; ranges mean "your dataset and base differ from theirs," not "this is unreliable."
+**Craft — what actually makes a good LoRA.** Caption-the-residual and its inversion, captioning the cause for traits that are identity *and* variable, the coverage protocol, 15–30 curated images beating 100, the hyperparameter ranges, the dataset factory and when feeding a new LoRA the old one's pictures wrecks the run, XY-grid evaluation, the blind pass and setting it up blind from the start, what previews cost and why they understate likeness on a two-half model, the overfit signals. **The authoritative source here is the community** — named trainers who have run hundreds of these: neonkisu, QuantumBogoSort, Khanykov01, NanashiAnon, L3n4, Ainara, MyAIForce and the Civitai dataset guides, plus `-p-e-w-` on abliteration and MASilverHammer on Differential Output Preservation. Stated with confidence; ranges mean "your dataset and base differ from theirs," not "this is unreliable."
 
 Five things held as genuinely open:
 
@@ -215,7 +221,7 @@ Five things held as genuinely open:
 - **Optimal rank for character work** is contested across families and has been for years — the ranges above bracket the disagreement rather than resolving it. `[contested]`
 - **Differential Output Preservation's transferability**: it works on Krea 2, fails outright on Z-Image Base, and nobody has mapped which architectures it takes on. `[contested]`
 
-**Facts dated 2026-08-22; community craft refreshed 2026-08-23.** The legal material moves fastest and is the thing to re-check before publishing anything — Civitai's policy text, the enforcement posture around the Act, and the derivative terms of any non-permissive licence you train against. The adult-flagged-share figures are dated in place, disputed between two methods, and drift as ecosystems mature — re-measure rather than reading either table forward.
+**Facts dated 2026-08-22; community craft refreshed 2026-08-23; the evaluation and captioning craft extended 2026-08-25 from one finished real-person character run. Its measured numbers are a single data point and are dated where they appear — the mechanisms behind them do generalise.** The legal material moves fastest and is the thing to re-check before publishing anything — Civitai's policy text, the enforcement posture around the Act, and the derivative terms of any non-permissive licence you train against. The adult-flagged-share figures are dated in place, disputed between two methods, and drift as ecosystems mature — re-measure rather than reading either table forward.
 
 ---
 
@@ -223,7 +229,7 @@ Five things held as genuinely open:
 
 | File | When to read it |
 |---|---|
-| `references/dataset-and-captioning.md` | Building the set: the 8-point rotation protocol in full, curation criteria, the synthetic dataset-factory loop, caption formats by encoder class, multi-outfit limits, and Differential Output Preservation for multi-character work |
+| `references/dataset-and-captioning.md` | Building the set: the 8-point rotation protocol in full, curation criteria, the synthetic dataset-factory loop and when reusing your own previous LoRA's pictures is fair, caption formats by encoder class, multi-outfit limits, and Differential Output Preservation for multi-character work |
 | `references/nsfw-training.md` | Adult work in depth: both adult-flagged-share censuses with their methods and why they disagree, per-family base selection, the character-vs-capability-LoRA scale difference and why stacking them is unreliable, the same-sex coverage gap, why the encoder-swap myth persists, explicit-captioning practice, anatomy failure modes, and the manual-captioning cost on video |
-| `references/evaluation-and-tooling.md` | Judging a run at home: which grid tool and its limits, the blind-judging pass, a copy-pasteable probe set, `FaceEmbedDistance` with baseline calibration and why the metric misleads, cost arithmetic for rented GPUs, and the one small script worth writing yourself |
+| `references/evaluation-and-tooling.md` | Judging a run at home: which grid tool and its limits, the blind-judging pass and how to set it up blind from the start, what training previews really cost and why they understate likeness on a two-half model, a copy-pasteable probe set, `FaceEmbedDistance` with baseline calibration and why the metric misleads, cost arithmetic for rented GPUs, and the one small script worth writing yourself |
 | `references/publishing-and-likeness.md` | Whether a LoRA is publishable at all: Civitai's rules in full, the TAKE IT DOWN Act, licence inheritance on non-permissive models, dataset provenance, the synthetic-character resemblance test, and where distribution is still open |

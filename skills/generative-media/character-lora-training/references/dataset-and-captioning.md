@@ -74,6 +74,19 @@ Two advantages beyond convenience: you get **coverage photography rarely provide
 
 Which edit model to use for step 2 is a per-family question; your model skill names the one for its ecosystem.
 
+### Feeding a new LoRA with an old one's pictures — when it helps, when it wrecks the run
+
+Using your previous version's output to fill a coverage hole is just the factory above pointed at your own back catalogue, and it is a fair move: the identity is already locked, you have full provenance, and it is often the only way to get angles a photo set never had. **The question to ask is whether the old LoRA was actually good at the exact thing you are borrowing.**
+
+That question fails more often than it sounds, for an annoying reason: the hole you are filling now is usually the same hole the old model had. The coverage was missing back then too — that is *why* it never learned those angles. So harvesting its profile and rear views to fix your profile and rear coverage means training the new version on the old version's guesses about the one thing it could not do. The new model treats those angles as fact, cannot do better than them, and never shows you the ceiling, because nothing in its data disagrees.
+
+Two rules keep this honest:
+
+- **Look at the candidates full size, next to the real references, before you decide.** Not as thumbnails. Model artefacts are invisible at contact-sheet size and permanent once trained: over-baked traits (above), plastic skin, a softness the original photos never had.
+- **If you started over because the old one was not good enough, seeding from it contradicts the reason you started over.** "Fresh start" and "keep the old model's characteristics" are opposite instructions. A fresh line built on the old one's pictures is just the old line again, with extra steps. When the coverage genuinely cannot be got any other way, the honest move is to train without it and write down which prompts failed — that list is the spec for your next dataset. A gap you documented beats one you invented.
+
+Seeding earns its place when the old model was strong where you are borrowing and weak somewhere else. That is a different situation, and worth deciding on purpose rather than by whether the pictures happen to be lying around.
+
 **The whole loop has been packaged.** VNCCS 3.0 — the Visual Novel Character Creation Suite — is a ComfyUI character-consistency system that implements steps 1–3 as a wired pipeline `[community — AHEKOT, r/StableDiffusion 892 pts]`. What it gives you over hand-wiring: a **Control Center** that downloads and manages the models the workflows need, an interactive 3D **Pose Studio** for posing, framing, lighting and pose libraries, a **Character Cloner** that builds the anchor from reference images, a **Clothes Designer** that clones an outfit across different characters, an **Emotion Studio** for expression sets, and **per-sprite regeneration**, so one bad frame does not cost the sheet. Install via `github.com/AHEKOT/VNCCS_Easy-Install` `[official — repo README, read 2026-08-23]`.
 
 Two things to settle before training on its output. Its generation stack is reported to be built around **Anima-Base-1.0** `[community — AHEKOT; re-verify]`, so the stills inherit that model's look and its weights-side licence — see [`anima`](../../anima/) before publishing anything trained on them. And its target is a **visual-novel sprite sheet**, which is a different coverage target from §2: expression and outfit variation are what it optimises for, and the rotation and elevation axes are yours to check. Curate its output against §2 rather than assuming a finished sheet is a finished dataset.
@@ -112,6 +125,21 @@ The trick generalises to any video model with reference conditioning; the caveat
 | LLM/T5-class (Flux, Z-Image, Qwen-class, Krea) | Natural prose clauses | Folded into a phrase, or omitted — bare rare tokens confuse a language encoder |
 
 Getting this backwards is a common cause of a LoRA that "trained fine but won't trigger."
+
+**When a trait belongs to the person but still changes, caption whatever changes it.** Caption-the-residual has a blind spot the table above hides: some things are clearly part of the identity *and* clearly variable. Freckles are the tidy example. They belong to her, so the rule says never name them — but they fade under foundation, so a set shot over both bare-faced and made-up days contains two versions of her skin.
+
+Leaving both unnamed does not quietly average out. The model has to blame the difference on *something*, and it picks whatever else happens to line up: the formal dress that shows up in the made-up shots, or the indoor light, or the year. You end up with a character who mysteriously loses her freckles in evening wear.
+
+The fix is to name the **cause** — which is not part of the identity, and does change — and leave the trait unnamed:
+
+| | Caption it? | What you get |
+|---|---|---|
+| The freckles (the trait) | **Never** | They stay part of `<trigger>` — the default face |
+| The makeup (the cause) | **Wherever you can see it** | A switch you can flip: add "wearing foundation" when you generate, and the freckles fade, exactly as they do in the photos |
+
+Caption the **exception, not the rule.** If most of the set is bare-faced, leave bare-faced unmentioned so it becomes the default, and put a makeup clause only on the made-up images. The same shape covers tan lines, glasses, a beard grown and shaved, hair up or down, a necklace she always wears — anything where "is this the person, or is this a variable?" answers *both*. Ask what nameable thing changes it, and caption that `[community — production practice; convergent with the caption-the-residual mechanism]`.
+
+The opposite mistake is common and real: **naming the trait in your generation prompts bakes it in too hard.** One character LoRA whose synthetic set was made with "freckles across her face and body" in every prompt learned heavy, even freckling all over her — far more than the real person had. The words were in the caption *and* the thing was in every image, so it got taught twice. If a trait is part of the identity, let the pictures teach it and control it through its cause.
 
 **Consistency of vocabulary matters more than richness.** If you call it "three-quarter view" in one caption and "angled slightly away" in another, you have split one concept into two. Pick terms and reuse them exactly.
 

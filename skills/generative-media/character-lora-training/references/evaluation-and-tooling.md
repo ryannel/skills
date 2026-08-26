@@ -33,9 +33,26 @@ Every trainer generates sample images at intervals — kohya, OneTrainer, AI-Too
 | Identity emerging gradually, background still varying | Healthy. This is the shape you want |
 | Identity appears, then everything stiffens into one look | You have passed the peak — the useful checkpoints are behind you |
 | Samples get *smoother* and waxier late | Over-training. Late-run over-smoothing looks like "quality" in a thumbnail and is not |
-| Nothing resembling the subject by 40% of the run | Something is wrong with captions or config — stop and check rather than waiting it out |
+| Nothing resembling the subject by 40% of the run | Suspicious, but **not on its own a reason to restart** — read the next two paragraphs before touching the config |
 
 **Do not pick your final checkpoint from samples.** Trainer previews use the trainer's sampler and settings, not your production ones, so a checkpoint can look better here and worse in ComfyUI. Samples tell you *roughly where the useful region is* so the grid in layer 2 can be small.
+
+**Some models come in two halves, and previews from the training half look worse than the truth.** Several models here ship a slow, undistilled version you train on and a fast version you actually deploy — Krea 2 Raw and Turbo, Z-Image Base and Turbo, Flux dev and schnell. The trainer draws its previews with the training half, at high guidance and a lot of steps. That combination smears exactly the details a face is recognised by: skin texture and fine bone structure. So the likeness looks weaker than it really is. Load the same weights on the fast half and the person is plainly there.
+
+One measured run shows how wide the gap gets. At step 750 of 2250 the previews were clean pictures of a generic face, with the subject's freckles missing. By step 1500 she was unmistakable. On the deployment model the shipped checkpoint looked sharper than any preview had `[community — production run, Krea 2 + AI-Toolkit, 25 real photos, 2026-08-24]`.
+
+Two rules follow, and they are the ones that save a run:
+
+- **Wait until about 60–70% of the run before you worry.** The 40% row above was written for trainers that preview on the same model you deploy on. On a two-half model it fires early and talks you into restarting a healthy run. A generic face a third of the way in is normal.
+- **Check on the deployment model before you change anything.** One image at your real settings answers the question the previews cannot, and costs a tiny fraction of a restart. Restarting because of a preview is the expensive version of this mistake: every restart pays again for loading the model and rebuilding the caches.
+
+**Previews can burn more GPU time than the training does, and almost nobody budgets for them.** The cost is `prompts × seconds per preview × (steps ÷ sample_every)`. On an undistilled model at high guidance one preview takes tens of seconds, not two or three. In the run above, 6 prompts at about 89 seconds each, every 250 steps, added up to roughly **80 minutes of previews on a 75-minute training job**. That more than doubled the bill — to produce the reading the paragraphs above tell you not to trust. Three fixes, all free:
+
+- **Split `save_every` from `sample_every`.** Checkpoints are what you shop from later, so save them often. Previews are only a rough "is it working yet" check, so make them rare. One every third checkpoint is plenty.
+- **Skip the preview at step 0.** It draws the base model with an untrained adapter. You already know what that looks like.
+- **Cut the preview step count.** Previews answer "is the identity arriving", not "is this good". Half your normal steps reads the same.
+
+Before you rent a GPU, do that multiplication the same way §6 has you count grid cells. If previews come out as a real slice of the training time, that is a bug in the config, not a setting.
 
 **Loss is close to useless for this** and the community is right about that. The exception worth knowing: **OneTrainer supports genuine validation loss** — you flag separate concepts as validation data (explicitly *not* your training images) and it graphs per-concept validation loss to TensorBoard. That is a real held-out signal none of the other trainers give you, and it is free. If validation loss turns up while sample images still look fine, you are watching overfit begin.
 
@@ -74,6 +91,21 @@ This is the part no tool does for you, and it is where a home setup can genuinel
 4. Only then look at which was which.
 
 You can do this by renaming files to `A.png`, `B.png`, `C.png` from a shuffled order — a ten-line script, or by hand. It sounds fussy. It routinely reverses the answer people got from the labelled grid.
+
+**Make it blind from the start, not by willpower.** Knowing about this bias does not protect you from it. The labelled grid gets drawn first, and then you are supposed to ignore what it tells you. That does not work. The labelled sheet is sitting right there, it is the obvious thing to open, and a run that took hours wants an answer now. So do not make that file at all. Have whatever draws your grid write out **coded cells plus a separate key**, and leave the key shut until you have written down a pick:
+
+1. Render every cell under a shuffled code — `A`, `B`, `C`…
+2. Save the code-to-checkpoint mapping in a `BLIND_KEY.json` next to them. Do not open it.
+3. Write down your pick — best likeness and best prompt-adherence, separately, for each prompt.
+4. Now open the key.
+
+Same images, same cost. The one thing that changes is that no file ever exists showing you a picture and its checkpoint number side by side. That is worth more than promising yourself you will ignore one. It also holds up when someone else runs the eval for you, agent or human, because "was the key still shut when the pick was written?" is something you can check and "were you biased?" is not. This is the concrete version of the build-it-yourself advice in §7: the shuffling is not a bonus on top of a grid tool, it is the part grid tools do not do.
+
+**Still draw the labelled grid — just afterwards.** Once the pick is recorded, the labelled view is the best way to see the shape of the run: where the likeness arrived, how wide the usable strength band is, whether late checkpoints go stiff. It is a bad judge and a good explanation.
+
+**If the subject is a real person, the person who knows that face makes the pick.** You cannot judge how much a picture looks like someone you have never met, and neither can a metric. You can check the broad structure against a reference photo, but the part that reads as *them* is exactly what a stranger's eye misses. So split the job: **whoever ran the training builds the blind set and says what each prompt was testing; whoever knows the subject chooses.** Prompt-adherence is the opposite case — anyone can score a picture against the prompt text, so that half does not have to wait.
+
+**Do not promote a checkpoint until the pick is settled.** Whatever gets copied into the LoRA folder is the one that gets used forever, so a "temporary" promotion quietly becomes permanent. If you have to hand someone a file early — to let them try it, or because the rented machine is about to disappear — label it **provisional** in the sidecar, name the pick you are waiting on, and keep the other candidates. Deleting the alternatives is how "we will confirm this properly later" turns into a decision nobody made.
 
 **Score likeness and prompt-adherence separately.** They peak at different checkpoints, reliably: likeness keeps improving after flexibility has started to die. Asking "which is best?" forces you to silently average two axes that are moving in opposite directions, and the answer you get depends on which one you happened to be looking at. Ask twice:
 
@@ -149,7 +181,7 @@ Nothing here is priced in currency, because GPU rates move and the numbers would
 
 | Stage | Cost | Notes |
 |---|---|---|
-| Training samples | **Free** | Already running. A few seconds per sample |
+| Training samples | **Not free on a rented GPU** | They share the GPU the training is already paying for. Count them as `prompts × seconds per preview × (steps ÷ sample_every)` — on an undistilled model that can come to more than the training itself (§1) |
 | OneTrainer validation loss | **Free** | Some extra steps per validation interval |
 | The grid | **The real cost.** cells = checkpoints × strengths × prompts × seeds | 96 cells is a comfortable ceiling at home; 400 is an afternoon |
 | Blind judging | **Free** | Reuses grid images. Costs attention, not compute |
@@ -165,11 +197,13 @@ Nothing here is priced in currency, because GPU rates move and the numbers would
 
 **Do not build a trainer, and do not build a grid renderer.** Both are solved, and the tools in §2 are better than what you would write.
 
-**The thing worth building is small**, and it is the thing no tool provides: a script that takes a folder of grid outputs and
+**The thing worth building is small**, and no tool provides it: a script that drives the render itself, so the pictures arrive already blind. It should
 
-1. renames a shuffled subset to `A/B/C…` for a blind pass,
-2. records your picks — best-likeness and best-adherence, separately, per prompt,
-3. writes the result next to the run with the checkpoint identities restored.
+1. write every cell under a shuffled code (`A/B/C…`), with the mapping in a `BLIND_KEY.json` you leave shut,
+2. record your picks — best likeness and best adherence, separately, per prompt,
+3. write the result next to the run with the checkpoint names filled back in.
+
+The order matters. A script that renames files *after* a labelled grid has been drawn leaves the labelled grid sitting on disk, and §3 is about that file never existing.
 
 That is an afternoon, it is the highest-value hour in this entire document, and it persists across runs so that run 5 can be compared with run 2.
 
@@ -198,7 +232,7 @@ Not the target audience for this file, but worth knowing which of it is worth bo
 
 **Hard facts.** The DreamBench++ result on DINO/CLIP-I misalignment, the pointwise-vs-pairwise VLM judging figures, VBench's dimension set, and what each named tool does and does not support (including SwarmUI's lack of a LoRA axis and its 3-axis grid-image / 4-axis web-page limits). **Sources are published benchmarks, papers and project READMEs.** These are checkable and were checked.
 
-**Craft.** The blind pass, splitting likeness from adherence, the fixed probe set, weak-everywhere prompts as a dataset signal, the narrow-then-render budget habit. **This is community and production practice** rather than measured result — it comes from people running these repeatedly, and from a working private pipeline whose design the pairwise finding independently supports. Stated with confidence; adapt the specifics.
+**Craft.** The blind pass and the trick of making it blind from the start, scoring likeness and adherence separately, who gets to make the pick when the subject is a real person, holding a checkpoint as provisional, the fixed probe set, weak-everywhere prompts as a dataset signal, the narrow-then-render budget habit, and §1's readings on preview cost and two-half models. Those last two come from one production run and are dated where they appear: trust the mechanism, treat the numbers as a single data point. **This is community and production practice** rather than measured result — it comes from people running these repeatedly, and from a working private pipeline whose design the pairwise finding independently supports. Stated with confidence; adapt the specifics.
 
 One thing genuinely open: **there is no accepted home-scale metric for character-LoRA fidelity.** ArcFace distance is what is reachable and it is known-imperfect; VLM judging is where the field went but has no turnkey local tooling at this scale. Expect this section to change. `[contested]`
 

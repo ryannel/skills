@@ -43,6 +43,15 @@ Template: **`image_krea2_turbo_t2i.json`** (Comfy-Org/workflow_templates; in-app
 
 **Subgraph switches:** `prompt_enhance` (default **true** — the `TextGenerate` LLM expander; see `prompting-guide.md §6` for when and why to turn it off, including the documented refusal bug Comfy-Org/ComfyUI#14631) and `enable_lora?` (default false). A `CustomCombo` on the main canvas picks the style LoRA and auto-appends its trigger phrase to your prompt via `StringConcatenate`.
 
+**Your ComfyUI has to be newer than 2026-06-22, and an old one does not tell you so.** `krea2` is a CLIP *type*, so an older build simply does not list it in the `CLIPLoader` dropdown. The encoder file is sitting there, the model loads, and the one option you need is quietly missing from a menu. This hurts most on rented pods and prebuilt containers, whose images are often pinned months back — a container built 2026-05-01 is older than the open-weights release itself. Check that dropdown before you debug anything else `[community — production run on a RunPod ComfyUI template, 2026-08-25]`.
+
+Updating a container's bundled ComfyUI has two snags worth knowing about first:
+
+- **`git pull` can fail because the branches have diverged**, since the image build edited the working tree. `git fetch origin && git reset --hard origin/master` works reliably — but check for local changes you care about first, because it throws them away.
+- **Run `pip install -r requirements.txt` afterwards, not just the pull.** A current ComfyUI needs a newer `comfy_kitchen` than an older image ships with. You find out through a startup `ImportError` about a missing name (`int8_attention_is_available`, in the case we saw), not through anything that mentions versions.
+
+One more container trap: restart ComfyUI with **the same interpreter that started it**. If you kill a working `python3` process and relaunch under a `python` that points at a different environment, you get a torch build that does not match the card — and it reads like a hardware fault.
+
 **Hosted Medium/Large in ComfyUI:** separate path entirely — the "Krea 2 Image" API/partner node (API-key billing, style refs, moodboard IDs, creativity Raw/Low/Medium/High). See `api-and-hosted.md §4`.
 
 ## 2. Quantisation & VRAM
