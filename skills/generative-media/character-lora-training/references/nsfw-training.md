@@ -2,7 +2,7 @@
 
 Adult content is a dominant use of open-weights media models, and most of the difficulty around it gets misdiagnosed. This file covers what actually decides results.
 
-Read [`publishing-and-likeness.md`](publishing-and-likeness.md) first if a real person is anywhere near the dataset. That decides whether the work can be distributed at all, before any of this matters.
+If a real person is anywhere near the dataset, read [`publishing-and-likeness.md`](publishing-and-likeness.md) first. That file decides whether the work can be distributed at all, and that question comes before anything here.
 
 1. [The limit is data, not refusal](#1-the-limit-is-data-not-refusal)
 2. [Base model selection by family](#2-base-model-selection-by-family)
@@ -14,23 +14,23 @@ Read [`publishing-and-likeness.md`](publishing-and-likeness.md) first if a real 
 
 ## 1. The limit is data, not refusal
 
-This is the single most useful thing to get straight. Open-weights image and video models **do not generally refuse.** They produce poor anatomy because the base model saw very little of it. What looks like censorship is usually just absence.
+This is the single most useful thing to get straight. Open-weights image and video models **do not generally refuse.** They produce poor anatomy because the base model saw very little of it during training. What looks like censorship is usually just absence.
 
-That explains the ecosystem's most stubborn myth. People swap the text encoder for an abliterated ("heretic") build and expect it to unlock capability. **It does not, and the author of the leading abliteration tool has said so directly:**
+That explains the ecosystem's most stubborn myth. People swap the text encoder for an abliterated ("heretic") build and expect the swap to unlock capability. **It does not, and the author of the leading abliteration tool has said so directly:**
 
-> Abliteration works by directional ablation on the residual stream so an LLM stops *refusing*. But LLMs already represent "harmful" inputs accurately — that is how they know to refuse. The hidden states reaching the diffusion model are therefore not clearer, they are **perturbed relative to what it was trained on**, costing prompt adherence and sometimes adding artefacts. `[community — -p-e-w-, author of Heretic]`
+> Abliteration works by directional ablation on the residual stream, so that an LLM stops *refusing*. But LLMs already represent "harmful" inputs accurately. That accurate representation is how they know to refuse in the first place. The hidden states reaching the diffusion model are therefore not clearer. They are **perturbed relative to what the diffusion model was trained on**, which costs prompt adherence and sometimes adds artefacts. `[community — -p-e-w-, author of Heretic]`
 
-There is corroborating evidence in the file sizes. The encoder builds shipped with some models are physically **smaller than stock, because the output layers are missing** — refusal lives in those layers, and a text encoder never uses them. There is no refusal path there to remove.
+The file sizes corroborate this. The encoder builds shipped with some models are physically **smaller than stock, because the output layers are missing.** Refusal lives in those layers, and a text encoder never uses them. There is no refusal path there to remove.
 
-**Abliterated models do help in one place: prompt expansion.** An LLM asked to *enhance* a prompt can refuse outright, and several official ComfyUI templates ship such an expander switched on by default. That is a separate stage, before the encoder, and swapping it is legitimate.
+**Abliterated models do help in one place: prompt expansion.** An LLM asked to *enhance* a prompt can refuse outright, and several official ComfyUI templates ship such an expander switched on by default. The expander is a separate stage that runs before the encoder, so swapping it is legitimate.
 
-The confusion is usually structural. A template's subgraph wires **the same LLM** into both the expander and the text-encode node, so a swap meant to fix the refusing expander quietly changes the encoder too. Unpack the subgraph and point the abliterated model at the expander only.
+The confusion usually comes from template structure. A template's subgraph wires **the same LLM** into both the expander and the text-encode node. A swap meant to fix the refusing expander therefore quietly changes the encoder too. Unpack the subgraph and point the abliterated model at the expander only.
 
 **So if anatomy is poor, change the base model or train it in. No conditioning trick substitutes for training data.**
 
 ### But "train it in" is a different job at a different scale
 
-Here is the distinction that catches people. It is worth being blunt about, because the two get confused constantly:
+Here is the distinction that catches people. It is worth being blunt about it, because the two jobs get confused constantly:
 
 | | **Character LoRA** | **Capability / concept LoRA** |
 |---|---|---|
@@ -41,56 +41,56 @@ Here is the distinction that catches people. It is worth being blunt about, beca
 
 `[community — Qwen-Image NSFW LoRA notes, Civitai]`
 
-What follows: **if your base lacks the coverage, do not try to fix it with a character LoRA.** You will build a LoRA that half-works and then blame the settings. Either pick a base that already has the coverage (§2), or stack an existing general-purpose capability LoRA *underneath* your character LoRA and let each do its own job.
+The consequence: **if your base lacks the coverage, do not try to fix it with a character LoRA.** You will build a LoRA that half-works and then blame the settings. Instead, either pick a base that already has the coverage (§2), or stack an existing general-purpose capability LoRA *underneath* your character LoRA and let each one do its own job.
 
-That layering is the normal production pattern, and it is why the good-citizen advice in `../SKILL.md` matters. A character LoRA that demands strength 1.0 cannot share a stack with the anatomy LoRA it needs.
+That layering is the normal production pattern. It is also why the good-citizen advice in `../SKILL.md` matters: a character LoRA that demands strength 1.0 cannot share a stack with the anatomy LoRA it needs.
 
 ### The layering is a live constraint, not a solved recipe
 
-One practitioner worked through four published Wan I2V anatomy LoRAs — DASIWA, "Ultimate pussy anus helper", "Edible Anuses" and HearmemanAI's. Each one either failed to render at all or *"changes the character lora too much"* `[community — One-Energy5403; unanswered]`. Nothing in the thread resolved it, and nobody has published a working configuration `[contested]`.
+One practitioner worked through four published Wan I2V anatomy LoRAs — DASIWA, "Ultimate pussy anus helper", "Edible Anuses" and HearmemanAI's. Each one either failed to render at all or *"changes the character lora too much"* `[community — One-Energy5403; unanswered]`. Nothing in the thread resolved the problem, and nobody has published a working configuration `[contested]`.
 
-Read that alongside the paragraph above, because they are the same situation from opposite ends: **stacking a capability LoRA under a character LoRA is exactly what people are doing when this fails.** The mechanism is not mysterious. Both adapters write into the same attention weights, and an anatomy LoRA trained on 1,500+ images of bodies is a much broader change than a 25-image identity — so it has every opportunity to move the face too. Two things follow:
+Read that report alongside the paragraph above, because they are the same situation seen from opposite ends: **stacking a capability LoRA under a character LoRA is exactly what people are doing when this fails.** The mechanism is not mysterious. Both adapters write into the same attention weights. An anatomy LoRA trained on 1,500+ images of bodies is a much broader change than a 25-image identity, so it has every opportunity to move the face too. Two things follow:
 
 - **Evaluate the stack, not the LoRA.** A character LoRA that passes its strength sweep on its own tells you nothing about whether it survives an anatomy LoRA underneath. The stack test in `../SKILL.md` is the gate, and on adult work it is not optional. Run it before you commit to the base.
-- **A base that already has the coverage beats the stack.** This is the strongest practical argument for choosing on §2's axis instead of assembling coverage at generation time. On video it is more than an argument: an NSFW-merged checkpoint is the route that has actually been shown to fix anatomy failures a LoRA could not. See the single-variable study in [`generative-media-atlas/references/adult-work.md`](../../generative-media-atlas/references/adult-work.md) §3, which also warns that stacking an NSFW LoRA onto such a merge **double-applies** what is already baked in.
+- **A base that already has the coverage beats the stack.** This is the strongest practical argument for choosing on §2's axis instead of assembling coverage at generation time. On video it is more than an argument: an NSFW-merged checkpoint is the route that has actually been shown to fix anatomy failures a LoRA could not. See the single-variable study in [`generative-media-atlas/references/adult-work.md`](../../generative-media-atlas/references/adult-work.md) §3. That study also warns that stacking an NSFW LoRA onto such a merge **double-applies** what is already baked in.
 
-**Merging instead of stacking.** Where you are combining several capability LoRAs, published merge tooling folds them into one "meta-LoRA" by **rank concatenation** — joining the A and B matrices, with each contribution scaled by `√(weight × alpha/rank)` `[community — published merge scripts; re-verify]`. Two things to know before you go there. Rank adds up, so the merged file is as big as the sum of its parts. And **naming conventions differ** — Kohya-style `.lora_down.weight` / `.lora_up.weight` / `.alpha` versus PEFT-style `.lora_A.weight` / `.lora_B.weight`. A merge script that assumes the wrong one finds no modules to merge and reports success while changing nothing.
+**Merging instead of stacking.** Where you are combining several capability LoRAs, published merge tooling folds them into one "meta-LoRA" by **rank concatenation**. It joins the A and B matrices, scaling each contribution by `√(weight × alpha/rank)` `[community — published merge scripts; re-verify]`. Know two things before you go there. First, rank adds up, so the merged file is as big as the sum of its parts. Second, **naming conventions differ**: Kohya-style files use `.lora_down.weight` / `.lora_up.weight` / `.alpha`, while PEFT-style files use `.lora_A.weight` / `.lora_B.weight`. A merge script that assumes the wrong convention finds no modules to merge, and it reports success while changing nothing.
 
 ### The gap this framing predicts, and nobody has closed
 
-If the limit is data, then a model fails wherever it saw least — and there is a reported case of that which nothing in this suite answers. Across SDXL, [`z-image`](../../z-image/) and [`krea-2`](../../krea-2/) alike, scenes specifying **two women** come back with distorted anatomy and **intrusive male anatomy that was never prompted** `[community — ricovelez; unanswered]`.
+If the limit is data, then a model fails wherever it saw least. There is a reported case of exactly that, and nothing in this suite answers it. Across SDXL, [`z-image`](../../z-image/) and [`krea-2`](../../krea-2/) alike, scenes specifying **two women** come back with distorted anatomy and **intrusive male anatomy that was never prompted** `[community — ricovelez; unanswered]`.
 
-The mechanism is the one §1 opened with, not a new one. The adult data these bases absorbed is overwhelmingly heteronormative, so a same-sex scene sits far enough outside the distribution that the model falls back on what it saw most. That is also why negative prompts disappoint here: they bias sampling away from a token, which is a weak lever against a prior the model is reaching for structurally.
+The mechanism is the one §1 opened with, not a new one. The adult data these bases absorbed is overwhelmingly heteronormative. A same-sex scene therefore sits far enough outside the distribution that the model falls back on what it saw most. That is also why negative prompts disappoint here: they bias sampling away from a token, which is a weak lever against a prior the model is reaching for structurally.
 
-No verified fix has surfaced, and nothing in this suite currently addresses it `[flagged — open gap]`. Two directions have the most behind them. **Base choice** — the booru-tagged SDXL finetunes carry explicit act and configuration tags, so you can name the scene instead of hoping for it. And **composing instead of generating** — per-face detailer passes or regional conditioning ([`dataset-and-captioning.md`](dataset-and-captioning.md) §5) resolve each figure separately, so no single sampling pass has to hold the whole frame. Training it in is the in-principle answer, and it inherits the scale above: this is a capability LoRA, not a character one.
+No verified fix has surfaced, and nothing in this suite currently addresses it `[flagged — open gap]`. Two directions have the most behind them. The first is **base choice**: the booru-tagged SDXL finetunes carry explicit act and configuration tags, so you can name the scene instead of hoping for it. The second is **composing instead of generating**: per-face detailer passes or regional conditioning ([`dataset-and-captioning.md`](dataset-and-captioning.md) §5) resolve each figure separately, so no single sampling pass has to hold the whole frame. Training it in is the in-principle answer, and it inherits the scale from the table above — this is a capability LoRA, not a character one.
 
 ---
 
 ## 2. Base model selection by family
 
-Base choice dominates every other decision here — more than rank, more than steps, more than captioning.
+Base choice dominates every other decision here. It matters more than rank, more than steps, more than captioning.
 
-**The usual proxy is what share of a base's published LoRAs are adult-flagged. The two measurements of it disagree, almost inversely, on video.** `[contested]` Both are given here, because quietly picking one would hide the more useful lesson, which is about the metric itself.
+**The usual proxy for a base's adult support is what share of its published LoRAs are adult-flagged. The two measurements of that share disagree, almost inversely, on video.** `[contested]` Both are given here, because quietly picking one would hide the more useful lesson, which is about the metric itself.
 
 | Census | Method | The ordering it produces |
 |---|---|---|
 | **2026-08-13** — this file's original figures | ~100 LoRAs per base from Civitai's model API | Wan 2.2 I2V **90%**, Wan 2.2 T2V 84%, MiniMax H3 62%, Krea 2 52%, Z-Image 46–47%, SDXL/Pony/Illustrious 29–34%, Anima 29%, Flux 28% |
 | **2026-08-23** — re-census `[official — Civitai /api/v1/models]` | 600 most-downloaded LoRAs per base, testing the X and XXX bits of the `nsfwLevel` bitmask (1 PG · 2 PG-13 · 4 R · 8 X · 16 XXX) | Pony **67%**, Illustrious 56%, Anima 52%, NoobAI 50%, Krea 2 46%, Z-Image Turbo 45%, Flux.1 dev 37%, SDXL 1.0 31%, Wan 2.2 T2V/I2V 23%/22%, LTX 2.3 14% |
 
-**The likely explanation covers half the gap, and which half matters.** `nsfwLevel` is a bitmask over a model's **preview images**, not over what the LoRA does. A video LoRA's preview is routinely a tame first frame or a motion demo, so an explicit video LoRA can score PG. The metric undercounts video systematically, and that accounts for Wan falling from the top of one table to the bottom of the other.
+**The likely explanation covers half the gap, and which half matters.** `nsfwLevel` is a bitmask over a model's **preview images**, not over what the LoRA does. A video LoRA's preview is routinely a tame first frame or a motion demo, so an explicit video LoRA can score PG. The metric therefore undercounts video systematically, and that accounts for Wan falling from the top of one table to the bottom of the other.
 
-It does **not** account for the image half, where Flux rises from 28% to 37% and the booru finetunes climb into the fifties and sixties. There the two samples differ in what they select for: an unspecified ~100 versus the 600 most-downloaded, and popularity correlates with rating. **Treat neither ordering as settled**, and in particular do not read the video rows of either table as a capability ranking.
+It does **not** account for the image half, where Flux rises from 28% to 37% and the booru finetunes climb into the fifties and sixties. There the two samples differ in what they select for: an unspecified ~100 versus the 600 most-downloaded, and popularity correlates with rating. **Treat neither ordering as settled.** In particular, do not read the video rows of either table as a capability ranking.
 
-**A trap for whoever measures next: the API's `nsfw` boolean is dead.** It returns `false` for every model sampled, including ones whose previews are XXX, so any share built on it is wrong — which is one candidate explanation for the 2026-08-13 numbers `[flagged — re-verify]`. Test bits instead. Explicit is `level & (8|16)`; mature is `level & (4|8|16)`. Using `nsfwLevel > 1` counts PG-13 as adult and inflates everything.
+**A trap for whoever measures next: the API's `nsfw` boolean is dead.** It returns `false` for every model sampled, including ones whose previews are XXX. Any share built on it is therefore wrong, and that is one candidate explanation for the 2026-08-13 numbers `[flagged — re-verify]`. Test bits instead. Explicit is `level & (8|16)`; mature is `level & (4|8|16)`. Using `nsfwLevel > 1` counts PG-13 as adult and inflates everything.
 
-**Reproduce rather than trust.** [`generative-media-atlas`](../../generative-media-atlas/) carries `scripts/civitai_census.py`, and `python scripts/civitai_census.py --adult` re-runs the 2026-08-23 measurement exactly. The full 17-base table with its caveats lives in [`generative-media-atlas/references/adult-work.md`](../../generative-media-atlas/references/adult-work.md) §1. **That file owns model choice; this one owns what to do once you have chosen** — so re-measure there and come back here.
+**Reproduce rather than trust.** [`generative-media-atlas`](../../generative-media-atlas/) carries `scripts/civitai_census.py`, and `python scripts/civitai_census.py --adult` re-runs the 2026-08-23 measurement exactly. The full 17-base table with its caveats lives in [`generative-media-atlas/references/adult-work.md`](../../generative-media-atlas/references/adult-work.md) §1. **That file owns model choice; this one owns what to do once you have chosen.** So re-measure there and come back here.
 
-**What survives the disagreement**, because none of it rests on the metric:
+**What survives the disagreement** — none of the following rests on the metric:
 
 - **Adult work is a dominant published use of open video models.** The community evidence is direct rather than inferred: r/unstable_diffusion's top-of-month is dominated by video `[community — r/unstable_diffusion sweep, 2026-08-23]`. Worth knowing before you assume image-side craft carries over.
 - **Either table measures which way an ecosystem leans, never what a model can do.** SDXL 1.0's ~31% of a vastly larger library is more material in absolute terms than any newer base's 60%.
-- **One family is ruled out for a reason that is not capability**: [`ltx-2-5`](../../ltx-2-5/), by the acceptable-use policy written into its licence, which bans sexually explicit content everywhere, local weights included. That is absolute — no technical workaround changes a licence term.
-- **[`ideogram-4`](../../ideogram-4/) used to sit in that sentence and no longer belongs there**, because a filter and a licence are different shapes of obstacle. Its model-level filter is real and officially documented, but it is **leaky rather than absolute** — see the row below. Grouping a technical barrier with a legal one taught the wrong lesson about both.
+- **One family is ruled out for a reason that is not capability.** [`ltx-2-5`](../../ltx-2-5/) is excluded by the acceptable-use policy written into its licence, which bans sexually explicit content everywhere, local weights included. That is absolute — no technical workaround changes a licence term.
+- **[`ideogram-4`](../../ideogram-4/) used to sit in that sentence and no longer belongs there.** A filter and a licence are different shapes of obstacle. Its model-level filter is real and officially documented, but it is **leaky rather than absolute** — see the row below. Grouping a technical barrier with a legal one taught the wrong lesson about both.
 
 What each family actually gives you:
 
@@ -107,7 +107,7 @@ What each family actually gives you:
 
 ### The SDXL finetunes
 
-The deepest ecosystem, and worth understanding as separate lineages rather than interchangeable options. The descriptions below are convergent community verdicts, not measurements — nobody has benchmarked these against each other, and the ranking claims in particular move as new versions land:
+This is the deepest ecosystem, and it is worth understanding as separate lineages rather than interchangeable options. The descriptions below are convergent community verdicts, not measurements. Nobody has benchmarked these finetunes against each other, and the ranking claims in particular move as new versions land:
 
 | Finetune | Character `[community — Civitai model cards and comparisons; convergent]` |
 |---|---|
@@ -116,7 +116,7 @@ The deepest ecosystem, and worth understanding as separate lineages rather than 
 | **Illustrious** (v2.0 as a finetune base) | The **largest character-LoRA library**, which matters if you want compatibility with existing work |
 | **Pony Diffusion V6 XL** | Heavy booru-tagged training with explicit examples. Tolerates arbitrarily long tag strings and stays coherent when tags conflict. Enormous LoRA ecosystem |
 
-**Train against the base you will run on.** A LoRA trained on one of these and run on another transfers partially at best — these lineages have diverged a long way. Where an ecosystem separates a training base from a runtime variant, follow that skill's guidance.
+**Train against the base you will run on.** A LoRA trained on one of these finetunes and run on another transfers partially at best, because these lineages have diverged a long way. Where an ecosystem separates a training base from a runtime variant, follow that skill's guidance.
 
 All of these are CLIP-class, tag-driven models. Captioning and trigger tokens follow the CLIP column of the conditioning doctrine — **verbatim rare tokens and weighted tags** — not the natural-sentence style newer DiTs want.
 
@@ -124,14 +124,14 @@ All of these are CLIP-class, tag-driven models. Captioning and trigger tokens fo
 
 ## 3. Captioning
 
-**Caption the explicit content explicitly.** This is not a stylistic preference. It follows mechanically from caption-the-residual: anything constant across the dataset and missing from the captions gets absorbed into the concept you are training.
+**Caption the explicit content explicitly.** This is not a stylistic preference. It follows mechanically from caption-the-residual: anything that is constant across the dataset and missing from the captions gets absorbed into the concept you are training.
 
-Caption an explicit dataset vaguely, or with euphemisms, and you teach the model that *the explicit content is the character*. The LoRA then produces explicit output whatever you prompt, and cannot render the character clothed at all. This is one of the most common complaints about character LoRAs, and it is a captioning error rather than a base-model problem.
+Caption an explicit dataset vaguely, or with euphemisms, and you teach the model that *the explicit content is the character*. The LoRA then produces explicit output whatever you prompt, and it cannot render the character clothed at all. This is one of the most common complaints about character LoRAs, and it is a captioning error rather than a base-model problem.
 
 So:
 
 - **Name acts, poses, states of dress and framing** in the caption, in the dialect the encoder wants — booru tags for CLIP-class finetunes, natural clauses for LLM-encoder DiTs.
-- **Do not caption the identity.** Same rule as always: the face is the thing you are teaching.
+- **Do not caption the identity.** The same rule as always applies: the face is the thing you are teaching.
 - **Include clothed images in the dataset** if you want the character to be renderable clothed. A set that is uniformly explicit produces a character who cannot be anything else.
 - **Balance the set.** Coverage of angle, expression and shot size matters just as much here — arguably more, since explicit datasets tend to be narrow in framing.
 
@@ -159,7 +159,7 @@ So:
 
 Two things differ materially from image work.
 
-**Automated captioners fail.** Vision-language captioners either refuse or produce useless euphemism on adult footage, so **the community captions adult video by hand.** Video datasets are already the expensive kind — clip count multiplied by frame handling — so this is a real cost multiplier to budget for, not a detail. It is also a strong argument for **training on single frames** where you care about appearance rather than motion: the same curated stills, ordinary image captioning, far less labour.
+**Automated captioners fail.** Vision-language captioners either refuse or produce useless euphemism on adult footage, so **the community captions adult video by hand.** Video datasets are already the expensive kind, because cost scales with clip count multiplied by frame handling. Hand captioning is therefore a real cost multiplier to budget for, not a detail. It is also a strong argument for **training on single frames** where you care about appearance rather than motion: you get the same curated stills, ordinary image captioning, and far less labour.
 
 **Architecture still governs.** The rules from the model skill do not relax:
 

@@ -1,6 +1,6 @@
 # FLUX.2 — Setup & Workflows Reference
 
-Source tier: ComfyUI template JSONs (primary, read verbatim), Comfy-Org HF repos (primary), diffusers docs and HF blog (official-via-docs), community GGUF repos and Civitai training guide (community-tier, labelled).
+Source tier: the ComfyUI template JSONs are primary sources, read verbatim. The Comfy-Org Hugging Face repos are also primary. The diffusers docs and the HF blog are official-via-docs. The community GGUF repos and the Civitai training guide are community-tier and labelled as such.
 
 ---
 
@@ -54,8 +54,8 @@ Source: `Comfy-Org/workflow_templates/image_flux2_image_editing.json` (verbatim)
 | `Flux_2-Turbo-LoRA_comfyui.safetensors` *(optional)* | `models/loras/` | `LoraLoaderModelOnly` | Same turbo LoRA as t2i |
 
 **Key nodes added for image editing:**
-- `LoadImage` → feeds into `VAEEncode` (encodes reference image to latent space)
-- `ReferenceLatent` — new FLUX.2 node. It takes a latent plus an optional mask, and outputs a reference conditioning token
+- `LoadImage` feeds into `VAEEncode`, which encodes the reference image to latent space
+- `ReferenceLatent` is a new FLUX.2 node. It takes a latent plus an optional mask, and outputs a reference conditioning token
 - Multiple `ReferenceLatent` nodes are wired in sequence. Each one accepts one reference image
 - `BasicGuider` and `FluxGuidance=4` stay unchanged. The reference latents are injected into the conditioning stream, not into the guider
 
@@ -111,8 +111,8 @@ Source: `Comfy-Org/workflow_templates/image_flux2_klein_9b_kv*.json` (verbatim, 
 - Standard `ReferenceLatent` nodes for the actual reference images
 
 **When to use KV vs standard 9B:**
-- Running batch jobs with the same reference image set and varying prompts → use KV. The first call pays the reference encoding cost; later calls reuse the cache
-- Single-shot generation with one reference → standard 9B is equivalent
+- Use KV when you run batch jobs with the same reference image set and varying prompts. The first call pays the reference encoding cost, and later calls reuse the cache
+- For single-shot generation with one reference, standard 9B is equivalent
 - KV caching gives roughly 1.5–3× speedup on repeated-reference batches (community-tier estimate)
 
 ---
@@ -124,10 +124,10 @@ Source: `Comfy-Org/workflow_templates/image_flux2_klein_9b_kv*.json` (verbatim, 
 **Important path difference:** GGUF `.gguf` files go in `models/unet/`, not `models/diffusion_models/`. The `UnetLoaderGGUF` node (from the custom node) reads from `models/unet/`.
 
 **Repositories (community-tier):**
-- `city96/FLUX.2-dev-gguf` — produces Q2_K through Q8_0 quants
-- `unsloth/FLUX.2-dev-GGUF` — alternative quant series; may include iQ (importance-weighted) variants
+- `city96/FLUX.2-dev-gguf` produces Q2_K through Q8_0 quants
+- `unsloth/FLUX.2-dev-GGUF` is an alternative quant series, and may include iQ (importance-weighted) variants
 
-**File naming convention:** `flux2-dev-Q4_K_M.gguf` (approximate — verify exact filenames in the HF repo before downloading).
+**File naming convention:** `flux2-dev-Q4_K_M.gguf`. This is approximate, so verify exact filenames in the HF repo before downloading.
 
 **Node swap from official templates:**
 
@@ -241,11 +241,11 @@ pipe = Flux2Pipeline.from_pretrained(
 
 ## 7. Using LoRAs
 
-The generic path for any downloaded FLUX.2 LoRA. (Training your own is §8.)
+This section covers the generic path for any downloaded FLUX.2 LoRA. Training your own is covered in §8.
 
-> **Sourcing:** the loader node and the frozen-encoder fact are verified (official template + AI-Toolkit configs). The weight ranges and "FLUX.2 dislikes trigger words" are community craft from named Flux LoRA trainers (apatero, RunComfy, fal.ai, bghira/SimpleTuner). FLUX.2 is new — treat the numbers as starting points.
+> **Sourcing:** the loader node and the frozen-encoder fact are verified against the official template and the AI-Toolkit configs. The weight ranges and the claim that "FLUX.2 dislikes trigger words" are community craft from named Flux LoRA trainers (apatero, RunComfy, fal.ai, bghira/SimpleTuner). FLUX.2 is new, so treat the numbers as starting points.
 
-**Node wiring — model-only.** A FLUX.2 LoRA patches the **DiT transformer only**. The text encoders (Mistral 3.2 for [dev], Qwen3 for [klein]) stay **frozen** in both training and inference, so there are no encoder weights to apply. Load it with **`LoraLoaderModelOnly`** on the model path:
+**Node wiring is model-only.** A FLUX.2 LoRA patches the **DiT transformer only**. The text encoders (Mistral 3.2 for [dev], Qwen3 for [klein]) stay **frozen** in both training and inference, so there are no encoder weights to apply. Load it with **`LoraLoaderModelOnly`** on the model path:
 
 ```
 (model loader) → LoraLoaderModelOnly → Flux2 sampler chain
@@ -253,20 +253,20 @@ The generic path for any downloaded FLUX.2 LoRA. (Training your own is §8.)
 
 If a LoRA *does* ship text-encoder weights (rare for FLUX.2), switch to the full `LoraLoader` so they apply. Model-only is still the norm.
 
-**Variant-specific — a [dev] LoRA does not load on [klein], and vice-versa.** Unlike Z-Image, where Base and Turbo share one architecture, FLUX.2's variants are **different model sizes**: [dev] is 32B, [klein] is 4B or 9B. So their LoRAs are **not interchangeable**. Match the LoRA to the exact variant it was trained on. The Klein sizes matter too. **Klein 9B needs the Qwen3-8B encoder** — run it against the 4B encoder and it fails outright. Check the LoRA's stated base model before you download it.
+**LoRAs are variant-specific: a [dev] LoRA does not load on [klein], and vice-versa.** This is unlike Z-Image, where Base and Turbo share one architecture. FLUX.2's variants are **different model sizes**: [dev] is 32B, and [klein] is 4B or 9B. Their LoRAs are therefore **not interchangeable**, so match the LoRA to the exact variant it was trained on. The Klein sizes matter too. **Klein 9B needs the Qwen3-8B encoder**. If you run it against the 4B encoder, it fails outright. Check the LoRA's stated base model before you download it.
 
 **Weight.** Start around **0.8**, and sweep **0.6–1.2**. Go lower for style LoRAs that flatten texture, and higher to force a stubborn concept. Read the LoRA's card for the author's tested weight `[community — consistent with Flux.1 conventions]`.
 
-**Trigger words — FLUX.2 mostly doesn't want them.** The encoder is a full LLM (Mistral/Qwen3), so FLUX.2 reads **natural-language description** far better than bare trigger tokens. Trainers report that trigger words "confuse the model," and that semi-long descriptive captions activate a LoRA best. If a LoRA defines a trigger, include it verbatim. Otherwise just *describe* what you want in prose. This is the opposite of tag-based SDXL, where the literal trigger token is mandatory.
+**Trigger words: FLUX.2 mostly doesn't want them.** The encoder is a full LLM (Mistral/Qwen3), so FLUX.2 reads **natural-language description** far better than bare trigger tokens. Trainers report that trigger words "confuse the model," and that semi-long descriptive captions activate a LoRA best. If a LoRA defines a trigger, include it verbatim. Otherwise, simply *describe* what you want in prose. This is the opposite of tag-based SDXL, where the literal trigger token is mandatory.
 
-**Stacking.** Chain `LoraLoaderModelOnly` nodes (MODEL out → MODEL in), or use the rgthree **Power Lora Loader**. Run **3–4 LoRAs** max `[community]`, and **lower each strength** as you add them — for example a character plus a style plus an effect, each around 0.5–0.8 — so they don't fight or over-bake. Use `strength_model` to make one dominant.
+**Stacking.** Chain `LoraLoaderModelOnly` nodes (MODEL out → MODEL in), or use the rgthree **Power Lora Loader**. Run **3–4 LoRAs** max `[community]`. Lower each LoRA's strength as you add more, so they don't fight or over-bake. For example, run a character plus a style plus an effect, each around 0.5–0.8. Use `strength_model` to make one dominant.
 
 **The Turbo LoRA** (`Flux_2-Turbo-LoRA_comfyui.safetensors`) is a special case. It is an *acceleration* LoRA that cuts [dev]/[klein] to 8 steps (guidance stays 4), toggled via `ComfySwitchNode`. It stacks with content LoRAs like a speed LoRA, not a style one.
 
-**Ecosystem (early 2026, fast-moving).** Civitai is the main LoRA source. Filter by the **exact FLUX.2 variant** ([dev] vs [klein]) — a Flux.1 LoRA won't load. Most are trained with the **Ostris AI-Toolkit**. BFL published an official "fine-tune [klein] in under 60 min" LoRA guide, and fal.ai, RunComfy, and bghira's SimpleTuner all support FLUX.2 training. The published pool was still small and growing close to release.
+**Ecosystem (early 2026, fast-moving).** Civitai is the main LoRA source. Filter by the **exact FLUX.2 variant** ([dev] vs [klein]), because a Flux.1 LoRA won't load. Most are trained with the **Ostris AI-Toolkit**. BFL published an official "fine-tune [klein] in under 60 min" LoRA guide, and fal.ai, RunComfy, and bghira's SimpleTuner all support FLUX.2 training. The published pool was still small and growing close to release.
 
 ---
 
 ## 8. LoRA training → `references/lora-training.md`
 
-Training moved to its own file, matching the suite's layout. **`references/lora-training.md`** covers the supported training bases (train on base, never distilled; [klein] 4B Base for commercial rights), the AI-Toolkit YAML and the Civitai klein recipe (including its dim-2 floor warning), and hyperparameters by target (character vs style — Herbst's 50+-run ablation). It also covers caption-the-residual in prose and the contested captionless debate, **style-LoRA specifics** (diversity maxim, color-cast lock-in, the out-of-set acceptance test), and XY-grid evaluation. The full character pipeline is **`references/characters.md`**. Once trained, **§7** above covers loading, weights, stacking, and variant compatibility.
+Training moved to its own file, matching the suite's layout. **`references/lora-training.md`** covers the supported training bases (train on base, never distilled; [klein] 4B Base for commercial rights), the AI-Toolkit YAML, and the Civitai klein recipe, including its dim-2 floor warning. It covers hyperparameters by target — character versus style, based on Herbst's 50+-run ablation. It also covers caption-the-residual in prose, the contested captionless debate, **style-LoRA specifics** (the diversity maxim, color-cast lock-in, and the out-of-set acceptance test), and XY-grid evaluation. The full character pipeline is **`references/characters.md`**. Once you have trained a LoRA, **§7** above covers loading, weights, stacking, and variant compatibility.

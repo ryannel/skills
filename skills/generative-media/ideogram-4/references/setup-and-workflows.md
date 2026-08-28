@@ -1,12 +1,12 @@
 # Ideogram 4 setup & workflows (open weights)
 
-This covers how to run the open-weight model yourself, through diffusers, the shipped CLI, or ComfyUI. "Self-hosted" means *you* run the model. It does not mean *where*. Every path here works the same on your own workstation **or a rented cloud GPU** (RunPod, Vast.ai, Lambda, etc.). Renting a box is the usual way to get a 24 GB+ / H100 GPU for the larger quants and 2K renders. See §1.1.
+This file covers how to run the open-weight model yourself, through diffusers, the shipped CLI, or ComfyUI. "Self-hosted" means that you run the model. It says nothing about where the hardware lives. Every path here works the same on your own workstation **or a rented cloud GPU** (RunPod, Vast.ai, Lambda, etc.). Renting a box is the usual way to get a 24 GB+ / H100 GPU for the larger quants and 2K renders. See §1.1.
 
 **Licence reminder:** the weights are **Non-Commercial**. Commercial use needs a separate paid licence from Ideogram. The inference code is Apache-2.0. The non-commercial restriction is about the *purpose* of use. **Running on a paid cloud GPU does not make commercial use OK.** For commercial output, use the hosted API/web app instead (`api-and-hosted.md`).
 
-**Training** a LoRA is covered in the neighbouring file, `lora-training.md`. Section 6 here covers only the loading half of that boundary.
+**Training** a LoRA is covered in the neighbouring file, `lora-training.md`. Section 6 here covers only the loading half of that split.
 
-Sources are labelled `[official]` when they come from the `ideogram-oss/ideogram4` repo and the HF model cards. They are labelled `[community — single report; re-verify]` when they come from forum and blog reports. The practitioner corpus for this model is still too thin to corroborate those.
+Sources are labelled `[official]` when they come from the `ideogram-oss/ideogram4` repo and the HF model cards. They are labelled `[community — single report; re-verify]` when they come from forum and blog reports. The community record for this model is still too thin to corroborate those reports.
 
 ## Contents
 
@@ -35,7 +35,7 @@ The weights are **gated** on Hugging Face. You must accept the licence and authe
 
 ### 1.1 Running on a cloud GPU (RunPod, Vast.ai, …)
 
-You don't need the hardware locally. The same diffusers / CLI / ComfyUI stacks run on a rented GPU pod. This is the common way to meet Ideogram 4's appetite: 24 GB+ for `nf4`, or an H100/A100 for comfortable `fp8` 2K renders.
+You don't need the hardware locally. The same diffusers / CLI / ComfyUI stacks run on a rented GPU pod, and renting is the common way to get the VRAM Ideogram 4 needs: 24 GB+ for `nf4`, or an H100/A100 for comfortable `fp8` 2K renders.
 
 - Pick a **ComfyUI** template/image (or a bare CUDA image for diffusers/CLI) and a GPU with enough VRAM (§4).
 - **Update ComfyUI to nightly** inside the pod. The Ideogram-4 loaders are new, and pre-baked images often ship an older build.
@@ -139,13 +139,13 @@ Key flags:
 | `--warn-on-caption-issues` | off | downgrade verifier aborts to warnings |
 | `--hive-text-key` / `--hive-visual-key` | env | **optional external** Hive moderation of prompt/output; the CLI warns loudly if absent (screening is then off) |
 
-Note: even the "free" `ideogram-4-v1` Magic Prompt is **server-side** and needs `IDEOGRAM_API_KEY`. For a fully-offline run, use `--no-magic-prompt` with a hand-written caption. Or run the open-source system prompt through your own LLM.
+Note: even the "free" `ideogram-4-v1` Magic Prompt is **server-side** and needs `IDEOGRAM_API_KEY`. For a fully-offline run, use `--no-magic-prompt` with a hand-written caption, or run the open-source system prompt through your own LLM.
 
 ---
 
 ## 4. ComfyUI (day-0 native support)
 
-ComfyUI is a **runtime for the open weights**. Run it on your workstation or a cloud GPU pod (§1.1); it works the same either way. It added native support on launch day. The official template is **`image_ideogram4_t2i.json`** (`Comfy-Org/workflow_templates`). The day-0 walkthrough is on `blog.comfy.org` and `docs.comfy.org/tutorials/image/ideogram/ideogram-v4`. **This requires an updated/nightly ComfyUI.** The loaders are new, and Desktop/Cloud builds on the stable channel may lag (pull nightly inside a pod). Node and file details below were read from the raw template JSON `[official — ComfyUI template JSON]`.
+ComfyUI is a **runtime for the open weights**, and it added native support on launch day. Run it on your workstation or a cloud GPU pod (§1.1). It works the same either way. The official template is **`image_ideogram4_t2i.json`** (`Comfy-Org/workflow_templates`). The day-0 walkthrough is on `blog.comfy.org` and `docs.comfy.org/tutorials/image/ideogram/ideogram-v4`. **This requires an updated/nightly ComfyUI** because the loaders are new, and Desktop/Cloud builds on the stable channel may lag (pull nightly inside a pod). The node and file details below were read from the raw template JSON `[official — ComfyUI template JSON]`.
 
 ### File layout
 
@@ -158,7 +158,7 @@ ComfyUI/models/
                       gemma4_e4b_it_fp8_scaled.safetensors      ← in-stack captioner LLM (separate Comfy-Org/gemma-4 repo)
 ```
 
-> **Two diffusion models load**, combined via a `DualModelGuider` — this is the model's dual-branch (asymmetric) CFG: a conditional and a separate unconditional transformer, not a negative-prompt string. Ideogram 4 also **reuses Flux.2's VAE and latent space** (`flux2-vae.safetensors`, `EmptyFlux2LatentImage`).
+> **Two diffusion models load**, combined via a `DualModelGuider`. This is the model's dual-branch (asymmetric) CFG: a conditional transformer plus a separate unconditional transformer, rather than a negative-prompt string. Ideogram 4 also **reuses Flux.2's VAE and latent space** (`flux2-vae.safetensors`, `EmptyFlux2LatentImage`).
 
 ### Key nodes (verbatim from the template)
 
@@ -185,7 +185,7 @@ Defaults are **euler / 20 steps / DualModelGuider 7**, latent 1024×1024. The `C
 
 ### The `gemma4` puzzle
 
-`gemma4_e4b_it_fp8_scaled.safetensors` is in the required-download list, from a separate `Comfy-Org/gemma-4` repo, but **no node in the shipped template actually loads it.** It is the recommended **in-stack** LLM (it runs on your own GPU, instead of the hosted `ideogram-4-v1` Magic Prompt) for the natural-language-to-JSON-caption step. The template includes an "Ideogram4 Caption Prompt Template" helper subgraph — string nodes that assemble the system prompt plus your idea — but **no LLM-execution node**. You run that conversion through gemma4 yourself. Downloading gemma4 and finding nothing to plug it into is a common first-day confusion `[official — ComfyUI template JSON]`.
+`gemma4_e4b_it_fp8_scaled.safetensors` is in the required-download list, from a separate `Comfy-Org/gemma-4` repo, but **no node in the shipped template actually loads it.** It is the recommended **in-stack** LLM for the natural-language-to-JSON-caption step: it runs on your own GPU instead of relying on the hosted `ideogram-4-v1` Magic Prompt. The template does include an "Ideogram4 Caption Prompt Template" helper subgraph, a set of string nodes that assemble the system prompt plus your idea, but it contains **no LLM-execution node**. You run that conversion through gemma4 yourself. Downloading gemma4 and then finding nothing to plug it into is a common first-day confusion `[official — ComfyUI template JSON]`.
 
 ### VRAM & quant naming — flagged
 
@@ -205,7 +205,7 @@ Two layers, both `[official]`:
 
 1. **Model-level NSFW filter.** Blocked generations return a gray screen reading "Image blocked by safety filter". It is in the weights and cannot be disabled in ComfyUI or diffusers. **False-positive rates are higher for plain-text than JSON prompts** — using a JSON caption reduces spurious blocks. The team has acknowledged over-blocking and signalled a future checkpoint update.
 
-   **It is real, and it is not absolute.** This difference matters, because "in the weights" was being read as "route elsewhere entirely". An adult generation has been posted from the open weights with two ordinary style LoRAs loaded, `real engine` and `lenovo` at 0.4 strength, 48 steps, driven by a JSON caption `[community — Ashamed-Ad7403, r/unstable_diffusion; single report]`. One of the published Civitai LoRAs is named `Gray Screen bypass` (`lora-training.md` §4) — somebody is building for exactly this. The Civitai shelf went from zero adult-flagged entries on 2026-08-13 to ~26% explicit across 34 on 2026-08-23 `[community — Civitai baseModel census, 2026-08-23]`. None of that explains the mechanism. It is unclear whether a LoRA displaces the filtered behaviour, or the reports simply sit inside the filter's false-negative margin `[flagged — re-verify]`. Plan for the gray screen. Do not plan on defeating it.
+   **The filter is real, but it is not absolute.** That difference matters, because "in the weights" was being read as "route elsewhere entirely". An adult generation has been posted from the open weights with two ordinary style LoRAs loaded (`real engine` and `lenovo` at 0.4 strength, 48 steps, driven by a JSON caption) `[community — Ashamed-Ad7403, r/unstable_diffusion; single report]`. One of the published Civitai LoRAs is named `Gray Screen bypass` (`lora-training.md` §4), so somebody is building for exactly this. The Civitai shelf went from zero adult-flagged entries on 2026-08-13 to ~26% explicit across 34 on 2026-08-23 `[community — Civitai baseModel census, 2026-08-23]`. None of that explains the mechanism: it is unclear whether a LoRA displaces the filtered behaviour, or whether the reports simply sit inside the filter's false-negative margin `[flagged — re-verify]`. Plan for the gray screen. Do not plan on defeating it.
 2. **Optional external Hive moderation.** This is wired into the reference `run_inference.py` (text and visual). You supply `HIVE_TEXT_MODERATION_KEY` / `HIVE_VISUAL_MODERATION_KEY`. If absent, that screening is simply off (the CLI warns).
 
 (The ComfyUI blog's "safety is baked into the weights, can't disable" refers to layer 1; the Hive layer 2 is the optional external one in the reference code.)
@@ -214,22 +214,22 @@ Two layers, both `[official]`:
 
 ## 6. Using a LoRA you have trained
 
-This section is short, honestly. **Making** a LoRA is covered in `lora-training.md`. This is the
-*using* half of that boundary, and it is thin because the ecosystem has not filled it in yet.
+This section is short because the ecosystem has not filled this gap in yet. **Making** a LoRA is
+covered in `lora-training.md`. This section covers the *using* half of that split.
 
 - **Format.** fal's trainer emits a `comfy`-format `.safetensors` alongside its own. That is an
-  ordinary ComfyUI LoRA file, and it is what you load. ai-toolkit writes its own output in the same
-  place it does for every other model it supports.
+  ordinary ComfyUI LoRA file, and it is the one you load. ai-toolkit writes its own output in the
+  same place it does for every other model it supports.
 - **Where it plugs in.** The shipped template `image_ideogram4_t2i.json` contains **no LoRA loader
-  node at all**, and no wired example has been published — not by Comfy-Org, not by fal, not on
-  Civitai `[flagged — re-verify]`. Ideogram 4 also loads **two** diffusion models (§4), so which
-  branch the LoRA attaches to — conditional, unconditional, or both — is an open question rather
-  than a settled default. Expect to wire it yourself, and to test whether the unconditional branch
-  needs the same patch.
-- **Strengths and stacking.** There are no published weight bands, and no reports on stacking two
-  LoRAs `[flagged — re-verify]`. Sweep from 1.0 downward as you would on any DiT, and judge by eye.
-  Do not import a band from another model's skill, because the dual-branch guider makes the
-  effective strength non-comparable.
+  node at all**, and no wired example has been published by Comfy-Org, by fal, or on Civitai
+  `[flagged — re-verify]`. Ideogram 4 also loads **two** diffusion models (§4), so it is an open
+  question rather than a settled default which branch the LoRA attaches to: the conditional model,
+  the unconditional model, or both. Expect to wire it yourself, and to test whether the
+  unconditional branch needs the same patch.
+- **Strengths and stacking.** There are no published weight bands, and there are no reports on
+  stacking two LoRAs `[flagged — re-verify]`. Sweep from 1.0 downward as you would on any DiT, and
+  judge by eye. Do not import a band from another model's skill, because the dual-branch guider
+  makes the effective strength non-comparable.
 
 If you get this working, it would be the most useful thing anyone could currently write up about
 Ideogram 4.

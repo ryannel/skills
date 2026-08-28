@@ -1,7 +1,8 @@
 # Installing skills — the CLI, the bundles, and why nothing installs transitively
 
-This file owns **getting skills onto a machine**. It covers the `skills` CLI as this suite uses it,
-the per-playbook bundles, and troubleshooting for the one failure mode that is structural, not a bug.
+This file covers **getting skills onto a machine**. It explains the `skills` CLI as this suite uses it
+and lists the per-playbook install bundles. It also covers troubleshooting, including the one failure
+mode that is structural rather than a bug.
 
 ## Contents
 
@@ -19,19 +20,19 @@ the per-playbook bundles, and troubleshooting for the one failure mode that is s
 ## 1. The structural fact: no dependencies
 
 **A `SKILL.md` cannot declare that it needs another skill, and the CLI resolves nothing
-transitively.** Required frontmatter is `name` and `description`. The only meaningful optional field
-is `metadata.internal`. There is no dependency field, no lockfile of dependencies, and no
-install-time resolution.
+transitively.** The required frontmatter fields are `name` and `description`. The only meaningful
+optional field is `metadata.internal`. There is no dependency field, no lockfile of dependencies,
+and no install-time resolution.
 
-Two consequences shape how this suite is written:
+This structural fact shapes how the suite is written, in two ways:
 
 - **Cross-skill links resolve only when both skills are installed.** Every link in this repo is
-  relative (`../sibling/`), and installing flattens the domain folder away. So `../z-image/` resolves
-  when `z-image` is installed, and dangles otherwise. **A dangling link is not a bug. It is the
-  install command you have not run.**
-- **[`generative-media-atlas`](../) carries what it would otherwise route**, because it is the one
-  skill designed to be installed alone. That is a deliberate deviation from how the rest of the
-  suite is written, and it is why this skill runs longer than its cross-cutting siblings.
+  relative, in the form `../sibling/`, and installing flattens the domain folder away. So a link to
+  `../z-image/` resolves when `z-image` is installed, and dangles otherwise. **A dangling link is
+  not a bug. It means you have not yet run the install command for that sibling.**
+- **[`generative-media-atlas`](../) carries what it would otherwise route to a sibling**, because it
+  is the one skill designed to be installed alone. That is a deliberate deviation from how the rest
+  of the suite is written, and it is why this skill runs longer than its cross-cutting siblings.
 
 ---
 
@@ -54,20 +55,21 @@ npx skills add ryannel/skills
 npx skills add ryannel/skills --skill z-image -g -a claude-code -y
 ```
 
-**Ask the user before installing** — especially with `-g`, or into a repository they did not ask you
-to modify. Installing writes files into their agent directories. It is a change to their machine,
-not a lookup.
+**Ask the user before installing.** This matters especially with `-g`, or when installing into a
+repository they did not ask you to modify. Installing writes files into their agent directories, so
+it changes their machine. It is not just a lookup.
 
-Sources resolve several ways: GitHub shorthand (`ryannel/skills`), a full GitHub/GitLab/git URL, a
-direct tree URL to one skill, a local path, or a `.zip`/`.tar` download. Private repositories use
-whatever Git authentication is already configured: the Git credential helper first, then `gh repo
-clone`, then SSH.
+The CLI resolves sources in several ways: GitHub shorthand such as `ryannel/skills`, a full
+GitHub/GitLab/git URL, a direct tree URL to one skill, a local path, or a `.zip`/`.tar` download.
+Private repositories use whatever Git authentication is already configured. The CLI tries the Git
+credential helper first, then `gh repo clone`, then SSH.
 
 ---
 
 ## 3. Bundles by playbook
 
-From [`playbooks.md`](playbooks.md). Add `-g` for global, `-a claude-code` to target one agent.
+These bundles come from [`playbooks.md`](playbooks.md). Add `-g` to install globally, or
+`-a claude-code` to target one agent.
 
 | Playbook | Command |
 |---|---|
@@ -93,11 +95,12 @@ From [`playbooks.md`](playbooks.md). Add `-g` for global, `-a claude-code` to ta
 | `-y, --yes` | Skip confirmation prompts |
 | `--all` | Every skill to every agent, no prompts |
 
-**Symlink is the default, and it is the right one** for this suite: one canonical copy per skill, so
-`npx skills update` updates every agent at once. Use `--copy` only where symlinks are not supported.
+**Symlink is the default, and it is the right choice for this suite.** Each skill keeps one
+canonical copy, so `npx skills update` updates every agent at once. Use `--copy` only where symlinks
+are not supported.
 
-**Install by skill name, not by path.** Names stay stable across repository reorganisation. This repo
-groups skills under `skills/generative-media/`, but that grouping is invisible to the installed
+**Install by skill name, not by path.** Names stay stable when the repository is reorganised. This
+repo groups skills under `skills/generative-media/`, but that grouping is invisible in the installed
 result.
 
 ---
@@ -109,10 +112,10 @@ npx skills use ryannel/skills@z-image | claude
 npx skills use ryannel/skills --skill z-image --agent claude-code
 ```
 
-`skills use` resolves the source the same way `add` does, writes the skill to a temporary directory,
-and prints the generated prompt to stdout, or starts an agent with it when `--agent` is given.
-Useful for a one-off consultation, and for checking whether a skill is what you want before it lands
-in a repository.
+`skills use` resolves the source the same way `add` does. It writes the skill to a temporary
+directory and prints the generated prompt to stdout. When `--agent` is given, it starts an agent
+with that prompt instead. This is useful for a one-off consultation, and for checking whether a
+skill is what you want before it lands in a repository.
 
 ---
 
@@ -125,9 +128,9 @@ npx skills update -g                    # global only
 npx skills list                         # what is installed, where
 ```
 
-**Run it against this suite deliberately.** Its subjects move weekly, and every skill here carries a
-`Facts dated …` line in its two-bar section. Compare that against your install date instead of
-assuming the copy on disk is current.
+**Run the update command against this suite deliberately.** The models it covers change weekly, and
+every skill here carries a `Facts dated …` line in its two-bar section. Compare that date against
+your install date instead of assuming the copy on disk is current.
 
 ---
 
@@ -140,8 +143,9 @@ This is an alternative to per-skill installation: it installs the whole domain a
 /plugin install generative-media-skills@ryannel-skills
 ```
 
-The CLI also reads `.claude-plugin/marketplace.json` when discovering skills in a repository. Skills
-declared there are found at their declared depth, rather than by the bounded depth-3 walk.
+The CLI also reads `.claude-plugin/marketplace.json` when it discovers skills in a repository.
+Skills declared there are found at their declared depth. Without that declaration, the CLI finds
+skills by a bounded depth-3 walk.
 
 ---
 
@@ -153,6 +157,6 @@ declared there are found at their declared depth, rather than by the bounded dep
 | `--list` shows more skills than the catalogue | The CLI scans `.agents/skills/` and `.claude/skills/` as standard locations, so a repo's own authoring machinery appears | Repo-side fix: `metadata.internal: true` in that skill's frontmatter hides it unless `INSTALL_INTERNAL_SKILLS=1` |
 | An expected skill is missing from `--list` | It is marked internal | `INSTALL_INTERNAL_SKILLS=1 npx skills add <repo> --list` |
 | Private repo download fails | Git auth not configured for that remote | Configure the credential helper, authenticate `gh`, or use the SSH URL form. `GITHUB_TOKEN`/`GH_TOKEN` work for API access |
-| Skill installs but the agent never uses it | The `description` is the trigger the agent matches on | Check the description actually names the user's vocabulary — the model names, node names and error strings they would type |
+| Skill installs but the agent never uses it | The `description` is the trigger the agent matches on | Check that the description names the user's vocabulary: the model names, node names and error strings they would type |
 | Updating one agent leaves another stale | Installed with `--copy` | Reinstall with symlinks, or update each agent |
 | A skill's claims are out of date | Skills are snapshots | `npx skills update`, then check the skill's `Facts dated` line |

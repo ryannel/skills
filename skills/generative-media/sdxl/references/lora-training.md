@@ -1,10 +1,10 @@
 # SDXL LoRA Training (kohya_ss / OneTrainer / ai-toolkit)
 
-> **Shared craft lives in [`character-lora-training`](../../character-lora-training/)** — dataset coverage, caption-the-residual, evaluation, adult/NSFW base selection, and the real-person likeness rules that decide whether a LoRA is publishable. This file covers what is specific to SDXL and its finetune families.
+> **Shared craft lives in [`character-lora-training`](../../character-lora-training/)**. That skill covers dataset coverage, caption-the-residual, evaluation, adult/NSFW base selection, and the real-person likeness rules that decide whether a LoRA is publishable. This file covers what is specific to SDXL and its finetune families.
 
-> **Using** a LoRA (loading, dialect pools, weights, stacking) is `checkpoints-and-loras.md §4–5`. This file is only about **making** one. The full character pipeline is `references/characters.md`.
+> **Using** a LoRA (loading, dialect pools, weights, stacking) is covered in `checkpoints-and-loras.md §4–5`. This file is only about **making** one. The full character pipeline is `references/characters.md`.
 
-SDXL LoRA training is the most mature corner of open-source image generation. It has years of accumulated recipes, several solid trainers, stable behaviour, and by far the deepest body of published craft. The numbers below are convergent recipes drawn from named guides. LR and **rank in particular are genuinely contested** across reputable sources, so treat them as starting points, not fixed answers.
+SDXL LoRA training is the most mature corner of open-source image generation. It has years of accumulated recipes, several solid trainers, stable behaviour, and by far the deepest body of published craft. The numbers below are convergent recipes drawn from named guides. Note that LR and **rank in particular are genuinely contested** across reputable sources, so treat them as starting points rather than fixed answers.
 
 ## Contents
 
@@ -24,7 +24,7 @@ SDXL LoRA training is the most mature corner of open-source image generation. It
 
 ## 1. Choosing the base
 
-**This decides your ceiling, your tagging dialect, and which existing LoRAs you can stack with.** It matters more than any hyperparameter. It is also not reversible — a LoRA belongs to the family it was trained on.
+**This choice decides your quality ceiling, your tagging dialect, and which existing LoRAs you can stack with.** It matters more than any hyperparameter. It is also not reversible, because a LoRA belongs to the family it was trained on.
 
 | Base | Dialect | Position |
 |---|---|---|
@@ -33,29 +33,29 @@ SDXL LoRA training is the most mature corner of open-source image generation. It
 | **Illustrious** (v2.0 as a finetune base) | Booru tags | **The largest character-LoRA library.** The default choice for character work if you want it to work with existing community LoRAs |
 | **NoobAI-XL V-Pred 1.0** | Booru tags | Reported as the most anatomically accurate, with the best tag comprehension. **It requires v-prediction sampler settings and Euler specifically — other samplers will not work.** Budget an evening for that alone |
 | **WAI-NSFW v17** | Booru tags | The usual easier-setup runner-up to v-pred NoobAI |
-| **Anima** | Booru tags | **Not an SDXL finetune** — a separate 2B model that happens to speak the same booru dialect. So it needs its own trainer config and its own LoRA pool. Named trainers describe it as becoming "the new Illustrious," and note that LoRA quality there varies widely, since the pool is still young `[community — re-verify]`. **Weights are non-commercial**, unlike everything else in this table, and your LoRA is a Derivative that carries that restriction too — but not as a flat bar. §2(c) lets a person **operating in an individual capacity** sell the LoRA weights themselves. What it does not let anyone do is ship those weights inside a larger product or serve them behind a paid API. The images the LoRA makes stay unrestricted for everyone, individual or company. Full shape: [`anima`](../../anima/) `[official — CircleStone NC licence §1(a)/§2(c)/§2(e)]` |
+| **Anima** | Booru tags | **Not an SDXL finetune.** Anima is a separate 2B model that happens to speak the same booru dialect, so it needs its own trainer config and its own LoRA pool. Named trainers describe it as becoming "the new Illustrious," and they note that LoRA quality there varies widely because the pool is still young `[community — re-verify]`. **The weights are non-commercial**, unlike everything else in this table, and your LoRA is a Derivative that carries that restriction too. It is not a flat bar, though: §2(c) lets a person **operating in an individual capacity** sell the LoRA weights themselves. What no one may do is ship those weights inside a larger product or serve them behind a paid API. The images the LoRA makes stay unrestricted for everyone, individual or company. The full shape is in [`anima`](../../anima/) `[official — CircleStone NC licence §1(a)/§2(c)/§2(e)]` |
 
-**Cross-family transfer is partial at best.** Some NoobAI LoRAs are reported to work acceptably on Illustrious, since the two lineages share ancestry `[community — re-verify]`. Pony is the outlier: its score-tag conditioning means a Pony-trained LoRA carries assumptions no other family shares.
+**Cross-family transfer is partial at best.** Some NoobAI LoRAs are reported to work acceptably on Illustrious, because the two lineages share ancestry `[community — re-verify]`. Pony is the outlier: its score-tag conditioning means a Pony-trained LoRA carries assumptions that no other family shares.
 
-**The honest heuristic:** train on the checkpoint you will actually generate with. If you don't know yet, pick Illustrious for anime or stylised character work, and a photoreal SDXL finetune for realism. Both have the largest pools of compatible LoRAs to stack with, so they are the safe defaults.
+**The honest heuristic is simple: train on the checkpoint you will actually generate with.** If you do not know yet, pick Illustrious for anime or stylised character work, and a photoreal SDXL finetune for realism. Both have the largest pools of compatible LoRAs to stack with, which makes them the safe defaults.
 
 ---
 
 ## 2. Tools
 
-- **kohya_ss** (`sd-scripts`) — the de-facto standard, GUI and CLI. Its GitHub **discussions** are a primary craft source: named users publish reproducible experiments there.
-- **OneTrainer** — friendlier UI, good defaults, and the most-requested target when new techniques get ported.
-- **ai-toolkit** (Ostris) — increasingly the default for newer architectures, and the base for the experimental fork in §8.
+- **kohya_ss** (`sd-scripts`) is the de-facto standard, with both a GUI and a CLI. Its GitHub **discussions** are a primary craft source, because named users publish reproducible experiments there.
+- **OneTrainer** has a friendlier UI, good defaults, and is the most-requested target when new techniques get ported.
+- **ai-toolkit** (Ostris) is increasingly the default for newer architectures, and it is the base for the experimental fork in §8.
 
-**Text-encoder training is contested.** SDXL LoRAs *can* train the CLIP encoders — that is why `LoraLoader` exposes `strength_clip`. kohya's default TE LR is 5e-5, half the UNet's. The Illustrious style recipe runs TE at 0.5 Prodigy-relative. Others disable TE entirely for styles. Training the TE binds vocabulary harder, which helps trigger-heavy characters, but it costs more prompt-hijacking when the LoRA is loaded. Both camps have named, reproducible advocates. `[contested]`
+**Text-encoder training is contested.** SDXL LoRAs *can* train the CLIP encoders; that is why `LoraLoader` exposes `strength_clip`. kohya's default TE LR is 5e-5, which is half the UNet's. The Illustrious style recipe runs TE at 0.5 Prodigy-relative. Other trainers disable TE entirely for styles. Training the TE binds vocabulary harder, which helps trigger-heavy characters, but it costs more prompt-hijacking when the LoRA is loaded. Both camps have named, reproducible advocates. `[contested]`
 
 ---
 
 ## 3. Hyperparameters
 
-**The convergent photoreal/general recipe** (ViewComfy, Bieler, Civitai cheatsheets independently land here): **rank 32 / alpha 32, AdamW or AdamW8bit, constant scheduler, 0% warmup, LR ~3e-5** (usable ~3e-6 to 8e-5), batch 1–4, 1024-area bucketed images.
+**The convergent photoreal/general recipe**, which ViewComfy, Bieler and the Civitai cheatsheets independently land on, is: **rank 32 / alpha 32, AdamW or AdamW8bit, constant scheduler, 0% warmup, LR ~3e-5** (usable ~3e-6 to 8e-5), batch 1–4, 1024-area bucketed images.
 
-**Prodigy** (set LR 1.0 and it self-tunes; d-coef ~0.5 for styles) is the default across Pony/Illustrious training guides. It is the best answer to "I don't want to tune LR" `[community]`.
+**Prodigy** is the default across Pony/Illustrious training guides. Set LR to 1.0 and it self-tunes; use a d-coef of ~0.5 for styles. It is the best answer to "I don't want to tune LR" `[community]`.
 
 **Rank is genuinely contested. The disagreement is worth understanding, not averaging away:**
 
@@ -64,20 +64,20 @@ SDXL LoRA training is the most mature corner of open-source image generation. It
 | The classic rank-by-type ladder `[community]` | Simple character **8**, complex/realistic character **16**, concept 16–32, style **32** (up to 128/α64 for very detailed styles) |
 | Named character-LoRA trainers | **48/48** as a working default, with **48–64** prescribed specifically when a LoRA "forgets" at weights below 0.5 `[community — neonkisu, QuantumBogoSort]` |
 
-Both are defensible. Lower rank soaks up less unwanted background and style, so it makes a better-behaved stacking citizen. Higher rank captures fine identity detail and holds up at reduced weight. **If your LoRA needs 1.0 to work, that is the signal to raise rank** — not to accept 1.0.
+Both positions are defensible. Lower rank soaks up less unwanted background and style, so it makes a better-behaved stacking citizen. Higher rank captures fine identity detail and holds up at reduced weight. **If your LoRA needs 1.0 to work, that is the signal to raise rank**, not to accept 1.0.
 
-**Steps.** Two anchors, and they agree better than they look:
+**Steps.** There are two anchors, and they agree better than they look:
 
-- **~80–100 steps per image** is the community rule of thumb, corroborated across SDXL and newer architectures `[community — QuantumBogoSort and others]`. Twenty images ≈ 1600–2000 steps.
+- **~80–100 steps per image** is the community rule of thumb, corroborated across SDXL and newer architectures `[community — QuantumBogoSort and others]`. Twenty images therefore means roughly 1600–2000 steps.
 - **~3000 total** is the SDXL/Illustrious *style* anchor `[community — Civitai 25645, L3n4]`. Characters usually converge sooner.
 
-**How the knobs interact:** total steps ≈ images × repeats × epochs ÷ batch. **Effective LR scales as `alpha ÷ rank`** (alpha = rank means no scaling). The old "alpha must never exceed rank or it burns" rule is a myth — `alpha = 2×rank` is a legitimate config that simply doubles effective LR.
+**How the knobs interact:** total steps ≈ images × repeats × epochs ÷ batch. **Effective LR scales as `alpha ÷ rank`**, so alpha = rank means no scaling. The old rule that "alpha must never exceed rank or it burns" is a myth. `alpha = 2×rank` is a legitimate config that simply doubles the effective LR.
 
-**VRAM and batch.** ~12 GB works with gradient checkpointing plus an 8-bit optimizer; 16–24 GB is comfortable. When you drop batch size to fit, **hold `batch × gradient_accumulation` constant.** Batch 1 with accum 4 behaves like batch 4, just at roughly a third of the speed `[community — QuantumBogoSort]`.
+**VRAM and batch.** Around 12 GB works if you use gradient checkpointing plus an 8-bit optimizer; 16–24 GB is comfortable. When you drop batch size to fit in memory, **hold `batch × gradient_accumulation` constant.** Batch 1 with accum 4 behaves like batch 4, just at roughly a third of the speed `[community — QuantumBogoSort]`.
 
-**LyCORIS.** **LoKr** has the strongest *style* reputation: better texture fidelity at much smaller file sizes, at some cost in trainability and portability. **LoKr factor 8** is the setting used in the current experimental character recipes (§8). DoRA outperforms plain LoRA in academic benchmarks but stays niche. Plain LoRA and LoKr cover nearly all practical 2026 work.
+**LyCORIS.** **LoKr** has the strongest *style* reputation: it gives better texture fidelity at much smaller file sizes, at some cost in trainability and portability. **LoKr factor 8** is the setting used in the current experimental character recipes (§8). DoRA outperforms plain LoRA in academic benchmarks but stays niche. Plain LoRA and LoKr cover nearly all practical 2026 work.
 
-**Resolution.** 1024 is the point of diminishing returns. Training at 1536 and 2048 is analytically better but not perceptually so for most work `[community — QuantumBogoSort]`.
+**Resolution.** 1024 is the point of diminishing returns. Training at 1536 and 2048 is analytically better, but for most work it is not perceptibly better `[community — QuantumBogoSort]`.
 
 ---
 
@@ -94,8 +94,8 @@ This is the most useful published structure for character sets. It turns "datase
 
 Anywhere from **0.25 to 0.4** works. What matters is that both categories are present and meaningfully sized. The two failure directions tell you what went wrong:
 
-- **Mostly close-ups** → great faces, but body type, outfit consistency and pose flexibility are lost. The LoRA "knows the face and treats everything below the neck as a stranger." This is the classic selfie-style character LoRA.
-- **Mostly in-context** → holds body and outfit, but the face drifts toward generic when the prompt zooms in.
+- **Mostly close-ups** produces great faces, but body type, outfit consistency and pose flexibility are lost. The LoRA "knows the face and treats everything below the neck as a stranger." This is the classic selfie-style character LoRA.
+- **Mostly in-context** holds body and outfit, but the face drifts toward generic when the prompt zooms in.
 
 **Verify the split by counting.** Sort the set into the two categories and count them. This takes a minute, and it catches the most common structural dataset fault.
 
@@ -119,7 +119,7 @@ Caption in the **target dialect**: booru tags for Pony/Illustrious/NoobAI/Anima,
 
 **Put off-spec negatives in the captions**, not only in the inference-time negative prompt. If the character has ice-blue eyes, tagging `brown_eyes, green_eyes` as negatives during training reduces colour flipping later `[community — neonkisu]`.
 
-**Caption dropout is the strongest single lever for generalisation, and most character LoRAs skip it.** Setting `caption_dropout ≈ 0.3` randomly drops 30% of caption tokens each step. Without it, the LoRA learns the *whole caption* as its trigger condition. So a character trained on "library, reading" struggles at "beach, swimming," because the environment gets tangled up with the identity. With dropout, the model learns each token's meaning more independently, and the trigger alone activates the character in combinations it never saw `[community — neonkisu]`.
+**Caption dropout is the strongest single lever for generalisation, and most character LoRAs skip it.** Setting `caption_dropout ≈ 0.3` randomly drops 30% of caption tokens each step. Without it, the LoRA learns the *whole caption* as its trigger condition. That is why a character trained on "library, reading" struggles at "beach, swimming": the environment gets tangled up with the identity. With dropout, the model learns each token's meaning more independently, and the trigger alone activates the character in combinations it never saw `[community — neonkisu]`.
 
 **Prepend / append structure**, for trainers that expose it (Civitai's own trainer does) `[community — RONK234, Civitai]`:
 
@@ -129,18 +129,18 @@ Caption in the **target dialect**: booru tags for Pony/Illustrious/NoobAI/Anima,
 | **Prepend** | Permanent physical traits only — hair colour, eye colour, hairstyle, **body type** |
 | **Append** | Genuinely minor details. **Never put important character details here** — appended tags are pushed to the back and deprioritised |
 
-Two traps in that structure:
+There are two traps in that structure:
 
-- **If the dataset mixes colour and monochrome images, keep colour terms out of the prepend.** It confuses how the model interprets monochrome inputs — a real problem for manga/manhwa sourcing.
+- **If the dataset mixes colour and monochrome images, keep colour terms out of the prepend.** They confuse how the model interprets monochrome inputs, which is a real problem for manga/manhwa sourcing.
 - Use the append slot for something you want to toggle at inference. Tagging source styling (`manga`, `manhwa`) there lets you switch panel styling in or out of the positive prompt later.
 
 Auto-tagger settings: **max ~30 tags, minimum threshold ~0.4**, plus a standard quality blacklist (`bad quality`, `worst quality`, `deformed`, `mutation`, `blurry`) `[community — convergent across SDXL captioning guides]`.
 
-**Body tokens belong in the captions.** Height, build and proportions are part of an identity. Omitting them is a documented cause of a LoRA whose face is right and whose body is wrong — which matters most where the body is actually visible.
+**Body tokens belong in the captions.** Height, build and proportions are part of an identity. Omitting them is a documented cause of a LoRA whose face is right and whose body is wrong, and that matters most where the body is actually visible.
 
 **Pony-specific:** its `score_X` quality tags participate in training captions and must **honestly match** the image's quality, or they destabilise training.
 
-**Subject masking**, where the trainer supports it, masks out the background — and if you use it, captions must describe **only the character, never the setting**. Mixing masked training with setting descriptions gives the model contradictory signal `[community — QuantumBogoSort]`.
+**Subject masking**, where the trainer supports it, masks out the background. If you use it, captions must describe **only the character, never the setting**. Mixing masked training with setting descriptions gives the model contradictory signal `[community — QuantumBogoSort]`.
 
 ---
 
@@ -152,7 +152,7 @@ Here are three traps that have cost people whole training runs, all from publish
 
 **Never pad to square with a solid colour.** Padding non-square crops to 1024 with white teaches the model the white. The result is a pale border baked into every generation. This is not a rendering artefact, and **no negative prompt removes it**, because from the model's point of view the bar is simply part of what this character looks like. **Crop square; do not pad.**
 
-**Train at the aspect ratios you will generate at.** Training exclusively on 1:1 and then generating portrait degrades output. Use bucketing across the ratios you actually want.
+**Train at the aspect ratios you will generate at.** Training exclusively on 1:1 and then generating portrait degrades the output. Use bucketing across the ratios you actually want.
 
 Also: **dedupe hard.** Twenty frames pulled from one video clip look like twenty images and behave like one.
 
@@ -164,8 +164,8 @@ The governing maxim: **consistency in the thing you're training, diversity in ev
 
 - **Size:** ~50 minimum is the Illustrious-era recommendation. The legacy "300–500 ideal" figure is early-SDXL folklore that curation has since replaced. **A well-curated 30–50 beats a poorly curated 500** `[community — L3n4's crash course, Civitai 25645]`.
 - **The Illustrious style recipe** `[community — Civitai 25645]`: dim 32 / alpha 32, Prodigy (UNet 0.5 / TE 0.5), cosine scheduler, ~3000 steps, ~50 images, booru captions capped at ~30 tags, no style tags in captions.
-- **Invert the captioning:** caption the **content** of each image and never mention the style; the shared look becomes the residual.
-- **Palette discipline:** include the style's full tonal range and keep B&W out of a colour style set — narrow colour statistics cause **colour-cast lock-in**, where every output takes the dataset's average palette.
+- **Invert the captioning:** caption the **content** of each image and never mention the style. The shared look then becomes the residual that the LoRA learns.
+- **Palette discipline:** include the style's full tonal range, and keep B&W out of a colour style set. Narrow colour statistics cause **colour-cast lock-in**, where every output takes the dataset's average palette.
 - **Ethics flag:** a single living artist's style trained without consent is the community's sharpest fault line, and Civitai requires real-artist disclosure. Prefer self-made, licensed, or historic/aggregate aesthetics.
 
 **The style acceptance test:** the style is recognisable on subjects *not* in the training set. Point sample prompts at out-of-set subjects, and include one sample **without** the trigger to catch style leakage early.
@@ -178,13 +178,13 @@ This is an experimental method with published results and an active feedback loo
 
 **Weight noising** injects a small Gaussian disturbance directly into the LoRA weights at every training step. The intuition is that it helps the model *forget* what is inconsistent and keep only what the data agrees on. Mechanically, it biases training toward flatter loss minima and spreads learning across more singular directions of the LoRA factorisation (a measured +20% stable rank on the same config). The practical effect is **resistance to the memorisation that overcooks character runs**, with better likeness at the same step count.
 
-Reference config from the published comparison: batch 4, LR 5e-5, buckets 512/768/1024, **LoKr factor 8**, AdamW8bit, 1200 steps with the best checkpoint at **750**, on an **8-image** dataset. Noise **sigma 0.0125** gave the best results; the right value is believed to scale with dataset and batch size and is not yet mapped.
+The reference config from the published comparison: batch 4, LR 5e-5, buckets 512/768/1024, **LoKr factor 8**, AdamW8bit, 1200 steps with the best checkpoint at **750**, on an **8-image** dataset. Noise **sigma 0.0125** gave the best results. The right value is believed to scale with dataset and batch size, and it is not yet mapped.
 
 **Expect mid-training weirdness.** Body horror and extra limbs during the run are *normal* here, because the noise explores latent space more aggressively before converging. The heuristic: if you sample every 25 steps and see continuous body horror for more than ~20% of the run, sigma is too high. Lower it in 0.0025 increments.
 
 **Status on SDXL:** depth anchoring is supported. The weight-noising parameters for SDXL specifically are still being worked out. `[flagged — re-verify]`
 
-Also emerging from the same discussion: the **Rose optimizer** (stateless, lower VRAM, better reported generalisation) needs a **much higher LR — around 1e-3 rather than 1e-4.** Its overfitting also shows up as minor artefacting rather than the usual memorisation, so save checkpoints more frequently when using it. `[community — ECF630; contested, early]`
+One more thing is emerging from the same discussion: the **Rose optimizer** (stateless, lower VRAM, better reported generalisation) needs a **much higher LR — around 1e-3 rather than 1e-4.** Its overfitting also shows up as minor artefacting rather than the usual memorisation, so save checkpoints more frequently when using it. `[community — ECF630; contested, early]`
 
 ---
 
@@ -201,7 +201,7 @@ This is a widely-reproduced finding worth knowing before you train at all: **for
 
 The reported gain is **flexibility.** A single LoRA pushed to 1.0 follows prompt actions less, drops quality, and makes more mistakes. The averaging effect has theoretical support in the **Model Soups** line of work (arXiv 2203.05482).
 
-Two consequences follow: if your character already has good community LoRAs, **try stacking before training.** And if you *are* training one, expect it to be used this way, so build a good citizen (§10).
+Two consequences follow. First, if your character already has good community LoRAs, **try stacking before training.** Second, if you *are* training one, expect it to be used this way, so build a good citizen (§10).
 
 ---
 
@@ -211,7 +211,7 @@ Two consequences follow: if your character already has good community LoRAs, **t
 
 Save **checkpoints throughout** — every 200–500 steps on a conventional run, every 25 on an experimental one — because the best checkpoint is usually well before the final one. Then build an **XY grid of epoch × strength (0.1–1.0)** on fixed prompts spanning simple to complex and in-domain to out-of-domain, and pick the Goldilocks cell. Generating the grid in ComfyUI gives a truer picture than trainer preview samples.
 
-**Then judge the grid blind.** It is labelled by design, so you already know which cell trained longer before you look at it. For which comparison tool to use, the shuffled-candidate pass, a reusable probe set, and how to score likeness with numbers, see [`character-lora-training/references/evaluation-and-tooling.md`](../../character-lora-training/references/evaluation-and-tooling.md).
+**Then judge the grid blind.** The grid is labelled by design, so you already know which cell trained longer before you look at it. For which comparison tool to use, the shuffled-candidate pass, a reusable probe set, and how to score likeness with numbers, see [`character-lora-training/references/evaluation-and-tooling.md`](../../character-lora-training/references/evaluation-and-tooling.md).
 
 **A concrete ship criterion** `[community — neonkisu]`: if the LoRA holds identity at **0.7+ weight across three or more clearly different environments**, ship it. Do not over-optimise the first version. Feedback from real use is faster than another isolated round of iteration.
 
@@ -229,7 +229,7 @@ Save **checkpoints throughout** — every 200–500 steps on a conventional run,
 | Pale border or edge artefact in every output | Padded images in the dataset | Recrop square; retrain |
 | Forgets the character below ~0.5 weight | Rank too low, or under-converged | Rank 48–64; or more epochs |
 
-**ControlNet and IP-Adapter often substitute for training** when you need pose or identity on a one-off — no run needed (`setup-and-workflows.md §7`, `characters.md §1`).
+**ControlNet and IP-Adapter often substitute for training** when you need pose or identity on a one-off, with no training run needed (`setup-and-workflows.md §7`, `characters.md §1`).
 
 ---
 

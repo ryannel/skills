@@ -1,6 +1,6 @@
 # Krea 2 — Setup & workflows
 
-Local setup (ComfyUI, diffusers, the reference CLI), quantisation and VRAM strategy, using LoRAs, and the multi-stage / mixed-model workflows. Facts verified against the template JSON, HF repo listings, GitHub README, diffusers docs, and musubi-tuner docs on 2026-07-07; community recipes attributed inline.
+This file covers local setup (ComfyUI, diffusers, the reference CLI), quantisation and VRAM strategy, using LoRAs, and the multi-stage and mixed-model workflows. Facts were verified against the template JSON, HF repo listings, GitHub README, diffusers docs, and musubi-tuner docs on 2026-07-07. Community recipes are attributed inline.
 
 ## Contents
 1. [ComfyUI: the official template, node by node](#1-comfyui-the-official-template-node-by-node)
@@ -19,7 +19,7 @@ Local setup (ComfyUI, diffusers, the reference CLI), quantisation and VRAM strat
 
 ## 1. ComfyUI: the official template, node by node
 
-Template: **`image_krea2_turbo_t2i.json`** (Comfy-Org/workflow_templates; in-app under Templates → Image once ComfyUI is updated). Tutorial: docs.comfy.org/tutorials/image/krea/krea-2. No custom nodes. Only a Turbo t2i template exists — there is no official Raw template (Raw isn't recommended for inference).
+The template is **`image_krea2_turbo_t2i.json`** (from Comfy-Org/workflow_templates; it appears in-app under Templates → Image once ComfyUI is updated). The tutorial lives at docs.comfy.org/tutorials/image/krea/krea-2. It needs no custom nodes. Only a Turbo t2i template exists. There is no official Raw template, because Raw is not recommended for inference.
 
 **Downloads** (all from `Comfy-Org/Krea-2`):
 
@@ -30,29 +30,29 @@ Template: **`image_krea2_turbo_t2i.json`** (Comfy-Org/workflow_templates; in-app
 | `vae/qwen_image_vae.safetensors` | 0.25 GB | `models/vae/` |
 | `loras/krea2_<style>.safetensors` (optional) | 0.47 GB | `models/loras/` |
 
-**The graph** (a subgraph wraps the pipeline; double-click to open):
+**The graph.** A subgraph wraps the pipeline; double-click to open it. The nodes are:
 
 - `UNETLoader` → `krea2_turbo_fp8_scaled.safetensors`, weight_dtype `default`
 - `CLIPLoader` → `qwen3vl_4b_fp8_scaled.safetensors`, type **`krea2`**, device `default`
 - `VAELoader` → `qwen_image_vae.safetensors`
-- `LoraLoaderModelOnly` → strength **0.8**, behind an `enable_lora?` boolean switch (model-only — Krea 2 LoRAs never touch the text encoder)
-- `CLIPTextEncode` positive; the negative path runs through **`ConditioningZeroOut`** — the mechanism that makes negatives have no effect at cfg 1.0
-- `EmptyLatentImage` 1024×1024 — this is the *plain* latent node, not an SD3/Flux one, and there's **no shift node**. (No `ModelSamplingAuraFlow`; the model config handles the resolution-aware time shift.) A `ResolutionSelector` offers 1K–2K aspect presets.
+- `LoraLoaderModelOnly` → strength **0.8**, behind an `enable_lora?` boolean switch. It is model-only because Krea 2 LoRAs never touch the text encoder.
+- `CLIPTextEncode` for the positive prompt. The negative path runs through **`ConditioningZeroOut`**, which is the mechanism that makes negatives have no effect at cfg 1.0.
+- `EmptyLatentImage` at 1024×1024. This is the *plain* latent node, not an SD3/Flux one, and there is **no shift node**: no `ModelSamplingAuraFlow`, because the model config handles the resolution-aware time shift. A `ResolutionSelector` offers 1K–2K aspect presets.
 - `KSampler`: **steps 8, cfg 1.0, sampler `euler`, scheduler `simple`, denoise 1.0**
 - `VAEDecode` → `SaveImage` (prefix `Krea2_turbo`)
 
-**Subgraph switches:** `prompt_enhance` (default **true** — the `TextGenerate` LLM expander; see `prompting-guide.md §6` for when and why to turn it off, including the documented refusal bug Comfy-Org/ComfyUI#14631) and `enable_lora?` (default false). A `CustomCombo` on the main canvas picks the style LoRA and auto-appends its trigger phrase to your prompt via `StringConcatenate`.
+**Subgraph switches.** `prompt_enhance` defaults to **true** and runs the `TextGenerate` LLM expander; see `prompting-guide.md §6` for when and why to turn it off, including the documented refusal bug Comfy-Org/ComfyUI#14631. `enable_lora?` defaults to false. A `CustomCombo` on the main canvas picks the style LoRA and auto-appends its trigger phrase to your prompt via `StringConcatenate`.
 
-**Your ComfyUI has to be newer than 2026-06-22, and an old one does not tell you so.** `krea2` is a CLIP *type*, so an older build simply does not list it in the `CLIPLoader` dropdown. The encoder file is sitting there, the model loads, and the one option you need is quietly missing from a menu. This hurts most on rented pods and prebuilt containers, whose images are often pinned months back — a container built 2026-05-01 is older than the open-weights release itself. Check that dropdown before you debug anything else `[community — production run on a RunPod ComfyUI template, 2026-08-25]`.
+**Your ComfyUI has to be newer than 2026-06-22, and an old build does not tell you so.** `krea2` is a CLIP *type*, so an older build simply does not list it in the `CLIPLoader` dropdown. The encoder file is sitting there, the model loads, and the one option you need is quietly missing from a menu. This hurts most on rented pods and prebuilt containers, because their images are often pinned months back — a container built 2026-05-01 is older than the open-weights release itself. Check that dropdown before you debug anything else `[community — production run on a RunPod ComfyUI template, 2026-08-25]`.
 
 Updating a container's bundled ComfyUI has two snags worth knowing about first:
 
-- **`git pull` can fail because the branches have diverged**, since the image build edited the working tree. `git fetch origin && git reset --hard origin/master` works reliably. But check for local changes you care about first — it throws them away.
-- **Run `pip install -r requirements.txt` afterwards, not just the pull.** A current ComfyUI needs a newer `comfy_kitchen` than an older image ships with. You find out through a startup `ImportError` about a missing name (`int8_attention_is_available`, in the case we saw). Nothing mentions version numbers.
+- **`git pull` can fail because the branches have diverged**, since the image build edited the working tree. `git fetch origin && git reset --hard origin/master` works reliably. But check for local changes you care about first, because the reset throws them away.
+- **Run `pip install -r requirements.txt` after the pull, not just the pull.** A current ComfyUI needs a newer `comfy_kitchen` than an older image ships with. You find out through a startup `ImportError` about a missing name (`int8_attention_is_available`, in the case we saw). Nothing mentions version numbers.
 
 One more container trap: restart ComfyUI with **the same interpreter that started it**. If you kill a working `python3` process and relaunch under a `python` that points at a different environment, you get a torch build that does not match the card. It reads like a hardware fault.
 
-**Hosted Medium/Large in ComfyUI:** separate path entirely — the "Krea 2 Image" API/partner node (API-key billing, style refs, moodboard IDs, creativity Raw/Low/Medium/High). See `api-and-hosted.md §4`.
+**Hosted Medium/Large in ComfyUI** is a separate path entirely: the "Krea 2 Image" API/partner node, with API-key billing, style refs, moodboard IDs, and creativity Raw/Low/Medium/High. See `api-and-hosted.md §4`.
 
 ## 2. Quantisation & VRAM
 
@@ -68,7 +68,7 @@ One more container trap: restart ComfyUI with **the same interpreter that starte
 | `qwen3vl_4b_bf16` / `_fp8_scaled` | 8.9 / 5.2 GB | text encoder |
 | `qwen_image_vae` | 0.25 GB | |
 
-**Community GGUF** — the ecosystem formed without city96 this time: `gguf-org/krea-2-gguf`, `vantagewithai/Krea-2-Turbo-GGUF` and `-Raw-GGUF`, `molbal/krea2-gguf`, `realrebelai/KREA-2_GGUFs`. vantagewithai sizes: Q2_K 4.9 GB, Q4_K_M 7.5 GB, Q6_K 10.6 GB, Q8_0 13.7 GB. Requires the `ComfyUI-GGUF` custom node (GGUF DiTs load via its loader, not `UNETLoader`). **No per-quant quality comparison has been published yet.** The table below is size arithmetic plus the general GGUF experience from sibling models, not measured Krea-2 craft:
+**Community GGUF.** This time the ecosystem formed without city96. The repos are `gguf-org/krea-2-gguf`, `vantagewithai/Krea-2-Turbo-GGUF` and `-Raw-GGUF`, `molbal/krea2-gguf`, and `realrebelai/KREA-2_GGUFs`. The vantagewithai sizes are: Q2_K 4.9 GB, Q4_K_M 7.5 GB, Q6_K 10.6 GB, Q8_0 13.7 GB. GGUF requires the `ComfyUI-GGUF` custom node, because GGUF DiTs load via its loader rather than `UNETLoader`. **No per-quant quality comparison has been published yet.** The table below is size arithmetic plus the general GGUF experience from sibling models, not measured Krea-2 craft:
 
 | VRAM | Working setup |
 |---|---|
@@ -77,11 +77,11 @@ One more container trap: restart ComfyUI with **the same interpreter that starte
 | 16–24 GB | fp8_scaled or int8_convrot (13.1–13.5 GB) + fp8 encoder — the comfortable tier |
 | 24 GB+ | fp8/int8 with full headroom; bf16 wants ~46 GB (unified-memory / multi-GPU territory) |
 
-The memory pattern that matters is documented for musubi, and the same physics apply in ComfyUI. The DiT stays resident. The ~5–9 GB encoder and the VAE shuttle on and off the GPU around it. On a 24 GB card, fp8 (or block offloading) buys the headroom for the encode/decode — it does not work by evacuating the DiT. That pattern assumes a card with room to keep the DiT. Where there isn't one, the DiT stops being resident too, and its blocks stream in per step. That is what makes 8 GB viable at all. It is also why, on a small card, the number to check first is *host* RAM, not VRAM. Offload trades bus time for capacity. GGUF trades precision for capacity. Prefer GGUF when system RAM is the scarce resource, offload when it isn't. Koboldcpp's rolling build also runs Krea 2 (with Qwen3-VL + a Wan 2.1 VAE) `[community — u/Eisenstein, HN]`.
+The memory pattern that matters is documented for musubi, and the same physics apply in ComfyUI. The DiT stays resident on the GPU. The ~5–9 GB encoder and the VAE shuttle on and off the GPU around it. On a 24 GB card, fp8 (or block offloading) buys the headroom for the encode and decode steps; it does not work by evacuating the DiT. That pattern assumes a card with room to keep the DiT. Where there isn't one, the DiT stops being resident too, and its blocks stream in per step. That streaming is what makes 8 GB viable at all, and it is also why, on a small card, the number to check first is *host* RAM, not VRAM. Offload trades bus time for capacity, while GGUF trades precision for capacity. Prefer GGUF when system RAM is the scarce resource, and offload when it isn't. Koboldcpp's rolling build also runs Krea 2 (with Qwen3-VL + a Wan 2.1 VAE) `[community — u/Eisenstein, HN]`.
 
 ## 3. The reference CLI
 
-`github.com/krea-ai/krea-2` (Apache-2.0, `uv sync`; set `OSS_RAW` / `OSS_TURBO` env vars to the downloaded `raw.safetensors` / `turbo.safetensors` from the `krea/Krea-2-Raw` / `krea/Krea-2-Turbo` HF repos):
+The CLI lives at `github.com/krea-ai/krea-2` (Apache-2.0; install with `uv sync`). Set the `OSS_RAW` / `OSS_TURBO` env vars to the downloaded `raw.safetensors` / `turbo.safetensors` from the `krea/Krea-2-Raw` / `krea/Krea-2-Turbo` HF repos:
 
 ```bash
 # Raw — full sampler with CFG; trained to 1K
@@ -90,11 +90,11 @@ uv run inference.py "a fox walking in the snow" --checkpoint oss_raw --steps 52 
 uv run inference.py "a fox walking in the snow" --checkpoint oss_turbo --steps 8 --cfg 0.0 --mu 1.15 --width 2048 --height 2048
 ```
 
-Flag defaults: `--steps 28`, `--cfg 4.5` (0 disables), `--y1 0.5` / `--y2 1.15` (resolution-interpolated time shift; `--mu` pins a constant — recommended 1.15 for Turbo), dimensions padded to multiples of 16, `--seed 0` with image *i* using seed+*i*. Note the CFG numbers are Krea-convention (0 = off).
+The flag defaults are: `--steps 28`, `--cfg 4.5` (0 disables it), and `--y1 0.5` / `--y2 1.15` for the resolution-interpolated time shift, where `--mu` pins a constant instead (1.15 is the recommended value for Turbo). Dimensions are padded to multiples of 16. `--seed 0` is the default, with image *i* using seed+*i*. Note that the CFG numbers follow the Krea convention, where 0 means off.
 
 ## 4. diffusers
 
-Requires **diffusers from source** as of early July 2026 (docs are on `main`; check pypi before assuming a stable release carries it):
+This requires **diffusers from source** as of early July 2026. The docs are on `main`; check pypi before assuming a stable release carries it.
 
 ```python
 import torch
@@ -106,47 +106,47 @@ image = pipe("a fox in the snow", height=1024, width=1024,
              generator=torch.Generator("cuda").manual_seed(0)).images[0]
 ```
 
-- Classes: `Krea2Pipeline` / `Krea2Transformer2DModel` / `AutoencoderKLQwenImage` / `Qwen3VLModel` (+ `text_encoder_select_layers` — the 12-layer tap indices).
-- **Turbo:** `is_distilled=True` in the pipeline config → fixed `mu=1.15`; run `num_inference_steps=8, guidance_scale=0.0`.
-- **Guidance convention:** velocity = `cond + g·(cond − uncond)`; g>0 enables guidance; equals classic CFG at `1+g`. `negative_prompt` is ignored when `g ≤ 0`.
+- The classes are `Krea2Pipeline` / `Krea2Transformer2DModel` / `AutoencoderKLQwenImage` / `Qwen3VLModel`, plus `text_encoder_select_layers`, which holds the 12-layer tap indices.
+- **Turbo:** `is_distilled=True` in the pipeline config gives a fixed `mu=1.15`; run `num_inference_steps=8, guidance_scale=0.0`.
+- **Guidance convention:** velocity = `cond + g·(cond − uncond)`. Guidance is enabled when g>0, and this equals classic CFG at `1+g`. `negative_prompt` is ignored when `g ≤ 0`.
 - Scheduler: `FlowMatchEulerDiscreteScheduler`, `use_dynamic_shifting=True`, `base_shift=0.5`, `max_shift=1.15`, `base_image_seq_len=256`, `max_image_seq_len=6400`.
-- `max_sequence_length=512`; dims rounded to ×16. **t2i only** — no img2img/inpaint/edit pipeline classes yet.
+- `max_sequence_length=512`; dims are rounded to ×16. It is **t2i only** — there are no img2img/inpaint/edit pipeline classes yet.
 - The HF repos carry a full diffusers layout (`transformer/`, `text_encoder/`, `vae/`, `scheduler/`, `model_index.json`) alongside the single-file checkpoints.
 
 ## 5. The VAE decision
 
-Three decode paths now exist for the same latents. This matters more on Krea 2 than on most models. A large share of what people call the model's softness is decided in the decode, not in the sampler. So the VAE is a tuning knob — one you can A/B on a latent you have already paid for. The stock `qwen_image_vae` is the conservative baseline. The Wan 2.1 FP32 swap is the standard cure for the soft default. The Qwen Image VAE Sharp line is the cure that does not move your colour.
+Three decode paths now exist for the same latents, and the choice matters more on Krea 2 than on most models. A large share of what people call the model's softness is decided in the decode, not in the sampler. That makes the VAE a tuning knob, and one you can A/B on a latent you have already paid for. The stock `qwen_image_vae` is the conservative baseline. The Wan 2.1 FP32 swap is the standard cure for the soft default. The Qwen Image VAE Sharp line is the cure that does not move your colour.
 
 ### 5a. The Wan 2.1 VAE swap
 
-The single highest-leverage quality fix for the soft/airbrushed default and the halftone/dark-noise artefacts: decode through the **Wan 2.1 VAE (FP32)** instead of `qwen_image_vae`. Reported independently as "solves this" for the blur complaint `[community — mobiuscog, HN]` and adopted in the best-documented realism workflow `[community — nsfwVariant, Civitai]`. Mechanics: drop the Wan 2.1 VAE file into `models/vae/` and point the `VAELoader` at it. The latent spaces are compatible enough for decode — you're changing the renderer, not the model. Keep the Qwen VAE for encode-side operations (img2img-style passes) to stay conservative. A/B the swap on your own content — this is community craft, not an official configuration. It is not a cure-all. Moiré/halftone artefacts on hair and clothing are reported *on the Wan VAE too*, notably on community checkpoint merges (Fascium-class) even with all LoRAs off `[community — derTommygun, r/StableDiffusion]`. When that happens on a merge, re-test the stock checkpoint before debugging settings.
+The single highest-leverage quality fix for the soft/airbrushed default and the halftone/dark-noise artefacts is to decode through the **Wan 2.1 VAE (FP32)** instead of `qwen_image_vae`. It was reported independently as "solves this" for the blur complaint `[community — mobiuscog, HN]` and adopted in the best-documented realism workflow `[community — nsfwVariant, Civitai]`. The mechanics are simple: drop the Wan 2.1 VAE file into `models/vae/` and point the `VAELoader` at it. The latent spaces are compatible enough for decode; you are changing the renderer, not the model. Keep the Qwen VAE for encode-side operations (img2img-style passes) to stay conservative. A/B the swap on your own content, because this is community craft, not an official configuration. It is also not a cure-all. Moiré/halftone artefacts on hair and clothing are reported *on the Wan VAE too*, notably on community checkpoint merges (Fascium-class) even with all LoRAs off `[community — derTommygun, r/StableDiffusion]`. When that happens on a merge, re-test the stock checkpoint before debugging settings.
 
 ### 5b. Qwen Image VAE Sharp / Sharp Plus
 
-Retuned decoders for Krea 2 Turbo and Raw lift fine-edge response, micro-contrast and high-frequency detail *without* shifting colour, composition or character. That is the whole reason they exist alongside the Wan swap — the Wan VAE does move colour. Two grades:
+These are retuned decoders for Krea 2 Turbo and Raw. They lift fine-edge response, micro-contrast and high-frequency detail *without* shifting colour, composition or character. That is the whole reason they exist alongside the Wan swap, because the Wan VAE does move colour. There are two grades:
 
 | Decoder | Character | Reach for it when |
 |---|---|---|
 | `Qwen Image VAE Sharp` | conservative crisp-up | you want the stock look, just less mushy |
 | `Qwen Image VAE Sharp Plus` | a real sharpening decode | hair, fabric, machinery and architecture need to separate visibly |
 
-Mechanics: same drop-in as §5a — file into `models/vae/`, point the `VAELoader` at it. **FP32 builds need ComfyUI started with `--fp32-vae`**, and without that flag you get a silently worse decode rather than an error. This is a clarity trade, not a strict upgrade: keep the stock VAE for softer or painterly work, where the sharpening reads as harshness `[community — Merserk13]`.
+The mechanics are the same drop-in as §5a: put the file into `models/vae/` and point the `VAELoader` at it. **FP32 builds need ComfyUI started with `--fp32-vae`**, and without that flag you get a silently worse decode rather than an error. This is a clarity trade, not a strict upgrade: keep the stock VAE for softer or painterly work, where the sharpening reads as harshness `[community — Merserk13]`.
 
-Decision shortcut: soft *and* the colour is fine → Sharp/Sharp Plus. Soft *and* you also dislike the Qwen VAE's rendering character → Wan 2.1. Painterly or stylised work → leave it stock.
+A decision shortcut: if the image is soft *and* the colour is fine, use Sharp or Sharp Plus. If it is soft *and* you also dislike the Qwen VAE's rendering character, use Wan 2.1. For painterly or stylised work, leave it stock.
 
 ### 5c. Colour grading in latent space
 
-The **exposure, temperature, tint, detail/clarity and contrast vectors** have been extracted from Krea 2's (Qwen-Image) VAE. In principle, that makes Camera-Raw-style grading available *inside* the diffusion process rather than in post. Two things follow that post cannot do. One is a higher dynamic range than a graded PNG allows. The other is the ability to steer generations into territory the model resists on its own — very dark or very bright frames, and reportedly even the morphology of objects. That's because the grade conditions the sample instead of correcting it afterwards.
+The **exposure, temperature, tint, detail/clarity and contrast vectors** have been extracted from Krea 2's (Qwen-Image) VAE. In principle, that makes Camera-Raw-style grading available *inside* the diffusion process rather than in post. Two things follow from that which post-processing cannot do. One is a higher dynamic range than a graded PNG allows. The other is the ability to steer generations into territory the model resists on its own — very dark or very bright frames, and reportedly even the morphology of objects. This works because the grade conditions the sample instead of correcting it afterwards.
 
 **It is not actionable yet.** A ComfyUI node was *announced*, not shipped. Vectors for Z-Image (Flux VAE) were in progress. If it lands, the method should transfer to anything sharing the Qwen-Image VAE, which is why it is worth watching rather than waiting on `[community — muerrilla; re-verify]`.
 
 ## 6. Using LoRAs
 
-- **Node:** `LoraLoaderModelOnly` — Krea 2 LoRAs are DiT-only (the encoder is never trained; encoder-class doctrine). GGUF DiT + LoRA works through the same node.
-- **Official style LoRAs:** strengths 0.8–1.0, natural-phrase triggers auto-appended by the template (`prompting-guide.md §5` has the verbatim table).
-- **The official Turbo LoRA:** `loras/krea2_turbo_lora_rank_64_bf16.safetensors` in Comfy-Org/Krea-2 — the Turbo distillation *as a rank-64 LoRA*. Applied over **Raw**, it turns Raw into a few-step model; at partial strength it blends distillation speed with Raw's diversity. This is the enabling piece of the two-stage recipe below.
-- **Trained LoRAs:** train on Raw, apply on Turbo (the official doctrine — `lora-training.md`). Character LoRAs commonly hold identity at ~0.8 while stacking with style LoRAs `[community — JahJedi]`. Sweep 0.6–1.0 per LoRA. There's no established per-type weight table yet (two-week-old ecosystem — expect this to firm up).
-- **Slider/utility LoRAs** are already appearing (e.g. a Detail Slider on Civitai) — treat weights per the author's card.
+- **Node:** `LoraLoaderModelOnly`. Krea 2 LoRAs are DiT-only, because the encoder is never trained (encoder-class doctrine). GGUF DiT + LoRA works through the same node.
+- **Official style LoRAs:** run them at strengths 0.8–1.0. Their natural-phrase triggers are auto-appended by the template; `prompting-guide.md §5` has the verbatim table.
+- **The official Turbo LoRA:** `loras/krea2_turbo_lora_rank_64_bf16.safetensors` in Comfy-Org/Krea-2 is the Turbo distillation *as a rank-64 LoRA*. Applied over **Raw**, it turns Raw into a few-step model; at partial strength it blends distillation speed with Raw's diversity. This is the enabling piece of the two-stage recipe below.
+- **Trained LoRAs:** train on Raw, apply on Turbo — that is the official doctrine, covered in `lora-training.md`. Character LoRAs commonly hold identity at ~0.8 while stacking with style LoRAs `[community — JahJedi]`. Sweep 0.6–1.0 per LoRA. There is no established per-type weight table yet; the ecosystem is two weeks old, so expect this to firm up.
+- **Slider/utility LoRAs** are already appearing (for example a Detail Slider on Civitai). Treat their weights per the author's card.
 
 ## 7. Multi-stage workflows
 
@@ -160,27 +160,27 @@ The author publishes it as "Krea 2 simple gen workflow for high quality realism"
 | 2 — finish | same | 2 steps, `deis_3m` / `bong_tangent`, **denoise 0.2** | resolves the undercooked noise without re-imposing the default look |
 | decode | **Wan 2.1 FP32 VAE** | — | the §5a swap |
 
-Author's companion numbers: int8 convrot quant; cfg 2.0 variant when negatives are needed (2× time).
+The author's companion numbers: the int8 convrot quant, and a cfg 2.0 variant for when negatives are needed (at 2× the time).
 
 ### 7b. Alternative sampler ladders (stock Turbo)
 
-`[community — RaymondLuxuryYacht, Civitai "RLY Basic Photorealism"]`: `res_2s`/`beta` at **4–5 steps** for maximum texture; `er_sde`/`simple` at **4–9 steps** for a cleaner look. Past 8 steps, gains are minimal at 1024 `[community — liutyi, tested to 12]`. But at higher resolutions the step economy shifts. `euler_ancestral`/`simple` at **15 steps, 1536×1792, cfg 1** (alternate: `uni_pc_bh2`, seeds batch of 2) is a named daily-driver `[community — m0ran1's sampler thread, r/StableDiffusion]`. LoRA loading note: each active LoRA adds ~5–10 s per generation on Turbo (reported on int8 + rgthree Power Lora stacking). That's more noticeable against an 8-step base than it ever was on slower models `[community — rarezin, r/comfyui]`.
+`[community — RaymondLuxuryYacht, Civitai "RLY Basic Photorealism"]` recommends `res_2s`/`beta` at **4–5 steps** for maximum texture, and `er_sde`/`simple` at **4–9 steps** for a cleaner look. Past 8 steps, gains are minimal at 1024 `[community — liutyi, tested to 12]`. But at higher resolutions the step economy shifts: `euler_ancestral`/`simple` at **15 steps, 1536×1792, cfg 1** (alternate: `uni_pc_bh2`, seeds batch of 2) is a named daily-driver `[community — m0ran1's sampler thread, r/StableDiffusion]`. A LoRA loading note: each active LoRA adds ~5–10 s per generation on Turbo (reported on int8 + rgthree Power Lora stacking). That overhead is more noticeable against an 8-step base than it ever was on slower models `[community — rarezin, r/comfyui]`.
 
 ### 7b'. Low-VRAM pixel-space ladder
 
-For weak GPUs, generate at **512×512 and upscale in pixel space with realESRGAN 2×**, instead of rendering native-res. Mr Flow-style nodes adapted for Krea-2/ZIT keep detail while cutting compute `[community — MFGREBEL, RealRebelAI/Rebels_MrFlow]`.
+For weak GPUs, generate at **512×512 and upscale in pixel space with realESRGAN 2×**, instead of rendering at native resolution. Mr Flow-style nodes adapted for Krea-2/ZIT keep detail while cutting compute `[community — MFGREBEL, RealRebelAI/Rebels_MrFlow]`.
 
 ### 7c. The full production ladder
 
-`[community — lonecatone23, "Pro Grade" workflow]`: caption/enhance (abliterated local LLM) → base gen → detailer-daemon sampling → **SAM3 face/eye detailers** → `UltimateSDUpscale` at low denoise with simplified prompt → post FX. The character-LoRA swap belongs at the detailer stage, not the base gen (`characters.md §4`). Note the author's own honesty: the workflow's image-edit stage underperforms — there is no real edit model yet.
+`[community — lonecatone23, "Pro Grade" workflow]` chains: caption/enhance (abliterated local LLM) → base gen → detailer-daemon sampling → **SAM3 face/eye detailers** → `UltimateSDUpscale` at low denoise with a simplified prompt → post FX. The character-LoRA swap belongs at the detailer stage, not the base gen (`characters.md §4`). Note the author's own honesty about a limitation: the workflow's image-edit stage underperforms, because there is no real edit model yet.
 
 ## 8. Krea 2 in mixed-model pipelines
 
-Krea 2's role: **aesthetics/composition front-end** — widest stylistic range, strong anatomy/animals/wide-aspect `[community — nsfwVariant's comparison]`. Its finishing partners:
+Krea 2's role in a mixed pipeline is the **aesthetics/composition front-end**: it has the widest stylistic range and is strong on anatomy, animals and wide-aspect frames `[community — nsfwVariant's comparison]`. Its finishing partners:
 
-- **Z-Image as the face/detail finisher and repair-inpainter.** Z-Image Base beats Krea 2 on facial expressiveness and hair at ~8× the generation time. The efficient split is Krea 2 for the scene, Z-Image for the face pass. Krea 2's characteristic artefact zones (hair strands, fine repeating patterns, halftone-prone fabric, dark-area noise) inpaint cleanly with **Z-Image at denoise ~0.2** `[community — nsfwVariant]`. Paired LoRA releases (same style, Krea-2 + Z-Image-Turbo versions) are already a Civitai pattern — the community treats them as a standard pairing.
-- **Wan 2.1 VAE** (§5) is itself a cross-family graft — renderer from one family, generator from another.
-- **Handoff rule** (suite-standard): **VAE-decode to pixels between model families** — Qwen-Image-VAE latents are not Z-Image/SDXL/Flux latents. Identity-preserving refines live at denoise ~0.2–0.5. 0.2 is the Krea2→Z-Image repair number above.
-- No hosted↔open handoff subtlety is documented yet. But remember hosted Large renders through the FLUX.2 VAE — hosted and local outputs of "the same model" won't match pixel-level.
+- **Z-Image as the face/detail finisher and repair-inpainter.** Z-Image Base beats Krea 2 on facial expressiveness and hair, at ~8× the generation time. The efficient split is Krea 2 for the scene and Z-Image for the face pass. Krea 2's characteristic artefact zones (hair strands, fine repeating patterns, halftone-prone fabric, dark-area noise) inpaint cleanly with **Z-Image at denoise ~0.2** `[community — nsfwVariant]`. Paired LoRA releases — the same style in Krea-2 and Z-Image-Turbo versions — are already a Civitai pattern, and the community treats the two as a standard pairing.
+- **The Wan 2.1 VAE** (§5) is itself a cross-family graft: a renderer from one family serving a generator from another.
+- **The handoff rule** (suite-standard): **VAE-decode to pixels between model families**, because Qwen-Image-VAE latents are not Z-Image/SDXL/Flux latents. Identity-preserving refines live at denoise ~0.2–0.5, and 0.2 is the Krea2→Z-Image repair number above.
+- No hosted↔open handoff subtlety is documented yet. But remember that hosted Large renders through the FLUX.2 VAE, so hosted and local outputs of "the same model" will not match pixel-level.
 
-Cross-model craft in depth (denoise bands, resolution matching, color management, workflows-as-code): the **[`image-production-workflows`](../../image-production-workflows/)** skill.
+Cross-model craft in depth — denoise bands, resolution matching, color management, workflows-as-code — lives in the **[`image-production-workflows`](../../image-production-workflows/)** skill.

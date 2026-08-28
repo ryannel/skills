@@ -1,22 +1,24 @@
 ---
 name: character-lora-training
 description: >
-  Train a character LoRA that holds an identity across prompts, poses and models — the cross-model craft that
-  every model skill in this suite otherwise repeats. Use this whenever the user is building, debugging or
-  planning a LoRA, even obliquely: assembling and curating a dataset, deciding how many images, captioning
-  (and the character-vs-style inversion that decides what a LoRA actually learns), picking rank/alpha/LR/steps
-  as starting points, **evaluating a finished run** — which checkpoint to ship, how to build and read an
-  XY/checkpoint grid, which comparison tool to use, whether a run over- or under-fit, how to score likeness
-  objectively — holding likeness across a multi-stage pipeline or into video, or choosing which base model to
-  train on in the first place. It covers **adult/NSFW work as a first-class case** — which base models
-  actually have the training data (the limit is nearly always data, not refusal), why explicit captioning is
-  mandatory rather than optional, anatomy failure modes, and why automated captioners fail on adult video. It
-  also covers what determines whether a LoRA is **publishable at all**: Civitai's total ban on real-person
-  likeness (SFW and NSFW alike) and the TAKE IT DOWN Act's live FTC enforcement, both of which constrain
-  dataset sourcing and distribution. Per-model hyperparameters, trainer flags and quirks live in the model
-  skills — this owns what transfers. Choosing between models, comparing them, or working out which skills and
-  install commands a job needs is [`generative-media-atlas`](../generative-media-atlas/)'s job — start there
-  when the model is not already settled.
+  Train a character LoRA that holds an identity across prompts, poses and models. This is the
+  cross-model craft that every model skill in this suite would otherwise have to repeat. Use this
+  whenever the user is building, debugging or planning a LoRA, even obliquely: assembling and
+  curating a dataset, deciding how many images to use, captioning (including the character-vs-style
+  inversion that decides what a LoRA actually learns), picking rank/alpha/LR/steps as starting
+  points, or **evaluating a finished run** — which checkpoint to ship, how to build and read an
+  XY/checkpoint grid, which comparison tool to use, whether a run over- or under-fit, and how to
+  score likeness objectively. It also covers holding likeness across a multi-stage pipeline or into
+  video, and choosing which base model to train on in the first place. It covers **adult/NSFW work
+  as a first-class case**: which base models actually have the training data (the limit is nearly
+  always data, not refusal), why explicit captioning is mandatory rather than optional, anatomy
+  failure modes, and why automated captioners fail on adult video. It also covers what determines
+  whether a LoRA is **publishable at all**: Civitai bans real-person likeness totally, SFW and NSFW
+  alike, and the TAKE IT DOWN Act now has live FTC enforcement. Both constrain dataset sourcing and
+  distribution. Per-model hyperparameters, trainer flags and quirks live in the model skills; this
+  skill owns what transfers. Choosing between models, comparing them, or working out which skills
+  and install commands a job needs is [`generative-media-atlas`](../generative-media-atlas/)'s
+  job — start there when the model is not already settled.
 ---
 
 # Character LoRA training
@@ -45,19 +47,19 @@ A character LoRA works when the identity survives prompts it never saw. Everythi
 
 ## Before anything: can you publish it?
 
-This goes first because it decides whether the work is usable at all. The rules also changed recently enough that most guides you will find still predate them.
+This section goes first because it decides whether the work is usable at all. The rules also changed recently enough that most guides you will find still predate them.
 
-**Civitai bans real-person likeness outright** — *"living or deceased … including public figures, celebrities, influencers, and private individuals"* — at **every rating, SFW and NSFW alike.** That includes historical figures, and fictional characters rendered as the actor who played them. **There is no consent exception.** `[official — Civitai content rules, read 2026-08-13; re-verify]`
+**Civitai bans real-person likeness outright.** The ban covers *"living or deceased … including public figures, celebrities, influencers, and private individuals"*, and it applies at **every rating, SFW and NSFW alike.** It includes historical figures, and it includes fictional characters rendered as the actor who played them. **There is no consent exception.** `[official — Civitai content rules, read 2026-08-13; re-verify]`
 
-**The TAKE IT DOWN Act is live.** It was signed in May 2025, and **FTC enforcement began on 19 May 2026** — the same day platforms had to have 48-hour notice-and-removal working. Civil penalties run to about **$53,088 per violation**. It covers AI-generated NCII of real people whenever the output is *"indistinguishable from an authentic visual depiction."*
+**The TAKE IT DOWN Act is live.** It was signed in May 2025, and **FTC enforcement began on 19 May 2026**, the same day platforms had to have 48-hour notice-and-removal working. Civil penalties run to about **$53,088 per violation**. The Act covers AI-generated NCII of real people whenever the output is *"indistinguishable from an authentic visual depiction."*
 
 Three consequences for training:
 
 - **A dataset of a real person cannot be distributed**, whatever you intended. The main host will not take it, and on the NSFW side the exposure is now federal and enforced.
-- **The test is resemblance, not where the pictures came from.** A synthetic character is fine, even though the base model learned from photographs of real people. A character who looks like an identifiable individual is not. **"It's a lookalike, not them"** is exactly the argument the actor clause closes off.
-- **Private commissions and self-portraits are your own call.** The platform rule governs what you distribute; the law governs intimate imagery of other people. Know which one you are under.
+- **The test is resemblance, not where the pictures came from.** A synthetic character is fine, even though the base model learned from photographs of real people. A character who looks like an identifiable individual is not fine. **"It's a lookalike, not them"** is exactly the argument the actor clause closes off.
+- **Private commissions and self-portraits are your own call.** The platform rule governs what you distribute. The law governs intimate imagery of other people. Know which one you are under.
 
-Full treatment, dataset provenance, and the synthetic-character question: **`references/publishing-and-likeness.md`**.
+For the full treatment, dataset provenance, and the synthetic-character question, read **`references/publishing-and-likeness.md`**.
 
 ---
 
@@ -74,11 +76,11 @@ A LoRA learns whatever is *constant across the dataset and missing from the capt
 | Therefore: always caption | pose, outfit, framing, lighting, setting, expression | subject, composition, everything depicted |
 | Dataset diversity in | everything *except* the person | subjects, above all else |
 
-Caption the face and you teach the model that this face is optional. Forget to caption the red jacket she wears in twenty of thirty pictures and the jacket becomes part of the character.
+If you caption the face, you teach the model that this face is optional. If you forget to caption the red jacket she wears in twenty of thirty pictures, the jacket becomes part of the character.
 
-**When a trait belongs to the person but still changes, caption what changes it.** Freckles are hers, so never name them — but they fade under foundation. A set holding both versions forces the model to blame that difference on something, and if you name nothing it blames a bystander: the formal dress, or the indoor light. Caption the **makeup** instead. The freckles stay part of the trigger, and their fading becomes a switch you can flip when you generate. Same shape for tan lines, glasses, hair up or down: name the cause, never the trait, and caption the exception rather than the rule. `references/dataset-and-captioning.md` §4.
+**When a trait belongs to the person but still changes, caption what changes it.** Freckles are hers, so never name them. But freckles fade under foundation, and a set holding both versions forces the model to blame that difference on something. If you name nothing, it blames a bystander, such as the formal dress or the indoor light. Caption the **makeup** instead. The freckles stay part of the trigger, and their fading becomes a switch you can flip when you generate. The same shape applies to tan lines, glasses, and hair up or down: name the cause, never the trait, and caption the exception rather than the rule. See `references/dataset-and-captioning.md` §4.
 
-**A trigger token gives you a handle on the character.** On CLIP-class encoders it should be a rare token, used literally and identically every time. On LLM/T5-class encoders it belongs inside a natural phrase, or left out altogether — a bare rare token just confuses a language encoder. Your encoder class decides this, not your preference. See the conditioning doctrine in your model skill.
+**A trigger token gives you a handle on the character.** On CLIP-class encoders it should be a rare token, used literally and identically every time. On LLM/T5-class encoders it belongs inside a natural phrase, or it should be left out altogether, because a bare rare token just confuses a language encoder. Your encoder class decides this, not your preference. See the conditioning doctrine in your model skill.
 
 ---
 
@@ -86,26 +88,26 @@ Caption the face and you teach the model that this face is optional. Forget to c
 
 **Quality and coverage beat volume.** **15–30 well-curated images beat 100 mediocre ones.** This holds up in every base family anyone has tested it on, from NanashiAnon's Illustrious-era figure of 20–30 to L3n4's "a well-curated 30–50 beats a poorly curated 500" `[community — NanashiAnon, L3n4/Civitai 25645; convergent]`. More images will not fix a set that lacks angular coverage. They just cost more steps.
 
-**The coverage protocol decides whether the identity generalises**, and it runs on five axes `[community — MyAIForce, Civitai guides 5301/6990; convergent]`:
+**The coverage protocol decides whether the identity generalises.** It runs on five axes `[community — MyAIForce, Civitai guides 5301/6990; convergent]`:
 
 - **8-point rotation** around the head: front, three-quarter and profile on each side, and the rear angles. Missing angles is the number-one cause of a LoRA that collapses onto one pose, and the rear views are the ones people skip.
 - **Elevation** (one above and one below eye level), **shot size** (close-up, medium, full body), **expression** (neutral plus two more), and **varied lighting and settings**. Every gap fails the same way: whatever never changes becomes part of the identity. A face-only set gives you a character with no body. A single-expression set gives you a character stuck with one face.
 
-Full protocol with the exact angle clauses: **`references/dataset-and-captioning.md` §2**.
+The full protocol with the exact angle clauses is in **`references/dataset-and-captioning.md` §2**.
 
 **Change one clause at a time.** When you generate a set, hold the character description fixed and vary only the rotation, shot-size or expression clause. Anything else that drifts becomes part of what the model learns.
 
-**The chained approach is now standard**: lock one anchor image, use an edit model to build the varied set from it, curate hard, then train. That gives you coverage photography rarely does, and it sidesteps the likeness problem completely, because the character never existed. Someone has packaged the whole loop as a ComfyUI system — **VNCCS 3.0**, with a 3D pose studio, outfit cloning across characters and per-sprite regeneration `[community — AHEKOT, r/StableDiffusion 892 pts]`. A sprite sheet aims at narrower coverage than a training set does, though, so still curate its output against the protocol above.
+**The chained approach is now standard.** Lock one anchor image, use an edit model to build the varied set from it, curate hard, then train. That gives you coverage photography rarely does, and it sidesteps the likeness problem completely, because the character never existed. Someone has packaged the whole loop as a ComfyUI system — **VNCCS 3.0**, with a 3D pose studio, outfit cloning across characters and per-sprite regeneration `[community — AHEKOT, r/StableDiffusion 892 pts]`. Be aware that a sprite sheet aims at narrower coverage than a training set does, so still curate its output against the protocol above.
 
-**A video model makes a good dataset factory**, and it genuinely *solves* the 8-point rotation problem rather than approximating it. Prompt a slow 360° turnaround with no cuts, then cut the clip into frames. The coverage comes out continuous and consistent because it is one camera move, not several separate generations. Two things to know before reaching for it: it burns a lot of generated frames, and video stills carry less detail than image stills. One more is easy to miss — **check the licence of the model you harvest from**, because some of them restrict using their output to train anything else. [`ltx-2-5`](../ltx-2-5/)'s Attachment A ¶18 does exactly that, and how far it reaches into non-commercial work is unsettled `[contested]`.
+**A video model makes a good dataset factory**, and it genuinely *solves* the 8-point rotation problem rather than approximating it. Prompt a slow 360° turnaround with no cuts, then cut the clip into frames. The coverage comes out continuous and consistent because it is one camera move, not several separate generations. Two things to know before reaching for it: it burns a lot of generated frames, and video stills carry less detail than image stills. A third thing is easy to miss: **check the licence of the model you harvest from**, because some of them restrict using their output to train anything else. [`ltx-2-5`](../ltx-2-5/)'s Attachment A ¶18 does exactly that, and how far it reaches into non-commercial work is unsettled `[contested]`.
 
-Full dataset craft — curation criteria, the synthetic-generation loop, the video turnaround in detail, captioning by encoder class, and the multi-character options: **`references/dataset-and-captioning.md`**.
+The full dataset craft — curation criteria, the synthetic-generation loop, the video turnaround in detail, captioning by encoder class, and the multi-character options — is in **`references/dataset-and-captioning.md`**.
 
 ---
 
 ## Hyperparameters as starting points
 
-These show the shape of the consensus. They are not settings to copy — every model skill gives its own, and they differ.
+These ranges show the shape of the consensus. They are not settings to copy. Every model skill gives its own, and they differ.
 
 | Parameter | Typical starting range `[community — neonkisu, QuantumBogoSort, L3n4/Civitai 25645]` | Notes |
 |---|---|---|
@@ -115,11 +117,11 @@ These show the shape of the consensus. They are not settings to copy — every m
 | Steps | **1500–3000** | Scale with dataset size. The rule of thumb behind that range is ~80–100 steps per image |
 | Batch | 1–2 on 16–24 GB | If you drop batch to fit, hold `batch × gradient_accumulation` constant |
 
-Two alpha conventions are in use. **Alpha = rank** trains "louder" per step, because it effectively scales the learning rate. **Alpha = rank/2** is the more conservative default given here. Since alpha and LR interact, recipes using different conventions are not directly comparable. When a model skill in this suite pins a different alpha for its trainer, the model skill wins — this row is only the cross-model fallback.
+Two alpha conventions are in use. **Alpha = rank** trains "louder" per step, because it effectively scales the learning rate. **Alpha = rank/2** is the more conservative default given here. Alpha and LR interact, so recipes that use different conventions are not directly comparable. When a model skill in this suite pins a different alpha for its trainer, the model skill wins. This row is only the cross-model fallback.
 
 **Save checkpoints throughout and judge them as a series.** The best epoch is rarely the last one. This is the single highest-value habit in training: a run with intermediate checkpoints gives you a choice, and a run with only a final one gives you a verdict.
 
-**The floor for training at home has dropped, and that changes the economics.** Most of the suite's models want 16–24 GB, which is why renting ([`comfyui-on-runpod`](../comfyui-on-runpod/)) is the usual answer. [`anima`](../anima/) breaks that pattern: LoRA training fits in roughly **6 GB at 768 px** `[community — citronlegacy, Civitai 26217; convergent]`. That matters beyond anime work, because the real cost of this craft is the three failed runs it takes to learn what your dataset is missing — and at 6 GB those are free.
+**The floor for training at home has dropped, and that changes the economics.** Most of the suite's models want 16–24 GB, which is why renting ([`comfyui-on-runpod`](../comfyui-on-runpod/)) is the usual answer. [`anima`](../anima/) breaks that pattern: its LoRA training fits in roughly **6 GB at 768 px** `[community — citronlegacy, Civitai 26217; convergent]`. That matters beyond anime work, because the real cost of this craft is the three failed runs it takes to learn what your dataset is missing. At 6 GB those failed runs are free.
 
 ---
 
@@ -127,13 +129,13 @@ Two alpha conventions are in use. **Alpha = rank** trains "louder" per step, bec
 
 **Loss is a weak signal.** It tells you the model is fitting. It does not tell you whether the identity generalises. Judge on images, in three layers, cheapest first:
 
-1. **Training previews** — already switched on, and *not* free on a rented GPU. They run on the clock you are paying for, and on an undistilled training model they can eat more time than the training does. Fix the seed, use 3–5 prompts, save checkpoints often but preview rarely, and read them only to find *roughly where the good region is*. Never pick your final checkpoint here — the trainer's sampler is not the one you ship with.
+1. **Training previews.** These are already switched on, and they are *not* free on a rented GPU. They run on the clock you are paying for, and on an undistilled training model they can eat more time than the training does. Fix the seed, use 3–5 prompts, save checkpoints often but preview rarely, and read the previews only to find *roughly where the good region is*. Never pick your final checkpoint here, because the trainer's sampler is not the one you ship with.
 2. **A grid: checkpoint × strength**, on fixed prompts and a fixed seed, made in the tool you will actually ship from. This is the only step that costs real compute, so narrow the range with layer 1 first.
-3. **Judge it blind, and set it up that way from the start.** A grid is labelled on purpose, so you know which cell trained longer before you even look. Knowing that does not protect you — the labelled sheet is still the easiest thing to open. Have whatever draws the grid write **coded cells plus a key file you leave shut** until your pick is written down. Then open it. Same cost, and it often flips the answer the labelled grid gave you.
+3. **Judge it blind, and set it up that way from the start.** A grid is labelled on purpose, so you know which cell trained longer before you even look. Knowing that does not protect you, and the labelled sheet is still the easiest thing to open. Have whatever draws the grid write **coded cells plus a key file you leave shut** until your pick is written down. Then open it. This costs the same, and it often flips the answer the labelled grid gave you.
 
-**When a model comes in two halves, previews lie in a predictable direction.** If the trainer previews on the slow half (Krea 2 Raw, Z-Image Base, Flux dev) and you deploy on the fast one, those high-guidance previews smear exactly the fine detail a face is recognised by. The likeness looks weaker than it is. So do not restart because of a preview. Wait until about 60–70% of the run before you worry, and check on the model you actually deploy on — one image at real settings costs far less than a restart.
+**When a model comes in two halves, previews lie in a predictable direction.** If the trainer previews on the slow half (Krea 2 Raw, Z-Image Base, Flux dev) and you deploy on the fast one, those high-guidance previews smear exactly the fine detail a face is recognised by. The likeness looks weaker than it is. So do not restart because of a preview. Wait until about 60–70% of the run before you worry, and check on the model you actually deploy on. One image at real settings costs far less than a restart.
 
-**Nothing goes into the LoRA library until the blind pick is settled**, and **if the subject is a real person, the pick belongs to whoever knows that face.** How closely a picture resembles a stranger is not something an outside eye or a metric can judge. So whoever ran the training builds the blind set, and whoever knows the subject chooses. A checkpoint handed over early gets used forever, so label it provisional and keep the other candidates until it is settled.
+**Nothing goes into the LoRA library until the blind pick is settled.** And **if the subject is a real person, the pick belongs to whoever knows that face.** How closely a picture resembles a stranger is not something an outside eye or a metric can judge. So whoever ran the training builds the blind set, and whoever knows the subject chooses. A checkpoint handed over early gets used forever, so label it provisional and keep the other candidates until the pick is settled.
 
 **Three habits decide whether any of that is worth anything** `[community — production practice; convergent]`:
 
@@ -141,17 +143,17 @@ Two alpha conventions are in use. **Alpha = rank** trains "louder" per step, bec
 - **Write the probe prompts before you see any results, and reuse the same set across runs.** Prompts you invent while browsing outputs drift toward what the LoRA already does well. A fixed set is the only way run 3 stays comparable to run 1.
 - **Score likeness and prompt-adherence separately.** They peak at *different* checkpoints, because likeness keeps improving after flexibility has started to die. Asking "which is best?" quietly averages two things moving in opposite directions.
 
-**Numbers are a screen, not a verdict.** `FaceEmbedDistance` (from `cubiq/ComfyUI_FaceAnalysis`) is the quantitative signal you can actually reach. Calibrate a baseline from real photos first. And know that DINO/CLIP-I-family metrics are **documented as significantly out of step with human judgement** on exactly this task — that is the central result of **DreamBench++** (ICLR 2025) `[official — published benchmark]`. They also inflate when a LoRA overfits pose, so a score that climbs late in a run may just be measuring memorisation.
+**Numbers are a screen, not a verdict.** `FaceEmbedDistance` (from `cubiq/ComfyUI_FaceAnalysis`) is the quantitative signal you can actually reach. Calibrate a baseline from real photos first. Know also that DINO/CLIP-I-family metrics are **documented as significantly out of step with human judgement** on exactly this task. That is the central result of **DreamBench++** (ICLR 2025) `[official — published benchmark]`. These metrics also inflate when a LoRA overfits pose, so a score that climbs late in a run may just be measuring memorisation.
 
-Two cheap tests before shipping: a **strength sweep** (a healthy LoRA has a usable band, not a knife-edge) and a **stack test** if it will run alongside others.
+Run two cheap tests before shipping: a **strength sweep** (a healthy LoRA has a usable band, not a knife-edge) and a **stack test** if the LoRA will run alongside others.
 
-Grid tooling, a copy-pasteable probe set, the cost arithmetic, and what is worth building yourself: **`references/evaluation-and-tooling.md`**.
+Grid tooling, a copy-pasteable probe set, the cost arithmetic, and what is worth building yourself are in **`references/evaluation-and-tooling.md`**.
 
 ---
 
 ## Failure modes & QC
 
-Read the cause column and the pattern jumps out: nearly every one is a **dataset or caption** problem dressed up as a hyperparameter problem.
+Read the cause column and the pattern jumps out: nearly every failure is a **dataset or caption** problem dressed up as a hyperparameter problem.
 
 | Signal | Cause (mechanism) | Fix |
 |---|---|---|
@@ -169,30 +171,30 @@ Read the cause column and the pattern jumps out: nearly every one is a **dataset
 
 ## Adult and NSFW work
 
-Treated as a first-class case, because it is a dominant use of open-weights models and because most of the difficulty gets misdiagnosed.
+This skill treats adult work as a first-class case, because it is a dominant use of open-weights models and because most of the difficulty gets misdiagnosed.
 
-**The limit is training data, not refusal.** Open-weights models do not generally refuse. They produce poor anatomy because the base model never saw much of it. That is why swapping in an abliterated ("heretic") text encoder does not work, and the author of the leading abliteration tool says so plainly: abliteration removes an LLM's ability to *refuse*, and refusal lives in output layers that a text encoder never uses `[community — -p-e-w-, author of Heretic]`. What you get is disturbed conditioning, slightly worse prompt adherence, and no new capability. Abliterated models do have a use here — **prompt expansion**, when a prompt-enhancer LLM is the thing refusing. That is a separate stage, before the encoder.
+**The limit is training data, not refusal.** Open-weights models do not generally refuse. They produce poor anatomy because the base model never saw much of it. That is why swapping in an abliterated ("heretic") text encoder does not work, and the author of the leading abliteration tool says so plainly: abliteration removes an LLM's ability to *refuse*, and refusal lives in output layers that a text encoder never uses `[community — -p-e-w-, author of Heretic]`. What you get from the swap is disturbed conditioning, slightly worse prompt adherence, and no new capability. Abliterated models do have one use here: **prompt expansion**, when a prompt-enhancer LLM is the thing refusing. That is a separate stage, before the encoder.
 
-**So base-model choice dominates** — and the usual way people measure it is currently disputed `[contested]`. The proxy is **what share of a base's published LoRAs are adult-flagged**, and two measurements ten days apart disagree almost inversely on video. A 2026-08-13 sample of about 100 LoRAs per base puts **Wan 2.2 I2V highest at 90%** and Flux lowest at 28%. A 2026-08-23 re-census — 600 most-downloaded per base, reading the X/XXX bits of Civitai's `nsfwLevel` bitmask — runs from **Pony at 67%** down to **Wan 2.2 at 22–23%**. The likely explanation is that `nsfwLevel` comes from **preview images**, and a video LoRA's preview is routinely a tame first frame, so the metric undercounts video. Both tables, both methods, and the trap that the API's `nsfw` boolean is dead: **`references/nsfw-training.md` §2**. The reproducible census script lives in [`generative-media-atlas`](../generative-media-atlas/), which owns model choice.
+**So base-model choice dominates.** The usual way people measure it is currently disputed `[contested]`. The proxy is **what share of a base's published LoRAs are adult-flagged**, and two measurements ten days apart disagree almost inversely on video. A 2026-08-13 sample of about 100 LoRAs per base puts **Wan 2.2 I2V highest at 90%** and Flux lowest at 28%. A 2026-08-23 re-census — 600 most-downloaded per base, reading the X/XXX bits of Civitai's `nsfwLevel` bitmask — runs from **Pony at 67%** down to **Wan 2.2 at 22–23%**. The likely explanation is that `nsfwLevel` comes from **preview images**, and a video LoRA's preview is routinely a tame first frame, so the metric undercounts video. Both tables, both methods, and the trap that the API's `nsfw` boolean is dead are in **`references/nsfw-training.md` §2**. The reproducible census script lives in [`generative-media-atlas`](../generative-media-atlas/), which owns model choice.
 
-Two things hold whichever ordering is right. First, these percentages measure *which way an ecosystem leans*, not what a model can do — SDXL's ~31% of a far larger library is more material in absolute terms than any newer base's 60%, and SDXL is still where the purpose-built finetunes live. Second, **adult work is a dominant published use of open video models**, which rests on what the video community actually ships rather than on the metric. Two models stay ruled out for reasons that have nothing to do with capability: **Ideogram 4**, by a hard filter in the model itself, and [`ltx-2-5`](../ltx-2-5/), by an acceptable-use policy that bans explicit content everywhere, local weights included.
+Two things hold whichever ordering is right. First, these percentages measure *which way an ecosystem leans*, not what a model can do. SDXL's ~31% of a far larger library is more material in absolute terms than any newer base's 60%, and SDXL is still where the purpose-built finetunes live. Second, **adult work is a dominant published use of open video models**, and that claim rests on what the video community actually ships rather than on the metric. Two models stay ruled out for reasons that have nothing to do with capability: **Ideogram 4**, by a hard filter in the model itself, and [`ltx-2-5`](../ltx-2-5/), by an acceptable-use policy that bans explicit content everywhere, local weights included.
 
-**Stacking a capability LoRA under a character LoRA is the standard answer when a base lacks the anatomy, and it is not a reliable one `[contested]`.** One practitioner worked through four published Wan I2V anatomy LoRAs and found each either failed to render or *"changes the character lora too much"* `[community — One-Energy5403]`. Two adapters are writing the same attention weights, and the broader one wins. Run the stack test *before* you commit to a base, not after the character LoRA is trained.
+**Stacking a capability LoRA under a character LoRA is the standard answer when a base lacks the anatomy, and it is not a reliable one `[contested]`.** One practitioner worked through four published Wan I2V anatomy LoRAs and found each either failed to render or *"changes the character lora too much"* `[community — One-Energy5403]`. The mechanism: two adapters are writing the same attention weights, and the broader one wins. Run the stack test *before* you commit to a base, not after the character LoRA is trained.
 
-**Caption explicitly.** This is not a stylistic choice. Uncaptioned elements get absorbed into the concept, so euphemistic captions teach the model that the explicit content *is* the character — the failure people then go on to blame on the base model.
+**Caption explicitly.** This is not a stylistic choice. Uncaptioned elements get absorbed into the concept, so euphemistic captions teach the model that the explicit content *is* the character. That is the failure people then go on to blame on the base model.
 
 **Automated captioners fail here.** The community captions adult video by hand, which multiplies the cost on datasets where frame count is already the expensive part.
 
-Anatomy failure modes, the full per-family table, and video specifics: **`references/nsfw-training.md`**.
+Anatomy failure modes, the full per-family table, and video specifics are in **`references/nsfw-training.md`**.
 
 ---
 
 ## Pre-flight checklist
 
-Most training checklists start at the config file. This one starts three steps earlier, because a config mistake costs you one run while a likeness problem costs you the project — and no step count trains around missing angular coverage.
+Most training checklists start at the config file. This one starts three steps earlier, because a config mistake costs you one run while a likeness problem costs you the project, and no step count trains around missing angular coverage.
 
 1. **Publishable?** If a real person is anywhere near the dataset, settle this now. Civitai bans real-person likeness at every rating, and the TAKE IT DOWN Act is in force (`references/publishing-and-likeness.md`).
-2. **Base chosen for the job, not out of familiarity** — judged on the axes that actually differ: adult coverage, multi-character support, and the VRAM floor you can afford.
+2. **Base chosen for the job, not out of familiarity.** Judge it on the axes that actually differ: adult coverage, multi-character support, and the VRAM floor you can afford.
 3. **Per-model trap read**, from the boundary table above. Wan's two experts, H3's non-pruned checkpoint, Anima's LLM adapter and LTX's licence inheritance each cost a whole run if missed.
 4. **Coverage passes** — 8-point rotation including the rear angles, one elevation above and one below, close-up through full body, neutral plus two expressions, varied lighting and settings.
 5. **Curated hard** — no near-duplicates, no occluded faces, no watermarks, consistent apparent age and build.
@@ -207,7 +209,7 @@ Most training checklists start at the config file. This one starts three steps e
 
 ## Where this fits
 
-The boundary table at the top routes *inward*, to the per-model trap that applies to your run. This one routes *outward*, for when the job sits next to training rather than being training. Between them they define what this skill owns: only the craft that survives a change of model.
+The boundary table at the top routes *inward*, to the per-model trap that applies to your run. This table routes *outward*, for when the job sits next to training rather than being training. Between them they define what this skill owns: only the craft that survives a change of model.
 
 | If the job is… | Reach for |
 |---|---|
@@ -229,11 +231,11 @@ The boundary table at the top routes *inward*, to the per-model trap that applie
 
 This skill holds two kinds of claim to two different standards, because they fail in two different ways.
 
-**Hard facts — must be exact or it breaks.** Civitai's real-person policy (quoted from their published rules), the TAKE IT DOWN Act's dates, enforcement start and penalty scale, the DreamBench++ result on DINO/CLIP-I misalignment, LTX-2.x's derivative-inheritance clauses, and the mechanism by which abliteration fails as an encoder swap. **Sources are official or primary**: platform policy pages, the published benchmark, licence text, and legal-practice summaries of the statute. These carry legal and account consequences, and the regulatory picture is **still moving** — state deepfake law is landing and platform policy follows it. **Re-verify before relying on any of it, whoever said it, and treat this as orientation rather than legal advice.**
+**Hard facts — must be exact or it breaks.** These are: Civitai's real-person policy (quoted from their published rules), the TAKE IT DOWN Act's dates, enforcement start and penalty scale, the DreamBench++ result on DINO/CLIP-I misalignment, LTX-2.x's derivative-inheritance clauses, and the mechanism by which abliteration fails as an encoder swap. **Sources are official or primary**: platform policy pages, the published benchmark, licence text, and legal-practice summaries of the statute. These claims carry legal and account consequences, and the regulatory picture is **still moving** — state deepfake law is landing and platform policy follows it. **Re-verify before relying on any of it, whoever said it, and treat this as orientation rather than legal advice.**
 
-**Craft — what actually makes a good LoRA.** Caption-the-residual and its inversion, captioning the cause for traits that are identity *and* variable, the coverage protocol, 15–30 curated images beating 100, the hyperparameter ranges, the dataset factory and when feeding a new LoRA the old one's pictures wrecks the run, XY-grid evaluation, the blind pass and setting it up blind from the start, what previews cost and why they understate likeness on a two-half model, the overfit signals. **The authoritative source here is the community** — named trainers who have run hundreds of these: neonkisu, QuantumBogoSort, Khanykov01, NanashiAnon, L3n4, Ainara, MyAIForce and the Civitai dataset guides, plus `-p-e-w-` on abliteration and MASilverHammer on Differential Output Preservation. Stated with confidence. A range means "your dataset and base differ from theirs", not "this is unreliable".
+**Craft — what actually makes a good LoRA.** This covers caption-the-residual and its inversion, captioning the cause for traits that are identity *and* variable, the coverage protocol, 15–30 curated images beating 100, the hyperparameter ranges, the dataset factory and when feeding a new LoRA the old one's pictures wrecks the run, XY-grid evaluation, the blind pass and setting it up blind from the start, what previews cost and why they understate likeness on a two-half model, and the overfit signals. **The authoritative source here is the community** — named trainers who have run hundreds of these: neonkisu, QuantumBogoSort, Khanykov01, NanashiAnon, L3n4, Ainara, MyAIForce and the Civitai dataset guides, plus `-p-e-w-` on abliteration and MASilverHammer on Differential Output Preservation. It is stated with confidence. A range means "your dataset and base differ from theirs", not "this is unreliable".
 
-Five things held as genuinely open:
+Five things are held as genuinely open:
 
 - **The adult-flagged-share ordering.** Two censuses ten days apart disagree almost inversely on video, and neither method is clean — the preview-image basis of Civitai's `nsfwLevel` explains the video half of the gap but not the image half. `[contested]`
 - **Whether a capability LoRA can be stacked under a character LoRA without destabilising it.** Four published anatomy LoRAs, none of which worked for one practitioner, and no recipe offered in reply. `[contested]`

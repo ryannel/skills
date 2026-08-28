@@ -1,6 +1,6 @@
 # Z-Image Prompting Guide
 
-This is everything you need to write prompts for the Qwen-3 encoder: the full six-part anatomy, the vocabulary tables you build prompts from, and the two spots where you need to push back against Z-Image's defaults (plastic skin, and a chin that tilts back toward the lens). Sections 3.3–3.5 also work as the **dataset-shot specification** for character LoRA work. `references/characters.md` sends you here for the angle clauses instead of repeating them.
+This guide covers everything you need to write prompts for the Qwen-3 encoder. It gives you the full six-part prompt anatomy and the vocabulary tables you build prompts from. It also covers the two places where you need to push back against Z-Image's defaults: plastic skin, and a chin that tilts back toward the lens. Sections 3.3–3.5 also work as the **dataset-shot specification** for character LoRA work. `references/characters.md` sends you here for the angle clauses instead of repeating them.
 
 ## Contents
 
@@ -17,7 +17,7 @@ This is everything you need to write prompts for the Qwen-3 encoder: the full si
 
 ## 1. Prompt anatomy
 
-There are six parts, and the order matters. Qwen parses syntax, so earlier clauses carry more weight.
+A prompt has six parts, and the order matters. Qwen parses syntax, so earlier clauses carry more weight.
 
 | Part | What to include | Why |
 |---|---|---|
@@ -28,7 +28,7 @@ There are six parts, and the order matters. Qwen parses syntax, so earlier claus
 | **Style / medium** | Exactly one dominant medium | Two or more media create an uncanny-valley look |
 | **Constraints** | **Z-Image:** separate negative prompt. **Turbo:** positive phrasing inside the prompt | See SKILL.md for per-variant CFG / negative rules |
 
-**Length sweet spot:** 80–250 words. The default limit is 512 tokens, or about 384 words. Set `max_sequence_length=1024` locally if you need longer prompts. Stick to 3–5 key visual concepts — attention drifts past that point.
+**Length sweet spot:** 80–250 words. The default limit is 512 tokens, which is about 384 words. Set `max_sequence_length=1024` locally if you need longer prompts. Stick to 3–5 key visual concepts, because attention drifts past that point.
 
 ---
 
@@ -78,9 +78,9 @@ For LoRA datasets, aim for close-up (~30% of images), full body (~20%), and the 
 
 ### 3.3 Horizontal rotation — angle clauses (for LoRA datasets)
 
-These clauses describe subject orientation only. Combine them with any shot size from §3.2. §3.4 below has full-body framing already built in, if you want a ready-to-drop-in version.
+These clauses describe subject orientation only. Combine them with any shot size from §3.2. If you want a ready-to-drop-in version, §3.4 below has full-body framing already built in.
 
-Generate all eight with **identical** subject description, lighting, and background. Vary only the angle clause. Randomise the seed across the set. Lock it only while you are iterating on phrasing.
+Generate all eight views with an **identical** subject description, lighting, and background, and vary only the angle clause. Randomise the seed across the set. Lock the seed only while you are iterating on phrasing.
 
 | # | View | Drop-in angle clause |
 |---|---|---|
@@ -96,12 +96,12 @@ Generate all eight with **identical** subject description, lighting, and backgro
 **Tips for consistent sets:**
 - Keep the lighting direction description byte-identical across all eight views ("soft north-window light from camera-left at 45°").
 - For views #4–#6 (back-facing), describe the hair from behind explicitly ("hair gathered in a low ponytail visible from behind, loose strands at the nape").
-- Back views are the weakest-trained angles in every modern diffusion model, so expect 2–3 retries. Reinforce with "rear three-quarter angle" and an explicit back-hair description.
+- Back views are the weakest-trained angles in every modern diffusion model, so expect 2–3 retries. Reinforce them with "rear three-quarter angle" and an explicit description of the hair from behind.
 - Use this baseline pose for the rotation series: "relaxed standing, arms at her sides, neutral expression."
 
 ### 3.4 Horizontal rotation — full body (head to feet)
 
-For a full-body set, take each §3.3 angle clause and add a framing clause. No separate table is needed: **"full figure from head to feet in frame, 35 mm lens, vertical 3:4 crop"** (use 24 mm for more breathing room around the figure). Keep the pose consistent: "relaxed standing, arms at her sides, feet shoulder-width apart." Include footwear in the subject description, since the shoes will be fully visible.
+For a full-body set, take each §3.3 angle clause and add a framing clause. No separate table is needed. The framing clause is **"full figure from head to feet in frame, 35 mm lens, vertical 3:4 crop"**; use 24 mm for more breathing room around the figure. Keep the pose consistent: "relaxed standing, arms at her sides, feet shoulder-width apart." Include footwear in the subject description, since the shoes will be fully visible.
 
 - **Front (0°):** "full body, facing the camera directly, feet shoulder-width apart, head to feet in frame, 35 mm lens, vertical 3:4 crop"
 - **Back (180°) — the hardest:** "full body back view, facing directly away from camera, full-length figure from head to feet, back of hair and outfit fully visible, 35 mm lens, vertical 3:4 crop"
@@ -114,17 +114,17 @@ For a full-body set, take each §3.3 angle clause and add a framing clause. No s
 
 ### 3.5 Elevation shots — face close-up, high and low (for LoRA datasets)
 
-The horizontal 8-point rotation covers left-right variety. Elevation shots add the vertical axis. Together they cover the head from nearly every angle in 3D. Include **one high and one low** elevation shot per lighting setup in your dataset.
+The horizontal 8-point rotation covers left-right variety, and elevation shots add the vertical axis. Together they cover the head from nearly every angle in 3D. Include **one high and one low** elevation shot per lighting setup in your dataset.
 
-Use **close-up or bust framing** (85 mm f/1.4) and keep the face large in the frame, so the LoRA learns identity, not environment. See §5 for the full gaze-phrase library.
+Use **close-up or bust framing** (85 mm f/1.4) and keep the face large in the frame, so the LoRA learns identity rather than environment. See §5 for the full gaze-phrase library.
 
-**Recommended angle:** 30–45° above or below eye level. Extreme overhead and worm's-eye angles are hard to control and less useful for LoRA training than moderate elevations.
+**Recommended angle:** 30–45° above or below eye level. Extreme overhead and worm's-eye angles are hard to control, and they are less useful for LoRA training than moderate elevations.
 
 ---
 
 #### High elevation (camera above, looking down at the face)
 
-Camera elevated 30–45° above eye level, angled downward. The default failure is chin-up eye contact, so give the gaze a forward-or-down anchor.
+Place the camera 30–45° above eye level, angled downward. The default failure is chin-up eye contact, so give the gaze a forward-or-down anchor.
 
 Prompt pairs: pick one from each column and combine them.
 
@@ -143,7 +143,7 @@ Prompt pairs: pick one from each column and combine them.
 
 #### Low elevation (camera below, looking up at the face)
 
-Camera at chin height or slightly below, angled 20–30° upward. Keep it moderate. At extreme worm's-eye level, the underside of the jaw dominates and the face becomes hard for the LoRA to read. The default failure is chin-down eye contact, so give the gaze a forward-or-up anchor.
+Place the camera at chin height or slightly below, angled 20–30° upward. Keep the angle moderate. At extreme worm's-eye level, the underside of the jaw dominates the frame and the face becomes hard for the LoRA to read. The default failure is chin-down eye contact, so give the gaze a forward-or-up anchor.
 
 | Camera clause | Gaze clause |
 |---|---|
@@ -191,7 +191,7 @@ Gaze phrases (use one or two of these):
 
 **For Z-Image, add negative:** `looking at camera, looking at viewer, eye contact, face tilted up, looking up, posed portrait`
 
-**Avoid:** the word `portrait` on its own (it has a strong eye-contact prior — use "candid documentary photograph" instead) · a high-angle face close-up with nothing below to anchor the gaze · `confident smile`, `posing`, `model pose` (these all summon eye contact)
+**Avoid:** the word `portrait` on its own, because it has a strong eye-contact prior; use "candid documentary photograph" instead. Avoid a high-angle face close-up with nothing below to anchor the gaze. Avoid `confident smile`, `posing`, and `model pose`, because these all summon eye contact.
 
 ---
 
@@ -214,7 +214,7 @@ Gaze phrases:
 
 **For Z-Image, add negative:** `looking down, looking at camera, looking at viewer, eye contact, smirking down at viewer, posed`
 
-**Avoid:** `low angle` + `portrait` + `confident` together (this summons the "Vogue model looking down" trope) · `looming`, `intimidating`, `dominant`, `powerful` (these make the look-down effect stronger — use `heroic`, `contemplative`, `distant`, `focused` instead) · `looking down` without a specific anchor (this is ambiguous, and the model may point the gaze at the camera instead)
+**Avoid:** combining `low angle` + `portrait` + `confident`, because together they summon the "Vogue model looking down" trope. Avoid `looming`, `intimidating`, `dominant`, and `powerful`, because they make the look-down effect stronger; use `heroic`, `contemplative`, `distant`, or `focused` instead. Avoid `looking down` without a specific anchor, because the phrase is ambiguous and the model may point the gaze at the camera instead.
 
 ---
 
@@ -225,8 +225,8 @@ Z-Image renders legible Chinese and English in the same image, reliably.
 - **Wrap rendered text in straight double quotes:** `the neon sign reads "NIGHT MARKET"`
 - Keep each text block in one language: `English title "QUIET STREETS" at the top` and `Chinese subtitle "静谧之城" below it`
 - Describe the typography separately: `bold red neon serif` · `thin sans-serif white sub-text` · `vertical handwritten brush calligraphy along the right edge`
-- Keep rendered text under **~10 words per block** — longer strings start to degrade
-- To exclude a script, phrase it positively: "English text only, no Chinese characters on the sign" (this works; avoid negatives in Turbo)
+- Keep rendered text under **~10 words per block**, because longer strings start to degrade
+- To exclude a script, phrase it positively: "English text only, no Chinese characters on the sign". This works, and it avoids negatives in Turbo
 
 ---
 

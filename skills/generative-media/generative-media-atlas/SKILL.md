@@ -1,51 +1,50 @@
 ---
 name: generative-media-atlas
 description: >
-  The entry point to the generative-media suite: which open image or video model to use for a given
-  job, how they rank and trade off against each other, which skills to install to do the work, and
-  in what order. Use this whenever the user is choosing, comparing or planning rather than operating
-  a model they have already settled on — even when they never say the words "which model" — and
-  reach for it early, because the constraints it screens for (licence, territory, VRAM, prompt
-  dialect) are cheap to check now and unrecoverable later. Triggers: "which model is best for
-  photoreal faces / anime / typography / text in images", "which is easiest to train a character
-  LoRA on", "rank these for realism", "Z-Image vs Krea 2 vs FLUX.2", "what can I run on 12 GB",
-  "which video model gives me audio", "can I sell what this makes", "which licence lets me ship the
-  pipeline", "best model for NSFW / adult / uncensored work" and which ones bar it, "I want
-  realistic photos of a character I invented, in ComfyUI on RunPod — where do I start", or any
-  multi-step goal crossing model choice, LoRA training, pipeline design and GPU deployment. It also
-  owns **getting the skills onto the machine**: what to install with `npx skills add`, which
-  siblings a job needs, and the canonical skills published outside this suite by RunPod, Comfy-Org
-  and Hugging Face. Install this skill alone and it will tell you which others to pull and when. Per-model settings, filenames, node
-  wiring, prompt dialects and licence clause detail live in the model skills — this owns the
-  comparison between them, the route through them, and the decision of which ones you need. When a
-  question could plausibly be answered by a model skill or by this one, start here: routing costs
-  one read, and choosing the wrong model costs a week.
+  The entry point to the generative-media suite. It tells you which open image or video model to
+  use for a given job, how the models rank and trade off against each other, which skills to
+  install to do the work, and in what order to use them. Use this whenever the user is choosing,
+  comparing or planning rather than operating a model they have already settled on, even when they
+  never say the words "which model". Reach for it early: the constraints it screens for (licence,
+  territory, VRAM, prompt dialect) are cheap to check now and unrecoverable later. Triggers:
+  "which model is best for photoreal faces / anime / typography / text in images", "which is
+  easiest to train a character LoRA on", "rank these for realism", "Z-Image vs Krea 2 vs FLUX.2",
+  "what can I run on 12 GB", "which video model gives me audio", "can I sell what this makes",
+  "which licence lets me ship the pipeline", "best model for NSFW / adult / uncensored work" and
+  which ones bar it, "I want realistic photos of a character I invented, in ComfyUI on RunPod —
+  where do I start", or any multi-step goal crossing model choice, LoRA training, pipeline design
+  and GPU deployment. It also owns getting the skills onto the machine: what to install with
+  `npx skills add`, which siblings a job needs, and the canonical skills published outside this
+  suite by RunPod, Comfy-Org and Hugging Face. Install this skill alone and it will tell you which
+  others to pull and when. Per-model settings, filenames, node wiring, prompt dialects and licence
+  clause detail live in the model skills. This skill owns the comparison between them, the route
+  through them, and the decision of which ones you need. When a question could plausibly be
+  answered by a model skill or by this one, start here. Routing costs one read, and choosing the
+  wrong model costs a week.
 ---
 
 # Generative media atlas
 
 This is the **map** of the suite: the skill you read *before* you know which skill you need.
 
-Every other skill here answers "how do I do this with model X". This one answers the questions that
-come first: **which X, why that one, what it costs you, which skills to install, and in what
-order.** Then it hands you off. It is deliberately the one skill in the suite that works on its own,
-because it is the one people install first.
+Every other skill here answers "how do I do this with model X". This one answers the questions that come first:
+**which X, why that one, what it costs you, which skills to install, and in what order.** Then it hands you off.
+It is deliberately the one skill in the suite that works on its own, because it is the one people install first.
 
 Two ideas organize everything below:
 
-1. **Model choice is an elimination, not a beauty contest.** The constraints that rule a model out
-   are binary and public. The quality differences between the survivors are small and come down to
-   taste.
-2. **A finished result is a route through several skills, not one.** Locking a character is one job.
-   Training its LoRA, rendering it well, and running it on a rented GPU are three more. Each is a
-   different skill's job, and the expensive mistakes happen at the joins.
+1. **Model choice is an elimination, not a beauty contest.** The constraints that rule a model out are binary
+   and public. The quality differences between the survivors are small and come down to taste.
+2. **A finished result is a route through several skills, not one.** Locking a character is one job. Training
+   its LoRA, rendering it well, and running it on a rented GPU are three more. Each is a different skill's job,
+   and the expensive mistakes happen at the joins.
 
 ---
 
 ## What this owns, and what it doesn't
 
-**Routing outward is the whole job.** If the answer changes when you change the model, it is not
-this skill's answer to give.
+**Routing outward is the whole job.** If the answer changes when you change the model, it is not this skill's
+answer to give.
 
 | Question | Where it belongs |
 |---|---|
@@ -61,49 +60,46 @@ this skill's answer to give.
 | Provisioning a pod, GPU selection, `runpodctl`, pod lifecycle, cost guards | **RunPod's own skills** — see [The ecosystem beyond this suite](#the-ecosystem-beyond-this-suite) |
 | Actually running a job on Comfy Cloud | **Comfy-Org's skills** — same section |
 
-**One rule about disagreement.** This skill will occasionally be wrong before its siblings are. Where
-a ranking here conflicts with the model skill it summarises, **the model skill wins.** It is closer
-to the evidence, and it is checked on its own freshness cadence. Report the conflict.
+**One rule about disagreement.** This skill will occasionally be wrong before its siblings are. Where a ranking
+here conflicts with the model skill it summarises, **the model skill wins.** The model skill is closer to the
+evidence, and it is checked on its own freshness cadence. Report the conflict.
 
 ---
 
 ## Before you pick anything: three gates that can end the project
 
-These come first because none of them is recoverable later, and this is the only skill that sees
-all of them at once. Each is owned in full elsewhere; this is the triage.
+These come first because none of them is recoverable later, and this is the only skill that sees all of them at
+once. Each is owned in full elsewhere; this section is the triage.
 
-**1. What are you shipping?** The licences in this suite do not split into "free" and "paid". They
-split by *what leaves the building*.
+**1. What are you shipping?** The licences in this suite do not split into "free" and "paid". They split by
+*what leaves the building*.
 
 | You are selling… | The question the licence asks |
 |---|---|
 | **Pictures or clips** | May you *use* the model? Almost everything here clears this — including [`anima`](../anima/), whose non-commercial term explicitly excludes Outputs |
-| **A pipeline, product or hosted API** | May you *ship or serve* the weights? One non-commercial rung stops the whole chain, first or last — [`image-production-workflows`](../image-production-workflows/) owns the chain question |
-| **Anything, above a revenue line** | [`krea-2`](../krea-2/) is free under $1M; [`ltx-2-5`](../ltx-2-5/) under $10M — and LTX bars competing with Lightricks' products **at any revenue** |
+| **A pipeline, product or hosted API** | May you *ship or serve* the weights? One non-commercial rung stops the whole chain, whether it comes first or last. [`image-production-workflows`](../image-production-workflows/) owns the chain question |
+| **Anything, above a revenue line** | [`krea-2`](../krea-2/) is free under $1M and [`ltx-2-5`](../ltx-2-5/) under $10M. LTX also bars competing with Lightricks' products **at any revenue** |
 | **…and the licence you pick has an ecosystem cost** | FLUX.2's Apache-2.0 [klein] 4B carries 133 published LoRAs against 9B's 653. Clearing gate 1 can mean training your own `[official — Civitai API, 2026-08-23]` |
 | **Adult work** | [`ltx-2-5`](../ltx-2-5/)'s AUP bars it outright; [`wan-2-2`](../wan-2-2/) has no acceptable-use clause at all |
 
-**2. Is the person real?** Say a character resembles an identifiable living or deceased individual.
-**Then Civitai will not host the LoRA — SFW or NSFW, no consent exception.** The TAKE IT DOWN Act is
-in force too, and it reaches AI-generated intimate imagery of real people. **The test is resemblance,
-not provenance**: a character you invented is clean, and a lookalike is the case the rule was written
-for. Settle this before you build a dataset. The enforcement date, the penalty figure and the quoted
-policy text live in [`character-lora-training`](../character-lora-training/), which owns them — read
-them there rather than from this summary.
+**2. Is the person real?** Suppose a character resembles an identifiable living or deceased individual. **Then
+Civitai will not host the LoRA — SFW or NSFW, with no consent exception.** The TAKE IT DOWN Act is in force too,
+and it reaches AI-generated intimate imagery of real people. **The test is resemblance, not provenance.** A
+character you invented is clean. A lookalike is the case the rule was written for. Settle this before you build
+a dataset. The enforcement date, the penalty figure and the quoted policy text live in
+[`character-lora-training`](../character-lora-training/), which owns them. Read them there rather than from this
+summary.
 
-This gate is where **adult work** gets decided, and it is the one place in this skill where the
-answer is not a trade-off. Adult generation with invented adult characters is a first-class use of
-these models, and it is covered as such throughout. Two lines are absolute and are not licence
-questions: **sexual content depicting minors**, and **sexual imagery of real, identifiable people
-without their consent**. Neither is a capability gap to work around. Everything else on this axis is
-craft, and the craft is below.
+This gate is where **adult work** gets decided, and it is the one place in this skill where the answer is not a
+trade-off. Adult generation with invented adult characters is a first-class use of these models, and it is
+covered as such throughout. Two lines are absolute, and they are not licence questions: **sexual content
+depicting minors**, and **sexual imagery of real, identifiable people without their consent**. Neither is a
+capability gap to work around. Everything else on this axis is craft, and the craft is below.
 
-**3. Where are you?** [`minimax-h3`](../minimax-h3/)'s licence **excludes the US, EU, UK and South
-Korea**. It is the suite's only territory gate, and it rules the model out entirely rather than just
-limiting it.
+**3. Where are you?** [`minimax-h3`](../minimax-h3/)'s licence **excludes the US, EU, UK and South Korea**. It
+is the suite's only territory gate, and it rules the model out entirely rather than just limiting it.
 
-Then the ordinary question: **what hardware do you have**, or are you renting? See *Hardware*
-below.
+Then comes the ordinary question: **what hardware do you have**, or are you renting? See *Hardware* below.
 
 ---
 
@@ -111,9 +107,9 @@ below.
 
 **Eliminate on constraints, then rank on quality — in that order, and never the reverse.**
 
-Constraints are binary, published, and fatal. Quality gaps between the surviving models are small,
-contested, and usually fixable with a second pass. People pick a model from a comparison thread,
-build for a week, and then discover a licence or dialect problem that was knowable on day one.
+Constraints are binary, published, and fatal. Quality gaps between the surviving models are small, contested,
+and usually fixable with a second pass. People pick a model from a comparison thread, build for a week, and then
+discover a licence or dialect problem that was knowable on day one.
 
 **The elimination ladder**, in order. Each rung removes models; only the last one ranks them:
 
@@ -122,22 +118,21 @@ build for a week, and then discover a licence or dialect problem that was knowab
 | 1 | **Licence** — what leaves the building | Shipping or serving the weights kills [`anima`](../anima/) (whose *outputs* stay free), [`ideogram-4`](../ideogram-4/)'s open weights and FLUX.2 [dev]/9B. Adult work kills [`ltx-2-5`](../ltx-2-5/) |
 | 2 | **Territory** | [`minimax-h3`](../minimax-h3/) if you are in the US/EU/UK/KR |
 | 3 | **Hardware** | Under ~12 GB the field narrows to [`sdxl`](../sdxl/), [`anima`](../anima/), FLUX.2 [klein] 4B, quantised [`z-image`](../z-image/) and [`wan-2-2`](../wan-2-2/) 5B. See the table below |
-| 4 | **Capability** — can it do the job at all | In-image typography → only [`ideogram-4`](../ideogram-4/). Tracked person-replacement → only [`scail-2`](../scail-2/). Cuts inside one generation → only [`ltx-2-5`](../ltx-2-5/). Native audio → only [`minimax-h3`](../minimax-h3/) and [`ltx-2-5`](../ltx-2-5/). **Adult work → a capability axis in its own right**, see below |
+| 4 | **Capability** — can it do the job at all | In-image typography → only [`ideogram-4`](../ideogram-4/). Tracked person-replacement → only [`scail-2`](../scail-2/). Cuts inside one generation → only [`ltx-2-5`](../ltx-2-5/). Native audio → only [`minimax-h3`](../minimax-h3/) and [`ltx-2-5`](../ltx-2-5/). **Adult work is a capability axis in its own right**; see below |
 | 5 | **Dialect** — will it understand you | Booru tags into a prose-trained encoder land as noise, and sentences into CLIP hit a 77-token wall. This is an encoder-class fact, not a preference |
-| 6 | **Quality** | *Now* rank. See below — and expect the gaps to be smaller than the threads suggest |
+| 6 | **Quality** | *Now* rank. See below, and expect the gaps to be smaller than the threads suggest |
 
-Rung 5 is the one people skip. [`sdxl`](../sdxl/) and [`anima`](../anima/) want tags.
-[`flux-2`](../flux-2/), [`z-image`](../z-image/) and [`krea-2`](../krea-2/) want sentences.
-[`ideogram-4`](../ideogram-4/) wants a JSON document. A model prompted in the wrong dialect looks
-like a bad model.
+Rung 5 is the one people skip. [`sdxl`](../sdxl/) and [`anima`](../anima/) want tags. [`flux-2`](../flux-2/),
+[`z-image`](../z-image/) and [`krea-2`](../krea-2/) want sentences. [`ideogram-4`](../ideogram-4/) wants a JSON
+document. A model prompted in the wrong dialect looks like a bad model.
 
 ---
 
 ## Hardware — what actually fits
 
-Elimination rung 3. These are practitioner figures for a comfortable run at native resolution, not
-vendor minimums — several vendors publish none. Per-model detail is in each skill's *Quantisation &
-VRAM* section; the full table with quant filenames is
+This is elimination rung 3. These are practitioner figures for a comfortable run at native resolution, not
+vendor minimums. Several vendors publish no minimums at all. Per-model detail is in each skill's *Quantisation &
+VRAM* section, and the full table with quant filenames is
 [`references/model-rankings.md`](references/model-rankings.md) §7.
 
 | Card | What runs |
@@ -147,45 +142,43 @@ VRAM* section; the full table with quant filenames is
 | **16–24 GB** | [`z-image`](../z-image/) Base, FLUX.2 [dev] fp8, [`ideogram-4`](../ideogram-4/) nf4, [`wan-2-2`](../wan-2-2/) 14B, [`scail-2`](../scail-2/) fp8_scaled |
 | **32 GB+ / rent** | [`ltx-2-5`](../ltx-2-5/) `[contested]`, FLUX.2 [dev] unquantised, and **most LoRA training** — [`comfyui-on-runpod`](../comfyui-on-runpod/) |
 
-**The bands are conservative at the bottom.** Two well-received reports put models a tier below
-where this table places them: Z-Image on a 2060, Krea 2 Turbo on 8 GB. Read a row as *where it is
-comfortable*, not as where it becomes impossible. **Training moves the floor up**, which is why
-renting is the usual answer. One exception is worth knowing even if you never make anime.
-[`anima`](../anima/) trains in roughly **6 GB at 768 px**. The real cost of learning to train is the
-three failed runs, and those are free there.
+**The bands are conservative at the bottom.** Two well-received reports put models a tier below where this table
+places them: Z-Image on a 2060, and Krea 2 Turbo on 8 GB. Read a row as *where the model is comfortable*, not as
+where it becomes impossible. **Training moves the floor up**, which is why renting is the usual answer. One
+exception is worth knowing even if you never make anime: [`anima`](../anima/) trains in roughly **6 GB at 768
+px**. The real cost of learning to train is the three failed runs, and those runs are free there.
 
 ---
 
 ## The rankings — and what each one costs you
 
-Verdicts are here. The evidence, the disagreements and the second-place cases are in
-[`references/model-rankings.md`](references/model-rankings.md). Every ranking is a *summary of the
-model skills*, which own their own claims.
+The verdicts are here. The evidence, the disagreements and the second-place cases are in
+[`references/model-rankings.md`](references/model-rankings.md). Every ranking is a *summary of the model
+skills*, which own their own claims.
 
-**Photoreal faces and skin.** [`z-image`](../z-image/) → [`flux-2`](../flux-2/) [dev] →
-[`sdxl`](../sdxl/) photoreal finetune → [`krea-2`](../krea-2/). The suite routes *here* on this axis
-from four directions, which is what makes it settled rather than argued. **The cost:** Z-Image has
-one strong realism-leaning look, it fights stylisation, and its ControlNet is Turbo-only. So the
-standard move is not "pick the winner" but to **compose and control in [`sdxl`](../sdxl/) or
-[`krea-2`](../krea-2/), then finish the face in Z-Image at ~0.2 denoise**. Realism is a pipeline
-position, not a model.
+**Photoreal faces and skin.** [`z-image`](../z-image/) → [`flux-2`](../flux-2/) [dev] → [`sdxl`](../sdxl/)
+photoreal finetune → [`krea-2`](../krea-2/). The suite routes *here* on this axis from four directions, which is
+what makes it settled rather than argued. **The cost:** Z-Image has one strong realism-leaning look, it fights
+stylisation, and its ControlNet is Turbo-only. So the standard move is not "pick the winner". Instead, **compose
+and control in [`sdxl`](../sdxl/) or [`krea-2`](../krea-2/), then finish the face in Z-Image at ~0.2 denoise**.
+Realism is a pipeline position, not a model.
 
-**Consistent characters without training anything.** On *capability*: [`flux-2`](../flux-2/)
-(multi-reference + PuLID) → [`sdxl`](../sdxl/) (InstantID/HyperLoRA, `[SEP]` routing for several
-characters) → [`krea-2`](../krea-2/) (Identity Edit). [`z-image`](../z-image/) has no adapter
-shortcut at all. **The cost:** these are faster to start but weaker under pressure. A trained LoRA
-still wins on a character you will render a thousand times.
+**Consistent characters without training anything.** On *capability*: [`flux-2`](../flux-2/) (multi-reference +
+PuLID) → [`sdxl`](../sdxl/) (InstantID/HyperLoRA, `[SEP]` routing for several characters) →
+[`krea-2`](../krea-2/) (Identity Edit). [`z-image`](../z-image/) has no adapter shortcut at all. **The cost:**
+these routes are faster to start but weaker under pressure. A trained LoRA still wins on a character you will
+render a thousand times.
 
-**But that is capability, not practice.** A year-sorted r/StableDiffusion sweep on 2026-08-23
-returned **no top post naming PuLID or InstantID at all**. The work has moved to **edit models** —
-Krea 2 Identity Edit, Flux [klein] 9B, Qwen-Image-Edit — mixed freely in one job. The adapters still
-do things edit models cannot, but an adapter route today is one you debug alone
-([`references/model-rankings.md`](references/model-rankings.md) §3.2). **One trap fails silently in
-a stock graph:** Krea 2 Identity Edit is an *unofficial* community fine-tune. It needs the
-`ComfyUI-Krea2Edit` node pack for its dual conditioning `[community — Enshitification, 611 pts]`.
+**But that is capability, not practice.** A year-sorted r/StableDiffusion sweep on 2026-08-23 returned **no top
+post naming PuLID or InstantID at all**. The work has moved to **edit models**, meaning Krea 2 Identity Edit,
+Flux [klein] 9B and Qwen-Image-Edit, mixed freely in one job. The adapters still do things edit models cannot,
+but an adapter route today is one you debug alone
+([`references/model-rankings.md`](references/model-rankings.md) §3.2). **One trap fails silently in a stock
+graph:** Krea 2 Identity Edit is an *unofficial* community fine-tune. It needs the `ComfyUI-Krea2Edit` node pack
+for its dual conditioning `[community — Enshitification, 611 pts]`.
 
-**Easiest to train a character LoRA on — and this splits three ways.** There is no single winner.
-Treating it as one is the mistake:
+**Easiest to train a character LoRA on — and this splits three ways.** There is no single winner. Treating it as
+one question is the mistake:
 
 | "Easiest" meaning | Winner | Why |
 |---|---|---|
@@ -193,90 +186,86 @@ Treating it as one is the mistake:
 | **Fastest loop — most attempts per day** | [`z-image`](../z-image/) (~90 min/run, good by step ~900), [`anima`](../anima/) (~6 GB, so failures are free) | Iteration count is what actually teaches you what a dataset is missing |
 | **Most documented — least to invent** | [`sdxl`](../sdxl/) | Years of settled recipes, two trainers, separate Pony/Illustrious pools |
 
-**Ecosystem size is a fourth axis, and it does not track the first three.** These counts are from
-Civitai on 2026-08-23. They are **re-measurable**, which matters more than the snapshot: run
-[`scripts/civitai_census.py`](scripts/civitai_census.py) rather than trusting these figures once they
-are a few weeks old. [`z-image`](../z-image/) Turbo, [`krea-2`](../krea-2/), [`anima`](../anima/) and
-the SDXL family each carry **2,000+** published LoRAs. FLUX.2 [klein] 9B has 653, and **[klein] 4B
-just 133**. [`ideogram-4`](../ideogram-4/) has 34. Two traps fall out of this. **Z-Image's pool is on
-Turbo (2,191+) not Base (671)**, which is the variant its own training doctrine trains on. And
-**picking [klein] 4B for its Apache-2.0 licence costs you most of the FLUX.2 LoRA pool**. Full
-census, method and caveats: [`references/model-rankings.md`](references/model-rankings.md) §4.5.
+**Ecosystem size is a fourth axis, and it does not track the first three.** These counts are from Civitai on
+2026-08-23. They are **re-measurable**, which matters more than the snapshot: run
+[`scripts/civitai_census.py`](scripts/civitai_census.py) rather than trusting these figures once they are a few
+weeks old. [`z-image`](../z-image/) Turbo, [`krea-2`](../krea-2/), [`anima`](../anima/) and the SDXL family each
+carry **2,000+** published LoRAs. FLUX.2 [klein] 9B has 653, and **[klein] 4B just 133**.
+[`ideogram-4`](../ideogram-4/) has 34. Two traps fall out of this. First, **Z-Image's pool is on Turbo (2,191+)
+not Base (671)**, and Turbo is the variant its own training doctrine trains on. Second, **picking [klein] 4B for
+its Apache-2.0 licence costs you most of the FLUX.2 LoRA pool**. The full census, method and caveats are in
+[`references/model-rankings.md`](references/model-rankings.md) §4.5.
 
-**The cost of the podium.** Ideogram 4's win is one author, one dataset. Its **weights are
-non-commercial**, so a LoRA trained there may be unshippable for the reason gate 1 names. Its
-ecosystem is **34 LoRAs on Civitai, exactly one of them a character LoRA**
-`[official — Civitai API, counted 2026-08-23]`. The model may well train beautifully — nobody has
-done it in public. Krea 2 trains slowly and pays off only if you remember to *sample* on Turbo.
-FLUX.2 [dev] is the one to skip: it needed ~90 GB of system RAM to quantise, and that test never
-finished a usable LoRA on it. On video, [`wan-2-2`](../wan-2-2/) is the mature ecosystem (two LoRAs,
-one per expert, from one dataset). [`scail-2`](../scail-2/) has **no training path at all**.
+**The cost of the podium.** Ideogram 4's win rests on one author and one dataset. Its **weights are
+non-commercial**, so a LoRA trained there may be unshippable for the reason gate 1 names. Its ecosystem is **34
+LoRAs on Civitai, exactly one of them a character LoRA** `[official — Civitai API, counted 2026-08-23]`. The
+model may well train beautifully. Nobody has done it in public. Krea 2 trains slowly and pays off only if you
+remember to *sample* on Turbo. FLUX.2 [dev] is the one to skip: it needed ~90 GB of system RAM to quantise, and
+that test never finished a usable LoRA on it. On video, [`wan-2-2`](../wan-2-2/) is the mature ecosystem (two
+LoRAs, one per expert, from one dataset). [`scail-2`](../scail-2/) has **no training path at all**.
 
-**Adult and NSFW work.** This is a dominant use of open-weights models, and it is treated here as a
-capability axis, not just a licence one. The model that wins it is not the model that wins realism,
-and the difficulty is routinely misdiagnosed.
+**Adult and NSFW work.** This is a dominant use of open-weights models, and it is treated here as a capability
+axis, not just a licence one. The model that wins it is not the model that wins realism, and the difficulty is
+routinely misdiagnosed.
 
 | | The answer | The catch |
 |---|---|---|
 | **Image** | [`krea-2`](../krea-2/) — the busiest adult checkpoint ecosystem on Civitai (`LUSTIFY!`, `FinePorn v3 TURBO`, Moody Krea 2 Mix), typically Euler or ER SDE, 10 steps, guidance 1.0 | The checkpoint does the work, not your settings. Krea 2's safety tuning also drives its muted-expression tax — the same tuning `krea2filterbypass`-class LoRAs exist to undo |
 | **Anime / illustration** | [`sdxl`](../sdxl/)'s Pony, Illustrious and NoobAI — still the deepest pool — with [`anima`](../anima/) rising fast and running where nothing else will | Anima's weights are non-commercial; Pony/Illustrious are not |
-| **Video** | **[`minimax-h3`](../minimax-h3/), decisively** — *"far above LTX and Wan"*, *"the most powerful open source model"* `[community — AidenAizawa, Revolutionary-Bar766; convergent]` | **Its licence excludes the US, EU, UK and South Korea.** The capability leader is the one many readers may not lawfully use — gate 3 is not a formality here |
+| **Video** | **[`minimax-h3`](../minimax-h3/), decisively** — *"far above LTX and Wan"*, *"the most powerful open source model"* `[community — AidenAizawa, Revolutionary-Bar766; convergent]` | **Its licence excludes the US, EU, UK and South Korea.** The capability leader is one that many readers may not lawfully use — gate 3 is not a formality here |
 | **Video, licence-clean** | [`wan-2-2`](../wan-2-2/) — Apache-2.0, **no acceptable-use clause at all**, the only unencumbered adult path in the suite | Weaker prompt adherence; anatomy needs an NSFW-merged checkpoint (below) |
 | **Ruled out** | [`ltx-2-5`](../ltx-2-5/) — its AUP bars explicit content universally, local weights included. Adult LTX work happens on **2.3**, which is practice, not permission | — |
 
-**One boundary on this table: it ranks adult *scene* generation, not training bases.** Say the
-deliverable is a character LoRA used in adult work. Then the photoreal ranking above wins the base
-choice. Train on [`z-image`](../z-image/), and let the checkpoint ecosystem re-enter at scene time.
-The reconciliation: [`references/adult-work.md`](references/adult-work.md) §2.
+**One boundary on this table: it ranks adult *scene* generation, not training bases.** Suppose the deliverable
+is a character LoRA used in adult work. Then the photoreal ranking above wins the base choice. Train on
+[`z-image`](../z-image/), and let the checkpoint ecosystem re-enter at scene time. The reconciliation is in
+[`references/adult-work.md`](references/adult-work.md) §2.
 
-**The one reframe that saves the most time: the limit is training data, not refusal.** Open-weights
-models do not refuse. They render poor anatomy because the base saw little of it. This is why
-swapping in an abliterated ("heretic") text encoder does nothing: refusal lives in output layers a
-text encoder never uses. Change the base model or the checkpoint instead. Craft, captioning and
-anatomy failure modes: [`character-lora-training`](../character-lora-training/)
-`references/nsfw-training.md`.
+**The one reframe that saves the most time: the limit is training data, not refusal.** Open-weights models do
+not refuse. They render poor anatomy because the base saw little of it. This is why swapping in an abliterated
+("heretic") text encoder does nothing: refusal lives in output layers a text encoder never uses. Change the base
+model or the checkpoint instead. Craft, captioning and anatomy failure modes are in
+[`character-lora-training`](../character-lora-training/) `references/nsfw-training.md`.
 
-**A diagnostic follows from this, and it generalises well beyond adult work: when seed is the only
-variable that moves the result, stop rolling and change the checkpoint.** One 27-generation
-single-variable study looked at Wan I2V anatomy collapse. It found that prompt, steps, LoRA weight,
-clip length, shift and source image all made no difference, and only 2 of 28 seeds were usable.
-Swapping to an NSFW-merged checkpoint fixed it in one run `[community — RedMimicStudios]`. Numbers
-and the measurable QC proxy: [`references/adult-work.md`](references/adult-work.md) §3.
+**A diagnostic follows from this, and it generalises well beyond adult work: when seed is the only variable that
+moves the result, stop rolling and change the checkpoint.** One 27-generation single-variable study looked at
+Wan I2V anatomy collapse. It found that prompt, steps, LoRA weight, clip length, shift and source image all made
+no difference, and only 2 of 28 seeds were usable. Swapping to an NSFW-merged checkpoint fixed it in one run
+`[community — RedMimicStudios]`. The numbers and the measurable QC proxy are in
+[`references/adult-work.md`](references/adult-work.md) §3.
 
-**Structural control (pose, depth, canny, regional).** [`sdxl`](../sdxl/) wins, and it is not close:
-union ControlNet, IP-Adapter and regional prompting are all mature there. Then
-[`z-image`](../z-image/)/[`flux-2`](../flux-2/) (Fun Union, custom nodes, Turbo-only on Z-Image) →
-[`anima`](../anima/) (LLLite: lineart/depth/scribble, **no pose, no canny**) → [`krea-2`](../krea-2/)
-(depth only) → [`ideogram-4`](../ideogram-4/) (`bbox` layout only). **The cost:** SDXL's control
-comes with a 77-token CLIP window and no in-image text. That is why it so often acts as the *front
-end* of a chain rather than the whole of it.
+**Structural control (pose, depth, canny, regional).** [`sdxl`](../sdxl/) wins, and it is not close: union
+ControlNet, IP-Adapter and regional prompting are all mature there. Then come
+[`z-image`](../z-image/)/[`flux-2`](../flux-2/) (Fun Union, custom nodes, Turbo-only on Z-Image), then
+[`anima`](../anima/) (LLLite: lineart/depth/scribble, **no pose, no canny**), then [`krea-2`](../krea-2/) (depth
+only), then [`ideogram-4`](../ideogram-4/) (`bbox` layout only). **The cost:** SDXL's control comes with a
+77-token CLIP window and no in-image text. That is why it so often acts as the *front end* of a chain rather
+than the whole of it.
 
-**And a correction that shows this skill's own failure mode.** The suite rates
-[`ideogram-4`](../ideogram-4/) weak on characters because it has no identity adapter, no edit variant
-and one character LoRA. **Those clauses are true and the conclusion was wrong.** A published
-workflow gets identity from it with no adapter and no training. It asks for the character *twice
-in one canvas* and crops the result `[community — reality_comes, 402 pts]`. **"No adapter exists"
-describes tooling, not capability** ([`references/model-rankings.md`](references/model-rankings.md) §3.1).
+**And a correction that shows this skill's own failure mode.** The suite rates [`ideogram-4`](../ideogram-4/)
+weak on characters because it has no identity adapter, no edit variant and one character LoRA. **Those clauses
+are true, and the conclusion was wrong.** A published workflow gets identity from it with no adapter and no
+training. It asks for the character *twice in one canvas* and crops the result `[community — reality_comes, 402
+pts]`. **"No adapter exists" describes tooling, not capability**
+([`references/model-rankings.md`](references/model-rankings.md) §3.1).
 
-**Everything else, one line each.** Typography → [`ideogram-4`](../ideogram-4/), with no real
-second. Anime → [`anima`](../anima/), or [`sdxl`](../sdxl/)'s Illustrious/NoobAI/Pony finetunes when
-you must ship the weights. Widest aesthetic range → [`krea-2`](../krea-2/). Cleanest licence →
-[`z-image`](../z-image/).
+**Everything else, one line each.** Typography goes to [`ideogram-4`](../ideogram-4/), with no real second.
+Anime goes to [`anima`](../anima/), or to [`sdxl`](../sdxl/)'s Illustrious/NoobAI/Pony finetunes when you must
+ship the weights. Widest aesthetic range: [`krea-2`](../krea-2/). Cleanest licence: [`z-image`](../z-image/).
 
-**Video, by what you are actually doing.** Animating a still → [`wan-2-2`](../wan-2-2/), whose I2V
-is far stronger than its T2V, so lock the still with an image model first. Sound in the same pass →
-[`minimax-h3`](../minimax-h3/) or [`ltx-2-5`](../ltx-2-5/) — which one is a licence question, not a
-quality one. Several cuts in one generation → [`ltx-2-5`](../ltx-2-5/), alone. Replacing a person in
-footage frame-for-frame → [`scail-2`](../scail-2/), alone. **A named gap:** nothing in the suite does
-a freeform camera path.
+**Video, by what you are actually doing.** Animating a still is [`wan-2-2`](../wan-2-2/)'s job. Its I2V is far
+stronger than its T2V, so lock the still with an image model first. For sound in the same pass, use
+[`minimax-h3`](../minimax-h3/) or [`ltx-2-5`](../ltx-2-5/); which one is a licence question, not a quality one.
+Several cuts in one generation: [`ltx-2-5`](../ltx-2-5/), alone. Replacing a person in footage frame-for-frame:
+[`scail-2`](../scail-2/), alone. **A named gap:** nothing in the suite does a freeform camera path.
 
 ---
 
 ## Pick your job, get your stack
 
-The routing table. "Install" is the set of skills that job needs — run the command in
-[Installing what you need](#installing-what-you-need). Full step-by-step routes, with what to read
-at each step, are in [`references/playbooks.md`](references/playbooks.md).
+This is the routing table. "Install" is the set of skills that job needs. Run the command in [Installing what
+you need](#installing-what-you-need). Full step-by-step routes, with what to read at each step, are in
+[`references/playbooks.md`](references/playbooks.md).
 
 | The goal | Route | Install |
 |---|---|---|
@@ -294,11 +283,10 @@ at each step, are in [`references/playbooks.md`](references/playbooks.md).
 
 ## Installing what you need
 
-**The skills CLI has no dependency mechanism.** A skill cannot declare that it needs another, and
-nothing is pulled in transitively. That is why this skill carries install commands instead of
-relying on its links. **The relative links above resolve only when the sibling is also installed,
-and dangle otherwise.** A dangling link is not a bug report. It is the install command you have not
-run yet.
+**The skills CLI has no dependency mechanism.** A skill cannot declare that it needs another, and nothing is
+pulled in transitively. That is why this skill carries install commands instead of relying on its links. **The
+relative links above resolve only when the sibling is also installed, and dangle otherwise.** A dangling link is
+not a bug report. It is the install command you have not run yet.
 
 ```bash
 # The atlas alone — enough to choose a model and plan a route
@@ -311,68 +299,67 @@ npx skills add ryannel/skills --skill z-image --skill character-lora-training --
 npx skills add ryannel/skills --list
 ```
 
-Add `-g` for global rather than project scope, `-a claude-code` to target one agent, `-y` to skip
-prompts. `npx skills update` refreshes installed skills, and it is worth running against this suite,
-whose subjects move weekly. To read a skill once without installing it:
-`npx skills use ryannel/skills@z-image`.
+Add `-g` for global rather than project scope, `-a claude-code` to target one agent, and `-y` to skip prompts.
+`npx skills update` refreshes installed skills. It is worth running against this suite, whose subjects move
+weekly. To read a skill once without installing it, use `npx skills use ryannel/skills@z-image`.
 
-**Ask before installing globally or into a repo you do not own.** Installing writes files into the
-user's agent directories. That is a visible change to their machine, not a lookup.
+**Ask before installing globally or into a repo you do not own.** Installing writes files into the user's agent
+directories. That is a visible change to their machine, not a lookup.
 
-Scopes, agent targeting, symlink-vs-copy, private repos and troubleshooting:
+Scopes, agent targeting, symlink-vs-copy, private repos and troubleshooting are covered in
 [`references/installing-skills.md`](references/installing-skills.md).
 
 ---
 
 ## The ecosystem beyond this suite
 
-This suite deliberately does not restate what its vendors already publish well. Three canonical
-sources matter, and knowing what each is *not* is as useful as knowing what it is.
+This suite deliberately does not restate what its vendors already publish well. Three canonical sources matter,
+and knowing what each one is *not* is as useful as knowing what it is.
 
 | Source | Install | What it owns | What it is **not** |
 |---|---|---|---|
 | **RunPod** — `runpod/runpod-plugins-official` | `npx skills add runpod/runpod-plugins-official` | 7 skills — `runpod` (router), `runpod-usage`, `runpodctl`, `runpod-mcp`, `flash`, `companion-clis`, `runpod-migrate` — plus 24 golden paths including `02-comfyui-pod`, `07-network-volume-handoff`, `20-model-caching-endpoint`, `21-storage-tiers`, `25-bake-vs-mount` | Not ComfyUI-aware. Where models must sit so a fresh instance finds them is [`comfyui-on-runpod`](../comfyui-on-runpod/)'s job |
 | **Comfy-Org** — `Comfy-Org/comfy-skills` | `/plugin marketplace add Comfy-Org/comfy-skills` then `/plugin install comfy-cloud@comfy-skills` | 12 skills wrapping the **Comfy Cloud MCP** — `comfy-generate-image`, `comfy-generate-video`, `comfy-search-models`, `comfy-search-nodes`, `comfy-search-templates`, `comfy-upscale-image`, and others | **Command wrappers, not craft.** They execute a job on Comfy Cloud; they carry no per-model settings, prompt dialects or licence analysis. They pair with this suite rather than replacing it |
-| **Hugging Face** — `huggingface/skills` | `hf skills add <name>` | `hf-cli` (fetching weights), `hf-mem` (estimating VRAM from safetensors/GGUF) are the two that matter here | No diffusion-training or image-model skills; its trainers are LLM and vision-classification shaped |
+| **Hugging Face** — `huggingface/skills` | `hf skills add <name>` | `hf-cli` (fetching weights) and `hf-mem` (estimating VRAM from safetensors/GGUF) are the two that matter here | No diffusion-training or image-model skills; its trainers are LLM and vision-classification shaped |
 
-**Two things changed recently enough to catch people out.** RunPod ships **7** skills, not the 6
-widely cited — `runpod-migrate` was added `[official — repo tree, read 2026-08-23]`. And
-`metadata.internal: true` now hides a skill from discovery unless `INSTALL_INTERNAL_SKILLS=1`, which
-is how a repo keeps authoring machinery out of its published listing.
+**Two things changed recently enough to catch people out.** RunPod ships **7** skills, not the 6 widely cited:
+`runpod-migrate` was added `[official — repo tree, read 2026-08-23]`. And `metadata.internal: true` now hides a
+skill from discovery unless `INSTALL_INTERNAL_SKILLS=1` is set, which is how a repo keeps authoring machinery
+out of its published listing.
 
-No agent skills from Black Forest Labs, Stability, Alibaba/Tongyi, Lightricks, MiniMax or Civitai
-were findable as of **2026-08-23** `[flagged — negative result from search; re-verify]`. That is the
-gap this suite exists to fill. Full inventories, and how to judge a third-party skill before trusting
-it: [`references/ecosystem-map.md`](references/ecosystem-map.md).
+No agent skills from Black Forest Labs, Stability, Alibaba/Tongyi, Lightricks, MiniMax or Civitai were findable
+as of **2026-08-23** `[flagged — negative result from search; re-verify]`. That is the gap this suite exists to
+fill. Full inventories, and how to judge a third-party skill before trusting it, are in
+[`references/ecosystem-map.md`](references/ecosystem-map.md).
 
 ### The compute stack is pluggable — RunPod is the current inventory, not the architecture
 
 Every route in this suite runs on a three-layer stack, and only the bottom layer is vendor-shaped:
 
 1. **Model skills** — what to run and how to prompt, train and judge it. Platform-agnostic.
-2. **Execution surface** — ComfyUI or diffusers. Every model skill carries **both** as first-class
-   surfaces, so "not ComfyUI" is already covered: the diffusers path needs no UI shell at all.
+2. **Execution surface** — ComfyUI or diffusers. Every model skill carries **both** as first-class surfaces, so
+   "not ComfyUI" is already covered: the diffusers path needs no UI shell at all.
 3. **Compute platform** — where the GPU lives. Today the suite ships one platform skill,
-   [`comfyui-on-runpod`](../comfyui-on-runpod/). Its scoping — *the layer between the vendor's
-   platform skills and the model skills* — is the plug socket, not a commitment to RunPod.
+   [`comfyui-on-runpod`](../comfyui-on-runpod/). Its scoping, *the layer between the vendor's platform skills
+   and the model skills*, is the plug socket, not a commitment to RunPod.
 
-**The platform-skill contract.** A skill for any other platform (Modal, Vast.ai, fal, Lambda, a
-homelab) fills the same slot. It owns the same four things `comfyui-on-runpod` proved out: where
-models live so a fresh instance finds them out of the box; cost guards and the session-ending burn
-check; deploy-and-smoke-test for both interactive and API execution; and **routing to the vendor's
-own skills for provisioning** rather than restating them. Everything above the slot — model choice,
-prompting, LoRA craft, pipeline design — transfers unchanged.
+**The platform-skill contract.** A skill for any other platform (Modal, Vast.ai, fal, Lambda, a homelab) fills
+the same slot. It owns the same four things `comfyui-on-runpod` proved out: where models live so a fresh
+instance finds them out of the box; cost guards and the session-ending burn check; deploy-and-smoke-test for
+both interactive and API execution; and **routing to the vendor's own skills for provisioning** rather than
+restating them. Everything above the slot (model choice, prompting, LoRA craft, pipeline design) transfers
+unchanged.
 
-**Pick one platform, install its one skill.** The skills CLI resolves no dependencies, so pluggable
-means something concrete: running on RunPod means `npx skills add ryannel/skills --skill
-comfyui-on-runpod` plus RunPod's own suite, per the table above. A second platform's skill, when it
-exists, slots into this sentence and nothing else in the suite changes.
+**Pick one platform, install its one skill.** The skills CLI resolves no dependencies, so pluggable means
+something concrete: running on RunPod means `npx skills add ryannel/skills --skill comfyui-on-runpod` plus
+RunPod's own suite, per the table above. A second platform's skill, when it exists, slots into this sentence and
+nothing else in the suite changes.
 
-**Why there is exactly one platform skill today.** `comfyui-on-runpod` was generalised from a real
-production deployment, and that is the bar. A platform skill written from vendor docs alone would be
-the paraphrase this suite refuses to be. So new platform skills get authored the first time real
-work runs on that platform, not speculatively. If you run this suite somewhere else and want the
-skill to exist, that experience is the missing ingredient.
+**Why there is exactly one platform skill today.** `comfyui-on-runpod` was generalised from a real production
+deployment, and that is the bar. A platform skill written from vendor docs alone would be the paraphrase this
+suite refuses to be. So new platform skills get authored the first time real work runs on that platform, not
+speculatively. If you run this suite somewhere else and want the skill to exist, that experience is the missing
+ingredient.
 
 ---
 
@@ -403,8 +390,8 @@ skill to exist, that experience is the missing ingredient.
 3. Gate 3 settled — does any candidate's licence exclude your territory or your revenue band?
 4. Hardware known: your card's VRAM, or the decision to rent, made before model choice?
 5. Ladder run **in order** — licence, territory, hardware, capability, dialect, *then* quality?
-6. Capability checked against what only one model can do — typography, tracked replacement,
-   multishot, native audio?
+6. Capability checked against what only one model can do — typography, tracked replacement, multishot, native
+   audio?
 7. Prompt dialect matched to the encoder class you picked?
 8. Route written down as a sequence of skills, with the handoffs named — and every one installed?
 9. If training: base chosen as the model you will *render* on, not the one that trains best?
@@ -414,9 +401,9 @@ skill to exist, that experience is the missing ingredient.
 
 ## The suite map
 
-Every published skill, and the question it answers. This is the suite keyed by *question*.
-[`image-production-workflows`](../image-production-workflows/) keeps the suite map keyed by *pipeline
-role* — who composes, who refines, who finishes — and the two are meant to be read together.
+Every published skill, and the question it answers. This table is the suite keyed by *question*.
+[`image-production-workflows`](../image-production-workflows/) keeps the suite map keyed by *pipeline role*
+(who composes, who refines, who finishes), and the two are meant to be read together.
 
 | Skill | The question it answers |
 |---|---|
@@ -439,63 +426,58 @@ role* — who composes, who refines, who finishes — and the two are meant to b
 
 ## How to read the claims in this skill — two bars, by claim type
 
-This skill holds two kinds of claim to two different standards, because they fail in two different
-ways. There is also a third kind, peculiar to a router, worth naming on its own.
+This skill holds two kinds of claim to two different standards, because they fail in two different ways. There
+is also a third kind, peculiar to a router, worth naming on its own.
 
-**Hard facts — must be exact or it breaks.** This covers the names and install commands of every
-skill here and in the three external sources. It also covers RunPod's seven-skill inventory and its
-golden-path filenames; Comfy-Org's twelve; the `skills` CLI's flags, scopes and the absence of a
-dependency mechanism; `metadata.internal`; the shape of each licence gate (territory, revenue line,
-weights-vs-outputs split); and that a Civitai likeness ban and live TAKE IT DOWN enforcement exist at
-all. The dates and figures behind those two are [`character-lora-training`](../character-lora-training/)'s
-to state, not this skill's.
-**The source of truth is official** — the repository trees read directly, the CLI's README, and the
-model cards and licence texts via the model skills. A wrong install command fails loudly. A misread
-licence gate is a legal problem. Vendor skill repositories add and rename skills without notice, so
-**re-verify before relying on them, regardless of who said it.**
+**Hard facts — must be exact or it breaks.** This covers the names and install commands of every skill here and
+in the three external sources. It also covers RunPod's seven-skill inventory and its golden-path filenames;
+Comfy-Org's twelve; the `skills` CLI's flags, scopes and the absence of a dependency mechanism;
+`metadata.internal`; the shape of each licence gate (territory, revenue line, weights-vs-outputs split); and the
+fact that a Civitai likeness ban and live TAKE IT DOWN enforcement exist at all. The dates and figures behind
+those two are [`character-lora-training`](../character-lora-training/)'s to state, not this skill's. **The
+source of truth is official.** That means the repository trees read directly, the CLI's README, and the model
+cards and licence texts via the model skills. A wrong install command fails loudly. A misread licence gate is a
+legal problem. Vendor skill repositories add and rename skills without notice, so **re-verify before relying on
+them, regardless of who said it.**
 
-**Craft — what actually makes a good choice.** This covers the elimination ladder and its ordering;
-every ranking and the trade attached to it; the hardware bands; the playbook routes and where their
-handoffs fail; and the three-way split in what "easiest to train on" means. **The authoritative
-source here is the community and the practitioners the sibling skills cite.** Two pieces of
-first-hand evidence were gathered for this skill as well. The first is one named cross-model test
-for LoRA trainability, MesmerTools' six-base comparison of 2026-07-14. It is **a single author on a
-single dataset**, and it is marked as such wherever it is used. The second is a **census of the
-Civitai API taken 2026-08-23**, a direct measurement rather than a report. It is bounded by being one
-host — one that bans real-person likeness outright and so undercounts a whole category. There are
-also **primary Reddit sweeps from the same day** across r/StableDiffusion and r/unstable_diffusion.
-These were top-sorted over the past year and month, and read for the realism, identity and
-adult-work axes specifically. The adult stack in particular is reported from where that work is
-actually discussed, rather than inferred. Where a community claim here carries a point count, that
-is the sweep. Rankings are stated with confidence and mean "this is where the practice lands", not
-"this is measured".
+**Craft — what actually makes a good choice.** This covers the elimination ladder and its ordering; every
+ranking and the trade attached to it; the hardware bands; the playbook routes and where their handoffs fail; and
+the three-way split in what "easiest to train on" means. **The authoritative source here is the community and
+the practitioners the sibling skills cite.** Two pieces of first-hand evidence were gathered for this skill as
+well. The first is one named cross-model test for LoRA trainability, MesmerTools' six-base comparison of
+2026-07-14. It is **a single author on a single dataset**, and it is marked as such wherever it is used. The
+second is a **census of the Civitai API taken 2026-08-23**, a direct measurement rather than a report. It is
+bounded by being one host, one that bans real-person likeness outright and so undercounts a whole category.
+There are also **primary Reddit sweeps from the same day** across r/StableDiffusion and r/unstable_diffusion.
+These were top-sorted over the past year and month, and read for the realism, identity and adult-work axes
+specifically. The adult stack in particular is reported from where that work is actually discussed, rather than
+inferred. Where a community claim here carries a point count, that is the sweep. Rankings are stated with
+confidence, and they mean "this is where the practice lands", not "this is measured".
 
-**Derived claims — the third bar.** Almost every comparative verdict here is *synthesised from the
-sibling skills*. Those are themselves two-bar documents with their own provenance and their own
-freshness cadence, and this skill adds no new evidence for them. Two things follow: it inherits their
-confidence rather than exceeding it, and **where it disagrees with a model skill, the model skill is
-right and this one is stale.**
+**Derived claims — the third bar.** Almost every comparative verdict here is *synthesised from the sibling
+skills*. Those are themselves two-bar documents with their own provenance and their own freshness cadence, and
+this skill adds no new evidence for them. Two things follow: this skill inherits their confidence rather than
+exceeding it, and **where it disagrees with a model skill, the model skill is right and this one is stale.**
 
 **Contested / unresolved points:**
 
 - The character-LoRA trainability podium rests on one author's test `[community — MesmerTools; single source]`.
-- [`ltx-2-5`](../ltx-2-5/)'s VRAM floor is 32 GB in documentation against 16 and 12 in the same
-  vendor's marketing, published the same week `[contested]`.
+- [`ltx-2-5`](../ltx-2-5/)'s VRAM floor is 32 GB in documentation against 16 and 12 in the same vendor's
+  marketing, published the same week `[contested]`.
 - [`anima`](../anima/)'s 8 GB inference floor is one report on one AMD card `[flagged — re-verify]`.
-- Whether Ideogram 4's LoRA win survives a second independent test is unknown — nobody has published
-  a character recipe for it `[flagged — re-verify]`.
+- Whether Ideogram 4's LoRA win survives a second independent test is unknown. Nobody has published a character
+  recipe for it `[flagged — re-verify]`.
 
-**Facts dated 2026-08-23**; ecosystem counts measured the same day. The fastest-moving parts are the
-external vendors' skill inventories (RunPod went 6→7 between this suite's last two passes) and the
-`skills` CLI's flags. The Civitai counts move fast too, since Anima and Krea 2 add LoRAs weekly. So
-does any ranking whose model shipped in the last quarter — which today is most of them.
+**Facts dated 2026-08-23**; ecosystem counts measured the same day. The fastest-moving parts are the external
+vendors' skill inventories (RunPod went 6→7 between this suite's last two passes) and the `skills` CLI's flags.
+The Civitai counts move fast too, since Anima and Krea 2 add LoRAs weekly. So does any ranking whose model
+shipped in the last quarter — which today is most of them.
 
-**What the sweeps changed.** Realism **held**: Z-Image owns that conversation, convergent with the
-suite's routing. Identity did not. The capability ordering survives, but the practice has moved to
-edit models, and the "Ideogram is weak on characters" verdict was **wrong**. On adult work, the
-Civitai census **inverts** the ordering in this suite's own existing table, most likely because that
-metric reads preview images and so undercounts video. All three are corrected above and filed as
-findings against the skills that own them.
+**What the sweeps changed.** Realism **held**: Z-Image owns that conversation, convergent with the suite's
+routing. Identity did not hold. The capability ordering survives, but the practice has moved to edit models, and
+the "Ideogram is weak on characters" verdict was **wrong**. On adult work, the Civitai census **inverts** the
+ordering in this suite's own existing table, most likely because that metric reads preview images and so
+undercounts video. All three are corrected above and filed as findings against the skills that own them.
 
 ---
 

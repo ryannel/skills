@@ -28,10 +28,10 @@ Source tier: BFL official prompting guide (primary), BFL blog, HF blog (official
 
 | Part | What goes here | Example |
 |---|---|---|
-| **Subject** | Who or what. Specific, concrete. Avoid generics like "person" or "scene". | `"A woman in her early 30s with silver-grey cropped hair and faint freckles"` |
-| **Action / Setting** | What the subject is doing, and/or where. Environmental specifics count here. | `"sits at a rain-wet counter in a narrow Kyoto kissaten, hands around a ceramic cup"` |
-| **Style** | Photographic spec, artistic medium, or aesthetic genre. Camera gear lives here. | `"Hasselblad X2D, 55mm f/2.8, Fujifilm Pro 400H emulation, overcast afternoon diffuse"` |
-| **Context** | Secondary elements, background details, atmosphere, secondary figures. | `"rain-blurred street visible through the window, steam rising from the coffee"` |
+| **Subject** | Who or what the image shows. Be specific and concrete, and avoid generics like "person" or "scene". | `"A woman in her early 30s with silver-grey cropped hair and faint freckles"` |
+| **Action / Setting** | What the subject is doing, and/or where. Environmental specifics belong here. | `"sits at a rain-wet counter in a narrow Kyoto kissaten, hands around a ceramic cup"` |
+| **Style** | The photographic spec, artistic medium, or aesthetic genre. Camera gear lives here. | `"Hasselblad X2D, 55mm f/2.8, Fujifilm Pro 400H emulation, overcast afternoon diffuse"` |
+| **Context** | Secondary elements: background details, atmosphere, secondary figures. | `"rain-blurred street visible through the window, steam rising from the coffee"` |
 
 **Length sweet spots:**
 
@@ -43,33 +43,33 @@ Source tier: BFL official prompting guide (primary), BFL blog, HF blog (official
 | Multi-reference / structured JSON | Any length, but count subjects |
 | Hard cap | 512 tokens (~380 words) |
 
-Front-load the subject and key elements. Mistral 3.2 and Qwen3 give more weight to earlier tokens in their attention mechanism.
+Put the subject and key elements first. Mistral 3.2 and Qwen3 give more weight to earlier tokens in their attention mechanism, so the front of the prompt carries the most influence.
 
 ---
 
 ## 2. What the encoder actually parses
 
-[dev] uses **Mistral Small 3.2 24B** (a 24-billion-parameter vision-language model). [klein] uses **Qwen3** (4B for [klein] 4B, 8B for [klein] 9B). Both are instruction-following LLMs. That is the same model family used for code generation and text summarisation.
+[dev] uses **Mistral Small 3.2 24B** (a 24-billion-parameter vision-language model). [klein] uses **Qwen3** (4B for [klein] 4B, 8B for [klein] 9B). Both are instruction-following LLMs. They belong to the same model families that are used for code generation and text summarisation.
 
 **What they read well:**
-- Grammatical clause structure (`"a woman who is holding"` > `"woman holding"`)
-- Compositional prepositions and spatial language (`"in front of"`, `"partially hidden behind"`)
-- Proper nouns for brands, places, films, periods (`"Kodak Portra 400"`, `"1970s Tokyo"`, `"Bauhaus-era poster"`)
-- Colour descriptions in natural language (`"deep indigo"`, `"burnt-sienna matte"`)
-- Specific names for known cultural artefacts (`"a Leica M-A body"`, `"Rolleiflex twin-lens"`)
-- Hex color codes when signalled correctly (see section 3)
+- Grammatical clause structure (`"a woman who is holding"` > `"woman holding"`).
+- Compositional prepositions and spatial language (`"in front of"`, `"partially hidden behind"`).
+- Proper nouns for brands, places, films, periods (`"Kodak Portra 400"`, `"1970s Tokyo"`, `"Bauhaus-era poster"`).
+- Colour descriptions in natural language (`"deep indigo"`, `"burnt-sienna matte"`).
+- Specific names for known cultural artefacts (`"a Leica M-A body"`, `"Rolleiflex twin-lens"`).
+- Hex color codes when signalled correctly (see section 3).
 
 **What they parse as noise:**
-- Quality-adjective chains: `masterpiece`, `8k`, `best quality`, `ultra-realistic`, `highly detailed`, `photorealistic`, `trending on artstation`. These are Stable Diffusion 1.5 booru tags. They carry almost no meaning for an LLM-class encoder.
-- Leading comma-separated tokens with no predicate: `woman, hair, eyes, blue, rain, city, night`. This describes noun fields, not a scene.
+- Quality-adjective chains: `masterpiece`, `8k`, `best quality`, `ultra-realistic`, `highly detailed`, `photorealistic`, `trending on artstation`. These are Stable Diffusion 1.5 booru tags, and they carry almost no meaning for an LLM-class encoder.
+- Comma-separated tokens with no predicate: `woman, hair, eyes, blue, rain, city, night`. A list like this describes a pile of nouns, not a scene.
 - Parenthetical emphasis tokens: `(masterpiece:1.2)`, `((eyes))`. This is AUTOMATIC1111 syntax, and it means nothing here.
-- Negative prompts. There is no CFG path in [dev] and no active guidance in [klein] distilled (see section 9).
+- Negative prompts. They cannot work because there is no CFG path in [dev] and no active guidance in [klein] distilled (see section 9).
 
 ---
 
 ## 3. Hex color control
 
-FLUX.2 introduced explicit hex-color conditioning. Flux.1 had none. The mechanism needs a keyword trigger before the hex code, so the encoder routes it to the color-conditioning pathway.
+FLUX.2 introduced explicit hex-color conditioning, which Flux.1 did not have. The mechanism needs a keyword trigger before the hex code, because that trigger is what tells the encoder to route the code to the color-conditioning pathway.
 
 **Format: `"...in color #XXXXXX"` or `"...in hex #XXXXXX"`**
 
@@ -82,18 +82,18 @@ FLUX.2 introduced explicit hex-color conditioning. Flux.1 had none. The mechanis
 Multiple hex codes work in one prompt. Each needs its own `"in color"` or `"in hex"` signal.
 
 **Use cases:**
-- Brand colour consistency across a campaign: define a `color_palette` array in the JSON format (section 4), then reference elements with hex codes inline
-- Logo and type-on-image generation: pair hex color conditioning with the JSON `subjects` format, and wrap text in quotes
-- Replicating a film still's specific colour grading: hex-code the primary midtone and shadow colour
+- Brand colour consistency across a campaign: define a `color_palette` array in the JSON format (section 4), then reference elements with hex codes inline.
+- Logo and type-on-image generation: pair hex color conditioning with the JSON `subjects` format, and wrap text in quotes.
+- Replicating a film still's specific colour grading: hex-code the primary midtone and shadow colour.
 
 ---
 
 ## 4. JSON for production (optional, not required)
 
-FLUX.2 was trained on natural language. JSON is a workflow tool for situations where:
-- You need multi-subject scenes with explicit positional control
-- You want machine-readable, version-controllable prompts in an API pipeline
-- You need strict colour consistency across a batch
+FLUX.2 was trained on natural language, so JSON is never required. It is a workflow tool for situations where:
+- You need multi-subject scenes with explicit positional control.
+- You want machine-readable, version-controllable prompts in an API pipeline.
+- You need strict colour consistency across a batch.
 
 **Official BFL schema:**
 
@@ -117,10 +117,10 @@ FLUX.2 was trained on natural language. JSON is a workflow tool for situations w
 ```
 
 **Rules:**
-- Each distinct subject needs its own entry in `subjects[]`
-- `position` is a freeform string — the model reads it semantically, not as pixel coordinates
-- `color_palette` hex codes compose with inline `"in color #XXXXXX"` syntax
-- The JSON can be sent directly as the prompt string in ComfyUI or the API — no special wrapper
+- Each distinct subject needs its own entry in `subjects[]`.
+- `position` is a freeform string. The model reads it semantically, not as pixel coordinates.
+- `color_palette` hex codes compose with the inline `"in color #XXXXXX"` syntax.
+- The JSON can be sent directly as the prompt string in ComfyUI or the API, with no special wrapper.
 
 **When to use JSON vs natural language:**
 
@@ -136,7 +136,7 @@ FLUX.2 was trained on natural language. JSON is a workflow tool for situations w
 
 ## 5. Realism vocabulary: camera, lens, film stock
 
-FLUX.2 tends by default toward over-processed sharpness, especially in [klein]. Camera vocabulary works because Mistral/Qwen3 have strong priors on what images these setups produce. They are not just keywords; they activate the model's world model.
+By default, FLUX.2 tends toward over-processed sharpness, especially in [klein]. Camera vocabulary counteracts this because Mistral and Qwen3 have strong priors about what images each setup produces. These terms are not just keywords; they activate the encoder's world model.
 
 ### Camera bodies (photoreal signal strength: high) `[community — fal.ai prompting guide; convergent]`
 
@@ -188,60 +188,60 @@ FLUX.2 tends by default toward over-processed sharpness, especially in [klein]. 
 
 ### Breaking the "over-AI'd" look
 
-Add one or two:
-- One non-idealised human feature: "slight under-eye shadow", "visible pores on cheeks", "fine hairline scar above left eyebrow"
-- Environment imperfections: "dust on the window", "slightly chipped enamel mug", "worn leather shoulder bag"
-- Motion / life: "exhaled breath visible in cold air", "hair caught by a gust", "jacket wrinkled from the bus ride"
+Add one or two of the following:
+- One non-idealised human feature: "slight under-eye shadow", "visible pores on cheeks", "fine hairline scar above left eyebrow".
+- Environment imperfections: "dust on the window", "slightly chipped enamel mug", "worn leather shoulder bag".
+- Motion / life: "exhaled breath visible in cold air", "hair caught by a gust", "jacket wrinkled from the bus ride".
 
-Do **not** add: `"realistic"`, `"ultra-realistic"`, `"photorealistic"`, `"8K"`, `"high quality"` — these are zero-signal booru tokens.
+Do **not** add `"realistic"`, `"ultra-realistic"`, `"photorealistic"`, `"8K"`, or `"high quality"`. These are booru tokens that carry zero signal.
 
 ---
 
 ## 6. Multi-reference image editing
 
-FLUX.2 [dev] and [klein] 9B KV support **reference-based image editing**. Provide one or more reference images, and the model integrates them into the generated composition. This capability uses `ReferenceLatent` nodes in ComfyUI — a FLUX.2-native node, not the older IPAdapter approach.
+FLUX.2 [dev] and [klein] 9B KV support **reference-based image editing**. You provide one or more reference images, and the model integrates them into the generated composition. In ComfyUI this capability uses `ReferenceLatent` nodes, which are FLUX.2-native. It does not use the older IPAdapter approach.
 
-**Supported reference count:** marketing documentation states up to 10. The official prompting guide states up to 8. Both 4B and 9B documentation mention approximately 4 in some configurations. Use the lower bounds as safe targets until you verify your specific variant's model card.
+**Supported reference count:** the sources disagree. Marketing documentation states up to 10, the official prompting guide states up to 8, and both 4B and 9B documentation mention approximately 4 in some configurations. Use the lower bounds as safe targets until you verify your specific variant's model card.
 
 **Suggested supported counts by variant (verify at time of use):**
-- [dev]: up to ~8–10 reference images
-- [klein] 9B: up to ~8 (9B KV adds KV-caching to speed repeated reference processing)
-- [klein] 4B: up to ~4 (marketing may overstate this for 4B specifically)
+- [dev]: up to ~8–10 reference images.
+- [klein] 9B: up to ~8 (9B KV adds KV-caching to speed repeated reference processing).
+- [klein] 4B: up to ~4 (marketing may overstate this for 4B specifically).
 
 ### ComfyUI reference workflow (dev image-edit template)
 
 The `image_flux2_image_editing.json` template introduces:
-- `ReferenceLatent` node: takes a reference image + optional mask, outputs a latent reference
-- Multiple `ReferenceLatent` nodes chain into the conditioning
-- Reference images encode separately from the main latent (hence KV-cache speedup in 9B KV)
+- The `ReferenceLatent` node takes a reference image plus an optional mask, and outputs a latent reference.
+- Multiple `ReferenceLatent` nodes chain into the conditioning.
+- Reference images encode separately from the main latent, which is why 9B KV's KV-caching speeds up repeated reference processing.
 
-Full image-edit template notes and node graph: **`setup-and-workflows.md`**.
+The full image-edit template notes and node graph are in **`setup-and-workflows.md`**.
 
 ### Prompting for multi-reference
 
-When using reference images, describe the reference's role explicitly:
-- `"[Subject from reference 1] wearing the jacket shown in reference 2, standing in front of the building from reference 3"`
-- The model reads semantic labels in the prompt and maps them to provided reference images in order
-- Positional language (`"first reference"`, `"the jacket image"`) helps disambiguation
+When you use reference images, describe each reference's role explicitly:
+- `"[Subject from reference 1] wearing the jacket shown in reference 2, standing in front of the building from reference 3"`.
+- The model reads semantic labels in the prompt and maps them to the provided reference images in order.
+- Positional language such as `"first reference"` or `"the jacket image"` helps the model disambiguate.
 
 ---
 
 ## 7. Text-in-image guidance
 
-FLUX.2 improved text rendering significantly over Flux.1. Suitable for: short text overlays (1–5 words), typographic accents, decorative scripts, sign text in scenes. Not suitable for: multi-line body copy, dense typographic layouts, logos with complex internal geometry.
+FLUX.2 improved text rendering significantly over Flux.1. It is suitable for short text overlays (1–5 words), typographic accents, decorative scripts, and sign text in scenes. It is not suitable for multi-line body copy, dense typographic layouts, or logos with complex internal geometry.
 
 **Rules that improve success:**
-1. Wrap the exact text in `'single quotes'` or `"double quotes"` in the prompt: `"A shop sign reading 'CLOSED'"`
-2. Keep each text block to ≤10 words; shorter is more reliable
-3. Specify typography style: `"hand-lettered in white chalk"`, `"serif metal engraving"`, `"neon tube lettering in color #FF3300"`
+1. Wrap the exact text in `'single quotes'` or `"double quotes"` in the prompt: `"A shop sign reading 'CLOSED'"`.
+2. Keep each text block to ≤10 words; shorter is more reliable.
+3. Specify typography style: `"hand-lettered in white chalk"`, `"serif metal engraving"`, `"neon tube lettering in color #FF3300"`.
 4. Use JSON `subjects` to position text blocks precisely:
    ```json
    {"description": "Sign reading 'WELCOME' in brushed copper lettering", "position": "upper-center on the door frame"}
    ```
-5. Combine hex color control for text colour: `"Sign text 'ACME' in color #FF5733"`
-6. Generate 3–5 candidates and select — text rendering has higher variance than scene composition
+5. Combine hex color control for text colour: `"Sign text 'ACME' in color #FF5733"`.
+6. Generate 3–5 candidates and select the best, because text rendering has higher variance than scene composition.
 
-For anything heavier — labels on product packaging, business cards, poster layouts, UI mockups — FLUX.2 text rendering is not reliable for dense multi-line copy or layout-driven design. Use a model purpose-built for typography instead.
+For anything heavier, such as labels on product packaging, business cards, poster layouts, or UI mockups, FLUX.2 text rendering is not reliable. Dense multi-line copy and layout-driven design need a model purpose-built for typography instead.
 
 ---
 
@@ -327,12 +327,12 @@ Sony A7R V, 50mm f/1.8, available street lighting, puddles on the pavement.
 
 | Mistake | Why it's wrong | Correct |
 |---|---|---|
-| `"photorealistic, 8K, ultra detailed"` | SD1.5-era booru tokens, near-zero signal for Mistral/Qwen3 | Camera body + lens + film stock instead |
-| Negative prompt filled in | No CFG path ([dev]) or guidance-off ([klein] distilled) | Phrase constraints positively in the main prompt |
-| CFG=0 in KSampler | 0.0 outputs the unconditional (ignores prompt entirely) | Use **1** for guidance-off in [klein] distilled |
-| `"The image should show…"` opening | Reflexive meta-language; the encoder interprets it literally and may generate an image of an image | Open directly with the subject: `"A woman…"` |
-| Bare hex code without keyword | `"...#0047AB"` routes as text noise; doesn't trigger color conditioning | `"...in color #0047AB"` |
-| Subject buried mid-prompt | LLM encoders front-weight tokens | Front-load subject in first clause |
-| Treating JSON as required ("plain text fails") | FLUX.2 was trained on natural language; JSON is optional and a workflow tool | Use plain language for single subjects; JSON for complex multi-subject |
-| Dropping camera gear to avoid the "AI look" | Some models benefit from removing DSLR markers. FLUX.2 is the opposite: Mistral/Qwen3 treat camera vocabulary as semantic context | Keep camera body + lens + film stock in FLUX.2 prompts for photoreal results |
-| `(text:1.5)` parenthetical weight syntax | This is AUTOMATIC1111 syntax, and it means nothing *here* — FLUX.2's Mistral/Qwen3 conditioning has no per-token weight channel. This is not a rule about LLM encoders as a class: [`anima`](../../anima/) has one and ships officially documented weighting | No parenthetical weighting; rephrase the sentence instead |
+| `"photorealistic, 8K, ultra detailed"` | These are SD1.5-era booru tokens, and they carry near-zero signal for Mistral/Qwen3 | Use a camera body + lens + film stock instead |
+| Negative prompt filled in | [dev] has no CFG path, and [klein] distilled runs with guidance off | Phrase constraints positively in the main prompt |
+| CFG=0 in KSampler | A value of 0.0 outputs the unconditional result, which ignores the prompt entirely | Use **1** for guidance-off in [klein] distilled |
+| `"The image should show…"` opening | This is reflexive meta-language. The encoder interprets it literally and may generate an image of an image | Open directly with the subject: `"A woman…"` |
+| Bare hex code without keyword | `"...#0047AB"` routes as text noise and does not trigger color conditioning | `"...in color #0047AB"` |
+| Subject buried mid-prompt | LLM encoders give more weight to early tokens | Put the subject in the first clause |
+| Treating JSON as required ("plain text fails") | FLUX.2 was trained on natural language. JSON is optional, and is a workflow tool | Use plain language for single subjects, and JSON for complex multi-subject scenes |
+| Dropping camera gear to avoid the "AI look" | Some models benefit from removing DSLR markers. FLUX.2 is the opposite, because Mistral/Qwen3 treat camera vocabulary as semantic context | Keep the camera body + lens + film stock in FLUX.2 prompts for photoreal results |
+| `(text:1.5)` parenthetical weight syntax | This is AUTOMATIC1111 syntax, and it means nothing here: FLUX.2's Mistral/Qwen3 conditioning has no per-token weight channel. This is not a rule about LLM encoders as a class, since [`anima`](../../anima/) has one and ships officially documented weighting | Do not use parenthetical weighting; rephrase the sentence instead |

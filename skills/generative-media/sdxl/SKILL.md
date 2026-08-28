@@ -1,44 +1,45 @@
 ---
 name: sdxl
 description: >
-  Authoritative guide for Stable Diffusion XL (SDXL 1.0, Stability AI) and its ecosystem — base + refiner, the
+  Authoritative guide for Stable Diffusion XL (SDXL 1.0, Stability AI) and its ecosystem: base + refiner, the
   distilled fast variants (Turbo, Lightning, LCM, Hyper-SDXL), and the community finetunes (Juggernaut,
-  RealVisXL, DreamShaper, Pony, Illustrious/NoobAI) — in ComfyUI or the diffusers API. Use this whenever the
+  RealVisXL, DreamShaper, Pony, Illustrious/NoobAI), in ComfyUI or the diffusers API. Use this whenever the
   user touches SDXL in any way, even obliquely: choosing a checkpoint or fast variant (base vs Turbo vs
-  Lightning vs LCM vs Hyper, or which photoreal/anime finetune), installing or setting it up in ComfyUI
-  (single-checkpoint loader, the fp16-fix VAE, file layout, base+refiner ensemble graph), writing or fixing
-  prompts (SDXL is a dual-CLIP 77-token model — weighted comma-separated keyword phrases, not LLM sentences
-  and not generic "masterpiece 8k"; matching the prompt dialect to the checkpoint; the text_g/text_l split;
-  negative prompts and CFG), getting photoreal results (use a photoreal finetune, then stack camera body +
-  film stock + lens + lighting vocabulary), choosing steps/CFG/sampler/scheduler/resolution per variant,
-  running ControlNet / IP-Adapter / LoRA, training a LoRA (kohya_ss / OneTrainer) including style LoRAs (the
-  Illustrious recipe, dataset diversity, XY-grid evaluation), creating a consistent character (InstantID vs
-  IP-Adapter FaceID vs HyperLoRA vs a trained character LoRA, the detailer LoRA swap, ADetailer [SEP]
-  multi-character routing, block-weighted LoRA to stop style bleed), building multi-stage production pipelines
-  (hires-fix, tiled upscale, detailers) or using SDXL as the controllable front-end / texture back-end in
-  mixed-model workflows, or debugging artefacts (fried colours, cut-off heads, plastic skin, mangled hands,
-  unreadable text). It also covers the licence picture (OpenRAIL++-M is commercially clean; Turbo's licence is
-  contested) and when to leave the SDXL family entirely — including Anima, the anime-native base that speaks
-  the same booru dialect but whose *weights* are non-commercial, even though its outputs are not. Use this for
-  any question about SDXL in any context. Choosing between models, comparing them, or working out which skills
-  and install commands a job needs is [`generative-media-atlas`](../generative-media-atlas/)'s job — start
-  there when the model is not already settled.
+  Lightning vs LCM vs Hyper, or which photoreal/anime finetune); installing or setting it up in ComfyUI
+  (single-checkpoint loader, the fp16-fix VAE, file layout, base+refiner ensemble graph); writing or fixing
+  prompts — SDXL is a dual-CLIP 77-token model, so it wants weighted comma-separated keyword phrases, not LLM
+  sentences and not generic "masterpiece 8k" — including matching the prompt dialect to the checkpoint, the
+  text_g/text_l split, negative prompts and CFG; getting photoreal results (use a photoreal finetune, then
+  stack camera body + film stock + lens + lighting vocabulary); choosing steps/CFG/sampler/scheduler/resolution
+  per variant; running ControlNet / IP-Adapter / LoRA; training a LoRA (kohya_ss / OneTrainer) including style
+  LoRAs (the Illustrious recipe, dataset diversity, XY-grid evaluation); creating a consistent character
+  (InstantID vs IP-Adapter FaceID vs HyperLoRA vs a trained character LoRA, the detailer LoRA swap, ADetailer
+  [SEP] multi-character routing, block-weighted LoRA to stop style bleed); building multi-stage production
+  pipelines (hires-fix, tiled upscale, detailers); using SDXL as the controllable front-end or texture
+  back-end in mixed-model workflows; and debugging artefacts (fried colours, cut-off heads, plastic skin,
+  mangled hands, unreadable text). It also covers the licence picture (OpenRAIL++-M is commercially clean;
+  Turbo's licence is contested) and when to leave the SDXL family entirely — including Anima, the anime-native
+  base that speaks the same booru dialect but whose *weights* are non-commercial, even though its outputs are
+  not. Use this for any question about SDXL in any context. Choosing between models, comparing them, or
+  working out which skills and install commands a job needs is
+  [`generative-media-atlas`](../generative-media-atlas/)'s job — start there when the model is not already
+  settled.
 ---
 
 # Stable Diffusion XL (SDXL)
 
-SDXL 1.0 is Stability AI's open-weights latent-diffusion model (released July 2023). It is a **convolutional UNet — not a DiT** — with a **2.6B-parameter UNet backbone**. The full **base + refiner "ensemble of experts" pipeline is ~6.6B parameters**. It uses **two fixed CLIP text encoders working together** — **CLIP-ViT/L** ("CLIP-L") and **OpenCLIP-ViT/bigG** ("CLIP-G"). Their penultimate hidden states are concatenated into a 2048-dim conditioning, and the pooled bigG embedding feeds the timestep. Native resolution is **1024×1024**. Licence: **CreativeML Open RAIL++-M** (commercial use permitted).
+SDXL 1.0 is Stability AI's open-weights latent-diffusion model, released July 2023. It is a **convolutional UNet, not a DiT**, with a **2.6B-parameter UNet backbone**. The full **base + refiner "ensemble of experts" pipeline is ~6.6B parameters**. It uses **two fixed CLIP text encoders working together**: **CLIP-ViT/L** ("CLIP-L") and **OpenCLIP-ViT/bigG** ("CLIP-G"). Their penultimate hidden states are concatenated into a 2048-dim conditioning, and the pooled bigG embedding feeds the timestep. Native resolution is **1024×1024**. The licence is **CreativeML Open RAIL++-M**, which permits commercial use.
 
-Its defining trait — and the thing that dates it — is this: **it is a CLIP-conditioned UNet, not an LLM/T5-conditioned transformer.** That gives it a hard **77-token** prompt window. You write keywords and tags, not sentences. It cannot render reliable in-image text, and it grasps complex compositions worse than transformer-based models with LLM text encoders do. In exchange, it has the **deepest ecosystem of any open model** — thousands of finetunes, LoRAs, ControlNets, and IP-Adapters. It runs on **6–8 GB VRAM**, and it is fast. You almost never run base SDXL raw; you run a finetune of it.
+One trait defines SDXL, and it is also the thing that dates it: **it is a CLIP-conditioned UNet, not an LLM/T5-conditioned transformer.** That gives it a hard **77-token** prompt window. You write keywords and tags, not sentences. It cannot render reliable in-image text, and it understands complex compositions worse than transformer-based models with LLM text encoders do. In exchange, it has the **deepest ecosystem of any open model**: thousands of finetunes, LoRAs, ControlNets, and IP-Adapters. It runs on **6–8 GB VRAM**, and it is fast. You almost never run base SDXL raw; you run a finetune of it.
 
 ## Two orthogonal axes — they compose
 
 SDXL choices fall on **two independent axes that stack**:
 
-- **Speed** — base (full quality) vs a distilled fast variant (Turbo / Lightning / LCM / Hyper-SDXL), trading steps for seconds.
+- **Speed** — base (full quality) versus a distilled fast variant (Turbo / Lightning / LCM / Hyper-SDXL), which trades steps for seconds.
 - **Style / dialect** — which checkpoint: raw base, a photoreal finetune (Juggernaut, RealVisXL), an art generalist (DreamShaper), or an anime/booru model (Pony, Illustrious/NoobAI).
 
-These axes are **composable**. Lightning, LCM, and Hyper-SDXL all ship as **LoRAs** that drop onto *any* SDXL finetune — so "Juggernaut + 4-step Lightning LoRA" gives you fast *and* photoreal in one stack. Pick a point on each axis.
+These axes are **composable**. Lightning, LCM, and Hyper-SDXL all ship as **LoRAs** that drop onto *any* SDXL finetune. So "Juggernaut + 4-step Lightning LoRA" gives you fast *and* photoreal in one stack. Pick a point on each axis.
 
 ### Speed variants (the fast axis)
 
@@ -51,7 +52,7 @@ These axes are **composable**. Lightning, LCM, and Hyper-SDXL all ship as **LoRA
 | **LCM** | latent consistency | 4–8 | **1–2** / **1.0–2.0** | `lcm` · `sgm_uniform` | 1024² | OpenRAIL-ish | fast on *any* finetune (LCM-LoRA); needs `ModelSamplingDiscrete`→`lcm` |
 | **Hyper-SDXL** | TSCD + reward | 1 / 2 / 4 / 8 | ~1 / ~0.0 | `euler` · `sgm_uniform` | 1024² | OpenRAIL++-M | best-rated 1-step; **LoRA or full ckpt** |
 
-> ¹ **Turbo's licence is contested** — see *Licence & limitations*. **CFG note (read this):** for every distilled variant, "guidance off" is **CFG `1.0` in a ComfyUI sampler** and **`guidance_scale=0.0` in diffusers**. They are the same thing. **Never type CFG `0.0` into a ComfyUI sampler** (it outputs the unconditional and ignores your prompt). At guidance-off, **negative prompts are inert** (see *The one rule* and *Failure modes*).
+> ¹ **Turbo's licence is contested** — see *Licence & limitations*. **CFG note (read this):** for every distilled variant, "guidance off" means **CFG `1.0` in a ComfyUI sampler** and **`guidance_scale=0.0` in diffusers**. Those are the same setting expressed in two conventions. **Never type CFG `0.0` into a ComfyUI sampler** — that outputs the unconditional result and ignores your prompt. At guidance-off, **negative prompts are inert** (see *The one rule* and *Failure modes*).
 
 ### Checkpoints (the style axis) — you want a finetune, not raw base
 
@@ -65,9 +66,9 @@ Base SDXL 1.0 is a strong *foundation*, but it looks undertrained and plasticky 
 | **Pony Diffusion V6 XL** | anime/furry/cartoon, very flexible, own sub-ecosystem | **`score_9, score_8_up, …` + `source_*` + booru tags** — normal prompts fail |
 | **Illustrious / NoobAI XL** | anime/illustration powerhouse | **Danbooru booru tags** |
 
-> **Dialect follows the checkpoint.** Pony and Illustrious were trained on tag vocabularies, so they need their own dialect. Their LoRAs are a **separate pool** and don't work with base-SDXL LoRAs. Everything else in this skill assumes the photoreal/base dialect unless noted. Details and current-version notes: `references/checkpoints-and-loras.md`.
+> **Dialect follows the checkpoint.** Pony and Illustrious were trained on tag vocabularies, so they need their own dialect. Their LoRAs are a **separate pool** and do not work with base-SDXL LoRAs. Everything else in this skill assumes the photoreal/base dialect unless noted. Details and current-version notes: `references/checkpoints-and-loras.md`.
 
-> **The anime axis now has an option that is not an SDXL checkpoint.** **Anima** (CircleStone Labs, 2B, derived from NVIDIA's Cosmos-Predict2) has its own architecture, loaders and LoRA pool — nothing on this page loads it. But it takes **Danbooru tags and attention weighting**, so it reads to a prompter as a fifth anime "checkpoint". It is now one of the largest base-model ecosystems on Civitai, competing directly with Pony/Illustrious/NoobAI `[flagged — re-verify]`. **The licence differs, but not in the way the phrase "non-commercial" suggests, so read it before you route around it.** Anima's CircleStone Labs NC licence (plus NVIDIA's Open Model License, inherited through Cosmos) restricts the **weights**, not the pictures. §1(a) puts Outputs outside the definition of Derivative, and §2(e) grants use of them *"for any purpose (including for commercial purposes)"*, with the card naming sold images, paid commissions and game/VN assets as allowed — for companies as much as individuals. What you may not do is **ship the weights**. Hosting Anima behind a paid API, or embedding it in a monetised product, needs a separate licence. §2(c)'s carve-out lets an individual sell derivative weights, but only *"solely to the model weights, and not to any larger product"*. So SDXL wins when the **model** is what you are shipping. For paid work whose deliverable is a **picture**, Anima is not disqualified. The other trap for an SDXL reader is weighting: Anima needs weights pushed well past SDXL's ~1.05–1.3 band (`(chibi:2)` is ordinary there and would fry SDXL). Full treatment: [`anima`](../anima/).
+> **The anime axis now has an option that is not an SDXL checkpoint.** **Anima** (CircleStone Labs, 2B, derived from NVIDIA's Cosmos-Predict2) has its own architecture, its own loaders, and its own LoRA pool, so nothing on this page loads it. But it takes **Danbooru tags and attention weighting**, which means it reads to a prompter like a fifth anime "checkpoint". It is now one of the largest base-model ecosystems on Civitai, competing directly with Pony/Illustrious/NoobAI `[flagged — re-verify]`. **The licence differs, but not in the way the phrase "non-commercial" suggests, so read it before you route around it.** Anima's CircleStone Labs NC licence (plus NVIDIA's Open Model License, inherited through Cosmos) restricts the **weights**, not the pictures. §1(a) puts Outputs outside the definition of Derivative. §2(e) grants use of them *"for any purpose (including for commercial purposes)"*, and the card names sold images, paid commissions and game/VN assets as allowed, for companies as much as for individuals. What you may not do is **ship the weights**. Hosting Anima behind a paid API, or embedding it in a monetised product, needs a separate licence. §2(c)'s carve-out lets an individual sell derivative weights, but only *"solely to the model weights, and not to any larger product"*. So SDXL wins when the **model** is what you are shipping. For paid work whose deliverable is a **picture**, Anima is not disqualified. The other trap for an SDXL reader is weighting: Anima needs weights pushed well past SDXL's ~1.05–1.3 band. `(chibi:2)` is ordinary there, and it would fry SDXL. Full treatment: [`anima`](../anima/).
 
 > **A `../link/` on this page that doesn't resolve is a skill you have not installed, not a broken
 > page.** [`generative-media-atlas`](../generative-media-atlas/) is the map of this suite: which
@@ -78,20 +79,22 @@ Base SDXL 1.0 is a strong *foundation*, but it looks undertrained and plasticky 
 
 ## The one rule that changes everything
 
-SDXL is conditioned by CLIP, which matches **tokens and short phrases**, not syntax. So **write a weighted, comma-separated list of keyword phrases — front-loaded, within ~77 tokens — and match the dialect to your checkpoint.** This is the opposite of the LLM-encoder models. Don't write a flowing sentence — CLIP can't parse clause structure the way LLM-encoder models do. And don't lean on a generic `masterpiece, best quality, 8k` booster block; it is near-useless on SDXL, so earn quality with concrete photographic terms instead. The encoder class also flips the LoRA rules: SDXL triggers are **verbatim rare tokens** (CLIP tag-matching) and training captions are tags, where Flux/Z-Image instead fold triggers into prose or omit them. Dialect, triggers, and captions all follow the encoder here, not folklore — with the refinement that **Dialect follows the checkpoint** above already implies. The encoder is standing in for the **caption corpus**, and the corpus is the real rule underneath: encoder class sets the ceiling on what a dialect *can* express, while what a model was captioned on decides what it is fluent in. Usually the two agree — CLIP arrived with tag corpora, LLM encoders with prose — which is exactly why Pony and Illustrious can change dialect without changing encoder, why [`anima`](../anima/) takes weighted booru tags behind an LLM encoder, and why [`ideogram-4`](../ideogram-4/) takes JSON behind one. The encoder is still the right first guess; check the corpus before betting on it.
+SDXL is conditioned by CLIP, and CLIP matches **tokens and short phrases**, not syntax. So **write a weighted, comma-separated list of keyword phrases — front-loaded, within ~77 tokens — and match the dialect to your checkpoint.** This is the opposite of the LLM-encoder models. Do not write a flowing sentence, because CLIP cannot parse clause structure the way LLM-encoder models can. Do not lean on a generic `masterpiece, best quality, 8k` booster block either; it is near-useless on SDXL. Earn quality with concrete photographic terms instead.
+
+The encoder class also flips the LoRA rules. On SDXL, triggers are **verbatim rare tokens**, because CLIP does tag-matching, and training captions are tags. Flux and Z-Image instead fold triggers into prose or omit them. Dialect, triggers, and captions all follow the encoder here, with the refinement that **dialect follows the checkpoint**, as the note above already implies. The encoder is standing in for the **caption corpus**, and the corpus is the real rule underneath: the encoder class sets the ceiling on what a dialect *can* express, while what a model was captioned on decides what it is fluent in. The two usually agree, because CLIP arrived with tag corpora and LLM encoders arrived with prose. That is exactly why Pony and Illustrious can change dialect without changing encoder, why [`anima`](../anima/) takes weighted booru tags behind an LLM encoder, and why [`ideogram-4`](../ideogram-4/) takes JSON behind one. The encoder is still the right first guess; check the corpus before betting on it.
 
 | Don't (LLM-style) | Don't (empty booster) | Do (SDXL keyword phrases) |
 |---|---|---|
 | *A candid documentary photograph of a young woman standing alone in a sunlit kitchen…* | `1girl, masterpiece, best quality, 8k, ultra detailed` | `candid documentary photo, young woman, detailed skin, standing in a sunlit kitchen, soft window light, 35mm, shot on Fujifilm X-T4, Kodak Portra 400` |
 
-Four mechanics that follow from the CLIP encoder:
+Four mechanics follow from the CLIP encoder:
 
-1. **Position = emphasis.** CLIP weights earlier tokens more. Put subject + the 2–3 highest-value concepts first.
+1. **Position = emphasis.** CLIP weights earlier tokens more. Put the subject and the 2–3 highest-value concepts first.
 2. **Weighting syntax** is `(phrase:1.2)` — raise toward 1.3, lower toward 0.9. **SDXL fries faster than SD1.5.** Keep weights in **~1.05–1.3** `[community]`. The 1.5–1.8 values common in SD1.5 guides over-saturate and posterise SDXL.
-3. **77 tokens per chunk.** Past ~77 tokens prompt-weight falls off a cliff. Keep it tight. If you genuinely need more, split with `BREAK` (ComfyUI/A1111) so each chunk is encoded separately.
+3. **77 tokens per chunk.** Past ~77 tokens, prompt-weight falls off a cliff, so keep it tight. If you genuinely need more, split with `BREAK` (ComfyUI/A1111) so each chunk is encoded separately.
 4. **Dialect by checkpoint** — photoreal keywords for base/Juggernaut/RealVis; `score_*`/`source_*` for Pony; booru tags for Illustrious/anime.
 
-**Advanced lever — the dual-encoder split.** SDXL has two text encoders. The **`CLIPTextEncodeSDXL`** node lets you feed them different text: `text_g` goes to OpenCLIP-bigG, the global/scene channel, and `text_l` goes to CLIP-L, the local/detail channel. The **stock ComfyUI base and base+refiner templates use the plain `CLIPTextEncode` node** (same text to both). The split is an *optional* power-user technique, not the default path. Use it when you want scene and detail steered separately — for example, global mood in `text_g` and specific object or texture detail in `text_l`.
+**Advanced lever — the dual-encoder split.** SDXL has two text encoders, and the **`CLIPTextEncodeSDXL`** node lets you feed them different text. `text_g` goes to OpenCLIP-bigG, the global/scene channel, and `text_l` goes to CLIP-L, the local/detail channel. The **stock ComfyUI base and base+refiner templates use the plain `CLIPTextEncode` node**, which sends the same text to both. The split is an *optional* power-user technique, not the default path. Use it when you want scene and detail steered separately — for example, global mood in `text_g` and specific object or texture detail in `text_l`.
 
 Full prompt anatomy, the complete photoreal vocabulary (camera bodies, film stocks, lenses, lighting, photographer names), the Pony/booru dialects, negatives, and worked SDXL-calibrated examples: **`references/prompting-guide.md`**.
 
@@ -111,16 +114,16 @@ SDXL runs in **ComfyUI core** with no custom nodes. Unlike the DiT models, the c
 | any finetune / fast-variant checkpoint | `models/checkpoints/` | CheckpointLoaderSimple |
 | LoRAs (incl. Lightning/LCM/Hyper LoRAs) | `models/loras/` | LoraLoader |
 
-**The VAE gotcha:** SDXL's original VAE **overflows in fp16 and produces black/NaN images**. The VAE baked into the checkpoint is fine, and the stock templates use it. But if you decode in fp16 with a standalone VAE, point a `VAELoader` at **`madebyollin/sdxl-vae-fp16-fix`** (or run the VAE in fp32). Black outputs mean this `[community; strong]`.
+**The VAE gotcha:** SDXL's original VAE **overflows in fp16 and produces black/NaN images**. The VAE baked into the checkpoint is fine, and the stock templates use it. But if you decode in fp16 with a standalone VAE, point a `VAELoader` at **`madebyollin/sdxl-vae-fp16-fix`**, or run the VAE in fp32. Black outputs mean this is what happened `[community; strong]`.
 
 **Stock node settings (verbatim from the official `sdxl_simple_example.json` template):**
 - **Base:** `EmptyLatentImage` **1024×1024**; `KSamplerAdvanced` → **steps 25, cfg 8, sampler `euler`, scheduler `normal`**, `start_at_step 0`, `end_at_step 20`, `return_with_leftover_noise enable`.
-- **Refiner (ensemble):** a second `KSamplerAdvanced` with **`add_noise disable`**, **steps 25, cfg 8, `euler`/`normal`**, `start_at_step 20`, `end_at_step 10000`. The **20/25 = 0.8 split** means base runs 0→0.8 and the refiner finishes 0.8→1.0 on the *same* 25-step schedule. It continues the base's leftover-noise latent — no fresh noise, no decode in between.
+- **Refiner (ensemble):** a second `KSamplerAdvanced` with **`add_noise disable`**, **steps 25, cfg 8, `euler`/`normal`**, `start_at_step 20`, `end_at_step 10000`. The **20/25 = 0.8 split** means the base runs 0→0.8 and the refiner finishes 0.8→1.0 on the *same* 25-step schedule. The refiner continues the base's leftover-noise latent — no fresh noise, no decode in between.
 - Recommended SDXL resolutions (from the template's note): **1024×1024 · 1152×896 · 896×1152 · 1216×832 · 832×1216 · 1344×768 · 768×1344 · 1536×640 · 640×1536** (all ≈1 MP, multiples of 64). 512² gives badly degraded output. Unlike SD1.5, do not go below the 1024-area buckets.
 
-**diffusers:** pipelines are **`StableDiffusionXLPipeline`** (t2i), **`StableDiffusionXLImg2ImgPipeline`** (img2img / the refiner pass), **`StableDiffusionXLInpaintPipeline`** (inpaint). Minimum **diffusers ≥ 0.19.0**. The base+refiner ensemble is wired with `denoising_end=0.8` on the base and `denoising_start=0.8` on the refiner (handing off latents). Full code: `references/setup-and-workflows.md`.
+**diffusers:** the pipelines are **`StableDiffusionXLPipeline`** (t2i), **`StableDiffusionXLImg2ImgPipeline`** (img2img / the refiner pass), and **`StableDiffusionXLInpaintPipeline`** (inpaint). Minimum **diffusers ≥ 0.19.0**. The base+refiner ensemble is wired with `denoising_end=0.8` on the base and `denoising_start=0.8` on the refiner, handing off latents. Full code: `references/setup-and-workflows.md`.
 
-**Quantisation — there is effectively no GGUF path for SDXL.** It's a **Conv2D-heavy UNet**, and GGUF/DiT quantisation is built for transformer models. The `ComfyUI-GGUF` author explicitly says *don't quantise SDXL*. fp16 is the standard format (~6.5 GB), with optional `--fp8_e4m3fn-unet` weight-casting in ComfyUI for tight VRAM. ComfyUI auto-offloads, so 1024² runs on ~**4 GB** (low-VRAM), **6–8 GB comfortable**. Base+refiner keeps both checkpoints resident, so budget **8 GB+**. Stability and Comfy publish no hard minimum, so these are practitioner figures `[community]`.
+**Quantisation — there is effectively no GGUF path for SDXL.** SDXL is a **Conv2D-heavy UNet**, and GGUF/DiT quantisation is built for transformer models. The `ComfyUI-GGUF` author explicitly says *don't quantise SDXL*. fp16 is the standard format (~6.5 GB), with optional `--fp8_e4m3fn-unet` weight-casting in ComfyUI for tight VRAM. ComfyUI auto-offloads, so 1024² runs on ~**4 GB** in low-VRAM mode, and **6–8 GB is comfortable**. Base+refiner keeps both checkpoints resident, so budget **8 GB+**. Stability and Comfy publish no hard minimum, so these are practitioner figures `[community]`.
 
 ControlNet, IP-Adapter (incl. FaceID), hires-fix and tiled-upscale workflows are all mature for SDXL — this control depth is its biggest practical edge. See `references/setup-and-workflows.md` and `references/checkpoints-and-loras.md`.
 
@@ -128,27 +131,27 @@ ControlNet, IP-Adapter (incl. FaceID), hires-fix and tiled-upscale workflows are
 
 ## Per-variant settings
 
-One block per variant. Numbers are from the official templates and model cards (primary), except where a marker says otherwise. **Seed behaviour is stated per block because the distilled variants change it.** At 25 steps you can nudge the schedule and keep the image. But at 1–4 steps, the seed, the step count and the scheduler act as a single joint input — change any one of them and you have re-rolled, not refined.
+One block per variant. Numbers are from the official templates and model cards (primary), except where a marker says otherwise. **Seed behaviour is stated per block because the distilled variants change it.** At 25 steps you can nudge the schedule and keep the image. But at 1–4 steps, the seed, the step count and the scheduler act as a single joint input: change any one of them and you have re-rolled, not refined.
 
 ### Base 1.0
 
-Steps **25–40** (30–40 sweet spot), **CFG 5–8** (template uses 8; finetunes often prefer 3–7), `euler`/`normal`, 1024-area bucket. **Use negative prompts.** Best LoRA-training base. **Seed:** fully deterministic at a fixed sampler, scheduler and step count, and stable *across* small step changes. You can tune steps without losing a composition you like.
+Steps **25–40** (30–40 sweet spot), **CFG 5–8** (the template uses 8; finetunes often prefer 3–7), `euler`/`normal`, 1024-area bucket. **Use negative prompts.** Best LoRA-training base. **Seed:** fully deterministic at a fixed sampler, scheduler and step count, and stable *across* small step changes. You can tune steps without losing a composition you like.
 
 ### Base + Refiner
 
-Total **steps 25**, hand off at **0.8** (base 0→20, refiner 20→25), **CFG 8**, `euler`/`normal`. Refiner adds high-frequency detail only. It is *optional* and largely redundant once you use a good finetune. **Seed:** one seed governs both passes, because the refiner continues the base's leftover-noise latent on the same 25-step schedule. Reproducing an image means reproducing the split point (20/25) too, not just the seed.
+Total **steps 25**, hand off at **0.8** (base 0→20, refiner 20→25), **CFG 8**, `euler`/`normal`. The refiner adds high-frequency detail only. It is *optional*, and it becomes largely redundant once you use a good finetune. **Seed:** one seed governs both passes, because the refiner continues the base's leftover-noise latent on the same 25-step schedule. Reproducing an image means reproducing the split point (20/25) too, not just the seed.
 
 ### Turbo
 
-**1–4 steps**, **CFG 1** (ComfyUI) / **0.0** (diffusers), **`euler_ancestral`** via `SamplerCustom`, scheduler **`SDTurboScheduler`** (`steps`, `denoise 1`), **512²**. Negatives inert. 1 step usable, 4 better. **Seed:** reproducible only when step count *and* scheduler match exactly. `euler_ancestral` injects fresh noise at every step, so with only one to four of them, a step-count change rewrites the image.
+**1–4 steps**, **CFG 1** (ComfyUI) / **0.0** (diffusers), **`euler_ancestral`** via `SamplerCustom`, scheduler **`SDTurboScheduler`** (`steps`, `denoise 1`), **512²**. Negatives are inert. 1 step is usable; 4 is better. **Seed:** reproducible only when the step count *and* scheduler match exactly. `euler_ancestral` injects fresh noise at every step, and with only one to four steps, a step-count change rewrites the image.
 
 ### Lightning
 
-**2 / 4 / 8 steps** (match the checkpoint/LoRA to the step count), **CFG 1** / **0.0**, **`euler`**, **`sgm_uniform`**, 1024². Full ckpt or UNet beats LoRA quality; use the **LoRA** to add speed onto a *custom finetune*. 1-step is experimental; 2-step is the floor, 4-step the popular default. **Seed:** deterministic, but bound to the step count the checkpoint or LoRA was distilled for. Running a 4-step Lightning LoRA at 8 steps gives a different image, not a more detailed one.
+**2 / 4 / 8 steps** (match the checkpoint/LoRA to the step count), **CFG 1** / **0.0**, **`euler`**, **`sgm_uniform`**, 1024². The full ckpt or UNet beats the LoRA on quality; use the **LoRA** to add speed onto a *custom finetune*. 1-step is experimental; 2-step is the floor and 4-step the popular default. **Seed:** deterministic, but bound to the step count the checkpoint or LoRA was distilled for. Running a 4-step Lightning LoRA at 8 steps gives a different image, not a more detailed one.
 
 ### LCM
 
-**4–8 steps**, **CFG 1–2** / **1.0–2.0**, sampler **`lcm`**, **`sgm_uniform`**. **LCM-LoRA** applies to any SDXL finetune but requires a **`ModelSamplingDiscrete`** node set to **`lcm`** and patched onto the model. It is softer than Lightning/Hyper but the most portable. **Seed:** deterministic given the same steps, scheduler *and* the `ModelSamplingDiscrete` patch. The patch is part of the sampling identity, so re-running the same seed without it silently produces a different — and worse — image, rather than an error.
+**4–8 steps**, **CFG 1–2** / **1.0–2.0**, sampler **`lcm`**, **`sgm_uniform`**. **LCM-LoRA** applies to any SDXL finetune, but it requires a **`ModelSamplingDiscrete`** node set to **`lcm`** and patched onto the model. It is softer than Lightning/Hyper but the most portable. **Seed:** deterministic given the same steps, scheduler *and* the `ModelSamplingDiscrete` patch. The patch is part of the sampling identity, so re-running the same seed without it silently produces a different — and worse — image rather than an error.
 
 ### Hyper-SDXL
 
@@ -163,26 +166,26 @@ SDXL reaches photoreal by the **gear-stacking route**: concrete photographic voc
 1. **Use a photoreal finetune, not base.** This is the single biggest lever. **Juggernaut XL** or **RealVisXL** outclass raw base SDXL on skin, light, and anatomy before you change a single prompt word.
 2. **Stack concrete photographic vocabulary.** Earn realism with specifics, not adjectives. Build the prompt from these slots (full vocabulary tables in `references/prompting-guide.md`):
    - **Style tag first:** `candid photo`, `documentary photography`, `glamour photography`, `analog photo`, `polaroid`…
-   - **`detailed skin`** — the highest-value realism keyword on SDXL finetunes (adds pores, texture; kills the plastic look).
+   - **`detailed skin`** — the highest-value realism keyword on SDXL finetunes. It adds pores and texture and kills the plastic look.
    - **Camera body:** `shot on Canon EOS 5D`, `Fujifilm X-T4`, `Hasselblad X1D II`, `ARRI ALEXA 65`, `RED digital cinema`…
    - **Film stock:** `Kodak Portra 400` (flattering skin), `Cinestill 800T` (halation), `Ektar 100` (saturated), `Tri-X 400` (B&W), `Fujicolor Pro`…
-   - **Lighting:** name source + quality + direction — `soft window light from camera-left`, `golden hour rim light`, `harsh direct flash`, `chiaroscuro single source`.
+   - **Lighting:** name the source, quality, and direction — `soft window light from camera-left`, `golden hour rim light`, `harsh direct flash`, `chiaroscuro single source`.
    - **One imperfection / texture anchor:** `film grain`, `slight vignette`, `subsurface scattering`, `visible skin pores`.
 
-   Keep effect/style weights modest (`(detailed skin:1.2)`, not `:1.6`). `8k`, `masterpiece`, `realistic` do almost nothing. Drop them for the concrete terms above.
+   Keep effect/style weights modest (`(detailed skin:1.2)`, not `:1.6`). `8k`, `masterpiece`, and `realistic` do almost nothing. Drop them for the concrete terms above.
 
-SDXL's strengths are **ecosystem depth (LoRAs, ControlNet, IP-Adapter), speed, low-VRAM accessibility, artistic/anime range, and photoreal-via-finetune** — plus clean commercial licensing on base. Its weaknesses are **in-image text (it basically can't render legible words), complex/compositional prompts (77-token CLIP, no LLM encoder), and hands/anatomy**. Use SDXL when you want control tooling, a specific finetune/LoRA look, fast iteration, or to run on a small GPU. When SDXL's CLIP limitations are the bottleneck — reliable text, compositional prompts, natural-language description — you need a model with an LLM text encoder instead.
+SDXL's strengths are **ecosystem depth (LoRAs, ControlNet, IP-Adapter), speed, low-VRAM accessibility, artistic/anime range, and photoreal-via-finetune**, plus clean commercial licensing on base. Its weaknesses are **in-image text (it basically can't render legible words), complex/compositional prompts (77-token CLIP, no LLM encoder), and hands/anatomy**. Use SDXL when you want control tooling, a specific finetune/LoRA look, fast iteration, or to run on a small GPU. When SDXL's CLIP limitations are the bottleneck — reliable text, compositional prompts, natural-language description — you need a model with an LLM text encoder instead.
 
 ---
 
 ## Production pipelines & mixing models
 
-For production output, SDXL runs the **full multi-stage ladder**. It's the family with the most rungs worth climbing. The denoise bands below are convergent community settings rather than official ones `[community — Civitai workflow authors]`:
+For production output, SDXL runs the **full multi-stage ladder**. It is the family with the most rungs worth climbing. The denoise bands below are convergent community settings rather than official ones `[community — Civitai workflow authors]`:
 
 1. **Base gen** in a 1024-area bucket (finetune + optional speed LoRA). Judge composition only; reroll freely.
 2. **Hires second pass** — latent ×1.5 at denoise 0.3–0.5, or pixel-space upscale + re-sample at 0.25–0.35.
 3. **Detailers** — FaceDetailer/ADetailer at denoise ~0.4. Swap the character LoRA in *here* rather than loading it in the base pass `[community — MyAIForce; strong]` (`references/characters.md §3`).
-4. **Tiled upscale** — `UltimateSDUpscale` with a 4× ESRGAN model, denoise 0.2–0.35, simpler prompt than the base gen.
+4. **Tiled upscale** — `UltimateSDUpscale` with a 4× ESRGAN model, denoise 0.2–0.35, and a simpler prompt than the base gen.
 5. **Finish** — ColorMatch against the pre-upscale image; optional SeedVR2-class restorer.
 
 Per-stage settings: `references/setup-and-workflows.md §6`.
@@ -261,13 +264,13 @@ Before hitting Queue Prompt:
 | **LCM-LoRA** | OpenRAIL/permissive | ✅ Generally yes |
 | **SDXL Turbo** | **contested** — see below `[contested]` | ⚠️ Verify |
 
-**OpenRAIL++-M** permits royalty-free commercial use, and you own your outputs. But it is a *responsible-AI* licence, not OSI-open. It carries **use-restrictions** (no illegal use, CSAM, harassment, disinformation, unlicensed medico-legal advice, etc.) that you must **pass downstream** when you redistribute the model or derivatives.
+**OpenRAIL++-M** permits royalty-free commercial use, and you own your outputs. But it is a *responsible-AI* licence, not OSI-open. It carries **use-restrictions** (no illegal use, CSAM, harassment, disinformation, unlicensed medico-legal advice, etc.), and you must **pass them downstream** when you redistribute the model or derivatives.
 
 **Turbo's licence is genuinely contested — don't state a flat verdict.** The current `LICENSE.md` in `stabilityai/sdxl-turbo` is the **Stability AI Community License** (updated 5 July 2024), which **permits free commercial use for entities under US $1M annual revenue** (paid membership above that). *But* the same repo's metadata tag still reads `sai-nc-community`, and the model-card prose still says "non-commercial / research." The actual LICENSE.md governs. Still, **anyone relying on commercial Turbo use should confirm with Stability directly** rather than trust one field.
 
 **Architectural limitations** (primary, from the encoder design): the **77-token CLIP window** and the absence of an LLM/T5 encoder cap compositional and long-prompt comprehension. There is **no reliable in-image text**, and hands/anatomy need negatives, inpainting, or ControlNet. Don't import **SD1.5 negative-embedding** crutches (`UnrealisticDream`, etc.) — they don't load on SDXL.
 
-**Release & stability:** SDXL 1.0 shipped 26 July 2023. By image-model standards it is **old and stable**, so the core facts here move slowly. The **fast-moving parts** are the community layer: finetune versions (Juggernaut/RealVis release new versions regularly), the fast-variant LoRAs, and Turbo's licence status. Re-verify those before relying on them.
+**Release & stability:** SDXL 1.0 shipped 26 July 2023. By image-model standards it is **old and stable**, so the core facts here move slowly. The **fast-moving parts** are the community layer: finetune versions (Juggernaut and RealVis release new versions regularly), the fast-variant LoRAs, and Turbo's licence status. Re-verify those before relying on them.
 
 ---
 
@@ -275,15 +278,15 @@ Before hitting Queue Prompt:
 
 This skill holds two kinds of claim to two different standards, because they fail in two different ways.
 
-**Hard facts — must be exact or it breaks.** This covers the architecture (2.6B UNet, dual CLIP-L + OpenCLIP-bigG, 2048-dim concat, micro-conditioning), the ~6.6B ensemble figure, native 1024² and the resolution buckets, node names (`CLIPTextEncodeSDXL`, `CLIPTextEncodeSDXLRefiner`, `LoraLoader`), the stock node settings (1024², 25 steps, CFG 8, euler/normal, the 0.8 base/refiner split), the diffusers pipeline classes and ensemble code, the distillation methods, the OpenRAIL++-M / Lightning licence terms, and the fp16-VAE overflow. **Source of truth is official** — the SDXL paper (arXiv 2307.01952), the Stability + ByteDance HF model cards, the licence files, the official ComfyUI templates — and these claims are verified there. A wrong node name won't wire. A misread licence is a legal problem. SDXL is old, so these facts move slowly — but Turbo's licence (above) is the exception `[contested]`. Re-verify before relying on them, regardless of who said it.
+**Hard facts — must be exact or it breaks.** This covers the architecture (2.6B UNet, dual CLIP-L + OpenCLIP-bigG, 2048-dim concat, micro-conditioning), the ~6.6B ensemble figure, native 1024² and the resolution buckets, the node names (`CLIPTextEncodeSDXL`, `CLIPTextEncodeSDXLRefiner`, `LoraLoader`), the stock node settings (1024², 25 steps, CFG 8, euler/normal, the 0.8 base/refiner split), the diffusers pipeline classes and ensemble code, the distillation methods, the OpenRAIL++-M / Lightning licence terms, and the fp16-VAE overflow. **The source of truth is official** — the SDXL paper (arXiv 2307.01952), the Stability + ByteDance HF model cards, the licence files, and the official ComfyUI templates — and these claims are verified there. A wrong node name won't wire. A misread licence is a legal problem. SDXL is old, so these facts move slowly, but Turbo's licence (above) is the exception `[contested]`. Re-verify before relying on them, regardless of who said it.
 
-**Craft — what actually makes a good image.** This covers which finetune to start from and at what version (Juggernaut, RealVisXL, DreamShaper, Pony V6, Illustrious/NoobAI), the Pony/Illustrious prompt dialects (score tags, booru ordering), the photoreal camera/film/lens/lighting vocabulary, LoRA weights and how the fast-variant LoRAs stack onto finetunes, VRAM thresholds, and GGUF (un)suitability. **The authoritative source here is the community** — the finetune authors, Civitai model pages, and practitioners who've run these checkpoints for years (neonkisu, QuantumBogoSort, MyAIForce, WeirdWonderfulAI, Khanykov01, Ainara and L3n4 are the most-cited across this skill's references). It is *not* the base model card, which describes the undertrained base SDXL nobody ships for real work. This is the deep, battle-tested layer, stated with confidence. Where it's a range or "verify the current version," that's because the community layer moves (new finetune versions land monthly), not because it's unreliable. One calibration note: the photoreal *vocabulary* is CLIP-understood, but the SD1.5-era **weight values** from older guides don't transfer — those were dropped.
+**Craft — what actually makes a good image.** This covers which finetune to start from and at what version (Juggernaut, RealVisXL, DreamShaper, Pony V6, Illustrious/NoobAI), the Pony/Illustrious prompt dialects (score tags, booru ordering), the photoreal camera/film/lens/lighting vocabulary, LoRA weights and how the fast-variant LoRAs stack onto finetunes, VRAM thresholds, and GGUF (un)suitability. **The authoritative source here is the community**: the finetune authors, the Civitai model pages, and practitioners who have run these checkpoints for years (neonkisu, QuantumBogoSort, MyAIForce, WeirdWonderfulAI, Khanykov01, Ainara and L3n4 are the most-cited across this skill's references). It is *not* the base model card, which describes the undertrained base SDXL that nobody ships for real work. This is the deep, battle-tested layer, and it is stated with confidence. Where a claim is a range or says "verify the current version," that is because the community layer moves (new finetune versions land monthly), not because it is unreliable. One calibration note: the photoreal *vocabulary* is CLIP-understood, but the SD1.5-era **weight values** from older guides don't transfer — those were dropped.
 
-**Contested / unresolved points.** Four, and they are all in the community bar:
+**Contested / unresolved points.** There are four, and they are all in the community bar:
 
 - **Turbo's licence.** The `stabilityai/sdxl-turbo` repo's `LICENSE.md` permits free commercial use below US $1M revenue, while the same repo's metadata tag and model-card prose still read non-commercial. The licence file governs, but the contradiction is unresolved on Stability's side. So commercial Turbo is unsettled, not merely undocumented `[contested]`.
 - **Character-LoRA rank.** The classic 8–16 ladder and the 48/48 default (48–64 when a LoRA "forgets" below weight 0.5) `[community — neonkisu, QuantumBogoSort]` are both defensible. This skill deliberately does not average them. The choice turns on whether you need a well-behaved stacking citizen or maximum identity retention at reduced weight `[contested]`. Both positions, with sources: `references/lora-training.md §3`.
-- **Anima against SDXL's anime finetunes.** It is growing fast, and named trainers call it "the new Illustrious." But its LoRA pool is young and quality varies widely, and the weights-side licence restriction caps who can build a *product* on it. Whether it displaces Pony/Illustrious/NoobAI is genuinely open `[flagged — re-verify]`. See [`anima`](../anima/) and `references/lora-training.md §1`.
+- **Anima against SDXL's anime finetunes.** It is growing fast, and named trainers call it "the new Illustrious." But its LoRA pool is young, its quality varies widely, and the weights-side licence restriction caps who can build a *product* on it. Whether it displaces Pony/Illustrious/NoobAI is genuinely open `[flagged — re-verify]`. See [`anima`](../anima/) and `references/lora-training.md §1`.
 - **Which finetune currently leads.** Juggernaut, RealVisXL, Pony, Illustrious and NoobAI ship new versions faster than this skill is re-checked. The picks named here are stable *families*, not current-version verdicts. Treat any version number in this skill as an example, not a recommendation `[flagged — re-verify]`.
 
 **Facts dated 2026-08-22.** The architecture, node names, template settings and diffusers classes above have not moved since 2023, and are unlikely to. Everything that moves is in the community bar: finetune version numbers first, then Turbo's licence status, then Anima's trajectory as an Illustrious challenger. Re-verify those three before relying on them.

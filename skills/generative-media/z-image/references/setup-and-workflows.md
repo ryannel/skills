@@ -1,6 +1,6 @@
 # Z-Image Setup & Multi-Stage Workflows
 
-This file shows you how to build layered rendering pipelines for production-quality results. You generate small, refine, then upscale in passes, using **ZIB for structure and ZIT for detail** (there is also a reverse ladder for when you want it the other way round). It also covers everything that hangs off the graph: node settings, **using and stacking LoRAs**, ControlNet, identity methods, and handoffs to other model families. Two things live elsewhere: the one-time install and file layout is in `SKILL.md § Setup & ecosystem` (you only read that once), and **making** a LoRA rather than loading one is in `references/lora-training.md`.
+This file shows you how to build layered rendering pipelines for production-quality results. The core pattern is to generate small, refine, and then upscale in passes, using **ZIB for structure and ZIT for detail**. There is also a reverse ladder for when you want it the other way round. The file also covers everything that hangs off the graph: node settings, **using and stacking LoRAs**, ControlNet, identity methods, and handoffs to other model families. Two things live elsewhere. The one-time install and file layout is in `SKILL.md § Setup & ecosystem`, which you only read once. **Making** a LoRA rather than loading one is in `references/lora-training.md`.
 
 The settings here come from two sources. They are labelled because you cannot swap one for the other:
 - **Official** — the stock ComfyUI Z-Image-Turbo template (`Comfy-Org/workflow_templates`).
@@ -56,9 +56,9 @@ Each stage takes the previous stage's output and improves one thing. Skip any op
 | 7 | **Skin contrast** *(opt)* | — | Add skin micro-texture for realism |
 | 8 | **SeedVR2** *(opt)* | SeedVR2 | Heavy final upscale (high VRAM) |
 
-**Two-pass discipline** (the reason this beats one big render):
-- **1st gen — judge composition only.** Reroll the seed until the layout and pose are right. Minor defects are fine; they get fixed downstream.
-- **2nd gen — judge the fine details.** Fingers/toes, facial expression, rendered text, small artefacts.
+**Two-pass discipline.** This is the reason the layered build beats one big render:
+- **1st gen — judge composition only.** Reroll the seed until the layout and pose are right. Minor defects are fine, because they get fixed downstream.
+- **2nd gen — judge the fine details.** Look at fingers and toes, facial expression, rendered text, and small artefacts.
 
 Preview after stage 1, and again after stage 3, *before* you commit to the expensive upscale stages.
 
@@ -76,19 +76,19 @@ Verified from a representative community ZIB+ZIT graph. CFG values are **ComfyUI
 | Face detailer (ZIT) | `dpmpp_2m_sde` / `sgm_uniform` | 4 | 1.0 | **0.42** | zeroed | yolov8m bbox + SAM |
 | Manual inpaint (ZIT) | `dpmpp_2m_sde` / `sgm_uniform` | 4 | 1.0 | **0.39** | zeroed | mask → SEGS, dilate ~8 px |
 
-**Detailer/refine denoise rule:** raise denoise up to ~**0.54** for more prompt- and LoRA-adherence; lower it to preserve the original. Keep the **tiled upscale denoise low (~0.2–0.25)** — high denoise there invents new content per tile.
+**Detailer/refine denoise rule:** raise denoise up to ~**0.54** for more prompt- and LoRA-adherence; lower it to preserve the original. Keep the **tiled upscale denoise low (~0.2–0.25)**, because high denoise there invents new content per tile.
 
 > Some community graphs handle the 1st-gen → 2nd-gen handoff with `return_with_leftover_noise` + `add_noise` across mismatched step schedules. That is one author's hires-fix trick, not a canonical requirement. A clean "decode → latent-upscale → re-noise → refine" chain works fine.
 
 ### The reverse ladder: ZIT draft → ZIB finish (Z-Image-SPECIFIC)
 
-The ladder above runs base-first because the expensive high-resolution passes are exactly where you want the *cheap* model. Running it the other way round is also a live pattern: draft in **ZIT**, then push the keepers back through **Z-Image base** as the refinement pass. One low-VRAM report does this with the **ComfyUI Z-Image upscaling node template** — in practice, pointing the template's Load Diffusion Model node at the base DiT instead of the Turbo one. It describes the result as more detail and more realism `[community — Royal_Carpenter_1338]`.
+The ladder above runs base-first because the expensive high-resolution passes are exactly where you want the *cheap* model. Running it the other way round is also a live pattern: draft in **ZIT**, then push the keepers back through **Z-Image base** as the refinement pass. One low-VRAM report does this with the **ComfyUI Z-Image upscaling node template**. In practice that means pointing the template's Load Diffusion Model node at the base DiT instead of the Turbo one. The report describes the result as more detail and more realism `[community — Royal_Carpenter_1338]`.
 
-The mechanism is the distillation trade run in reverse. Decoupled-DMD buys Turbo its 8 steps by collapsing toward the strongest mode. That is the same property the variant selector credits base with *not* having ("best texture diversity"). The undistilled weights still carry the full training signal, and they sample with real CFG and real negatives. So a **low-denoise** base pass over a Turbo render re-renders skin, fabric and hair micro-texture that Turbo's short trajectory flattened. It leaves the composition Turbo already settled alone — the same bargain §11 strikes when ZIT finishes *another family's* render, only pointed inward.
+The mechanism is the distillation trade run in reverse. Decoupled-DMD buys Turbo its 8 steps by collapsing toward the strongest mode. That is the same property the variant selector credits base with *not* having ("best texture diversity"). The undistilled weights still carry the full training signal, and they sample with real CFG and real negatives. So a **low-denoise** base pass over a Turbo render re-renders the skin, fabric and hair micro-texture that Turbo's short trajectory flattened. It leaves the composition Turbo already settled alone. This is the same bargain §11 strikes when ZIT finishes *another family's* render, only pointed inward.
 
 Here is what it costs, and when that cost is worth paying:
 
-- **Compute, in the place the base-first ladder deliberately avoids.** The base pass runs 25–50 steps against ZIT's 8, and it runs them at or near output resolution. Treat it as a finishing pass on selected frames — the same logic that makes stage 5 above a face crop rather than a full re-render.
+- **Compute, in the place the base-first ladder deliberately avoids.** The base pass runs 25–50 steps against ZIT's 8, and it runs them at or near output resolution. Treat it as a finishing pass on selected frames. That is the same logic that makes stage 5 above a face crop rather than a full re-render.
 - **Negatives come back on.** This is a real-CFG pass, so wire an actual negative prompt into it rather than carrying through the `ConditioningZeroOut` the Turbo stages use (§5). Forgetting is not an error, just a wasted pass.
 - **It is kinder to a small card than it looks.** It is a single img2img pass, not a tiled sweep, so peak VRAM is one latent plus the model. That is how the report above runs it on hardware that could not host the full layered graph. Pair it with the int8 base DiT if the bf16 one will not fit.
 
@@ -116,11 +116,11 @@ Latent upscale node: `LatentUpscaleBy`, method `bislerp`, factor ~1.7. SD upscal
 
 ## 5. Universal node settings
 
-- **ModelSamplingAuraFlow on every model path, `shift = 3`.** Stock — the official template includes it. Apply it to the ZIB path, the ZIT path, and every detailer/upscaler model input.
+- **ModelSamplingAuraFlow on every model path, `shift = 3`.** This is stock; the official template includes it. Apply it to the ZIB path, the ZIT path, and every detailer/upscaler model input.
 - **CLIPLoader type `lumina2`** for `qwen_3_4b.safetensors`. Stock.
-- **CFG = 1.0 is "guidance-off" in ComfyUI.** At cfg 1, the KSampler formula collapses to just the conditional. That is why Turbo runs at **cfg 1.0 in ComfyUI** — the same thing as `guidance_scale = 0` in diffusers. Do **not** type cfg 0.0 into a KSampler: that outputs the unconditional and ignores your prompt. Use cfg 1.0 for every ZIT pass, and cfg 3–5 only for ZIB passes that need true classifier-free guidance.
-- **Negatives:** ZIB passes take a **real negative prompt**; ZIT passes wire the negative through `ConditioningZeroOut` (turbo ignores negatives, so zero them rather than feed text).
-- **Seed:** keep the **same seed across 1st-gen, 2nd-gen, and SD upscale** for consistent results; reset to a fixed value (e.g. 0) once you've found a good composition. Only vary the later-stage seed if a stage needs a localised re-roll.
+- **CFG = 1.0 is "guidance-off" in ComfyUI.** At cfg 1, the KSampler formula collapses to just the conditional. That is why Turbo runs at **cfg 1.0 in ComfyUI**, which is the same thing as `guidance_scale = 0` in diffusers. Do **not** type cfg 0.0 into a KSampler: that outputs the unconditional and ignores your prompt. Use cfg 1.0 for every ZIT pass, and cfg 3–5 only for ZIB passes that need true classifier-free guidance.
+- **Negatives:** ZIB passes take a **real negative prompt**. ZIT passes wire the negative through `ConditioningZeroOut`, because turbo ignores negatives, so you zero them rather than feed text.
+- **Seed:** keep the **same seed across 1st-gen, 2nd-gen, and SD upscale** for consistent results. Reset it to a fixed value (e.g. 0) once you've found a good composition. Only vary the later-stage seed if a stage needs a localised re-roll.
 
 ---
 
@@ -139,11 +139,11 @@ Load Diffusion Model → LoRA loader → ModelSamplingAuraFlow (shift 3) → KSa
 CLIPLoader (qwen_3_4b, "lumina2") ─────────────────────────────────┘
 ```
 
-**Which loader:** the ComfyUI core PR #12717 repro adds the LoRA with the **full `LoraLoader`** (model + clip). **`LoraLoaderModelOnly`** also works and is the clean choice. Z-Image LoRAs target the DiT, and most (Ostris-trained, diffusers-format) carry **no text-encoder weights**, so the Qwen-3/CLIP side is usually a no-op either way. The DiT target is verified `[official — ComfyUI PR #12717]`. Which of the two loader nodes you pick is a usage detail, not a break-or-not fact. Don't agonize over it — if a LoRA *does* ship Qwen-3 keys, use the full `LoraLoader` so they apply.
+**Which loader:** the ComfyUI core PR #12717 repro adds the LoRA with the **full `LoraLoader`** (model + clip). **`LoraLoaderModelOnly`** also works and is the clean choice. Z-Image LoRAs target the DiT, and most (Ostris-trained, diffusers-format) carry **no text-encoder weights**, so the Qwen-3/CLIP side is usually a no-op either way. The DiT target is verified `[official — ComfyUI PR #12717]`. Which of the two loader nodes you pick is a usage detail, not a break-or-not fact. Don't agonize over it. If a LoRA *does* ship Qwen-3 keys, use the full `LoraLoader` so they apply.
 
 ### The gotcha that makes a LoRA silently do almost nothing (Z-Image-SPECIFIC)
 
-Most published Z-Image LoRAs ship in **diffusers format** with separate `to_q` / `to_k` / `to_v` attention keys. But Z-Image stores attention as a single **fused QKV** matrix. On older ComfyUI the loader **silently drops the attention deltas** — you see `lora key not loaded` warnings and the LoRA "barely does anything." The MLP/FFN weights still load, so it's *attention-degraded*, not fully dead. That is exactly why it's easy to misread as "this LoRA is weak, raise the weight."
+Most published Z-Image LoRAs ship in **diffusers format** with separate `to_q` / `to_k` / `to_v` attention keys. But Z-Image stores attention as a single **fused QKV** matrix. On older ComfyUI the loader **silently drops the attention deltas**: you see `lora key not loaded` warnings and the LoRA "barely does anything." The MLP/FFN weights still load, so the LoRA is *attention-degraded*, not fully dead. That is exactly why it's easy to misread as "this LoRA is weak, raise the weight."
 
 **Fixed in ComfyUI core PR #12717.** So when a LoRA underperforms, **update ComfyUI first**, before touching weights. (Primary: ComfyUI PR #12717 "fix: Z-Image LoRA and model loading for HuggingFace format weights"; issue #10973. A third-party `Comfyui-ZiT-Lora-loader` did conversion before the core fix; on current ComfyUI you shouldn't need it.)
 
@@ -157,31 +157,31 @@ Start **~0.7–0.8** and sweep **0.5–1.2**. Named authors land at very differe
 | **Realism enhancer** | **~0.6–0.7** | potent; start low and raise |
 | **Character / concept** | **~0.7–1.0** | needs more strength to carry identity |
 
-These are **per-LoRA tunings, not a model-wide ceiling.** The old "1.0 overcooks Turbo" framing was overstated. There's no documented hard cap; a saturated result means *that* LoRA is hot, not that 1.0 is illegal. The exact numbers are fast-moving and sources mildly disagree, so treat the table as starting points and prefer the weight printed on the LoRA's own model card `[community — single report; re-verify]`.
+These are **per-LoRA tunings, not a model-wide ceiling.** The old "1.0 overcooks Turbo" framing was overstated. There is no documented hard cap. A saturated result means *that* LoRA is hot, not that 1.0 is illegal. The exact numbers are fast-moving and sources mildly disagree, so treat the table as starting points and prefer the weight printed on the LoRA's own model card `[community — single report; re-verify]`.
 
 ### Stacking multiple LoRAs (general ComfyUI craft — stable across models)
 
-Use the rgthree **Power Lora Loader** node: multiple LoRAs in one node, per-LoRA strength, on/off toggles, "no real limit" (`FlexibleOptionalInputType`). Toggle to **separate model/clip strengths** via the advanced view if needed. On Turbo, **keep combined strength near or under ~1.0** to avoid burning/overexposure. That is a conservative heuristic; with normalization you can go higher. A Z-Image-specific LoRA-merger node (`ComfyUI-ZImage-LoRA-Merger`) exists precisely because chained strengths accumulate on distilled models. Ordering has minor effects `[community — rgthree README]`.
+Use the rgthree **Power Lora Loader** node. It takes multiple LoRAs in one node, with per-LoRA strength, on/off toggles, and "no real limit" (`FlexibleOptionalInputType`). Toggle to **separate model/clip strengths** via the advanced view if needed. On Turbo, **keep combined strength near or under ~1.0** to avoid burning/overexposure. That is a conservative heuristic; with normalization you can go higher. A Z-Image-specific LoRA-merger node (`ComfyUI-ZImage-LoRA-Merger`) exists precisely because chained strengths accumulate on distilled models. Ordering has minor effects `[community — rgthree README]`.
 
 ### ZIB ↔ ZIT cross-compatibility: loads fine, doesn't transfer cleanly (Z-Image-SPECIFIC)
 
-Base and Turbo share the **identical S3-DiT**, so any LoRA **loads on either without a format error.** But "loads" does not mean "transfers": a **Base-trained LoRA run on Turbo** shows **softer identity, dropped face consistency, shifted color/background**, and may need a strength bump.
+Base and Turbo share the **identical S3-DiT**, so any LoRA **loads on either without a format error.** But "loads" does not mean "transfers." A **Base-trained LoRA run on Turbo** shows **softer identity, dropped face consistency, shifted color/background**, and may need a strength bump.
 
-**Community best practice (incl. the official Tongyi-MAI HF discussion #18): train on Z-Image Base, generate on Z-Image-Turbo.** Base is the better base for cross-prompt control. Train *on* Turbo only if you specifically want fast-delivery behavior. The exact magnitude of Base→Turbo degradation is **genuinely contested** `[contested]` across sources — reports range from "~100% similarity" to "little impact" `[community — Tongyi-MAI #18, RunComfy, lilting.ch]`. So **test it, don't assume.**
+**Community best practice (incl. the official Tongyi-MAI HF discussion #18): train on Z-Image Base, generate on Z-Image-Turbo.** Base is the better base for cross-prompt control. Train *on* Turbo only if you specifically want fast-delivery behavior. The exact magnitude of Base→Turbo degradation is **genuinely contested** `[contested]` across sources. Reports range from "~100% similarity" to "little impact" `[community — Tongyi-MAI #18, RunComfy, lilting.ch]`. So **test it, don't assume.**
 
 ### "Fights distillation" — why a Turbo-trained LoRA can look blurry (Z-Image-SPECIFIC)
 
-A LoRA trained **directly on Turbo** can disturb Turbo's few-step "landing trajectory." It alters not just the subject/style but how the model converges in 8 steps, producing **blurry output at 8 steps that only cleans up at ~30.** This is the other reason the train-on-Base path is preferred, and why inference-time **DistillPatch** correction LoRAs exist (DiffSynth-Studio `Z-Image-Turbo-DistillPatch`; a Civitai equivalent). If a Turbo LoRA renders soft at 8 steps, suspect this before blaming your prompt `[community — lilting.ch, DiffSynth-Studio]`.
+A LoRA trained **directly on Turbo** can disturb Turbo's few-step "landing trajectory." It alters not just the subject and style but how the model converges in 8 steps, producing **blurry output at 8 steps that only cleans up at ~30.** This is the other reason the train-on-Base path is preferred. It is also why inference-time **DistillPatch** correction LoRAs exist (DiffSynth-Studio `Z-Image-Turbo-DistillPatch`; a Civitai equivalent). If a Turbo LoRA renders soft at 8 steps, suspect this before blaming your prompt `[community — lilting.ch, DiffSynth-Studio]`.
 
 ### Trigger words
 
-Z-Image's encoder is the Qwen-3 LLM, not a CLIP tag-matcher. So a trigger generally works best **folded into natural-language description** rather than dropped as a bare tag. This matches what FLUX.2 trainers report for *its* LLM encoder (Mistral/Qwen3): bare trigger words "confuse the model," and descriptive captions activate a LoRA better. So it's a consistent LLM-encoder pattern, not a Z-Image quirk. Still, follow the LoRA author's stated trigger and include it if they define one. The precise token-weighting behavior isn't formally documented for Z-Image, so treat heavy trigger-engineering as lower-yield than on tag-based SDXL `[community — cross-model pattern; re-verify]`.
+Z-Image's encoder is the Qwen-3 LLM, not a CLIP tag-matcher. So a trigger generally works best **folded into natural-language description** rather than dropped as a bare tag. This matches what FLUX.2 trainers report for *its* LLM encoder (Mistral/Qwen3): bare trigger words "confuse the model," and descriptive captions activate a LoRA better. So it is a consistent LLM-encoder pattern, not a Z-Image quirk. Still, follow the LoRA author's stated trigger and include it if they define one. The precise token-weighting behavior isn't formally documented for Z-Image, so treat heavy trigger-engineering as lower-yield than on tag-based SDXL `[community — cross-model pattern; re-verify]`.
 
 ### Ecosystem (early–mid 2026)
 
-An active Civitai/HF ecosystem tags its uploads **`ZImageTurbo`**: **style** (e.g. "Technically Color Z," trigger `t3chnic4lly`), **realism enhancers** (e.g. "Realistic Snapshot"), and **character/concept** LoRAs. Most are trained with the **Ostris AI-Toolkit**, which ships a dedicated Z-Image-Turbo training adapter. That is why so many ship in diffusers format, tying straight back to the QKV gotcha above. Community "apply any LoRA" ComfyUI workflows exist (Civitai 2194203, Next Diffusion, RunComfy) `[community — Civitai, Ostris HF]`.
+An active Civitai/HF ecosystem tags its uploads **`ZImageTurbo`**: **style** (e.g. "Technically Color Z," trigger `t3chnic4lly`), **realism enhancers** (e.g. "Realistic Snapshot"), and **character/concept** LoRAs. Most are trained with the **Ostris AI-Toolkit**, which ships a dedicated Z-Image-Turbo training adapter. That is why so many ship in diffusers format, which ties straight back to the QKV gotcha above. Community "apply any LoRA" ComfyUI workflows exist (Civitai 2194203, Next Diffusion, RunComfy) `[community — Civitai, Ostris HF]`.
 
-**The published ecosystem is lopsidedly Turbo.** A Civitai census on 2026-08-23 counted **2,191+ LoRAs tagged `ZImageTurbo` against 671 tagged `ZImageBase`** `[community — Civitai census, Aug 2026]` — better than 3 to 1. That is the doctrine above surfacing in the tags, not contradicting it: authors train on base and *deploy* on Turbo. What they tag is the variant they expect you to generate with, so a tag records intended runtime rather than training variant. Two things follow. The cross-compat question above is not an edge case for anyone loading a downloaded LoRA; it is the default case. So read the author's card for what it was trained on before reaching for a strength number. And a card that says only `ZImageTurbo` leaves open whether it was in fact trained there: if it renders soft at 8 steps, the distillation-trajectory failure above is the first suspect, ahead of your prompt.
+**The published ecosystem is lopsidedly Turbo.** A Civitai census on 2026-08-23 counted **2,191+ LoRAs tagged `ZImageTurbo` against 671 tagged `ZImageBase`** `[community — Civitai census, Aug 2026]` — better than 3 to 1. That is the doctrine above surfacing in the tags, not contradicting it: authors train on base and *deploy* on Turbo. What they tag is the variant they expect you to generate with, so a tag records intended runtime rather than training variant. Two things follow. First, the cross-compat question above is not an edge case for anyone loading a downloaded LoRA; it is the default case. So read the author's card for what it was trained on before reaching for a strength number. Second, a card that says only `ZImageTurbo` leaves open whether it was in fact trained there. If it renders soft at 8 steps, the distillation-trajectory failure above is the first suspect, ahead of your prompt.
 
 ---
 
@@ -213,11 +213,11 @@ Loading a character LoRA into the *base* generation often gives mediocre results
 - `4xNomos8k_atd_jpg` — high quality, slower.
 - `4xUltraSharp` — sharper, more aggressive.
 
-**SeedVR2 final upscale** (optional, heavy). A separate diffusion upscaler (`SeedVR2` nodes, e.g. the 7B or 3B GGUF) targeting ~4096 px. The first run downloads large models, so it is not recommended on low-VRAM GPUs. Use 3B if the 7B OOMs.
+**SeedVR2 final upscale** (optional, heavy). This is a separate diffusion upscaler (`SeedVR2` nodes, e.g. the 7B or 3B GGUF) targeting ~4096 px. The first run downloads large models, so it is not recommended on low-VRAM GPUs. Use 3B if the 7B OOMs.
 
 **Tiled-upscale prompt caveat.** When `UltimateSDUpscale` splits the image into tiles, a tile only "sees" its local patch. So a prompt that says "a tattoo reading 'X' below the collarbone" can make the model stamp that text onto unrelated smooth-skin tiles (shoulder, arm, back). If you render localised text or marks, give the upscale pass a **simpler prompt** (or the conditioning switch many graphs expose) so per-tile hallucinations don't reproduce it.
 
-**Color drift across passes.** Every VAE decode/encode round-trip and every re-sample pass shifts color slightly, and the shifts compound through a long pipeline. Fix it once at the end, not per stage. A **ColorMatch node (KJNodes**; `mkl` or `hm-mvgd-hm` method) comparing the final image against the stage-1/stage-3 composition reference pulls the grade back without touching detail `[community]`. The full colour-management treatment is in [`image-production-workflows`](../../image-production-workflows/).
+**Color drift across passes.** Every VAE decode/encode round-trip and every re-sample pass shifts color slightly, and the shifts compound through a long pipeline. Fix it once at the end, not per stage. Use a **ColorMatch node (KJNodes**; `mkl` or `hm-mvgd-hm` method) to compare the final image against the stage-1/stage-3 composition reference. It pulls the grade back without touching detail `[community]`. The full colour-management treatment is in [`image-production-workflows`](../../image-production-workflows/).
 
 ---
 
@@ -265,7 +265,7 @@ For tiled upscaling with ControlNet: `Z-Image-Turbo-Fun-Controlnet-Tile-2.1-8ste
 
 These are standard ComfyUI core nodes added in PR #11062 (ComfyUI v0.3.51+). The `QwenImageDiffsynthControlnet` name is misleading: it handles both Qwen-Image and Z-Image patches.
 
-**Recommended `control_context_scale`:** 0.65–0.80 `[community]` (the parameter on `QwenImageDiffsynthControlnet`) — a community band, not a documented default; the official template ships `strength=1.0` and leaves this alone `[official — Comfy-Org template JSON]`.
+**Recommended `control_context_scale`:** 0.65–0.80 `[community]` (the parameter on `QwenImageDiffsynthControlnet`). This is a community band, not a documented default; the official template ships `strength=1.0` and leaves this alone `[official — Comfy-Org template JSON]`.
 
 ### Conditioning types and preprocessors
 
@@ -291,7 +291,7 @@ Keep all standard Z-Image-Turbo settings. The ControlNet is additive, and it doe
 
 ### Official template
 
-The Comfy-Org template (`image_z_image_turbo_fun_union_controlnet.json`) defaults to Canny edge detection. To use it with pose: swap the `Canny` node for `DWPreprocessor`, connect the skeleton image output to `QwenImageDiffsynthControlnet`'s `image` input. The rest of the graph is unchanged.
+The Comfy-Org template (`image_z_image_turbo_fun_union_controlnet.json`) defaults to Canny edge detection. To use it with pose: swap the `Canny` node for `DWPreprocessor`, then connect the skeleton image output to `QwenImageDiffsynthControlnet`'s `image` input. The rest of the graph is unchanged.
 
 ---
 
@@ -312,7 +312,7 @@ No PuLID or IP-Adapter face implementation exists for Z-Image as of June 2026. T
 
 ## 11. Z-Image in mixed-model pipelines
 
-Z-Image-Turbo has earned a specific role in cross-model production: **the realism refiner for other models' renders.** ZIT is fast (8 steps), guidance-free, and has a strong photographic prior. Because of that, named community workflows compose in another model and finish in ZIT — e.g. Cordina's "ZIT Refiner workflows – SDXL v1" `[community — Cordina, Civitai Jan 2026]`: SDXL base gen → ZIT img2img pass "to add realism" → detailers → upscale.
+Z-Image-Turbo has earned a specific role in cross-model production: **the realism refiner for other models' renders.** ZIT is fast (8 steps), guidance-free, and has a strong photographic prior. Because of that, named community workflows compose in another model and finish in ZIT. An example is Cordina's "ZIT Refiner workflows – SDXL v1" `[community — Cordina, Civitai Jan 2026]`: SDXL base gen → ZIT img2img pass "to add realism" → detailers → upscale.
 
 If you build a handoff yourself, here is the mechanics:
 - **Always decode to pixels between model families.** Z-Image's latent space is not SDXL's or FLUX's: `VAE Decode` (model A) → image → `VAE Encode` (Z-Image's `ae.safetensors`) → ZIT KSampler. Feeding a foreign latent straight in produces garbage.
