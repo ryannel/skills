@@ -105,6 +105,16 @@ What each family actually gives you:
 | [`z-image`](../../z-image/) | **Well supported**, and both censuses agree (46–47% / 45% Turbo). Anatomy-specific LoRAs exist, so the coverage is not incidental | Train on Base, run on Turbo — that skill's rule, unchanged here |
 | [`anima`](../../anima/) | Rising fast, and unusual in that `nsfw` and `explicit` are **trained rating tags** rather than something you fight the model for | Tag the rating; do not reach for a capability LoRA first |
 
+### Two gates before any training run
+
+Whichever base you pick, close these two questions before you train. Both are cheap, and skipping them sends weeks of work at the wrong problem.
+
+**Gate 1 — confirm the anatomy source.** The anatomy comes from the checkpoint installed on your inference stack. A character LoRA is never the anatomy source. If NSFW output is a goal, an adult checkpoint must be installed there before any training run. On Krea 2 that means the NSFW checkpoint over the stock base, per the table above. Probe the inference base at LoRA strength 0 first. If the base cannot render it, the fix is an adult checkpoint, not dataset work.
+
+**Gate 2 — run the base-model control.** Before you attribute any capability failure to your LoRA, run the same probes with the LoRA at strength 0. Four images, and it costs cents. A failure the base shares is the base's failure, and no amount of retraining will move it.
+
+One reading error goes with gate 2. **A nude-probe miss on a safety-tuned stock base measures the base's tuning, not your LoRA.** Run nude probes on the stack you will actually ship with, adult checkpoint included. Anything else tests a configuration you never intended to use.
+
 ### The SDXL finetunes
 
 This is the deepest ecosystem, and it is worth understanding as separate lineages rather than interchangeable options. The descriptions below are convergent community verdicts, not measurements. Nobody has benchmarked these finetunes against each other, and the ranking claims in particular move as new versions land:

@@ -29,6 +29,10 @@ Curate against these, hard `[community — MyAIForce, Civitai guides 5301/6990; 
 
 **Near-duplicates are the most common self-inflicted wound.** Twenty frames pulled from one video clip look like twenty images, but they behave like one image. The model sees a single pose twenty times and collapses onto it.
 
+**Checksum matching only catches byte-identical copies, so do not dedupe with it.** Repair and upscale pipelines rename files and re-encode them, and md5 sees each result as a new image. In one 92-image pool, checksum dedup left roughly 23% duplicates behind `[community — production run, 2026-08]`. Dedupe visually instead: contact sheets to find suspects, then full-size side-by-side pairs to confirm. Perceptual hashes or face embeddings do the same job at scale.
+
+**When an original and its repaired or upscaled copy both survive, judge the pair, not the pipeline.** Face restoration often wins the file-quality battle and loses the likeness one. Waxy skin and smoothed detail read as polish at thumbnail size and as a different person at full size. Keep whichever member of the pair holds the likeness.
+
 ---
 
 ## 2. The coverage protocol
@@ -80,16 +84,18 @@ Settle two things before you train on its output. First, its generation stack is
 
 ### Feeding a new LoRA with an old one's pictures — when it helps, when it wrecks the run
 
-Using your previous version's output to fill a coverage hole is just the factory above pointed at your own back catalogue. It is a fair move: the identity is already locked, you have full provenance, and it is often the only way to get angles a photo set never had. **The question to ask is whether the old LoRA was actually good at the exact thing you are borrowing.**
+Seeding a dataset with a predecessor LoRA's renders is a legitimate and effective gap-filler. It is the factory above pointed at your own back catalogue. The identity is already locked, you have full provenance, and it can supply coverage the real photos never had — in practice it does exactly that.
 
-That question fails more often than it sounds, for an annoying reason. The hole you are filling now is usually the same hole the old model had. The coverage was missing back then too, and that is *why* it never learned those angles. So harvesting its profile and rear views to fix your profile and rear coverage means training the new version on the old version's guesses about the one thing it could not do. The new model treats those angles as fact. It cannot do better than them, and it never shows you the ceiling, because nothing in its data disagrees.
+**The hazard is recursion, not synthesis.** Each generation trained on the previous generation's outputs compounds that generation's errors. Trait drift is the visible form: a slightly wrong freckle pattern in v1's renders becomes v2's fact, and nothing in v2's data disagrees with it. One question to keep asking follows from the same mechanism. Was the old LoRA actually good at the exact thing you are borrowing? The hole you are filling now is often the same hole the old model had, and its guesses about that hole are the weakest thing it makes.
 
-Two rules keep this honest:
+Four rules keep seeding safe:
 
-- **Look at the candidates full size, next to the real references, before you decide.** Not as thumbnails. Model artefacts are invisible at contact-sheet size and permanent once trained: over-baked traits (above), plastic skin, a softness the original photos never had.
-- **If you started over because the old one was not good enough, seeding from it contradicts the reason you started over.** "Fresh start" and "keep the old model's characteristics" are opposite instructions. A fresh line built on the old one's pictures is just the old line again, with extra steps. When the coverage genuinely cannot be got any other way, the honest move is to train without it and write down which prompts failed. That list is the spec for your next dataset, and a gap you documented beats one you invented.
+- **Keep the synthetic fraction around 10% of the set** `[community — ReDiFine; arXiv 2311.12202]`. At that level the real photos still anchor every trait, so drift gets corrected instead of compounded.
+- **Seed for one generation only.** vN's renders may feed vN+1's dataset. Never let vN+1's renders feed vN+2. That chain is the recursion the research warns about.
+- **Source only from renders you judged and kept.** Then look at each candidate full size, next to the real references, before admitting it. Model artefacts are invisible at contact-sheet size and permanent once trained: over-baked traits, plastic skin, a softness the original photos never had.
+- **Caption each render's visible traits.** A caption that names what the render actually shows turns its drift into a variable the training can correct, rather than a fact it reinforces.
 
-Seeding earns its place when the old model was strong where you are borrowing and weak somewhere else. That is a different situation, and it is worth deciding on purpose rather than by whether the pictures happen to be lying around.
+**A previously rejected render carries its rejection reason with it.** Re-admit it only after the full-size side-by-side check, and only if the reason it was rejected is not about to be trained in.
 
 ### The video turnaround — a better factory for rotation specifically
 

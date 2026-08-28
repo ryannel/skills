@@ -159,6 +159,8 @@ non_diegetic_music: N/A
 
 Where exact motion transfer is the point — following the driving movement frame for frame rather than re-generating it — this is the wrong tool. That job belongs to [`scail-2`](../../scail-2/), which tracks the driving footage with SAM3 instead of re-rendering it. SKILL.md's suite table carries the full comparison, including what you give up: H3's audio, which SCAIL-2 neither generates nor consumes.
 
+**The SAM3+Ref2VA workaround, for when SCAIL-2 is not an option.** This is the recipe people report for doing a person swap inside H3 anyway. Isolate the performer from the source clip with SAM3 and composite them onto a neutral grey background. Use that isolated clip as the motion reference. The grey background matters because it stops the original scene from fighting the swap. Supply face and body reference images for identity. Run at 15 steps with no Turbo LoRA. Be clear about what this is: a workaround, not a substitute for tracked replacement. It surfaced late in a live session that had already lost several runs to the naive recipe above, and we have not verified it ourselves. `[community — reddit; re-verify]`
+
 ---
 
 ## 8. Ordering, timing and the shot list

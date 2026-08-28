@@ -23,7 +23,9 @@ A serverless setup has four separate pieces. Most confusion starts when you chan
 
 This separation exists for a reason: **weights are too big to bake into an image**. The image carries code and config, and the volume carries the weights. In practice, adding a LoRA only requires an upload, while adding a custom node requires a rebuild.
 
-**Rollback is a template edit, not a rebuild.** Point the template back at the previous image tag, and the endpoint picks it up. Keep your old tags around, because they are your undo mechanism.
+**Rollback is a template edit, not a rebuild — but a template swap does not drain warm workers.** Point the template back at the previous image tag. Only *new* workers start from that tag. Workers that are already warm keep running the old image until they scale to zero or you terminate them `[community — live deploy 2026-08; re-verify]`. So after any swap, verify the image a worker is actually running, not what the endpoint config says. Keep your old tags around, because they are your undo mechanism. Endpoints themselves cost nothing while idle, so one endpoint per deployable unit beats mutating a shared one.
+
+**Building a current worker image.** RunPod's published worker-comfyui base images lag new model releases, so a recent model usually needs a rebuild from source `[community — live deploy 2026-08; re-verify]`. Build with `--target base`. The default downloader stage silently bakes a ~17 GB FLUX checkpoint into the image `[community — live deploy 2026-08; re-verify]`. Two API gotchas sit next to this. The REST API silently drops `gpuTypeIds` it does not recognise, so read the endpoint back and check what it actually got `[community — live deploy 2026-08; re-verify]`. And set `minCudaVersion` to match the CUDA build your image's torch was compiled against, or workers land on hosts that cannot run it.
 
 **Mount root.** Serverless mounts the volume at `/runpod-volume/` by default, though an endpoint can be configured to mount elsewhere. Either way, the image's `extra_model_paths.yaml` should declare **both** roots so that the same image works in both contexts. See `volume-and-models.md` §1.
 
@@ -98,5 +100,7 @@ Workers bill **per second while running**. Once workers spin down, idle capacity
 | `LoadImage` file not found | Base64 filename ≠ what the node references | Align the encoded name with the graph |
 | Garbage base64, all jobs fail | Source images are Git LFS pointer stubs, not real files | `git lfs pull` before encoding |
 | Workers never warm | Max workers at zero, or no GPU free in the volume's DC | Check endpoint config; consider another DC when placing the volume |
+| Probes still hit the old image after a template swap | Warm pool is pinned to the old image; the account worker quota may also be fully claimed by another endpoint | Terminate the warm workers, or create a fresh endpoint `[community — live deploy 2026-08; re-verify]` |
+| Workers sit "throttled" | Account-wide worker quota exhausted — not GPU scarcity | Check quota across all endpoints before hunting for capacity `[community — live deploy 2026-08; re-verify]` |
 | First job slow, rest fast | Normal cold start — model loading | Raise idle timeout; enable FlashBoot; batch work |
 | Output missing a modality (e.g. silent video) | A post stage or muxing step dropped it, or a decode branch isn't wired | Verify each output branch explicitly — see the smoke test in SKILL.md |

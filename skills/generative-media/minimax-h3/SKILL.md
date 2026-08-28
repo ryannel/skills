@@ -87,6 +87,8 @@ H3 ships as **two task-specific checkpoints**, both BF16, each bundling its own 
 | **Ref2VA** | `ref2va` (omni-reference) | You need to carry a specific face, clip or **voice** into the output rather than describe it | ≤ 9 images, ≤ 3 video clips (2–15 s each), ≤ 3 audio clips (2–15 s each), **≤ 12 files total**, total ≤ 15 s | `MiniMaxH3ReferenceToVideo` |
 | **Hybrid** (FL2VA base + Ref2VA `adaln_proj`, blocks 30–49) | `ref2va` at FL2VA quality | You want references *and* FL2VA's picture and audio. Start here for any Ref2VA work you care about | as Ref2VA | as Ref2VA, plus the hybrid loader — or a pre-baked build |
 
+**One mode is missing from this table on purpose: swapping a person into footage that already exists.** That is tracked person-replacement, and it is [`scail-2`](../scail-2/)'s job — route there first. H3's video-editing mode re-generates the clip rather than tracking it. A live session lost several runs to this: likeness came out weak, a 30 s clip degraded heavily, and one swap followed neither the reference nor the source video. When SCAIL-2 is not an option, use the SAM3+Ref2VA workaround in `references/prompting-guide.md §7`.
+
 **One node covers three modes.** `MiniMaxH3ImageToVideo` is T2V when nothing is connected and FLF2V when you attach frames. There is no separate text-to-video node, which surprises people looking for one.
 
 **Ref2VA is the genuinely unusual capability.** Passing reference *audio* alongside reference images and video is something nothing else in this suite can do. It is how you carry a voice or a musical texture into the output rather than merely describing it.
@@ -322,6 +324,7 @@ Cross-model production craft is in [`image-production-workflows`](../image-produ
 | Clothing or props phase through limbs | Under-described mechanics in a physically fiddly action | Spell out the path in gratuitous detail — unlike Wan, H3 will not trade away other detail to pay for it — and give the action ≥3 s |
 | An undressing or multi-step sequence rushes, skips a garment or teleports one off | The model crams everything asked for into the duration given, and one clause covering three garments reads as one beat | Budget **≥3 s per garment**, name each item in its own clause in order, and lengthen the clip rather than the sentence |
 | Output is softer or more error-prone than other people's at the same settings | Stock scheduler is `simple`; several practitioners report `beta` as a large improvement independent of any speed LoRA | Try `beta` before you change anything else — it costs one widget `[contested]` |
+| Character swap on existing footage drifts from the reference, or ignores the inputs entirely | Wrong tool for tracked replacement — H3 re-generates the clip rather than tracking it | Route to [`scail-2`](../scail-2/), or use the SAM3+Ref2VA recipe in `references/prompting-guide.md §7` |
 | Character sheet's white background bleeds into the shot | Common with hybrid checkpoints fed a sheet on white | Matte the sheet, or state the environment explicitly |
 | Single-frame image edits come out blurry or gridded | Wrong VAE, or more than one frame | `Mamad8/MiniMax-H3-Image-VAE` **and** exactly 1 frame |
 

@@ -4,7 +4,8 @@ description: >
   Train a character LoRA that holds an identity across prompts, poses and models. This is the
   cross-model craft that every model skill in this suite would otherwise have to repeat. Use this
   whenever the user is building, debugging or planning a LoRA, even obliquely: assembling and
-  curating a dataset, deciding how many images to use, captioning (including the character-vs-style
+  curating a dataset — importing an image pool, deduplicating it, or captioning it counts, even
+  when no training run is planned yet — deciding how many images to use, captioning (including the character-vs-style
   inversion that decides what a LoRA actually learns), picking rank/alpha/LR/steps as starting
   points, or **evaluating a finished run** — which checkpoint to ship, how to build and read an
   XY/checkpoint grid, which comparison tool to use, whether a run over- or under-fit, and how to
@@ -195,15 +196,17 @@ Most training checklists start at the config file. This one starts three steps e
 
 1. **Publishable?** If a real person is anywhere near the dataset, settle this now. Civitai bans real-person likeness at every rating, and the TAKE IT DOWN Act is in force (`references/publishing-and-likeness.md`).
 2. **Base chosen for the job, not out of familiarity.** Judge it on the axes that actually differ: adult coverage, multi-character support, and the VRAM floor you can afford.
-3. **Per-model trap read**, from the boundary table above. Wan's two experts, H3's non-pruned checkpoint, Anima's LLM adapter and LTX's licence inheritance each cost a whole run if missed.
-4. **Coverage passes** — 8-point rotation including the rear angles, one elevation above and one below, close-up through full body, neutral plus two expressions, varied lighting and settings.
-5. **Curated hard** — no near-duplicates, no occluded faces, no watermarks, consistent apparent age and build.
-6. **Captions follow caption-the-residual in your encoder's dialect** — booru tags for CLIP-class, prose for LLM/T5-class. Identity absent, every varying element named, and named explicitly where the content is explicit.
-7. **Trigger token matched to the encoder class**: a rare literal token on CLIP-class, folded into a phrase or dropped on LLM-class.
-8. **Checkpoint saving on**, at an interval that gives you a series rather than a verdict.
-9. **Probe prompts written before the run**, saved in the run folder, and carried over from last time so the runs compare. At least one out of distribution.
-10. **Evaluation planned** — which grid tool, how the cells come out **coded instead of labelled**, who makes the likeness pick, and the `FaceEmbedDistance` baseline calibrated now if you plan to use it.
-11. **Budget counted in cells** if renting: checkpoints × strengths × prompts × seeds × seconds per image, worked out *before* rendering starts. Count the **training previews** the same way (`prompts × seconds per preview × steps ÷ sample_every`), because that cost stays invisible until the bill arrives.
+3. **If NSFW output is a goal, the anatomy source is confirmed before any training run.** The anatomy comes from the checkpoint installed on your inference stack. A character LoRA is never the anatomy source. Probe the inference base at LoRA strength 0 first. If the base cannot render it, the fix is an adult checkpoint, not dataset work (`references/nsfw-training.md`).
+4. **The base-model control is part of the plan.** Before you blame any capability failure on the LoRA, run the same probes at LoRA strength 0. Four images, and it costs cents. A failure the base shares is not the LoRA's failure.
+5. **Per-model trap read**, from the boundary table above. Wan's two experts, H3's non-pruned checkpoint, Anima's LLM adapter and LTX's licence inheritance each cost a whole run if missed.
+6. **Coverage passes** — 8-point rotation including the rear angles, one elevation above and one below, close-up through full body, neutral plus two expressions, varied lighting and settings.
+7. **Curated hard** — no near-duplicates, no occluded faces, no watermarks, consistent apparent age and build. Dedupe visually, not by checksum: repaired and upscaled copies re-encode, so md5 never sees them (`references/dataset-and-captioning.md` §1).
+8. **Captions follow caption-the-residual in your encoder's dialect** — booru tags for CLIP-class, prose for LLM/T5-class. Identity absent, every varying element named, and named explicitly where the content is explicit.
+9. **Trigger token matched to the encoder class**: a rare literal token on CLIP-class, folded into a phrase or dropped on LLM-class.
+10. **Checkpoint saving on**, at an interval that gives you a series rather than a verdict.
+11. **Probe prompts written before the run**, saved in the run folder, and carried over from last time so the runs compare. At least one out of distribution, and none that reuses a training caption's phrasing (`references/evaluation-and-tooling.md` §4).
+12. **Evaluation planned** — which grid tool, how the cells come out **coded instead of labelled**, who makes the likeness pick, and the `FaceEmbedDistance` baseline calibrated now if you plan to use it.
+13. **Budget counted in cells** if renting: checkpoints × strengths × prompts × seeds × seconds per image, worked out *before* rendering starts. Count the **training previews** the same way (`prompts × seconds per preview × steps ÷ sample_every`), because that cost stays invisible until the bill arrives.
 
 ---
 

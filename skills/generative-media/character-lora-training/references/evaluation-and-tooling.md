@@ -122,6 +122,13 @@ The two answers usually differ. When they do, the gap between them is your usabl
 
 **Write your test prompts before you look at any results, and reuse the same set across runs.** Prompts you invent while browsing outputs drift toward whatever the LoRA already does well. A fixed set is also the only way run 3 stays comparable to run 1. You cannot recover that comparability later.
 
+**Check every probe against the caption corpus before you trust it.** Grep the probe's phrases against your training captions. A probe that overlaps a training caption measures recall, not capability: the model has seen those words attached to those pixels, so a pass proves memory. One near-verbatim overlap is enough to invalidate every verdict a sweep produced `[community — production run, 2026-08]`. The same rule covers images. Never evaluate on, or judge likeness against, an image that is in the training set.
+
+Two rules for building and running the set:
+
+- **Do not reuse caption-corpus phrasing**, in the starter set below or in anything you add to it. And every capability group you test needs at least one probe that is out of distribution for that group. In-distribution probes alone cannot separate learning from memorisation.
+- **Every generation prompt carries the trigger token, and frozen probes are reused verbatim.** A probe that drops the trigger tests the base model, not the LoRA, and its outputs read as misleadingly weak. Rewording a frozen probe breaks comparability the same way inventing a new one does.
+
 Keep the set in the run folder as a plain file. Here is a workable starter set, grouped by what each group is actually testing:
 
 ```yaml
