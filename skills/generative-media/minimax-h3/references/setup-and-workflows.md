@@ -173,6 +173,7 @@ Ref2VA is visibly worse than FL2VA at identical settings. If you swap the FL2VA 
 
 - Loader node: `github.com/scottmudge/ComfyUI_MinimaxH3HybridLoader` (base = FL2VA, overlay = Ref2VA; use README settings, not node defaults; no memory overhead with mmap on)
 - Baked checkpoints: `smhfacct/Minimax-H3-fl2va-ref2va-hybrid-models`. Try `b30-49` first. `b25-49` is visually equivalent with slightly better reference retention, `b20-49` gives more retention at less quality, and `b15-49` may lose noticeable quality. `[community — ThatsALovelyShirt]`
+- The community default is drifting from `b30-49` toward **blocks 25–49**. dreamkrate ships a BF16-pruned hybrid baked that way. `[community — dreamkrate; re-verify]` A Hybrid-Checkpoint-Builder GUI now exists with 30-49, 25-49, 20-49 and 15-49 presets, so you can bake your own blend instead of waiting for a repack. `[community — BMB12d3; re-verify]`
 
 **Once the hybrid removes the quality objection, the mode choice inverts for most work.** FL2VA's advantage was always picture and audio quality, but its *conditioning* is the more rigid of the two. FL2VA commits a supplied image to a **frame position** and builds the clip to arrive there. Ref2VA takes the same image and pins it to nothing, so it **guides content instead of anchoring the timeline**. The rest of the reference budget stays free for more images, audio or video alongside it. Practitioners doing sustained character work start from hybrid Ref2VA for that reason. `[community — nsfwVariant]` Keep FL2VA for the case where its rigidity is the feature: a continuity seam between two chained clips, where you need the first frame matched rather than interpreted. FL2VA is also the mode the Turbo LoRA was trained against, so the speed recipes are best attested there.
 
@@ -223,12 +224,21 @@ Cross-model production craft is in [`image-production-workflows`](../../image-pr
 
 The tool is `Comfyui-H3--Motion-Context` (Nikodemon), usually run as `ethanfel/ComfyUI-MiniMaxH3-Contex-Loop`. It carries **22 frames of the previous clip** forward as context, plus reference images for identity, and stitches the accepted clips together — **with audio** — at the end. Minute-plus continuous video is routine (~10 min per 15 s clip at 1.5 MP on a 5090). Each accepted clip is checkpointed, so a crash does not cost the run, and each clip can be re-rolled before acceptance.
 
+**Chain through the latent, never through decoded frames.** The naive chain hands each segment the decoded last frame of the previous one. Every seam then pays a pixel round-trip through the VAE, which shifts colour, and the motion resets at the join. On a live 31 s chain built this way, the output darkened and degraded at every seam. Save and load the **latent** instead, through `MiniMaxH3MotionContext` (`context_latent` / `context_frames` / `context_audio`). That removes both the colour shift and the motion reset.
+
+**FL2VA first+last-frame interpolation is the tightest scene control at a seam**, because both endpoints are pinned. It has one trap. When the two endpoint frames show mismatched rooms, the clip visibly morphs between them. Match the environments before you lean on it.
+
 Context chaining changes what you write, not what you set:
 
 - A **global prompt** is prepended to every scene. Put style there, along with the naming convention for each character.
 - **Describe every other character in each scene's prompt**, in detail. That is the anti-bleed measure.
 - **End each scene on a still beat.** The last frame has to connect to the next scene's first frame, and mid-stride does not connect.
 - The tool is also useful in reverse: split one 8 s shot into two 4 s halves to afford more resolution.
+
+Two newer routes reduce the chaining, or skip it entirely:
+
+- The Civitai workflow **"Multishot — chained shots"** (v2.7, 2026-08-27, 17.3k downloads) adds a **per-character voice reference clip** to each shot. That stops dialogue bleeding across speakers in chained scenes, which the describe-every-character rule alone does not fix for voices. `[community — Civitai Multishot v2.7; re-verify]`
+- **Single-pass shot syntax avoids the chain altogether.** ethanfel's Cinematic Multishot Coverage generates 8 angles at 45° increments, 32–85 mm, in one 124-frame pass. No seams means no chain drift. `[community — ethanfel; re-verify]`
 
 ---
 

@@ -194,6 +194,12 @@ There is no way to misread that, so the model usually gets it right.
 
 Two practical notes on applying it. **Describe the path, not the outcome.** "So it slides directly down to the floor over her legs" is a trajectory the model can follow. "The skirt is removed" is a state change the model has to invent a route to. And **pair the description with time**: a mechanical description that does not fit the seconds available gets crammed rather than followed. That is the next subsection.
 
+### Describe the activity, not the geometry
+
+When a prompt states a spatial arrangement directly, the model treats it as a scene to compose, and it composes wrong ones. Describe the action that produces the arrangement instead. An activity implies the geometry, carries an object count, and gives the model a physical route to the pose. A static spatial description does none of those things.
+
+The live example: *"a hoop around her waist, gripping the sides"* drew **two** hoops. *"She has stepped into a single hoop and lifted it to her waist"* fixed it across all seeds. The second phrasing is a short history of how the pose came to be, so there is only one way to stage it.
+
 ### Timestamps
 
 Format is `mm:ss.000`. Two rules:

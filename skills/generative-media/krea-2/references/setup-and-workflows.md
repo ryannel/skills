@@ -150,6 +150,8 @@ The **exposure, temperature, tint, detail/clarity and contrast vectors** have be
 
 ## 7. Multi-stage workflows
 
+**Give any refine pass its own step budget.** A partial-denoise pass only runs the tail of the schedule. At denoise 0.30 on Turbo's stock 8 steps, that tail is about 2 effective steps. Two steps cannot resolve the re-noised image, so the pass produces artifacts. Raise the step count on the refine sampler itself — around 20 steps — so the denoised tail still has enough steps to work with. Do not copy the 2-step finish in §7a as a counter-example: that recipe tunes its finish stage deliberately, and it is not a default for a generic img2img refine.
+
 ### 7a. The two-stage Raw+Turbo-LoRA recipe (the best-documented local workflow)
 
 The author publishes it as "Krea 2 simple gen workflow for high quality realism" with a full write-up, and claims it is "WAY better" for photoreal than stock Turbo `[community — nsfwVariant, Civitai]`.

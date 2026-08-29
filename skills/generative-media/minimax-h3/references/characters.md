@@ -50,7 +50,7 @@ H3's own knowledge can bootstrap the reference set. Feed it up to 9 mediocre ima
 
 `PoopMan333/H3_Character_Sheet_Generator` does exactly this. It combines your description with a fixed "B prompt" that spins the character slowly with no hard cuts, and it outputs a 4- or 6-panel sheet plus the individual frames. The author lists several caveats, and they are the honest part:
 
-- It generates **124 frames to use 6**. The 4-panel variant is ~40% cheaper.
+- It generates many frames to keep a few. The 2026-08-29 update cut the 4-panel turnaround from 124 frames to **73**, roughly 40% faster, running 8 steps with the speed-up stack. `[community — PoopMan333; re-verify]`
 - Turbo LoRAs speed it up, but they **cost prompt adherence**. Reroll rather than fight it.
 - It is a video model making stills, so **resolution limits detail**. Pair the sheet with dedicated close-ups of face and clothing for close shots. For a one-off clip, you may be better off skipping the sheet entirely.
 - The stock B prompt specifies a **neutral A-pose**. Delete that clause for anything else.
@@ -84,6 +84,27 @@ The 15-second ceiling makes any real sequence a multi-shot problem, and identity
 
 ---
 
+## Holding a face without a LoRA — what survived live use
+
+The advice above was tested in anger across live sessions in late August 2026. These findings are first-party, not community reports, and they are the current best practice for this file.
+
+**Framing sets a hard ceiling on likeness.** At 768p, a full-body frame leaves the face too few pixels to carry an identity. No reference set fixes that, however the references are driven. The fix is framing, not more references. Frame thigh-up or closer for any shot where the face must read as the character. When the story needs a wide shot, accept a generic face in it and cut to a closer shot for recognition.
+
+**References help only when they agree with the anchor image.** In an A/B test, a reference that mismatched the start frame made likeness worse, not better. The best neutral face reference is a crop of the start frame itself. The recipe that held: matched references, a pinned anchor frame, and restrained motion.
+
+**For sequences, re-inject identity at every keyframe.** Likeness drift compounds when each clip extends the last. This chain beat it without any H3 LoRA:
+
+1. Take the previous true frame.
+2. Run an H3 micro-jump: a 5-frame clip in the same scene, keeping only the last frame.
+3. Pass that frame through a light img2img identity pass with a character **image** LoRA at denoise ~0.4. Backgrounds survive denoise 0.4–0.55.
+4. Use the result as the next keyframe.
+
+Drift cannot compound, because identity re-enters at every link. The image-side LoRA comes from [`character-lora-training`](../../character-lora-training/).
+
+**A character LoRA does not replace references.** When you have one, use both together. The LoRA anchors the identity. The references stop the model inventing detail the LoRA does not carry.
+
+---
+
 ## What H3 cannot do here — and which sibling does
 
 The gaps are real and this model is new, so here they are, stated plainly:
@@ -107,6 +128,9 @@ For the rest of the table — pose and depth conditioning, explicit camera paths
 | Symptom | Likely cause | Direction of fix |
 |---|---|---|
 | Face inconsistent across shots | Reference set varied between generations | Freeze the reference set; vary only the prompt |
+| Face soft or generic in a full-body shot | Too few face pixels at 768p — a framing ceiling, not a reference problem | Frame thigh-up or closer; cut in for recognition instead of adding references |
+| Likeness got *worse* after adding a reference | The reference disagrees with the anchor image | Use only references that match the anchor; a crop of the start frame is the best neutral face reference |
+| Likeness drifts across a chained sequence | Drift compounds when each clip extends the last | Re-anchor identity at every keyframe — the micro-jump chain above |
 | Voice doesn't resemble the reference | Reference clip too short, noisy, or in a different register | One clean 2–15 s clip in the target register |
 | References seem ignored | Roles not stated; Context-IR would have resolved them, and it is absent locally | Name each reference's job explicitly in the prompt |
 | Identity degrades late in the clip | Conditioning influence decaying over duration — the standard temporal failure | Shorter clips; re-anchor per shot |

@@ -123,6 +123,8 @@ SCAIL-2 has no T2V and no I2V mode, so **a driving video is a hard prerequisite*
 
 **Pose-driven mode changes what the driving video must be.** An SMPL pose render carries the skeleton and nothing else. It carries no clothing, build or lighting from the source performer. Reach for it when the original performer bleeds through, and run it at **704p**.
 
+**The gray-silhouette drive family (mannequin and clay renders) has lived-tested identity moves and hard limits.** The best in-SCAIL identity from a gray drive came from three moves together: no mask grow, a positive prompt that describes the body, and a reference showing a fuller bust than a neutral crop would `[community — media-lab dance-swap sessions, 2026-08-28]`. Two failure shapes are structural rather than tunable. First, a gray drive carries no props, so anything the performer holds or moves through is erased — a hula hoop's physics broke at wide framing. Second, the mapping collapses at close-up: the model rendered a face on a hip. The fixes point the same way. Keep occluding props out of the drive, and avoid close-up crops.
+
 ---
 
 ## 5. Long shots and the production ladder
@@ -188,7 +190,7 @@ The two standing artefacts are the inserted character being **too bright** and *
 
 **On the Relighting LoRA's reputation.** One practitioner tried it and got nothing usable — *"don't take my word on that"* `[community — nsfwVariant; single report]`. Weigh that against the vendor's description, not above it. The LoRA is mode-specific to Replacement, and it needs a format conversion the ComfyUI path does not do for you. A disappointing result is therefore at least as likely to be a setup problem as a capability one.
 
-**Use the speed path to iterate, and the full path to deliver.** Masks, tracker selection and reference framing are what you are actually tuning, and all three are visible at 8 steps. Re-render keepers at 40.
+**Use the speed path to iterate, and the full path to deliver.** Masks, tracker selection and reference framing are what you are actually tuning, and all three are visible at 8 steps. Do not judge identity at 8 steps, though. Lived testing shows the distilled path measurably loses the reference's likeness. A **24-step** run at guidance 5, shift 3, with the DPO and Relighting LoRAs loaded, held identity where 8 steps lost it, and it delivers cheaper than the stock 40 `[community — media-lab dance-swap sessions, 2026-08-28]`.
 
 ---
 

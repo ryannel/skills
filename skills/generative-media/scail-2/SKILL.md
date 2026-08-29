@@ -173,13 +173,17 @@ The default: stock numbers, **raw** driving frames, a coloured driving mask on a
 
 Stock numbers, with an SMPL pose render substituting for the driving frames. The vendor states it **performs better at 704p**, so do not run it at 512p and conclude the mode is worse. Reach for it when the source performer's clothing, build or lighting leaks through, because a pose render carries none of that.
 
+A pose or gray-silhouette render also carries no props. Anything the performer holds or moves through is erased, and a close-up crop can collapse the mapping entirely. Keep occluding props out of the drive and stay at medium framing or wider `[community — media-lab dance-swap sessions, 2026-08-28]`. The lived-tested identity moves for this drive family are in [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §4.
+
 ### Replacement
 
 Stock numbers, but the driving mask flips to a **white** background and `replacement_mode: True` goes on both nodes. Here the prompt earns what little it earns: describe the replacement character's **clothing** and **what they interact with**. Those are the attributes the model has no reference for once the region is masked `[official — wan-scail2 README]`. Load the **Relighting LoRA**, which is specific to this mode.
 
 ### The LightX2V distilled path
 
-8 steps, shift 1, guidance 1.0. Negatives go inert at guidance 1.0, as on any guidance-off path. Use this path to settle masks and reference framing, then re-render keepers at 40 steps.
+8 steps, shift 1, guidance 1.0. Negatives go inert at guidance 1.0, as on any guidance-off path. Use this path to settle masks and reference framing, then re-render keepers on the full path.
+
+**The speed path costs identity, and the cost is measurable.** In lived testing, 8-step distilled renders lost the reference's likeness where a full-guidance run held it. The setup that held identity was **24 steps, guidance 5, shift 3, with the DPO and Relighting LoRAs loaded** — a cheaper delivery point than the stock 40 `[community — media-lab dance-swap sessions, 2026-08-28]`. Iterate at 8 steps, but never judge identity there.
 
 ---
 
@@ -290,6 +294,8 @@ SCAIL-2 is a **middle** stage. It cannot originate a shot and produces no audio,
 | **Wan Animate** ([`wan-2-2`](../wan-2-2/)) | Transferred, with a relight LoRA | Reference-driven | None | Displaced by SCAIL-2 in community practice, even among people who otherwise run Wan end to end `[community — blackmixture]` |
 | **[`minimax-h3`](../minimax-h3/)** video-editing mode | **Re-generated**, not tracked | Prompt-anchored via `retention_analysis` | ✅ native | Approximate motion; a licence excluding US/EU/UK/KR; and an identity latch that gives out somewhere in the **5–7 s** band — two community reports disagree on where and how hard. [`minimax-h3`](../minimax-h3/references/prompting-guide.md) owns that claim and carries both reports plus the reason the 5 s figure may be a harness bug |
 | **Bernini-R** (ByteDance — announced, not covered by this suite) | Reference-guided video editing | Reference image(s) + prompt | None | Far more resource-hungry; outfit swap reportedly works, face swap reportedly does not `[community — single report; re-verify]` |
+
+**One verdict spans every row of this table.** With current open tools, source-exact motion and target-exact identity do not coexist in one pass. Plan a two-stage pipeline — a motion pass first, then an identity pass — rather than hunting for a single-pass setting `[community — media-lab dance-swap sessions, 2026-08-28]`.
 
 **Bernini-R is a sibling in function, not lineage.** It is ByteDance's model, built on Wan **2.2** (*"Wan2.2 base — Wan-AI/Wan2.2-T2V-A14B-Diffusers"*), under Apache 2.0 `[official — ByteDance/Bernini-R model card]`.
 
