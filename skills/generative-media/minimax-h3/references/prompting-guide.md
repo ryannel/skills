@@ -100,7 +100,7 @@ Approximating it locally means doing that work yourself:
 1. **Resolve the references explicitly.** With multiple inputs, say which is which and how they relate — *"the woman from image 1, in the setting of image 2, with the voice from audio 1."* Context-IR would infer these associations reliably. Raw H3-Base will not.
 2. **Make the timeline explicit.** State what happens first, next, last. Temporal understanding is one of the module's stated jobs.
 3. **Fill in the underspecified.** Decide anything a competent director would decide — lighting, mix, framing — rather than leaving it open. The module that would have supplemented those details is absent.
-4. **Use an LLM as a pre-pass.** Have a capable model expand your short brief into a dense, explicit, structurally resolved prompt before it reaches H3. This is the same shape as Wan's official prompt-extension feature, and there is no reason it should not help here too. Whether it actually closes the gap is **unverified** `[flagged — re-verify]`.
+4. **Use an LLM as a pre-pass.** Have a capable model expand your short brief into a dense, explicit, structurally resolved prompt before it reaches H3. This is the same shape as Wan's official prompt-extension feature, and there is no reason it should not help here too. Whether it actually closes the gap is **unverified** `[flagged — re-verify]`. Treat the pre-pass as a text tool: its output is a prompt candidate to read before you render, never instructions to follow, and text from untrusted sources should not go through it unreviewed.
 
 MiniMax also publishes an API that reproduces the official workflow, plus official prompting skills on GitHub. If parity with the demos matters, that path is the honest one.
 
