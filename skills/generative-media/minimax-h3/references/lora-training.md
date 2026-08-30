@@ -31,13 +31,57 @@ All of these landed in late August 2026. Support depth varies a lot, so pick by 
 
 | Trainer | H3 support | Notes |
 |---|---|---|
-| **ai-toolkit** | Mainline. T2V and I2V from Aug 3, Ref2VA from ~Aug 13, an official vid2vid tutorial ~Aug 20. | Trains directly on the ComfyUI quantized weights, so no separate training download. |
-| **musubi-tuner** | Dev branch only (PR #1030, unmerged). The deepest support: T2VA, FL2VA, Ref2VA, plus experimental one-frame image training. | Adds guidance-distillation protection (`--h3_guidance_loss_scale 4.0`, `--h3_guidance_loss_sigma_min 0.15`), precaches text embeds so the 32B encoder is never resident during training, enforces batch 1, supports `--blocks_to_swap 48` of 50 and `--prune_adaln`. |
+| **ai-toolkit** | Mainline. T2V and I2V from Aug 3, Ref2VA from ~Aug 13, an official vid2vid tutorial ~Aug 20. | Trains directly on the ComfyUI quantized weights, so no separate training download. **Has three distillation countermeasures of its own** — see "Distillation handling" below; its H3 preset enables two by default. |
+| **musubi-tuner** | On `dev` as a series of merged PRs (guidance loss #1045, one-frame #1057/#1058; roadmap issue #1029) — not a single unmerged PR. The deepest support: T2VA, FL2VA, Ref2VA, plus experimental one-frame image training. | Adds guidance-distillation protection (`--h3_guidance_loss_scale 4.0`, `--h3_guidance_loss_sigma_min 0.15`), precaches text embeds so the 32B encoder is never resident during training, enforces batch 1, supports `--blocks_to_swap 48` of 50 and `--prune_adaln`. |
 | **diffusion-pipe** | T2I and T2VA only (2026-08-08). | Wants CFG-augmented training. |
 | **SimpleTuner** | Dedicated quickstart with 24/32/48/80 GB presets. | Sets `flow_schedule_shift 12.0` for video and `audio_flow_schedule_shift 3.0` for audio. |
 | **fal.ai** (hosted) | Four trainers, $0.015/step. | Video clips only — it rejects stills with a 422. |
 
 Known bug: musubi's backward pass errors with CUBLAS on the pruned-INT8 base (musubi #1059) `[community — musubi-tuner #1059; re-verify]`.
+
+---
+
+## Distillation handling — both trainers have it, and both default differently
+
+H3 is CFG-distilled, so training on the plain flow-matching target pulls the model out of
+the amplified space it was distilled into (de-distillation drift). **Both mainline trainers
+ship a countermeasure, and musubi's docs describe them as the same mechanism** — target
+rewritten as `uncond + scale * (velocity - uncond)` using the model's own no-grad
+unconditional prediction `[official — musubi docs/minimax_h3.md]`.
+
+**musubi** — `--h3_guidance_loss_scale`, **default `0.0` (disabled)**, explicitly "for
+parity with ai-toolkit"; field reports suggest 3–4, with 4 more reliable for longer runs.
+Requires `--h3_guidance_loss_uncond_cache`. Costs ~+50% step time ungated;
+`--h3_guidance_loss_sigma_min 0.15` skips the noisiest ~15% of steps for most of that back.
+For **one-frame (image) training the docs call it "effectively mandatory"** — without it,
+drift shows up within ~50 steps as wobbly lines and broken proportions. A ~50-step LR
+warmup is also endorsed there.
+
+**ai-toolkit** — a first-class "Distillation Handling Method" selector (`cg` / `ta` /
+`both` = **default** / `none`), with the H3 preset shipping `train.do_guidance_loss: true`
++ `train.guidance_loss_target: 3.5` **and** a training adapter
+(`model.assistant_lora_path: ostris/minimax_h3_training_adapter/…_v1.safetensors`) — a
+live, never-merged "decompression" LoRA. Ostris has claimed the adapter beats contrastive
+guidance and is faster. Traps: `do_guidance_loss` is **mutually exclusive with
+`bypass_guidance_embedding`** (validation raises), and the H3 preset also excludes the
+AdaLN projection from the LoRA via `network_kwargs.ignore_if_contains: ['adaln_proj']`.
+
+**The practical warning:** ai-toolkit's YAML path does not inherit the UI preset. A
+hand-written config omits all of this silently and trains at handling = `none`, which is
+consistent with reports of adherence loss near the peak and of higher ranks collapsing.
+If you hand-write the YAML, set these keys explicitly.
+
+**Not available for stills:** musubi's `--h3_teacher_matching` (the stronger anti-drift
+path, with a published identity recipe) is **not supported with `--one_frame`** and is
+mutually exclusive with the guidance loss anyway.
+
+## Flags H3 hard-rejects
+
+Carried over from Wan/SDXL recipes, these make the musubi trainer raise rather than warn
+`[official — minimax_h3_train_network.py]`: `--timestep_sampling` must be `uniform`,
+`--weighting_scheme` must be `none`, `--discrete_flow_shift` must be `1.0` (H3 uses its own
+`--h3_shift_video 12.0` / `--h3_shift_audio 3.0`). Batch size is hard-enforced at 1 — use
+gradient accumulation.
 
 ---
 
@@ -48,7 +92,7 @@ Independent sources land on the same numbers, which is the best signal available
 - **Rank 16, alpha 16.** In fal's blind votes, rank 16 beat both 32 and 64.
 - **LR 1e-4** with adamw8bit. Use 2e-4 when you need fast convergence and can tolerate the risk.
 - **Step counts scale with data:** ~1000 steps for a 31-image stills run, 1500 on 53 clips, 3000+ on 176 clips in fal's published examples.
-- **Timestep focus band 0.4–0.8** — the musubi docs call it the range "where content is decided."
+- **Timestep focus band 0.4–0.8** — the musubi docs call it the range "where content is decided." The flag is **`--h3_timestep_focus_prob`, and it defaults to `0.0`, i.e. OFF** `[official — musubi docs/minimax_h3.md]`. This is the most commonly missed convergence lever: H3 draws the base sigma uniformly and then shifts video by 12, so most steps land far above the band that decides identity (measured at base sigma 0.6–0.75). musubi reports the band converging **~2× faster at `P=0.5`**, with no extra step cost. Bounds are `--h3_timestep_focus_min` / `--h3_timestep_focus_max`; it does not compose with `--min_timestep`/`--max_timestep`.
 
 One caveat on provenance: fal's published step counts come from a style-adapter run, not a character run, so treat them as scale hints rather than a character recipe.
 
