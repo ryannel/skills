@@ -192,7 +192,7 @@ The full wiring, kohya's architecture description, the split-screen **ReStyler**
 - **Anima → photoreal enhance.** `u/BitterAd8431` lifts Anima stills through **Flux Klein 9B**. [`krea-2`](../krea-2/) and [`z-image`](../z-image/) fill the same refiner slot.
 - **Anima → image-to-video** is its biggest role outside still work. Three practitioners name Anima as the **character-still generator for the suite's video models** and feed it into [`minimax-h3`](../minimax-h3/) `[community — u/irmemon225, u/Ok-Wolverine-5020, u/AzuliarTHP]`. The documented trap: high-res stills lose face quality at the first video frame. `u/WearNatural5992`'s fix is to **feed a 16:9 input with the short side at 768 px, render at the same aspect ratio**, then run FaceDetailer after.
 
-Across every family boundary: **VAE-decode to pixels.** Anima's Qwen-Image latents are not interchangeable with SDXL's or Flux's. Cross-model craft lives in [`image-production-workflows`](../image-production-workflows/).
+Across every family boundary: **VAE-decode to pixels.** Anima's [Qwen-Image](../qwen-image/) latents are not interchangeable with SDXL's or Flux's. Cross-model craft lives in [`image-production-workflows`](../image-production-workflows/).
 
 ---
 

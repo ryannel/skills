@@ -27,7 +27,7 @@ A Base-trained LoRA still **loads** on Turbo without error, because both variant
 
 ## 2. Dataset generation, the Z-Image way
 
-> The coverage protocol itself — how many images, which angles, how to caption them — is model-agnostic craft and lives in [`character-lora-training/references/dataset-and-captioning.md`](../../character-lora-training/references/dataset-and-captioning.md). The full character orchestration for Z-Image specifically — the Qwen-Image-Edit dataset factory, multi-outfit and multi-character craft, character failure modes — is in **`references/characters.md`**. This section only covers what changes *because it is Z-Image*.
+> The coverage protocol itself — how many images, which angles, how to caption them — is model-agnostic craft and lives in [`character-lora-training/references/dataset-and-captioning.md`](../../character-lora-training/references/dataset-and-captioning.md). The full character orchestration for Z-Image specifically — the [Qwen-Image-Edit](../../qwen-image/) dataset factory, multi-outfit and multi-character craft, character failure modes — is in **`references/characters.md`**. This section only covers what changes *because it is Z-Image*.
 
 Three things about building the set are specific to Z-Image:
 

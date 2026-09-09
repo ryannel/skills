@@ -182,7 +182,7 @@ Anima's ladder is **shorter than SDXL's on purpose**. Native 1536² removes the 
 
 ## 10. Mixed-model handoffs, including still-to-video
 
-The hard rule across every family boundary: **VAE-decode to pixels before handing off.** Anima's Qwen-Image latents are not interchangeable with SDXL's or Flux's. Passing latents across produces colour-shifted mush. Cross-model craft lives in [`image-production-workflows`](../../image-production-workflows/).
+The hard rule across every family boundary: **VAE-decode to pixels before handing off.** Anima's [Qwen-Image](../../qwen-image/) latents are not interchangeable with SDXL's or Flux's. Passing latents across produces colour-shifted mush. Cross-model craft lives in [`image-production-workflows`](../../image-production-workflows/).
 
 **Illustrious front-end → Anima refine.** Compose with an SDXL-anime checkpoint for its ControlNet/regional stack, decode, img2img through Anima at **low denoise**, then FaceDetailer `[community — u/Alekite]`. Watch VRAM on AMD (§5).
 

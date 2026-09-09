@@ -272,7 +272,7 @@ For tiled upscaling with ControlNet: `Z-Image-Turbo-Fun-Controlnet-Tile-2.1-8ste
 | `ModelPatchLoader` | Loads `.safetensors` from `models/model_patches/` |
 | `QwenImageDiffsynthControlnet` | Applies the patch to the model; key inputs: `model`, `model_patch`, `vae`, `image` (preprocessed), `strength` (default 1.0), optional `mask` |
 
-These are standard ComfyUI core nodes added in PR #11062 (ComfyUI v0.3.51+). The `QwenImageDiffsynthControlnet` name is misleading: it handles both Qwen-Image and Z-Image patches.
+These are standard ComfyUI core nodes added in PR #11062 (ComfyUI v0.3.51+). The `QwenImageDiffsynthControlnet` name is misleading: it handles both [Qwen-Image](../../qwen-image/) and Z-Image patches.
 
 **Recommended `control_context_scale`:** 0.65–0.80 `[community]` (the parameter on `QwenImageDiffsynthControlnet`). This is a community band, not a documented default; the official template ships `strength=1.0` and leaves this alone `[official — Comfy-Org template JSON]`.
 

@@ -52,7 +52,7 @@ This is [the one rule](../SKILL.md#the-one-rule-that-changes-everything) turned 
 
 1. **Pick your driving clip and trim it first.** Trim before you extract, so "frame 0" is the frame the model will actually start from. If you re-trim afterwards, the whole reference is invalidated.
 2. **Extract frame 0** as a still, at the clip's native resolution.
-3. **Edit the new character into that frame** with an image-edit model. Use [`krea-2`](../../krea-2/)'s Identity Edit LoRA, Flux 2 Klein 9B, or Qwen-Image-Edit, running image-to-image on the extracted still `[community — blackmixture, DeerWoodStudios]`.
+3. **Edit the new character into that frame** with an image-edit model. Use [`krea-2`](../../krea-2/)'s Identity Edit LoRA, Flux 2 Klein 9B, or [Qwen-Image-Edit](../../qwen-image/), running image-to-image on the extracted still `[community — blackmixture, DeerWoodStudios]`.
 4. **Keep the edit prompt blunt.** The flagship demonstration used literally *"make the man a blonde woman"*. Long descriptive edit prompts push the edit model into re-composing the frame, and that destroys the pose and framing match you are doing this for. Change one attribute per pass, and iterate if you need several changes.
 5. **Check the edit preserved pose, scale, screen position and lighting.** If the character moved, shrank, or got re-lit, the edit failed at its actual job, even if the face looks good. Re-roll.
 6. **Generate the reference mask** by running the edited still through a **SAM3 image track** into `SCAIL2ColoredMask`'s `ref_track_data` input. This is the same node that builds your driving mask, so both share one identity palette. Its background is always black, regardless of mode.

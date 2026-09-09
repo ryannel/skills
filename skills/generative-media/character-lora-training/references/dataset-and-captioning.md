@@ -187,7 +187,7 @@ And one false positive: on Krea 2, **Raw previews look plastic by design**. Raw 
 
 ### Multi-resolution buckets
 
-Multi-resolution training is mainstream on most DiTs: ai-toolkit ships `resolution: [512, 768, 1024]` for Flux and Qwen-Image `[official — ai-toolkit example configs]`, and BFL says start at 512 for iteration, finish at 1024 or higher `[official — docs.bfl.ml]`. On Krea 2 it is contested, and [`krea-2/references/lora-training.md`](../../krea-2/references/lora-training.md) §2c carries the flag. Two community sources bucket 512+768+1024; this suite's krea-2 skill argues 768 was never a trained stage; the lab's nine-run recipe used `[1024]` only. The "768-only" tooling default is a memory lever, not a quality claim. The argument is in [`krea-2/references/lora-training.md`](../../krea-2/references/lora-training.md) §2c.
+Multi-resolution training is mainstream on most DiTs: ai-toolkit ships `resolution: [512, 768, 1024]` for Flux and [Qwen-Image](../../qwen-image/) `[official — ai-toolkit example configs]`, and BFL says start at 512 for iteration, finish at 1024 or higher `[official — docs.bfl.ml]`. On Krea 2 it is contested, and [`krea-2/references/lora-training.md`](../../krea-2/references/lora-training.md) §2c carries the flag. Two community sources bucket 512+768+1024; this suite's krea-2 skill argues 768 was never a trained stage; the lab's nine-run recipe used `[1024]` only. The "768-only" tooling default is a memory lever, not a quality claim. The argument is in [`krea-2/references/lora-training.md`](../../krea-2/references/lora-training.md) §2c.
 
 ### The wrong turn, named
 

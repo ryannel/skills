@@ -57,6 +57,10 @@ scope.
 | **SDXL photoreal finetune** | **The strength is control, not skin.** Juggernaut/RealVisXL plus the camera/film vocabulary gets a convincing frame. Inside that frame you can dictate pose, composition and identity in a way no newer model matches | Base SDXL alone will not get there. 77-token window, no in-image text |
 | **Krea 2** | Good anatomy, animals and wide-aspect composition `[community — nsfwVariant]` | Expressions are the weak point. The default look is soft, and each image costs roughly 8× what Z-Image charges |
 
+[`qwen-image`](../../qwen-image/) is not a contender here without a realism LoRA. Its own skill calls the
+plastic default the tax and routes to Z-Image as the finisher, so it joins the table below as a composer,
+not a renderer of skin.
+
 **One finding matters more than the order: realism is a *pipeline position*.** Across the suite,
 the same pattern keeps showing up. Practitioners compose and control in SDXL or Krea 2, then finish
 the face in Z-Image at ~0.2 denoise `[community — nsfwVariant, Civitai]`. Ranking the models against
@@ -73,13 +77,13 @@ denoise bands live in [`image-production-workflows`](../../image-production-work
 
 | Rank | Model | Mechanism |
 |---|---|---|
-| 1 | [`flux-2`](../../flux-2/) | Native multi-reference (`ReferenceLatent`) plus PuLID. This is the strongest no-training path in the suite |
-| 2 | [`sdxl`](../../sdxl/) | The deepest adapter toolbox — InstantID, HyperLoRA, IP-Adapter FaceID — plus `[SEP]` routing for several characters |
-| 3 | [`krea-2`](../../krea-2/) | Identity Edit LoRA v1.2 is mature in adoption, and it is **the standard tool for prepping a video character swap**. But it is *unofficial*: a community fine-tune of Krea 2 Raw by conradlocke, *"not affiliated with or endorsed by Krea.ai"*, and it needs the `ComfyUI-Krea2Edit` node pack for its dual conditioning `[community — Enshitification, 611 pts]` |
+| 1 | [`qwen-image`](../../qwen-image/) | Edit-2511: one to three references, no adapter, and the dataset factory every image skill here routes through. *"I don't think there's a better open-weight model out there than Qwedit for making new shots of a character without loras"* `[community — nsfwVariant; strong]`. Apache-2.0, 273 character-tagged LoRAs. The trap is ComfyUI's edit node downscaling references to 1 MP; the model skill's bypass is the fix |
+| 2 | [`flux-2`](../../flux-2/) | Native multi-reference (`ReferenceLatent`) plus PuLID — the only PuLID-class face adapter in the suite, which an edit model cannot replace. No likeness head-to-head against Qwen-Image-Edit has been published `[contested]` |
+| 3 | [`sdxl`](../../sdxl/) | The deepest adapter toolbox — InstantID, HyperLoRA, IP-Adapter FaceID — plus `[SEP]` routing for several characters |
+| 4 | [`krea-2`](../../krea-2/) | Identity Edit LoRA v1.2 is mature in adoption, and it is **the standard tool for prepping a video character swap**. But it is *unofficial*: a community fine-tune of Krea 2 Raw by conradlocke, *"not affiliated with or endorsed by Krea.ai"*, and it needs the `ComfyUI-Krea2Edit` node pack for its dual conditioning `[community — Enshitification, 611 pts]` |
 | — | [`z-image`](../../z-image/) | No adapter shortcut exists. The path is LoRA + FaceDetailer or nothing |
 | **see §3.1** | [`ideogram-4`](../../ideogram-4/) | No adapter, no edit variant, one character-tagged LoRA on Civitai (36 total, 2026-09-09) — **and a working no-training path anyway** |
 | — | [`anima`](../../anima/) | **Knowledge-first**: it knows thousands of characters by tag, but identity transfer by reference is immature |
-| **not covered** | **Qwen-Image-Edit** (2509 / 2511) | The third leg of the edit-model trio in §3.2, Apache-2.0, with 192 character-tagged LoRAs on Civitai. **No skill in this suite as of 2026-09-09**; the Qwen model cards and Comfy-Org's three Qwen character templates are the source |
 
 ### 3.1 The Ideogram canvas trick — and why the suite got this wrong
 
@@ -122,15 +126,15 @@ things edit models cannot, and the capability ordering above stands. What the sw
 the workflows, the troubleshooting and the help are, and that is a real cost when you get stuck.
 **If you choose an adapter-based route today, you will debug it alone.**
 
-**And one of the three edit models has no skill here.** Krea 2 Identity Edit and Flux [klein] 9B are
-covered. Qwen-Image-Edit is not, and it is the largest of the three by ecosystem: the Qwen-Image
-family carries 1,162 Civitai LoRAs, 192 character-tagged, against [klein] 9B's ~670
-`[official — Civitai API, 2026-09-09]`. That is the suite's biggest coverage gap, and it is an
-omission rather than a recent launch — the open line shipped between 2025-08 and 2025-12 and then
-froze, since Qwen-Image 2.0 and 3.0 are hosted-only. Until a skill exists, treat it the way this
-suite treats any uncovered model: read the licence from the card (Apache-2.0, no territory or
-revenue clause), take settings from Comfy-Org's templates, and apply
-[`image-production-workflows`](../../image-production-workflows/)'s handoff rules unchanged.
+**All three edit models now have a skill, and the largest by ecosystem is the newest.**
+[`qwen-image`](../../qwen-image/) covers Qwen-Image-Edit. The family carries 1,637 Civitai LoRAs, 273
+character-tagged, against [klein] 9B's ~670 — counted by full pagination with `nsfw=true` on 2026-09-09,
+where the 1,162 / 192 figure this file carried earlier the same day excluded NSFW
+`[official — Civitai API, 2026-09-09]`. The open line shipped between 2025-08 and 2025-12 and then
+froze, since Qwen-Image 2.0 and 3.0 are hosted-only, so the skill will age slowly. What moved the
+ranking above is not the count. It is that Qwen-Image-Edit is where the image skills already send
+their anchors, and that it needs no adapter. The handoff is unchanged:
+[`image-production-workflows`](../../image-production-workflows/)'s pixels-in, pixels-out rule applies.
 
 ### 3.3 Several characters, and identity across a pipeline
 
@@ -211,7 +215,7 @@ its header says how.
 | [`z-image`](../../z-image/) **Base** | 671 | 201 | **The ecosystem lives on Turbo**, not Base — see the trap below |
 | [`krea-2`](../../krea-2/) | 2,199+ | 1,166 | Enormous for a model this new |
 | [`anima`](../../anima/) | 2,197+ | 1,199+ | Same, and it is the newest model in the suite |
-| **Qwen-Image** family ‡ — *no skill in this suite* | **1,162** | **192** | The largest pool with no skill behind it; above [klein] 9B, an order of magnitude above H3 and Ideogram. Apache-2.0 throughout |
+| [`qwen-image`](../../qwen-image/) family ‡ | **1,637** (1,162 without `nsfw=true`) | **273** (192) | Above [klein] 9B, an order of magnitude above H3 and Ideogram. Apache-2.0 throughout. **The only row counted with `nsfw=true`** (full pagination, 2026-09-09); the script behind the other rows does not pass the flag, so compare by the same method — see the bullet below |
 | FLUX.1 dev | 700+ | 1,197+ | The legacy pool, still deep |
 | FLUX.2 **[klein] 9B** ‡ | ~670 (653 on 08-23) | 178 (08-23) | Modest growth; character column not re-run |
 | FLUX.2 **[klein] 4B** | **133** | **16** | The Apache-2.0 variant has ~5× fewer LoRAs and ~11× fewer characters |
@@ -242,9 +246,11 @@ uploads land after the two hot models, while Anima and Krea 2 hold current atten
   pull (the [`ideogram-4`](../../ideogram-4/) skill says none; the difference is the `character` tag
   on one upload, and the tag is author-applied). Both facts are true. Together they say the model
   may well train well, and nobody has done it in public.
-- **The biggest pool in the table has no skill.** Qwen-Image's 1,162 LoRAs are the fifth-largest
-  pool on the host and the largest this suite does not cover. When a reader asks "which edit model",
-  the honest answer names it and says so.
+- **The `nsfw=true` query flag moves a count by ~40%.** Qwen-Image's pool is 1,162 without it and 1,637
+  with it, 192 against 273 on the character tag `[official — Civitai API, 2026-09-09]`.
+  [`scripts/civitai_census.py`](../scripts/civitai_census.py) does not pass the flag, so the other exact rows
+  above are floors for the NSFW-inclusive pool, not counts. Compare rows by the same method, and re-run with
+  the flag before quoting a total `[flagged — method matters here]`.
 
 **Read these numbers for what they are.** Civitai is one host — an important one, but it **bans
 real-person likeness entirely**, so it systematically undercounts a whole category. The `character`
@@ -286,14 +292,16 @@ Everything about datasets, captioning, hyperparameters, evaluation and publishin
 
 ## 5. Structural control
 
-**Order:** [`sdxl`](../../sdxl/) ≫ [`z-image`](../../z-image/) / [`flux-2`](../../flux-2/) →
-[`anima`](../../anima/) ≈ [`krea-2`](../../krea-2/) → [`ideogram-4`](../../ideogram-4/).
+**Order:** [`sdxl`](../../sdxl/) ≫ [`z-image`](../../z-image/) / [`flux-2`](../../flux-2/) /
+[`qwen-image`](../../qwen-image/) → [`anima`](../../anima/) ≈ [`krea-2`](../../krea-2/) →
+[`ideogram-4`](../../ideogram-4/).
 
 | Model | Stack | Gap |
 |---|---|---|
 | **SDXL** | Union ControlNet, IP-Adapter, regional prompting — all mature | xinsir's SDXL ControlNet training has stalled: frozen, still SOTA |
 | **Z-Image** | Fun Union ControlNet | **Turbo only** |
 | **FLUX.2** | Fun Union ControlNet via custom nodes | Younger ecosystem |
+| **Qwen-Image** | Native ControlNet inside Edit-2509+ (depth, edge, keypoint), InstantX ControlNet-Union for T2I, DiffSynth canny/depth/inpaint as model patches through the same node pair Z-Image uses | Ranked by evidence of use, not by what exists: EliGen and Blockwise-ControlNet show zero monthly downloads. No published head-to-head against the Fun Union stacks |
 | **Anima** | LLLite: lineart, depth, scribble, inpainting | **No pose, no canny, no HED** — pose is the weak one |
 | **Krea 2** | Two community ControlNet-LoRAs: **depth** and **OpenPose** (thedeoxen, 2026-08-04 — DWPose skeleton in, body pose followed) | No canny or union, and the two are separate adapters. Having pose is what moves it level with Anima |
 | **Ideogram 4** | `bbox` layout only | No control or identity adapter exists from anyone |
@@ -309,10 +317,12 @@ setups is unsettled `[contested]`.
 
 ## 6. Typography, anime and aesthetic range
 
-**In-image typography.** [`ideogram-4`](../../ideogram-4/) has no real second: JSON captions,
-`bbox` layout, text layers, transparency. FLUX.2 is "good, high variance". Z-Image is workable for
-short bilingual text. SDXL basically cannot do it. Krea 2 is unreliable. The trade is entirely
-licence. Ideogram's open weights are non-commercial *and* have no adapter ecosystem, so the typography
+**In-image typography.** [`ideogram-4`](../../ideogram-4/) leads on layout and dense lettering: JSON
+captions, `bbox` layout, text layers, transparency. [`qwen-image`](../../qwen-image/) is the second, and
+the first for two jobs Ideogram does not do — bilingual Chinese/English rendering, and editing text
+already in an image while keeping its font (Edit-2509+) — under Apache-2.0. FLUX.2 is "good, high
+variance". Z-Image is workable for short bilingual text. SDXL basically cannot do it. Krea 2 is
+unreliable. The trade at the top is licence. Ideogram's open weights are non-commercial *and* have no adapter ecosystem, so the typography
 plate is usually a **stage in someone else's pipeline** rather than the pipeline.
 
 **Anime and booru illustration.** [`anima`](../../anima/) is the anime-native base with a modern
@@ -370,6 +380,7 @@ puts licensing in a gate rather than a table.
 | Model | Sell pictures | Ship a pipeline / host the weights | The catch |
 |---|---|---|---|
 | [`z-image`](../../z-image/) | ✅ | ✅ | None — Apache-2.0 on weights *and* outputs. The least encumbered in the suite |
+| [`qwen-image`](../../qwen-image/) | ✅ | ✅ | None — Apache-2.0 on code and every open weight, no output clause, no gate; tied with Z-Image. Open through 2512 and Edit-2511; 2.0 and 3.0 are hosted-only under Model Studio terms. Third-party Lightning LoRAs and ControlNets are outside Qwen's grant |
 | [`wan-2-2`](../../wan-2-2/) | ✅ | ✅ | None — Apache-2.0, no territory, revenue, field-of-use or acceptable-use clause |
 | [`scail-2`](../../scail-2/) | ✅ | ✅ | Apache-2.0 code, MIT weights card. But it cannot originate a shot |
 | FLUX.2 **[klein] 4B** | ✅ | ✅ | Apache-2.0 — and it is the *only* FLUX.2 variant that is |
@@ -386,12 +397,11 @@ asks whether each model may be distributed. One non-commercial rung stops the wh
 it sits first or last. This rule is owned by
 [`image-production-workflows`](../../image-production-workflows/).
 
-**Outside the suite, six rows worth knowing before you add a model to a chain** `[official — model
+**Outside the suite, five rows worth knowing before you add a model to a chain** `[official — model
 cards and licence files, read 2026-09-09]`:
 
 | Model | Sell pictures | Ship a pipeline | The catch |
 |---|---|---|---|
-| **Qwen-Image** family | ✅ | ✅ | Apache-2.0, no territory, revenue or acceptable-use clause. The cleanest *edit* path anywhere — and not covered here |
 | **Bernini-R** | ✅ | ✅ | Apache-2.0, no territory clause. A video-editing path that survives gates 1 and 3 where H3 does not. Not covered |
 | **nvidia/PiD** | ❌ | ❌ | **NSCLv1, non-commercial.** A decoder/upscaler rung that drops into FLUX, FLUX.2, SD3, SDXL and Qwen-Image graphs, with a Comfy-Org template. The chain rule means one PiD rung makes the whole pipeline non-commercial |
 | **Pony V7** | ✅ | ⚠️ | Custom licence: no inference services, no companies over $1M revenue, no professional video. A third revenue gate beside Krea 2 and LTX-2.5 |
@@ -434,15 +444,16 @@ still exactly H3 and LTX-2.5. Dates and the full list are in
 
 ## 10. The axis matrix
 
-One table, ten models, the axes that decide. **●** best in suite · **○** capable · **–** weak ·
+One table, eleven models, the axes that decide. **●** best in suite · **○** capable · **–** weak ·
 **✗** cannot.
 
 | | realism | identity (no train) | LoRA pool | control | text | anime | range | licence |
 |---|---|---|---|---|---|---|---|---|
 | [`z-image`](../../z-image/) | ● | ✗ | ● (Turbo) | – | ○ | – | – | ● |
-| [`flux-2`](../../flux-2/) | ○ | ● | ○ | ○ | ○ | ✗ | – | – (klein 4B ●) |
+| [`flux-2`](../../flux-2/) | ○ | ○ (● adapter) | ○ | ○ | ○ | ✗ | – | – (klein 4B ●) |
 | [`sdxl`](../../sdxl/) | ○ | ○ | ● | ● | ✗ | ● | ○ | ○ |
 | [`krea-2`](../../krea-2/) | ○ | ○ | ● | – | – | – | ● | ○ |
+| [`qwen-image`](../../qwen-image/) | – | ● (edit) | ○ (1,637) | ○ | ○ (● bilingual, text edits) | ✗ | – | ● |
 | [`ideogram-4`](../../ideogram-4/) | – | ✗ | ✗ (34) | ✗ | ● | ✗ | – | ✗ |
 | [`anima`](../../anima/) | ✗ | – | ● | – | – | ● | – | ○ images / ✗ weights |
 | [`wan-2-2`](../../wan-2-2/) | video | ○ | ● video | ● video | ✗ | ○ | ○ | ● |
@@ -460,9 +471,8 @@ you can download. Maturity tells you what you can train without inventing the me
 argument for the elimination ladder in SKILL.md, and for chaining models rather than choosing one.
 
 **What the matrix leaves out, deliberately.** Only published skills get a row, because a row is a
-summary of a model skill and there is nothing to summarise for the others. Four open models would
-earn one on capability alone — **Qwen-Image** (edit, identity-without-training, layered RGBA;
-1,162 LoRAs), **Bernini-R** (video editing), **SenseNova U1.5** (native 4K, region edit) and
+summary of a model skill and there is nothing to summarise for the others. Three open models would
+earn one on capability alone — **Bernini-R** (video editing), **SenseNova U1.5** (native 4K, region edit) and
 **HunyuanVideo-1.5** (14 GB video, territory-gated). They are listed as *not yet covered* in
 SKILL.md's suite map and in [`ecosystem-map.md`](ecosystem-map.md) §6, with where to route until a
 skill exists. Read an axis where one of them would win as "the suite's answer, among what it

@@ -1378,7 +1378,8 @@
         "ltx-2-5",
         "scail-2",
         "minimax-h3",
-        "wan-2-2"
+        "wan-2-2",
+        "qwen-image"
       ],
       "watchlist": [
         {
@@ -2047,6 +2048,86 @@
           "resolution": "repaired inline 2026-09-09 (see workbench/harvest-2026-09-09/writes/generative-media-atlas.md)"
         }
       ]
+    },
+    "qwen-image": {
+      "path": "skills/generative-media/qwen-image",
+      "tier": "hot",
+      "cadence_days": 1,
+      "last_checked": "2026-09-09",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "Registered hot on 2026-09-09 (authoring pass counts as a full verification): six open variants shipped across five months plus two hosted-only models (2.0, 3.0) since, the packaging layer moves weekly — GGUF changed maintainer at 2511, Nunchaku SVDQuant stalled at 2509, a new int8 quant and API templates landed within the last five weeks — and a 2.0/3.0 weights drop would rewrite the variant selector and licence table in one pass. Review down to active once the weights question settles or a quiet streak accrues.",
+      "linked_skills": [
+        "krea-2",
+        "z-image",
+        "image-production-workflows"
+      ],
+      "watchlist": [
+        {
+          "id": "qwen-image-open-vs-hosted-variants",
+          "type": "pending-release",
+          "claim": "Qwen-Image 2.0 (announced 2026-02-10) and 3.0 (API by 2026-08) are hosted-only — no downloadable weights, API node only in ComfyUI; the QwenLM README's News block stops at 2.0 and never mentions 3.0. 'Closed' as of 2026-09-09 carries no Qwen statement ruling out a future release.",
+          "where": "SKILL.md variant table ~L53, ~L310; references/api-and-hosted.md §5 (~L90)",
+          "check": "Check the QwenLM GitHub README, the Qwen-Image HF org and Model Studio announcements for open weights for 2.0 or 3.0. A weights drop rewrites the variant selector, licence table and open/closed framing across SKILL.md — MAJOR."
+        },
+        {
+          "id": "qwen-image-template-fp8-lightning-pairing",
+          "type": "flagged-inference",
+          "claim": "The stock ComfyUI base template pairs a downcast fp8_e4m3fn DiT with a bf16 Lightning LoRA; Lightning maintainers mark the combination broken, and no Comfy-Org statement confirms whether fp8 handling has since been patched.",
+          "where": "SKILL.md one-rule section (~L15); references/setup-and-workflows.md §4",
+          "check": "Re-check the Lightning README and the current template JSON for a fp8-safe build or a maintainer statement; also diff template step/CFG/shift numbers per generation against the live templates/index.json."
+        },
+        {
+          "id": "qwen-image-lightning-repo-versions",
+          "type": "version-pin",
+          "claim": "Lightning distillation LoRAs live in three separate lightx2v/ModelTC HF repos split by base generation (base+2509, Edit-2511, 2512); a version mismatch either no-ops or produces garbage output, and Edit-Lightning V2.0 fixes over-saturation versus V1.0, which the base template still ships.",
+          "where": "SKILL.md ~L52, ~L99, ~L161; references/setup-and-workflows.md §1",
+          "check": "Re-read ModelTC/Qwen-Image-Lightning's README and HF tree for new repo splits, renamed files, or the base template moving off V1.0 onto V2.0."
+        },
+        {
+          "id": "qwen-image-quant-maintainers",
+          "type": "version-pin",
+          "claim": "GGUF maintainer changed at 2511 (city96 → QuantStack through 2509, then unsloth/Qwen-Image-Edit-2511-GGUF); Nunchaku SVDQuant stopped at 2509 (org renamed nunchaku-ai, last update 2025-11-16) with no 4-bit build for 2511/2512/Layered; what fp8mixed and int8_convrot actually quantise is undocumented, and nvfp4-Blackwell-only is an assumption, not a stated fact.",
+          "where": "SKILL.md quant section ~L118; references/setup-and-workflows.md §2.1",
+          "check": "Check unsloth's and nunchaku-ai's HF orgs for new quant releases covering 2511/2512/Layered, and look for an official statement on what fp8mixed/int8_convrot quantise."
+        },
+        {
+          "id": "qwen-image-textencode-editplus-bypass",
+          "type": "tool-behaviour",
+          "claim": "TextEncodeQwenImageEditPlus force-downscales every Edit reference to 1 MP with AREA resampling before the model sees it — the single largest quality lever on Edit, worked around by disconnecting the VAE input, and undocumented as a Comfy-Org bug (no tracked issue, no fix landed).",
+          "where": "SKILL.md ~L76, ~L179-183, failure table ~L248; references/setup-and-workflows.md §5 (~L158-184); references/characters.md ~L58",
+          "check": "Search Comfy-Org/ComfyUI issues for a tracked report or fix for the forced downscale; if patched, the whole bypass section and the reference-path workflow need rewriting — MAJOR."
+        },
+        {
+          "id": "qwen-image-trainer-support-and-zero-cond-t",
+          "type": "flagged-inference",
+          "claim": "ai-toolkit, musubi-tuner and DiffSynth trainer defaults are current as captured; --zero_cond_t for Edit-2511 is documented by one comment line in a DiffSynth script with no ai-toolkit or musubi counterpart, and Edit-2511 in ai-toolkit is reported (single report) to need a 1024² solid black control image and 30-50% more VRAM than 2512.",
+          "where": "SKILL.md LoRA training section ~L218; references/lora-training.md §1.3, §6",
+          "check": "Check ai-toolkit and musubi-tuner changelogs/docs for a --zero_cond_t equivalent or updated Edit-2511 defaults, and look for a second report corroborating or refuting the 1024² black-image / VRAM claim before a paid run."
+        },
+        {
+          "id": "qwen-image-control-adapter-and-layered-gap",
+          "type": "ecosystem-gap",
+          "claim": "Control tooling in real use is native ControlNet inside Edit-2509+ and InstantX ControlNet-Union for T2I; DiffSynth's canny/depth/inpaint model patches also work. EliGen and Blockwise-ControlNet show zero monthly downloads (abandoned). Qwen-Image-Layered is adopted and trainable but has no settings-level craft write-up anywhere.",
+          "where": "SKILL.md ~L210; references/setup-and-workflows.md §6",
+          "check": "Watch for a settings-level Layered write-up, for EliGen/Blockwise-ControlNet regaining downloads, and for any new control adapter (canny/pose/IP-Adapter-class) targeting Qwen-Image specifically."
+        },
+        {
+          "id": "qwen-image-civitai-census",
+          "type": "figure",
+          "claim": "1,637 Qwen LoRAs on Civitai by full pagination with nsfw=true (2026-09-09): 273 character (16.7%), 773 style, 422 adult-flagged (25.8%); an earlier NSFW-excluded sample gave 1,162 total / 192 adult. generative-media-atlas currently states 24%/54% and needs reconciling against this pass's numbers.",
+          "where": "SKILL.md ecosystem paragraph ~L224; workbench/qwen-image/WRITE-REPORT.md §5 (atlas reconciliation, not yet applied)",
+          "check": "Re-run the Civitai models API with baseModels='Qwen-Image' and nsfw=true, full pagination; reconcile the figure against generative-media-atlas's adult-work.md numbers in the same pass."
+        },
+        {
+          "id": "qwen-image-hosted-pricing",
+          "type": "pricing",
+          "claim": "Hosted 2.0/3.0 pricing is entirely secondary and unverified against Alibaba's own price list: 3.0 Pro ~$0.04/image at 1K and ~$0.075 at 2K, 3.0 standard ~$0.03 flat, and a ¥0.18-per-image figure also circulates. The 3.0 launch timeline (announced 2026-07-21, GA ~2026-08-04/05) is also secondary; the QwenLM README stops at 2.0.",
+          "where": "references/api-and-hosted.md §5 (~L86-90)",
+          "check": "Check Alibaba Cloud Model Studio's own pricing page for Qwen-Image-3.0 and re-verify the launch date against an official Alibaba/Qwen announcement, not aggregator coverage."
+        }
+      ],
+      "open_findings": []
     }
   },
   "repo_findings": [

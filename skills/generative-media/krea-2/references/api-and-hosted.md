@@ -16,7 +16,7 @@ This file covers the hosted side of Krea 2. That means Krea's own API and web ap
 | | Open (Raw/Turbo) | Hosted (Medium/Large) |
 |---|---|---|
 | Weights | downloadable | no |
-| VAE | Qwen-Image VAE | **Large trained with the FLUX.2 VAE** `[official — team statement, HN]` — this is a real fidelity difference, not just a scale difference |
+| VAE | [Qwen-Image](../../qwen-image/) VAE | **Large trained with the FLUX.2 VAE** `[official — team statement, HN]` — this is a real fidelity difference, not just a scale difference |
 | Resolution | 1K (Raw) / 1–2K (Turbo) | **1K only via API, currently** `[official — API docs]` |
 | Style references / moodboards | not in the open stack (style LoRAs instead) | yes — the flagship feature |
 | Creativity dial | no (analogue: enhancer on/off) | raw / low / medium / high |

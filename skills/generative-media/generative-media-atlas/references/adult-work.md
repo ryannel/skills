@@ -43,14 +43,18 @@ the traps listed below so you do not have to rediscover them:
 | [`sdxl`](../../sdxl/) 1.0 | 31% | 53% |
 | FLUX.2 [klein] 9B | 30% | 57% |
 | [`ideogram-4`](../../ideogram-4/) | 26% *(n=34)* | 35% |
-| **Qwen-Image** — *no skill in this suite* | 24% | 54% |
+| [`qwen-image`](../../qwen-image/) | 24% | 54% |
 | [`wan-2-2`](../../wan-2-2/) T2V / I2V | 23% / 22% | 49% / 45% |
 | [`minimax-h3`](../../minimax-h3/) | 23% *(n=22 on 08-23; the pool is 86 on 09-09 and the share was not re-measured)* | 59% |
 | Hunyuan Video (1.5 is *not covered*; EU/UK/KR excluded) | 20% | 34% |
 | [`ltx-2-5`](../../ltx-2-5/) — 2.3 | 14% | 39% |
 
 The Ideogram 4 row was re-run on 2026-09-09 at n=36: 25% explicit, 36% mature — unchanged within
-noise. Every other row is the 2026-08-23 measurement.
+noise. Every other row is the 2026-08-23 measurement. The Qwen-Image row was also re-measured on
+2026-09-09, by a different cut: full pagination with `nsfw=true` over all 1,637 Qwen LoRAs gave **25.8%
+adult-flagged** overall and 31% explicit among the character-tagged, where the same count with NSFW-listed
+models excluded gave 20% / 45% `[official — Civitai API, 2026-09-09, via qwen-image]`. Read the 24% above as
+this file's top-600 method; the figures agree within their methods, and none is near Krea 2's.
 
 **Three warnings, because this metric is easy to over-read.**
 

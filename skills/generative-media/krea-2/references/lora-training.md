@@ -43,7 +43,7 @@ Two structural facts hold on either path (encoder-class doctrine):
 
 Kohya's musubi-tuner added day-0 experimental Krea 2 support, and the docs still say experimental `[official — musubi docs/krea2.md, re-read 2026-08-15]`. This is the most completely documented trainer. It is also the source of several load-bearing architecture facts: 28 blocks, GQA 48Q/12KV, and the resolution-aware shift schedule.
 
-**Models needed:** the Raw DiT (`raw.safetensors` from `krea/Krea-2-Raw`); optionally the Turbo DiT for sampling; the **Qwen-Image VAE** (the same file ComfyUI uses); and **Qwen3-VL-4B-Instruct as a single safetensors file** (the Comfy-Org `qwen3vl_4b_bf16.safetensors` works and can be shared with ComfyUI).
+**Models needed:** the Raw DiT (`raw.safetensors` from `krea/Krea-2-Raw`); optionally the Turbo DiT for sampling; the **[Qwen-Image](../../qwen-image/) VAE** (the same file ComfyUI uses); and **Qwen3-VL-4B-Instruct as a single safetensors file** (the Comfy-Org `qwen3vl_4b_bf16.safetensors` works and can be shared with ComfyUI).
 
 **Pre-cache both stages.** Cache image latents with `krea2_cache_latents.py --vae …`, and text-encoder outputs with `krea2_cache_text_encoder_outputs.py --text_encoder …`. Krea 2 caches the 12-layer hidden-state stack, so the encoder is not needed during training itself.
 
@@ -304,6 +304,8 @@ This section applies when the dataset is *generated* rather than photographed: a
 **Generate at LoRA strength 0.0, always.** The dataset comes from the base checkpoint, never from the character's own previous LoRA — *"we can't use the lora to train the next lora"*. That is what makes a synthetic set a clean source rather than a recursion. Settled render settings for the synthetic character: `fineporn_v4_int8`, 12 steps, cfg 1.0, `wan_2.1_vae`, LoRA 0.0, one baseline seed. Dataset prompts ran 243–434 words, far past the ~45-word inference budget in §10, because they describe a cell rather than fight a LoRA.
 
 **How much synthetic is safe is contested, inside the lab's own documents.** The only *measured* points on a real-person pool are 12–14% fine and **64% a failure** ("body learned, face regressed" — every synthetic carried one generator's rendering of the face). Nothing between has been run; a later arm ran at ≤40% on the stated direction "almost entirely synthetic", and a high-variety 65% set is prepared but unlaunched `[live-use — media lab, krea2-v15 vs DATASET-DESIGN, 2026-09-06]` `[contested]`. The fully synthetic character is a different case: 100% synthetic *from the base*, not from a predecessor LoRA, and it worked. The hazard is recursing generations, not the presence of renders. The literature cap and the seeding rules are in the sibling's `synthetic-datasets.md`.
+
+**None of this transfers to Qwen-Image**, even though Krea 2 is Qwen-derived and shares this VAE. The 1024-native source rule (Qwen's band is the 1328 class), flow shift 2.5 (Qwen's is 2.2), LoKr as the character default, grad-accum 2 and train-on-Raw/run-on-Turbo are all Krea findings; Qwen has one undistilled base per generation and stacks Lightning at inference. The Qwen side of the line is [`qwen-image/references/lora-training.md`](../../qwen-image/references/lora-training.md) §9.
 
 ## 10. Deployment and inference rules
 

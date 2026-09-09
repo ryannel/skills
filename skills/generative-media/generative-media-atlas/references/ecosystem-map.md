@@ -147,7 +147,7 @@ The repo holds around 25 skills. Three matter for generative media:
   sanity-checking a quant against a card before renting one, in a field where several vendors
   publish no VRAM figure at all.
 - **`huggingface-lora-space-builder`** — builds and publishes a Gradio ZeroGPU Space that demos a
-  trained LoRA, and its own frontmatter scopes it to Qwen-Image, Qwen-Image-Edit, LTX-Video, Wan,
+  trained LoRA, and its own frontmatter scopes it to [Qwen-Image](../../qwen-image/), Qwen-Image-Edit, LTX-Video, Wan,
   FLUX and SDXL `[official — huggingface/skills tree, read 2026-09-09]`. That is a real downstream
   step after [`character-lora-training`](../../character-lora-training/)'s evaluation, for anyone
   who wants a shareable demo rather than a Civitai upload. It is a publishing tool, not a trainer,
@@ -236,7 +236,7 @@ with, the description is at fault, not the model.
 
 **Why this section exists.** The atlas routes readers to models. When it routes them to one with
 no skill behind it, the honest thing is to say so in the same breath, and to say where to go
-instead. A dangling `../qwen-image/` link would tell the reader to run an install command that
+instead. A dangling `../bernini-r/` link would tell the reader to run an install command that
 cannot work. Every model here is named in plain bold, never linked, with its status as of
 **2026-09-09**. The evidence is a same-day sweep of Comfy-Org's `workflow_templates/index.json`
 (every template carries a date, an `openSource` flag and a usage counter), the ComfyUI commit log,
@@ -245,9 +245,10 @@ Banodoco were not measured** in that sweep, so community sentiment below is unme
 
 ### 6.1 Uncovered and worth a skill — in priority order
 
+The Qwen-Image family headed this table until 2026-09-09; it is now [`qwen-image`](../../qwen-image/).
+
 | Model | Why it matters | Route to, until a skill exists | Verify first |
 |---|---|---|---|
-| **Qwen-Image family** — Qwen-Image (2025-08-02), Qwen-Image-Edit (08-17), Edit-2509, Edit-2511 and Layered (12-17), 2512 (12-30). Alibaba, **Apache-2.0 throughout** | The largest hole in the suite, and an omission rather than a launch. ComfyUI-native since 2025-08; ~3.9M 30-day HF pulls across the line; **1,162 Civitai LoRAs, 192 character-tagged**; ~14,000 Comfy template runs, three of them character workflows on Qwen-Image-Edit. Takes three jobs the rankings leave open: instruction-based editing, identity without training (the third leg beside Krea 2 Identity Edit and [klein] 9B), and layered RGBA decomposition. Trainers: musubi-tuner (up to three control images), ai-toolkit, diffusion-pipe. **The open line is frozen** — Qwen-Image 2.0 (2026-02-10) is API-only and 3.0 (2026-07-21) is closed — which is an argument for writing the skill, since it will not rot | `huggingface.co/Qwen` model cards; Comfy-Org's Qwen templates; [`image-production-workflows`](../../image-production-workflows/) for the edit-rung handoff | Nothing — licence confirmed from `cardData` with no territory, revenue or acceptable-use clause |
 | **Bernini / Bernini-R** — ByteDance, paper 2026-05-22, renderer weights 2026-06-01, 1.3B 06-09, full pipeline 06-11, training code 07-13, **Apache-2.0** | The video-*editing* job nobody in the suite owns: an MLLM planner feeding a DiT renderer fine-tuned from Wan (1.3B from Wan2.1, 14B from Wan2.2-T2V-A14B), six modes — t2i, i2i, t2v, v2v, rv2v, r2v — for relighting, restyling, subject insertion and local editing on stills and footage. Native ComfyUI 2026-06-14; `Comfy-Org/Bernini-R` at ~109k pulls/30d; and a real derivative layer already (two GGUF repacks, a 4-step LightX2V LoRA set, an fp8 Wan2.2 build, a motion-enhancer LoRA). 14B is H100-class; 1.3B is the small one. No territory clause, so it clears gates 1 and 3 where H3 does not | `github.com/bytedance/Bernini`; [`scail-2`](../../scail-2/) for the boundary — SCAIL tracks a person, Bernini re-renders a scene | Nothing on licence; VRAM for 14B before promising it on a rented card |
 | **SenseNova U1 / U1.5-8B-MoT** — SenseTime, U1 2026-04-22, U1.5 2026-08-19 | Native 4K on U1.5; t2i, single- and multi-image edit, **region-controlled edit via masks, boxes and visual markers**; ~17 GB peak on a 24 GB card. **ComfyUI core since 2026-09-01** (`Support SenseNova U1.5 (CORE-411)`, #15922). Official `SenseNova-U1.5-8B-MoT-LoRAs` (2026-08-20) and community GGUFs with real pull. The ecosystem fact that outranks its download numbers: **the NoobAI team published a LoRA trainer for it** (`Laxhar/sensenova-u1-lora-trainer`, 2026-05-09) and has shipped no checkpoint since 2024-12 — the anime pool is migrating | `github.com/OpenSenseNova/SenseNova-U1`; `docs.comfy.org` for the core node | **Two things** `[flagged — re-verify]`: the Apache-2.0 claim comes from the GitHub repo, not the gated (401) HF card; and "8B" in the name sits against ~18B total for the MoT. No VRAM prose until both are read |
 | **HunyuanVideo-1.5** — Tencent, 8.3B | Native ComfyUI 2025-11-24; musubi-tuner LoRA support; ~14 GB VRAM, which makes it the other open answer to "video on a 16 GB card" beside Wan 5B. **The Tencent Hunyuan Community Licence excludes the EU, UK and South Korea** — a second territory gate beside H3's | `huggingface.co/tencent/HunyuanVideo-1.5` | Whether your territory is excluded, before anything else |
@@ -281,7 +282,7 @@ One line each, so the next sweep does not re-discover them.
 
 - **FireRed-Image-Edit-1.1** (Xiaohongshu, Apache-2.0, 2026-03-09) — 10+ element fusion, strong
   identity retention, ~30 GB. **2,740 template runs**, the busiest open edit template after Qwen
-  Edit 2509, and zero Civitai LoRAs. If a Qwen skill wants a rival, this is the first candidate.
+  Edit 2509, and zero Civitai LoRAs. If [`qwen-image`](../../qwen-image/) wants a rival, this is the first candidate.
 - **GLM-Image** (Z.ai — SCAIL-2's lab — MIT, 2026-01-08) — 16B, edit, style transfer,
   identity-preserving, multi-subject; ~23 GB with offload; 1,105 HF likes. ComfyUI custom node only.
 - **Open, ComfyUI-reachable, and without a LoRA ecosystem.** None of these has a job the suite
@@ -317,7 +318,8 @@ announcement, not Comfy's partner node, which can lag by weeks.
 *Image, hosted only:*
 
 - **Seedream 5.0 Pro** — 2026-07-08. The busiest hosted image template in Comfy.
-- **Qwen-Image 3.0** — 2026-07-20. No weights, no licence, no technical report.
+- **Qwen-Image 3.0** — 2026-07-20. No weights, no licence, no technical report. The open family is
+  [`qwen-image`](../../qwen-image/), whose `api-and-hosted.md` covers the 3.0 Pro API nodes.
 - **Grok Imagine Image 2.0** — 2026-08-07.
 - **Meta Muse Image / Muse Video** — 2026-07-07. Meta's first, and agentic: it invokes search and
   code mid-generation.

@@ -250,7 +250,7 @@ Context chaining changes what you write, not what you set:
 - **New seed per shot.** A shared seed drifts face and voice across the chain.
 - Run a **normaliser** across the chain: texture ratchets roughly 1.3× per join.
 - Use decoded last frames only as an occasional quality reset, never as the join itself.
-- When you genuinely want an end frame, make it by **image-editing the previous last frame** (Qwen-Image-Edit was preferred for scene preservation) or from H3 itself at one frame (§8).
+- When you genuinely want an end frame, make it by **image-editing the previous last frame** ([Qwen-Image-Edit](../../qwen-image/) was preferred for scene preservation) or from H3 itself at one frame (§8).
 - References and pins in one graph is possible via a hybrid checkpoint plus `minimax-h3-hybrid-cond`.
 
 What the lab found on its own: the hop-made end frame it built to stop room changes was solving a **prompt-format** problem. Once each shot was one `[Shot 1]` block with no timestamps, the room held without pins — see `prompting-guide.md §8` `[live-use — media lab, Ciara hoop piece, 2026-09]`.

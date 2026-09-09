@@ -54,7 +54,7 @@ answer to give.
 | **Which skills to install for a stated goal, and in what order to use them** | **here** |
 | **The end-to-end route from "I want X" to a finished file** | **here** — the playbooks |
 | **Which canonical skills exist outside this suite, and what each is actually for** | **here** |
-| Node settings, filenames, prompt dialect, sampler, resolution, that model's licence text | the model skill — [`flux-2`](../flux-2/), [`ideogram-4`](../ideogram-4/), [`z-image`](../z-image/), [`sdxl`](../sdxl/), [`krea-2`](../krea-2/), [`anima`](../anima/), [`wan-2-2`](../wan-2-2/), [`minimax-h3`](../minimax-h3/), [`ltx-2-5`](../ltx-2-5/), [`scail-2`](../scail-2/) |
+| Node settings, filenames, prompt dialect, sampler, resolution, that model's licence text | the model skill — [`flux-2`](../flux-2/), [`ideogram-4`](../ideogram-4/), [`z-image`](../z-image/), [`sdxl`](../sdxl/), [`krea-2`](../krea-2/), [`anima`](../anima/), [`qwen-image`](../qwen-image/), [`wan-2-2`](../wan-2-2/), [`minimax-h3`](../minimax-h3/), [`ltx-2-5`](../ltx-2-5/), [`scail-2`](../scail-2/) |
 | The stage ladder, denoise bands, cross-family handoffs, mixing models | [`image-production-workflows`](../image-production-workflows/) |
 | Dataset, captioning, hyperparameters, evaluating a run, publishing a LoRA | [`character-lora-training`](../character-lora-training/) |
 | Volume layout, `extra_model_paths.yaml`, ComfyUI as a serverless endpoint | [`comfyui-on-runpod`](../comfyui-on-runpod/) |
@@ -133,7 +133,7 @@ document. A model prompted in the wrong dialect looks like a bad model.
 
 **Three traps on rungs 1 and 2, all outside the suite, all easy to pick up by accident.** They are here because
 each one looks clean from where people meet it. **`nvidia/PiD`** is a latent-to-pixel decoder and 4× upscaler
-that drops into FLUX, FLUX.2, SD3, SDXL and Qwen-Image graphs, and Comfy-Org ships a template for it. Its
+that drops into FLUX, FLUX.2, SD3, SDXL and [Qwen-Image](../qwen-image/) graphs, and Comfy-Org ships a template for it. Its
 licence is **NSCLv1, non-commercial**. A template is not a licence check. **Pony V7** (AuraFlow, not SDXL)
 carries a custom licence that bars inference services, companies over $1M revenue and professional video, which
 makes it a third revenue gate beside [`krea-2`](../krea-2/)'s $1M and [`ltx-2-5`](../ltx-2-5/)'s $10M.
@@ -180,25 +180,27 @@ stylisation, and its ControlNet is Turbo-only. So the standard move is not "pick
 and control in [`sdxl`](../sdxl/) or [`krea-2`](../krea-2/), then finish the face in Z-Image at ~0.2 denoise**.
 Realism is a pipeline position, not a model.
 
-**Consistent characters without training anything.** On *capability*: [`flux-2`](../flux-2/) (multi-reference +
-PuLID) → [`sdxl`](../sdxl/) (InstantID/HyperLoRA, `[SEP]` routing for several characters) →
-[`krea-2`](../krea-2/) (Identity Edit). [`z-image`](../z-image/) has no adapter shortcut at all. **The cost:**
-these routes are faster to start but weaker under pressure. A trained LoRA still wins on a character you will
-render a thousand times.
+**Consistent characters without training anything.** [`qwen-image`](../qwen-image/) (Edit-2511: one to three
+references, no adapter, and the dataset factory every image skill here routes through) → [`flux-2`](../flux-2/)
+(multi-reference + PuLID, the only PuLID-class face adapter in the suite) → [`sdxl`](../sdxl/) (InstantID/HyperLoRA,
+`[SEP]` routing for several characters) → [`krea-2`](../krea-2/) (Identity Edit). [`z-image`](../z-image/) has
+no adapter shortcut at all. Qwen-Image-Edit leads because that is where the practice is and where the other
+skills already send their anchors; FLUX.2 keeps the one thing an edit model cannot do, a face adapter. No
+head-to-head likeness test between the two exists `[contested]`. **The cost:** these routes are faster to start
+but weaker under pressure. A trained LoRA still wins on a character you will render a thousand times.
 
-**But that is capability, not practice.** A year-sorted r/StableDiffusion sweep on 2026-08-23 returned **no top
-post naming PuLID or InstantID at all**. The work has moved to **edit models**, meaning Krea 2 Identity Edit,
-Flux [klein] 9B and Qwen-Image-Edit, mixed freely in one job. The adapters still do things edit models cannot,
-but an adapter route today is one you debug alone
-([`references/model-rankings.md`](references/model-rankings.md) §3.2). **One trap fails silently in a stock
-graph:** Krea 2 Identity Edit is an *unofficial* community fine-tune. It needs the `ComfyUI-Krea2Edit` node pack
-for its dual conditioning `[community — Enshitification, 611 pts]`. **And one of the three has no skill behind
-it.** The **Qwen-Image family** (Qwen-Image, Qwen-Image-Edit 2509/2511, 2512, Layered) is Apache-2.0,
-ComfyUI-native, and carries **1,162 Civitai LoRAs, 192 of them character-tagged** — more than FLUX.2 [klein] 9B
-`[official — Civitai API, 2026-09-09]`. This suite routes you to it and, as of 2026-09-09, hands you nothing:
-**not yet covered**. Until it is, the model cards at `huggingface.co/Qwen` and Comfy-Org's Qwen templates are
-the source, and [`image-production-workflows`](../image-production-workflows/) carries the one handoff rule
-that still applies (pixels in, pixels out).
+**Practice says the same.** A year-sorted r/StableDiffusion sweep on 2026-08-23 returned **no top post naming
+PuLID or InstantID at all**. The work has moved to **edit models**, meaning Qwen-Image-Edit, Krea 2 Identity Edit
+and Flux [klein] 9B, mixed freely in one job. The adapters still do things edit models cannot, but an adapter
+route today is one you debug alone ([`references/model-rankings.md`](references/model-rankings.md) §3.2). **Two
+traps fail silently in a stock graph.** Krea 2 Identity Edit is an *unofficial* community fine-tune; it needs
+the `ComfyUI-Krea2Edit` node pack for its dual conditioning `[community — Enshitification, 611 pts]`. And
+ComfyUI's Qwen edit node downscales every reference to 1 MP before the model sees it, which is where "Qwen Edit
+is blurry" comes from; the bypass is the first thing [`qwen-image`](../qwen-image/) teaches. **The largest of
+the three by ecosystem is the newest skill here.** The **Qwen-Image family** (Qwen-Image, Edit 2509/2511, 2512,
+Layered) is Apache-2.0, ComfyUI-native, and carries **1,637 Civitai LoRAs, 273 of them character-tagged**,
+counted by full pagination with `nsfw=true` on 2026-09-09; the 1,162 / 192 figure this suite carried earlier
+the same day excluded NSFW `[official — Civitai API, 2026-09-09]`.
 
 **Easiest to train a character LoRA on — and this splits three ways.** There is no single winner. Treating it as
 one question is the mistake:
@@ -213,8 +215,8 @@ one question is the mistake:
 2026-08-23, with the fast-moving rows re-run on 2026-09-09. They are **re-measurable**, which matters more than
 the snapshot: run [`scripts/civitai_census.py`](scripts/civitai_census.py) rather than trusting these figures
 once they are a few weeks old. [`z-image`](../z-image/) Turbo, [`krea-2`](../krea-2/), [`anima`](../anima/) and
-the SDXL family each carry **2,000+** published LoRAs. **Qwen-Image**, which has no skill here, sits next at
-1,162. FLUX.2 [klein] 9B has ~670, and **[klein] 4B just 133**. [`ideogram-4`](../ideogram-4/) has 36. Two traps
+the SDXL family each carry **2,000+** published LoRAs. [`qwen-image`](../qwen-image/) sits next at **1,637**
+(273 character-tagged; counted with `nsfw=true`, which the earlier 1,162 was not). FLUX.2 [klein] 9B has ~670, and **[klein] 4B just 133**. [`ideogram-4`](../ideogram-4/) has 36. Two traps
 fall out of this. First, **Z-Image's pool is on Turbo (2,191+) not Base (671)**, and Turbo is the variant its
 own training doctrine trains on. Second, **picking [klein] 4B for its Apache-2.0 licence costs you most of the
 FLUX.2 LoRA pool**. The full census, method and caveats are in
@@ -280,11 +282,15 @@ training. It asks for the character *twice in one canvas* and crops the result `
 pts]`. **"No adapter exists" describes tooling, not capability**
 ([`references/model-rankings.md`](references/model-rankings.md) §3.1).
 
-**Everything else, one line each.** Typography goes to [`ideogram-4`](../ideogram-4/), with no real second.
+**Everything else, one line each.** Typography goes to [`ideogram-4`](../ideogram-4/) for layout and dense
+lettering; [`qwen-image`](../qwen-image/) is the second, and the first for bilingual Chinese/English rendering and
+for editing text already in an image without losing its font.
 Anime goes to [`anima`](../anima/), or to [`sdxl`](../sdxl/)'s Illustrious/NoobAI/Pony V6 XL finetunes when you
 must ship the weights (Pony V7 is AuraFlow and is not an SDXL checkpoint). Widest aesthetic range:
-[`krea-2`](../krea-2/). Cleanest licence: [`z-image`](../z-image/). Instruction-based image editing and layered
-RGBA output: **Qwen-Image-Edit / Qwen-Image-Layered**, not yet covered here. Native 4K with region-controlled
+[`krea-2`](../krea-2/). Cleanest licence: [`z-image`](../z-image/), tied with [`qwen-image`](../qwen-image/) (Apache-2.0 on code and
+weights, open through 2512 and Edit-2511; 2.0 and 3.0 are hosted-only). Instruction-based editing, multi-image
+fusion and layered RGBA output: [`qwen-image`](../qwen-image/) — Edit-2511 for the edits, Layered for RGBA,
+which is adopted but has no settings-level craft yet. Native 4K with region-controlled
 edits: **SenseNova U1.5**, ComfyUI core since 2026-09-01, not yet covered, and its licence is verify-gated.
 
 **Video, by what you are actually doing.** Animating a still is [`wan-2-2`](../wan-2-2/)'s job. Its I2V is far
@@ -309,9 +315,10 @@ you need](#installing-what-you-need). Full step-by-step routes, with what to rea
 
 | The goal | Route | Install |
 |---|---|---|
-| **Realistic photos of a character I invented, on rented GPUs** | Playbook A — lock anchor → dataset → train → evaluate → deploy → production ladder | `generative-media-atlas` `z-image` `character-lora-training` `comfyui-on-runpod` `image-production-workflows` + RunPod's |
+| **Realistic photos of a character I invented, on rented GPUs** | Playbook A — lock anchor → dataset → train → evaluate → deploy → production ladder | `generative-media-atlas` `z-image` `qwen-image` `character-lora-training` `comfyui-on-runpod` `image-production-workflows` + RunPod's |
 | **An anime character, on my own card** | Playbook B — the 6 GB loop | `anima` `character-lora-training` `image-production-workflows` |
 | **A design or marketing image with real text in it** | Playbook C — typography plate → composite | `ideogram-4` `image-production-workflows` |
+| **Edit an image by instruction, or re-shoot a character in new scenes without training** | Compose, then Edit-2511 one instruction per pass, re-anchored on the original each time; pixels out per the handoff rules | `qwen-image` `image-production-workflows` |
 | **Turn a still into a shot** | Playbook D — the image-to-video handoff, and the audio licence fork | an image skill + `wan-2-2` (or `ltx-2-5` / `minimax-h3`) |
 | **Put my character into footage I already have** | Playbook E — edit frame 0, then track | `krea-2` `scail-2` `character-lora-training` |
 | **Run all this as an API** | Playbook F — API-format workflows on serverless | `comfyui-on-runpod` + RunPod's `runpod`, `flash` |
@@ -333,7 +340,7 @@ not a bug report. It is the install command you have not run yet.
 npx skills add ryannel/skills --skill generative-media-atlas
 
 # A playbook's stack, in one command
-npx skills add ryannel/skills --skill z-image --skill character-lora-training --skill comfyui-on-runpod --skill image-production-workflows
+npx skills add ryannel/skills --skill z-image --skill qwen-image --skill character-lora-training --skill comfyui-on-runpod --skill image-production-workflows
 
 # Browse the catalogue first
 npx skills add ryannel/skills --list
@@ -456,6 +463,7 @@ Every published skill, and the question it answers. This table is the suite keye
 | [`flux-2`](../flux-2/) | "How do I keep this character without training anything?" — multi-reference identity, PuLID; [klein] 4B is the Apache-2.0 escape hatch |
 | [`sdxl`](../sdxl/) | "How do I control the pose/composition exactly?" — the deepest control, adapter and LoRA ecosystem, on 6–8 GB |
 | [`krea-2`](../krea-2/) | "How do I get a look that isn't the AI look?" — widest aesthetic range, style references, Identity Edit |
+| [`qwen-image`](../qwen-image/) | "How do I edit this image by instruction, or re-shoot this character without training anything?" — Edit-2511 identity engine and dataset factory, multi-image fusion, bilingual text; Apache-2.0, open through 2512/2511, 2.0/3.0 hosted-only |
 | [`ideogram-4`](../ideogram-4/) | "How do I put real text in the image?" — typography, layout, JSON captions. Open weights are non-commercial |
 | [`anima`](../anima/) | "How do I make anime that understands booru tags?" — 2B, ~6 GB, outputs commercially free, weights not |
 | [`wan-2-2`](../wan-2-2/) | "How do I make this still move?" — the strongest unencumbered I2V path, plus the camera and motion rigs |
@@ -469,11 +477,11 @@ Every published skill, and the question it answers. This table is the suite keye
 
 **Strong open models with no skill here yet.** Plain bold, not a link, because there is nothing to link to. Each
 row says where to go instead. The status is as of **2026-09-09**; if a row below has become a link in a later
-version of this table, the skill exists.
+version of this table, the skill exists. The Qwen-Image family left this table the same day, when
+[`qwen-image`](../qwen-image/) shipped.
 
 | Model | The question it would answer | Not yet covered — route to |
 |---|---|---|
-| **Qwen-Image family** — Qwen-Image, Edit-2509/2511, 2512, Layered (Alibaba, Apache-2.0) | "How do I edit an image by instruction, hold identity without training, or get layered RGBA out?" — 1,162 Civitai LoRAs, 192 character-tagged; the open line is frozen, since 2.0 and 3.0 are hosted-only | The `Qwen` model cards on Hugging Face and Comfy-Org's Qwen templates; trainers are musubi-tuner, ai-toolkit, diffusion-pipe. Handoffs per [`image-production-workflows`](../image-production-workflows/) |
 | **Bernini-R** (ByteDance, Apache-2.0, Wan-derived renderer) | "How do I relight, restyle, insert into or remove from a clip I already have?" — six modes, t2i through rv2v; native ComfyUI since 2026-06-14; 14B is H100-class, 1.3B is the small one | `github.com/bytedance/Bernini`. Boundary against the suite: [`scail-2`](../scail-2/) tracks a person, Bernini re-renders a scene |
 | **SenseNova U1.5-8B-MoT** (SenseTime) | "How do I get native 4K, or edit a region by mask or box?" — ComfyUI core since 2026-09-01; the NoobAI team published its LoRA trainer | `github.com/OpenSenseNova/SenseNova-U1`. **Licence and parameter count are unverified here**: the HF card is gated and "8B" sits against ~18B total (flagged in the two-bar section below) |
 | **HunyuanVideo-1.5** (Tencent, 8.3B) | "Which open video model fits ~14 GB?" — native ComfyUI since 2025-11-24, musubi-tuner LoRAs | `huggingface.co/tencent/HunyuanVideo-1.5`. **Gate 3 applies: the Tencent Community Licence excludes the EU, UK and South Korea** |
@@ -530,6 +538,8 @@ exceeding it, and **where it disagrees with a model skill, the model skill is ri
 **Contested / unresolved points:**
 
 - The character-LoRA trainability podium rests on one author's test `[community — MesmerTools; single source]`.
+- The no-training identity ordering puts Qwen-Image-Edit ahead of FLUX.2 on practice and ecosystem, not on a
+  measured likeness test; none has been published `[contested]`.
 - [`ltx-2-5`](../ltx-2-5/)'s VRAM floor is 32 GB in documentation against 16 and 12 in the same vendor's
   marketing, published the same week `[contested]`.
 - [`anima`](../anima/)'s 8 GB inference floor is one report on one AMD card `[flagged — re-verify]`.
@@ -541,8 +551,8 @@ exceeding it, and **where it disagrees with a model skill, the model skill is ri
 - Whether `runpodctl`'s timer flags come back (runpodctl#331, blocked on RunPod#5718) is
   [`comfyui-on-runpod`](../comfyui-on-runpod/)'s watch, not this skill's; until they do, no CLI flag is a cost guard.
 
-**Facts dated 2026-09-09**; the H3, Ideogram 4, Wan 2.2 and FLUX.2 [klein] 9B Civitai rows re-counted the same
-day, the rest on 2026-08-23. The fastest-moving parts are the external vendors' skill inventories (RunPod went
+**Facts dated 2026-09-09**; the H3, Ideogram 4, Wan 2.2, FLUX.2 [klein] 9B and Qwen-Image Civitai rows re-counted
+the same day (Qwen-Image by full pagination with `nsfw=true`), the rest on 2026-08-23. The fastest-moving parts are the external vendors' skill inventories (RunPod went
 6→7→8 across this suite's last three passes, and BFL appeared from nothing), the "not yet covered" table, and
 the `skills` CLI's flags. The Civitai counts move fast too, since Anima and Krea 2 add LoRAs weekly and H3
 quadrupled in seventeen days. So does any ranking whose model shipped in the last quarter — which today is
@@ -554,7 +564,9 @@ the "Ideogram is weak on characters" verdict was **wrong**. On adult work, the C
 ordering in this suite's own existing table, most likely because that metric reads preview images and so
 undercounts video. All three are corrected above and filed as findings against the skills that own them. The
 2026-09-09 landscape sweep's largest finding was an **omission, not a launch**: Qwen-Image had been named
-across twelve skills as a peer the reader was assumed to have, with no skill behind it.
+across twelve skills as a peer the reader was assumed to have, with no skill behind it. That skill,
+[`qwen-image`](../qwen-image/), shipped the same day, and the identity, typography, control and licence rankings
+above were re-cut around it.
 
 ---
 

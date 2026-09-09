@@ -82,7 +82,7 @@ The prompt that decides your result is not written for SCAIL-2 at all. It is the
 
 **Style transfer is the same move at frame scale.** The documented anime-to-real path is: *"1: flux2klein9b image to image the 1st frame of your video into whatever style you want. 2: that image and your video go into the workflow. 3: generate."* The edit model does all the style work. SCAIL-2 just carries it through the clip.
 
-**Which model to write for.** The named front ends are [`krea-2`](../../krea-2/)'s Identity Edit LoRA, Flux 2 Klein 9B, and Qwen-Image-Edit, often mixed within one project `[community — DeerWoodStudios]`. Flux 2 Klein *"understands natural language really well"* `[community — LucidFir]`, so plain instructions work — but plain still means short. Each of those models has its own prompting conventions. [`krea-2`](../../krea-2/) documents its Identity Edit dialect from the image side.
+**Which model to write for.** The named front ends are [`krea-2`](../../krea-2/)'s Identity Edit LoRA, Flux 2 Klein 9B, and [Qwen-Image-Edit](../../qwen-image/), often mixed within one project `[community — DeerWoodStudios]`. Flux 2 Klein *"understands natural language really well"* `[community — LucidFir]`, so plain instructions work — but plain still means short. Each of those models has its own prompting conventions. [`krea-2`](../../krea-2/) documents its Identity Edit dialect from the image side.
 
 ---
 

@@ -100,7 +100,7 @@ The full derivation, plus the per-model frame-count and dimension constraints th
 
 ## Mixing models — the three handoff rules
 
-1. **Decode to pixels between families.** Latent spaces are family-specific: FLUX.2's VAE is its own, SDXL's is not Z-Image's, and Anima's is Qwen-Image's. A foreign latent produces garbage, and sometimes subtle garbage. Always go `VAE Decode (A) → image → VAE Encode (B)`. diffusers does this by construction.
+1. **Decode to pixels between families.** Latent spaces are family-specific: FLUX.2's VAE is its own, SDXL's is not Z-Image's, and Anima's is [Qwen-Image](../qwen-image/)'s. A foreign latent produces garbage, and sometimes subtle garbage. Always go `VAE Decode (A) → image → VAE Encode (B)`. diffusers does this by construction.
 2. **Identity-preserving refines live at denoise ~0.2–0.5** (the bands above; 0.25–0.35 is the sweet spot).
 3. **Match resolution to the refining model's native range.** Downscale, refine, then upscale or tile. Do not feed 4 MP raw to a 1024-class model.
 
@@ -213,6 +213,7 @@ Per-model facts live in the model skills. This skill owns what spans them.
 | [`ideogram-4`](../ideogram-4/) | typography, layout, design | the typography pass |
 | [`krea-2`](../krea-2/) | widest aesthetic range; tuned against the AI look | aesthetics/composition front-end |
 | [`anima`](../anima/) | anime and illustration; 2B, ~6 GB VRAM, booru-tag dialect — **non-commercial weights** | the anime front-end: cheap enough to be a default composing rung, never a realism refiner; blocks any pipeline sold as a service |
+| [`qwen-image`](../qwen-image/) | instruction and multi-image editing, identity without training (Edit-2511), bilingual in-image text; Apache-2.0 | the edit rung and the dataset factory for other families' stills — pixels in, pixels out; Z-Image finishes its skin |
 | [`wan-2-2`](../wan-2-2/) | **video** — image-to-video, motion and camera control | downstream: a still finished by this ladder is what drives I2V |
 | [`ltx-2-5`](../ltx-2-5/) | **video + joint audio**; the suite's generative video upscaler | downstream, and the engine behind ReDetail |
 | [`scail-2`](../scail-2/) | **video** — character replacement tracking a driving clip frame-for-frame | downstream, and the strictest consumer: its reference must be the driving clip's own first frame, edited |

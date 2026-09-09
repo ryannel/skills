@@ -28,7 +28,7 @@ The native workflow uses the ComfyUI [dev] image-edit template (`setup-and-workf
 3. **Iterate with fixed seeds.** If a reference fights the prompt — for example, its background keeps leaking — bypass it. `ReferenceLatentPlus` (shootthesound) adds per-image strength and timestep gating when you need one reference to dominate.
 4. **[klein] 9B KV** is the batch variant. It caches reference K/V states, so a fixed character bundle re-renders against many prompts at roughly 1.5–3× speed (`setup-and-workflows.md §4`).
 
-Multi-reference is also the **dataset factory** for the LoRA path. One anchor image becomes many consistent variants — angles, outfits, expressions, lighting — which you curate into a training set. Generate about 60, keep the best 30, and cut every frame where the face drifted. Qwen-Image-Edit 2509/2511 is the other widely-used factory tool: a different model used purely for data manufacturing. WeirdWonderfulAI's Qwen-Edit dataset writeup is the canonical version of this pipeline `[community — WeirdWonderfulAI; strong]`.
+Multi-reference is also the **dataset factory** for the LoRA path. One anchor image becomes many consistent variants — angles, outfits, expressions, lighting — which you curate into a training set. Generate about 60, keep the best 30, and cut every frame where the face drifted. [Qwen-Image-Edit 2509/2511](../../qwen-image/) is the other widely-used factory tool: a different model used purely for data manufacturing. WeirdWonderfulAI's Qwen-Edit dataset writeup is the canonical version of this pipeline `[community — WeirdWonderfulAI; strong]`.
 
 ---
 

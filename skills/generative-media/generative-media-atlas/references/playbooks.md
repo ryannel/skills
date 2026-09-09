@@ -101,8 +101,8 @@ into this step than it feels like it deserves.
 - **People skip the 8-point rotation**, and that is the number-one cause of a LoRA that collapses to
   a single pose. Also vary elevation, shot size, expression and lighting.
 - **The chained approach is the standard method.** Hold the character description fixed, vary
-  exactly one clause at a time, generate each variation from the anchor with an edit model, and
-  curate hard.
+  exactly one clause at a time, generate each variation from the anchor with an edit model — [`qwen-image`](../../qwen-image/)'s Edit-2511
+  is the one the image skills route to — and curate hard.
 - **A video turnaround solves rotation exactly rather than approximating it** `[community — via character-lora-training]`. Prompt a slow 360°
   with no cuts, then cut the clip into frames. Check the harvested model's licence first, because
   some licences bar using outputs to train.

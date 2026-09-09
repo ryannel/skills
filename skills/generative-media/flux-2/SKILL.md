@@ -302,7 +302,7 @@ The handoff rule is simple: **always VAE-decode to pixels between model families
 
 | Job | FLUX.2 | Reach for instead |
 |---|---|---|
-| Consistent characters | **Strongest no-training path** — native multi-reference (ReferenceLatent) + PuLID; full LoRA pipeline too (`references/characters.md`) | [`sdxl`](../sdxl/) for the deepest adapter toolbox (InstantID/HyperLoRA) and `[SEP]` multi-character routing; [`character-lora-training`](../character-lora-training/) for the dataset and captioning craft that transfers across every model here |
+| Consistent characters | **Strongest no-training path** — native multi-reference (ReferenceLatent) + PuLID; full LoRA pipeline too (`references/characters.md`) | [`sdxl`](../sdxl/) for the deepest adapter toolbox (InstantID/HyperLoRA) and `[SEP]` multi-character routing; [`character-lora-training`](../character-lora-training/) for the dataset and captioning craft that transfers across every model here; [`qwen-image`](../qwen-image/) — the Apache-2.0 open-weights alternative for multi-reference editing and re-shooting a character with no adapter at all, and the dataset factory `references/characters.md` names |
 | Style LoRAs | Supported, young ecosystem (`references/lora-training.md`) | [`sdxl`](../sdxl/) for mature recipes and years of accumulated craft |
 | In-image typography | Good, high variance | [`ideogram-4`](../ideogram-4/) — the typography leader |
 | Structural control | Fun Union ControlNet (custom nodes) | [`sdxl`](../sdxl/) for the most complete, mature control stack |

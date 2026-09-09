@@ -80,7 +80,7 @@ The mechanism tells you when the rule matters most. SCAIL-2 must solve two probl
 | Edit the driving video too | Feed the **original, unedited** clip as the motion source; only the reference is edited |
 | Expect it to hit a *specific* real face | It changes who the person is; it does not do face→specific-face `[community — Cre0na; single report]` |
 
-**What to edit with:** [`krea-2`](../krea-2/)'s Identity Edit LoRA, Flux 2 Klein 9B, or Qwen-Image-Edit, run image-to-image on the extracted frame `[community — blackmixture, DeerWoodStudios]`.
+**What to edit with:** [`krea-2`](../krea-2/)'s Identity Edit LoRA, Flux 2 Klein 9B, or [Qwen-Image-Edit](../qwen-image/), run image-to-image on the extracted frame `[community — blackmixture, DeerWoodStudios]`.
 
 **The rule generalises into a family of positional hints**: screen position, zoom level, reference ordering in a batch. They all follow the same idea. Pre-solve the correspondence instead of making the model infer it `[community — nsfwVariant]`. Step-by-step instructions: [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §2.
 

@@ -73,15 +73,16 @@ These bundles come from [`playbooks.md`](playbooks.md). Add `-g` to install glob
 
 | Playbook | Command |
 |---|---|
-| **A** — realistic invented character, on RunPod | `npx skills add ryannel/skills --skill generative-media-atlas --skill z-image --skill character-lora-training --skill comfyui-on-runpod --skill image-production-workflows` then `npx skills add runpod/runpod-plugins-official` |
+| **A** — realistic invented character, on RunPod | `npx skills add ryannel/skills --skill generative-media-atlas --skill z-image --skill qwen-image --skill character-lora-training --skill comfyui-on-runpod --skill image-production-workflows` then `npx skills add runpod/runpod-plugins-official` |
 | **B** — anime character, local | `npx skills add ryannel/skills --skill anima --skill character-lora-training --skill image-production-workflows` |
 | **C** — design image with text | `npx skills add ryannel/skills --skill ideogram-4 --skill image-production-workflows` |
 | **D** — still into a shot | `npx skills add ryannel/skills --skill wan-2-2 --skill image-production-workflows` (swap `wan-2-2` for `ltx-2-5` or `minimax-h3` per the licence fork) |
 | **E** — replace a person in footage | `npx skills add ryannel/skills --skill krea-2 --skill scail-2 --skill character-lora-training` (add `--skill wan-2-2` for close-up faces and lip sync via Animate 2) |
 | **F** — run it as an API | `npx skills add ryannel/skills --skill comfyui-on-runpod --skill image-production-workflows` then `npx skills add runpod/runpod-plugins-official` |
+| **Instruction editing, or identity without training** (no lettered playbook yet) | `npx skills add ryannel/skills --skill qwen-image --skill image-production-workflows` |
 | **Everything** | `npx skills add ryannel/skills --skill '*'` |
 
-**There is no bundle for the models the suite does not cover.** Qwen-Image, Bernini-R, SenseNova
+**There is no bundle for the models the suite does not cover.** Bernini-R, SenseNova
 U1.5 and HunyuanVideo-1.5 have no skill here as of 2026-09-09, so nothing to install; the atlas's
 suite map says where to route instead. **Black Forest Labs' hosted-API skills** live in
 `black-forest-labs/skills` and should install with the same CLI (`npx skills add
