@@ -1,0 +1,102 @@
+{
+  "skill": "sdxl",
+  "verdict": "drift",
+  "flux": "active",
+  "flux_evidence": "Core architecture is frozen, but the ecosystem layer keeps producing real gaps: Pony shipped a non-SDXL V7 successor unmentioned in the skill, and the SDXL/Anima trainer boundary keeps moving.",
+  "findings": [
+    {
+      "id": "pony-v7-auraflow-not-sdxl",
+      "severity": "major",
+      "claim": "The skill's checkpoint table and lora-training.md base table present 'Pony Diffusion V6 XL' as simply 'Pony,' with no indication of a newer non-SDXL Pony generation.",
+      "reality": "Pony Diffusion V7 shipped 2025-10-08: a 7B AuraFlow-based model (not an SDXL finetune), with its own LoRA pool (SimpleTuner, not kohya/OneTrainer) and a new tag+description prompting scheme replacing score_9. V6 remains dominant for production/LoRA work today because V7's ecosystem is still immature, but the omission mirrors exactly the gap the skill already flags for Anima.",
+      "evidence": "https://huggingface.co/purplesmartai/pony-v7-base ; https://civitai.com/models/1901521/pony-v7-base ; https://civitai.com/articles/6309/towards-pony-diffusion-v7-going-with-the-flow",
+      "fix_hint": "SKILL.md checkpoint table ~L66 and anime-axis callout ~L71; references/checkpoints-and-loras.md §3; references/lora-training.md §1 base table — add a Pony-V7 callout parallel to the existing Anima paragraph, noting V6 remains the practical pick until V7's LoRA pool matures."
+    },
+    {
+      "id": "weight-noising-sdxl-now-listed-supported",
+      "severity": "minor",
+      "claim": "lora-training.md §8 says SDXL weight-noising params are 'still being worked out' (open/unstable status).",
+      "reality": "The ai-toolkit-perceptual repo now lists SDXL as 'Supported' for both weight noising and perceptual anchors, but only gives a generic sigma range (0.01-0.017) with no SDXL-tuned recipe distinct from Flux/Z-Image — so the claim should soften from 'not yet worked out' to 'generic range applies, no SDXL-specific tuning published yet.'",
+      "evidence": "https://github.com/BuffaloBuffaloBuffaloBuffalo/ai-toolkit-perceptual",
+      "fix_hint": "references/lora-training.md §8, 'Status on SDXL' line."
+    },
+    {
+      "id": "kohya-lokr-loha-sdxl-anima-native",
+      "severity": "minor",
+      "claim": "lora-training.md §2/§7 doesn't mention kohya_ss's LoKr/LoHa engine support scope for SDXL vs. newer bases.",
+      "reality": "kohya_ss sd-scripts changelog now lists LoKr/LoHa support explicitly for 'SDXL/Anima' together, plus multi-resolution bucketing — confirming the trainer now natively spans both bases named in the skill's base-selection table.",
+      "evidence": "https://github.com/kohya-ss/sd-scripts (releases/changelog, 2026)",
+      "fix_hint": "references/lora-training.md §2 Tools / §7 Style LoRAs, LyCORIS note."
+    },
+    {
+      "id": "juggernaut-x-sfw-nsfw-split",
+      "severity": "minor",
+      "claim": "checkpoints-and-loras.md §2 names 'Juggernaut XL' generically with 'v9/v10/v11 line — check current.'",
+      "reality": "The current Juggernaut line (v10 / 'Juggernaut X') now ships as two separate checkpoints, SFW and NSFW, rather than one unified file — a structural change the hedge doesn't capture, though it correctly avoided pinning a version number.",
+      "evidence": "https://www.rundiffusion.com/juggernaut-xl ; https://huggingface.co/RunDiffusion/Juggernaut-XL-v9",
+      "fix_hint": "references/checkpoints-and-loras.md §2 Juggernaut XL row."
+    },
+    {
+      "id": "anima-third-party-finetunes-emerging",
+      "severity": "minor",
+      "claim": "The anima-as-illustrious-challenger watchlist item asks whether Anima's LoRA pool and finetune ecosystem have matured.",
+      "reality": "Third-party Anima finetunes are now shipping on Civitai (e.g. 'CyberRealistic Anima v7.0 Turbo'), evidence the base ecosystem is growing past the initial CircleStone release — a data point for the anima skill to track, not yet a verdict on displacing Illustrious.",
+      "evidence": "https://civitai.com/models/2668799/cyberrealistic-anima ; https://civitai.com/ecosystems/anima",
+      "fix_hint": "Defer to the `anima` skill's own freshness entry; sdxl's references/lora-training.md §1 Anima row can stay as-is."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "civitai-onsite-trainer-as-alternative",
+      "what": "Civitai's own on-site LoRA trainer is a documented alternative to local kohya_ss/OneTrainer for SDXL/Illustrious, with its own quirks: set repeats=1 and scale batch size instead (inflating repeats 'lies to the optimizer'), only flip-augmentation is available, and Prodigy always trains the text encoder regardless of settings.",
+      "why_it_matters": "It's a no-local-GPU path readers may reach for, but its defaults and cost model (buzz-per-step bands) differ enough from kohya/OneTrainer that following this skill's kohya-flavored advice verbatim there would misfire.",
+      "source_class": "single-report",
+      "evidence": "https://civitai.com/articles/21257/lora-training-parameters-guide-for-sdxl-illustrious-civitai-on-site-trainer",
+      "date": "2025-10-19",
+      "where_it_belongs": "references/lora-training.md §2 Tools",
+      "already_covered": false
+    },
+    {
+      "id": "pony-v7-simpletuner-lora-path",
+      "what": "Pony V7's LoRA training runs on SimpleTuner against the AuraFlow architecture, not kohya_ss/OneTrainer, and V7's own team flags its prompting as still inconsistent pending a V7.1 fix.",
+      "why_it_matters": "Anyone told to 'train a Pony LoRA' needs routing to a completely different toolchain and base once V6 stops being the answer, the same fork-in-the-road the skill already handles for Anima.",
+      "source_class": "official",
+      "evidence": "https://huggingface.co/purplesmartai/pony-v7-base ; https://civitai.com/articles/6309/towards-pony-diffusion-v7-going-with-the-flow",
+      "date": "2025-10-08",
+      "where_it_belongs": "references/lora-training.md §1 base table",
+      "already_covered": false
+    },
+    {
+      "id": "identity-ratio-companion-article-body-tokens",
+      "what": "neonkisu published a fuller companion article on the 0.33 identity ratio that spells out putting body-descriptor tokens (e.g. build/height phrases) directly in identity-emphasis captions, not just in-context ones.",
+      "why_it_matters": "Confirms and sharpens a nuance already present in the skill's captioning section rather than introducing a new mechanism — worth a citation update, not a rewrite.",
+      "source_class": "single-report",
+      "evidence": "https://civitai.com/articles/31467/dataset-prep-for-character-loras-how-the-033-identity-ratio-actually-works",
+      "date": "2026-06-15",
+      "where_it_belongs": "references/lora-training.md §5 Captioning",
+      "already_covered": true
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [],
+    "add": [
+      {
+        "id": "pony-v7-non-sdxl-successor",
+        "type": "contested",
+        "claim": "Pony Diffusion V7 (AuraFlow, 7B, non-SDXL) shipped 2025-10-08 with its own LoRA pool and prompting scheme; V6 XL remains the practical pick for SDXL-ecosystem work while V7's tooling matures.",
+        "where": "SKILL.md checkpoint table + anime-axis callout; references/checkpoints-and-loras.md §3; references/lora-training.md §1",
+        "check": "Has V7's LoRA pool and prompt-consistency (V7.1) matured enough to displace V6 as the default anime/furry recommendation? Track alongside anima-as-illustrious-challenger — SDXL's anime axis now has two non-SDXL challengers, not one."
+      }
+    ],
+    "amend": [
+      {
+        "id": "weight-noising-depth-anchoring",
+        "change": "ai-toolkit-perceptual now lists SDXL as 'Supported' for weight noising (not just depth anchoring), but only with the generic sigma range (0.01-0.017), no SDXL-tuned config. Update the check to ask specifically whether an SDXL-specific sigma/config has since been published, distinct from the generic range."
+      },
+      {
+        "id": "trainer-status",
+        "change": "kohya_ss sd-scripts changelog now explicitly names SDXL/Anima together for LoKr/LoHa support — note this convergence next check and see if OneTrainer/ai-toolkit have matched it."
+      }
+    ]
+  }
+}

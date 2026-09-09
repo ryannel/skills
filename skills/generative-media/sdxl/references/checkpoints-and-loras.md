@@ -28,7 +28,7 @@ Match both the **dialect** and the **LoRA pool** to the checkpoint family.
 
 | Checkpoint | Maker | For | Notes |
 |---|---|---|---|
-| **Juggernaut XL** | RunDiffusion | all-purpose **photoreal**, the default "just works" pick | strong skin/lighting/anatomy; frequent version bumps (v9/v10/v11 line) — check current |
+| **Juggernaut XL** | RunDiffusion | all-purpose **photoreal**, the default "just works" pick | strong skin/lighting/anatomy; frequent version bumps — check current. The v10 / "Juggernaut X" generation ships as **two separate checkpoints, SFW and NSFW**, so pick the file that matches the job `[official — rundiffusion.com/juggernaut-xl, 2026-09-09]` |
 | **RealVisXL** | SG161222 | **maximum photorealism**, portraits, skin/hair | the realism specialist; v5 current line |
 | **DreamShaper XL** | Lykon | artistic / fantasy / concept-art generalist | handles stylised scenes; looser prompts |
 | **ZavyChroma XL** | — | general, vivid colour, realism/art balance | |
@@ -43,6 +43,8 @@ All of these use the **photo-keyword dialect**. Most carry an OpenRAIL++-M licen
 **Pony Diffusion V6 XL** is wildly popular and very flexible (anime/furry/cartoon, strong concept flexibility). It is its own sub-ecosystem.
 - **Dialect:** start every prompt with the **score ladder** `score_9, score_8_up, score_7_up, score_6_up, score_5_up, score_4_up`, then a **source tag** (`source_anime` / `source_pony` / `source_furry` / `source_cartoon`), a **rating** (`rating_safe` / `rating_questionable` / `rating_explicit`), then Danbooru content tags.
 - Normal photoreal prompts produce poor results on it. Pony **LoRAs are a separate pool**.
+
+**Pony Diffusion V7 is not an SDXL model, and this file does not cover it.** It shipped on 2025-10-08 as a ~7B **AuraFlow** base with its own loaders and its own LoRA pool. It replaces the `score_9, score_8_up…` ladder with a tag-plus-description prompting scheme, and it trains on SimpleTuner rather than kohya_ss or OneTrainer `[official — purplesmartai/pony-v7-base card; Civitai article 6309]`. The V7 team itself calls V7 prompting inconsistent, with a fix promised for V7.1. **V6 XL remains the practical pick for SDXL-ecosystem work** while V7's LoRA pool and tooling mature `[flagged — re-verify]`. A V6 LoRA will not load on V7. When a Civitai page or a user says "Pony", check which generation before matching dialect or LoRA pool.
 
 **Illustrious XL / NoobAI XL** are the leading **anime/illustration** bases, trained on Danbooru tag vocabularies. They are the current go-to for anime finetuning and LoRAs.
 - **Dialect:** comma-separated **booru tags** (`1girl, solo, <character>, <series>, <attributes>`), plus the model's quality tags (`masterpiece, best quality` — these *do* work here, unlike on photoreal SDXL). NoobAI is an Illustrious-derived community continuation. Check its card for the exact quality-tag convention and any model-specific tags.

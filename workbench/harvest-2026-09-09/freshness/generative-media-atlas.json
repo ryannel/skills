@@ -1,0 +1,94 @@
+{
+  "skill": "generative-media-atlas",
+  "verdict": "drift",
+  "flux": "active",
+  "flux_evidence": "In the 17 days since 2026-08-23, four independent things moved: MiniMax H3's LoRA ecosystem quadrupled and gained a real training doctrine, Black Forest Labs shipped a public skills repo (contradicting the atlas's own 'no vendor publishes skills' watchlist item), RunPod added an 8th skill, and Hugging Face added a skill directly relevant to this suite — consistent with weeks-not-days movement on a hub whose drift is inherited from siblings and the skills ecosystem.",
+  "findings": [
+    {
+      "id": "h3-lora-ecosystem-matured",
+      "severity": "major",
+      "claim": "The atlas calls minimax-h3 LoRA training 'young and unsettled' (model-rankings.md §4.4) and rules video-LoRA training as 'H3 is unsettled' in the capability table (§10, playbook row); the axis matrix (§4.5) puts its Civitai census at 22 total LoRAs / 14 character-tagged as of 2026-08-23.",
+      "reality": "The sibling minimax-h3 skill was repaired 2026-08-29/30 (commits 16ff710, 0b1abdb) and now documents four converging trainers (ai-toolkit, musubi-tuner, diffusion-pipe, SimpleTuner) plus a hosted fal.ai option, shared distillation-handling doctrine, and a real content ecosystem (NSFW concept LoRAs at 40-47k downloads, character LoRAs, an audio LoRA). A live Civitai API census today (baseModels=MiniMax H3) returns 86 total LoRAs (was 22) and 29 character-tagged (was 14) — confirmed complete via full cursor pagination, not a capped sample.",
+      "evidence": "skills/generative-media/minimax-h3/references/lora-training.md (local, commits 16ff710 and 0b1abdb); https://civitai.com/api/v1/models?types=LORA&baseModels=MiniMax%20H3 (queried 2026-09-09, 86 items, no further pages)",
+      "fix_hint": "references/model-rankings.md §4.4 'Video is a different world' bullet (~L246-247), §10 axis matrix row (~L205), and the 'Train a video LoRA' playbook row (~L364); references/adult-work.md's 'H3's lead is weeks old and LoRA-poor' framing in the atlas's own watchlist also needs revisiting since it is no longer LoRA-poor."
+    },
+    {
+      "id": "bfl-skills-repo-shipped",
+      "severity": "major",
+      "claim": "Watchlist item 'vendors-publish-nothing' states none of Black Forest Labs, Stability, Alibaba/Tongyi, Lightricks, MiniMax, Z.ai or Civitai published agent skills as of 2026-08-23, echoed in SKILL.md ~L330.",
+      "reality": "black-forest-labs/skills is a real, actively maintained official repo (created 2026-01-24, last pushed 2026-09-05) shipping 10 skills: bfl-api, flux-image-best-practices, and eight flux-3-* skills covering the FLUX 3 hosted video/image/audio API (t2v/i2v/v2v/draft_enhance, keyframes-continuation, audio-dialogue, cinematic-inserts, product-ads, archival-formats, prompt-doctor). This is exactly the scenario the watchlist named as a rewrite trigger: 'route to it and delete the overlap rather than maintaining a second copy.'",
+      "evidence": "https://github.com/black-forest-labs/skills (repo metadata + skills/ listing, checked 2026-09-09)",
+      "fix_hint": "SKILL.md 'The ecosystem beyond this suite' (~L330) and references/ecosystem-map.md §4 — add Black Forest Labs as a publishing vendor and note whether flux-image-best-practices/bfl-api overlaps flux-2's own prompting guidance."
+    },
+    {
+      "id": "runpod-skill-count-8",
+      "severity": "minor",
+      "claim": "RunPod publishes 7 skills (runpod, runpod-usage, runpodctl, runpod-mcp, flash, companion-clis, runpod-migrate) per the watchlist and ecosystem-map.md §1.",
+      "reality": "The repo now ships 8 skills — one router plus seven lanes, per its own README ('one router plus seven lanes'). The new lane is runpod-templates (official pod templates). The golden-path count (24, excluding README.md) still holds exactly.",
+      "evidence": "https://github.com/runpod/runpod-plugins-official (README + skills/ directory listing via GitHub API, checked 2026-09-09)",
+      "fix_hint": "SKILL.md 'ecosystem beyond this suite' and references/ecosystem-map.md §1 — add runpod-templates, update the count to 8; comfyui-on-runpod restates the same figure and needs the same fix."
+    },
+    {
+      "id": "hf-lora-space-builder-relevant",
+      "severity": "minor",
+      "claim": "Watchlist item 'hf-skill-relevance' and references/ecosystem-map.md §3 state only hf-cli and hf-mem are relevant from Hugging Face's skills repo; no diffusion-LoRA-training skill exists there.",
+      "reality": "No training skill has landed (that part still holds), but huggingface-lora-space-builder now exists and is explicitly scoped to this suite's models: 'Qwen-Image, Qwen-Image-Edit, LTX-Video, Wan, FLUX, SDXL' — it builds and publishes a Gradio ZeroGPU Space demo for a user's trained LoRA. That is a genuinely relevant downstream step after character-lora-training that the atlas's ecosystem map omits.",
+      "evidence": "https://github.com/huggingface/skills/tree/main/skills/huggingface-lora-space-builder (SKILL.md frontmatter, checked 2026-09-09)",
+      "fix_hint": "references/ecosystem-map.md §3 — add huggingface-lora-space-builder as relevant for publishing a trained LoRA as a demo; consider a pointer from character-lora-training's evaluation/publishing section."
+    },
+    {
+      "id": "comfy-skills-technique-overlap",
+      "severity": "minor",
+      "claim": "Watchlist item 'comfy-skill-inventory' and references/ecosystem-map.md §2 describe Comfy-Org/comfy-skills as 'all Comfy Cloud MCP command wrappers rather than model craft,' with an explicit note to watch for skills that would overlap this suite's routing.",
+      "reality": "The repo has carried technique-combine-people.md since its June 2026 seed (predates the atlas's last check, so not new drift, but the atlas's framing was already imprecise): it is a face-consistency compositing recipe using GeminiNanoBanana2V2 and KlingOmniProImageNode — genuine model craft touching this suite's character-consistency territory, not a pure command wrapper. Skill count (12) is unchanged.",
+      "evidence": "https://github.com/Comfy-Org/comfy-skills/blob/main/skills/technique-combine-people.md (content + commit history, checked 2026-09-09)",
+      "fix_hint": "references/ecosystem-map.md §2 — soften 'all... command wrappers rather than model craft' and name this one exception."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "flux-3-hosted-video-api",
+      "what": "Black Forest Labs launched FLUX 3 (announced ~2026-07-25) as a hosted, closed API covering image, video up to 20s with native audio, i2v via pinned keyframes, v2v continuation from a clip's final frames, and a cached draft_enhance mode. It is not open weights; BFL's own launch plan puts an open-weight 'FLUX 3 Dev' last in the rollout with no date, licence or parameter count disclosed yet.",
+      "why_it_matters": "It is a new native-audio, keyframe-consistent video product from the vendor behind flux-2, directly adjacent to the minimax-h3/ltx-2-5 native-audio-video comparison the atlas already runs — but it stays hosted-only, so it likely belongs in the ecosystem map as an out-of-scope note rather than the open-weight video ranking.",
+      "source_class": "official",
+      "evidence": "https://github.com/black-forest-labs/skills/blob/main/skills/flux-3-generate/SKILL.md; https://venturebeat.com/technology/black-forest-labs-launches-flux-3-capable-of-generating-images-and-20-second-video-with-audio-but-in-limited-release-to-start",
+      "date": "2026-07-25",
+      "where_it_belongs": "references/ecosystem-map.md §4 (vendor skill listing) and possibly a one-line out-of-scope note near the video ranking in model-rankings.md, mirroring how Kling/Veo/Sora are excluded",
+      "already_covered": false
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [],
+    "add": [],
+    "amend": [
+      {
+        "id": "runpod-skill-inventory",
+        "change": "Skill count is now 8 (added runpod-templates), not 7. Golden-path count (24) confirmed unchanged."
+      },
+      {
+        "id": "hf-skill-relevance",
+        "change": "huggingface-lora-space-builder is now relevant (LoRA demo publishing for Qwen-Image/LTX/Wan/FLUX/SDXL); hf-cli and hf-mem remain the only infra-only ones. Still no diffusion-LoRA-training skill at HF."
+      },
+      {
+        "id": "vendors-publish-nothing",
+        "change": "No longer holds for Black Forest Labs — black-forest-labs/skills is live and actively maintained (pushed 2026-09-05). Stability, Alibaba/Tongyi, Lightricks, MiniMax, Z.ai and Civitai still have no found skill repos as of 2026-09-09."
+      },
+      {
+        "id": "comfy-skill-inventory",
+        "change": "Skill count (12) unchanged, but technique-combine-people.md (present since the June 2026 seed) is model craft, not a pure command wrapper — the 'command wrappers rather than model craft' framing should be softened."
+      },
+      {
+        "id": "civitai-census",
+        "change": "Re-run 2026-09-09: MiniMax H3 now 86 LoRAs total / 29 character-tagged (was 22/14) — full cursor-paginated count, not capped. Ideogram 4.0 now 36 total / 1 character-tagged (was 34/1, essentially unchanged). Wan 2.2 (T2V-A14B + I2V-A14B + TI2V-5B) totals 501, matching the prior ~502 — unchanged. FLUX.2 klein 9B is ~670+ (was 653) — modest growth, unchanged verdict."
+      },
+      {
+        "id": "uncovered-models",
+        "change": "Seedance 2.5 and Seedream 5.0 (ByteDance, announced 2026-06-23 at Volcano Engine) and Grok Imagine 2.0 (xAI) have all shipped since the last check, and all remain closed/hosted — confirms they stay out of scope for this open-weight-focused suite rather than leaving the silence ambiguous."
+      },
+      {
+        "id": "skills-cli-surface",
+        "change": "The proposed depends_on dependency mechanism (vercel-labs/skills issue #515, opened 2026-03-05) is still an open, unmerged proposal as of 2026-09-09 — not shipped. metadata.internal / INSTALL_INTERNAL_SKILLS documentation unchanged."
+      }
+    ]
+  }
+}

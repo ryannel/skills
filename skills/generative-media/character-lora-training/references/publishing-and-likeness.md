@@ -4,7 +4,7 @@
 
 Why does this sit in a training skill at all? Because **these rules decide whether a finished LoRA can be published, and they constrain the dataset before you assemble it.** If you find out afterwards, the work was wasted.
 
-**Everything here is dated, because it moves.** Platform policy and statute are the two fastest-moving kinds of claim in this whole skill, and both changed within the last eighteen months. **Facts in this file were read on 2026-08-13.** The direction of travel is consistently toward stricter rules. Re-verify the specific rule you are relying on before you publish `[flagged — re-verify]`.
+**Everything here is dated, because it moves.** Platform policy and statute are the two fastest-moving kinds of claim in this whole skill, and both changed within the last eighteen months. **Facts in this file were read on 2026-08-13; the statute and penalty rows in §2 were re-checked on 2026-09-09.** The direction of travel is consistently toward stricter rules. Re-verify the specific rule you are relying on before you publish `[flagged — re-verify]`.
 
 ---
 
@@ -48,7 +48,7 @@ This is US federal law, and it is the reason platform policy moved when it did.
 | Signed | 19 May 2025 |
 | Platform compliance deadline | **19 May 2026** |
 | FTC enforcement began | **19 May 2026** |
-| Civil penalty exposure | ~**$53,088 per violation** |
+| Civil penalty exposure | ~**$53,088 per violation** — frozen for 2026, not freshly indexed: OMB cancelled the government-wide 2026 inflation adjustment for federal civil penalties (the October 2025 CPI-U data was missing) and told agencies to keep 2025 figures, so re-check this in early 2027 `[official — FTC business blog, 2026-05; re-verify]` |
 
 **What it does:** it makes it a federal crime to knowingly share, or threaten to share, non-consensual intimate imagery. That **explicitly includes AI-generated images of real people**, wherever the depiction is *"indistinguishable from an authentic visual depiction."*
 
@@ -58,7 +58,16 @@ This is US federal law, and it is the reason platform policy moved when it did.
 
 - The legal exposure attaches to *distributing* the imagery, not to a model file existing. Even so, a published LoRA whose obvious purpose is generating NCII of an identifiable person is not a comfortable position to be in, under either the statute or any host's terms.
 - **A 48-hour takedown window is fast.** If you run any service that accepts user uploads, you are probably a covered platform, and you need a process for handling notices.
-- This is US law. The EU, the UK and several other jurisdictions have their own versions, and state-level deepfake statutes are still arriving. **The picture is still moving**, so re-verify rather than trusting a snapshot.
+- This is US federal law, and it is no longer the only instrument. The rest of the landscape, as of 2026-09-09 `[official-via-docs — DPP Law, TechPolicy.press, MultiState; re-verify]`:
+
+| Jurisdiction | Instrument | What it does | Status |
+|---|---|---|---|
+| **United Kingdom** | Data (Use and Access) Act 2025 | Makes merely **creating** a non-consensual intimate deepfake a criminal offence — not only sharing it | In force since **2026-02-06** |
+| **European Union** | AI Act | Classifies unsafeguarded NCII-generation systems as a **prohibited practice** | Check whether the provision has moved from proposal to binding text before relying on it |
+| **US states** | State deepfake statutes | Civil and criminal liability that varies state by state | **At least 45 states** have an enacted law as of mid-2026 |
+| **US federal** | NO FAKES Act | A federal digital-replica right over voice and likeness | Cleared the Senate Judiciary Committee in **June 2026**; not law |
+
+  The UK row is the one that changes a trainer's position most: it attaches to the act of generation, which a model file and a prompt together perform. **The picture is still moving**, so re-verify the specific instrument rather than trusting this table.
 
 ---
 

@@ -1,0 +1,126 @@
+{
+  "skill": "anima",
+  "verdict": "drift",
+  "flux": "active",
+  "flux_evidence": "The base model itself is frozen, but the downstream ecosystem moved concretely this cycle: OneTrainer merged support, a community 2.9B fork got a LoRA-compatibility fix and an upstream sd-scripts PR, a new official Turbo v1.1 checkpoint shipped, and the base-vs-finetune download race flipped — all within about two weeks of the 2026-08-22 check.",
+  "findings": [
+    {
+      "id": "onetrainer-anima-support-shipped",
+      "severity": "major",
+      "claim": "references/lora-training.md's trainer table says: \"OneTrainer | No Anima support found either way. Check its changelog before planning around it\".",
+      "reality": "OneTrainer merged native Anima support on 2026-07-04 (PR #1487 \"New model: Anima\", gated behind the diffusers Cosmos pipeline landing). The tracking issue Nerogar/OneTrainer#1278 was closed as completed the same window.",
+      "evidence": "https://github.com/Nerogar/OneTrainer/pull/1487 ; https://github.com/Nerogar/OneTrainer/issues/1278",
+      "fix_hint": "references/lora-training.md trainer table ~L45 — replace the OneTrainer row with confirmed support (merged 2026-07-04) and note it's the only trainer with genuine validation loss, which bears directly on the contested character-LoRA-difficulty claim nearby."
+    },
+    {
+      "id": "anima-2.9b-lora-compat-now-answered",
+      "severity": "major",
+      "claim": "SKILL.md ~L241 / two-bar bullet ~L260 and references/setup-and-workflows.md ~L115 treat whether Anima-Base LoRAs load on the Anima-2.9B fork as an open, unanswered question (u/Neonsea1234's post went unanswered).",
+      "reality": "It's now answered and documented: loading a Base LoRA as-is on 2.9B silently corrupts identity (0/3 success, ComfyUI gives no warning) because layer insertion shifts block numbers; remapping the LoRA's block keys to the new numbering restores it (3/3). Separately, kohya-ss/sd-scripts PR #2418 (\"Add support for expanded Anima 2.9B model by detecting block count from keys\", open non-draft, last updated 2026-08-14) is upstream work toward native support — evidence the fork is gaining traction rather than staying a footnote.",
+      "evidence": "https://lilting.ch/en/articles/anima-2-9b-layer-expansion-lora-compat ; https://github.com/kohya-ss/sd-scripts/pull/2418",
+      "fix_hint": "SKILL.md ~L241 and two-bar bullet ~L260; references/setup-and-workflows.md ~L115 — replace \"assumes not\" framing with: LoRAs don't load directly (silent corruption) but do work with block-key remapping; the fork now has upstream sd-scripts interest, so it's no longer purely a footnote."
+    },
+    {
+      "id": "checkpoint-download-ranking-reversed-and-flawed",
+      "severity": "major",
+      "claim": "SKILL.md ~L23/52 and setup-and-workflows.md ~L211 state \"A community checkpoint already out-downloads the official base — MiaoMiao Harem at ~199k against ~190k [2026-08-22]\", framing Anima like SDXL where most people run a finetune.",
+      "reality": "As of 2026-09-09 the official Anima listing's total downloads (218,777, all versions) now edge past MiaoMiao Harem's total (215,667). More importantly the comparison was apples-to-oranges: MiaoMiao Harem is a multi-base checkpoint (Anima + Illustrious + NoobAI + Pony); only its Anima-tagged versions sum to ~102.6k downloads, well under Anima-Base alone (89,433) plus Aesthetic/Turbo. A same-base comparison shows the official checkpoints clearly ahead, not behind.",
+      "evidence": "https://civitai.com/api/v1/models/2458426 ; https://civitai.com/api/v1/models/934764",
+      "fix_hint": "SKILL.md ~L23 blockquote and ~L52; references/setup-and-workflows.md ~L211 — drop the \"out-downloads\" framing or replace with the corrected, same-base comparison; the SDXL analogy may need softening since it rests on this now-reversed number."
+    },
+    {
+      "id": "turbo-v1.1-undocumented",
+      "severity": "minor",
+      "claim": "SKILL.md variant table ~L46 lists only Anima-Turbo v1.0 (`anima-turbo-v1.0.safetensors`).",
+      "reality": "CircleStone shipped anima-turbo-v1.1.safetensors (uploaded by tdrussell) alongside Aesthetic v1.1; it already has ~16,886 Civitai downloads and community notes describe it as improving on v1.0's flatness and detail expression.",
+      "evidence": "https://huggingface.co/circlestone-labs/Anima/tree/main/split_files/diffusion_models ; https://civitai.com/api/v1/models/2458426",
+      "fix_hint": "SKILL.md variant table ~L46 — add the v1.1 row/note, parallel to how Aesthetic v1.1 is already flagged as undocumented-in-card."
+    },
+    {
+      "id": "aesthetic-cfg-community-figure-exists",
+      "severity": "minor",
+      "claim": "The watchlist and SKILL.md ~L45 say no vendor CFG figure exists for Aesthetic and the skill's number is extrapolated from Base.",
+      "reality": "The official card still doesn't document Aesthetic v1.1 or give it a CFG figure, but community sources now converge on CFG ~3 for Aesthetic (\"tolerates lower CFGs such as 3, and often looks better with them\"), which is lower than Base's 4-5.",
+      "evidence": "https://prompthero.com/ai-models/anima-official-2458426-download/anima-aesthetic-v11",
+      "fix_hint": "SKILL.md ~L45 and references/setup-and-workflows.md — the extrapolated CFG 4 could be replaced with the community-sourced ~3, tagged `[community]` since it's still not official."
+    },
+    {
+      "id": "style-explorer-alive-and-grown",
+      "severity": "minor",
+      "claim": "The watchlist flags animastyles.thetacursed.com as a volatile mirror URL at risk of going dead after ThetaCursed's GitHub was suspended.",
+      "reality": "The site resolves fine and still advertises 40,000+ artist tags; the source GitHub repo (github.com/ThetaCursed/Anima-Style-Explorer) is live with an index file named for 59k artists, suggesting the count has grown past what the skill cites.",
+      "evidence": "https://animastyles.thetacursed.com/ ; https://github.com/ThetaCursed/Anima-Style-Explorer/blob/main/Anima2B_Artist_Index_59k.txt",
+      "fix_hint": "references/prompting-guide.md ~L102 — no urgent fix needed; optionally bump the artist count from 42k+ to the newer 59k figure once confirmed against the live site's own count."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "anima-2.9b-lora-block-key-remap",
+      "what": "To use an Anima-Base LoRA on the community Anima-2.9B fork (28→40 layers via LLaMA-Pro-style expansion), remap the LoRA's block-number keys using the layer-insertion position table before loading; loading as-is silently misapplies deltas to the wrong blocks (0/3 success) while remapped keys work (3/3).",
+      "why_it_matters": "Without this, ComfyUI loads a mismatched LoRA with no warning and quietly corrupts character identity, which is exactly the kind of silent-failure trap this skill documents elsewhere.",
+      "source_class": "single-report",
+      "evidence": "https://lilting.ch/en/articles/anima-2-9b-layer-expansion-lora-compat",
+      "date": "2026-08-12",
+      "where_it_belongs": "references/setup-and-workflows.md ~L115 (community forks section)",
+      "already_covered": false
+    },
+    {
+      "id": "anima-lora-recipe-by-type",
+      "what": "A Civitai sd-scripts guide gives per-type Anima LoRA settings: character (dim/alpha 8, lr 1e-4, 1000-1500 steps, 20-30 images), multi-outfit character (lr 1e-3 then 5e-5 refine, ~900+ steps/outfit), style (dim/alpha 16, lr 5e-5, 6500 steps, 60-150 images), concept (dim/alpha 4-8, lr 1e-4, 1200-2000 steps).",
+      "why_it_matters": "Gives named, reproducible numbers where the skill currently states a single generic recipe (2e-5 LR at rank 32) with no type-specific breakdown; it directly bears on the contested character-LoRA-difficulty watchlist item.",
+      "source_class": "community-consensus",
+      "evidence": "https://civitai.com/articles/31972/anima-lora-training-settings-for-sd-scripts",
+      "date": "2026-06-28",
+      "where_it_belongs": "references/lora-training.md §3 hyperparameter table",
+      "already_covered": false
+    },
+    {
+      "id": "sd-scripts-2.9b-block-detection",
+      "what": "kohya-ss/sd-scripts PR #2418 adds automatic detection of Anima-2.9B's expanded block count from checkpoint keys, moving toward native trainer-side support for the layer-expanded fork rather than manual handling.",
+      "why_it_matters": "Signals the community fork is being absorbed into mainline tooling rather than staying an experimental footnote, which should update the fork's current \"not for production\" framing.",
+      "source_class": "official",
+      "evidence": "https://github.com/kohya-ss/sd-scripts/pull/2418",
+      "date": "2026-08-14",
+      "where_it_belongs": "SKILL.md variant table ~L48 and references/setup-and-workflows.md ~L115",
+      "already_covered": false
+    },
+    {
+      "id": "anima-turbo-v1.1-checkpoint",
+      "what": "CircleStone shipped anima-turbo-v1.1.safetensors, an update to the Turbo distillation, alongside Aesthetic v1.1.",
+      "why_it_matters": "It's a new default-candidate checkpoint in the Turbo-vs-Aesthetic contest the skill already flags as unresolved, and isn't in the variant table at all yet.",
+      "source_class": "official",
+      "evidence": "https://huggingface.co/circlestone-labs/Anima/tree/main/split_files/diffusion_models",
+      "date": "2026-08-26",
+      "where_it_belongs": "SKILL.md variant table ~L46",
+      "already_covered": false
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [
+      "anima-trainer-support"
+    ],
+    "add": [
+      {
+        "id": "anima-turbo-v1.1-vs-v1.0",
+        "type": "figure",
+        "claim": "Turbo v1.1 exists but is undocumented in the skill and its relationship to the contested Turbo-vs-Aesthetic default is unassessed.",
+        "where": "SKILL.md variant table ~L46",
+        "check": "Check whether the model card documents v1.1's changes and whether community opinion on the Turbo-vs-Aesthetic default shifts once v1.1 is accounted for."
+      }
+    ],
+    "amend": [
+      {
+        "id": "anima-community-forks",
+        "note": "LoRA-compat question is now answered (fails as-is, works with block-key remap) and sd-scripts PR #2418 shows upstream interest in native 2.9B support — the fork is no longer a pure footnote; re-check whether it should get variant-selector treatment."
+      },
+      {
+        "id": "anima-checkpoint-ecosystem-ranking",
+        "note": "Re-sampled 2026-09-09: official Anima total downloads (218,777) now edge past MiaoMiao Harem's total (215,667), and the original comparison mixed MiaoMiao Harem's non-Anima base-model versions in; use same-base download figures going forward."
+      },
+      {
+        "id": "anima-turbo-vs-aesthetic-default",
+        "note": "Community now cites CFG ~3 for Aesthetic (still not on the official card), and Turbo v1.1 shipped, complicating the existing v1.0 Turbo-vs-Aesthetic framing."
+      }
+    ]
+  }
+}

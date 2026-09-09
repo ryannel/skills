@@ -1,0 +1,122 @@
+{
+  "skill": "ltx-2-5",
+  "verdict": "drift",
+  "flux": "hot",
+  "flux_evidence": "A GitHub release four days after last_checked (v1.3.0, 2026-08-26) shipped a breaking DFR checkpoint-format change and removed a CLI flag the skill instructs users to pass; HF monthly downloads flipped in 2.5's favor within two and a half weeks; dense community quantization (MLX, INT8, FP8, NVFP4) activity continues weekly.",
+  "findings": [
+    {
+      "id": "dfr-checkpoint-format-changed",
+      "severity": "major",
+      "claim": "DFR runs the distilled sigma schedule on the full checkpoint, using the distilled LoRA (stage 1 half-res, stage 2 full-res with the distilled LoRA).",
+      "reality": "LTX-2 v1.3.0 (2026-08-26) changed this: release notes list under Changed, \"Checkpoint Format: DFR now requires distilled checkpoint instead of full checkpoint plus LoRA,\" and under Removed, \"Legacy checkpoint/LoRA flags.\" The full-checkpoint-plus-distilled-LoRA loading path the skill documents no longer applies.",
+      "evidence": "https://github.com/Lightricks/LTX-2/releases/tag/v1.3.0",
+      "fix_hint": "SKILL.md ~L213-215 (\"DFR — DFRPipeline, 2.5 only\") and ~L268 (stage-1 description); references/setup-and-workflows.md ~L209 (\"DFR in detail\") — update checkpoint-loading instructions to the distilled checkpoint directly, drop the full-checkpoint+distilled-LoRA framing and the now-removed legacy flags."
+    },
+    {
+      "id": "temporal-upsample-rounds-flag-removed",
+      "severity": "major",
+      "claim": "`--temporal-upsample-rounds {0,1,2}` is the DFR temporal-rounds flag and the native alternative to RIFE.",
+      "reality": "LTX-2 v1.3.0 (2026-08-26) release notes list `--num-generated-keyframes` and `--temporal-upsample-rounds` under Removed. A user following the skill's flag as written will hit an unrecognised-argument error on current ltx-pipelines.",
+      "evidence": "https://github.com/Lightricks/LTX-2/releases/tag/v1.3.0",
+      "fix_hint": "SKILL.md ~L215, ~L266, ~L270 and any other `--temporal-upsample-rounds` mentions — find the replacement flag/mechanism in the current ltx_pipelines CLI help and update all three call sites."
+    },
+    {
+      "id": "hf-downloads-flip-2-5-leads-2-3",
+      "severity": "major",
+      "claim": "The ecosystem is still on 2.3: HF downloads favored 2.3 (1.58M vs 695k) as of 2026-08-22, used to justify defaulting new users to 2.3 in the variant selector.",
+      "reality": "As of 2026-09-09, Lightricks/LTX-2.5's HF card shows 1,644,796 downloads in the last month versus Lightricks/LTX-2.3's 1,181,828 — 2.5 has overtaken 2.3 on this axis. The Civitai LoRA-count side of the same claim (168 vs 3 on 2026-08-22) was not resampled this run (tag-based Civitai API queries did not return usable totals) and needs a follow-up check.",
+      "evidence": "https://huggingface.co/Lightricks/LTX-2.5 ; https://huggingface.co/Lightricks/LTX-2.3",
+      "fix_hint": "SKILL.md variant selector ~L54 and two-bar bullet ~L347 — the download-count half of the \"ecosystem hasn't followed\" argument no longer holds; the LoRA-count half is still unverified this cycle, so soften the framing rather than flip it outright."
+    },
+    {
+      "id": "replicate-adds-ltx-2-5-fast",
+      "severity": "minor",
+      "claim": "Replicate carries no ltx-2.5-pro and its pricing was not read (implying no 2.5 presence on Replicate at all).",
+      "reality": "Replicate's Lightricks page now lists \"ltx-2.5-fast\" (6.8K runs) alongside ltx-2.3-pro/fast — a 2.5 tier exists on Replicate, though still no ltx-2.5-pro. Pricing was not confirmed this run.",
+      "evidence": "https://replicate.com/lightricks",
+      "fix_hint": "SKILL.md task table ~L169 and references/setup-and-workflows.md ~L189 — add ltx-2.5-fast as a routing option; the \"no 2.5 on Replicate\" framing is now inaccurate for the fast tier."
+    },
+    {
+      "id": "macos-install-fix-not-full-metal-support",
+      "severity": "minor",
+      "claim": "Apple Metal support is contested / unresolved.",
+      "reality": "LTX-2 v1.3.0 (2026-08-26) release notes list a Fixed item: \"macOS uv sync compatibility for non-CUDA torch wheels\" — official engineering attention to macOS install is now happening, though this is packaging compatibility, not confirmation of working Metal inference or a reproduced benchmark.",
+      "evidence": "https://github.com/Lightricks/LTX-2/releases/tag/v1.3.0",
+      "fix_hint": "SKILL.md two-bar bullet ~L348 — note the packaging fix as movement without claiming Metal inference is resolved; still needs a reproduced macOS run to close."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "mlx-quantization-apple-silicon",
+      "what": "A wave of community MLX conversions of LTX-2.5 has appeared on Hugging Face (mlx-community and multiple individual accounts): bf16, q4, q8, ditq8 and w4a8-convrot-int4 variants, letting the model run on Apple Silicon via MLX rather than native PyTorch/CUDA.",
+      "why_it_matters": "This is the practical answer to Apple support right now — not Metal-backed PyTorch, but an MLX conversion path with real community uptake.",
+      "source_class": "community-consensus",
+      "evidence": "https://huggingface.co/mlx-community/ltx-2.5-mlx-q8 ; https://huggingface.co/mlx-community/ltx-2.5-mlx",
+      "date": "2026-09-01",
+      "where_it_belongs": "SKILL.md two-bar bullet ~L348 (platform support); references/setup-and-workflows.md (a macOS/Apple Silicon subsection)",
+      "already_covered": false
+    },
+    {
+      "id": "nvfp4-blackwell-jetson-quantization",
+      "what": "v1.3.0 extended NVFP4 quantization support (introduced for Blackwell GPUs in v1.2.0) to Jetson Thor via a `110a` architecture target.",
+      "why_it_matters": "Widens the low-VRAM/edge-hardware quantization story beyond desktop Blackwell cards, relevant to the contested VRAM-floor discussion.",
+      "source_class": "official",
+      "evidence": "https://github.com/Lightricks/LTX-2/releases/tag/v1.3.0",
+      "date": "2026-08-26",
+      "where_it_belongs": "references/setup-and-workflows.md optimization/quantization section; SKILL.md two-bar bullet ~L346 (VRAM floor)",
+      "already_covered": false
+    },
+    {
+      "id": "multi-gpu-dfr-runner",
+      "what": "v1.3.0 shipped `ltx_pipelines.dfr_mgpu`, a distributed multi-GPU DFR runner, alongside fixes for multi-GPU DFR tiling and temporal-boundary bugs.",
+      "why_it_matters": "First official multi-GPU path for the DFR pipeline specifically, relevant for production setups scaling past a single card.",
+      "source_class": "official",
+      "evidence": "https://github.com/Lightricks/LTX-2/releases/tag/v1.3.0",
+      "date": "2026-08-26",
+      "where_it_belongs": "references/setup-and-workflows.md (DFR section, multi-GPU note)",
+      "already_covered": false
+    },
+    {
+      "id": "4k-tiled-spatial-epilogue-dfr",
+      "what": "DFR can now finish 4K output via a tiled spatial epilogue (`--spatial-upscalings 2`) instead of denoising the full canvas in stage 2, changing the recommended path to 4K.",
+      "why_it_matters": "Changes the mechanics of the highest-resolution DFR workflow the skill documents.",
+      "source_class": "official",
+      "evidence": "https://github.com/Lightricks/LTX-2/releases/tag/v1.3.0",
+      "date": "2026-08-26",
+      "where_it_belongs": "SKILL.md ~L213-215 (DFR section); references/setup-and-workflows.md ~L209 (DFR in detail)",
+      "already_covered": false
+    },
+    {
+      "id": "gemma4-audio-sync-music-video-regression",
+      "what": "A detailed HF discussion reports LTX-2.5's Gemma-4 text encoder struggles with precise audio/lip-sync for singing avatars and music videos, recommending 2.3 for that use case specifically; the author notes recent nightly builds partially but inconsistently improve it.",
+      "why_it_matters": "A named, use-case-specific regression versus 2.3 that the skill's version-selector guidance doesn't currently carve out.",
+      "source_class": "single-report",
+      "evidence": "https://huggingface.co/Lightricks/LTX-2.5/discussions/57",
+      "date": "2026-08-19",
+      "where_it_belongs": "SKILL.md variant selector ~L54-64 (add a music-video/singing-avatar caveat)",
+      "already_covered": false
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [],
+    "add": [
+      {
+        "id": "ltx-dfr-checkpoint-and-flag-breaking-changes",
+        "type": "version-pin",
+        "claim": "v1.3.0 (2026-08-26) changed DFR to load the distilled checkpoint directly (no more full-checkpoint+distilled-LoRA) and removed `--temporal-upsample-rounds`/`--num-generated-keyframes`. The skill's DFR sections still describe the pre-v1.3.0 mechanics and flags.",
+        "where": "SKILL.md ~L213-215, ~L266-270; references/setup-and-workflows.md ~L209",
+        "check": "Diff the current ltx_pipelines DFR CLI help and checkpoint-loading code against what SKILL.md documents; confirm whether the replacement flag for temporal upsampling has stabilized or is still moving."
+      }
+    ],
+    "amend": [
+      {
+        "id": "ltx-2-3-vs-2-5-ecosystem-split",
+        "note": "HF monthly downloads flipped: 2.5 now leads 2.3 (1,644,796 vs 1,181,828 on 2026-09-09). Civitai LoRA-count comparison (168 vs 3 on 2026-08-22) was not resampled this run — tag-based Civitai API queries returned no usable totals. Next check should resample Civitai counts specifically."
+      },
+      {
+        "id": "ltx-platform-support-and-realtime",
+        "note": "v1.3.0 (2026-08-26) fixed macOS uv-sync compatibility for non-CUDA torch wheels, and a large community MLX-quantization wave for Apple Silicon has appeared on HF — movement on the install/packaging side, but no reproduced native Metal inference benchmark or ROCm report was found this run."
+      }
+    ]
+  }
+}

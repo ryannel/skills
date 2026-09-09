@@ -29,13 +29,14 @@ SDXL LoRA training is the most mature corner of open-source image generation. It
 | Base | Dialect | Position |
 |---|---|---|
 | **SDXL 1.0 / photoreal finetunes** | Descriptive keyword phrases | Maximum compatibility across the photoreal family. The right choice for realism work |
-| **Pony Diffusion V6 XL** | Booru tags **plus `score_X` quality tags** | Enormous ecosystem. The score-tag system is divisive: it becomes part of the training captions and **does not transfer** to other families `[community]` |
+| **Pony Diffusion V6 XL** | Booru tags **plus `score_X` quality tags** | Enormous ecosystem. The score-tag system is divisive: it becomes part of the training captions and **does not transfer** to other families `[community]`. **The last SDXL Pony** — see the V7 row |
+| **Pony Diffusion V7** | Tags plus natural-language descriptions | **Not an SDXL finetune.** A ~7B AuraFlow model, shipped 2025-10-08, with its own LoRA pool. **It trains on SimpleTuner**, not kohya_ss or OneTrainer, so none of the recipes in this file apply as written. The V7 team flags its prompting as still inconsistent pending a V7.1 fix `[official — purplesmartai/pony-v7-base card; Civitai article 6309]`. **Train on V6 XL for SDXL-ecosystem work** until V7's pool matures; a V6 LoRA does not load on V7 `[flagged — re-verify]` |
 | **Illustrious** (v2.0 as a finetune base) | Booru tags | **The largest character-LoRA library.** The default choice for character work if you want it to work with existing community LoRAs |
 | **NoobAI-XL V-Pred 1.0** | Booru tags | Reported as the most anatomically accurate, with the best tag comprehension. **It requires v-prediction sampler settings and Euler specifically — other samplers will not work.** Budget an evening for that alone |
 | **WAI-NSFW v17** | Booru tags | The usual easier-setup runner-up to v-pred NoobAI |
 | **Anima** | Booru tags | **Not an SDXL finetune.** Anima is a separate 2B model that happens to speak the same booru dialect, so it needs its own trainer config and its own LoRA pool. Named trainers describe it as becoming "the new Illustrious," and they note that LoRA quality there varies widely because the pool is still young `[community — re-verify]`. **The weights are non-commercial**, unlike everything else in this table, and your LoRA is a Derivative that carries that restriction too. It is not a flat bar, though: §2(c) lets a person **operating in an individual capacity** sell the LoRA weights themselves. What no one may do is ship those weights inside a larger product or serve them behind a paid API. The images the LoRA makes stay unrestricted for everyone, individual or company. The full shape is in [`anima`](../../anima/) `[official — CircleStone NC licence §1(a)/§2(c)/§2(e)]` |
 
-**Cross-family transfer is partial at best.** Some NoobAI LoRAs are reported to work acceptably on Illustrious, because the two lineages share ancestry `[community — re-verify]`. Pony is the outlier: its score-tag conditioning means a Pony-trained LoRA carries assumptions that no other family shares.
+**Cross-family transfer is partial at best.** Some NoobAI LoRAs are reported to work acceptably on Illustrious, because the two lineages share ancestry `[community — re-verify]`. Pony V6 is the outlier: its score-tag conditioning means a Pony-trained LoRA carries assumptions that no other family shares. Pony V7 is not a transfer question at all, because it is a different architecture.
 
 **The honest heuristic is simple: train on the checkpoint you will actually generate with.** If you do not know yet, pick Illustrious for anime or stylised character work, and a photoreal SDXL finetune for realism. Both have the largest pools of compatible LoRAs to stack with, which makes them the safe defaults.
 
@@ -46,6 +47,8 @@ SDXL LoRA training is the most mature corner of open-source image generation. It
 - **kohya_ss** (`sd-scripts`) is the de-facto standard, with both a GUI and a CLI. Its GitHub **discussions** are a primary craft source, because named users publish reproducible experiments there.
 - **OneTrainer** has a friendlier UI, good defaults, and is the most-requested target when new techniques get ported.
 - **ai-toolkit** (Ostris) is increasingly the default for newer architectures, and it is the base for the experimental fork in §8.
+- **kohya_ss now spans SDXL and Anima natively.** Its sd-scripts changelog lists LoKr/LoHa support for "SDXL/Anima" together, plus multi-resolution bucketing, so the two booru bases in §1 share one trainer `[official — kohya-ss/sd-scripts changelog, 2026]`. Pony V7 is the exception: it trains on **SimpleTuner** against AuraFlow (§1).
+- **Civitai's on-site trainer** is the no-local-GPU path for SDXL and Illustrious. It bills in buzz per step, and its defaults differ from kohya's in three ways that matter `[community — Civitai 21257; single report; re-verify]`: set **repeats to 1 and scale batch size instead**, because inflating repeats "lies to the optimizer"; the only augmentation on offer is **flip**; and **Prodigy always trains the text encoder there**, whatever the TE setting says. Do not copy this file's kohya numbers into it verbatim.
 
 **Text-encoder training is contested.** SDXL LoRAs *can* train the CLIP encoders; that is why `LoraLoader` exposes `strength_clip`. kohya's default TE LR is 5e-5, which is half the UNet's. The Illustrious style recipe runs TE at 0.5 Prodigy-relative. Other trainers disable TE entirely for styles. Training the TE binds vocabulary harder, which helps trigger-heavy characters, but it costs more prompt-hijacking when the LoRA is loaded. Both camps have named, reproducible advocates. `[contested]`
 
@@ -75,7 +78,7 @@ Both positions are defensible. Lower rank soaks up less unwanted background and 
 
 **VRAM and batch.** Around 12 GB works if you use gradient checkpointing plus an 8-bit optimizer; 16–24 GB is comfortable. When you drop batch size to fit in memory, **hold `batch × gradient_accumulation` constant.** Batch 1 with accum 4 behaves like batch 4, just at roughly a third of the speed `[community — QuantumBogoSort]`.
 
-**LyCORIS.** **LoKr** has the strongest *style* reputation: it gives better texture fidelity at much smaller file sizes, at some cost in trainability and portability. **LoKr factor 8** is the setting used in the current experimental character recipes (§8). DoRA outperforms plain LoRA in academic benchmarks but stays niche. Plain LoRA and LoKr cover nearly all practical 2026 work.
+**LyCORIS.** **LoKr** has the strongest *style* reputation: it gives better texture fidelity at much smaller file sizes, at some cost in trainability and portability. **LoKr factor 8** is the setting used in the current experimental character recipes (§8). kohya's sd-scripts now lists LoKr and LoHa as supported for SDXL and Anima alike `[official — kohya-ss/sd-scripts changelog, 2026]`. DoRA outperforms plain LoRA in academic benchmarks but stays niche. Plain LoRA and LoKr cover nearly all practical 2026 work.
 
 **Resolution.** 1024 is the point of diminishing returns. Training at 1536 and 2048 is analytically better, but for most work it is not perceptibly better `[community — QuantumBogoSort]`.
 
@@ -136,7 +139,7 @@ There are two traps in that structure:
 
 Auto-tagger settings: **max ~30 tags, minimum threshold ~0.4**, plus a standard quality blacklist (`bad quality`, `worst quality`, `deformed`, `mutation`, `blurry`) `[community — convergent across SDXL captioning guides]`.
 
-**Body tokens belong in the captions.** Height, build and proportions are part of an identity. Omitting them is a documented cause of a LoRA whose face is right and whose body is wrong, and that matters most where the body is actually visible.
+**Body tokens belong in the captions.** Height, build and proportions are part of an identity. Omitting them is a documented cause of a LoRA whose face is right and whose body is wrong, and that matters most where the body is actually visible. Put them in the **identity-emphasis** captions too, not only the in-context ones `[community — neonkisu, Civitai 31467]`.
 
 **Pony-specific:** its `score_X` quality tags participate in training captions and must **honestly match** the image's quality, or they destabilise training.
 
@@ -182,7 +185,7 @@ The reference config from the published comparison: batch 4, LR 5e-5, buckets 51
 
 **Expect mid-training weirdness.** Body horror and extra limbs during the run are *normal* here, because the noise explores latent space more aggressively before converging. The heuristic: if you sample every 25 steps and see continuous body horror for more than ~20% of the run, sigma is too high. Lower it in 0.0025 increments.
 
-**Status on SDXL:** depth anchoring is supported. The weight-noising parameters for SDXL specifically are still being worked out. `[flagged — re-verify]`
+**Status on SDXL:** the ai-toolkit-perceptual repo now lists SDXL as supported for both weight noising and depth anchoring. But it gives only the generic sigma range, **0.01–0.017**, with no SDXL-tuned recipe distinct from Flux or Z-Image `[official — ai-toolkit-perceptual README, 2026-09-09]`. Start inside that range and sweep; the 0.0125 above was not established on SDXL `[flagged — re-verify]`.
 
 One more thing is emerging from the same discussion: the **Rose optimizer** (stateless, lower VRAM, better reported generalisation) needs a **much higher LR — around 1e-3 rather than 1e-4.** Its overfitting also shows up as minor artefacting rather than the usual memorisation, so save checkpoints more frequently when using it. `[community — ECF630; contested, early]`
 
@@ -239,8 +242,8 @@ SDXL is where this is deepest in the whole open-weights field, and base choice d
 
 SDXL-specific points:
 
-- **Pick a base with the training data in mind.** Use NoobAI-XL V-Pred for anatomical accuracy (with the v-pred/Euler constraint), Illustrious for the largest compatible character-LoRA pool, Pony for breadth, or WAI-NSFW for an easier setup. Training an explicit character on vanilla SDXL 1.0 fights the base model the whole way.
+- **Pick a base with the training data in mind.** Use NoobAI-XL V-Pred for anatomical accuracy (with the v-pred/Euler constraint), Illustrious for the largest compatible character-LoRA pool, Pony V6 XL for breadth (V7 is not SDXL; §1), or WAI-NSFW for an easier setup. Training an explicit character on vanilla SDXL 1.0 fights the base model the whole way.
 - **Booru dialect means explicit tagging is natural.** These finetunes were trained on tagged data, so tag the explicit content plainly and specifically. Vague captions cause the content to fuse into the character, producing a LoRA that can only ever be explicit.
 - **Include clothed images** if the character needs to be renderable clothed. This follows from the same rule.
-- **Body tokens belong in the identity-emphasis captions too.** Build and proportions are part of the identity, and omitting them is a documented cause of "outfit and body type wrong" `[community — neonkisu]`.
+- **Body tokens belong in the identity-emphasis captions too.** Build and proportions are part of the identity, and omitting them is a documented cause of "outfit and body type wrong" `[community — neonkisu, Civitai 31467]`.
 - **Publishing is the binding constraint, not capability.** Real-person likeness is prohibited outright on Civitai regardless of rating, and NCII of real people is federally enforced in the US. See [`character-lora-training/references/publishing-and-likeness.md`](../../character-lora-training/references/publishing-and-likeness.md) before sourcing a dataset.

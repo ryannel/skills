@@ -54,7 +54,11 @@ Two rules follow from this, and they are the rules that save a run:
 
 Before you rent a GPU, do that multiplication, the same way §6 has you count grid cells. If previews come out as a real slice of the training time, treat that as a bug in the config, not a setting.
 
-**Loss is close to useless here**, and the community is right about that. One exception is worth knowing about: **OneTrainer supports real validation loss.** You mark separate concepts as validation data — explicitly *not* your training images — and it graphs per-concept validation loss to TensorBoard. That is a genuine held-out signal that no other trainer gives you, and it costs nothing. If validation loss turns upward while the sample images still look fine, you are watching overfitting start.
+**Loss is close to useless here**, and the community and the vendors now agree: "watch the samples, not the loss" `[official — BFL, docs.bfl.ml]`. One exception is worth knowing about: **OneTrainer supports real validation loss.** You mark separate concepts as validation data — explicitly *not* your training images — and it graphs per-concept validation loss to TensorBoard. That is a genuine held-out signal that no other trainer gives you, and it costs nothing. If validation loss turns upward while the sample images still look fine, you are watching overfitting start.
+
+Two 2026 tooling notes. OneTrainer is reported to run 1.4–2× faster than AI-Toolkit on the same hardware, from `torch.compile` and int8 (w8a8) training switched on by default `[community — sanj.dev trainer comparison, 2026-08]`. AI-Toolkit's mid-2026 PR stream added qfloat8 offloading, a dynamic memory manager, offline mode and block-by-block quantisation for Krea 2 `[official — ostris/ai-toolkit PRs, 2026]`. That lowers the VRAM floor on the newer bases this suite trains on.
+
+**Disable in-training samples where the sample pass is what blows the memory.** On H3 under ai-toolkit the first sampling rung pulls the fully offloaded text encoder back on top of resident training state, and can OOM a container with no traceback. The checkpoint and optimizer state are written *before* sampling, so a relaunch resumes exactly where it died `[live-use — media lab, h3-v16/v17, 2026-09-04]`.
 
 ---
 
@@ -74,6 +78,21 @@ The standard move is a grid of **checkpoint × LoRA strength**, rendered on fixe
 **One note on SwarmUI's LoRA handling:** the Grid Generator has no LoRA-model axis. You vary LoRAs through **prompt replace** instead. Put `<lora:mylora>` in the prompt and give the replacements as `mylora, myotherlora, mythirdlora`. This works fine for checkpoint sweeps once you know to do it that way. People lose an evening hunting for an axis that is not there.
 
 **Keep the grid small.** Cells multiply fast. A grid of 6 checkpoints × 4 strengths × 4 prompts × 1 seed is 96 images, which is already a long wait on a home GPU. Use layer 1 to narrow the checkpoint range first, then spend the grid on the range that could actually win.
+
+### Staging the grid — the A–F ladder
+
+One grid answers one question. The media lab's protocol runs six small ones in order `[live-use — media lab, EVAL-PROTOCOL, 2026-09-03]`. **Each stage fixes its variable for every stage after it, so no later stage runs on more than the survivors**:
+
+| Stage | Question | Cells | Notes |
+|---|---|---|---|
+| **A — step and strength** | Which rung, at which strength | ~36–54: 3 probes × 3 rungs × 3 strengths × 2 seeds | Ties break to the lower rung (§3) |
+| **B — stability** | Does the winner hold across seeds | ~15: 5 seeds on the winner | Diversity collapse shows here |
+| **C — flexibility** | Does it survive out-of-distribution prompts | ~8–12: OOD plus the run's own starved axes | The starved axes come from the dataset audit |
+| **D — the adult stack** | Does it survive the NSFW checkpoint underneath | ~9–12 over the adult checkpoint, **plus one cell at strength 0** | Skip if not a goal; the strength-0 cell is not optional |
+| **E — render surface** | Every deployment checkpoint × resolution | Small | A Turbo-only eval shipped a broken LoRA (§3) |
+| **F — head-to-head** | Blind pairs against the incumbent at *its* shipped settings | 20–30 pairs | The only stage that says "ship" |
+
+Ninety to a hundred and twenty cells, a few dollars rented. The ship rule: **wins likeness on the close and three-quarter probes, and does not lose full body or the adult stack.** A LoRA that wins the face and loses the body has not earned the default slot; it is a specialist, and gets labelled as one.
 
 ---
 
@@ -116,6 +135,39 @@ The two answers usually differ. When they do, the gap between them is your usabl
 
 **A prompt that fails on every checkpoint tells you about your dataset, not your checkpoints.** Build that distinction into the habit. If "profile view" is bad at epoch 4, at epoch 12, and at every strength, then no choice of checkpoint will fix it. Your dataset lacks profile coverage, and the answer is another training run with a better set. Write those prompts down separately from your checkpoint verdict. They are the spec for your next dataset.
 
+### Which rung — the tie-break, and which probe regressed
+
+**Which probe regressed is the finding.** A single likeness number averages over probes that move independently. Across four real-photo arms on one recipe and one judge, the three-quarter view was lost by every dataset change (0 of 6, 0 of 4), while the front close-up and the full body moved on their own. The same probe is where an over-trained rung collapsed first: c2500 went 0 wins, 4 losses on the three-quarter alone `[live-use — media lab, krea2-v9…v13, 2026-09-03]`. Score per probe, and report per probe.
+
+**When the grid cannot separate two rungs, take the lower one.** Fewer steps bakes in less of the set, keeps flexibility, and avoids what happens past the peak: the *source medium* trains in, not just the identity. An all-phone-JPEG set learned compression grain as skin past c1750: "higher steps seem to bake in a bit weird skin texture". Its rung ladder ran c1750 > c2250 > final, the first unambiguous one in the project. A set with more views of the same photos tolerated a rung more `[live-use — media lab, krea2-v11 vs v12/v13, 2026-09-03]`. So **the peak is a function of source quality, not dataset size**: measured peaks across nine runs ran from c1750 of 2500 to `final` of 3500. If it matters, carry both rungs into the head-to-head.
+
+**Strength is a diagnostic too.** A likeness that keeps rising up to 1.1 is the weak-likeness signature — the LoRA needs above-normal strength to assert the identity, which means it has no stacking headroom `[live-use — media lab, krea2-v1/v6, 2026-08]`. Later, better-fit runs shipped at 1.0. The same reading from the community side: a style LoRA that peaked at 0.73 with a usable 0.4–0.75 band, where "0.8 to 1.0 starts pulling the image apart" `[community — Herbst, FLUX.2 runs, 2026-02]`. A LoRA that needs 1.0 or more is telling you something about the run.
+
+### Pairs, margins and fatigue
+
+**Blind, paired, one decision per screen — not a 1–5 scale.** Perception is relative, and a pairwise judgement does not ask the judge for a global consistency they do not have; the same finding drives the pairwise-beats-pointwise result in §8. The lab's deck format `[live-use — media lab, EVAL-PROTOCOL, 2026-09-03]`:
+
+- **Pairs** — same probe, same seed, tap to flick A↔B, then *A more her / Same / B more her* — for any stage that compares arms.
+- **Grids** — arms as columns, one decision per arm pair rather than per cell — for step, strength and render-surface stages. With grids on the arm stages a full run is about 45 decisions.
+- **Gates** — *Her / Close / Not her*, plus leak and fault chips — for single cells.
+- A real reference photo pinned on every card, and a fullscreen viewer that flicks A/B **while keeping zoom and pan**, so the same patch of face is compared.
+
+**Record the margin, not just the win.** Two chips — *close call*, *neither strong* — save with each pick, and the scorer splits wins into clear and close. The worked example: one arm beat another 9–1, but both full-body pairs were "very close" and four others "neither strong", so 9–1 overstated the lead. Free-text notes matter too; the judge's most useful signal did not fit the chips.
+
+**Judge fatigue bounds how many decks you can run, and the right response is to stop.** After roughly a hundred blind pairs across four arms in two days, the judge reported getting "a little blind" to the face. Then: "I think I'm actually muddying things when they are this close." One arm's stage F was published as 30 pairs and never scored; the ship call was made unblinded `[live-use — media lab, krea2-v11/v13, 2026-09-03]`. Design for it. Let a metric (§5) rank the cells so the human judges the top and bottom of a ranking rather than the middle. Use grids over per-cell pairs on the arm stages. One question per screen. Put the next deck at least a day out.
+
+### Diagnosing a quality regression
+
+The layers above judge a run. Nothing above debugs one, and the lab lost a day to that gap `[live-use — media lab, EVAL-DISCIPLINE, 2026-09-07]`:
+
+1. **Reproduce the known-good render before forming a hypothesis.** The decisive fact — that a skin artefact originated in the *base model* — came from a no-LoRA render that "should have been the second image made, not the twentieth."
+2. **A strength-0 control in every comparison.** A failure the base shares is not the LoRA's failure, and on a guidance-distilled checkpoint cfg above 1.0 grains the image with no LoRA loaded at all.
+3. **Check the background.** An artefact on the wall as well as the skin is a sampling artefact — steps, cfg — not something a character LoRA learned (`dataset-and-captioning.md` §3).
+4. **Evaluate on every checkpoint × resolution you will deploy on.** One LoRA was trained on Raw, evaluated only on Turbo, and shipped `final`. On the adult checkpoint it was unusable at 1024×1536 and good at ≥1344×2016. Strength was not the lever, and c2500 was the only rung that survived the hard case `[live-use — media lab, Ciara krea2-v3, 2026-09-08]`.
+5. **Sidecar every render, including throwaways**, and read `cells.json` rather than the plan file. A recipe JSON carried a variant at cfg 1.5 with a negative that was never used for the dataset. Taking it as "the recipe" produced grain that was blamed on the LoRA.
+6. **Enumerate exactly what an error touched before retracting anything.** The cfg-1.5 mistake was announced as contaminating "much of the day's work"; one grep showed two tests.
+7. **A blank or flat cell is a checkpoint fault, not a renderer fault.** Per-frame standard deviation ~2 against ~50 for every other cell, one cell in 36, same seed fine at other rungs `[live-use — media lab, h3-v14, 2026-08-30]`. Measure before blaming the renderer.
+
 ---
 
 ## 4. The held-out probe set
@@ -127,7 +179,17 @@ The two answers usually differ. When they do, the gap between them is your usabl
 Two rules for building and running the set:
 
 - **Do not reuse caption-corpus phrasing**, in the starter set below or in anything you add to it. And every capability group you test needs at least one probe that is out of distribution for that group. In-distribution probes alone cannot separate learning from memorisation.
-- **Every generation prompt carries the trigger token, and frozen probes are reused verbatim.** A probe that drops the trigger tests the base model, not the LoRA, and its outputs read as misleadingly weak. Rewording a frozen probe breaks comparability the same way inventing a new one does.
+- **Every generation prompt carries the trigger token, and frozen probes are reused verbatim.** A probe that drops the trigger tests the base model, not the LoRA, and its outputs read as misleadingly weak. Rewording a frozen probe breaks comparability the same way inventing a new one does. The one deliberate exception is the **no-trigger control** below, which exists to be compared *against* the base.
+
+**Five design rules for a judgeable probe.** They come from a probe-set rebuild after the near-verbatim probe above inverted a headline finding `[live-use — media lab, C1–C8 rebuild, 2026-08-31]`:
+
+1. **The face must be above ~15% of frame height**, or you are testing framing, not identity.
+2. **The body must be upright and side-on** — lying or foreshortened poses cannot be read for anatomy.
+3. **Never paraphrase a training caption.**
+4. **Stay photographic.** Out-of-distribution should mean an unfamiliar setting or light, not an unfamiliar medium: an oil-painting probe abstracts the face until no identity call is possible. (`flex-style` below stays in the set as an *overfit* detector — does the LoRA drag output back to photographic? — not as an identity probe. Score it for adherence only.)
+5. **Nude probes need the adult base underneath**, or they measure censorship.
+
+And a sixth from the same rebuild: **standing-figure probes render on a portrait canvas** (768×1344, not 1024²). The first square test complied with the prompt and cropped the head off at the neck.
 
 Keep the set in the run folder as a plain file. Here is a workable starter set, grouped by what each group is actually testing:
 
@@ -148,12 +210,20 @@ Keep the set in the run folder as a plain file. Here is a workable starter set, 
 
 # flexibility — nothing like the dataset; this is where overfit shows
 - id: flex-style
-  text: "<trigger>, oil painting, thick visible brushstrokes, museum lighting"
+  text: "<trigger>, oil painting, thick visible brushstrokes, museum lighting"   # adherence only — see rule 4
 - id: flex-costume
   text: "<trigger>, wearing full medieval plate armour, castle courtyard"
 - id: flex-scene
   text: "<trigger>, sitting in a crowded diner, seen from across the room, wide shot"
+
+# controls — rendered every time, never scored for likeness
+- id: ctrl-no-trigger
+  text: "portrait, neutral expression, plain grey background, soft even lighting"   # base-portrait minus the trigger: must stay close to base, or you overtrained
+- id: ctrl-strength-0
+  text: "<trigger>, portrait, neutral expression, plain grey background, soft even lighting"   # LoRA loaded at 0.0: the base's own answer to every probe
 ```
+
+The two controls are cheap and they close two arguments before they start. `ctrl-no-trigger` is the community's overtrain test: the same text minus the trigger "must stay close to base; if polluted, you overtrained" `[community — chengyansen-ai, krea2-lora-training v0.4.0]`. `ctrl-strength-0` is the base-model control from `../SKILL.md`'s pre-flight, made a standing probe so it is never skipped.
 
 That set does two things on purpose. **`flex-scene` puts the face small in the frame**, which shows you whether the identity survives at low pixel counts. That is the most common failure nobody tests for until production. And **`flex-style` fights the LoRA deliberately**: an over-trained character LoRA drags every output back toward photographic, and this prompt makes that visible in a single image.
 
@@ -163,19 +233,23 @@ Add a group for whatever you actually use the LoRA for. If it exists to make adu
 
 ## 5. Putting a number on it
 
-**`cubiq/ComfyUI_FaceAnalysis` provides the `FaceEmbedDistance` node.** It offers InsightFace/ArcFace or DLib backends, and cosine or Euclidean distance between a batch of reference faces and a candidate. This is the accessible way to get a number out of a home setup, and it is a real number.
+**`cubiq/ComfyUI_FaceAnalysis` provides the `FaceEmbedDistance` node.** It offers InsightFace/ArcFace or DLib backends, and cosine or Euclidean distance between a batch of reference faces and a candidate. This is the accessible way to get a number out of a home setup, and it is a real number. Know that the repo has been **maintenance-only since 2025-04-14** `[official — repo README]`. The one successor located is `Kidev/ComfyUI-FaceFilter` (InsightFace `antelopev2`, cosine against a reference *set*, default threshold 0.30), built as a filter rather than a benchmark `[official — repo README, read 2026-09-09]`. A few lines of Python over any face-embedding model does the same job outside ComfyUI, which is how the lab runs it.
 
-**Calibrate a baseline first, or the number means nothing.** Take 3 real photos of the subject as the reference batch, then score a *4th real photo* against them. That value is your floor: the distance you get between genuine photographs of the same person in different conditions. Read your generations against that floor, not against zero. Skipping this step is the most common way this node gets misused.
+**Calibrate a baseline first, or the number means nothing.** The node's own recipe is 3 real photos as the reference batch and a *4th real photo* scored against them. The better version is **leave-one-out over every real photo you have**: score each against the centroid of the others and record p50, p90 and max. That spread is your floor: the distance genuine photographs of the same person sit from each other in different conditions. Everything you generate is read against it, never against zero. Two calibrations for scale `[live-use — media lab, Amy triage v17, Ciara rotation-01, 2026-09]`. Fifteen real photos of one person gave p50 0.183 / p90 0.347 / max 0.418, with good finals landing at 0.13–0.19 and a LoRA-off render at 0.80. Nine face-visible synthetic rotation cells of another gave p50 0.112 / p90 0.191 / max 0.270, with "inside p90 is her" as the working rule. Skipping this step is the most common way this node gets misused.
+
+**Two measured blind spots.** Profiles score high regardless — half a face — so judge them by eye. And the metric is **not sensitive enough at half- and full-body face scale to be trusted for a ship call**. On one run it said the new arm was at least as good as the old on five of six probes. The person who knows the face failed the run `[live-use — media lab, krea2-v15, 2026-09-06]`. Synthetic cells inside the real spread (0.145–0.31) were rejected on sight as "not at all like her". **The metric can triage; it must never admit an image**, into a dataset or into the LoRA folder.
 
 **Then treat the score as a screen, not a verdict.** This is a hard finding rather than a caution:
 
 > The standard personalization metrics — **DINO and CLIP-I for subject fidelity, CLIP-T for prompt following** — show significant discrepancies from human judgement, because they are image-*similarity* models being asked a question that is not similarity. This is the central result of **DreamBench++** (ICLR 2025). `[official — published benchmark]`
 
+The 2026 successors sharpen it. **MaSC** (2026-05) diagnoses the bug as global pooling: a whole-image cosine averages in background variation that humans ignore when judging identity. It measures agreement with humans on DreamBench++ at CLIP-I **+0.135** and DINO-I +0.311, against a human ceiling of +0.658 `[official — arXiv 2605.22469]`. That CLIP-I figure is the citable evidence that it is near-useless for identity. **DSH-Bench** (2026-04) confirms the weak CLIP/DINO–human correlation over 459 subjects, but annotates with absolute scoring where MaSC does not. So the two leading benchmarks disagree on protocol, and neither validates pairwise here `[official — arXiv 2603.08090]`.
+
 ArcFace distance is in the same family and inherits the problem. Watch for one specific failure: **similarity scores inflate when a LoRA overfits face position and pose**, because the metric rewards spatial resemblance that it ought to be ignoring. A score that climbs through the late checkpoints may therefore just be measuring memorisation. Reading it as improving fidelity hands you exactly the wrong checkpoint.
 
 **Two free signals partly cover the gap**, and both are computable from images you have already generated:
 
-- **Diversity collapse.** Generate the same prompt at several seeds and measure how different the outputs are from each other. When that spread falls off a cliff at some checkpoint, that checkpoint has stopped generating and started reciting. It is a good overfit detector precisely because it does not rely on a similarity model agreeing with human judgement.
+- **Diversity collapse.** Generate the same prompt at several seeds and measure how different the outputs are from each other. When that spread falls off a cliff at some checkpoint, that checkpoint has stopped generating and started reciting. It is a good overfit detector precisely because it does not rely on a similarity model agreeing with human judgement. The community names four signatures of the same thing: **prompt inertia, skin plasticity, pose echoing** (repeated shoulder and neck angles across seeds) and **colour lock**. Its roll-back rule is two consecutive failures `[community — WaveSpeedAI, 2026-01-23; single report]`.
 - **Sharpness** (Laplacian variance, a few lines with OpenCV). This catches early blur *and* late waxy over-smoothing. One metric covers two failure modes at opposite ends of the run.
 
 Use the numbers to **rank candidates and flag suspects**. Use the blind pass in §3 to decide. The machine is advisory; the human is decisive.
@@ -227,7 +301,7 @@ You are not the target audience for this tier, but it is worth knowing which par
 | What they do | Worth borrowing at home? |
 |---|---|
 | **Experiment tracking** — W&B as the industry standard: every run logged with full hyperparameter config, dataset version, loss curves, eval results. W&B **Weave** now has an image-eval framework (dataset + scorers + comparison dashboard, model-agnostic and documented for diffusion) | **Partly.** The full platform is overkill; the *habit* is not. A folder per run with the config, the probe set and the verdict in it gets you most of the value for nothing |
-| **Benchmark suites** — **DreamBench++** for personalization (7 methods × 150 subjects × 9 prompts); **VBench/VBench++** for video across 16 dimensions | **No, and this is the key point.** These compare *methods* across *the benchmark's* subjects. You need to compare *checkpoints* on *your* subject. That is a different unit of analysis, so running DreamBench++ tells you nothing about your character |
+| **Benchmark suites** — **DreamBench++** for personalization (7 methods × 150 subjects × 9 prompts), its 2026 successors **MaSC** and **DSH-Bench**; **VBench/VBench++** for video across 16 dimensions | **No, and this is the key point.** These compare *methods* across *the benchmark's* subjects. You need to compare *checkpoints* on *your* subject. That is a different unit of analysis, so running DreamBench++ tells you nothing about your character |
 | **Reward models** — ImageReward, PickScore, HPSv2/HPSv3++ | **Rarely.** They predict aggregate human preference for general aesthetics, not whether this is the right person |
 | **VLM-as-judge** — the field has converged on VQA/VLM-mediated scoring, and it is where the metric layer went after DINO/CLIP-I | **The finding is worth borrowing, even if the tooling is not.** Raw pointwise VLM judging is unreliable — Qwen3-VL-8B scores **26.5% pointwise vs 59.4% as a direct pairwise judge**. Pairwise beats pointwise, and that is the same reason the blind head-to-head in §3 beats scoring cells one at a time. You can apply that conclusion with no infrastructure at all |
 
@@ -239,8 +313,8 @@ You are not the target audience for this tier, but it is worth knowing which par
 
 **Hard facts.** The DreamBench++ result on DINO/CLIP-I misalignment, the pointwise-vs-pairwise VLM judging figures, VBench's dimension set, and what each named tool does and does not support (including SwarmUI's lack of a LoRA axis and its 3-axis grid-image / 4-axis web-page limits). **Sources are published benchmarks, papers and project READMEs.** These are checkable, and they were checked.
 
-**Craft.** This covers the blind pass and the trick of making it blind from the start, scoring likeness and adherence separately, who gets to make the pick when the subject is a real person, holding a checkpoint as provisional, the fixed probe set, weak-everywhere prompts as a dataset signal, the narrow-then-render budget habit, and §1's readings on preview cost and two-half models. Those last two come from one production run and are dated where they appear: trust the mechanism, and treat the numbers as a single data point. **This is community and production practice** rather than measured result. It comes from people running these evaluations repeatedly, and from a working private pipeline whose design the pairwise finding independently supports. It is stated with confidence; adapt the specifics.
+**Craft.** This covers the blind pass and the trick of making it blind from the start, scoring likeness and adherence separately, who gets to make the pick when the subject is a real person, holding a checkpoint as provisional, the fixed probe set and its design rules, weak-everywhere prompts as a dataset signal, the narrow-then-render budget habit, and §1's readings on preview cost and two-half models. **Two sources carry it.** The community bar is people running these evaluations repeatedly, and it is stated with confidence. The `[live-use — media lab, …]` bar is one lab's protocol over some forty runs on two characters, each claim dated to its run. It covers the A–F ladder, the deck format, the margin record, judge fatigue, the lower-rung tie-break, the which-probe-regressed reading, the regression checklist and the calibration numbers. Trust the mechanisms; treat the numbers as measured single points. The blind discipline is defensible, not documented consensus: no image-community source advocating shuffled comparison for epoch picking was found, and the pairwise-over-pointwise argument is borrowed from the LLM-evaluation literature.
 
-One thing is genuinely open: **there is no accepted home-scale metric for character-LoRA fidelity.** ArcFace distance is what is reachable, and it is known to be imperfect. VLM judging is where the field went, but it has no turnkey local tooling at this scale. Expect this section to change. `[contested]`
+Two things are genuinely open. **There is no accepted home-scale metric for character-LoRA fidelity.** Face-embedding distance is what is reachable, it triages well, and it is measured to be too loose for a ship call at body scale. VLM judging is where the field went, but it has no turnkey local tooling at this scale. `[contested]` And **no reusable checkpoint-selection harness exists**: the published benchmarks evaluate methods on their subjects, not your checkpoints on yours.
 
-**Facts dated 2026-08-22.** The tooling layer moves fastest here — grid extensions, the `FaceEmbedDistance` node's backends, and whatever local VLM-judging tooling appears next — so re-verify a named tool's current state before building a habit around it.
+**Facts dated 2026-09-09; community craft refreshed 2026-09-09; live-use craft extended 2026-09-09.** The tooling layer moves fastest here — grid extensions, the face-analysis node's successors, and whatever local VLM-judging tooling appears next — so re-verify a named tool's current state before building a habit around it.

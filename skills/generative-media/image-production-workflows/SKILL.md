@@ -82,7 +82,7 @@ These are bands, not fixed settings, because they mark where independent recipes
 | 2 | **Refine / hires pass** | latent upscale (denoise ≥ ~0.5) *or* pixel upscale + re-sample (**0.25–0.35**) | fine detail: fingers, faces, text |
 | 3 | **Detailers** | Impact Pack FaceDetailer (model-agnostic), denoise ~0.4–0.5 `[community — myByways, Civitai workflow conventions]` | faces/hands/eyes; **character LoRA swaps in here** |
 | 4 | **Tiled upscale** | `UltimateSDUpscale` (denoise 0.2–0.35, simplified prompt) `[community — Civitai USDU conventions; convergent]` — DiTs: **TTP Toolset**, per-tile captions `[official — TTPlanet repos]` | resolution + micro-detail |
-| 5 | **Finish** | **ColorMatch** vs the post-refine reference; **SeedVR2** restorer `[community — MyAIForce]` | color truth; final 4K push |
+| 5 | **Finish** | **ColorMatch** vs the post-refine reference; **SeedVR2** restorer `[community — MyAIForce]`; Topaz partner nodes are the commercial alternative | color truth; final 4K push |
 
 Every stage past 1 is **bypassable**. Preview after stages 1 and 2 before you pay for the heavy passes, and climb only the rungs your model needs. SDXL-family work uses the full ladder. Flux and Z-Image generate 1–2 MP natively, so their stage 2 refines detail rather than jumping resolution. Settings live in [`references/production-ladder.md`](references/production-ladder.md).
 
@@ -142,7 +142,8 @@ Stale tutorials outnumber current ones. These are the load-bearing changes:
 | **SUPIR → SeedVR2** | SUPIR frozen (merged into core); SeedVR2 is the current default finisher ([`references/production-ladder.md`](references/production-ladder.md) §5) |
 | **cubiq IPAdapter_plus** | maintenance-only since Apr 2025; Comfy-Org maintains a reference implementation |
 | **xinsir ControlNet (SDXL)** | training stalled — frozen but still SOTA; ProMax union is the pick |
-| **Regional prompting on DiTs** | core mask-based attention masking (PR #5942) is the *only* working approach |
+| **Regional prompting on DiTs** | core mask-based attention masking (PR #5942) is the *only* working approach on Flux-class DiTs; Z-Image's first regional nodes are experimental ([`references/mixed-model-recipes.md`](references/mixed-model-recipes.md) §4) |
+| **Topaz partner nodes** | official `TopazImageEnhanceV2` templates in ComfyUI's workflow gallery (Aug 2026) — a commercial generative finisher beside SeedVR2 ([`references/production-ladder.md`](references/production-ladder.md) §5) |
 | **Subgraphs** | native since Aug 2025 — replaced group-node conventions for stage packaging |
 
 ### The test is output modality, not training modality
@@ -154,6 +155,8 @@ Stale tutorials outnumber current ones. These are the load-bearing changes:
 **[`minimax-h3`](../minimax-h3/) generating exactly one frame is an image editor.** By multiple reports, it beats Krea 2 + Identity Edit, Qwen-Image-Edit and Flux Klein 9B for character fidelity, 3D scene understanding, mirrors and composition, at around 8 s per edit on a 5090 `[community — Patient_Ratio4177]`. It wins there because **a model trained on multi-reference video conditioning has learned spatial and physical relationships an image editor has not**.
 
 Two requirements make it work, and skipping either produces garbage instead of an error. You need a **dedicated image VAE** (`Mamad8/MiniMax-H3-Image-VAE`), and you must generate **exactly one frame** (5 frames through that VAE grids). Rule 1 applies unchanged: an H3 latent is not a Qwen-Image or Flux latent. Decode it to pixels, and it drops into the ladder cleanly.
+
+**The stock ComfyUI node will not let you set one frame.** As of 2026-09-09, `comfy_extras/nodes_minimax_h3.py` still clamps length to a 5-frame minimum. The request to lift it, `Comfy-Org/ComfyUI#15644`, is open with no linked PR `[official — Comfy-Org/ComfyUI#15644]`. So a reader who builds this rung in the GUI gets a gridded still and no error, because 5 frames is exactly the case the image VAE cannot handle. Until the fix lands there are two ways through. Patch the node's minimum to 1 locally, and expect to re-apply that patch on every ComfyUI update. Or run the edit outside the stock node, through the API or a script route where the frame count is yours to set. Re-check the issue before you choose `[flagged — re-verify]`. [`minimax-h3`](../minimax-h3/) carries the same caveat and the node settings.
 
 ### Generative upscaling versus restoration
 
@@ -174,7 +177,8 @@ It has three hard constraints, and all of them fail quietly. **Both output dimen
 | Composition destroyed by "hires fix" | Latent-upscale route run at pixel-route denoise (< 0.5) | Pixel route at 0.25–0.35, or latent route at ≥ 0.5 |
 | Colors drift warmer/flatter over the pipeline | VAE round-trips and re-samples compound; two VAEs in mixed chains | One ColorMatch at the end vs the post-refine reference |
 | Inpainted region is mush | Masked area sampled far below native resolution | Crop-and-stitch; `InpaintModelConditioning` + Differential Diffusion |
-| Regional prompts ignored on Flux/Z-Image | SD-era regional tooling doesn't work on DiTs | Core attention masking (Flux); per-face detailer passes (Z-Image) |
+| Regional prompts ignored on Flux/Z-Image | SD-era regional tooling doesn't work on DiTs | Core attention masking (Flux); per-face detailer passes (Z-Image — its new regional nodes are experimental, see [`references/mixed-model-recipes.md`](references/mixed-model-recipes.md) §4) |
+| H3 one-frame edit comes out gridded, and the node refuses `length=1` | Stock `nodes_minimax_h3.py` clamps to 5 frames (#15644 open); the image VAE grids at 5 | Patch the node minimum locally, or run the edit outside the stock node — see *A video model is now a legitimate stage* |
 | Batch results unreproducible | Per-stage random seeds | rgthree global Seed, fixed once composition is found |
 | Licence blocks delivery after the pipeline is built | A rung cleared for selling the *picture*, never for shipping the *pipeline* | Settle the chain's terms first |
 
@@ -212,7 +216,7 @@ Per-model facts live in the model skills. This skill owns what spans them.
 | [`wan-2-2`](../wan-2-2/) | **video** — image-to-video, motion and camera control | downstream: a still finished by this ladder is what drives I2V |
 | [`ltx-2-5`](../ltx-2-5/) | **video + joint audio**; the suite's generative video upscaler | downstream, and the engine behind ReDetail |
 | [`scail-2`](../scail-2/) | **video** — character replacement tracking a driving clip frame-for-frame | downstream, and the strictest consumer: its reference must be the driving clip's own first frame, edited |
-| [`minimax-h3`](../minimax-h3/) | **video + native audio** — omni-modal, reference conditioning | downstream, and the one output this ladder can silently break: most video post nodes are picture-only and drop the audio. **Also upstream now**, at one frame |
+| [`minimax-h3`](../minimax-h3/) | **video + native audio** — omni-modal, reference conditioning | downstream, and the one output this ladder can silently break: most video post nodes are picture-only and drop the audio. **Also upstream now**, at one frame — with the stock-node caveat above |
 | [`generative-media-atlas`](../generative-media-atlas/) | choosing between everything above — rankings by job, the elimination ladder, install routes | upstream of this ladder: it decides *which* models the chain hires before this skill decides how they hand off |
 
 **Where the ladder feeds backwards — and where it doesn't.** The table reads left-to-right: image skills feed video skills. Exactly one path runs the other way: [`minimax-h3`](../minimax-h3/) at one frame, by the output-modality test above. The [`krea-2`](../krea-2/) → [`scail-2`](../scail-2/) case looks identical, but it is not. Identity Edit prepares the driving clip's first frame, which is ordinary forward flow, and it marks where this skill's job *ends*.
@@ -231,8 +235,9 @@ This skill holds two kinds of claim to two different standards, because they fai
 
 - The Ideogram typography-pass pattern is practiced, but the composite step is reconstructed craft rather than a graph someone published `[flagged — no canonical workflow]`.
 - Per-region *LoRA* application on DiT regional-attention setups is unsettled. It works on SDXL and does not transfer `[contested]`.
+- The H3 one-frame edit rests on a node limit ComfyUI has not lifted. Stock `nodes_minimax_h3.py` clamps to 5 frames while #15644 stays open, so the GUI route needs a local patch `[flagged — re-verify]`.
 
-**Facts dated 2026-06-12**; community craft refreshed 2026-08-22. The fastest-moving areas: finishers (SeedVR2's successors and the generative video upscalers), DiT regional and per-region-LoRA tooling, the video-model-as-image-editor path, new weights' licence terms, and ComfyScript/frontend compatibility.
+**Facts dated 2026-09-09** (first authored 2026-06-12); community craft refreshed 2026-09-09. The H3 node status and the finisher table were re-verified against official sources on 2026-09-09. The fastest-moving areas: finishers (SeedVR2's successors, Topaz's partner nodes, and the generative video upscalers), DiT regional and per-region-LoRA tooling (Z-Image's first regional nodes are weeks old), the video-model-as-image-editor path and its ComfyUI node limit, the edit-rung choice (Klein-edit, Qwen-Image-Edit 2511, hosted Nano Banana), new weights' licence terms, and ComfyScript/frontend compatibility.
 
 ---
 

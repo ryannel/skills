@@ -31,7 +31,7 @@ the traps listed below so you do not have to rediscover them:
 
 | Base | explicit (X/XXX) | mature (R+) |
 |---|---|---|
-| **Pony** | **67%** | 87% |
+| **Pony V6 XL** (Civitai base `Pony`) | **67%** | 87% |
 | **Illustrious** | 56% | 82% |
 | [`anima`](../../anima/) | 52% | 84% |
 | **NoobAI** | 50% | 76% |
@@ -43,11 +43,14 @@ the traps listed below so you do not have to rediscover them:
 | [`sdxl`](../../sdxl/) 1.0 | 31% | 53% |
 | FLUX.2 [klein] 9B | 30% | 57% |
 | [`ideogram-4`](../../ideogram-4/) | 26% *(n=34)* | 35% |
-| Qwen | 24% | 54% |
+| **Qwen-Image** — *no skill in this suite* | 24% | 54% |
 | [`wan-2-2`](../../wan-2-2/) T2V / I2V | 23% / 22% | 49% / 45% |
-| [`minimax-h3`](../../minimax-h3/) | 23% *(n=22)* | 59% |
-| Hunyuan Video | 20% | 34% |
+| [`minimax-h3`](../../minimax-h3/) | 23% *(n=22 on 08-23; the pool is 86 on 09-09 and the share was not re-measured)* | 59% |
+| Hunyuan Video (1.5 is *not covered*; EU/UK/KR excluded) | 20% | 34% |
 | [`ltx-2-5`](../../ltx-2-5/) — 2.3 | 14% | 39% |
+
+The Ideogram 4 row was re-run on 2026-09-09 at n=36: 25% explicit, 36% mature — unchanged within
+noise. Every other row is the 2026-08-23 measurement.
 
 **Three warnings, because this metric is easy to over-read.**
 
@@ -104,6 +107,14 @@ on a **3060 Ti 8 GB** with the turbo LoRA and SageAttention, and takes ~5–7 mi
 5070 Ti. **Remember gate 3**: its licence excludes the US, EU, UK and South Korea. That means the community's
 capability leader is one that many readers cannot lawfully use, whatever the enthusiasm in those threads
 says.
+
+**Its LoRA ecosystem is no longer thin, and it is adult-led.** On 2026-08-23 the whole H3 pool was
+22 LoRAs. On 2026-09-09 it was 86, and the biggest downloads are NSFW concept LoRAs at roughly
+40–47k each, plus a modular anatomy-part family and Ref2VA-tuned sets `[community — Civitai API,
+2026-09-09; via minimax-h3]`. Four trainers now support the model. The details, and the one
+first-hand finding that a stills-only character LoRA carries identity into motion, are in
+[`minimax-h3`](../../minimax-h3/) `references/lora-training.md`. The territory gate travels with
+every one of those LoRAs.
 
 **H3 prompting, the parts that transfer** `[community — nsfwVariant, 427 pts]`:
 

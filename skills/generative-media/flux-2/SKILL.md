@@ -14,8 +14,8 @@ description: >
   Fun Union ControlNet, covering Pose, Depth, Canny, HED and more, and why Flux.1 ControlNets are
   incompatible). Face identity preservation (PuLID via iFayens nodes; InsightFace + EVA-CLIP pipeline).
   Calling the BFL hosted API (flux-2-pro, flux-2-max, flux-2-flex, flux-2-klein endpoints, async polling
-  pattern, pricing). Setting up diffusers (Flux2Pipeline, Flux2KleinPipeline). Training a LoRA with
-  AI-Toolkit/Kohya, including style LoRAs (rank ablations, prose captions, the captionless debate, XY-grid
+  pattern, pricing). Setting up diffusers (Flux2Pipeline, Flux2KleinPipeline, Flux2KleinKVPipeline).
+  Training a LoRA with AI-Toolkit/Kohya, including style LoRAs (rank ablations, prose captions, the captionless debate, XY-grid
   evaluation). Creating a consistent character (the ReferenceLatent multi-reference character engine, PuLID,
   the character-LoRA dataset factory and detailer deployment, multi-character scenes via attention masking).
   Building production pipelines (refine passes, tiled upscale for DiTs, Klein as the img2img refiner for
@@ -173,7 +173,9 @@ No FLUX.2-native IP-Adapter face model exists. Full setup, node wiring, and a Pu
 
 ### diffusers
 
-`Flux2Pipeline` ([dev]) and `Flux2KleinPipeline` ([klein] 9B base) are the primary classes. Version v0.38.0 appears in diffusers source links, but the install may still be `pip install git+https://github.com/huggingface/diffusers -U`. Verify at `pypi.org/project/diffusers` before relying on the git-install path `[flagged — re-verify]`.
+`Flux2Pipeline` ([dev]) and `Flux2KleinPipeline` ([klein] 9B base) are the primary classes. diffusers **0.40.0** is a stable PyPI release (2026-08-20, verified 2026-09-09), so a plain `pip install "diffusers>=0.40"` is enough. The git-install path is no longer needed `[official — diffusers 0.40.0 docs]`.
+
+0.40.0 also adds **`Flux2KleinKVPipeline`**, the diffusers counterpart of the ComfyUI 9B KV template. On the first denoising step it runs the reference-image tokens through the forward pass and caches their attention K/V projections. Later steps reuse the cache instead of recomputing it. Use it for repeated multi-reference editing against a fixed reference bundle. For a single generation it behaves like `Flux2KleinPipeline` `[official — diffusers 0.40.0 docs]`.
 
 ```python
 from diffusers import Flux2Pipeline
@@ -223,7 +225,7 @@ Distilled and base are separate checkpoints with separate numbers. Mixing them u
 - **Steps / guidance:** 4 steps, `CFGGuider` **1**. These are the same as 4B distilled.
 - **Sampler / scheduler:** `euler` / `Flux2Scheduler`.
 - Better quality than 4B on skin and fine detail, but still susceptible to over-sharpening `[community — re-verify]`.
-- **[klein] 9B KV:** the same distilled settings, but use it for repeated multi-reference editing. It KV-caches reference tokens, so a fixed reference bundle re-renders faster across many prompts.
+- **[klein] 9B KV:** the same distilled settings, but use it for repeated multi-reference editing. It KV-caches reference tokens, so a fixed reference bundle re-renders faster across many prompts. In diffusers the same path is `Flux2KleinKVPipeline` (0.40.0+).
 
 ### [klein] 9B Base — undistilled
 
@@ -350,13 +352,13 @@ The [klein] 4B's Apache 2.0 status is a deliberate BFL decision: they made the f
 
 This skill holds two kinds of claim to two different standards, because they fail in two different ways.
 
-**Hard facts — must be exact or it breaks.** These are the architecture (32B MM-DiT, 8+48 blocks, Mistral 3.2 24B for [dev], Qwen3 4B/8B for [klein] 4B/9B). They are the licence terms (Apache 2.0 for [klein] 4B, Non-Commercial for [dev]/9B). They include the ComfyUI file layout and stock node settings (verbatim from the template JSON), all node names, and the official quantised filenames and sizes (Comfy-Org HF repos). They also include the no-negative mechanism (guidance-distilled for [dev], CFG=1 for [klein]), the 4-part prompting structure, hex color syntax, and the API model slugs and async polling pattern. **Source of truth is official**: BFL GitHub/model cards/docs, the raw ComfyUI template JSON, and diffusers. A wrong quant filename 404s. A misread licence (NC vs Apache) is a legal problem. **The weights have settled, but the packaging around them has not.** These stay volatile: quant filenames/sizes, the diffusers stable version (v0.38.0 is *inferred* from source links, so verify at pypi), and ComfyUI template details. All of these are republished independently of the model itself. **Re-verify before relying on them, regardless of who said it.**
+**Hard facts — must be exact or it breaks.** These are the architecture (32B MM-DiT, 8+48 blocks, Mistral 3.2 24B for [dev], Qwen3 4B/8B for [klein] 4B/9B). They are the licence terms (Apache 2.0 for [klein] 4B, Non-Commercial for [dev]/9B). They include the ComfyUI file layout and stock node settings (verbatim from the template JSON), all node names, and the official quantised filenames and sizes (Comfy-Org HF repos). They also include the no-negative mechanism (guidance-distilled for [dev], CFG=1 for [klein]), the 4-part prompting structure, hex color syntax, and the API model slugs and async polling pattern. **Source of truth is official**: BFL GitHub/model cards/docs, the raw ComfyUI template JSON, and diffusers. A wrong quant filename 404s. A misread licence (NC vs Apache) is a legal problem. **The weights have settled, but the packaging around them has not.** These stay volatile: quant filenames/sizes, the diffusers pipeline API (0.40.0 verified on PyPI 2026-09-09; a later breaking release could rename or re-cut the classes), and ComfyUI template details. All of these are republished independently of the model itself. **Re-verify before relying on them, regardless of who said it.**
 
 **Craft — what actually makes a good image.** This covers the photoreal camera/lighting vocabulary, LoRA weights and stacking, multi-reference editing technique, GGUF VRAM trade-offs, and the ControlNet/PuLID identity tooling. **The authoritative source here is the community**: the ComfyUI workflow authors and the people running [dev]/[klein] daily. For a model this new, *they are often ahead of BFL's own docs*. This is stated with confidence. Ranges and "verify at time of use" flags mark where the community layer is still forming, not where it is untrustworthy. The third-party and community tooling to verify before downloading: the Alibaba PAI **Fun Union ControlNet** repo/node names/filenames, the **iFayens PuLID** weights, and the **bryanmcguire** community nodes.
 
 **One genuinely-unresolved fact:** the multi-reference image count. BFL marketing says **10**, the prompting guide says **8**. This discrepancy is unresolved across official sources. Treat ~8 as the safe working number and test if you need more `[contested]`.
 
-**Facts dated 2026-08-22.** Both release dates are in the intro paragraph. This line dates the *claims*, not the model. What moves fastest, and must be re-verified before you rely on it: BFL API pricing and model slugs, the quantised filenames and their sizes, the diffusers stable version, the third-party LoRA / ControlNet / PuLID tooling, and the ComfyUI template details every settings number above is read from.
+**Facts dated 2026-09-09.** Both release dates are in the intro paragraph. This line dates the *claims*, not the model. What moves fastest, and must be re-verified before you rely on it: BFL API pricing and model slugs, the quantised filenames and their sizes, the diffusers stable version, the third-party LoRA / ControlNet / PuLID tooling, and the ComfyUI template details every settings number above is read from.
 
 ---
 
@@ -366,7 +368,7 @@ This skill holds two kinds of claim to two different standards, because they fai
 |---|---|
 | `references/prompting-guide.md` | Full 4-part prompt anatomy; hex color control with examples; JSON production format; camera vocabulary for photoreal; multi-reference image editing; typography/text-in-image guidance; drop-in templates |
 | `references/api-and-hosted.md` | BFL hosted API: endpoints (global/EU/US), auth, model slugs, parameters, async polling pattern, pricing note, API model capability comparison ([pro] vs [max] vs [flex] vs [klein]) |
-| `references/setup-and-workflows.md` | All ComfyUI templates (dev image-edit / klein 9B / klein 9B KV); full diffusers setup and VRAM table; GGUF setup (city96 loader); **§7 Using LoRAs** (`LoraLoaderModelOnly` model-only loading, the [dev]↔[klein] variant-incompatibility rule, weight ranges, why FLUX.2 dislikes trigger words, stacking, the Turbo accel-LoRA); multi-reference workflow patterns |
+| `references/setup-and-workflows.md` | All ComfyUI templates (dev image-edit / klein 9B / klein 9B KV); full diffusers setup (`Flux2Pipeline` / `Flux2KleinPipeline` / `Flux2KleinKVPipeline`, 0.40.0+) and VRAM table; GGUF setup (city96 loader); **§7 Using LoRAs** (`LoraLoaderModelOnly` model-only loading, the [dev]↔[klein] variant-incompatibility rule, weight ranges, why FLUX.2 dislikes trigger words, stacking, the Turbo accel-LoRA); multi-reference workflow patterns |
 | `references/lora-training.md` | **Making** a LoRA (using is setup-and-workflows §7): training bases (base-not-distilled; [klein] 4B for commercial rights), AI-Toolkit YAML, the Civitai klein recipe and its dim-2 floor warning, hyperparameters by target (Herbst's style ablation), prose caption-the-residual and the **contested captionless debate**, style-LoRA specifics (diversity maxim, color-cast lock-in, acceptance test), XY-grid evaluation |
 | `references/characters.md` | Creating a **consistent character**: the path decision (multi-reference vs PuLID vs character LoRA and how they compose), **ReferenceLatent as the character engine** (reference bundles, KV batching), the dataset factory (generate ~60 → curate ~30, 8-point rotation), the detailer LoRA swap, multi-character scenes via core attention masking, failure modes |
 | `references/controlnet-and-identity.md` | Pose control: Alibaba PAI Fun Union ControlNet (why Flux.1 won't work, model files, ComfyUI nodes, per-type strength settings, preprocessors); face identity: PuLID setup (files, nodes, dependencies, integration); IP-Adapter status; ReferenceLatent native tool; choosing between ControlNet vs PuLID vs ReferenceLatent |

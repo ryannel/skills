@@ -1,0 +1,131 @@
+{
+  "skill": "character-lora-training",
+  "verdict": "drift",
+  "flux": "active",
+  "flux_evidence": "Trainer tooling ticks over steadily (musubi-tuner 0.5.0 in July 2026, ongoing ai-toolkit PRs) and the legal layer moved concretely this cycle (UK creation-criminalization live 2026-02-06, FTC enforcement live 2026-05-19), but nothing this pass forces a section-level rewrite the way the 2026-08-23 census repair did.",
+  "findings": [
+    {
+      "id": "encoder-abliteration-vlm-exception",
+      "severity": "major",
+      "claim": "SKILL.md L177 and nsfw-training.md §1 state flatly that swapping in an abliterated (\"heretic\") text encoder does not uncensor diffusion output, because refusal lives in output layers a text encoder never uses.",
+      "reality": "A Heretic-abliterated Qwen3-VL-4B encoder is now packaged for Krea 2 (DreamFast, ComfyUI) specifically because the stock encoder is a VLM that genuinely refuses — rejecting ~30% of prompted content — and abliterating it measurably increases the share of prompts that reach the diffusion model, unlike a classic CLIP/T5 encoder.",
+      "evidence": "https://comfyui-wiki.com/en/news/2026-07-16-qwen3-vl-4b-heretic-comfyui ; https://github.com/p-e-w/heretic",
+      "fix_hint": "SKILL.md ~L177 and references/nsfw-training.md §1 (the -p-e-w- quote block) — add an explicit carve-out: the myth holds for CLIP/T5-class encoders, but VLM-class encoders that perform genuine understanding-level refusal (Qwen3-VL on Krea 2, per the existing Ideogram exception language) are a documented exception."
+    },
+    {
+      "id": "ncii-legal-landscape-understated",
+      "severity": "major",
+      "claim": "publishing-and-likeness.md §2 says only \"the EU, the UK and several other jurisdictions have their own versions, and state-level deepfake statutes are still arriving\" with no specifics.",
+      "reality": "This is no longer vague: the UK's Data (Use and Access) Act 2025 made merely *creating* (not just sharing) a non-consensual intimate deepfake a criminal offence as of 2026-02-06; the EU AI Act now classifies unsafeguarded NCII-generation systems as a prohibited practice; at least 45 US states have an enacted deepfake law as of mid-2026; and the federal NO FAKES Act cleared the Senate Judiciary Committee in June 2026.",
+      "evidence": "https://dpp-law.com/blog/laws-on-ai-generated-sexual-deepfakes/ ; https://www.techpolicy.press/eu-moves-to-regulate-ai-nudification-but-key-challenges-remain/ ; https://www.multistate.ai/nonconsensual-deepfake-laws",
+      "fix_hint": "references/publishing-and-likeness.md §2, closing paragraph — replace the vague sentence with the UK creation-criminalization date, the EU AI Act prohibited-practice classification, and the 45-state count, each dated and sourced."
+    },
+    {
+      "id": "take-it-down-penalty-inflation-frozen",
+      "severity": "minor",
+      "claim": "publishing-and-likeness.md §2 states civil penalty exposure as \"~$53,088 per violation\" with no note on why it might change.",
+      "reality": "The figure is confirmed current for 2026, but not because it was re-adjusted: OMB cancelled the 2026 inflation adjustment for federal civil monetary penalties government-wide (missing October 2025 CPI-U data) and told agencies to keep 2025 figures, so this number is frozen rather than freshly indexed.",
+      "evidence": "https://www.ftc.gov/business-guidance/blog/2026/05/take-it-down-act-enforcement-starts-now-what-know-about-ftc-tida",
+      "fix_hint": "references/publishing-and-likeness.md §2 penalty row — one-line footnote that the figure is frozen for 2026 pending the next CPI-U-based adjustment, so re-check it in early 2027."
+    },
+    {
+      "id": "sdxl-nsfw-finetune-eps-vs-vpred",
+      "severity": "minor",
+      "claim": "nsfw-training.md §2 (already self-flagged [re-verify]) names NoobAI-XL V-Pred 1.0 as the most anatomically accurate option, requiring the v-prediction + Euler sampler combination.",
+      "reality": "2026 community comparisons increasingly point to NoobAI-XL **Eps** (epsilon-prediction, not v-pred) as the better 2026 default for character/illustration work — cleaner output and better named-character recognition — without the v-pred sampler trap.",
+      "evidence": "https://aiofm.info/en/guides/pony-vs-noobai",
+      "fix_hint": "references/nsfw-training.md §2 NoobAI-XL row — check whether Eps has displaced V-Pred 1.0 as the recommended variant and update the sampler-trap warning accordingly."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "lora-squared-adaptive-rank",
+      "what": "\"Not All Layers Are Created Equal\" (arXiv 2603.21884, March 2026) proposes LoRA²: per-layer adaptive rank during fine-tuning on a personalization subject, letting layers that need it grow rank while others stay cheap, tested across 29 subjects on DINO/CLIP-I/CLIP-T.",
+      "why_it_matters": "Directly bears on the skill's deliberately-bracketed rank disagreement (8-64 across families) by offering a mechanism-level answer instead of a flat number.",
+      "source_class": "single-report",
+      "evidence": "https://arxiv.org/abs/2603.21884",
+      "date": "2026-03-23",
+      "where_it_belongs": "SKILL.md hyperparameter table / two-bar bullet ~L208 (character-rank-contested)",
+      "already_covered": false
+    },
+    {
+      "id": "onetrainer-int8-default-speed",
+      "what": "2026 trainer comparisons report OneTrainer running roughly 1.4–2× faster than AI-Toolkit on identical hardware, driven by torch.compile and int8-quantized (w8a8) training enabled by default.",
+      "why_it_matters": "A throughput gap this size affects which trainer to reach for on constrained hardware, independent of the existing validation-loss differentiator.",
+      "source_class": "community-consensus",
+      "evidence": "https://sanj.dev/post/onetrainer-vs-kohya-ss-vs-ai-toolkit/",
+      "date": "2026-08",
+      "where_it_belongs": "references/evaluation-and-tooling.md §1 (trainer comparison table)",
+      "already_covered": false
+    },
+    {
+      "id": "ai-toolkit-2026-feature-drip",
+      "what": "ostris/ai-toolkit's mid-2026 PR stream adds qfloat8 offloading, a dynamic memory manager, offline mode, and Krea 2 block-by-block quantization improvements.",
+      "why_it_matters": "Lowers the VRAM floor for training on Krea 2 and other newer bases with this trainer, relevant wherever the skill recommends ai-toolkit.",
+      "source_class": "official",
+      "evidence": "https://github.com/ostris/ai-toolkit/pulls",
+      "date": "2026-mid",
+      "where_it_belongs": "references/evaluation-and-tooling.md §1 (tool notes)",
+      "already_covered": false
+    },
+    {
+      "id": "musubi-tuner-gui-0.5.0",
+      "what": "kohya-ss's musubi-tuner (the video-model-focused sibling of sd-scripts) shipped a GUI update in July 2026 (v0.5.0) adding support for newer video models, following a large internal refactor in May 2026.",
+      "why_it_matters": "Confirms musubi-tuner remains actively maintained as the video-LoRA trainer this skill and its video siblings route to.",
+      "source_class": "official",
+      "evidence": "https://github.com/kohya-ss/musubi-tuner/issues/996 ; https://github.com/kohya-ss/musubi-tuner",
+      "date": "2026-07",
+      "where_it_belongs": "Not currently named in this skill; relevant if a trainer-landscape table is ever added",
+      "already_covered": false
+    },
+    {
+      "id": "sd-scripts-anima-lumina-support",
+      "what": "kohya-ss/sd-scripts expanded 2026 model coverage to Lumina, HunyuanImage 2.1, Chroma and Anima, with August 2026 fixes to Anima ControlNet-LLLite v2.1 and a Qwen VAE spatial-chunking bug on tall/high-res images.",
+      "why_it_matters": "Widens which bases this suite's trainer-of-record actually supports, including Anima which this skill already links to.",
+      "source_class": "official",
+      "evidence": "https://github.com/kohya-ss/sd-scripts/pulls",
+      "date": "2026-08",
+      "where_it_belongs": "references/evaluation-and-tooling.md §1 (tool notes), if sd-scripts model coverage is named anywhere",
+      "already_covered": false
+    },
+    {
+      "id": "comfyui-captionthis-multi-vlm",
+      "what": "ComfyUI-CaptionThis packages Janus Pro, Florence-2 and (upcoming) JoyCaption behind one node for LoRA dataset captioning, alongside standalone Florence2+WD14 combo workflows (natural description plus booru-style detail tags).",
+      "why_it_matters": "One-line note only — dataset-curation depth is covered by a separate agent's pass; flagged here purely as a tooling consolidation worth a mention.",
+      "source_class": "community-consensus",
+      "evidence": "https://github.com/MieMieeeee/ComfyUI-CaptionThis",
+      "date": "2026",
+      "where_it_belongs": "references/dataset-and-captioning.md tooling note",
+      "already_covered": false
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [],
+    "add": [
+      {
+        "id": "encoder-abliteration-vlm-exception",
+        "type": "contested",
+        "claim": "VLM-class text encoders that perform genuine refusal (Qwen3-VL on Krea 2) are a real exception to the abliteration-doesn't-help myth, distinct from classic CLIP/T5 encoders.",
+        "where": "SKILL.md ~L177; references/nsfw-training.md §1",
+        "check": "Track whether more VLM-backed encoders (beyond Krea 2/Qwen3-VL and the existing Ideogram case) get a documented Heretic-style abliteration exception, and whether -p-e-w- or the Krea community qualifies the mechanism further."
+      },
+      {
+        "id": "ncii-legal-instruments-eu-uk-state",
+        "type": "date-stamp",
+        "claim": "UK creation-criminalization (2026-02-06), EU AI Act prohibited-practice classification for NCII systems, 45+ US state deepfake statutes, and the NO FAKES Act (cleared Senate Judiciary Committee June 2026) are the current non-US-federal legal landscape.",
+        "where": "references/publishing-and-likeness.md §2",
+        "check": "Check whether the EU AI Act provision has moved from proposal to binding text, whether NO FAKES Act passed the full Senate/House, and whether the state count has grown further."
+      }
+    ],
+    "amend": [
+      {
+        "id": "sdxl-nsfw-finetune-landscape",
+        "change": "Add: 2026 community comparisons increasingly favor NoobAI-XL Eps over V-Pred 1.0 as the easier, better-default anatomy/character finetune; re-verify which variant currently leads before the next repair pass."
+      },
+      {
+        "id": "take-it-down-act",
+        "change": "Add: the 2026 federal civil-penalty inflation adjustment was cancelled government-wide (OMB, missing CPI-U data), so $53,088 is frozen rather than freshly indexed — re-check for a resumed adjustment in early 2027."
+      }
+    ]
+  }
+}

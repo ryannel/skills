@@ -22,6 +22,8 @@ That explains the ecosystem's most stubborn myth. People swap the text encoder f
 
 The file sizes corroborate this. The encoder builds shipped with some models are physically **smaller than stock, because the output layers are missing.** Refusal lives in those layers, and a text encoder never uses them. There is no refusal path there to remove.
 
+**The carve-out: VLM-class encoders that refuse at the understanding level.** The argument above is about CLIP- and T5-class encoders, which never refuse. Krea 2's stock encoder is a Qwen3-VL-4B — a vision-language model that performs genuine understanding-level refusal and rejects roughly 30% of prompted content before the diffusion model sees any conditioning. A Heretic-abliterated build of that encoder is now packaged for Krea 2 in ComfyUI and DreamFast precisely because the swap measurably raises the share of prompts that reach the model `[community — comfyui-wiki, 2026-07-16; p-e-w/heretic]` `[contested]`. Read the two facts together: abliteration still adds nothing the base cannot draw, and the perturbation cost in the quote above still applies, but where the encoder itself is the thing refusing, the swap is removing a real gate rather than an imaginary one. Ideogram 4's in-weights filter is the other documented exception, for a different reason (§2). Whether more VLM-backed encoders join this list is open.
+
 **Abliterated models do help in one place: prompt expansion.** An LLM asked to *enhance* a prompt can refuse outright, and several official ComfyUI templates ship such an expander switched on by default. The expander is a separate stage that runs before the encoder, so swapping it is legitimate.
 
 The confusion usually comes from template structure. A template's subgraph wires **the same LLM** into both the expander and the text-encode node. A swap meant to fix the refusing expander therefore quietly changes the encoder too. Unpack the subgraph and point the abliterated model at the expander only.
@@ -121,7 +123,7 @@ This is the deepest ecosystem, and it is worth understanding as separate lineage
 
 | Finetune | Character `[community — Civitai model cards and comparisons; convergent]` |
 |---|---|
-| **NoobAI-XL V-Pred 1.0** | The most anatomically accurate, with the best tag comprehension and the highest community ELO `[flagged — re-verify]`. **Needs v-prediction sampler settings, and Euler specifically — other samplers will not work.** That trap costs people an evening |
+| **NoobAI-XL** — V-Pred 1.0 or **Eps** | V-Pred 1.0 held the anatomical-accuracy and tag-comprehension crown through 2025, and **needs v-prediction sampler settings, and Euler specifically — other samplers will not work.** That trap costs people an evening. 2026 comparisons increasingly favour the **Eps** (epsilon-prediction) variant as the better default for character and illustration work — cleaner output, better named-character recognition, and no v-pred sampler trap `[community — aiofm.info Pony-vs-NoobAI comparison, 2026; re-verify]`. Which variant leads is not settled `[flagged — re-verify]` |
 | **WAI-NSFW v17** | The usual runner-up, and much easier to set up than v-pred NoobAI |
 | **Illustrious** (v2.0 as a finetune base) | The **largest character-LoRA library**, which matters if you want compatibility with existing work |
 | **Pony Diffusion V6 XL** | Heavy booru-tagged training with explicit examples. Tolerates arbitrarily long tag strings and stays coherent when tags conflict. Enormous LoRA ecosystem |
@@ -169,12 +171,12 @@ So:
 
 Two things differ materially from image work.
 
-**Automated captioners fail.** Vision-language captioners either refuse or produce useless euphemism on adult footage, so **the community captions adult video by hand.** Video datasets are already the expensive kind, because cost scales with clip count multiplied by frame handling. Hand captioning is therefore a real cost multiplier to budget for, not a detail. It is also a strong argument for **training on single frames** where you care about appearance rather than motion: you get the same curated stills, ordinary image captioning, and far less labour.
+**Automated captioners fail.** Vision-language captioners either refuse or produce useless euphemism on adult footage, so **the community captions adult video by hand.** Video datasets are already the expensive kind, because cost scales with clip count multiplied by frame handling. Hand captioning is therefore a real cost multiplier to budget for, not a detail. It is also a strong argument for **training on single frames** where you care about appearance rather than motion: you get the same curated stills, ordinary image captioning, and far less labour. On a generated set the cheapest honest caption is one produced from a per-cell manifest of what actually landed — see [`dataset-and-captioning.md`](dataset-and-captioning.md) §4.
 
 **Architecture still governs.** The rules from the model skill do not relax:
 
 - Wan 2.2's MoE split means **two LoRAs from one dataset**, one per expert. The low-noise half carries appearance; the high-noise half carries motion and pose.
-- H3 needs a **non-pruned checkpoint** to train at all.
+- H3 needs a **non-pruned checkpoint** to train at all — and a stills-only H3 character LoRA *does* carry identity into generated motion, which was open until the lab measured it: with the LoRA a thigh-up T2V clip stayed the subject where the no-LoRA control was a different woman, and with a pinned keyframe the face held flat across five seconds where the base drifted `[live-use — media lab, Ciara h3-v1, 2026-09-08]`. So stills are a legitimate identity dataset on H3; what clips add is motion-time stability without a keyframe and full-body identity. Numbers and the recipe: [`minimax-h3/references/lora-training.md`](../../minimax-h3/references/lora-training.md).
 - Speed and distill LoRAs change the sampling trajectory, so **evaluate without them loaded**, then check the combination separately, since that is how it will run.
 
 **Listen to your evaluations as well as looking at them**, on any model that generates audio. A LoRA can sharpen visual identity while degrading voice or ambience, and frames alone will never show you that.

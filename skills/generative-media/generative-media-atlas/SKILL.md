@@ -2,11 +2,11 @@
 name: generative-media-atlas
 description: >
   The entry point to the generative-media suite. It tells you which open image or video model to
-  use for a given job, how the models rank and trade off against each other, which skills to
-  install to do the work, and in what order to use them. Use this whenever the user is choosing,
+  use for a job, how they rank and trade off, which skills to install, and in what order to use
+  them. Use this whenever the user is choosing,
   comparing or planning rather than operating a model they have already settled on, even when they
   never say the words "which model". Reach for it early: the constraints it screens for (licence,
-  territory, VRAM, prompt dialect) are cheap to check now and unrecoverable later. Triggers:
+  territory, VRAM, dialect) are cheap to check now and unrecoverable later. Triggers:
   "which model is best for photoreal faces / anime / typography / text in images", "which is
   easiest to train a character LoRA on", "rank these for realism", "Z-Image vs Krea 2 vs FLUX.2",
   "what can I run on 12 GB", "which video model gives me audio", "can I sell what this makes",
@@ -14,9 +14,10 @@ description: >
   which ones bar it, "I want realistic photos of a character I invented, in ComfyUI on RunPod —
   where do I start", or any multi-step goal crossing model choice, LoRA training, pipeline design
   and GPU deployment. It also owns getting the skills onto the machine: what to install with
-  `npx skills add`, which siblings a job needs, and the canonical skills published outside this
-  suite by RunPod, Comfy-Org and Hugging Face. Install this skill alone and it will tell you which
-  others to pull and when. Per-model settings, filenames, node wiring, prompt dialects and licence
+  `npx skills add`, which siblings a job needs, the canonical skills published outside this
+  suite by RunPod, Comfy-Org, Hugging Face and Black Forest Labs, and which strong open models
+  have no skill here yet. Installed alone, it tells you which others to pull and when. Per-model
+  settings, filenames, node wiring, prompt dialects and licence
   clause detail live in the model skills. This skill owns the comparison between them, the route
   through them, and the decision of which ones you need. When a question could plausibly be
   answered by a model skill or by this one, start here. Routing costs one read, and choosing the
@@ -97,7 +98,11 @@ depicting minors**, and **sexual imagery of real, identifiable people without th
 capability gap to work around. Everything else on this axis is craft, and the craft is below.
 
 **3. Where are you?** [`minimax-h3`](../minimax-h3/)'s licence **excludes the US, EU, UK and South Korea**. It
-is the suite's only territory gate, and it rules the model out entirely rather than just limiting it.
+is the only territory gate *inside* the suite, and it rules the model out entirely rather than just limiting it.
+It is no longer the only one you can walk into. Tencent's Hunyuan Community Licence **excludes the EU, UK and
+South Korea**, and it covers **HunyuanVideo-1.5** and **HunyuanImage 2.1 / 3.0**, none of which this suite
+covers `[official — HunyuanVideo-1.5 card, read 2026-09-09]`. If you are in those territories,
+strike both families before you compare anything.
 
 Then comes the ordinary question: **what hardware do you have**, or are you renting? See *Hardware* below.
 
@@ -116,7 +121,7 @@ discover a licence or dialect problem that was knowable on day one.
 | # | Rung | What it removes |
 |---|---|---|
 | 1 | **Licence** — what leaves the building | Shipping or serving the weights kills [`anima`](../anima/) (whose *outputs* stay free), [`ideogram-4`](../ideogram-4/)'s open weights and FLUX.2 [dev]/9B. Adult work kills [`ltx-2-5`](../ltx-2-5/) |
-| 2 | **Territory** | [`minimax-h3`](../minimax-h3/) if you are in the US/EU/UK/KR |
+| 2 | **Territory** | [`minimax-h3`](../minimax-h3/) if you are in the US/EU/UK/KR. Outside the suite, **HunyuanVideo-1.5** and **HunyuanImage 2.1 / 3.0** if you are in the EU/UK/KR |
 | 3 | **Hardware** | Under ~12 GB the field narrows to [`sdxl`](../sdxl/), [`anima`](../anima/), FLUX.2 [klein] 4B, quantised [`z-image`](../z-image/) and [`wan-2-2`](../wan-2-2/) 5B. See the table below |
 | 4 | **Capability** — can it do the job at all | In-image typography → only [`ideogram-4`](../ideogram-4/). Tracked person-replacement → only [`scail-2`](../scail-2/). Cuts inside one generation → only [`ltx-2-5`](../ltx-2-5/). Native audio → only [`minimax-h3`](../minimax-h3/) and [`ltx-2-5`](../ltx-2-5/). **Adult work is a capability axis in its own right**; see below |
 | 5 | **Dialect** — will it understand you | Booru tags into a prose-trained encoder land as noise, and sentences into CLIP hit a 77-token wall. This is an encoder-class fact, not a preference |
@@ -125,6 +130,18 @@ discover a licence or dialect problem that was knowable on day one.
 Rung 5 is the one people skip. [`sdxl`](../sdxl/) and [`anima`](../anima/) want tags. [`flux-2`](../flux-2/),
 [`z-image`](../z-image/) and [`krea-2`](../krea-2/) want sentences. [`ideogram-4`](../ideogram-4/) wants a JSON
 document. A model prompted in the wrong dialect looks like a bad model.
+
+**Three traps on rungs 1 and 2, all outside the suite, all easy to pick up by accident.** They are here because
+each one looks clean from where people meet it. **`nvidia/PiD`** is a latent-to-pixel decoder and 4× upscaler
+that drops into FLUX, FLUX.2, SD3, SDXL and Qwen-Image graphs, and Comfy-Org ships a template for it. Its
+licence is **NSCLv1, non-commercial**. A template is not a licence check. **Pony V7** (AuraFlow, not SDXL)
+carries a custom licence that bars inference services, companies over $1M revenue and professional video, which
+makes it a third revenue gate beside [`krea-2`](../krea-2/)'s $1M and [`ltx-2-5`](../ltx-2-5/)'s $10M.
+**HunyuanImage 2.1 / 3.0** sit under the Tencent Community Licence: EU, UK and South Korea excluded, 100M-MAU
+cap `[official — model cards and licence files, read 2026-09-09]`. One more rule from the same sweep: run the
+ladder against the **specific checkpoint**, never against the vendor's reputation. Qwen-Image 3.0 went
+hosted-only with no weights and no licence in the same four months that Ideogram 4, Krea 2, MiniMax H3 and
+LTX-2.5 all released weights. "Historically open lab" predicts nothing.
 
 ---
 
@@ -175,7 +192,13 @@ Flux [klein] 9B and Qwen-Image-Edit, mixed freely in one job. The adapters still
 but an adapter route today is one you debug alone
 ([`references/model-rankings.md`](references/model-rankings.md) §3.2). **One trap fails silently in a stock
 graph:** Krea 2 Identity Edit is an *unofficial* community fine-tune. It needs the `ComfyUI-Krea2Edit` node pack
-for its dual conditioning `[community — Enshitification, 611 pts]`.
+for its dual conditioning `[community — Enshitification, 611 pts]`. **And one of the three has no skill behind
+it.** The **Qwen-Image family** (Qwen-Image, Qwen-Image-Edit 2509/2511, 2512, Layered) is Apache-2.0,
+ComfyUI-native, and carries **1,162 Civitai LoRAs, 192 of them character-tagged** — more than FLUX.2 [klein] 9B
+`[official — Civitai API, 2026-09-09]`. This suite routes you to it and, as of 2026-09-09, hands you nothing:
+**not yet covered**. Until it is, the model cards at `huggingface.co/Qwen` and Comfy-Org's Qwen templates are
+the source, and [`image-production-workflows`](../image-production-workflows/) carries the one handoff rule
+that still applies (pixels in, pixels out).
 
 **Easiest to train a character LoRA on — and this splits three ways.** There is no single winner. Treating it as
 one question is the mistake:
@@ -187,22 +210,29 @@ one question is the mistake:
 | **Most documented — least to invent** | [`sdxl`](../sdxl/) | Years of settled recipes, two trainers, separate Pony/Illustrious pools |
 
 **Ecosystem size is a fourth axis, and it does not track the first three.** These counts are from Civitai on
-2026-08-23. They are **re-measurable**, which matters more than the snapshot: run
-[`scripts/civitai_census.py`](scripts/civitai_census.py) rather than trusting these figures once they are a few
-weeks old. [`z-image`](../z-image/) Turbo, [`krea-2`](../krea-2/), [`anima`](../anima/) and the SDXL family each
-carry **2,000+** published LoRAs. FLUX.2 [klein] 9B has 653, and **[klein] 4B just 133**.
-[`ideogram-4`](../ideogram-4/) has 34. Two traps fall out of this. First, **Z-Image's pool is on Turbo (2,191+)
-not Base (671)**, and Turbo is the variant its own training doctrine trains on. Second, **picking [klein] 4B for
-its Apache-2.0 licence costs you most of the FLUX.2 LoRA pool**. The full census, method and caveats are in
+2026-08-23, with the fast-moving rows re-run on 2026-09-09. They are **re-measurable**, which matters more than
+the snapshot: run [`scripts/civitai_census.py`](scripts/civitai_census.py) rather than trusting these figures
+once they are a few weeks old. [`z-image`](../z-image/) Turbo, [`krea-2`](../krea-2/), [`anima`](../anima/) and
+the SDXL family each carry **2,000+** published LoRAs. **Qwen-Image**, which has no skill here, sits next at
+1,162. FLUX.2 [klein] 9B has ~670, and **[klein] 4B just 133**. [`ideogram-4`](../ideogram-4/) has 36. Two traps
+fall out of this. First, **Z-Image's pool is on Turbo (2,191+) not Base (671)**, and Turbo is the variant its
+own training doctrine trains on. Second, **picking [klein] 4B for its Apache-2.0 licence costs you most of the
+FLUX.2 LoRA pool**. The full census, method and caveats are in
 [`references/model-rankings.md`](references/model-rankings.md) §4.5.
 
 **The cost of the podium.** Ideogram 4's win rests on one author and one dataset. Its **weights are
-non-commercial**, so a LoRA trained there may be unshippable for the reason gate 1 names. Its ecosystem is **34
-LoRAs on Civitai, exactly one of them a character LoRA** `[official — Civitai API, counted 2026-08-23]`. The
-model may well train beautifully. Nobody has done it in public. Krea 2 trains slowly and pays off only if you
+non-commercial**, so a LoRA trained there may be unshippable for the reason gate 1 names. Its ecosystem is **36
+LoRAs on Civitai, exactly one of them tagged as a character LoRA** `[official — Civitai API, counted 2026-09-09]`.
+The model may well train beautifully. Nobody has done it in public. Krea 2 trains slowly and pays off only if you
 remember to *sample* on Turbo. FLUX.2 [dev] is the one to skip: it needed ~90 GB of system RAM to quantise, and
 that test never finished a usable LoRA on it. On video, [`wan-2-2`](../wan-2-2/) is the mature ecosystem (two
-LoRAs, one per expert, from one dataset). [`scail-2`](../scail-2/) has **no training path at all**.
+LoRAs, one per expert, from one dataset). [`minimax-h3`](../minimax-h3/) has stopped being the young one: four
+trainers now support it (ai-toolkit, musubi-tuner, diffusion-pipe, SimpleTuner) plus a hosted fal.ai option, its
+Civitai pool went from 22 to **86 LoRAs, 29 character-tagged**, in seventeen days, and one lab has shown a
+stills-only H3 character LoRA holding identity in motion — 0.200 median face distance against 0.920 for the
+no-LoRA control `[live-use — media lab, Ciara h3-v1, 2026-09]`. The doctrine is weeks old and the model skill
+owns it; rank 32 collapses under ai-toolkit, so r16 is the ceiling there. [`scail-2`](../scail-2/) has **no
+training path at all**.
 
 **Adult and NSFW work.** This is a dominant use of open-weights models, and it is treated here as a capability
 axis, not just a licence one. The model that wins it is not the model that wins realism, and the difficulty is
@@ -211,7 +241,7 @@ routinely misdiagnosed.
 | | The answer | The catch |
 |---|---|---|
 | **Image** | [`krea-2`](../krea-2/) — the busiest adult checkpoint ecosystem on Civitai (`LUSTIFY!`, `FinePorn v3 TURBO`, Moody Krea 2 Mix), typically Euler or ER SDE, 10 steps, guidance 1.0 | The checkpoint does the work, not your settings. Krea 2's safety tuning also drives its muted-expression tax — the same tuning `krea2filterbypass`-class LoRAs exist to undo |
-| **Anime / illustration** | [`sdxl`](../sdxl/)'s Pony, Illustrious and NoobAI — still the deepest pool — with [`anima`](../anima/) rising fast and running where nothing else will | Anima's weights are non-commercial; Pony/Illustrious are not |
+| **Anime / illustration** | [`sdxl`](../sdxl/)'s Pony V6 XL, Illustrious and NoobAI — still the deepest pool — with [`anima`](../anima/) rising fast and running where nothing else will | Anima's weights are non-commercial; Pony V6 XL/Illustrious are not. **Pony V7 is AuraFlow, not SDXL**, and its licence bars inference services and >$1M companies (rung 1) |
 | **Video** | **[`minimax-h3`](../minimax-h3/), decisively** — *"far above LTX and Wan"*, *"the most powerful open source model"* `[community — AidenAizawa, Revolutionary-Bar766; convergent]` | **Its licence excludes the US, EU, UK and South Korea.** The capability leader is one that many readers may not lawfully use — gate 3 is not a formality here |
 | **Video, licence-clean** | [`wan-2-2`](../wan-2-2/) — Apache-2.0, **no acceptable-use clause at all**, the only unencumbered adult path in the suite | Weaker prompt adherence; anatomy needs an NSFW-merged checkpoint (below) |
 | **Ruled out** | [`ltx-2-5`](../ltx-2-5/) — its AUP bars explicit content universally, local weights included. Adult LTX work happens on **2.3**, which is practice, not permission | — |
@@ -237,10 +267,11 @@ no difference, and only 2 of 28 seeds were usable. Swapping to an NSFW-merged ch
 **Structural control (pose, depth, canny, regional).** [`sdxl`](../sdxl/) wins, and it is not close: union
 ControlNet, IP-Adapter and regional prompting are all mature there. Then come
 [`z-image`](../z-image/)/[`flux-2`](../flux-2/) (Fun Union, custom nodes, Turbo-only on Z-Image), then
-[`anima`](../anima/) (LLLite: lineart/depth/scribble, **no pose, no canny**), then [`krea-2`](../krea-2/) (depth
-only), then [`ideogram-4`](../ideogram-4/) (`bbox` layout only). **The cost:** SDXL's control comes with a
-77-token CLIP window and no in-image text. That is why it so often acts as the *front end* of a chain rather
-than the whole of it.
+[`anima`](../anima/) (LLLite: lineart/depth/scribble, **no pose, no canny**) and [`krea-2`](../krea-2/) (two
+community ControlNet-LoRAs, **depth and OpenPose**, no canny or union — the pose one landed 2026-08-04, which
+lifts it level with Anima on the axis people most often need), then [`ideogram-4`](../ideogram-4/) (`bbox` layout
+only). **The cost:** SDXL's control comes with a 77-token CLIP window and no in-image text. That is why it so
+often acts as the *front end* of a chain rather than the whole of it.
 
 **And a correction that shows this skill's own failure mode.** The suite rates [`ideogram-4`](../ideogram-4/)
 weak on characters because it has no identity adapter, no edit variant and one character LoRA. **Those clauses
@@ -250,14 +281,23 @@ pts]`. **"No adapter exists" describes tooling, not capability**
 ([`references/model-rankings.md`](references/model-rankings.md) §3.1).
 
 **Everything else, one line each.** Typography goes to [`ideogram-4`](../ideogram-4/), with no real second.
-Anime goes to [`anima`](../anima/), or to [`sdxl`](../sdxl/)'s Illustrious/NoobAI/Pony finetunes when you must
-ship the weights. Widest aesthetic range: [`krea-2`](../krea-2/). Cleanest licence: [`z-image`](../z-image/).
+Anime goes to [`anima`](../anima/), or to [`sdxl`](../sdxl/)'s Illustrious/NoobAI/Pony V6 XL finetunes when you
+must ship the weights (Pony V7 is AuraFlow and is not an SDXL checkpoint). Widest aesthetic range:
+[`krea-2`](../krea-2/). Cleanest licence: [`z-image`](../z-image/). Instruction-based image editing and layered
+RGBA output: **Qwen-Image-Edit / Qwen-Image-Layered**, not yet covered here. Native 4K with region-controlled
+edits: **SenseNova U1.5**, ComfyUI core since 2026-09-01, not yet covered, and its licence is verify-gated.
 
 **Video, by what you are actually doing.** Animating a still is [`wan-2-2`](../wan-2-2/)'s job. Its I2V is far
 stronger than its T2V, so lock the still with an image model first. For sound in the same pass, use
 [`minimax-h3`](../minimax-h3/) or [`ltx-2-5`](../ltx-2-5/); which one is a licence question, not a quality one.
-Several cuts in one generation: [`ltx-2-5`](../ltx-2-5/), alone. Replacing a person in footage frame-for-frame:
-[`scail-2`](../scail-2/), alone. **A named gap:** nothing in the suite does a freeform camera path.
+Several cuts in one generation: [`ltx-2-5`](../ltx-2-5/), alone. Replacing a person in footage is now a **task
+split**, not a single answer: [`scail-2`](../scail-2/) for body motion, non-human subjects and multi-character
+scenes, tracked frame-for-frame; Wan **Animate 2** (in [`wan-2-2`](../wan-2-2/), native ComfyUI since
+2026-08-08) for close-up faces and lip sync `[community — Wensleydale on X, dreamerland.ai; two sources]`. **Two named gaps.** Nothing in the suite does a freeform camera path. And nothing *edits* a clip —
+relight, restyle, insert a subject, remove an object. The open model that does is ByteDance's **Bernini-R**
+(Apache-2.0, native ComfyUI since 2026-06-14), **not yet covered**; SCAIL-2 tracks a person, Bernini re-renders a
+scene. A fourth open video model, Tencent's **HunyuanVideo-1.5** (8.3B, ~14 GB VRAM, native ComfyUI, musubi-tuner
+LoRAs), is also uncovered and carries the EU/UK/KR exclusion from gate 3.
 
 ---
 
@@ -276,7 +316,7 @@ you need](#installing-what-you-need). Full step-by-step routes, with what to rea
 | **Put my character into footage I already have** | Playbook E — edit frame 0, then track | `krea-2` `scail-2` `character-lora-training` |
 | **Run all this as an API** | Playbook F — API-format workflows on serverless | `comfyui-on-runpod` + RunPod's `runpod`, `flash` |
 | **Adult work, image or video** | Playbook G — checkpoint first, then licence, then anatomy | `krea-2` or `sdxl` (image) / `wan-2-2` or `minimax-h3` (video) + `character-lora-training` |
-| **What's deployed on my RunPod account, and what is it costing me** | `comfyui-on-runpod` *Cost guards that actually work* (burn check, two-timer guards, agent-free teardown) → RunPod's `runpod-mcp`/`runpodctl` to act on it | `comfyui-on-runpod` + RunPod's |
+| **What's deployed on my RunPod account, and what is it costing me** | `comfyui-on-runpod` *Cost guards that actually work* (burn check, the clock-outside-the-pod guard, agent-free teardown) → RunPod's `runpod-mcp`/`runpodctl` to act on it | `comfyui-on-runpod` + RunPod's |
 | **I just want to know which model** | The elimination ladder above, then the rankings | this skill alone |
 
 ---
@@ -313,24 +353,26 @@ Scopes, agent targeting, symlink-vs-copy, private repos and troubleshooting are 
 
 ## The ecosystem beyond this suite
 
-This suite deliberately does not restate what its vendors already publish well. Three canonical sources matter,
+This suite deliberately does not restate what its vendors already publish well. Four canonical sources matter,
 and knowing what each one is *not* is as useful as knowing what it is.
 
 | Source | Install | What it owns | What it is **not** |
 |---|---|---|---|
-| **RunPod** — `runpod/runpod-plugins-official` | `npx skills add runpod/runpod-plugins-official` | 7 skills — `runpod` (router), `runpod-usage`, `runpodctl`, `runpod-mcp`, `flash`, `companion-clis`, `runpod-migrate` — plus 24 golden paths including `02-comfyui-pod`, `07-network-volume-handoff`, `20-model-caching-endpoint`, `21-storage-tiers`, `25-bake-vs-mount` | Not ComfyUI-aware. Where models must sit so a fresh instance finds them is [`comfyui-on-runpod`](../comfyui-on-runpod/)'s job |
-| **Comfy-Org** — `Comfy-Org/comfy-skills` | `/plugin marketplace add Comfy-Org/comfy-skills` then `/plugin install comfy-cloud@comfy-skills` | 12 skills wrapping the **Comfy Cloud MCP** — `comfy-generate-image`, `comfy-generate-video`, `comfy-search-models`, `comfy-search-nodes`, `comfy-search-templates`, `comfy-upscale-image`, and others | **Command wrappers, not craft.** They execute a job on Comfy Cloud; they carry no per-model settings, prompt dialects or licence analysis. They pair with this suite rather than replacing it |
-| **Hugging Face** — `huggingface/skills` | `hf skills add <name>` | `hf-cli` (fetching weights) and `hf-mem` (estimating VRAM from safetensors/GGUF) are the two that matter here | No diffusion-training or image-model skills; its trainers are LLM and vision-classification shaped |
+| **RunPod** — `runpod/runpod-plugins-official` | `npx skills add runpod/runpod-plugins-official` | 8 skills — `runpod` (router), `runpod-usage`, `runpodctl`, `runpod-mcp`, `flash`, `companion-clis`, `runpod-migrate`, `runpod-templates` — plus 24 golden paths including `02-comfyui-pod`, `07-network-volume-handoff`, `20-model-caching-endpoint`, `21-storage-tiers`, `25-bake-vs-mount` | Not ComfyUI-aware. Where models must sit so a fresh instance finds them is [`comfyui-on-runpod`](../comfyui-on-runpod/)'s job |
+| **Comfy-Org** — `Comfy-Org/comfy-skills` | `/plugin marketplace add Comfy-Org/comfy-skills` then `/plugin install comfy-cloud@comfy-skills` | 12 skills wrapping the **Comfy Cloud MCP** — `comfy-generate-image`, `comfy-generate-video`, `comfy-search-models`, `comfy-search-nodes`, `comfy-search-templates`, `comfy-upscale-image`, and others | **Mostly command wrappers, not craft.** They execute a job on Comfy Cloud; they carry no per-model settings, prompt dialects or licence analysis. One exception: `technique-combine-people` is a real face-consistency compositing recipe on hosted partner nodes. They pair with this suite rather than replacing it |
+| **Hugging Face** — `huggingface/skills` | `hf skills add <name>` | `hf-cli` (fetching weights), `hf-mem` (estimating VRAM from safetensors/GGUF), and `huggingface-lora-space-builder`, which publishes a trained LoRA (Qwen-Image, LTX, Wan, FLUX, SDXL) as a Gradio ZeroGPU demo | Still no diffusion-*training* skill; its trainers are LLM and vision-classification shaped |
+| **Black Forest Labs** — `black-forest-labs/skills` | `npx skills add black-forest-labs/skills` (standard `skills/` layout; the shorthand is inferred, not run here — see [`references/ecosystem-map.md`](references/ecosystem-map.md) §4) | 10 skills: `bfl-api`, `flux-image-best-practices`, and eight `flux-3-*` skills for the **hosted** FLUX 3 API (image, 20 s video with native audio, keyframes, v2v continuation, prompt doctor) | Hosted API only. **FLUX 3 has no open weights**; "FLUX 3 Dev" is on BFL's roadmap with no date, licence or size. Open-weight FLUX.2 craft stays in [`flux-2`](../flux-2/) |
 
-**Two things changed recently enough to catch people out.** RunPod ships **7** skills, not the 6 widely cited:
-`runpod-migrate` was added `[official — repo tree, read 2026-08-23]`. And `metadata.internal: true` now hides a
-skill from discovery unless `INSTALL_INTERNAL_SKILLS=1` is set, which is how a repo keeps authoring machinery
-out of its published listing.
+**Three things changed recently enough to catch people out.** RunPod ships **8** skills, not the 6 or 7 widely
+cited: `runpod-migrate` and then `runpod-templates` were added `[official — repo tree, read 2026-09-09]`. Black
+Forest Labs became the first model vendor in this suite's field to publish agent skills, which retires the claim
+this section used to make that none did. And `metadata.internal: true` hides a skill from discovery unless
+`INSTALL_INTERNAL_SKILLS=1` is set, which is how a repo keeps authoring machinery out of its published listing.
 
-No agent skills from Black Forest Labs, Stability, Alibaba/Tongyi, Lightricks, MiniMax or Civitai were findable
-as of **2026-08-23** `[flagged — negative result from search; re-verify]`. That is the gap this suite exists to
-fill. Full inventories, and how to judge a third-party skill before trusting it, are in
-[`references/ecosystem-map.md`](references/ecosystem-map.md).
+No agent skills from Stability, Alibaba/Tongyi, Lightricks, MiniMax, Z.ai or Civitai were findable as of
+**2026-09-09** (a negative search result, flagged for re-verification in the ecosystem map). That is still the
+gap this suite exists to fill. Full inventories, the BFL repo, the open models with no skill yet, and how to judge a third-party skill
+before trusting it, are in [`references/ecosystem-map.md`](references/ecosystem-map.md).
 
 ### The compute stack is pluggable — RunPod is the current inventory, not the architecture
 
@@ -372,7 +414,7 @@ ingredient.
 | The trained LoRA cannot be published anywhere | Dataset was a real person — resemblance, not provenance, is the test | Synthetic character; [`character-lora-training`](../character-lora-training/) gate |
 | The model ignores half the prompt | Wrong dialect for its encoder class — tags into an LLM encoder, or sentences past CLIP's 77 tokens | Rung 5; the model skill's `prompting-guide.md` |
 | Great model, wrong country | [`minimax-h3`](../minimax-h3/)'s territory exclusion is a licence term, not a geoblock you can ignore | [`wan-2-2`](../wan-2-2/) |
-| GPU bill with nothing to show | Rented before the graph ran end to end once | Smoke-test cheap; `--terminate-after`; [`comfyui-on-runpod`](../comfyui-on-runpod/) and RunPod's `runpod-usage` |
+| GPU bill with nothing to show | Rented before the graph ran end to end once — or trusted a CLI timer. `runpodctl` 2.12.0 (2026-08-27) removed `--stop-after`/`--terminate-after`, and its own PR #330 says they were forwarded but **never enforced** | Smoke-test cheap. Put the clock **outside the pod**: a scheduler or shell `trap` that calls `runpodctl pod remove "$POD_ID"` unconditionally, plus an on-pod watchdog. Then the burn check — [`comfyui-on-runpod`](../comfyui-on-runpod/) and RunPod's `runpod-usage` |
 | Works locally, breaks on serverless | The dual mount root — `/workspace` vs `/runpod-volume` | [`comfyui-on-runpod`](../comfyui-on-runpod/) |
 | Chose the "best realism" model and the render still looks AI | Realism is a pipeline position, not a model — one pass rarely gets there | The production ladder in [`image-production-workflows`](../image-production-workflows/) |
 | Swapped in an abliterated encoder to "unlock" anatomy; nothing improved and adherence got worse | Refusal lives in LLM output layers a **text encoder never uses** — there is no refusal path to remove, only perturbed conditioning | Change the base or checkpoint. Use abliterated models only for a refusing *prompt-expander* stage |
@@ -395,7 +437,10 @@ ingredient.
 7. Prompt dialect matched to the encoder class you picked?
 8. Route written down as a sequence of skills, with the handoffs named — and every one installed?
 9. If training: base chosen as the model you will *render* on, not the one that trains best?
-10. If renting: cost guard set, and the workflow proven cheaply first?
+10. If renting: a terminate call scheduled from **outside** the pod (no CLI flag does this any more), and the
+    workflow proven cheaply first?
+11. If the model you want is one of the "not yet covered" rows in the suite map: licence read from its own card,
+    not inferred from the vendor?
 
 ---
 
@@ -422,6 +467,21 @@ Every published skill, and the question it answers. This table is the suite keye
 | [`comfyui-on-runpod`](../comfyui-on-runpod/) | "Why can't ComfyUI find my model?" — volumes, mount roots, serverless |
 | **this skill** | "Which of the above, and in what order?" |
 
+**Strong open models with no skill here yet.** Plain bold, not a link, because there is nothing to link to. Each
+row says where to go instead. The status is as of **2026-09-09**; if a row below has become a link in a later
+version of this table, the skill exists.
+
+| Model | The question it would answer | Not yet covered — route to |
+|---|---|---|
+| **Qwen-Image family** — Qwen-Image, Edit-2509/2511, 2512, Layered (Alibaba, Apache-2.0) | "How do I edit an image by instruction, hold identity without training, or get layered RGBA out?" — 1,162 Civitai LoRAs, 192 character-tagged; the open line is frozen, since 2.0 and 3.0 are hosted-only | The `Qwen` model cards on Hugging Face and Comfy-Org's Qwen templates; trainers are musubi-tuner, ai-toolkit, diffusion-pipe. Handoffs per [`image-production-workflows`](../image-production-workflows/) |
+| **Bernini-R** (ByteDance, Apache-2.0, Wan-derived renderer) | "How do I relight, restyle, insert into or remove from a clip I already have?" — six modes, t2i through rv2v; native ComfyUI since 2026-06-14; 14B is H100-class, 1.3B is the small one | `github.com/bytedance/Bernini`. Boundary against the suite: [`scail-2`](../scail-2/) tracks a person, Bernini re-renders a scene |
+| **SenseNova U1.5-8B-MoT** (SenseTime) | "How do I get native 4K, or edit a region by mask or box?" — ComfyUI core since 2026-09-01; the NoobAI team published its LoRA trainer | `github.com/OpenSenseNova/SenseNova-U1`. **Licence and parameter count are unverified here**: the HF card is gated and "8B" sits against ~18B total (flagged in the two-bar section below) |
+| **HunyuanVideo-1.5** (Tencent, 8.3B) | "Which open video model fits ~14 GB?" — native ComfyUI since 2025-11-24, musubi-tuner LoRAs | `huggingface.co/tencent/HunyuanVideo-1.5`. **Gate 3 applies: the Tencent Community Licence excludes the EU, UK and South Korea** |
+
+Held back rather than uncovered: **HiDream-O1-Image** (MIT) and **Mage-Flow** (Microsoft, MIT) both have core
+ComfyUI support and trainers, and 47 and 0 Civitai LoRAs respectively. Strong on paper, absent in practice;
+re-check date and thresholds are in [`references/ecosystem-map.md`](references/ecosystem-map.md) §6.
+
 ---
 
 ## How to read the claims in this skill — two bars, by claim type
@@ -430,15 +490,18 @@ This skill holds two kinds of claim to two different standards, because they fai
 is also a third kind, peculiar to a router, worth naming on its own.
 
 **Hard facts — must be exact or it breaks.** This covers the names and install commands of every skill here and
-in the three external sources. It also covers RunPod's seven-skill inventory and its golden-path filenames;
-Comfy-Org's twelve; the `skills` CLI's flags, scopes and the absence of a dependency mechanism;
-`metadata.internal`; the shape of each licence gate (territory, revenue line, weights-vs-outputs split); and the
-fact that a Civitai likeness ban and live TAKE IT DOWN enforcement exist at all. The dates and figures behind
-those two are [`character-lora-training`](../character-lora-training/)'s to state, not this skill's. **The
-source of truth is official.** That means the repository trees read directly, the CLI's README, and the model
-cards and licence texts via the model skills. A wrong install command fails loudly. A misread licence gate is a
-legal problem. Vendor skill repositories add and rename skills without notice, so **re-verify before relying on
-them, regardless of who said it.**
+in the four external sources. It also covers RunPod's eight-skill inventory and its golden-path filenames;
+Comfy-Org's twelve; Black Forest Labs' ten; the `skills` CLI's flags, scopes and the absence of a dependency
+mechanism; `metadata.internal`; the shape of each licence gate (territory, revenue line, weights-vs-outputs
+split), including the three traps outside the suite; the licence and ComfyUI status of each "not yet covered"
+model; the removal of `runpodctl`'s timer flags; and the fact that a Civitai likeness ban and live TAKE IT DOWN
+enforcement exist at all. The dates and figures behind those two are
+[`character-lora-training`](../character-lora-training/)'s to state, not this skill's. **The source of truth is
+official.** That means the repository trees read directly, the CLI's README and release notes, Comfy-Org's
+`workflow_templates` index (not `blog.comfy.org`, which is now behind a subscription wall and returns nothing to
+a checker), and the model cards and licence texts via the model skills. A wrong install command fails loudly. A
+misread licence gate is a legal problem. Vendor skill repositories add and rename skills without notice, so
+**re-verify before relying on them, regardless of who said it.**
 
 **Craft — what actually makes a good choice.** This covers the elimination ladder and its ordering; every
 ranking and the trade attached to it; the hardware bands; the playbook routes and where their handoffs fail; and
@@ -446,12 +509,17 @@ the three-way split in what "easiest to train on" means. **The authoritative sou
 the practitioners the sibling skills cite.** Two pieces of first-hand evidence were gathered for this skill as
 well. The first is one named cross-model test for LoRA trainability, MesmerTools' six-base comparison of
 2026-07-14. It is **a single author on a single dataset**, and it is marked as such wherever it is used. The
-second is a **census of the Civitai API taken 2026-08-23**, a direct measurement rather than a report. It is
-bounded by being one host, one that bans real-person likeness outright and so undercounts a whole category.
-There are also **primary Reddit sweeps from the same day** across r/StableDiffusion and r/unstable_diffusion.
-These were top-sorted over the past year and month, and read for the realism, identity and adult-work axes
-specifically. The adult stack in particular is reported from where that work is actually discussed, rather than
-inferred. Where a community claim here carries a point count, that is the sweep. Rankings are stated with
+second is a **census of the Civitai API taken 2026-08-23 and re-run for the fast-moving rows on 2026-09-09**, a
+direct measurement rather than a report. It is bounded by being one host, one that bans real-person likeness
+outright and so undercounts a whole category. There are also **primary Reddit sweeps from 2026-08-23** across
+r/StableDiffusion and r/unstable_diffusion. These were top-sorted over the past year and month, and read for
+the realism, identity and adult-work axes specifically. The adult stack in particular is reported from where
+that work is actually discussed, rather than inferred. Where a community claim here carries a point count, that
+is the sweep. A **landscape sweep on 2026-09-09** read Comfy-Org's template index, the Hugging Face API and
+Civitai for every open launch since May; it is the source for the "not yet covered" rows and the three ladder
+traps, and it did *not* measure Reddit or Banodoco, so community sentiment on those models is unmeasured, not
+low. Where a claim carries `[live-use — media lab, …]`, it is one lab's measured run in this suite's own
+testbed: firmer than a forum report, weaker than consensus, and always dated. Rankings are stated with
 confidence, and they mean "this is where the practice lands", not "this is measured".
 
 **Derived claims — the third bar.** Almost every comparative verdict here is *synthesised from the sibling
@@ -466,18 +534,27 @@ exceeding it, and **where it disagrees with a model skill, the model skill is ri
   marketing, published the same week `[contested]`.
 - [`anima`](../anima/)'s 8 GB inference floor is one report on one AMD card `[flagged — re-verify]`.
 - Whether Ideogram 4's LoRA win survives a second independent test is unknown. Nobody has published a character
-  recipe for it `[flagged — re-verify]`.
+  recipe for it; the one style recipe that exists is one author's `[flagged — re-verify]`.
+- The SCAIL-2 / Wan Animate task split rests on one same-scene comparison and one third-party guide, and both
+  predate **Animate 2** `[flagged — re-verify]`.
+- SenseNova U1.5's licence and parameter count are secondhand until its gated card is read `[flagged — re-verify]`.
+- Whether `runpodctl`'s timer flags come back (runpodctl#331, blocked on RunPod#5718) is
+  [`comfyui-on-runpod`](../comfyui-on-runpod/)'s watch, not this skill's; until they do, no CLI flag is a cost guard.
 
-**Facts dated 2026-08-23**; ecosystem counts measured the same day. The fastest-moving parts are the external
-vendors' skill inventories (RunPod went 6→7 between this suite's last two passes) and the `skills` CLI's flags.
-The Civitai counts move fast too, since Anima and Krea 2 add LoRAs weekly. So does any ranking whose model
-shipped in the last quarter — which today is most of them.
+**Facts dated 2026-09-09**; the H3, Ideogram 4, Wan 2.2 and FLUX.2 [klein] 9B Civitai rows re-counted the same
+day, the rest on 2026-08-23. The fastest-moving parts are the external vendors' skill inventories (RunPod went
+6→7→8 across this suite's last three passes, and BFL appeared from nothing), the "not yet covered" table, and
+the `skills` CLI's flags. The Civitai counts move fast too, since Anima and Krea 2 add LoRAs weekly and H3
+quadrupled in seventeen days. So does any ranking whose model shipped in the last quarter — which today is
+most of them.
 
 **What the sweeps changed.** Realism **held**: Z-Image owns that conversation, convergent with the suite's
 routing. Identity did not hold. The capability ordering survives, but the practice has moved to edit models, and
 the "Ideogram is weak on characters" verdict was **wrong**. On adult work, the Civitai census **inverts** the
 ordering in this suite's own existing table, most likely because that metric reads preview images and so
-undercounts video. All three are corrected above and filed as findings against the skills that own them.
+undercounts video. All three are corrected above and filed as findings against the skills that own them. The
+2026-09-09 landscape sweep's largest finding was an **omission, not a launch**: Qwen-Image had been named
+across twelve skills as a peer the reader was assumed to have, with no skill behind it.
 
 ---
 
@@ -489,5 +566,5 @@ undercounts video. All three are corrected above and filed as findings against t
 | [`references/playbooks.md`](references/playbooks.md) | You have picked a goal and want the ordered route: which skill at which step, what to read in it, where the handoffs silently fail, and what to check before paying for the next stage |
 | [`references/installing-skills.md`](references/installing-skills.md) | You are getting skills onto a machine: scopes, agent targeting, bundles per playbook, updating, private repos, `metadata.internal`, and why nothing installs transitively |
 | [`references/adult-work.md`](references/adult-work.md) | You are doing adult work and need the model choice settled: the Civitai explicit-share census and why it undercounts video, the image and video stacks people actually run, MiniMax H3's prompting rules, the anatomy-collapse study and its checkpoint-swap tell, and two open gaps |
-| [`references/ecosystem-map.md`](references/ecosystem-map.md) | You are deciding whether an external skill covers something this suite does not — the full RunPod, Comfy-Org and Hugging Face inventories, and how to judge a third-party skill before trusting it |
+| [`references/ecosystem-map.md`](references/ecosystem-map.md) | You are deciding whether an external skill covers something this suite does not — the full RunPod, Comfy-Org, Hugging Face and Black Forest Labs inventories, the open models with no skill yet (with re-check dates), the hosted-only frontier, what was checked and found unreleased, and how to judge a third-party skill before trusting it |
 | [`scripts/civitai_census.py`](scripts/civitai_census.py) | **An ecosystem or adult-share number here looks stale, or you want one for a base this skill doesn't list.** Re-measures both from the Civitai API — run it rather than trusting the snapshot, and read its header first: it encodes the bitmask semantics and the dead `nsfw` field that make hand-rolled versions silently wrong |

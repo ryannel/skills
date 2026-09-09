@@ -1,0 +1,88 @@
+{
+  "skill": "flux-2",
+  "verdict": "drift",
+  "flux": "active",
+  "flux_evidence": "Core dev/klein facts (6-9 months old) are settled, but the packaging layer moved: diffusers shipped a stable 0.40.0 release (2026-08-20) adding a new Flux2KleinKVPipeline, a named Klein-9B training-collapse issue landed on ostris/ai-toolkit, and third-party pricing aggregators refreshed their numbers — all in the ~2.5 weeks since last_checked.",
+  "findings": [
+    {
+      "id": "diffusers-flux2-stable-release",
+      "severity": "minor",
+      "claim": "SKILL.md L176: 'Version v0.38.0 appears in diffusers source links, but the install may still be pip install git+https://github.com/huggingface/diffusers -U. Verify at pypi.org/project/diffusers before relying on the git-install path [flagged — re-verify]'",
+      "reality": "diffusers 0.40.0 is a stable PyPI release (2026-08-20). The official docs page for Flux2Pipeline/Flux2KleinPipeline links source at the v0.40.0 tag with no git-install caveat, and pypi.org shows 0.40.0 as latest. The git+ install path is stale.",
+      "evidence": "https://huggingface.co/docs/diffusers/api/pipelines/flux2 ; https://pypi.org/project/diffusers/",
+      "fix_hint": "SKILL.md diffusers setup paragraph (~L176) and references/setup-and-workflows.md diffusers section — replace with `pip install diffusers>=0.40` (or current), drop the git-install flag."
+    },
+    {
+      "id": "diffusers-flux2-klein-kv-pipeline-missing",
+      "severity": "minor",
+      "claim": "SKILL.md L174 and reference files name only Flux2Pipeline ([dev]) and Flux2KleinPipeline ([klein] 9B base) as the diffusers classes.",
+      "reality": "diffusers now also ships a dedicated Flux2KleinKVPipeline (in 0.40.0) that mirrors the ComfyUI 9B-KV template: it caches reference-image K/V on the first step and reuses them on later ones for faster repeated multi-reference editing.",
+      "evidence": "https://huggingface.co/docs/diffusers/api/pipelines/flux2",
+      "fix_hint": "SKILL.md diffusers section + references/setup-and-workflows.md — add Flux2KleinKVPipeline alongside the existing two classes, matching the ComfyUI 9B KV template it already documents."
+    },
+    {
+      "id": "klein-9b-collapse-now-has-named-issue",
+      "severity": "minor",
+      "claim": "references/lora-training.md: 'Klein 9B has documented collapse patterns... Sourced from secondary summary, not a named trainer.'",
+      "reality": "A concrete, named GitHub issue now exists: ostris/ai-toolkit#654 'Flux Klein 9b training collapse' (opened 2026-01-19), describing the model collapsing by step 250 and fully degenerating by step 500. Still a single unresolved report, but the attribution can be upgraded from 'secondary summary' to a cited issue.",
+      "evidence": "https://github.com/ostris/ai-toolkit/issues/654",
+      "fix_hint": "references/lora-training.md 'The official reference config' section — cite ostris/ai-toolkit#654 directly in place of the vague secondary-summary framing."
+    },
+    {
+      "id": "bfl-pricing-numbers-now-circulating",
+      "severity": "minor",
+      "claim": "references/api-and-hosted.md §8 gives only relative tier ordering (klein cheapest, max most expensive), no numbers, and says BFL only publishes via an interactive calculator.",
+      "reality": "Third-party aggregators now report concrete figures: Klein ~$0.014/image, Pro $0.03/MP ($0.045/MP for edits), Flex $0.05-0.06/MP, Max $0.07/MP. These are aggregator-sourced, not a BFL static table, so the calculator caveat still holds, but real numbers exist to anchor the 'directional only' language.",
+      "evidence": "https://dynalord.com/blog/flux-2-pricing ; https://flowith.io/blog/flux-2-pro-pricing-2026-dev-vs-pro-vs-schnell-api/",
+      "fix_hint": "references/api-and-hosted.md §8 — optionally add these as illustrative numbers with an aggregator citation, keeping the 'verify at bfl.ai/pricing' instruction."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "flux2-klein-consistency-lora-iterative-edit",
+      "what": "A Consistency LoRA for FLUX.2 Klein 9B (image-edit mode) that locks unmodified structure/identity across repeated iterative edits, preventing the compounding drift where a face edit slowly warps the background or clothing over several passes.",
+      "why_it_matters": "Multi-step edit chains (face, then outfit, then background) are a common production pattern and this directly targets the failure mode of drift across iterations that the skill's ReferenceLatent/editing coverage doesn't currently address.",
+      "source_class": "single-report",
+      "evidence": "https://civitai.com/articles/27410/flux2-klein-9b-consistency-lora",
+      "date": "2026-03-18",
+      "where_it_belongs": "references/characters.md (multi-reference/editing section) or references/setup-and-workflows.md (image-edit template §), alongside the existing ReferenceLatent coverage",
+      "already_covered": false
+    },
+    {
+      "id": "flux2-int8-quant-node",
+      "what": "A community ComfyUI node pack (ComfyUI-Flux2-INT8) and reports of INT8 quantization giving roughly 1.5-2x faster inference on GPUs like the RTX 3090 for FLUX.2, distinct from the FP8/NVFP4/GGUF paths the skill already documents.",
+      "why_it_matters": "If corroborated, INT8 would be a fourth quantization option worth a VRAM/speed row alongside fp8mixed, NVFP4, and GGUF — but this is currently a single, unverified community report.",
+      "source_class": "single-report",
+      "evidence": "https://comfy.icu/extension/BobJohnson24__ComfyUI-Flux2-INT8",
+      "date": "2026 (exact date unconfirmed)",
+      "where_it_belongs": "SKILL.md 'Quantisation' section / references/setup-and-workflows.md quantisation table",
+      "already_covered": false
+    },
+    {
+      "id": "diffusers-flux2-klein-kv-pipeline-technique",
+      "what": "diffusers 0.40.0 ships Flux2KleinKVPipeline: on the first denoising step it runs reference-image tokens through the forward pass and caches their attention K/V projections, then reuses the cache on later steps instead of recomputing — a diffusers-native counterpart to the ComfyUI 9B-KV template already in the skill.",
+      "why_it_matters": "Gives Python/diffusers users the same fast repeated-reference-editing path that was previously ComfyUI-only in this skill's coverage.",
+      "source_class": "official",
+      "evidence": "https://huggingface.co/docs/diffusers/api/pipelines/flux2",
+      "date": "2026-08-20",
+      "where_it_belongs": "SKILL.md diffusers paragraph + references/setup-and-workflows.md diffusers section, next to the existing Flux2Pipeline/Flux2KleinPipeline coverage",
+      "already_covered": false
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [
+      "diffusers-status — resolved: diffusers 0.40.0 is a confirmed stable PyPI release carrying Flux2Pipeline/Flux2KleinPipeline (and now Flux2KleinKVPipeline); the git-install caveat no longer applies. Re-open only if a future breaking diffusers release changes the pipeline API."
+    ],
+    "add": [],
+    "amend": [
+      {
+        "id": "pulid-flux2",
+        "check": "Confirmed current at v0.6.2 (2026-09-09): still text-to-image only ('Edit mode (img2img)' still on the roadmap, not shipped), training scripts still removed pending stability work, supports [dev]/[klein] 4B/[klein] 9B. Still the only FLUX.2-specific PuLID, single-maintainer. Re-check repo for a version bump past v0.6.2 or a competing implementation."
+      },
+      {
+        "id": "klein-9b-collapse",
+        "check": "Now has a named source: ostris/ai-toolkit#654 'Flux Klein 9b training collapse' (opened 2026-01-19, collapse by step 250-500), still unresolved/unconfirmed by a maintainer as of this check. Re-check the issue for a maintainer response or fix, and look for corroborating reports beyond this one."
+      }
+    ]
+  }
+}

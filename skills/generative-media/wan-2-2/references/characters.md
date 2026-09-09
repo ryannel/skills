@@ -41,9 +41,9 @@ This is the no-training path. You supply reference imagery that conditions the w
 
 ### 3. Animate, for a specific performance
 
-Use Animate when you need this character doing *this exact motion*. Transfer the performance from a driving video rather than describing it in the prompt. The relight LoRA is what makes an inserted character sit in the scene's lighting instead of looking pasted in.
+Use Animate when you need this character doing *this exact motion*. Transfer the performance from a driving video rather than describing it in the prompt. Start with Animate 2: it takes the driving video's raw frames with no pose-extraction stage, and it sets background and camera from the prompt rather than from the clip (`motion-and-camera.md`). The relight LoRA is what makes an inserted character sit in the scene's lighting instead of looking pasted in.
 
-If the job is specifically *replacing* someone already in footage, rather than driving your own character, use [`scail-2`](../../scail-2/) instead. It has displaced Animate for that job in community practice. Note that it is a Wan 2.1 fine-tune from zai-org, so it is a separate download and a separate graph, not a mode of this model.
+If the job is specifically *replacing* someone already in footage, rather than driving your own character, use [`scail-2`](../../scail-2/) instead. Community practice splits the job: SCAIL-2 for body motion, non-human subjects and multi-character scenes, Animate for close-up faces and lip sync. Note that it is a Wan 2.1 fine-tune from zai-org, so it is a separate download and a separate graph, not a mode of this model.
 
 ### 4. Character LoRA on Wan itself
 

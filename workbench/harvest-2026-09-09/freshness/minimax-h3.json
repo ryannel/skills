@@ -1,0 +1,101 @@
+{
+  "skill": "minimax-h3",
+  "verdict": "drift",
+  "flux": "hot",
+  "flux_evidence": "Spectrum shipped 5 releases in 10 days (v0.2.22→v0.2.26, latest today), the official t2v/i2v template's default duration/frame-count changed, the turbo-vs-stock default flip-flopped again, and dozens of GitHub PRs/issues referencing MiniMax-H3 landed across major inference projects (vllm-omni, sglang, tenstorrent) in the last 24 hours alone.",
+  "findings": [
+    {
+      "id": "turbo-default-flipped-back-to-off",
+      "severity": "major",
+      "claim": "Open finding from 2026-08-29 (still unrepaired) says the official templates now default to turbo-by-default (LoraLoaderModelOnly at strength 1.0, 8 steps) and that the skill's current 'stock is 20-step res_multistep/simple, Turbo is optional' framing is stale.",
+      "reality": "Re-diffing all three current template JSONs (t2v, i2v, r2v) shows a ComfySwitchNode gated by a 'Boolean (Enable Lightning LoRA)' primitive whose stored/exposed default is False in every template. On that default path, Steps switch selects the fixed PrimitiveInt 20 (not the turbo branch's 8/4), and Model switch bypasses the LoraLoaderModelOnly node entirely. The turbo LoRA is present but off by default, exactly as the skill currently states. Applying the 08-29 finding's fix_hint now would make the skill wrong.",
+      "evidence": "https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/video_minimax_h3_t2v.json, https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/video_minimax_h3_i2v.json, https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/video_minimax_h3_r2v.json",
+      "fix_hint": "freshness.json open_findings — close/reverse 'official-template-now-turbo' rather than acting on its fix_hint; SKILL.md and setup-and-workflows.md text is currently correct. Flag this as a flip-flopping value worth a tighter re-check cadence."
+    },
+    {
+      "id": "t2v-i2v-frame-default-now-124",
+      "severity": "major",
+      "claim": "SKILL.md 'Frame count and resolution' (listed as a 'hard fact') and setup-and-workflows.md §3 state the shipped defaults are 73 frames (≈17×4+5, ≈3s) for t2v/i2v and 124 frames (≈17×7+5, ≈5s) for r2v.",
+      "reality": "The live t2v and i2v template JSONs now expose a duration default of 5 (not 3) seconds — identical to r2v's existing 5s default — which the unchanged mod-17 formula converts to 124 frames for all three modes. The 73-frame default no longer exists in any of the three official templates.",
+      "evidence": "https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/video_minimax_h3_t2v.json (PrimitiveFloat 'Float (duration)' node and outer duration widget both =5), https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/video_minimax_h3_i2v.json",
+      "fix_hint": "SKILL.md 'Frame count and resolution' hard-fact bullet + module table; references/setup-and-workflows.md §3 — update t2v/i2v default from 73 to 124 frames (5s), or soften to 'template-defined, currently 124 across all three modes, re-verify before quoting'"
+    },
+    {
+      "id": "spectrum-version-25-releases-stale",
+      "severity": "minor",
+      "claim": "references/setup-and-workflows.md §9 pins Spectrum v0.2.1 defaults: offline_smoothing_replay=true, blend_weight 0.50, audio_blend_weight 0.00, incompatible with EasyCache.",
+      "reality": "xmarre/ComfyUI-Spectrum-MiniMax-H3 is now at v0.2.26 (25 releases past the pinned version, most recent today), having added a provider-generic 'attention_backend_history' contract and a companion project (xmarre/ComfyUI-Sol-H3, created 2026-09-07) combining it with new components called VDN/Untwist/Diff-Aid/Flow. The specific numeric defaults could not be confirmed to still hold at this depth of churn.",
+      "evidence": "https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3/releases, https://github.com/xmarre/ComfyUI-Sol-H3",
+      "fix_hint": "references/setup-and-workflows.md §9 Layer 2 — re-pin current release defaults; note Sol-H3 as a very new (1 star, 2 days old) unverified companion stack, not yet a recommendation"
+    },
+    {
+      "id": "comfyui-nightly-vram-regression-open",
+      "severity": "minor",
+      "claim": "Skill's failure-modes tables do not mention any VRAM/RAM-tradeoff regression tied to updating ComfyUI itself.",
+      "reality": "Comfy-Org/ComfyUI#16150 (opened 2026-09-06, still open, updated today) reports that updating to the latest ComfyUI development branch on Windows lowers system RAM usage but raises VRAM usage significantly for MiniMax H3 workflows, risking CUDA OOM at previously-safe settings. Single report so far, root cause unconfirmed.",
+      "evidence": "https://github.com/Comfy-Org/ComfyUI/issues/16150",
+      "fix_hint": "SKILL.md failure-modes table / setup-and-workflows.md troubleshooting — add as a watch item, not yet an established fix"
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "sparseref15-hybrid-checkpoint",
+      "what": "Community checkpoint 'MiniMax H3_SparseRef15_Hybrid' applies sparse Ref2VA-style reference influence through AdaLN across 15 of the FL2VA transformer's blocks, without LoRA merging, to get reference-image consistency while staying on the FL2VA base (author says use FL2VA-trained LoRAs with it, not Ref2VA ones).",
+      "why_it_matters": "Offers a third point between plain FL2VA and full Ref2VA hybrid conditioning for holding a reference image's identity without switching checkpoints or task type.",
+      "source_class": "single-report",
+      "evidence": "https://civitai.com/models/2900456",
+      "date": "2026-09-06",
+      "where_it_belongs": "references/setup-and-workflows.md §5 (FL2VA vs Ref2VA hybrid discussion)",
+      "already_covered": false
+    },
+    {
+      "id": "h3-continuum-chunked-long-form-node-pack",
+      "what": "ComfyUI-H3-Continuum (xmarre... actually ukr8b3g-cmyk/ComfyUI-H3-Continuum) is a dedicated node pack for chunked long-form H3 video+audio, with per-chunk review/retry ('Takes') and recovery; V3.8 (2026-09-08) is a stability hotfix on an actively maintained project (77 stars, created 2026-08-10).",
+      "why_it_matters": "A more tooled alternative to hand-wiring MiniMaxH3MotionContext chains or using the single Civitai 'Multishot' workflow already cited, aimed specifically at avoiding chain-seam drift over many segments.",
+      "source_class": "community-consensus",
+      "evidence": "https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum, https://civitai.com/models/2860061",
+      "date": "2026-09-08",
+      "where_it_belongs": "references/setup-and-workflows.md §7 Going long — context chaining",
+      "already_covered": false
+    },
+    {
+      "id": "ultra-fastest-4-step-v8-workflow",
+      "what": "Civitai workflow 'MiniMax H3 Ultra Fastest True 4 Steps + HD Sound' V8 (2026-09-07) claims a tuned 4-step pipeline with facial-consistency locking and V2V node integration, ~30% faster than its own V7.",
+      "why_it_matters": "Another entrant in the already-contested speed-LoRA-strength space; unverified self-reported benchmark, not corroborated elsewhere yet.",
+      "source_class": "single-report",
+      "evidence": "https://civitai.com/models/2835250",
+      "date": "2026-09-07",
+      "where_it_belongs": "SKILL.md per-mode settings / 'Going faster' Layer 3; references/lora-training.md speed-LoRA section",
+      "already_covered": false
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [],
+    "add": [
+      {
+        "id": "h3-turbo-default-flip-flop",
+        "type": "contested",
+        "claim": "Whether the official ComfyUI templates default to turbo-on or turbo-off has now changed at least twice (turbo-by-default reported 2026-08-29; turbo-off-by-default confirmed 2026-09-09).",
+        "where": "SKILL.md 'Setup & ecosystem' and 'Going faster' Layer 3; references/setup-and-workflows.md §1-4",
+        "check": "Re-diff the three template JSONs' ComfySwitchNode/Boolean-primitive default for 'Enable Lightning LoRA' each cycle until it stabilises."
+      },
+      {
+        "id": "h3-frame-default-124-everywhere",
+        "type": "version-pin",
+        "claim": "As of 2026-09-09 all three official templates (t2v, i2v, r2v) default to a 5s/124-frame duration; the mod-17 formula itself is unchanged.",
+        "where": "SKILL.md 'Frame count and resolution'; references/setup-and-workflows.md §3",
+        "check": "Re-pull the three template JSONs and read the PrimitiveFloat 'duration' default in each; confirm 124 still holds or note any further change."
+      }
+    ],
+    "amend": [
+      {
+        "id": "h3-spectrum-audio",
+        "note": "Version pin is 25 releases stale (v0.2.1 → v0.2.26 as of 2026-09-09, releasing roughly daily); a new companion project xmarre/ComfyUI-Sol-H3 (created 2026-09-07) has appeared but is too new (1 star) to be a recommendation yet."
+      },
+      {
+        "id": "h3-musubi-pr-1030",
+        "note": "PR #1030 now spans 74 commits (added NVFP4 text-encoder support and an RGBA control-image crash fix on top of the original ConvRot INT8 work) but is still Draft/unmerged as of 2026-09-09; issue #1059 unchanged since 2026-08-16."
+      }
+    ]
+  }
+}

@@ -397,11 +397,14 @@ backticks.
 `[community — <named author>, <venue>]`     `[official — <artefact>]`
 `[official]`                                 `[official-via-docs]`
 `[flagged — re-verify]`                      `[contested]`
-`[pending release]`
+`[pending release]`                          `[live-use — media lab, <run or dataset>, <date>]`
 ```
 
-- **The tier token is one of exactly six**: `official`, `official-via-docs`, `community`, `flagged`,
-  `contested`, `pending release`. Nothing else. **Normalise these strays** (all real, all in the
+- **The tier token is one of exactly seven**: `official`, `official-via-docs`, `community`, `flagged`,
+  `contested`, `pending release`, `live-use`. Nothing else. `live-use` (added 2026-09-09) marks a
+  finding from this suite's own lab runs (`../media-lab`), always with the run or dataset and the
+  date. It sits between `community` and `official` in confidence — a measured result, but one lab's
+  runs, not consensus — and the two-bar section must say so in one line wherever the token appears. **Normalise these strays** (all real, all in the
   suite today): `[official-kohya — …]`, `[official-Ostris — …]`, `[official-via-musubi docs]`,
   `[official-via-host — …]` → `` `[official — <artefact>]` ``; `[official source]`,
   `[official template observation]`, `[official, verified <date>]` → `` `[official — <artefact>]` ``;

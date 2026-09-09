@@ -65,13 +65,18 @@ this choice before step 2, not after.
 - **Licence.** If you will sell images, almost any model clears. If you will ship or host the
   pipeline itself, stay on [`z-image`](../../z-image/) (Apache-2.0, covering weights and outputs) or
   [`sdxl`](../../sdxl/). Also make sure every rung of the later ladder is clear.
-- **Budget.** Set a cost guard before you create anything. Use RunPod's `runpod-usage` for GPU
-  selection. Give every pod `--stop-after` at the session length plus `--terminate-after` as a
-  backstop (batch pods get `--terminate-after` alone). A rented-GPU session must also **end with a
-  burn check**: confirm nothing is `RUNNING` and every volume is accounted for before you call the
-  session done. The check, and the reason it exists, are in
-  [`comfyui-on-runpod`](../../comfyui-on-runpod/), *Cost guards that actually work*. If you are an
-  agent running these playbooks, treat the burn check as a STOP gate, not a suggestion.
+- **Budget.** Set a cost guard before you create anything, and **put the clock outside the pod**.
+  Use RunPod's `runpod-usage` for GPU selection. Do not reach for `--stop-after` or
+  `--terminate-after`: `runpodctl` 2.12.0 (2026-08-27) removed both, and its PR #330 says they were
+  forwarded to the API but never enforced, so a pod "guarded" that way kept billing. The guard that
+  works is a scheduler or a shell `trap` on your own machine that calls
+  `runpodctl pod remove "$POD_ID"` unconditionally when the job ends or the script dies, plus a
+  detached watchdog on the pod (sized for the whole session, eval included) for the case where
+  your machine goes away `[official — runpodctl v2.12.0 release notes; PR #330]`. A rented-GPU
+  session must also **end with a burn check**: confirm nothing is `RUNNING` and every volume is
+  accounted for before you call the session done. The guard shape, the watchdog and the check are
+  in [`comfyui-on-runpod`](../../comfyui-on-runpod/), *Cost guards that actually work*. If you are
+  an agent running these playbooks, treat the burn check as a STOP gate, not a suggestion.
 
 ### Step 1 — lock the anchor image
 
@@ -185,7 +190,8 @@ LoRA at all** before you train one.
 1. **Settle the licence first, and specifically.** Outputs are commercially free, because the card
    places them outside the non-commercial term. The **weights** are not free. Selling illustrations
    is fine; shipping a product or API that contains Anima is not. If you must ship the model, switch
-   this playbook to [`sdxl`](../../sdxl/) with an Illustrious/NoobAI/Pony finetune.
+   this playbook to [`sdxl`](../../sdxl/) with an Illustrious/NoobAI/Pony V6 XL finetune. Not Pony
+   V7: it is AuraFlow, not SDXL, and its licence bars inference services and >$1M companies.
 2. **Learn the dialect before anything else.** That means tag order, the `@artist` prefix (which is
    mandatory), the `score_*` and rating tags, and prompt weights pushed far past SDXL norms. A
    prompt in the wrong dialect looks like a bad model.
@@ -232,6 +238,8 @@ LoRA at all** before you train one.
      outside the US/EU/UK/KR**, otherwise [`ltx-2-5`](../../ltx-2-5/). Note that LTX bars explicit
      content and bars competing with Lightricks' products at any revenue.
    - You need several connected cuts from one generation → [`ltx-2-5`](../../ltx-2-5/), and only it.
+   - You have ~14 GB and Wan 5B is not enough → **HunyuanVideo-1.5** is the other open answer, not
+     covered here, and its licence excludes the EU, UK and South Korea. Read the card first.
 3. **Match the handoff format.** Aspect ratio and resolution are per-model, and video models have
    frame lattices — LTX uses `8n+1`, Wan has per-variant counts. A mismatch silently drops the tail
    of the clip.
@@ -245,10 +253,20 @@ LoRA at all** before you train one.
 
 ## 6. E — put your character into footage you already have
 
-**Stack:** `krea-2`, `scail-2`, `character-lora-training`.
+**Stack:** `krea-2`, `scail-2`, `character-lora-training` — or `wan-2-2` in place of `scail-2` when
+the shot is a close-up.
 
 This is the suite's most sequence-sensitive route, and the ordering is not obvious.
 
+0. **Pick the replacer by the shot, not by reputation.** [`scail-2`](../../scail-2/) wins whole-body
+   replacement, non-human subjects, complex action and multi-character scenes. Wan **Animate 2**
+   ([`wan-2-2`](../../wan-2-2/), native ComfyUI since 2026-08-08) wins close-up faces, eye movement
+   and lip sync `[community — Wensleydale on X, dreamerland.ai; two sources]`. The split
+   was measured against the original Animate, not Animate 2 (flagged in
+   [`model-rankings.md`](model-rankings.md) §9). If you need to
+   *edit* the footage rather than replace a person — relight it, restyle it, remove something —
+   nothing in the suite does that; **Bernini-R** (ByteDance, Apache-2.0) does, and is not covered
+   here.
 1. **You need real footage.** [`scail-2`](../../scail-2/) has no T2V and no I2V. It tracks a driving
    clip; it cannot originate a shot.
 2. **Edit the driving clip's own first frame into your character.** Do not use a reference image you
@@ -266,7 +284,8 @@ This is the suite's most sequence-sensitive route, and the ordering is not obvio
 
 ## 7. F — run the whole thing as an API
 
-**Stack:** `comfyui-on-runpod` + RunPod's `runpod`, `flash`, `runpodctl`.
+**Stack:** `comfyui-on-runpod` + RunPod's `runpod`, `flash`, `runpodctl`, and `runpod-templates` if
+you start from one of RunPod's own images.
 
 1. **Build in the GUI, but ship the API-format JSON.** Export (API) format is not the same as the UI
    format, and the `/prompt` endpoint takes the former. See

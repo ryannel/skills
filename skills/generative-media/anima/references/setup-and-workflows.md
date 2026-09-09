@@ -25,7 +25,7 @@ Anima is native in ComfyUI core. It has official templates and needs no custom n
 
 | File | ComfyUI folder | Loader node |
 |---|---|---|
-| `anima-base-v1.0.safetensors` (**4.18 GB**) · `anima-aesthetic-v1.0.safetensors` / `-v1.0b` / `-v1.1` · `anima-turbo-v1.0.safetensors` · community checkpoints · the superseded `anima-preview3-base.safetensors` | `models/diffusion_models/` | `UNETLoader` |
+| `anima-base-v1.0.safetensors` (**4.18 GB**) · `anima-aesthetic-v1.0.safetensors` / `-v1.0b` / `-v1.1` · `anima-turbo-v1.0.safetensors` / `-v1.1` · community checkpoints · the superseded `anima-preview3-base.safetensors` | `models/diffusion_models/` | `UNETLoader` |
 | `qwen_3_06b_base.safetensors` (Qwen3-0.6B *base* encoder, **shared**) | `models/text_encoders/` | `CLIPLoader`, type `stable_diffusion` |
 | `qwen_image_vae.safetensors` (Qwen-Image VAE, **shared**) | `models/vae/` | `VAELoader` |
 | LoRAs, including the Anima Turbo LoRA | `models/loras/` | `LoraLoader` |
@@ -35,7 +35,7 @@ The encoder and VAE are common to every variant and every community checkpoint, 
 
 **Graph shape** (from the stock `image_anima_base_v1` template): `UNETLoader` → (`LoraLoader`…) → `KSampler`; `CLIPLoader` → two `CLIPTextEncode` nodes → `KSampler`; `EmptyLatentImage` → `KSampler` → `VAEDecode` (fed by `VAELoader`) → `SaveImage`. The stock graph has no sampling-shift node. Shift lives in the model config instead, as `shift: 3.0` on the flow-matching scheduler.
 
-**Version dates**, from the repo commit log: base v1.0 shipped **2026-05-14**; Turbo and the Turbo LoRA around **2026-07-08**; Aesthetic v1.0b on **2026-07-09**; Aesthetic **v1.1 on 2026-07-13**, and v1.1 is still undocumented in the card.
+**Version dates**, from the repo commit log: base v1.0 shipped **2026-05-14**; Turbo and the Turbo LoRA around **2026-07-08**; Aesthetic v1.0b on **2026-07-09**; Aesthetic **v1.1 on 2026-07-13**; Turbo **v1.1 on 2026-08-26**. Neither v1.1 is documented in the card yet.
 
 ---
 
@@ -48,12 +48,12 @@ The encoder and VAE are common to every variant and every community checkpoint, 
 | | Base | Aesthetic | Turbo |
 |---|---|---|---|
 | Steps | 30–50 (template 30) | 30–50 | **8–12** |
-| CFG | **4–5** (template 4) | no vendor figure — start at 4 | **1** |
+| CFG | **4–5** (template 4) | no vendor figure; community **~3** `[community — PromptHero; re-verify]` | **1** |
 | Sampler · scheduler | `euler` (template) or `er_sde` (card) · `simple` | same | `euler` · `simple` |
 | Negatives | live | live | inert |
 | Latent node | `EmptyLatentImage` | same | same |
 
-The card gives *"30-50 steps, CFG 4-5"* for Base. **Nothing official gives Aesthetic a CFG.** The card's Aesthetic section covers quality tags only. It says Aesthetic *"can tolerate lower CFGs"* without naming one.
+The card gives *"30-50 steps, CFG 4-5"* for Base. **Nothing official gives Aesthetic a CFG.** The card's Aesthetic section covers quality tags only. It says Aesthetic *"can tolerate lower CFGs"* without naming one. Community guides do name one: **~3**, reporting that Aesthetic *"tolerates lower CFGs such as 3, and often looks better with them"* `[community — PromptHero; re-verify]`. Take that as the starting point, and move up to 4 if adherence drops.
 
 **CFG 1 means guidance is off.** That is the same convention as every distilled model in this suite. Never type `0.0` into a ComfyUI KSampler, because that outputs the unconditional and ignores your prompt entirely.
 
@@ -112,7 +112,7 @@ Renting a GPU is rarely necessary here. If you do rent one, [`comfyui-on-runpod`
 - **Node:** use a standard `LoraLoader` on the model path between `UNETLoader` and the sampler. Anima LoRAs are ordinary safetensors LoRAs.
 - **There is no cross-compatibility with SDXL, Illustrious, NoobAI or Pony LoRAs.** The architecture, latent space and encoder are all different. An SDXL LoRA either fails to load or no-ops, and there is no conversion path. This is the most common false expectation that Illustrious migrants carry over.
 - **Train on Base, run anywhere.** The card says *"LoRAs should be trained using this version"* `[official]`. Base-trained LoRAs then run on Aesthetic, Turbo and most community checkpoints, usually with strength reduced by ~0.1–0.3, because those checkpoints already carry a style of their own `[community — convergent practice]`.
-- **Whether Anima LoRAs load on the 2.9B/3.8B forks is unanswered** `[flagged — re-verify]`. `u/Neonsea1234` asked and got no reply. Assume they do not, since the forks add extra layers.
+- **Base LoRAs do not load correctly on the 2.9B fork as-is, and ComfyUI will not tell you.** The fork inserts new layers (28 → 40 blocks, LLaMA-Pro style), which shifts the block numbering. A Base LoRA loaded unchanged applies its deltas to the wrong blocks, and the character comes out wrong with no warning (0/3 in the one published test). Remap the LoRA's block-number keys to the fork's numbering using the fork's layer-insertion table, and identity comes back (3/3) `[community — lilting.ch, 2026-08-12; single report]`. Trainer-side support is on its way: `kohya-ss/sd-scripts` PR #2418 detects the expanded block count from checkpoint keys, and was open and undrafted on 2026-08-14 `[pending release]`. Nothing is published about 3.8B.
 - **The Turbo LoRA** (`circlestone_labs`, ~60k downloads) applies Turbo's distillation to any checkpoint. Switch to **CFG 1, 8–12 steps** when you load it. A community `RDBT Distilled Turbo LoRA` and a 12-step variant also exist `[community — u/TheBizarreCommunity]`.
 - **Utility LoRAs are a real part of this ecosystem.** `Aesthetic Quality Modifiers - Masterpiece` (motimalu, ~153k downloads) is the second-most-downloaded Anima asset of any kind. `Anima Highres/Aesthetic Boost` and `Anima Detail Tweaker` (lse14) are widely stacked too `[community — Civitai API, 2026-08-22]`.
 - **Stacking:** chain `LoraLoader` nodes, or use rgthree's power loader. Style LoRAs compound fast on a base that already has a style. Reduce each LoRA's strength as you add more.
@@ -198,19 +198,21 @@ Video targets in this suite: [`minimax-h3`](../../minimax-h3/), which is the one
 
 ## 11. Community checkpoints and where the ecosystem actually is
 
-**A community finetune out-downloads the official base.** The ecosystem is repeating what happened to SDXL. A Civitai `baseModels=Anima` most-downloaded **sample of the first 100 items** (2026-08-22) held 53 LoRAs, 41 checkpoints, 5 workflows and 1 VAE `[community — Civitai API]`. That is a composition figure, not a census. The true totals are unknown and larger.
+**The official checkpoints out-download every community finetune on a same-base count.** An earlier version of this section said the reverse, and the mistake is worth keeping visible. The 2026-08-22 comparison set MiaoMiao Harem's whole listing (~199k) against the base, but that listing mixes Illustrious, NoobAI and Pony builds in with its Anima ones. Its Anima builds alone sit near **~103k**. The official listing sits at **~219k** across Base, Aesthetic and Turbo, with Base alone near **~89k** `[community — Civitai API, 2026-09-09]`. So the SDXL pattern, where generation happens on finetunes and the base is only a training substrate, has **not** arrived. Finetunes are a real option, not the default.
+
+A Civitai `baseModels=Anima` most-downloaded **sample of the first 100 items** (2026-08-22) held 53 LoRAs, 41 checkpoints, 5 workflows and 1 VAE `[community — Civitai API]`. That is a composition figure, not a census. The true totals are unknown and larger.
 
 | Model | Type | Downloads | Creator |
 |---|---|---|---|
-| **MiaoMiao Harem** | Checkpoint | 198,832 | MIAOKA |
-| **Anima** (official base) | Checkpoint | 189,872 | circlestone_labs |
+| **Anima** (official listing, all variants) | Checkpoint | 218,777 (2026-09-09) | circlestone_labs |
+| **MiaoMiao Harem** | Checkpoint | 215,667 all bases · ~102.6k Anima builds (2026-09-09) | MIAOKA |
 | Aesthetic Quality Modifiers - Masterpiece | LoRA | 153,330 | motimalu |
 | WAI-ANIMA · AnimaYume · Nova Anime AM · RDBT \| Anima · AnimaIka · Hassaku (Anima) | Checkpoints | 19–71k | WAI0731 · duongve13112002 · Crody · reakaakasky · giko · Ikena |
 | AI styles dump · Anima Turbo LoRA · Highres/Aesthetic Boost · Detail Tweaker | LoRAs | 22–66k | bakariso · circlestone_labs · lse14 |
 
-Download counts move daily `[flagged — re-verify]`. The *ranking* is the durable signal. The furry ecosystem has ported (`uwumerge`/`uwustyle Anima Edition`), and cross-model style assets now ship an Anima build alongside Flux, Pony, Illustrious and Z-Image builds. Check for one before assuming you must retrain ([`image-production-workflows`](../../image-production-workflows/)).
+The rows below the first two are the 2026-08-22 sample. Download counts move daily `[flagged — re-verify]`. The *ranking* is the durable signal, and even that flipped once on this page, so compare listings on the same base before ranking them. The furry ecosystem has ported (`uwumerge`/`uwustyle Anima Edition`), and cross-model style assets now ship an Anima build alongside Flux, Pony, Illustrious and Z-Image builds. Check for one before assuming you must retrain ([`image-production-workflows`](../../image-production-workflows/)).
 
-**Tag and style discovery** `[community]`: `animastyles.thetacursed.com` (42k+ artist styles — these are mirrors, since ThetaCursed's GitHub was suspended, so the URLs are volatile `[flagged — re-verify]`), `tags.latent.moe` (a Danbooru browser, ~70% populated for Anima), and the Anima "Animedex" character index.
+**Tag and style discovery** `[community]`: `animastyles.thetacursed.com` (40k+ artist styles by the site's own count; the source repo `ThetaCursed/Anima-Style-Explorer` is live again after a suspension, and its index file is named for 59k, so the true count is unconfirmed `[flagged — re-verify]`), `tags.latent.moe` (a Danbooru browser, ~70% populated for Anima), and the Anima "Animedex" character index.
 
 ---
 

@@ -42,14 +42,14 @@ Anima is CircleStone Labs' open-weights **anime and illustration** model, *"crea
 | Variant | What it is | Steps · CFG | Quality tags | Use when… |
 |---|---|---|---|---|
 | **Anima-Base** v1.0 (`anima-base-v1.0.safetensors`) | The pretrained, unrefined base. *"Maximum flexibility, diversity, and style adherence"*; its default style is deliberately *"very plain and neutral"* | 30–50 · **4–5** | Yes | you want full stylistic range, you are stacking artist tags or LoRAs, and **always when training a LoRA** |
-| **Anima-Aesthetic** v1.0 / v1.0b / **v1.1** | Finetuned *"for better consistency and a higher quality default art style"*; its captions had quality tags stripped. v1.1 shipped 2026-07-13 and the card still does not document it | 30–50 · no vendor figure — start at 4 | **No — omit both quality ladders** | you want a good-looking image without curating artist tags |
-| **Anima-Turbo** (`anima-turbo-v1.0.safetensors`) | Guidance-distilled. *"Increases stability and gives the model a strong default style, but reduces diversity"* | **8–12 · CFG 1** | unstated; treat as Base | fast iteration, drafting, and — per the authors — as the default starting point `[contested]` |
+| **Anima-Aesthetic** v1.0 / v1.0b / **v1.1** | Finetuned *"for better consistency and a higher quality default art style"*; its captions had quality tags stripped. v1.1 shipped 2026-07-13 and the card still does not document it | 30–50 · no vendor figure; community converges on **~3** `[community — PromptHero; re-verify]` | **No — omit both quality ladders** | you want a good-looking image without curating artist tags |
+| **Anima-Turbo** v1.0 / **v1.1** (`anima-turbo-v1.0.safetensors`, `-v1.1`) | Guidance-distilled. *"Increases stability and gives the model a strong default style, but reduces diversity"*. v1.1 landed on the Hugging Face tree on 2026-08-26 and, like Aesthetic v1.1, the card does not document it. Early Civitai notes say it fixes v1.0's flat, under-detailed look `[community — Civitai 2458426; re-verify]` | **8–12 · CFG 1** | unstated; treat as Base | fast iteration, drafting, and — per the authors — as the default starting point `[contested]` |
 | **Anima Turbo LoRA** | Turbo's distillation packaged as a LoRA, droppable onto any checkpoint | 8–12 · CFG 1 | follow the host | Turbo speed on a checkpoint you already like |
-| **Anima-2.9B / Anima-3.8B** | Community layer-expanded forks — **not CircleStone releases**, experimental, own nodes | — | — | not for production; see *Licence & limitations* |
+| **Anima-2.9B / Anima-3.8B** | Community layer-expanded forks — **not CircleStone releases**. A Base LoRA loaded unchanged on 2.9B silently corrupts identity; remapping its block keys fixes it, and sd-scripts has an open PR to detect the expanded layout | — | — | experiments, not production; see *Licence & limitations* and [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §7 before loading a LoRA on one |
 
 > **The Turbo-vs-Aesthetic default is contested** `[contested]`. CircleStone recommend Turbo, calling it *"only slightly worse than Anima-Aesthetic, while being very fast to generate."* But `u/Time-Teaching1926` reports that its *"quality, styles, stability and even sometimes prompt Adherence isn't that great."* Test both before you commit a pipeline to one.
 >
-> **A community checkpoint already out-downloads the official base.** MiaoMiao Harem sits at ~199k downloads against the base's ~190k `[community — Civitai API, 2026-08-22]`. Treat Anima the way this suite treats SDXL: the base is the training substrate, and most people generate on a finetune instead. The roster is in [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §11.
+> **The official checkpoints still out-download every community finetune.** An earlier version of this page said the reverse, because it counted MiaoMiao Harem's Illustrious, NoobAI and Pony builds alongside its Anima ones. On the same base it sits near ~103k, against ~219k for the official listing `[community — Civitai API, 2026-09-09]`. Anima is **not** yet SDXL, where nobody generates on the base: finetunes are a real option, not the default. The roster and the corrected count are in [`references/setup-and-workflows.md`](references/setup-and-workflows.md) §11.
 
 ---
 
@@ -93,7 +93,7 @@ Anima runs in **ComfyUI core**, with official templates. Like the suite's other 
 
 | File | ComfyUI folder | Loader node |
 |---|---|---|
-| `anima-base-v1.0.safetensors` (**4.18 GB**) · `anima-aesthetic-v1.0` / `-v1.0b` / `-v1.1.safetensors` · `anima-turbo-v1.0.safetensors` · any community checkpoint | `models/diffusion_models/` | `UNETLoader` (Load Diffusion Model) |
+| `anima-base-v1.0.safetensors` (**4.18 GB**) · `anima-aesthetic-v1.0` / `-v1.0b` / `-v1.1.safetensors` · `anima-turbo-v1.0` / `-v1.1.safetensors` · any community checkpoint | `models/diffusion_models/` | `UNETLoader` (Load Diffusion Model) |
 | `qwen_3_06b_base.safetensors` (text encoder, **shared across variants**) | `models/text_encoders/` | `CLIPLoader`, type `stable_diffusion` |
 | `qwen_image_vae.safetensors` (VAE, **shared**) | `models/vae/` | `VAELoader` |
 | Anima LoRAs, incl. the Turbo LoRA | `models/loras/` | `LoraLoader` |
@@ -135,7 +135,7 @@ The node-by-node graph, LoRA loading and stacking, the community-checkpoint rost
 
 ### Anima-Aesthetic
 
-- **Steps 30–50 · sampler `euler` · scheduler `simple` · same resolution band.** **CFG: CircleStone publish no figure for Aesthetic.** Start at Base's 4 and try lower. The card only says it *"can tolerate lower CFGs."*
+- **Steps 30–50 · sampler `euler` · scheduler `simple` · same resolution band.** **CFG: CircleStone publish no figure for Aesthetic.** The card only says it *"can tolerate lower CFGs."* Community guides put the number at **~3** and report it often looks better there than at Base's 4 `[community — PromptHero; re-verify]`. Start at 3, and go up to 4 if the prompt is not landing.
 - **Quality tags: omit both ladders, positive and negative.** Its captions had quality tags stripped, so `masterpiece`/`best quality` *and* `score_*` land out of distribution and push it *"too hard into slop territory."*
 
 ### Anima-Turbo (guidance-distilled)
@@ -150,7 +150,7 @@ The node-by-node graph, LoRA loading and stacking, the community-checkpoint rost
 
 Base Anima's default look is *"very plain and neutral"* by design. It is the inverse of [`z-image`](../z-image/)'s stock-photo gloss. Instead of fighting a house style, you must **supply** one. There are three levers, in order of impact:
 
-1. **Artist tags with the `@` prefix.** This is the deepest vocabulary and the real differentiator: ThetaCursed's **Style Explorer** indexes **42k+ artist styles for Anima Base**, against 16k+ for Illustrious/NoobAI `[community — ThetaCursed]`. Stack two or three artists to blend styles, and weight them (`(@artist:1.6)`) rather than repeating them.
+1. **Artist tags with the `@` prefix.** This is the deepest vocabulary and the real differentiator: ThetaCursed's **Style Explorer** indexes **40k+ artist styles for Anima Base** by the site's own count, and its index file is named for 59k, against 16k+ for Illustrious/NoobAI `[community — ThetaCursed]`. Stack two or three artists to blend styles, and weight them (`(@artist:1.6)`) rather than repeating them.
 2. **Quality and year tags.** The `masterpiece … worst quality` ladder and the PonyV7-derived `score_9 … score_1` ladder are **two independent systems, usable alone, together, or not at all**. Year tags (`year 2025`, `newest`, `old`) form a separate and unusually strong style axis. `u/RevolutionaryWater31`: *"the year tags — this has very strong influence on the generated image."*
 3. **Sampler choice.** `er_sde` gives flat colour and sharp lines. `euler_a` softens toward 2.5D. `beta57` (RES4LYF) adds painterly texture. On an illustration model this is a style control, not a quality knob.
 
@@ -221,7 +221,7 @@ Across every family boundary: **VAE-decode to pixels.** Anima's Qwen-Image laten
 4. Weights at **Anima scale** (start 1.5, step 0.25), not SDXL's 1.05–1.3?
 5. Quality tags matched to the variant — both ladders on Base/Turbo, **neither** on Aesthetic?
 6. A **rating tag** in the positive (`safe` / `sensitive` / `nsfw` / `explicit`), and its opposite in the negative where negatives work?
-7. CFG matched to the variant: **4–5** on Base, start at 4 on Aesthetic, **1** on Turbo with negatives treated as inert?
+7. CFG matched to the variant: **4–5** on Base, **~3** on Aesthetic, **1** on Turbo with negatives treated as inert?
 8. Sampler and scheduler set to the stock pair, **`euler` / `simple`**? Resolution inside **512²–1536²** and a multiple of 16? `beta57` only if RES4LYF is installed?
 9. Natural-language prompt at least **two sentences**, with characters named *and* described?
 10. Bad output? Tried three more **seeds** before rewriting the prompt?
@@ -266,7 +266,7 @@ Across every family boundary: **VAE-decode to pixels.** Anima's Qwen-Image laten
 
 **Vendor-stated limitations** `[official]`: no realism (*"This is intended"*), weak text (*"single words and sometimes short phrases"*), and a deliberately plain base style. The card also warns that *"the model may generate undesired content, especially if the prompt is short or lacking details."*
 
-**Community forks are covered by none of this.** **Anima-2.9B** and **Anima-3.8B** are layer-expanded community experiments, not CircleStone releases. Whether Anima LoRAs load on them is unanswered `[flagged — re-verify]`, their authors caveat them as experimental, and reception is sceptical (`u/x11iyu`, `u/LaPapaVerde`). Treat them as a footnote until one survives a few months.
+**Community forks are covered by none of this.** **Anima-2.9B** and **Anima-3.8B** are layer-expanded community experiments, not CircleStone releases. Their authors caveat them as experimental, and reception is sceptical (`u/x11iyu`, `u/LaPapaVerde`). A Base LoRA loaded unchanged on 2.9B silently corrupts identity, because the inserted layers shift the block numbering; remapping the LoRA's block keys restores it ([`references/setup-and-workflows.md`](references/setup-and-workflows.md) §7). Upstream tooling has started to notice: `kohya-ss/sd-scripts` PR #2418 detects the expanded block count, and was still open on 2026-08-14. The forks are no longer a pure footnote, but they are not production models. Keep them out of a pipeline until one survives a few months and that PR merges.
 
 ---
 
@@ -285,13 +285,13 @@ This skill holds two kinds of claim to two different standards, because they fai
 - **`anima-lllite-exp-change-2` is not released.** Both PRs are open, draft and unmerged, and kohya says *"merging into main is not decided yet"* `[pending release]`.
 - **The 8 GB inference floor** rests on one report on one AMD card, and CircleStone publish no VRAM figure `[flagged — re-verify]`.
 - **AMD memory creep** — two reports, with the cause unattributed between Anima and ROCm `[flagged — re-verify]`.
-- **Whether Anima LoRAs load on the 2.9B/3.8B forks** — asked and unanswered `[flagged — re-verify]`.
-- **Aesthetic's CFG.** No vendor figure exists anywhere. The guidance here is extrapolated from Base.
-- Volatile items carrying their own markers in the references: Civitai download counts, the Style Explorer URLs, Civitai's SFW-filtered API, and OneTrainer/AI-Toolkit support.
+- **Turbo v1.1 versus v1.0.** The new checkpoint is on the tree and undocumented, and nobody has re-run the Turbo-vs-Aesthetic comparison against it yet `[flagged — re-verify]`.
+- **Aesthetic's CFG.** Still no vendor figure. The ~3 given here is a community figure, and it is lower than the Base-derived 4 an earlier version of this page gave.
+- Volatile items carrying their own markers in the references: Civitai download counts, the Style Explorer URLs, Civitai's SFW-filtered API, AI-Toolkit support, the 2.9B block-key remap (one report), and sd-scripts PR #2418 for 2.9B detection (open, unmerged).
 
-**Settled since drafting, and deliberately no longer flagged:** the architecture (flow-matching DiT), the 2B count (the "2.9B" in circulation is the community fork), and the T5-XXL component (real, vendor-shipped, and the weighting mechanism). Also settled: the `CLIPLoader` `type` (irrelevant), the diffusers class, and `exp-change-2`'s architecture, which is kohya's own words.
+**Settled since drafting, and deliberately no longer flagged:** the architecture (flow-matching DiT), the 2B count (the "2.9B" in circulation is the community fork), and the T5-XXL component (real, vendor-shipped, and the weighting mechanism). Also settled: the `CLIPLoader` `type` (irrelevant), the diffusers class, and `exp-change-2`'s architecture, which is kohya's own words. Settled this pass: OneTrainer support (merged 2026-07-04), the 2.9B LoRA question (block-key remap needed), and the checkpoint ranking (the official listing leads on a same-base count).
 
-**Facts dated 2026-08-22**. The fastest-moving parts are the community checkpoint and LoRA ecosystem, the Anima-LLLite control models and their unmerged PRs, the trainer tooling, and the 2.9B/3.8B fork line. Re-verify all of those before relying on them.
+**Facts dated 2026-09-09**. The fastest-moving parts are the community checkpoint and LoRA ecosystem, the undocumented v1.1 checkpoints, the Anima-LLLite control models and their unmerged PRs, the trainer tooling, and the 2.9B/3.8B fork line. Re-verify all of those before relying on them.
 
 ---
 

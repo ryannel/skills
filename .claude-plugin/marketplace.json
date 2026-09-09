@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills organised by domain — deeply researched, provenance-tracked, and kept current against fast-moving ecosystems",
-    "version": "2.2.0"
+    "version": "2.3.0"
   },
   "plugins": [
     {
@@ -14,7 +14,7 @@
       "description": "Pick a generative-media model, then run it well. A cross-suite atlas ranks image and video models by job and settles model choice with a licence-first elimination ladder, then routes the goal through the skills it needs — alongside authoritative ComfyUI, diffusers and API guides for each model: image (FLUX.2, Ideogram 4, Z-Image, SDXL, Krea 2, Anima) and video (Wan 2.2, MiniMax H3, LTX-2.5, SCAIL-2) — spanning setup, prompting across tag and natural-language conditioning classes, ControlNet and motion/camera control, native audio-video generation, multishot single-generation cuts, face identity, character consistency across frames and shots, in-video character replacement, LoRA training and evaluation, the image-to-video handoff, licence and territory pitfalls, multi-stage and mixed-model production pipelines, GPU deployment on RunPod, and failure modes",
       "source": "./",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.5.0",
       "category": "creative",
       "keywords": [
         "image-generation",

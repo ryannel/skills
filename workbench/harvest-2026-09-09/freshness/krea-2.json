@@ -1,0 +1,130 @@
+{
+  "skill": "krea-2",
+  "verdict": "drift",
+  "flux": "hot",
+  "flux_evidence": "In the ~2.5 weeks since last_checked (2026-08-22), diffusers shipped a stable Krea2Pipeline release, a second community ControlNet-LoRA landed, a rigorous multi-quant shootout appeared, and the previously-'unverified' VAE colour-grading node shipped and was tested on both Krea2 and Z-Image as intended — all independent, concrete artifacts, not just chatter.",
+  "findings": [
+    {
+      "id": "diffusers-krea2pipeline-now-stable",
+      "severity": "major",
+      "claim": "Krea2Pipeline 'requires diffusers from source (main) as of early July 2026'; 'no hub repo yet'; check pypi before assuming a stable release carries it.",
+      "reality": "diffusers 0.40.0 was released on PyPI 2026-08-20 with Krea2 modular pipeline support, documentation, and test cases shipped in-tree. The source-only caveat is stale.",
+      "evidence": "https://newreleases.io/project/pypi/diffusers/release/0.40.0 ; https://pypi.org/project/diffusers/#history",
+      "fix_hint": "SKILL.md line ~112 (diffusers code block comment) and §diffusers; references/setup-and-workflows.md §4 — drop the source-only install line, give the `pip install diffusers>=0.40.0` path instead."
+    },
+    {
+      "id": "openpose-controlnet-landed",
+      "severity": "major",
+      "claim": "SKILL.md suite table (~L243): 'First community depth ControlNet just landed (Tanmay Patil); no pose/canny/union yet.' Known-limitations line echoes the same.",
+      "reality": "A second structural-control adapter has shipped: thedeoxen's Krea 2 OpenPose ControlNet-LoRA (2026-08-04) takes a DWPose skeleton map and follows body pose while the prompt drives identity/clothing/style — the 'no pose yet' claim is now false.",
+      "evidence": "https://huggingface.co/thedeoxen/Krea-2-pose-controlnet ; https://comfyui-wiki.com/en/news/2026-08-04-krea-2-pose-controlnet",
+      "fix_hint": "SKILL.md suite/control table ~L243 and 'Known limitations' ~L262; references/characters.md §1/§3 control-stack table — add the pose CN alongside the depth CN, reframe 'no pose/canny/union yet' as 'pose + depth, no canny/union'."
+    },
+    {
+      "id": "gguf-quant-shootout-published",
+      "severity": "major",
+      "claim": "references/setup-and-workflows.md §2 (~L71) and SKILL.md quant note (~L107): 'No per-quant quality comparison has been published yet'; whether int8_convrot's speedup costs complex-prompt adherence is left disputed/contested.",
+      "reality": "A 150-image benchmark (perceptual, semantic, latent-space) across BF16/FP8/INT8-ConvRot/INT4/GGUF now exists and recommends INT8-ConvRot as the primary choice for 16-24GB VRAM, near-lossless vs BF16 — the 'no comparison published' framing is outdated, though the benchmark result should be verified in full before being stated as settled.",
+      "evidence": "https://huggingface.co/lilcheaty/Krea2-INT8-ConvRot ; https://www.instasd.com/post/krea-2-turbo-checkpoint-formats-vram-guide ; https://huggingface.co/Winnougan/Krea-2-Base-Turbo-NVFP4-FP8-INT8",
+      "fix_hint": "SKILL.md ~L107 two-bar contested bullet and references/setup-and-workflows.md §2 quant table — read the full Merserk13 benchmark thread and either cite it or soften the 'no comparison exists' line."
+    },
+    {
+      "id": "colorcraft-vae-node-shipped",
+      "severity": "minor",
+      "claim": "krea2-vae-options watchlist item: 'muerrilla's extracted latent colour vectors ... with a ComfyUI node announced but unverified.'",
+      "reality": "muerrilla's ComfyUI-Colorcraft node pack has shipped, supports the Qwen Image VAE family including Krea2, and is explicitly tested on both Krea2 and Z-Image as the author intended — this is a genuinely new capability class, no longer speculative.",
+      "evidence": "https://github.com/muerrilla/ComfyUI-Colorcraft",
+      "fix_hint": "SKILL.md 'Production pipelines & mixing models' section — move Colorcraft from watch-status to a stated fact; check whether it changes the Wan 2.1 VAE-swap recommendation."
+    },
+    {
+      "id": "lora-doctrine-ostris-trending-but-not-settled",
+      "severity": "minor",
+      "claim": "SKILL.md ~L163 and lora-training.md frame train-on-Raw/run-on-Turbo (official/kohya) vs Ostris turbo-adapter direct-on-Turbo as an open, evidenced-both-ways dispute.",
+      "reality": "Multiple secondary sources now describe Ostris AI-Toolkit plus its turbo training adapter as the 'de facto standard' for advanced Krea 2 fine-tuning on popularity/convenience grounds, while musubi-tuner's own docs still call Krea2 LoRA support 'experimental' — this is a framing shift, not a rigorous A/B win, so the dispute isn't resolved, just tilting.",
+      "evidence": "https://x.com/ostrisai/status/2069612016848060609 ; https://github.com/kohya-ss/musubi-tuner/blob/main/docs/krea2.md ; https://www.buildfastwithai.com/blogs/krea-2-open-source-review-raw-turbo",
+      "fix_hint": "SKILL.md LoRA summary ~L163 and references/lora-training.md §1/§3 — note the popularity tilt toward Ostris without declaring the technical dispute settled."
+    },
+    {
+      "id": "two-weeks-old-framing-now-eleven-weeks-stale",
+      "severity": "minor",
+      "claim": "references/characters.md ('Ecosystem verified 2026-07-07, about two weeks after open weights') and setup-and-workflows.md §per-LoRA weights ('the ecosystem is two weeks old, so expect this to firm up') still frame Krea 2 as a two-week-old model.",
+      "reality": "Krea 2 is now ~11 weeks past its 2026-06-22 open-weights release; per the watchlist's own trigger condition ('ages out on its own... >4-6 weeks old, sweep the no-consensus items'), several 'no consensus yet' framings are due for a sweep — this cycle alone surfaced a second ControlNet, a stable diffusers pipeline, and a quant shootout, none of which existed at 'two weeks old.'",
+      "evidence": "https://github.com/krea-ai/krea-2 (release date) ; internal — see other findings in this report as evidence of maturation",
+      "fix_hint": "references/characters.md line ~3, references/setup-and-workflows.md ~L148, and SKILL.md two-bar closing (~L285) — update the age framing and re-check which 'no consensus yet' items now have answers."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "lokr-over-lora-for-krea2-characters",
+      "what": "LoKr is emerging as the community-preferred decomposition for Krea 2 character LoRAs over plain LoRA: rank 512 or 1024 (never 768 — ai-toolkit Discord reports of failed 768 runs), with the LoKr factor genuinely contested (16 per one guide, ai-toolkit community leaning 4, some compromise at 8). Reported benefit: noticeably less identity bleed when two characters share a frame.",
+      "why_it_matters": "It's a concrete alternative to the skill's current rank/alpha-32 LoRA doctrine for multi-character work, not just a parameter tweak.",
+      "source_class": "community-consensus",
+      "evidence": "https://www.instasd.com/post/krea-2-lora-training-lokr-guide",
+      "date": "2026-08-20",
+      "where_it_belongs": "references/lora-training.md (rank/settings section)",
+      "already_covered": false
+    },
+    {
+      "id": "reference-image-edit-comfyui-workflow",
+      "what": "A community ComfyUI workflow turns a reference image plus a plain-English instruction into an edited render that preserves subject/pose/composition, built around Krea 2's style-reference conditioning rather than the awaited official edit model.",
+      "why_it_matters": "It's a distinct, packaged route to edit-like behaviour alongside the Identity Edit LoRA the skill already documents, worth distinguishing in the control/edit routing table.",
+      "source_class": "community-consensus",
+      "evidence": "https://www.runcomfy.com/comfyui-workflows/krea-2-reference-image-editing-comfyui-workflow-precise-style-control",
+      "date": "2026-07-15",
+      "where_it_belongs": "references/characters.md §1 or SKILL.md control-routing note",
+      "already_covered": false
+    },
+    {
+      "id": "turbo-img2img-denoise-ladder",
+      "what": "Community practice for Krea 2 Turbo img2img/repaint settles on a denoise ladder at Turbo's native 8-step/cfg-1.0 defaults: 0.4 stays close to source, 0.55 is balanced, 0.7 is a strong restyle; a packaged Civitai workflow adds face-preservation on top.",
+      "why_it_matters": "The skill currently has no stated denoise-strength guidance for Turbo img2img, and this fills that gap with named numbers.",
+      "source_class": "community-consensus",
+      "evidence": "https://civitai.com/models/2768351/krea-2-turbo-image-to-image-workflow-face-preservation ; https://www.kombitz.com/2026/07/19/how-to-use-krea-2-turbo-gguf-for-inpainting-in-comfyui/",
+      "date": "2026-07-19",
+      "where_it_belongs": "references/setup-and-workflows.md (img2img/repaint section, currently thin)",
+      "already_covered": false
+    },
+    {
+      "id": "musubi-krea2-doc-flag-names-confirmed",
+      "what": "musubi-tuner's official krea2.md now documents the full training recipe in one place: --timestep_sampling shift --discrete_flow_shift 2.5, --network_dim 32 --network_alpha 32, --optimizer_type adamw8bit --learning_rate 1e-4, and --fp8_base --fp8_scaled --blocks_to_swap (max 26) for memory — still explicitly marked experimental.",
+      "why_it_matters": "Confirms the skill's existing rank/alpha/LR numbers are still the official recommendation and gives an exact flag reference to cite instead of paraphrasing.",
+      "source_class": "official",
+      "evidence": "https://github.com/kohya-ss/musubi-tuner/blob/main/docs/krea2.md",
+      "date": "2026-08-15",
+      "where_it_belongs": "references/lora-training.md §1/§7 (already covers the same numbers — cite the doc directly)",
+      "already_covered": true
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [
+      "diffusers-source-only",
+      "krea2-vae-options"
+    ],
+    "add": [
+      {
+        "id": "gguf-quant-shootout-followup",
+        "type": "contested",
+        "claim": "Merserk13's 150-image BF16/FP8/INT8-ConvRot/INT4/GGUF shootout recommends INT8-ConvRot for 16-24GB VRAM as near-lossless, but whether it costs complex-prompt adherence specifically (the skill's stated dispute) is not yet confirmed settled by this report.",
+        "where": "SKILL.md ~L107; references/setup-and-workflows.md §2",
+        "check": "Read the full Merserk13 benchmark thread (HF Winnougan/instasd links) for the adherence-specific verdict, not just overall perceptual quality, before rewriting the contested framing."
+      },
+      {
+        "id": "pose-controlnet-maturation",
+        "type": "ecosystem-gap",
+        "claim": "thedeoxen's OpenPose ControlNet-LoRA (2026-08-04) is a second structural-control adapter alongside Patil's depth CN; still no canny/union CN and no PuLID/InstantID-class identity adapter.",
+        "where": "SKILL.md suite table; references/characters.md §1/§3",
+        "check": "Watch for a canny/union ControlNet, an IP-Adapter-class identity tool, or consolidation of the depth+pose CNs into one multi-condition adapter."
+      }
+    ],
+    "amend": [
+      {
+        "id": "lora-doctrine",
+        "change": "Add: Ostris AI-Toolkit + turbo training adapter is now described by multiple secondary sources as the 'de facto standard' for Krea 2 fine-tuning by popularity, while musubi-tuner's own docs still call its support 'experimental' — a framing tilt, not a resolved technical dispute."
+      },
+      {
+        "id": "two-weeks-old-framing",
+        "change": "Trigger condition met: release is now ~11 weeks old (>4-6 week threshold). Recommend the sweep this watchlist item calls for, since this cycle alone surfaced three concrete maturation items (stable diffusers pipeline, second ControlNet, quant shootout)."
+      }
+    ]
+  }
+}

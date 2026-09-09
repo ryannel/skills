@@ -87,7 +87,7 @@ The ControlNet is confirmed to support all FLUX.2 open-weight variants: [dev], [
 
 ## 3. PuLID — face identity (iFayens)
 
-PuLID (Portrait Unique Identity Locking) takes a reference portrait and locks that face's identity into generation. For FLUX.2, use **iFayens/ComfyUI-PuLID-Flux2**. As of June 2026 it was the only FLUX.2-specific PuLID implementation.
+PuLID (Portrait Unique Identity Locking) takes a reference portrait and locks that face's identity into generation. For FLUX.2, use **iFayens/ComfyUI-PuLID-Flux2**. As of 2026-09-09 (v0.6.2) it is still the only FLUX.2-specific PuLID implementation, and still text-to-image only.
 
 **Primary source:** `github.com/iFayens/ComfyUI-PuLID-Flux2` (model weights: `Fayens/Pulid-Flux2` on Hugging Face).
 

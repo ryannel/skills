@@ -63,7 +63,7 @@ BFL also describes the expected shape of a run: **15–40 images sharing one loo
 
 **Train on a Base (undistilled) variant.** Klein Base is the intended fine-tuning target precisely because it is undistilled. This is the same train-on-the-undistilled-variant rule that governs Z-Image and Krea 2. Guidance-distilled variants fight training.
 
-**Klein 9B has documented collapse patterns.** Community trainers report characteristic failure modes specific to the 9B at certain configs. If a 9B run degenerates rather than converging, treat it as a known class of problem rather than a dataset fault `[community — re-verify]`.
+**Klein 9B has a reported collapse pattern.** ostris/ai-toolkit#654 ("Flux Klein 9b training collapse", opened 2026-01-19) describes a 9B run collapsing by step ~250 and fully degenerating by step 500. As of 2026-09-09 it is one report with no maintainer response and no fix. If a 9B run degenerates rather than converging, treat it as a known class of problem rather than a dataset fault. Sample early on 9B: the reported collapse begins before the first checkpoint a 500-step interval would save `[community — ostris/ai-toolkit#654; single report, re-verify]`.
 
 The `ai-toolkit-perceptual` character-training fork **defaults to the Klein 9B checkpoint** in its quickstart, so Flux.2 is the best-supported target for weight-noising and depth-anchoring experiments. For background, see [`character-lora-training`](../../character-lora-training/) §8 territory, and [`sdxl`](../../sdxl/references/lora-training.md) §8 for the full method.
 

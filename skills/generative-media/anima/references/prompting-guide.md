@@ -99,7 +99,7 @@ On **Turbo** at CFG 1 the negative prompt is inert, so the positive rating tag i
 
 The failure is silent. A bare artist name tokenises as an ordinary general tag. The image still renders, nothing errors, and the style you asked for is simply not there. Check this first against every "Anima doesn't do styles well" report.
 
-**The vocabulary is Anima's deepest asset.** ThetaCursed's Style Explorer indexes **42k+ artist styles for Anima Base**, against 16k+ for Illustrious/NoobAI and ~1.5k for Krea 2 Turbo `[community — ThetaCursed, animastyles.thetacursed.com]`. His GitHub was suspended, so the hosted explorers are mirrors and the URLs are volatile `[flagged — re-verify]`.
+**The vocabulary is Anima's deepest asset.** ThetaCursed's Style Explorer indexes **40k+ artist styles for Anima Base** by the site's own count, against 16k+ for Illustrious/NoobAI and ~1.5k for Krea 2 Turbo `[community — ThetaCursed, animastyles.thetacursed.com]`. The source repo, `github.com/ThetaCursed/Anima-Style-Explorer`, is live again after a suspension, and its index file is named for 59k artists, so the true count may be higher than the site advertises `[flagged — re-verify]`.
 
 **Craft:** stack two or three artists to blend, rather than hunting for one exactly-right name. Blends are where the large vocabulary pays off. Weight them like anything else: `(@artist name:1.6)` to push a style harder, or a lower weight to dilute one member of a blend (§7). Keep them in the trained slot, after character and series and before general tags. Separately, put **`artist name` in the negative**. It does not conflict with `@`-prefixed artists in the positive. What it suppresses is rendered signatures and watermarks, which the training data is full of.
 
@@ -222,7 +222,7 @@ fur-trimmed headwear, holding, red capelet, holding box, capelet
 
 Read the order: era → quality → meta → rating → count → character → series → artist → the rest, unordered.
 
-> **This skill ships no artist list, deliberately.** The only `@` tags quoted anywhere here are the card's own (`@nnn yryr`, `@big chungus`), because those are the two that are verifiable from a primary source. Anima's artist vocabulary is 42k+ entries and changes nothing about the syntax. Pull real names from `animastyles.thetacursed.com` and confirm each one renders before building a prompt on it. `@artist one` below is a placeholder, not a tag.
+> **This skill ships no artist list, deliberately.** The only `@` tags quoted anywhere here are the card's own (`@nnn yryr`, `@big chungus`), because those are the two that are verifiable from a primary source. Anima's artist vocabulary is 40k+ entries and changes nothing about the syntax. Pull real names from `animastyles.thetacursed.com` and confirm each one renders before building a prompt on it. `@artist one` below is a placeholder, not a tag.
 
 **B — Original character, style-stacked** (Base, 40 steps, CFG 4, `er_sde` — settings illustrative, not vendor-specified)
 

@@ -41,6 +41,8 @@ Two hygiene items also apply: use a fixed seed in the refine pass, and color-mat
 | **Illustrious front-end → Anima refine** | an SDXL-anime checkpoint composes with its ControlNet/regional stack → decode → [`anima`](../../anima/) img2img at **low denoise** → FaceDetailer | `[community — u/Alekite]` | The SDXL-front-end pattern in anime clothing, and the strongest case for it: Anima-LLLite covers scribble/canny/depth, but **pose is its weak spot**, so the borrowed control stack earns more here than it does for a DiT. Anima is never the *realism* refiner — that is a stated non-goal |
 | **Ideogram typography pass** | text/design plate in **Ideogram 4** (bbox layout, transparent background) → composite/inpaint into another model's imagery; or mask Ideogram's text and restyle the rest elsewhere | `[flagged — no canonical workflow]` | the handoff is pixel-space; Ideogram's own Magic Fill covers the hosted half |
 
+**The edit rung is a wider choice than the table shows.** The rows above route instruction edits through FLUX.2 [klein]. Recent production write-ups also route them through **Qwen-Image-Edit 2511** when owning the weights and dense text matter, or through hosted **Nano Banana Pro** when multi-reference reliability matters more than ownership. That is one write-up so far, not a named workflow `[community — runflow.io write-up; single report]`. Whichever edit model you pick, the handoff is unchanged: pixels in, pixels out, rule 1 applies. [`minimax-h3`](../../minimax-h3/) at one frame competes for the same rung, with the ComfyUI node caveat SKILL.md describes.
+
 ## 3. The structural-control stack, per family (mid-2026)
 
 | Family | Best ControlNet | Status | Notes |
@@ -60,7 +62,7 @@ Multiple ControlNets can chain together with per-CN strength, start, and end val
 
 - **SDXL/SD1.5:** the classic Regional-Prompter and attention-couple approaches work, including per-region LoRA application. This is the mature option.
 - **Flux-class DiTs:** mask-based **attention masking is in ComfyUI core** (PR #5942), and it is the *only* approach that works — the SD-era regional tooling does not transfer. Flux-specific node packs (FluxRegionAttention, RES4LYF regional nodes) build on it. Per-region *LoRA* application on DiTs is still contested craft `[contested]`.
-- **Z-Image:** no regional tooling exists as of mid-2026. Use per-face detailer passes instead, where each detection gets its own prompt and LoRA.
+- **Z-Image:** regional tooling now exists, but it is early. `MisterLotto/zit-regions` is a Forge extension that adds attention-bias masks inside the joint self-attention, reported working on Turbo at 9 steps. `bbc-s/ZIT-Ideogram` is a ComfyUI node that does box-based regional conditioning on the KJNodes Ideogram-4 editor pattern. Both are seed-sensitive, blur at region boundaries, handle per-region LoRAs inconsistently, and are lightly tested past three regions `[community — MisterLotto, bbc-s repos; early]`. Per-face detailer passes remain the reliable route, where each detection gets its own prompt and LoRA. Reach for the regional nodes when the layout matters more than keeping a seed.
 
 ## 5. Identity across a mixed pipeline
 

@@ -1,0 +1,39 @@
+{
+  "skill": "scail-2",
+  "verdict": "drift",
+  "flux": "hot",
+  "flux_evidence": "Docs still disagree (README/HF=32 vs comfy docs=16, unchanged since last check), GGUF/quant ecosystem and competing-tool comparisons (Wan Animate) keep shifting, and the vendor record is still thin on VRAM/timing baselines.",
+  "findings": [
+    {
+      "id": "mix-studio-telemetry-now-documented",
+      "severity": "minor",
+      "claim": "SKILL.md ~L286 and the two-bar bullet frame Mix Studio's SCAIL-2 integration as unaudited, noting an unsubstantiated telemetry accusation went unanswered.",
+      "reality": "Mix Studio's own docs now spell out the telemetry precisely: only App_Launched and Generation_Started events via PostHog, memory-only persistence, autocapture/session-replay/person-profiles disabled, a first-run notice, and an on/off toggle in Settings -> General; operators can also override the PostHog project or IP capture server-side.",
+      "evidence": "https://github.com/BlackMixture/Mix-Studio/blob/main/docs/installation-and-operations.md ; https://github.com/BlackMixture/Mix-Studio",
+      "fix_hint": "SKILL.md ~L286 and references/setup-and-workflows.md ~L106 — replace 'unaudited'/'unanswered accusation' with the concrete, opt-out-able telemetry scope now published; the original accusation's source is still untraced, so keep that part cautious."
+    },
+    {
+      "id": "wan-animate-tradeoff-more-nuanced-than-displaced",
+      "severity": "minor",
+      "claim": "SKILL.md ~L294's comparison table states Wan Animate was 'displaced by SCAIL-2 in community practice, even among people who otherwise run Wan end to end' — read as a near-total win for SCAIL-2.",
+      "reality": "A same-scene community comparison (X/Brie Wensleydale) and a task-selection guide both report SCAIL-2 losing to Wan Animate on lip sync and facial/eye-movement nuance, while winning on non-human subjects, complex 3D physical actions, multi-character interaction, and low-resolution stability — a task-dependent split, not a clean displacement.",
+      "evidence": "https://docs.dreamerland.ai/video/wan2.2-video/character-animation/wan-animate-vs-scail2 ; https://x.com/SlipperyGem/status/2000761345738948888",
+      "fix_hint": "SKILL.md ~L294 comparison table — soften 'displaced' to note Wan Animate is still preferred for close-up facial/expression work; SCAIL-2 wins the rest."
+    }
+  ],
+  "new_techniques": [],
+  "watchlist_updates": {
+    "resolved": [],
+    "add": [],
+    "amend": [
+      {
+        "id": "scail2-mix-studio-unaudited",
+        "change": "The telemetry scope is now documented in detail (see finding mix-studio-telemetry-now-documented) — narrow the check to whether the original unsubstantiated accusation's source ever surfaces or gets retracted, since the transparency question itself is now answered."
+      },
+      {
+        "id": "scail2-wan21-lora-transfer",
+        "change": "Still untested/undocumented directly, but one secondary source (stablediffusiontutorials.com, 2026-06-16) states generically that Wan2.1 LoRAs 'don't work 100% as they should' on SCAIL-2 without detail — too thin to resolve the item, but worth folding in as a weak corroborating data point next check."
+      }
+    ]
+  }
+}

@@ -36,13 +36,13 @@ SDXL has a similar debate about training its text encoder, and there the answer 
 | Trainer | Notes |
 |---|---|
 | **diffusion-pipe** (tdrussell) | The author's own script. The model card calls it *"my own training script"*, and `tdrussell@circlestone.ai` is the commercial-licence contact, so this is first-party-adjacent tooling. It ships an Anima example config with `llm_adapter_lr 0` |
-| **kohya-ss/sd-scripts** | **First-class and merged on `main`**: `anima_train.py`, `anima_train_network.py`, `anima_train_control_net_lllite.py`, `anima_minimal_inference.py`, plus `docs/anima_train_network.md` and `docs/anima_torch_compile.md`. This is the route most people take, and it is the base for several forks and GUIs |
+| **kohya-ss/sd-scripts** | **First-class and merged on `main`**: `anima_train.py`, `anima_train_network.py`, `anima_train_control_net_lllite.py`, `anima_minimal_inference.py`, plus `docs/anima_train_network.md` and `docs/anima_torch_compile.md`. This is the route most people take, and it is the base for several forks and GUIs. PR #2418, open and unmerged on 2026-08-14, adds detection of the community 2.9B fork's expanded block count |
 | **citron-anima-lora-trainer-ui** | Gradio front-end built for Anima. It advertises **6 GB VRAM** at 768 px `[community — citronlegacy; reproducible]` |
 | **Aozora Trainer** (Hysocs) | Covers SDXL + Anima. It claims **100% of Anima at 1152² in ~11.4 GB, ~2.67 s/iter**, which is full finetuning on a 12 GB card `[community — u/RealOminousHvh]` |
 | **AI Toolkit** (ostris) | Reported in use, but not confirmed in ostris's own docs `[community — u/justbob9; re-verify]` |
 | **Anima Standalone Trainer** | Named in practitioner reports, with little documentation `[community — u/justbob9]` |
 | **LoRA Dataset Studio** (perfectgf) | Dataset tooling. It lists Anima in its ai-toolkit presets alongside Z-Image, Krea 2, FLUX and SDXL `[community]` |
-| **OneTrainer** | No Anima support found either way. Check its changelog before planning around it |
+| **OneTrainer** (Nerogar) | **Native Anima support merged 2026-07-04** (PR #1487, "New model: Anima"; tracking issue #1278 closed as completed). It depends on the diffusers Cosmos pipeline, so it needs a diffusers build that carries it. Worth reaching for on the §10 question: its validation loss and sample grid make "is this LoRA converging" something you measure rather than feel `[official — Nerogar/OneTrainer PR #1487]` |
 
 **Train on Anima-Base.** The model card says *"LoRAs should be trained using this version"*. Base is unrefined and has no aesthetic tuning for your training to fight. LoRAs trained on Base also run on Aesthetic, Turbo and community checkpoints. If you train on Aesthetic or Turbo instead, you bake their style into your LoRA and narrow where it can be used.
 
@@ -67,6 +67,17 @@ This is the opposite of the SDXL-anime situation. On an SDXL anime checkpoint, m
 | Resolution | 768 px for a 6 GB budget; 1024 px if you have the VRAM | Anima's band is 512²–1536², so 1024 training generalises well |
 | Adapter LR | **0** | §1 |
 | Optimiser | trainer default; the community forks report Muon-family experiments `[community]` | no settled Anima consensus — follow your trainer's default |
+
+**Per-type starting points from a named sd-scripts guide** `[community — Civitai 31972, 2026-06-28]`. One author's settings, not the vendor's:
+
+| LoRA type | dim / alpha | LR | Steps | Images |
+|---|---|---|---|---|
+| Character | 8 / 8 | 1e-4 | 1,000–1,500 | 20–30 |
+| Multi-outfit character | 8 / 8 | 1e-3, then 5e-5 to refine | ~900+ per outfit | — |
+| Style | 16 / 16 | 5e-5 | ~6,500 | 60–150 |
+| Concept | 4–8 | 1e-4 | 1,200–2,000 | — |
+
+**Read the two recipes against each other before you pick one.** The vendor's 2e-5 is calibrated for rank 32. The guide's 1e-4 is at dim 8, and lower rank buys some learning-rate headroom, but not 5×, and the multi-outfit 1e-3 opening is 50× the vendor figure `[contested]`. Both are named sources. The vendor's number protects the base from damage; the guide's numbers get a character in faster. Start at the vendor's figure if you have never trained on Anima, and move toward the guide's only if the LoRA is still under-fitting at 1,500 steps, watching for the §9 symptoms.
 
 Everything not listed here — epochs, repeats, batch size, scheduler — has no Anima-specific consensus. Follow [`character-lora-training`](../../character-lora-training/) for those instead. If you find a confident number online without a named author behind it, treat it as SEO laundering.
 
@@ -110,7 +121,7 @@ The model-agnostic craft — set size, rotation and elevation coverage, curation
 
 ## 7. Style LoRAs
 
-Anima has the deepest built-in artist vocabulary in the suite — 42k+ styles by the Style Explorer count `[community — ThetaCursed]`. So the first question for any style LoRA is **whether the style is already in the model under an `@` tag.** Check before training. Many "I need a style LoRA" cases on Anima are really cases of "I did not know the `@` prefix was mandatory" (`prompting-guide.md` §6).
+Anima has the deepest built-in artist vocabulary in the suite — 40k+ styles by the Style Explorer's own count, and its index file is named for 59k `[community — ThetaCursed]`. So the first question for any style LoRA is **whether the style is already in the model under an `@` tag.** Check before training. Many "I need a style LoRA" cases on Anima are really cases of "I did not know the `@` prefix was mandatory" (`prompting-guide.md` §6).
 
 When training is genuinely warranted, **subject diversity is the whole game.** Twenty portraits produce a portrait LoRA, so spread your set across subjects, compositions and shot sizes. The **acceptance test** is that the style is recognisable on *out-of-set subjects*. If the style only looks right on things resembling your dataset, the LoRA memorised composition instead of style. Watch for two overfit signals: composition memorisation and colour-cast lock-in. **Rank** starts lower than for characters; 8–16 is often enough. Rank-for-style is a wider-community dispute rather than an Anima-specific one, and [`character-lora-training`](../../character-lora-training/) owns that discussion. On **ethics**: single-living-artist datasets are the case where the licence is the least of your constraints ([`publishing-and-likeness.md`](../../character-lora-training/references/publishing-and-likeness.md)). Anima's licence also forbids implying CircleStone endorsement of a derivative, and it bars training models for *commercial* use.
 
@@ -153,3 +164,5 @@ The vendor says *"a light touch is all you need."* A named practitioner's experi
 Both can be true. The likely explanation lies in the target, not the model. Training a **character plus a specific non-anime art style in one LoRA** is the hardest configuration for any model, and that is the configuration that went wrong here. Anima's own strength, a huge baked-in artist vocabulary, works against you in this case: the base keeps asserting its own rendering conventions over the webtoon style you are trying to teach it.
 
 Until someone diagnoses this properly, the practical reading is: **separate the concerns.** Train the character on Anima-Base with the style captioned *out*, and get the style instead from `@` artist tags or from a second, separately trained style LoRA. Two LoRAs at moderate strength are far easier to debug than one LoRA doing both jobs. And **do not escalate hyperparameters first.** The failure above already involved a week of training, so more steps is the least likely fix on a model whose author recommends 2e-5. Treat this as an open question in the Anima community, not as settled knowledge.
+
+Two things have changed since this was written that make the question testable rather than argued. OneTrainer now supports Anima with validation loss (§2), and a named per-type recipe exists (§3) that runs learning rates 5–50× the vendor's. If the vendor's 2e-5 is simply too low for a character to converge in a normal step budget, that alone would explain `u/justbob9`'s result without the style-fusion theory. Nobody has published that comparison yet.

@@ -224,4 +224,6 @@ BFL publishes pricing through an interactive calculator rather than a static pri
 
 All BFL pricing is per-image, not per-second. Resolution affects cost, because higher resolution takes more compute.
 
+**Illustrative numbers (aggregator-sourced, 2026-09-09).** Third-party pricing aggregators quote roughly: `flux-2-klein` ~$0.014 per image; `flux-2-pro` $0.03 per megapixel, $0.045/MP for edits; `flux-2-flex` $0.05–0.06/MP; `flux-2-max` $0.07/MP. These are not a BFL price table. They anchor the tier ordering above, and nothing more. Note the unit: the aggregators quote most tiers per megapixel, which is why a 2048×2048 job costs about four times a 1024×1024 one `[community — dynalord, flowith aggregators; re-verify]`.
+
 **To get current prices:** go to `bfl.ai/pricing` and enter the model and resolution in the interactive calculator.

@@ -130,7 +130,7 @@ The photoreal dialect above is for base/Juggernaut/RealVis/DreamShaper. **Tag-tr
 ```
 score_9, score_8_up, score_7_up, source_anime, rating_safe, 1girl, solo, <booru tags…>
 ```
-The `score_9, score_8_up, score_7_up, score_6_up, …` ladder is near-mandatory. `source_anime` / `source_pony` / `source_furry` and `rating_safe` / `rating_explicit` set the register. Pony LoRAs are a **separate pool**, and base-SDXL LoRAs do not transfer.
+The `score_9, score_8_up, score_7_up, score_6_up, …` ladder is near-mandatory. `source_anime` / `source_pony` / `source_furry` and `rating_safe` / `rating_explicit` set the register. Pony LoRAs are a **separate pool**, and base-SDXL LoRAs do not transfer. This dialect is **V6 XL's**. Pony V7 is a different, non-SDXL model that drops the score ladder for a tag-plus-description scheme; see `checkpoints-and-loras.md §3` `[official — purplesmartai/pony-v7-base card]`.
 
 **Illustrious / NoobAI XL** — use **Danbooru booru tags**, comma-separated, with no score ladder (or a model-specific quality tag set — check the model card). The shape is `1girl, solo, <character>, <series>, <attributes>, masterpiece, best quality`. These quality boosters *do* work here because the model was trained with them, unlike on photoreal SDXL.
 

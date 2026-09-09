@@ -1,0 +1,88 @@
+{
+  "skill": "wan-2-2",
+  "verdict": "drift",
+  "flux": "hot",
+  "flux_evidence": "Wan Animate 2 shipped native ComfyUI nodes 2026-08-08 (post-dating last_checked), Comfy-Org's own template repo now carries API-only templates for Wan 2.6/2.7/3.0, and the musubi-tuner/lightx2v threads the skill tracks are all still open and moving.",
+  "findings": [
+    {
+      "id": "vace-wan22-no-native-comfy-template",
+      "severity": "minor",
+      "claim": "SKILL.md/motion-and-camera.md flag Wan2.2-VACE-Fun-A14B's exact file naming and ComfyUI node wiring as needing verification.",
+      "reality": "Verified unchanged: alibaba-pai/Wan2.2-VACE-Fun-A14B is still the correct repo (last updated 2025-10-09), built on Wan2.2-T2V-A14B, with PAI's own bundled ComfyUI workflow (not a Comfy-Org marketplace template). Comfy-Org's official workflow_templates repo ships native VACE templates only for Wan 2.1 (video_wan_vace_14B_t2v.json etc., defaulting to CausVid-accelerated 2-4 steps/CFG 1.0 vs base 20 steps/CFG 6.0) — there is still no native Comfy-Org template for Wan 2.2 VACE.",
+      "evidence": "https://huggingface.co/alibaba-pai/Wan2.2-VACE-Fun-A14B ; https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_wan_vace_14B_t2v.json",
+      "fix_hint": "references/motion-and-camera.md 'VACE' section — state plainly that Comfy-Org's native templates cover Wan 2.1 VACE only; running Wan2.2-VACE-Fun-A14B means using PAI's own bundled ComfyUI workflow, not a marketplace template. Watchlist item vace-for-wan22-naming can lose its 'flagged for verification' framing."
+    },
+    {
+      "id": "comfy-official-source-for-api-only-successors",
+      "severity": "minor",
+      "claim": "wan-2-5-plus-api-only and wan-3-0-open-weights watchlist items are 'sourced from secondary reporting, not a primary Alibaba statement.'",
+      "reality": "Comfy-Org's own workflow_templates repo now ships api_wan2_6_{i2v,t2v}.json, api_wan2_7_{i2v,t2v,r2v,video_edit}.json and api_wan3_0_{i2v,t2v,r2v}.json — all API-node templates, no matching diffusion_models entries. This is a primary-adjacent confirmation (from the tool ecosystem's own canonical source) that 2.6/2.7/3.0 remain hosted-API-only; no open weights exist on Wan-AI HF org or Wan-Video GitHub as of 2026-09-09.",
+      "evidence": "https://github.com/Comfy-Org/workflow_templates/tree/main/templates (api_wan2_6_*.json, api_wan2_7_*.json, api_wan3_0_*.json) ; https://huggingface.co/Wan-AI ; https://github.com/Wan-Video/Wan2.2",
+      "fix_hint": "SKILL.md intro / 'Licence and known limitations' — the sourcing can be upgraded from 'secondary reporting' to 'Comfy-Org's own template repo ships API-node-only templates for 2.6/2.7/3.0, no local weights' as corroborating evidence alongside the existing HF-org check."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "wan-animate-2-caching-node",
+      "what": "The native ComfyUI Wan Animate 2 template ships a WanAnimate2Cache node that caches pose computations across sampling steps, roughly halving generation time at the cost of extra system memory.",
+      "why_it_matters": "A concrete, official speed lever for Animate-2 that has no analogue documented for Animate v1 in the skill.",
+      "source_class": "official",
+      "evidence": "https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_wan_animate2.json ; https://blog.comfy.org/p/wan-animate-2-is-now-available-in",
+      "date": "2026-08-08",
+      "where_it_belongs": "references/motion-and-camera.md 'Animate' section (new Animate-2 subsection)",
+      "already_covered": false
+    },
+    {
+      "id": "wan-animate-2-subgraph-chaining",
+      "what": "Wan Animate 2's official template generates 81 frames (~3.4s@24fps) per pass; the documented way to extend past that is to duplicate the 'Motion Transfer' subgraph, wire its continue_motion/video_frame_offset outputs into the new copy, batch the IMAGE outputs, and trim the 1-frame overlap at each seam.",
+      "why_it_matters": "This is the current official long-video-stitching recipe for character animation, replacing manual pose-extraction chaining used for Animate v1; a native looping PR (ComfyUI #13180) is still under review as the eventual replacement.",
+      "source_class": "official",
+      "evidence": "https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_wan_animate2.json ; https://github.com/Comfy-Org/ComfyUI/pull/13180",
+      "date": "2026-08-08",
+      "where_it_belongs": "references/motion-and-camera.md 'Animate' section, near any existing long-video-stitching guidance",
+      "already_covered": false
+    },
+    {
+      "id": "wan-animate-2-no-pose-extraction",
+      "what": "Unlike Animate v1, Wan Animate 2 feeds raw driving-video frames directly into the DiT with no separate pose/keypoint extraction step, and decouples the output background/camera (text-controlled) from both the reference image and the driving video.",
+      "why_it_matters": "Removes a whole pipeline stage (pose extraction) that the skill's current Animate coverage assumes, and changes what the driving video is 'for' (motion only, not framing).",
+      "source_class": "official",
+      "evidence": "https://blog.comfy.org/p/wan-animate-2-is-now-available-in",
+      "date": "2026-08-08",
+      "already_covered": false,
+      "where_it_belongs": "references/motion-and-camera.md 'Animate' section (new Animate-2 subsection)"
+    },
+    {
+      "id": "wan-animate-2-lite-and-distilled-variants",
+      "what": "Alongside the base Wan-Animate-2-14B, Wan-AI ships a Wan2.2-Animate-2-14B-Distilled model for faster inference and, per Comfy's own coverage, a 'Lite' variant aimed at real-time streaming animation.",
+      "why_it_matters": "Widens the Animate-2 variant selector beyond the single distilled checkpoint the existing open_finding already flags; the Lite/real-time angle is new and not covered anywhere.",
+      "source_class": "official",
+      "evidence": "https://huggingface.co/Wan-AI/Wan2.2-Animate-2-14B-Diffusers ; https://blog.comfy.org/p/wan-animate-2-is-now-available-in",
+      "date": "2026-08-08",
+      "already_covered": false,
+      "where_it_belongs": "SKILL.md task-mode selector 'Animate' row; references/motion-and-camera.md 'Animate' section"
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [],
+    "add": [],
+    "amend": [
+      {
+        "id": "vace-for-wan22-naming",
+        "note": "Re-verified 2026-09-09: file naming unchanged (alibaba-pai/Wan2.2-VACE-Fun-A14B, last updated 2025-10-09). Now has a definite answer rather than an open question — no native Comfy-Org template exists for Wan 2.2 VACE (only Wan 2.1 VACE does); PAI ships its own separate ComfyUI workflow. Consider downgrading from 'ecosystem-gap, check' to a settled fact with an annual re-check."
+      },
+      {
+        "id": "comfy-template-numbers",
+        "note": "Re-pulled all five templates (14B i2v/t2v, 5B ti2v, S2V) directly from Comfy-Org/workflow_templates on 2026-09-09 and diffed widgets_values against the skill: every pinned number is verbatim unchanged — 14B speed path 4 steps/CFG 1.0/shift 5/81f@16fps, 5B 20 steps/CFG 5.0/uni_pc/shift 8/121f@24fps, S2V 10 steps/CFG 6.0/uni_pc/shift 8/77f@16fps. lightx2v LoRA filename versions also confirmed unchanged (i2v=v1, t2v=v1.1). No drift found this pass; safe to extend the next mandatory re-check slightly if desired, but keep the tier as-is given how many adjacent things are moving (Animate-2, API-only successors)."
+      },
+      {
+        "id": "musubi-569-one-lora",
+        "note": "Re-checked 2026-09-09 via GitHub API: kohya-ss/musubi-tuner#569 is still open, unresolved. No upstream fix has shipped. Skill's warning remains accurate as-is."
+      },
+      {
+        "id": "lightx2v-slow-motion-fixes",
+        "note": "HF discussion lightx2v/Wan2.2-Lightning#26 remains the live thread; still no single upstream fix supersedes community recipes — multiple divergent strength/step recipes continue to circulate (e.g. a Civitai recipe at 5.6 high/2.0 low LoRA strength, 6 total steps, CFG++, dated 2025-09-07, differs from the skill's 0.6-0.8/1.0, CFG 2-3.5, 8-step recipe). Still genuinely contested — no change needed to the skill's framing, but the divergence is wider than one alternate recipe."
+      }
+    ]
+  }
+}

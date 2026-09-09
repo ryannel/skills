@@ -77,8 +77,9 @@ denoise bands live in [`image-production-workflows`](../../image-production-work
 | 2 | [`sdxl`](../../sdxl/) | The deepest adapter toolbox — InstantID, HyperLoRA, IP-Adapter FaceID — plus `[SEP]` routing for several characters |
 | 3 | [`krea-2`](../../krea-2/) | Identity Edit LoRA v1.2 is mature in adoption, and it is **the standard tool for prepping a video character swap**. But it is *unofficial*: a community fine-tune of Krea 2 Raw by conradlocke, *"not affiliated with or endorsed by Krea.ai"*, and it needs the `ComfyUI-Krea2Edit` node pack for its dual conditioning `[community — Enshitification, 611 pts]` |
 | — | [`z-image`](../../z-image/) | No adapter shortcut exists. The path is LoRA + FaceDetailer or nothing |
-| **see §3.1** | [`ideogram-4`](../../ideogram-4/) | No adapter, no edit variant, one published character LoRA — **and a working no-training path anyway** |
+| **see §3.1** | [`ideogram-4`](../../ideogram-4/) | No adapter, no edit variant, one character-tagged LoRA on Civitai (36 total, 2026-09-09) — **and a working no-training path anyway** |
 | — | [`anima`](../../anima/) | **Knowledge-first**: it knows thousands of characters by tag, but identity transfer by reference is immature |
+| **not covered** | **Qwen-Image-Edit** (2509 / 2511) | The third leg of the edit-model trio in §3.2, Apache-2.0, with 192 character-tagged LoRAs on Civitai. **No skill in this suite as of 2026-09-09**; the Qwen model cards and Comfy-Org's three Qwen character templates are the source |
 
 ### 3.1 The Ideogram canvas trick — and why the suite got this wrong
 
@@ -120,6 +121,16 @@ back as multi-image reference `[community — bstr3k, 1482 pts]`.
 things edit models cannot, and the capability ordering above stands. What the sweep shows is where
 the workflows, the troubleshooting and the help are, and that is a real cost when you get stuck.
 **If you choose an adapter-based route today, you will debug it alone.**
+
+**And one of the three edit models has no skill here.** Krea 2 Identity Edit and Flux [klein] 9B are
+covered. Qwen-Image-Edit is not, and it is the largest of the three by ecosystem: the Qwen-Image
+family carries 1,162 Civitai LoRAs, 192 character-tagged, against [klein] 9B's ~670
+`[official — Civitai API, 2026-09-09]`. That is the suite's biggest coverage gap, and it is an
+omission rather than a recent launch — the open line shipped between 2025-08 and 2025-12 and then
+froze, since Qwen-Image 2.0 and 3.0 are hosted-only. Until a skill exists, treat it the way this
+suite treats any uncovered model: read the licence from the card (Apache-2.0, no territory or
+revenue clause), take settings from Comfy-Org's templates, and apply
+[`image-production-workflows`](../../image-production-workflows/)'s handoff rules unchanged.
 
 ### 3.3 Several characters, and identity across a pipeline
 
@@ -185,25 +196,29 @@ suite already has an answer written for the question you are about to hit.
 
 ### 4.5 What the ecosystem actually looks like — a Civitai census
 
-Measured directly against the Civitai API on **2026-08-23** `[official — Civitai /api/v1/models, counted this pass]`.
+Measured directly against the Civitai API on **2026-08-23**, with the rows marked **‡** re-counted by
+full cursor pagination on **2026-09-09** `[official — Civitai /api/v1/models, counted this pass]`.
 Capped counts (`+`) are lower bounds from paginating 2,200 deep. Unmarked figures are exact, reached
 by exhausting the cursor. **Once these numbers are weeks old, re-run the count instead of trusting
 it:** `python scripts/civitai_census.py --pages 22` (add `--tag character` for the character column).
+The API has no total field and answers 403 to a bare Python User-Agent; the script handles both, and
+its header says how.
 
 | Base | LoRAs total | tagged `character` | What it means |
 |---|---|---|---|
-| [`sdxl`](../../sdxl/) family — SDXL 1.0 / Illustrious / NoobAI / Pony | 2,200+ each | 1,200+ each | The largest absolute pools, as expected |
+| [`sdxl`](../../sdxl/) family — SDXL 1.0 / Illustrious / NoobAI / Pony V6 XL | 2,200+ each | 1,200+ each | The largest absolute pools, as expected |
 | [`z-image`](../../z-image/) **Turbo** | **2,191+** | **1,198+** | **A peer to the SDXL family.** The "young ecosystem" framing is wrong |
 | [`z-image`](../../z-image/) **Base** | 671 | 201 | **The ecosystem lives on Turbo**, not Base — see the trap below |
 | [`krea-2`](../../krea-2/) | 2,199+ | 1,166 | Enormous for a model this new |
 | [`anima`](../../anima/) | 2,197+ | 1,199+ | Same, and it is the newest model in the suite |
+| **Qwen-Image** family ‡ — *no skill in this suite* | **1,162** | **192** | The largest pool with no skill behind it; above [klein] 9B, an order of magnitude above H3 and Ideogram. Apache-2.0 throughout |
 | FLUX.1 dev | 700+ | 1,197+ | The legacy pool, still deep |
-| FLUX.2 **[klein] 9B** | 653 | 178 | — |
+| FLUX.2 **[klein] 9B** ‡ | ~670 (653 on 08-23) | 178 (08-23) | Modest growth; character column not re-run |
 | FLUX.2 **[klein] 4B** | **133** | **16** | The Apache-2.0 variant has ~5× fewer LoRAs and ~11× fewer characters |
-| [`ideogram-4`](../../ideogram-4/) | **34** | **1** | Exact. **One** published character LoRA on the main host |
-| [`wan-2-2`](../../wan-2-2/) 2.2 (I2V + T2V + 5B) | 502 | 6 (I2V) | A real ecosystem — but almost none of it is character work |
-| [`minimax-h3`](../../minimax-h3/) | 22 | 14 | Tiny, and unusually character-weighted |
-| [`ltx-2-5`](../../ltx-2-5/) — 2.5 / 2.3 | **3 / 168** | — | Independently reproduces the 2.3-vs-2.5 split |
+| [`ideogram-4`](../../ideogram-4/) ‡ | **36** | **1** | Exact. **One** character-tagged LoRA on the main host (34 / 1 on 08-23; essentially unchanged) |
+| [`wan-2-2`](../../wan-2-2/) 2.2 (I2V + T2V + 5B) ‡ | 501 | 6 (I2V, 08-23) | A real ecosystem — but almost none of it is character work. Flat since August |
+| [`minimax-h3`](../../minimax-h3/) ‡ | **86** (22 on 08-23) | **29** (14) | **Quadrupled in seventeen days.** Still character-weighted; the big downloads are NSFW concept LoRAs at 40–47k |
+| [`ltx-2-5`](../../ltx-2-5/) — 2.5 / 2.3 | **3 / 168** (08-22, not resampled) | — | Reproduced the 2.3-vs-2.5 adapter split; the *download* lead has since flipped to 2.5 (see §4.4) |
 | [`scail-2`](../../scail-2/) | **none** | — | No `baseModel` entry exists, which confirms there is no training path |
 
 **Velocity is a separate measurement.** Sampling the 400 most-downloaded LoRAs of the past month and
@@ -223,8 +238,13 @@ uploads land after the two hot models, while Anima and Krea 2 hold current atten
   so it is the one to reach for under gate 1. But it has only 133 LoRAs to 9B's 653, and sixteen of
   them are character LoRAs. **Choosing the licence here means training your own.**
 - **Ideogram 4's trainability win is one test against one published character LoRA.** §4.1 ranks it
-  first on likeness, but the host has exactly **one** character LoRA on it. Both facts are true.
-  Together they say the model may well train well, and nobody has done it in public.
+  first on likeness, but the host has exactly **one** character-tagged LoRA on it, per the 2026-09-09
+  pull (the [`ideogram-4`](../../ideogram-4/) skill says none; the difference is the `character` tag
+  on one upload, and the tag is author-applied). Both facts are true. Together they say the model
+  may well train well, and nobody has done it in public.
+- **The biggest pool in the table has no skill.** Qwen-Image's 1,162 LoRAs are the fifth-largest
+  pool on the host and the largest this suite does not cover. When a reader asks "which edit model",
+  the honest answer names it and says so.
 
 **Read these numbers for what they are.** Civitai is one host — an important one, but it **bans
 real-person likeness entirely**, so it systematically undercounts a whole category. The `character`
@@ -234,7 +254,7 @@ And a capped figure is a floor, not a count.
 ### 4.4 The trade, stated plainly
 
 - **Ideogram 4 wins likeness and loses shipping.** Its open weights are non-commercial with no
-  escape variant. Its LoRA ecosystem is 34 models with **exactly one** tagged `character` (§4.5). And
+  escape variant. Its LoRA ecosystem is 36 models with **exactly one** tagged `character` (§4.5). And
   a LoRA is only as useful as the base you may deploy.
 - **Krea 2's win depends on one detail**: train on Raw, *sample* on Turbo. Miss it and the same
   weights read as mid-pack.
@@ -243,10 +263,21 @@ And a capped figure is a floor, not a count.
 - **The base you train on should be the base you will render on.** A LoRA usually loads on a
   distilled sibling at reduced strength, but that is a convenience, not a plan.
 - **Video is a different world.** [`wan-2-2`](../../wan-2-2/) is mature — **two LoRAs, one per MoE
-  expert, from one dataset** — with a first-class trainer. [`minimax-h3`](../../minimax-h3/) is
-  young and unsettled. [`ltx-2-5`](../../ltx-2-5/) has a capable first-party trainer, but 168 of ~171
-  community LoRAs sit on 2.3, and **your LoRA inherits the licence and carries the obligation to
-  whoever you give it to**. [`scail-2`](../../scail-2/) has no training path at all.
+  expert, from one dataset** — with a first-class trainer. [`minimax-h3`](../../minimax-h3/) has
+  moved from "young and unsettled" to **converging**: four trainers (ai-toolkit, musubi-tuner,
+  diffusion-pipe, SimpleTuner) plus fal.ai hosted, a shared doctrine for the base's CFG distillation
+  that every trainer now handles, 86 Civitai LoRAs, and one lab's measurement that a stills-only
+  character LoRA carries identity into motion at thigh-up framing (0.200 median face distance vs
+  0.920 without it) `[live-use — media lab, Ciara h3-v1, 2026-09]`. The limits are still specific:
+  rank 32 collapsed under ai-toolkit, so r16 is the ceiling there; H3's weakness is likeness, not
+  adherence (its stills LoRA sat ~1.5× further from canon than the same dataset's Krea 2 LoRA); and
+  the whole doctrine is weeks old. The model skill's `references/lora-training.md` owns it.
+  [`ltx-2-5`](../../ltx-2-5/) has a capable first-party trainer, but 168 of ~171 community LoRAs sat
+  on 2.3 on 2026-08-22, even though 2.5 now leads 2.3 on Hugging Face downloads (1.64M vs 1.18M a
+  month on 2026-09-09) — the adapters have not followed the downloads yet — and **your LoRA inherits
+  the licence and carries the obligation to whoever you give it to**. [`scail-2`](../../scail-2/) has
+  no training path at all. Outside the suite, **HunyuanVideo-1.5** has musubi-tuner LoRA support and
+  the EU/UK/KR exclusion (§8); it is not covered here.
 
 Everything about datasets, captioning, hyperparameters, evaluation and publishing lives in
 [`character-lora-training`](../../character-lora-training/).
@@ -256,7 +287,7 @@ Everything about datasets, captioning, hyperparameters, evaluation and publishin
 ## 5. Structural control
 
 **Order:** [`sdxl`](../../sdxl/) ≫ [`z-image`](../../z-image/) / [`flux-2`](../../flux-2/) →
-[`anima`](../../anima/) → [`krea-2`](../../krea-2/) → [`ideogram-4`](../../ideogram-4/).
+[`anima`](../../anima/) ≈ [`krea-2`](../../krea-2/) → [`ideogram-4`](../../ideogram-4/).
 
 | Model | Stack | Gap |
 |---|---|---|
@@ -264,8 +295,9 @@ Everything about datasets, captioning, hyperparameters, evaluation and publishin
 | **Z-Image** | Fun Union ControlNet | **Turbo only** |
 | **FLUX.2** | Fun Union ControlNet via custom nodes | Younger ecosystem |
 | **Anima** | LLLite: lineart, depth, scribble, inpainting | **No pose, no canny, no HED** — pose is the weak one |
-| **Krea 2** | A community depth ControlNet, newly landed | No pose, canny or union |
+| **Krea 2** | Two community ControlNet-LoRAs: **depth** and **OpenPose** (thedeoxen, 2026-08-04 — DWPose skeleton in, body pose followed) | No canny or union, and the two are separate adapters. Having pose is what moves it level with Anima |
 | **Ideogram 4** | `bbox` layout only | No control or identity adapter exists from anyone |
+| **SenseNova U1.5** — *not covered* | Region-controlled edit via masks, bounding boxes and visual markers, in ComfyUI core since 2026-09-01 | A different kind of control (edit-time region, not generation-time structure). Licence unverified here |
 
 **This ranking is why the control front-end pattern exists.** Compose in SDXL, where the pose, depth
 and regional stack actually works, then render or refine in the DiT that has the quality. Regional
@@ -285,11 +317,18 @@ plate is usually a **stage in someone else's pipeline** rather than the pipeline
 
 **Anime and booru illustration.** [`anima`](../../anima/) is the anime-native base with a modern
 encoder, and the community reads it as Illustrious's successor. [`sdxl`](../../sdxl/)'s
-Illustrious/NoobAI/Pony finetunes are the mature alternative — deeper LoRA pools, real ControlNets,
-and **the only path where you may ship the weights**. Krea 2 covers anime *looks* but not the booru
-tag vocabulary or the character-by-name knowledge that ecosystem runs on. Z-Image is not in this
-contest at all. It is a photoreal-leaning sentence-prompted generalist, and it fights both the
-dialect and the aesthetic.
+Illustrious/NoobAI/Pony V6 XL finetunes are the mature alternative — deeper LoRA pools, real
+ControlNets, and **the only path where you may ship the weights**. Two things about that pool moved.
+**Pony V7** (2025-10-08) is a ~7B **AuraFlow** model, not an SDXL finetune: its own LoRA pool, its
+own trainer (SimpleTuner), no `score_9` ladder, a licence that bars inference services and >$1M
+companies, and V6 LoRAs do not load on it. When someone says "Pony", ask which; the
+[`sdxl`](../../sdxl/) skill keeps V6 XL as its Pony. And the **NoobAI** line has shipped no
+checkpoint since 2024-12; its team published a LoRA trainer for **SenseNova U1** instead
+(`Laxhar/sensenova-u1-lora-trainer`, 2026-05-09), which is the best current answer to "is there a
+NoobAI successor" — not a model, a migration. SenseNova is not covered here. Krea 2 covers anime
+*looks* but not the booru tag vocabulary or the character-by-name knowledge that ecosystem runs on.
+Z-Image is not in this contest at all. It is a photoreal-leaning sentence-prompted generalist, and it
+fights both the dialect and the aesthetic.
 
 **Aesthetic range without checkpoint-hopping.** [`krea-2`](../../krea-2/) is deliberately built with
 no house look. It offers style references, moodboards, official style LoRAs and 1,500+ community
@@ -347,6 +386,23 @@ asks whether each model may be distributed. One non-commercial rung stops the wh
 it sits first or last. This rule is owned by
 [`image-production-workflows`](../../image-production-workflows/).
 
+**Outside the suite, six rows worth knowing before you add a model to a chain** `[official — model
+cards and licence files, read 2026-09-09]`:
+
+| Model | Sell pictures | Ship a pipeline | The catch |
+|---|---|---|---|
+| **Qwen-Image** family | ✅ | ✅ | Apache-2.0, no territory, revenue or acceptable-use clause. The cleanest *edit* path anywhere — and not covered here |
+| **Bernini-R** | ✅ | ✅ | Apache-2.0, no territory clause. A video-editing path that survives gates 1 and 3 where H3 does not. Not covered |
+| **nvidia/PiD** | ❌ | ❌ | **NSCLv1, non-commercial.** A decoder/upscaler rung that drops into FLUX, FLUX.2, SD3, SDXL and Qwen-Image graphs, with a Comfy-Org template. The chain rule means one PiD rung makes the whole pipeline non-commercial |
+| **Pony V7** | ✅ | ⚠️ | Custom licence: no inference services, no companies over $1M revenue, no professional video. A third revenue gate beside Krea 2 and LTX-2.5 |
+| **HunyuanImage 2.1 / 3.0**, **HunyuanVideo-1.5** | ❌ in EU/UK/KR | ❌ there | Tencent Community Licence: territory exclusion plus a 100M-MAU cap. A second territory gate beside H3's, one row wider |
+| **SenseNova U1.5** | ? | ? | Apache-2.0 per the GitHub repo; the Hugging Face card is gated and was not read. Verify before relying on it (flagged in [`ecosystem-map.md`](ecosystem-map.md) §6.1) |
+
+One principle from the same sweep: **run the ladder against the checkpoint, not the lab.** Qwen-Image
+3.0 went hosted-only with no weights, no licence and no technical report in the same four months
+that Ideogram 4, Krea 2, MiniMax H3 and LTX-2.5 all released weights. "Historically open" is a
+description of the past, not a licence.
+
 ---
 
 ## 9. Video, by job
@@ -358,10 +414,21 @@ it sits first or last. This rule is owned by
 | **Sound in the same pass** | [`minimax-h3`](../../minimax-h3/) (generates) or [`ltx-2-5`](../../ltx-2-5/) (generates *and* consumes) | The choice is a licence fork, not a quality one: territory exclusion vs revenue cap + no-compete + NSFW ban |
 | **Lip-sync to an existing track** | [`wan-2-2`](../../wan-2-2/) S2V — it consumes audio rather than making it | H3 makes its own audio and will not follow yours |
 | **Several cuts in one generation** | [`ltx-2-5`](../../ltx-2-5/), alone — and it is a prompting technique, not a node | — |
-| **Replace a person, tracking their motion** | [`scail-2`](../../scail-2/) — tracked frame-for-frame with SAM3 | Wan Animate (displaced in practice); H3's editing mode **re-generates** the motion and its identity latch gives out around 5–7 s |
+| **Replace a person, tracking their motion** | **A task split, not one winner.** [`scail-2`](../../scail-2/) — tracked frame-for-frame with SAM3 — for whole-body replacement, non-human subjects, complex action, multi-character scenes and low-res stability. Wan **Animate 2** ([`wan-2-2`](../../wan-2-2/), native ComfyUI 2026-08-08, no pose extraction, `WanAnimate2Cache`) for close-up faces, eye movement and lip sync `[community — Wensleydale on X, dreamerland.ai; two sources]` | The split was measured against the original Animate and has not been re-run against Animate 2 `[flagged — re-verify]`. H3's editing mode **re-generates** the motion and its identity latch gives out around 5–7 s |
+| **Edit a clip — relight, restyle, insert a subject, remove an object** | **Nothing in the suite.** The open model that does it is ByteDance's **Bernini-R** (Apache-2.0, six modes t2i→rv2v, native ComfyUI 2026-06-14, GGUF and 4-step LoRA derivatives already exist) — **not covered here** as of 2026-09-09 | The boundary is clean: SCAIL-2 tracks a person, Bernini re-renders a scene. The suite's only partial answers are narrow LTX-2.3 style LoRAs |
 | **Camera control** | [`wan-2-2`](../../wan-2-2/) Fun Camera — discrete moves | **Nothing does a freeform camera path.** That is a named gap, not an omission |
 | **Post: upscale, restore, interpolate** | [`ltx-2-5`](../../ltx-2-5/) doubles as the generative video upscaler | **Restore before you interpolate, never after** — [`image-production-workflows`](../../image-production-workflows/) |
-| **Train a video LoRA** | [`wan-2-2`](../../wan-2-2/) — mature, Apache-2.0, publishable | LTX's derivatives inherit its licence; H3 is unsettled; SCAIL has no path |
+| **Train a video LoRA** | [`wan-2-2`](../../wan-2-2/) — mature, Apache-2.0, publishable | LTX's derivatives inherit its licence; H3 now has four trainers and a converging doctrine, r16 ceiling under ai-toolkit (§4.4), and its territory gate travels with the LoRA; SCAIL has no path |
+| **Fit a 14 GB card** | [`wan-2-2`](../../wan-2-2/) 5B, or 14B at Q4_K_M | **HunyuanVideo-1.5** (Tencent, 8.3B, ~14 GB, native ComfyUI 2025-11-24, musubi-tuner LoRAs) is the other open answer and is **not covered** — and its licence excludes the EU, UK and South Korea |
+
+**Out of scope, named so the silence is not ambiguous.** Every hosted video launch since May 2026 is
+closed: **FLUX 3 / FLUX 3 Video** (BFL, GA 2026-08-04, 20 s clips with native audio, keyframe and
+v2v continuation — the vendor behind [`flux-2`](../../flux-2/), but no weights; "FLUX 3 Dev" is a
+roadmap item, tracked in [`ecosystem-map.md`](ecosystem-map.md) §4), **Wan 3.0** (API beta 2026-08-06, no weights), **Seedance 2.5**,
+**Kling 3.0**, **Gemini Omni** (which supersedes Veo — Comfy archived Veo 3 on 2026-08-28),
+**Grok Imagine 2.0**, **Runway Characters**, **Pixverse V6**. The native-audio open-weight field is
+still exactly H3 and LTX-2.5. Dates and the full list are in
+[`ecosystem-map.md`](ecosystem-map.md) §7.
 
 ---
 
@@ -391,3 +458,12 @@ you can download. Maturity tells you what you can train without inventing the me
 
 **Read the columns, not the rows.** No row wins. Every column has one clear answer. That is the
 argument for the elimination ladder in SKILL.md, and for chaining models rather than choosing one.
+
+**What the matrix leaves out, deliberately.** Only published skills get a row, because a row is a
+summary of a model skill and there is nothing to summarise for the others. Four open models would
+earn one on capability alone — **Qwen-Image** (edit, identity-without-training, layered RGBA;
+1,162 LoRAs), **Bernini-R** (video editing), **SenseNova U1.5** (native 4K, region edit) and
+**HunyuanVideo-1.5** (14 GB video, territory-gated). They are listed as *not yet covered* in
+SKILL.md's suite map and in [`ecosystem-map.md`](ecosystem-map.md) §6, with where to route until a
+skill exists. Read an axis where one of them would win as "the suite's answer, among what it
+covers", not as "the best available".

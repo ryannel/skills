@@ -1,0 +1,51 @@
+{
+  "skill": "image-production-workflows",
+  "verdict": "drift",
+  "flux": "active",
+  "flux_evidence": "Core craft (denoise bands, handoff rules, ladder) is stable; the volatile edges are finisher options (Topaz partner nodes now templated in ComfyUI) and the H3-as-image-editor path this skill just adopted, which still has an open ComfyUI node limitation.",
+  "findings": [
+    {
+      "id": "h3-single-frame-comfy-node-limit",
+      "severity": "major",
+      "claim": "SKILL.md 'A video model is now a legitimate stage' section: 'you must generate exactly one frame (5 frames through that VAE grids)' — stated as a plain setting to make, with no execution caveat.",
+      "reality": "Stock ComfyUI's Minimax H3 node currently enforces a 5-frame minimum; Comfy-Org/ComfyUI#15644 (opened 2025, still open, updated 2026-08-17, no linked PR) tracks lifting it. minimax-h3's own freshness state already flags that its SKILL.md wrongly claims this is 'lifted in recent nightlies' — it is not, and the monkey-patch/waiting caveat must stay. image-production-workflows inherited the H3-as-image-stage pattern but not this caveat, so a reader following the ladder in the ComfyUI GUI hits a wall the text never warns about.",
+      "evidence": "https://github.com/Comfy-Org/ComfyUI/issues/15644",
+      "fix_hint": "SKILL.md 'A video model is now a legitimate stage in an image pipeline' section (~L152-156) — add the same caveat minimax-h3/SKILL.md needs: stock ComfyUI node still clamps to 5 frames as of 2026-09-09; needs a patched comfy_extras/nodes_minimax_h3.py or an API/diffusers route until #15644 lands. Fix in the same pass as minimax-h3's own open finding."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "topaz-comfyui-partner-nodes",
+      "what": "Topaz Labs now ships official 'Partner Node' templates in ComfyUI's own workflow gallery — TopazImageEnhanceV2 running the Bloom 2 and Wonder 3.5 models as a generative single-image enhancer (creativity slider, face recovery, color preservation, grain), usable via Comfy Cloud, downloaded JSON, or the Comfy SDK.",
+      "why_it_matters": "Gives the finisher stage a commercial, officially-integrated generative alternative to SeedVR2/SUPIR that the production-ladder finisher table doesn't mention.",
+      "source_class": "official",
+      "evidence": "https://comfy.org/workflows/1c0a3a9faad3-1c0a3a9faad3/",
+      "date": "2026-08-09",
+      "where_it_belongs": "references/production-ladder.md §5 (Final restorers & GAN upscalers table)",
+      "already_covered": false
+    },
+    {
+      "id": "qwen-nano-banana-edit-routing",
+      "what": "Community production write-ups increasingly route the instruction-edit stage through Qwen-Image-Edit 2511 or Nano Banana Pro (hosted) rather than Flux Kontext/Klein-edit alone, picking by whether local weight ownership or dense-text/multi-reference reliability matters more.",
+      "why_it_matters": "Widens the 'edit model' choice in mixed-model recipes beyond the Kontext/Klein-edit framing this skill currently implies.",
+      "source_class": "single-report",
+      "evidence": "https://www.runflow.io/blog/comfyui-qwen-image-edit",
+      "date": "2026-08-01",
+      "where_it_belongs": "references/mixed-model-recipes.md §2 (Named recipes) — low confidence, no single named author/workflow yet, worth a watchlist entry rather than a rewrite",
+      "already_covered": false
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [],
+    "add": [
+      {
+        "id": "h3-single-frame-comfy-node-limit",
+        "type": "tool-behaviour",
+        "claim": "Generating exactly 1 frame for the H3-as-image-editor pattern requires the stock ComfyUI node to accept length=1; it currently clamps to a 5-frame minimum pending Comfy-Org/ComfyUI#15644.",
+        "where": "SKILL.md 'A video model is now a legitimate stage' section",
+        "check": "Check Comfy-Org/ComfyUI#15644 for a merge; also re-check minimax-h3/SKILL.md's own open finding on this since the two must be fixed together."
+      }
+    ],
+    "amend": []
+  }
+}

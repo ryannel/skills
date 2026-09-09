@@ -1,0 +1,183 @@
+{
+  "skill": "ideogram-4",
+  "verdict": "drift",
+  "flux": "active",
+  "flux_evidence": "Core facts (architecture, JSON schema, licence, endpoints) are stable at 14 weeks old, but LoRA-tooling and quant-file facts still changed meaningfully this cycle (musubi-tuner support, a new official quant, a published hyperparameter recipe) — that's weekly-grade churn, not daily.",
+  "findings": [
+    {
+      "id": "musubi-tuner-ideogram4-support",
+      "severity": "major",
+      "claim": "The skill frames LoRA training as ai-toolkit + fal only; kohya/musubi are absent from lora-training.md and the wrong-tool table.",
+      "reality": "kohya-ss/musubi-tuner now has dedicated Ideogram4 support (docs/ideogram4.md, network_module networks.lora_ideogram4, a CaptionVerifier with --validate_caption_structure, blocks_to_swap up to 33) via PRs #966/#975/#977.",
+      "evidence": "https://github.com/kohya-ss/musubi-tuner/blob/main/docs/ideogram4.md ; https://deepwiki.com/kohya-ss/musubi-tuner/11.1-lora-training-configuration",
+      "fix_hint": "references/lora-training.md trainer table + SKILL.md wrong-tool table — add musubi-tuner alongside ai-toolkit/fal."
+    },
+    {
+      "id": "ideogram4-lora-hyperparameters-published",
+      "severity": "major",
+      "claim": "lora-training.md §~L34 states no published hyperparameter guidance exists for Ideogram 4 LoRAs; fal's product defaults are the only numbers anyone has named.",
+      "reality": "A named ai-toolkit recipe now exists: rank/alpha 16/16 (32 for higher fidelity), 2500 steps, LR 1e-4 (adamw8bit), checkpoint every 250 steps, and pick an earlier checkpoint since the style sweet spot precedes the final step.",
+      "evidence": "https://estylon.substack.com/p/training-an-ideogram-4-style-lora (2026-06-11)",
+      "fix_hint": "references/lora-training.md ~L34 — replace 'no hyperparameter guidance exists' with this named recipe, still flagged as one author's numbers pending corroboration."
+    },
+    {
+      "id": "quant-nvfp4-filename-resolved",
+      "severity": "major",
+      "claim": "setup-and-workflows.md 'VRAM & quant naming' calls the nf4-vs-nvfp4_mixed ComfyUI filename conflict 'unresolved'.",
+      "reality": "The Comfy-Org/Ideogram-4 HF repo (the org that ships ComfyUI's official templates) contains no nf4 file at all — only ideogram4_fp8_scaled, ideogram4_nvfp4_mixed, and ideogram4_int8_convrot (each with an unconditional pair). nvfp4_mixed is the confirmed ComfyUI-native 4-bit file.",
+      "evidence": "https://huggingface.co/Comfy-Org/Ideogram-4/tree/main/diffusion_models",
+      "fix_hint": "SKILL.md ~L314 and setup-and-workflows.md §VRAM & quant naming — drop the [flagged] tag, state nvfp4_mixed as fact, note nf4 only exists in the separate diffusers-oriented ideogram-ai/ideogram-4-nf4 repo, not Comfy-Org's."
+    },
+    {
+      "id": "new-int8-convrot-quant-undocumented",
+      "severity": "major",
+      "claim": "The skill's quant coverage lists only nf4 and fp8 (SKILL.md ~L172, setup-and-workflows.md §1.2).",
+      "reality": "Comfy-Org/Ideogram-4 now also ships ideogram4_int8_convrot.safetensors (9.58GB) + its unconditional pair — a third, undocumented quant class, parallel to the int8_convrot builds already covered in this suite's z-image skill.",
+      "evidence": "https://huggingface.co/Comfy-Org/Ideogram-4/tree/main/diffusion_models",
+      "fix_hint": "SKILL.md quant table + setup-and-workflows.md §1.2/§4 — add int8_convrot as a third option; check for any published speed/VRAM comparison against fp8_scaled."
+    },
+    {
+      "id": "onetrainer-ideogram4-comfyui-incompatible",
+      "severity": "minor",
+      "claim": "Not currently addressed — the skill doesn't mention OneTrainer for Ideogram 4 at all.",
+      "reality": "OneTrainer added an Ideogram4 extension using split q_k_v LoRA keys, but ComfyUI does not load them ('lora key not loaded' for to_q/to_k/to_v) — GH issue open since 2026-06-14, unresolved, no PR.",
+      "evidence": "https://github.com/Comfy-Org/ComfyUI/issues/14477",
+      "fix_hint": "references/lora-training.md trainer table — add OneTrainer as ComfyUI-incompatible today, unlike ai-toolkit/fal/musubi output."
+    },
+    {
+      "id": "days-old-framing-already-fixed-drop-from-watchlist",
+      "severity": "minor",
+      "claim": "Watchlist item 'days-old-framing' still expects a rewrite of 'days-old model' language.",
+      "reality": "Current SKILL.md already reads 'At a couple of months old...' and 'inside ten weeks' — the rewrite happened in the 2026-08-23 repair sweep; this watchlist item is stale and should be dropped, not re-checked.",
+      "evidence": "skills/generative-media/ideogram-4/SKILL.md ~L307",
+      "fix_hint": "freshness.json watchlist — remove 'days-old-framing' entry."
+    },
+    {
+      "id": "flash-tier-still-pending",
+      "severity": "minor",
+      "claim": "rendering_speed=FLASH is announced but returns 400 'coming soon'.",
+      "reality": "CLAIM HOLDS. Still 400/coming-soon per current docs; TURBO $0.03/12 steps, DEFAULT $0.06/20, QUALITY $0.10/48 all unchanged.",
+      "evidence": "https://docs.ideogram.ai/using-ideogram/generation-settings/render-speed",
+      "fix_hint": "No change needed."
+    },
+    {
+      "id": "v3-edit-paths-inference-still-unconfirmed",
+      "severity": "minor",
+      "claim": "Edit/upscale/reframe/replace-bg run the 4.0 model through /v1/ideogram-v3/* paths — flagged as an inference, not a stated fact.",
+      "reality": "CLAIM HOLDS. No v4-namespaced edit-family endpoint found; developer.ideogram.ai still lists only generate-v4 (and describe-v4). No official statement confirming the v3-path-runs-4.0 linkage was found this pass.",
+      "evidence": "https://developer.ideogram.ai/api-reference/api-reference/generate-v4",
+      "fix_hint": "No change needed; keep the [flagged] marker."
+    },
+    {
+      "id": "no-control-adapters-still-holds",
+      "severity": "minor",
+      "claim": "No ControlNet, PuLID, or IP-Adapter exists for Ideogram 4.",
+      "reality": "CLAIM HOLDS. No release found this pass; HF discussion thread on the missing ControlNet capability is still the reference point.",
+      "evidence": "https://huggingface.co/ideogram-ai/ideogram-4-fp8/discussions",
+      "fix_hint": "No change needed."
+    },
+    {
+      "id": "civitai-lora-composition-still-style-heavy",
+      "severity": "minor",
+      "claim": "34 Ideogram 4.0 LoRAs on Civitai (2026-08-13), near-entirely style/aesthetic, character LoRAs essentially absent.",
+      "reality": "A fresh sample via baseModels=Ideogram 4.0 still returns a similar-order-of-magnitude, style/workflow-dominated set (movie looks, car/product renders, illustration styles); no character LoRA surfaced. Exact count wasn't cleanly re-derived (the API response mixes LoRA and Workflow types) so treat as directionally unchanged, not re-verified to the digit.",
+      "evidence": "https://civitai.com/api/v1/models?baseModels=Ideogram%204.0&sort=Newest",
+      "fix_hint": "references/lora-training.md §6 — re-run the exact census with types=LORA filter next pass rather than relying on this spot-check."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "musubi-tuner-lora-ideogram4",
+      "what": "kohya-ss/musubi-tuner shipped first-class Ideogram4 LoRA training: a dedicated networks.lora_ideogram4 module, JSON-caption structure validation, and FP8-native weight handling with on-the-fly dequant.",
+      "why_it_matters": "Gives the skill a second mature, ComfyUI-compatible trainer beyond ai-toolkit/fal, strengthening the 'LoRA ecosystem is usable' claim.",
+      "source_class": "official",
+      "evidence": "https://github.com/kohya-ss/musubi-tuner/blob/main/docs/ideogram4.md",
+      "date": "2026-07-04",
+      "where_it_belongs": "references/lora-training.md trainer table; SKILL.md wrong-tool table",
+      "already_covered": false
+    },
+    {
+      "id": "ideogram4-named-hyperparameter-recipe",
+      "what": "First named Ideogram 4 LoRA hyperparameter recipe: rank/alpha 16/16 (32 for higher fidelity), 2500 steps, LR 1e-4 with adamw8bit, checkpoints every 250 steps, prefer an earlier checkpoint over the final one.",
+      "why_it_matters": "Directly resolves the skill's 'no published hyperparameter guidance exists' gap with a concrete, attributable starting point.",
+      "source_class": "single-report",
+      "evidence": "https://estylon.substack.com/p/training-an-ideogram-4-style-lora",
+      "date": "2026-06-11",
+      "where_it_belongs": "references/lora-training.md ~L34",
+      "already_covered": false
+    },
+    {
+      "id": "ideogram4-turbotime-speed-lora",
+      "what": "ostris published an 'Ideogram 4 TurboTime' LoRA that lets the model run in as little as 2 steps with no CFG and no unconditional model, collapsing the dual-model (conditional+unconditional) architecture into a single fast pass.",
+      "why_it_matters": "A speed-distillation LoRA analogous to Wan's lightx2v pattern; changes the VRAM/latency calculus and the DualModelGuider requirement the skill documents as mandatory.",
+      "source_class": "community-consensus",
+      "evidence": "https://huggingface.co/ostris/ideogram_4_turbotime_lora ; https://civitai.com/models/2711950/ideogram-4-turbotime",
+      "date": "2026-06",
+      "where_it_belongs": "SKILL.md sampler/architecture section; references/setup-and-workflows.md",
+      "already_covered": false
+    },
+    {
+      "id": "comfy-org-int8-convrot-quant",
+      "what": "Comfy-Org/Ideogram-4 now ships ideogram4_int8_convrot.safetensors (and its unconditional pair) alongside fp8_scaled and nvfp4_mixed — a third official ComfyUI quant class.",
+      "why_it_matters": "Adds a VRAM/quality point the skill's quant table doesn't cover at all; mirrors the int8_convrot pattern this suite already documents for z-image.",
+      "source_class": "official",
+      "evidence": "https://huggingface.co/Comfy-Org/Ideogram-4/tree/main/diffusion_models",
+      "date": "2026-08",
+      "where_it_belongs": "SKILL.md quant table; references/setup-and-workflows.md §VRAM & quant naming",
+      "already_covered": false
+    },
+    {
+      "id": "onetrainer-ideogram4-extension",
+      "what": "OneTrainer added an Ideogram4 extension producing split q_k_v LoRA weights, but ComfyUI cannot currently load them (unrecognized to_q/to_k/to_v keys) — an open, unassigned-to-a-fix GitHub issue since 2026-06-14.",
+      "why_it_matters": "A third trainer now targets Ideogram 4, but its output is a ComfyUI dead-end today, unlike ai-toolkit/fal/musubi — worth naming so readers don't waste a training run on an incompatible format.",
+      "source_class": "community-consensus",
+      "evidence": "https://github.com/Comfy-Org/ComfyUI/issues/14477",
+      "date": "2026-06-14",
+      "where_it_belongs": "references/lora-training.md trainer table",
+      "already_covered": false
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [
+      "ideogram4-4bit-quant-filename",
+      "days-old-framing"
+    ],
+    "add": [
+      {
+        "id": "ideogram4-int8-convrot-quant",
+        "type": "version-pin",
+        "claim": "Comfy-Org/Ideogram-4 ships a third quant, ideogram4_int8_convrot.safetensors, undocumented in the skill as of 2026-09-09.",
+        "where": "SKILL.md quant table; references/setup-and-workflows.md §VRAM & quant naming",
+        "check": "Once documented, watch for a published quality/speed comparison against fp8_scaled and nvfp4_mixed."
+      },
+      {
+        "id": "ideogram4-turbotime-adoption",
+        "type": "ecosystem-gap",
+        "claim": "ostris's TurboTime LoRA (2-step, no CFG, no unconditional model) is a single-author release as of 2026-06; adoption/reproduction status unknown.",
+        "where": "SKILL.md sampler/architecture section",
+        "check": "Has the community adopted or reproduced TurboTime-style speed LoRAs for Ideogram 4? Does it hold up outside the author's own samples?"
+      },
+      {
+        "id": "musubi-onetrainer-ideogram4-maturity",
+        "type": "tool-behaviour",
+        "claim": "musubi-tuner has first-class Ideogram4 support (2026-07); OneTrainer's Ideogram4 extension exists but its split-qkv LoRA format doesn't load in ComfyUI (issue open since 2026-06-14).",
+        "where": "references/lora-training.md trainer table",
+        "check": "Has ComfyUI added split-qkv LoRA key support (closing issue #14477)? Has musubi's Ideogram4 path produced any named community results yet?"
+      }
+    ],
+    "amend": [
+      {
+        "id": "ideogram4-lora-trainers",
+        "note": "Add musubi-tuner (official first-class support, networks.lora_ideogram4) and OneTrainer (support exists but ComfyUI-incompatible output) to the trainer list alongside ai-toolkit and fal."
+      },
+      {
+        "id": "lora-tooling",
+        "note": "The 'no mature LoRA training path' framing is now outdated for craft-in-principle (a named hyperparameter recipe exists, three trainers support it) even though character LoRAs remain absent — split the framing accordingly."
+      },
+      {
+        "id": "ideogram4-civitai-lora-composition",
+        "note": "Re-run with types=LORA explicitly (the plain baseModels query mixes in Workflow-type entries) to get a clean count comparable to the 2026-08-13 figure of 34."
+      }
+    ]
+  }
+}

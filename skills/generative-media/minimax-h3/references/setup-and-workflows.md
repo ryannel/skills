@@ -35,6 +35,8 @@ BasicScheduler (simple, 20, 1.0) ─┼──> SamplerCustomAdvanced <───�
 
 **Sampler chain, verbatim:** `KSamplerSelect` = **`res_multistep`**; `BasicScheduler` = **`simple`, 20 steps, denoise 1.0**; guidance via **`BasicGuider`**.
 
+**The templates now carry the Turbo LoRA, switched off.** All three template JSONs include a `LoraLoaderModelOnly` for the lightx2v Turbo LoRA behind a `ComfySwitchNode` gated by a `Boolean (Enable Lightning LoRA)` primitive whose default is **False**. On that default the Steps switch selects the fixed 20 and the Model switch bypasses the LoRA loader entirely; enabling it selects the 8-step branch `[official — Comfy-Org/workflow_templates, diffed 2026-09-09]`. That default has flipped at least twice since release, so if a template renders blurry at what looks like stock settings, check the switch before anything else.
+
 Two things are easy to get wrong here.
 
 **The graph forks at the decode, not before.** One latent goes to two decoders. `VAEDecode` produces the picture and **`VAEDecodeAudio`** produces the sound, and `CreateVideo` recombines them. Every other video model in this suite has a single decode path. If your output is silent, check this branch first.
@@ -93,11 +95,15 @@ Frame count must sit on the lattice **`frames ≡ 5 (mod 17)`**. The templates c
 max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17     # a = duration in seconds
 ```
 
-The shipped defaults are **73** frames (`17×4 + 5`, ≈3 s) for t2v/i2v, and **124** (`17×7 + 5`, ≈5 s) for r2v.
+As of 2026-09-09 the shipped default is **124** frames (`17×7 + 5`, 5 s) in **all three** templates: the t2v and i2v duration primitives now read 5, matching r2v. The earlier t2v/i2v default of 73 (≈3 s) no longer exists in any official template `[official — Comfy-Org/workflow_templates, diffed 2026-09-09]`.
 
 The valid values are: 5, 22, 39, 56, 73, 90, 107, 124, 141, 158, 175, 192, 209, 226, 243, 260, 277, 294, 311, 328, 345, 362. The maximum, 362 frames, is ≈15 s at 24 fps, and it is the documented ceiling.
 
 The 17 almost certainly reflects the temporal packing of the visual latent (4× temporal compression before patchification). But the templates do not say so, and this skill will not claim a mechanism it has not verified. **Use the formula.**
+
+### Past 15 seconds — the temporal stretch (musubi-tuner only, experimental)
+
+The 4–15 s figure is the supported path. musubi-tuner's generation script can stretch it: `--output_fps N` (default 24, range 1–24) with `--stretch_keep_bands K` — 3 at 12 fps, 4 to remove the last glitches; 2 at 16 fps; 1 at 20 fps. A fixed `--frame_count` at 12 fps doubles clip length for nearly the same compute, and equal duration at 12 fps runs ~2.1× faster (124 frames instead of 243) `[official — musubi-tuner docs/minimax_h3.md "Temporal stretch", 2026-08-27]`. Behind `--allow_experimental_duration`, 12 fps × 362 frames reaches **30 s**, the trained maximum latent length, and the author reports subject identity and speaker voice staying stable across it. The named failure modes matter more than the headline: a brightness wobble on the final 17-frame group past ~15.7 s (`--stretch_keep_bands 4` cures it to ~23 s, it returns by 30 s — generate one group longer and trim); weaker prompt adherence at the far end; and a 362-frame run packs ~110k rows, so it **requires the SDPA strided-value fix or a non-`sdpa` `--attn_mode`**, or the whole sample decodes to noise. Anime animates on twos, so 12 fps drops character motion to an effective 6 fps; 16 fps with `keep_bands 2` is the better animation compromise `[official — musubi-tuner docs, 2026-09-05]`. None of this is in ComfyUI, and it is a trainer author's probe rather than a released capability. The frame lattice above still governs the supported path.
 
 ---
 
@@ -174,6 +180,7 @@ Ref2VA is visibly worse than FL2VA at identical settings. If you swap the FL2VA 
 - Loader node: `github.com/scottmudge/ComfyUI_MinimaxH3HybridLoader` (base = FL2VA, overlay = Ref2VA; use README settings, not node defaults; no memory overhead with mmap on)
 - Baked checkpoints: `smhfacct/Minimax-H3-fl2va-ref2va-hybrid-models`. Try `b30-49` first. `b25-49` is visually equivalent with slightly better reference retention, `b20-49` gives more retention at less quality, and `b15-49` may lose noticeable quality. `[community — ThatsALovelyShirt]`
 - The community default is drifting from `b30-49` toward **blocks 25–49**. dreamkrate ships a BF16-pruned hybrid baked that way. `[community — dreamkrate; re-verify]` A Hybrid-Checkpoint-Builder GUI now exists with 30-49, 25-49, 20-49 and 15-49 presets, so you can bake your own blend instead of waiting for a repack. `[community — BMB12d3; re-verify]`
+- A third point between plain FL2VA and the full overlay: **`MiniMax H3_SparseRef15_Hybrid`** (Civitai, 2026-09-06) applies "sparse Ref2VA influence through AdaLN across 15 main transformer blocks" on an FL2VA base, with no LoRA merging, and claims strong resistance to character drift across long multi-clip runs. Use **FL2VA-trained** LoRAs with it, not Ref2VA ones. One author, no independent test yet `[community — Civitai 2900456; single report; re-verify]`.
 
 **Once the hybrid removes the quality objection, the mode choice inverts for most work.** FL2VA's advantage was always picture and audio quality, but its *conditioning* is the more rigid of the two. FL2VA commits a supplied image to a **frame position** and builds the clip to arrive there. Ref2VA takes the same image and pins it to nothing, so it **guides content instead of anchoring the timeline**. The rest of the reference budget stays free for more images, audio or video alongside it. Practitioners doing sustained character work start from hybrid Ref2VA for that reason. `[community — nsfwVariant]` Keep FL2VA for the case where its rigidity is the feature: a continuity seam between two chained clips, where you need the first frame matched rather than interpreted. FL2VA is also the mode the Turbo LoRA was trained against, so the speed recipes are best attested there.
 
@@ -235,10 +242,24 @@ Context chaining changes what you write, not what you set:
 - **End each scene on a still beat.** The last frame has to connect to the next scene's first frame, and mid-stride does not connect.
 - The tool is also useful in reverse: split one 8 s shot into two 4 s halves to afford more resolution.
 
+**Anchors at any frame, audio included.** Since ComfyUI v0.34.0 (2026-08-26) the core node **`MiniMaxH3AddGuide`** anchors an image, a video *or an audio* guide at any `frame_idx` — negative counts from the end — not only at first and last. Video guides snap to 5, 22 or 39 frames, and the nodes chain for multiple anchors. The shipped example feeds the first 22 frames of an existing clip plus its audio at `frame_idx 0` to continue both streams `[official — Comfy-Org/ComfyUI PR #15439, merged 2026-08-13, drozbay]`. It supersedes the "first and last frame only" framing of FL2VA. A masked in-place method also exists (ComfyUI PR #15375, 2026-08-18): the previous clip's latent is copied into the new one and protected, so the join is never regenerated `[community — ComfyUI PR #15375; re-verify]`.
+
+**Chaining doctrine the field converged on**, gathered in a web sweep during a live multi-scene job and then adopted there `[community — sweep recorded in the media lab, 2026-09; re-verify]`:
+
+- Repeat the room-and-lighting paragraph **verbatim** in every shot's prompt.
+- **New seed per shot.** A shared seed drifts face and voice across the chain.
+- Run a **normaliser** across the chain: texture ratchets roughly 1.3× per join.
+- Use decoded last frames only as an occasional quality reset, never as the join itself.
+- When you genuinely want an end frame, make it by **image-editing the previous last frame** (Qwen-Image-Edit was preferred for scene preservation) or from H3 itself at one frame (§8).
+- References and pins in one graph is possible via a hybrid checkpoint plus `minimax-h3-hybrid-cond`.
+
+What the lab found on its own: the hop-made end frame it built to stop room changes was solving a **prompt-format** problem. Once each shot was one `[Shot 1]` block with no timestamps, the room held without pins — see `prompting-guide.md §8` `[live-use — media lab, Ciara hoop piece, 2026-09]`.
+
 Two newer routes reduce the chaining, or skip it entirely:
 
 - The Civitai workflow **"Multishot — chained shots"** (v2.7, 2026-08-27, 17.3k downloads) adds a **per-character voice reference clip** to each shot. That stops dialogue bleeding across speakers in chained scenes, which the describe-every-character rule alone does not fix for voices. `[community — Civitai Multishot v2.7; re-verify]`
 - **Single-pass shot syntax avoids the chain altogether.** ethanfel's Cinematic Multishot Coverage generates 8 angles at 45° increments, 32–85 mm, in one 124-frame pass. No seams means no chain drift. `[community — ethanfel; re-verify]`
+- **A tooled chain: `ukr8b3g-cmyk/ComfyUI-H3-Continuum`** (v3.7/v3.8, 2026-08-30 → 09-08, actively maintained). Chunked long-form video *and* audio with per-chunk review, Keep/Retry/Finish, resume and named takes. It is the more tooled alternative to hand-wiring `MiniMaxH3MotionContext` chains, aimed at the same seam-drift problem `[community — GitHub, Civitai 2860061; re-verify]`.
 
 ---
 
@@ -249,7 +270,7 @@ H3 with `length = 1` is an image editor. Several reports say it beats Krea 2 + I
 | Requirement | Why |
 |---|---|
 | **`Mamad8/MiniMax-H3-Image-VAE`** | The video VAE gives blurry stills. Generating 5 frames and taking one does not fix it |
-| **Exactly 1 frame** | The image VAE produces grid artefacts at 5 frames. ComfyUI used to enforce a 5-frame minimum (`Comfy-Org/ComfyUI#15644`); recent nightlies lift it. Update rather than patching `comfy_extras/nodes_minimax_h3.py`, which you would have to re-apply on every ComfyUI update |
+| **Exactly 1 frame** | The image VAE produces grid artefacts at 5 frames. Stock ComfyUI still clamps the node to a 5-frame minimum; the request to lift it, `Comfy-Org/ComfyUI#15644`, is **open with no linked PR as of 2026-09-09**. Until it lands you have to patch `comfy_extras/nodes_minimax_h3.py`, and re-apply the patch after every ComfyUI update `[official — Comfy-Org/ComfyUI#15644, open]` |
 
 Reported settings: hybrid `b25-49` int8, ComfyKitchen attention, `sa_solver` / `simple`, **8 steps, CFG 1**, lightx2v Turbo LoRA, references at 1024×1536 or up to 1920×1088. `Mamad8/MaxiMin-HHH-R2V-ThisIsFine` is a detail LoRA some use here. `[community — Patient_Ratio4177]`
 
@@ -271,6 +292,7 @@ This is where most of the missing speed usually hides, and every failure in it i
 | **`comfy-kitchen` 0.2.10 fails to import** | One `cannot import name 'TensorCoreConvRotW4A4Layout'` ERROR buried in startup, then ComfyUI works normally — just slower. Kills the ConvRot path *and* fp8/fp4 | Update to 0.2.26+. **Check this before benchmarking anything** `[community — DeliciousGorilla]` |
 | **The templates ship the `nvfp4` text encoder** | No hardware path for NVFP4 before Blackwell, so pre-50-series cards fall back | On 30/40-series use `qwen3vl_32b_minimax_h3_int8_convrot` instead |
 | **SageAttention via the launch flag** | Reports of pure noise output, so people disable Sage entirely and lose ~20% | Apply it through the **KJNodes `Patch Sage Attention` node set to `auto`** instead — reported clean at the same seed, 11.99 → 9.29 s/it `[community — DeliciousGorilla]` |
+| **Updating ComfyUI itself** (watch item) | On the development branch (Windows) an update lowered system RAM use but raised VRAM use significantly for H3 graphs, OOMing at settings that used to fit. Single report, root cause unconfirmed | Pin the version that worked; re-test after updating `[community — Comfy-Org/ComfyUI#16150, open 2026-09-06; single report]` |
 
 ### Layer 1: sparse attention (SLA) — the biggest single win
 
@@ -287,6 +309,8 @@ Sparsity 0.85 is reported as practically indistinguishable from PyTorch attentio
 
 > **The node must be LAST in the chain, attached directly to the guider and scheduler.** Nearly every "it was slower" or "quality dropped" report traces back to this, usually because someone also wired a cache node in. Do not combine it with cache nodes. It requires a recent PyTorch on CU130. Blackwell gains the most, but every card gains something.
 
+**SLA has competitors now.** `Saganaki22/ComfyUI-sol-attn` reports 1.14–1.44× over SageAttention with ~37% less MLP VRAM, and `Zironic/H3-Optimizations` is a second entrant `[community — GitHub READMEs, 2026-08-29; re-verify]`. Whether either displaces SLA as the default is not settled. What is settled is the rule for all of them: **run one attention accelerator** — Sage, SLA or SOL — never two stacked `[community — r/StableDiffusion, 2026-09; re-verify]`.
+
 This layer is also the one most likely to be superseded. MiniMax withheld its own sparse-attention implementation and promised it "in a future update" `[official — model card]`. Once that ships, the recommendation changes.
 
 ### Layer 2: Spectrum — and the audio failure that is worth understanding
@@ -300,9 +324,9 @@ This layer is also the one most likely to be superseded. MiniMax withheld its ow
 The fix arrived in two stages. Both are worth knowing, because the first is not enough on its own:
 
 1. **Split the control.** Set `blend_weight` (video) = 0.50 and `audio_blend_weight` = 0.00, so audio uses the local prediction instead of the spectral blend. This is a big improvement, but the indirect path above survives it.
-2. **`offline_smoothing_replay`** (the default from v0.2.1). Pass 1 runs the same accelerated schedule with *both* blends forced to zero and archives every real post-transformer feature as an anchor. Pass 2 restarts from the original latent and reconstructs the trajectory from that archive, running **zero transformer blocks**. A skipped step can then interpolate between the nearest real anchors on *both* sides, instead of extrapolating from the past only. The forecast video features never re-enter a joint transformer call, so they cannot reach the audio. The result is the same 45% saving with clean audio.
+2. **`offline_smoothing_replay`** (the default from v0.2.1; the pack was at **v0.2.26 on 2026-09-09**, releasing roughly daily, and the numeric defaults above are the v0.2.1 ones — re-read the README before quoting them `[community — xmarre releases; re-verify]`). Pass 1 runs the same accelerated schedule with *both* blends forced to zero and archives every real post-transformer feature as an anchor. Pass 2 restarts from the original latent and reconstructs the trajectory from that archive, running **zero transformer blocks**. A skipped step can then interpolate between the nearest real anchors on *both* sides, instead of extrapolating from the past only. The forecast video features never re-enter a joint transformer call, so they cannot reach the audio. The result is the same 45% saving with clean audio.
 
-Spectrum is an approximation, not a bit-identical path. Fast or briefly-visible detail — eyes, fingers, fingernails — can still deviate or degrade, and motion trajectories can differ from native. Use it when the speed is worth that trade-off, and turn it off for a keeper.
+Spectrum is an approximation, not a bit-identical path. Fast or briefly-visible detail — eyes, fingers, fingernails — can still deviate or degrade, and motion trajectories can differ from native. Use it when the speed is worth that trade-off, and turn it off for a keeper. The same author has since started **`xmarre/ComfyUI-Sol-H3`** (2026-09-07), combining Spectrum with new components called VDN, Untwist, Diff-Aid and Flow. It is two days old and unverified here — noted, not recommended `[community — xmarre; early; re-verify]`.
 
 ### Layer 3: the Turbo LoRA
 
@@ -318,7 +342,9 @@ A speed LoRA landed within days of release and is now the standard acceleration 
 | Scheduler | **`beta`** — note this differs from the stock template's `simple` |
 | LoRA strength | **1.0** |
 
-It works across the quantised builds (int8, convrot, pruned, fp8). It was trained against the **FL2VA** checkpoint, but it is reported to work on **Ref2VA** too `[community — Organix33; re-verify]`. That is the first evidence that weights transfer between the two task checkpoints.
+It works across the quantised builds (int8, convrot, pruned, fp8). It was trained against the **FL2VA** checkpoint, but it is reported to work on **Ref2VA** too `[community — Organix33; re-verify]`. That is the first evidence that weights transfer between the two task checkpoints. The official templates now bundle it behind the `Enable Lightning LoRA` switch, default off (§1).
+
+Two more entrants in the same contested space. **FastH3**, FastVideo's 4-step distilled LoRA, does not load against ComfyUI's repacked checkpoints because the layer names differ; a community converter fixes that, but the converted LoRA wants **6 steps, not 4** (4 jitters and flickers; 7–8 add little, though the author later leaned to 8) and **strength ≥ 1.0**, below which structure and colour fall apart. It is reported to beat stock 20-step on background detail, lighting and gait in side-by-sides, while other commenters on the same clips complain of plastic skin `[community — r/StableDiffusion, two threads incl. the RTX-3090 sweep; re-verify]`. And a Civitai workflow, *"MiniMax H3 Ultra Fastest True 4 Steps + HD Sound"* V8 (2026-09-07), claims a tuned 4-step pipeline with facial-consistency locking and a V2V node, ~30% faster than its own V7 — one author's self-reported benchmark, uncorroborated `[community — Civitai 2835250; single report]`. When a speed path leaves you with artefacts or a wrong-looking face, one reported reset that cleared it: **26–32 steps, no Turbo, `shift_video 12`, `euler`, `normal` scheduler** `[community — r/StableDiffusion, 2026-09; single report]`.
 
 **The audio tax, and the core fix.** H3 runs **separate video and audio scheduling**. The original sampler chain mishandled that once the LoRA compressed the step count: the picture stayed fine, but the audio degraded. Kijai's `Comfy-Org/ComfyUI#15243` merged **2026-08-06** and shipped in **ComfyUI v0.31.0 (2026-08-08)**. It adds `ModelSamplingAV` / `ModelSamplingMiniMaxH3` with a separate **`audio_shift`**, so stochastic samplers and low step counts carry audio correctly on the stock path `[official — Comfy-Org/ComfyUI#15243, ComfyUI v0.31.0]`. In order of preference: update ComfyUI and use that node; on an install you cannot update, use larryvrh's `github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo` sampler; failing both, use ~10 steps with `euler` rather than `res_multistep` `[community — contested]`.
 

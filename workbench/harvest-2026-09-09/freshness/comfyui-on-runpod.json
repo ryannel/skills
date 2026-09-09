@@ -1,0 +1,122 @@
+{
+  "skill": "comfyui-on-runpod",
+  "verdict": "drift",
+  "flux": "hot",
+  "flux_evidence": "runpodctl removed its only pod auto-stop/terminate flags (v2.12.0, 2026-08-27) five days after this skill's last check, and the PR revealed they never actually enforced the deadline in the first place — a financially load-bearing claim broke inside one cadence window on a CLI that ships every 1-3 weeks.",
+  "findings": [
+    {
+      "id": "runpodctl-cost-guard-flags-removed",
+      "severity": "major",
+      "claim": "SKILL.md's 'Cost guards that actually work' section instructs setting --stop-after and --terminate-after on runpodctl pod create as 'the cost guards - a rename here has real financial consequence,' and states both were 'verified against runpodctl 2.3.0' / 're-verified live on 2026-08-23.'",
+      "reality": "Both flags were deleted in runpodctl v2.12.0 (2026-08-27, PR #330): the PR shows they were forwarded to the API but never enforced — pods kept running and billing past the deadline, with no way to read the timer back — so 'a flag that silently costs money is worse than no flag.' Passing either flag now fails immediately with 'unknown flag' and a non-zero exit; there is no CLI-level auto-stop until a backend fix (runpod/RunPod#5718) and a flag restoration (runpodctl#331) both land.",
+      "evidence": "https://github.com/runpod/runpodctl/releases/tag/v2.12.0 ; https://github.com/runpod/runpodctl/pull/330",
+      "fix_hint": "SKILL.md 'Cost guards that actually work' (~L203-223), the pre-flight checklist item 8, and every failure-mode row mentioning --stop-after/--terminate-after need a rewrite: no such flag exists on current runpodctl, and even the version this skill verified against never made the timer fire. Promote the existing watchdog-script fallback to the primary guard."
+    },
+    {
+      "id": "runpodctl-docker-args-now-supported",
+      "severity": "minor",
+      "claim": "Failure-modes table: '--docker-args rejected on pod create — The current API does not accept it through runpodctl 2.3.0.'",
+      "reality": "Fixed in runpodctl v2.7.3 (2026-07-29, PR #314): --docker-args is now sent as dockerStartCmd on the REST path and is accepted on pod create.",
+      "evidence": "https://github.com/runpod/runpodctl/releases/tag/v2.7.3",
+      "fix_hint": "SKILL.md failure-modes table row on --docker-args (~L293) — update or remove after confirming it now flows through on a live pod create."
+    },
+    {
+      "id": "runpodctl-version-far-behind",
+      "severity": "minor",
+      "claim": "Skill's version-pinned CLI facts and the two verified-against callouts both cite runpodctl 2.3.0-be4ced4 (2026-05-13) as the reference version.",
+      "reality": "runpodctl is now at v2.12.0 (2026-08-27) — nine releases later, adding --wait/--wait-timeout, real runtimeStatus/runtimeStatusReason, serverless run/status/health, pod+serverless log streaming, and --model-reference host-cached models — none reflected in the skill.",
+      "evidence": "https://github.com/runpod/runpodctl/releases",
+      "fix_hint": "SKILL.md version-pin callouts throughout the cost-guard and pre-flight sections — re-verify against current runpodctl instead of 2.3.0."
+    },
+    {
+      "id": "extra-model-paths-new-keys",
+      "severity": "minor",
+      "claim": "The skill's volume layout (SKILL.md, references/volume-and-models.md) frames a 'core six' plus a short optional list (controlnet, vae_approx, ipadapter, clip_vision, embeddings, style_models) as the complete key surface to consider.",
+      "reality": "The current Comfy-Org/ComfyUI extra_model_paths.yaml.example adds audio_encoders, background_removal, frame_interpolation, geometry_estimation, optical_flow, detection, model_patches, diffusers and latent_upscale_models — several (frame_interpolation, optical_flow) directly relevant to this suite's video models.",
+      "evidence": "https://github.com/Comfy-Org/ComfyUI/blob/master/extra_model_paths.yaml.example",
+      "fix_hint": "references/volume-and-models.md placement table — add these as 'declare when a node needs them' rows, consistent with the skill's existing 'declare generously, create lazily' doctrine."
+    },
+    {
+      "id": "worker-comfyui-prebuilt-images-broader",
+      "severity": "minor",
+      "claim": "references/serverless-comfyui.md §1: 'RunPod's published worker-comfyui base images lag new model releases, so a recent model usually needs a rebuild from source [community — live deploy 2026-08; re-verify].'",
+      "reality": "worker-comfyui is actively maintained (5.10.0, 2026-09-01, bumped to ComfyUI 0.34.0) and its changelog records a prebuilt z-image-turbo image (PR #189, 2026-03-17) — one of this suite's own linked models — beyond the README's documented flux1-dev/schnell/sdxl/sd3/base tags.",
+      "evidence": "https://github.com/runpod-workers/worker-comfyui/releases ; https://github.com/runpod-workers/worker-comfyui/blob/main/README.md",
+      "fix_hint": "references/serverless-comfyui.md §1 — soften the '[community]' inference: check the current worker-comfyui tag catalog for the target model before assuming a from-source rebuild is needed."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "multi-dc-volume-attach-serverless",
+      "what": "RunPod's own golden-path 19 (live-verified 2026-07-13) attaches the same S3-synced data across three network volumes in three datacenters to one serverless endpoint (runpodctl serverless create --network-volume-ids v1,v2,v3, v2.4.0+), so workers schedule in whichever DC has free GPU stock instead of being pinned to one.",
+      "why_it_matters": "Directly mitigates the skill's stated 'volume is pinned to one datacenter, which narrows GPU availability' constraint for ComfyUI serverless deployments, at the cost of manual cross-DC sync discipline.",
+      "source_class": "official",
+      "evidence": "https://github.com/runpod/runpod-plugins-official/blob/main/plugins/runpod/skills/runpod/golden-paths/19-three-region-same-file.md",
+      "date": "2026-07-13",
+      "where_it_belongs": "SKILL.md datacenter-lock caveat under 'Getting the weights there without burning GPU hours', or references/serverless-comfyui.md §4 — as an escape hatch with the sync-discipline caveat.",
+      "already_covered": false
+    },
+    {
+      "id": "external-scheduler-explicit-terminate",
+      "what": "RunPod's own guide (updated 2026-09-08) recommends an external cron/scheduler hitting the RunPod REST API to create a pod, run the job, and explicitly call terminate, rather than relying on any CLI auto-stop timer.",
+      "why_it_matters": "This is now the closest thing to a working, provable cost guard, given runpodctl's --stop-after/--terminate-after never fired and were removed outright in v2.12.0.",
+      "source_class": "official",
+      "evidence": "https://www.runpod.io/articles/guides/ai-on-a-schedule",
+      "date": "2026-09-08",
+      "where_it_belongs": "SKILL.md 'Cost guards that actually work' — as the primary replacement pattern alongside the existing watchdog-script advice.",
+      "already_covered": false
+    },
+    {
+      "id": "runpodctl-wait-flag-and-runtime-status",
+      "what": "runpodctl v2.9.0 (2026-08-05) added --wait/--wait-timeout to pod create and serverless create, blocking until the pod's SSH port actually answers or the endpoint reports a ready worker, plus a real runtimeStatus field (running/initializing/stopped/terminated) distinct from desiredStatus.",
+      "why_it_matters": "Gives a built-in, provable readiness check for the skill's own 'Running is not ready' smoke-test guidance, instead of hand-rolled polling.",
+      "source_class": "official",
+      "evidence": "https://github.com/runpod/runpodctl/releases/tag/v2.9.0",
+      "date": "2026-08-05",
+      "where_it_belongs": "SKILL.md 'Smoke test before you trust it' step 1, and the pre-flight checklist.",
+      "already_covered": false
+    },
+    {
+      "id": "runpodctl-log-streaming",
+      "what": "runpodctl v2.10.0 (2026-08-19) added 'pod logs' and 'serverless logs' with streaming.",
+      "why_it_matters": "Native CLI path to watch ComfyUI boot/model-load output live, complementing the skill's 'ask the worker what it can see' validation-error diagnostic.",
+      "source_class": "official",
+      "evidence": "https://github.com/runpod/runpodctl/releases/tag/v2.10.0",
+      "date": "2026-08-19",
+      "where_it_belongs": "references/serverless-comfyui.md §5 failure modes, as an added diagnostic tool.",
+      "already_covered": false
+    },
+    {
+      "id": "runpodctl-serverless-run-status-health",
+      "what": "runpodctl v2.9.0 added 'serverless run' (submit + wait for result), 'serverless status', and 'serverless health' subcommands — a built-in single-job probe.",
+      "why_it_matters": "Could replace the skill's advice to 'keep a single-job probe script' with a one-line native command.",
+      "source_class": "official",
+      "evidence": "https://github.com/runpod/runpodctl/releases/tag/v2.9.0",
+      "date": "2026-08-05",
+      "where_it_belongs": "references/serverless-comfyui.md §3 dispatch and polling — 'keep a single-job probe script' bullet.",
+      "already_covered": false
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [],
+    "add": [
+      {
+        "id": "runpodctl-cost-guard-removed-pending-restoration",
+        "type": "version-pin",
+        "claim": "--stop-after/--terminate-after were removed from runpodctl in v2.12.0 (PR #330) because the API never enforced them. Backend fix tracked as runpod/RunPod#5718 (open); CLI restoration tracked as runpodctl#331 (not yet landed as of 2026-09-09).",
+        "where": "SKILL.md 'Cost guards that actually work' section",
+        "check": "Has runpodctl#331 landed, restoring the flags with real validation? Has the backend deadline-firing fix (RunPod#5718) shipped? If both land, rewrite the guard section as fixed rather than removed; until then the watchdog-script and external-scheduler patterns are the only working guards."
+      }
+    ],
+    "amend": [
+      {
+        "id": "runpodctl-cost-flags",
+        "note": "Superseded by the new watchlist item above — the flags aren't just version-pinned facts to re-verify, they no longer exist as of v2.12.0 (2026-08-27) and were confirmed by the removal PR to have never worked even in the 2.3.0 build this skill verified against."
+      },
+      {
+        "id": "runpodctl-surface-split",
+        "note": "Legacy 'create pod' remains supported-but-deprecated with no removal timeline (confirmed via the current runpodctl README's 'legacy commands' section). But the reason this split mattered — 'pod create' being the only surface with cost guards — is moot now that neither surface has them."
+      }
+    ]
+  }
+}

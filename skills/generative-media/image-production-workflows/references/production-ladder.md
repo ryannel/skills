@@ -58,17 +58,19 @@ Settings `[community — myByways, Civitai workflow conventions]`:
 - **Simplify the prompt for the upscale pass.** A tile only sees its local patch, so a prompt like "a tattoo reading 'X' below the collarbone" gets stamped onto every smooth-skin tile. Pass a generic quality prompt instead of the full scene prompt.
 - **For DiT models, prefer TTPlanet's TTP Toolset.** It tiles the image and runs an interrogator to caption *each tile*, which gives per-tile conditioning. That per-tile prompting is the anti-hallucination mechanism, and the toolset was built explicitly "for DiT models… Flux, Hunyuan, SD3." TTPlanet also ships the de-facto SDXL tile ControlNet (`TTPLanet_SDXL_Controlnet_Tile_Realistic`) for ControlNet-assisted tiling `[official — TTPlanet repos]`.
 - An alternative is `shiimizu/ComfyUI-TiledDiffusion`, which offers MultiDiffusion / Mixture-of-Diffusers plus tiled VAE.
+- `moonwhaler/comfyui-seedvr2-tilingupscaler` runs **SeedVR2 itself tile-by-tile**, which folds this stage and the finisher into one pass. Memory is bounded by the tile, not the output: its README recommends 1024 tiles with 32–64 px padding when VRAM allows, and smaller tiles when it does not. Treat it as an option rather than the default. Its maintenance status and real VRAM behaviour at 8K were not verified in this pass, and the two-stage chain below still works `[community — moonwhaler repo; re-verify]`.
 
 ## 5. Final restorers & GAN upscalers
 
-| Tool | Status (mid-2026) | Use |
+| Tool | Status (as of 2026-09-09) | Use |
 |---|---|---|
 | **SeedVR2** (ByteDance) | **the current default finisher** — one-step diffusion restorer, official ComfyUI node, 3B/7B + FP8/GGUF | final restoration/upscale to ~4K; images and video. MyAIForce found SeedVR2 chains beat SUPIR chains on skin texture `[community — MyAIForce]` |
+| **Topaz partner nodes** (`TopazImageEnhanceV2`; Bloom 2 and Wonder 3.5 models) | **official ComfyUI partner-node templates** (Aug 2026) — creativity slider, face recovery, color preservation, grain; runs on Comfy Cloud, as downloaded JSON, or through the Comfy SDK `[official — comfy.org workflow gallery]` | the commercial, generative single-image finisher beside SeedVR2. High creativity invents detail, so where a face or label must stay exact, treat it like the generative restorers below |
 | **SUPIR** | **frozen** — kijai's wrapper README says "FINAL update"; merged into ComfyUI core; needs an SDXL checkpoint + 32 GB+ system RAM | stale-but-functional; existing workflows keep working, don't build new ones on it |
 | **ESRGAN-class models** (4x-UltraSharp, Remacri, 4xNomos series) | evergreen | the cheap deterministic step — pre-upscaler feeding tiled diffusion, or a final ×2 with zero hallucination risk |
 | 1× skin-contrast models (e.g. `1xSkinContrast-High`) | niche | blended at ~0.4 over the final image for skin micro-texture (photoreal only) |
 
-The typical max-quality chain runs tiled diffusion to about 2×, then SeedVR2 to 4K. The typical fast chain is a single ESRGAN ×2 pass.
+The typical max-quality chain runs tiled diffusion to about 2×, then SeedVR2 to 4K. The SeedVR2 tiling node in §4 collapses those two into one pass. The typical fast chain is a single ESRGAN ×2 pass.
 
 **Generative restorers are a different class, and the numbers show it.** `ReDetail` does not restore a clip; it re-renders the clip through [`ltx-2-5`](../../ltx-2-5/). Its scale factor therefore buys invented detail rather than recovered detail, which is why its author prefers 1.5× over 2×. On 243 frames from 768×1408, the run took **7 min and 65 GB peak VRAM at 1.5×, against 17 min and 80.5 GB at 2×** `[community — DaLyon92x]`. ReDetail also has constraints that fail silently: dimensions must be divisible by 64, frame counts must be `8n + 1`, and an audio track is mandatory. Those live in SKILL.md, so a reader meets them before building.
 

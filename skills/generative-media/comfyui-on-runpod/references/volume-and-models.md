@@ -1,6 +1,6 @@
 # Volume layout, `extra_model_paths.yaml`, and the model manifest
 
-This file covers everything ComfyUI needs to find a model on the volume: the dual-root config, the placement table, LoRA foldering, and the manifest that makes a volume reproducible. Deployment mechanics such as pods, endpoints, and dispatch are covered in `serverless-comfyui.md`.
+This file covers everything ComfyUI needs to find a model on the volume: the dual-root config, the placement table, LoRA foldering, and the manifest that makes a volume reproducible. Deployment mechanics such as endpoints and dispatch are covered in `serverless-comfyui.md`. §8 here is the exception: it is about keeping a trainer or batch pod honest, and it lives here because that pod is writing to this volume.
 
 1. [The dual mount root, in full](#1-the-dual-mount-root-in-full)
 2. [Placement table — file type → directory → loader](#2-placement-table)
@@ -9,6 +9,7 @@ This file covers everything ComfyUI needs to find a model on the volume: the dua
 5. [Populating and rebuilding a volume](#5-populating-and-rebuilding-a-volume)
 6. [Training on the same volume](#6-training-on-the-same-volume)
 7. [Custom nodes](#7-custom-nodes)
+8. [Launching, watching and killing a pod job](#8-launching-watching-and-killing-a-pod-job)
 
 ---
 
@@ -48,6 +49,16 @@ network_volume:
   upscale_models: models/upscale_models/
   vae: models/vae/
   vae_approx: models/vae_approx/
+  # keys the upstream example added by 2026-09 — declare now, create the folder when a node asks
+  audio_encoders: models/audio_encoders/
+  background_removal: models/background_removal/
+  detection: models/detection/
+  diffusers: models/diffusers/
+  frame_interpolation: models/frame_interpolation/
+  geometry_estimation: models/geometry_estimation/
+  latent_upscale_models: models/latent_upscale_models/
+  model_patches: models/model_patches/
+  optical_flow: models/optical_flow/
 
 runpod_volume:
   base_path: /runpod-volume/
@@ -72,6 +83,16 @@ runpod_volume:
   upscale_models: models/upscale_models/
   vae: models/vae/
   vae_approx: models/vae_approx/
+  # keys the upstream example added by 2026-09 — declare now, create the folder when a node asks
+  audio_encoders: models/audio_encoders/
+  background_removal: models/background_removal/
+  detection: models/detection/
+  diffusers: models/diffusers/
+  frame_interpolation: models/frame_interpolation/
+  geometry_estimation: models/geometry_estimation/
+  latent_upscale_models: models/latent_upscale_models/
+  model_patches: models/model_patches/
+  optical_flow: models/optical_flow/
 ```
 
 **Where the file goes.** ComfyUI reads this file from its own install directory. On a pod, that means you write it next to the ComfyUI checkout (`…/ComfyUI/extra_model_paths.yaml`). For serverless, bake it into the image so every worker gets it. Deploy it programmatically on boot rather than editing it by hand. A hand-edited copy on one pod is a config that will not survive the next rebuild.
@@ -105,6 +126,8 @@ The table is organised by the loader node that reads each file. That is the only
 | Detailer detector — `face_yolov8m.pt` | `models/ultralytics/bbox/` | Impact Pack `UltralyticsDetectorProvider` |
 | SAM segmenter — `sam_vit_b_01ec64.pth` | `models/sams/` | Impact Pack `SAMLoader` |
 
+**Keys added upstream since this table was written.** Comfy-Org's `extra_model_paths.yaml.example` now also lists `audio_encoders`, `background_removal`, `detection`, `diffusers`, `frame_interpolation`, `geometry_estimation`, `latent_upscale_models`, `model_patches` and `optical_flow` `[official — Comfy-Org/ComfyUI extra_model_paths.yaml.example, read 2026-09-09]`. `frame_interpolation` and `optical_flow` are the two this suite's video models are most likely to hit. Declare them all in both blocks, as §1 does, and create a folder only when a node's dropdown comes up empty. An absent directory is not a fault.
+
 **Detailer models have canonical files, and they are not optional if the pipeline runs a detail pass on faces.** The suite's standard deploy path does exactly that. The community-standard pair is `face_yolov8m.pt` (from `Bingsu/adetailer` on Hugging Face), which goes in `models/ultralytics/bbox/`, and `sam_vit_b_01ec64.pth` (the facebook SAM release, commonly mirrored), which goes in `models/sams/`. These two files are community-sourced picks, but they are the ones every FaceDetailer tutorial and workflow assumes. The paths themselves are hard fact: Impact Pack resolves detectors through the `ultralytics_bbox` / `ultralytics_segm` / `sams` keys and nowhere else. This was verified on 2026-08-23, when a deployment planned against this file's yaml had no home for them. **`insightface/` is not that home.** That directory serves PuLID/InstantID-class *identity* nodes (`FaceAnalysis`). A detector placed there leaves the FaceDetailer dropdowns empty.
 
 **The `CLIPLoader` `type` argument is model-specific, and you cannot guess it.** Values such as `lumina2`, `wan`, `minimax`, `ltxv`, and `flux2` all exist. Record it in your manifest next to the filename, because a workflow builder needs it. Getting it wrong produces a confusing encode failure rather than a missing-file error. Each model skill states its own value.
@@ -134,7 +157,9 @@ Two reasons this beats a flat directory:
 
 To answer *"if I retire base X, what dies?"*, query the manifest for entries whose `compat` lists **only** X. Anything that also lists another base survives.
 
-**Keep run archives, prune deliberately.** A training run leaves multiple checkpoints plus optimiser state. Optimiser files are only needed to resume an interrupted run, so delete them once a run is final. Intermediate checkpoints are worth keeping while a character is still being iterated. Once the final checkpoint is selected, prune down to that one.
+**Keep run archives, prune deliberately.** A training run leaves multiple checkpoints plus optimiser state. Optimiser files are only needed to resume a run, so delete them once a run is final. Be sure it is final: `optimizer.pt` is ~600 MB per run and the obvious thing to drop when the volume is tight, but keeping it is what let one run extend from 3,000 to 5,000 steps at about 40% of the compute of starting over `[live-use — media lab, 2026-09]`. Intermediate checkpoints are worth keeping while a character is still being iterated. Once the final checkpoint is selected, prune down to that one.
+
+**Promote with a copy, not a symlink.** ComfyUI validates a LoRA name against its own scan of `models/loras`, and that scan does not follow symlinks. A whole eval grid failed on links that `stat -L` resolved perfectly `[live-use — media lab, 2026-08]`. Eval checkpoints are real copies, a few hundred megabytes each; budget for them.
 
 ---
 
@@ -263,6 +288,8 @@ The text encoder is the usual surprise here. You can have a complete ComfyUI mod
 
 Container disks are usually 40 GB and mostly empty, which is enough for an encoder plus caches. This deliberately flips the default in the table above: putting the cache on the volume is right when there is room and wrong when there is not. "How full is the volume?" is the question that settles it.
 
+**The wall is real and it arrives mid-transfer.** One volume's cap was 250 GB. An `rsync` of two runs' outputs hit it at once — `Disk quota exceeded (122)`, a broken pipe, and a post-training step reported as failed after the training itself had succeeded `[live-use — media lab, 2026-09-09]`. Three habits follow. Sync only the checkpoints you will evaluate, not a run's full series. Plan quota before launching two arms in parallel, because both will write at the same time. And remember that volume writes need a running pod, so a copy you meant to do "later" belongs in the next pod's setup script.
+
 **Clear space before a run, not during one.** Firefighting a quota mid-run is the expensive kind, because the GPU bills while you decide what to delete. Two habits make it a non-event. Check free space as a pre-flight step, and know which of your big files can simply be downloaded again. A training base, once training is finished, is 24 GB you can drop without losing anything.
 
 **RunPod's S3-compatible endpoint is not a full S3, and the gaps bite right here.** Listing with `--recursive` returns nothing for directories that it will happily list one level at a time. **Server-side copy does not work.** It fails with a tagging 500, so moving a file from one volume path to another means doing it on a pod with `cp`, not over the API. The region has to be lowercase and set on every call. And a deleted directory keeps showing up as an empty `PRE` marker, which looks like a failed delete but is not `[community — measured against `eu-ro-1`, 2026-08-24]`.
@@ -279,3 +306,23 @@ Custom nodes are **code**, not weights, and that distinction decides where they 
 **Pin them.** Custom nodes are the least stable part of the stack. An unpinned node that updates between two runs is a leading cause of "the same workflow produced different output." Record the repo plus the commit in the manifest.
 
 A workflow JSON that references a node class that is not installed fails at load with a red node, not a helpful message. When a graph will not open on a fresh instance and the models all resolve, missing custom nodes are the next place to look.
+
+---
+
+## 8. Launching, watching and killing a pod job
+
+A trainer or batch pod bills while it does nothing. Every item here is a way that "nothing" was mistaken for "working," measured on rented GPUs `[live-use — media lab, 2026-08-26 to 2026-09-09]`. None of them is specific to one trainer.
+
+**Boot on a stock RunPod template, and gate the driver first.** An image built for serverless may not install RunPod's SSH key; a `RUNNING` pod with `22/tcp` published still answered `Permission denied (publickey)`. Stock templates take the key. Then, before installing anything, read `nvidia-smi`: a 570.x host driver fails a CUDA 13 stack with `driver too old`, and dropping to cu128 only moves the failure into pip. Four creates in a row landed on the same bad host. The fix is **hold-and-reroll**: keep the dud running so the scheduler cannot hand you that host again, create the next pod, verify it, then remove the duds. Two pip traps sit on the stock CUDA template. It exports `PIP_CONSTRAINT`, which makes a cu130 install fail with `ResolutionImpossible` hidden behind `pip -q`; `unset` it. And `git+https://` requirements need `git config --global http.version HTTP/1.1` — global, because pip's own clones read the same setting.
+
+**A return code is not a start.** Inline `ssh 'nohup bash -c "…"'` chains failed silently three times in one month. Write the setup to a file with `set -euo pipefail` and a banner `echo` at each phase, launch it with `setsid -f` with every file descriptor redirected (`setsid … & exit 0` holds the SSH pipe open, and cost one session seventy minutes), then verify within a minute two ways: `head` the log for the banner, and `pgrep` for the process. **The `pgrep` pattern must name something unique to this run.** A bare `[r]un.py` matched ComfyUI's own `run.py`, a launch was declared good, nothing trained, and an hour of GPU time went by. The same rule applies to the finish: a stray `.safetensors` in a latent cache read as DONE, so scope the completion check to the trainer's output directory and require positive evidence.
+
+**Watch the cap, not `free`.** `free` on a 5090 pod reports 123 GB; the container's cgroup limit (`/sys/fs/cgroup/memory.max`) was 60 GB, and `swapon` is not permitted. A process that crosses it is killed with no traceback. In-training sampling is the usual culprit on a large-encoder model, because it pulls the offloaded text encoder back on top of resident training state. Turn samples off. It costs nothing, since checkpoints and optimiser state are written before the sample pass, so a relaunch resumes where it died.
+
+**Kill by port, never by pattern.** `pkill -f 'main.py --listen'` matched the SSH command line carrying it and killed the session (rc 255, no output). Resolve the PID from `ss -ltnp` and kill that. And never stop or remove pods in bulk: name ids. A bulk stop took another session's pod down with it.
+
+**A monitor event is a nudge, not the state.** One delivered a four-hour-stale step count despite line buffering. When an event fires, go and read the current log. Poll with an `until grep -qE "DONE|Traceback"` loop rather than sleep chains, and stop chatty monitors once they have done their job.
+
+**Two parsing traps.** `runpodctl` prints a non-breaking space (U+00A0) between a port number and `(pub,tcp)`, which breaks naive endpoint parsing while looking identical on screen; split on Unicode whitespace. And zsh does not word-split unquoted variables, so `S="ssh …"; $S "cmd"` exits 0 instantly, and an `until` guard reads that as success.
+
+**Check the datatype before the price.** A cheaper card is not cheaper if the recipe's datatype is not native to it: a card without fp8 units runs an fp8 recipe several times slower than a consumer card that has them. The GPU decision belongs to `runpod-usage` and the model skill; this is the one check that is cheap to skip and expensive to have skipped.

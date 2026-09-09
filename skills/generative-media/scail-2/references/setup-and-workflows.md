@@ -103,7 +103,7 @@ All of these fixes share one idea: **pre-solve the correspondence rather than ma
 
 **The OOM you cannot predict.** Nobody in the sweep has a formula relating duration × resolution × models × LoRAs to peak VRAM: *"I still don't know how to calculate durationXresolutionXmodels&loras to figure out if I'm going to OOM or not"* `[community — ChairQueen]`. The working practice is to **reduce input resolution before you start**, not after the first OOM. If you are renting rather than owning the card, [`comfyui-on-runpod`](../../comfyui-on-runpod/) covers volume layout and `extra_model_paths.yaml`.
 
-**Runners other than plain ComfyUI:** **Wan2GP** is the low-VRAM runner of choice. **Mix Studio** exposes SCAIL-2 as a one-click mode alongside Krea 2, Flux 2 Klein and Qwen-Image-Edit, which is literally the first-frame rule built into a UI. But it is **unaudited**, and an unsubstantiated telemetry accusation against it went unanswered `[flagged — re-verify]`.
+**Runners other than plain ComfyUI:** **Wan2GP** is the low-VRAM runner of choice. **Mix Studio** exposes SCAIL-2 as a one-click mode alongside Krea 2, Flux 2 Klein and Qwen-Image-Edit, which is literally the first-frame rule built into a UI. Its telemetry is documented and can be switched off: two PostHog events, memory-only, with a toggle under Settings → General `[official — BlackMixture/Mix-Studio docs/installation-and-operations.md, read 2026-09-09]`. An older telemetry accusation against it was never traced to a source, so treat it as unverified rather than as either true or refuted `[flagged — re-verify]`. The [licence section](../SKILL.md#licence--limitations) carries the full telemetry scope.
 
 ---
 

@@ -55,7 +55,7 @@ The base URL is `https://api.krea.ai`, and the docs live at krea.ai/docs/develop
 
 ## 3. The web app
 
-The krea.ai image generator lets you pick **Medium / Large / Turbo**. It offers up to **4 style references, each with a strength slider**, moodboards ("the most precise way to set a visual direction"), batches up to 4, and 1K output. The app is also where you create the moodboards that the API uses. Krea's broader editor (realtime canvas, upscaler, etc.) wraps the same models, but it is out of scope here.
+The krea.ai image generator lets you pick **Medium / Large / Turbo**. It offers up to **4 style references, each with a strength slider**, moodboards ("the most precise way to set a visual direction"), batches up to 4, and 1K output. The app is also where you create the moodboards that the API uses. Krea also runs its **own LoRA trainer** on the Max/Business tiers (beta at announcement): auto-captioning, and a floor of "at least three" images `[official — krea.ai blog, 2026-05-21]`. Managed hyperparameters, like fal's; the training doctrine in `lora-training.md §4` still applies to what you feed it. Krea's broader editor (realtime canvas, upscaler, etc.) wraps the same models, but it is out of scope here.
 
 ## 4. ComfyUI partner nodes
 

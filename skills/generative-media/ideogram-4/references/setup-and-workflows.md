@@ -6,7 +6,7 @@ This file covers how to run the open-weight model yourself, through diffusers, t
 
 **Training** a LoRA is covered in the neighbouring file, `lora-training.md`. Section 6 here covers only the loading half of that split.
 
-Sources are labelled `[official]` when they come from the `ideogram-oss/ideogram4` repo and the HF model cards. They are labelled `[community — single report; re-verify]` when they come from forum and blog reports. The community record for this model is still too thin to corroborate those reports.
+Sources are labelled `[official]` when they come from the `ideogram-oss/ideogram4` repo, the HF model cards, or the `Comfy-Org/Ideogram-4` file listing. They are labelled `[community — single report; re-verify]` when they come from forum and blog reports. The community record for this model is still too thin to corroborate those reports.
 
 ## Contents
 
@@ -32,6 +32,8 @@ The weights are **gated** on Hugging Face. You must accept the licence and authe
 | `ideogram-ai/ideogram-4-fp8` | weight-only float8 e4m3 (activations stay bf16) | **all** (CUDA / MPS / CPU) | via `Ideogram4Pipeline` | larger; runs anywhere, no FP8 hardware needed |
 
 "We plan to support more quantizations in the future." No official GGUF yet `[official — HF model card]`.
+
+**These two repos are the diffusers and CLI weights.** ComfyUI does not load them. It uses a separate set of files from the `Comfy-Org/Ideogram-4` repo, in three quants of its own (§4). Mixing the two up was the source of a filename confusion this skill carried until 2026-09-09.
 
 ### 1.1 Running on a cloud GPU (RunPod, Vast.ai, …)
 
@@ -187,11 +189,31 @@ Defaults are **euler / 20 steps / DualModelGuider 7**, latent 1024×1024. The `C
 
 `gemma4_e4b_it_fp8_scaled.safetensors` is in the required-download list, from a separate `Comfy-Org/gemma-4` repo, but **no node in the shipped template actually loads it.** It is the recommended **in-stack** LLM for the natural-language-to-JSON-caption step: it runs on your own GPU instead of relying on the hosted `ideogram-4-v1` Magic Prompt. The template does include an "Ideogram4 Caption Prompt Template" helper subgraph, a set of string nodes that assemble the system prompt plus your idea, but it contains **no LLM-execution node**. You run that conversion through gemma4 yourself. Downloading gemma4 and then finding nothing to plug it into is a common first-day confusion `[official — ComfyUI template JSON]`.
 
-### VRAM & quant naming — flagged
+### The three ComfyUI quants
 
-- **nf4** fits a single **24 GB** GPU `[official — HF model card]`; **32 GB** is recommended.
+The ComfyUI diffusion models live in `Comfy-Org/Ideogram-4` on Hugging Face, under `diffusion_models/`. As of 2026-09-09 that folder holds **three quants, each as a conditional + unconditional pair**, and nothing else `[official — Comfy-Org/Ideogram-4 repo, 2026-09-09]`:
+
+| Conditional file | Unconditional pair | Quant | Notes |
+|---|---|---|---|
+| `ideogram4_fp8_scaled.safetensors` | `ideogram4_unconditional_fp8_scaled.safetensors` | fp8, scaled | What the official template loads. The default |
+| `ideogram4_nvfp4_mixed.safetensors` | `ideogram4_unconditional_nvfp4_mixed.safetensors` | NVFP4, mixed precision | **The ComfyUI 4-bit file.** This is what the community workflows that referenced `nvfp4_mixed` were pointing at |
+| `ideogram4_int8_convrot.safetensors` | `ideogram4_unconditional_int8_convrot.safetensors` | int8, convolutional rotation | Newest of the three (conditional file 9.58 GB). Same build family as the `int8_convrot` files [`z-image`](../../z-image/) ships |
+
+**The old naming puzzle is closed.** Earlier versions of this skill flagged a conflict between `nf4` (the HF repo name) and `nvfp4_mixed` (what workflows referenced). There was no conflict. `nf4` is the bitsandbytes quant in `ideogram-ai/ideogram-4-nf4`, which is a **diffusers** file; the Comfy-Org repo has no `nf4` file at all. `nvfp4_mixed` is the ComfyUI 4-bit file. They are different files for different runtimes, and the confusion came from reading one repo's listing against the other's workflows. Swap a pair in by changing both `UNETLoader` widgets; the rest of the graph is the same.
+
+**What is not published yet:** a quality or speed comparison between `int8_convrot`, `fp8_scaled` and `nvfp4_mixed` on this model, or a VRAM figure per pair `[flagged — re-verify]`. Until one appears, the only sizing guidance is the general one: fp8 is the reference, the 4-bit file is the smallest, and int8 sits between them on disk.
+
+### VRAM
+
+- **nf4** (diffusers) fits a single **24 GB** GPU `[official — HF model card]`; **32 GB** is recommended.
 - **fp8** reportedly ran on **16 GB VRAM / 32 GB RAM** (~48-step image in <5 min; turbo-12 in <90 s) `[community — single report; re-verify]`.
-- **Naming conflict:** the HF repos are `nf4` and `fp8`, but some community ComfyUI workflows reference `ideogram4_nvfp4_mixed.safetensors` (NVFP4) for the 4-bit ComfyUI file. Whether the ComfyUI-native 4-bit file is `nf4` or `nvfp4_mixed`, and where it is hosted, is **unresolved.** Verify against the current Comfy-Org repo `[flagged — re-verify]`.
+- The ComfyUI pairs above have no published per-quant VRAM numbers (see the flag in the previous section).
+
+### TurboTime — a speed LoRA that removes the second model
+
+ostris (the ai-toolkit author) published **Ideogram 4 TurboTime**, on Hugging Face as `ostris/ideogram_4_turbotime_lora` and on Civitai (2026-06). Its claim: the model runs in **as few as 2 steps, with no CFG and no unconditional model** `[community — ostris, HF + Civitai]`. This is the same pattern as Wan's lightx2v LoRAs ([`wan-2-2`](../../wan-2-2/)): guidance is distilled into the weights, so you stop asking for it at sampling time.
+
+What that does to the stock graph, reasoned from the claim rather than transcribed from a published node list: the second `UNETLoader` and the `DualModelGuider` come out, because there is no unconditional branch to guide against. The LoRA loads on the **conditional** model, and sampling runs at CFG 1 with a step count near the author's 2. Check the model card for the exact graph and step range before assuming these. Two cautions. It is one author's release with no independent reproduction on record, so whether the quality holds outside the author's samples is open `[flagged — re-verify]`. And nothing here changes the licence: a faster non-commercial model is still non-commercial.
 
 ### GGUF
 
@@ -218,14 +240,21 @@ This section is short because the ecosystem has not filled this gap in yet. **Ma
 covered in `lora-training.md`. This section covers the *using* half of that split.
 
 - **Format.** fal's trainer emits a `comfy`-format `.safetensors` alongside its own. That is an
-  ordinary ComfyUI LoRA file, and it is the one you load. ai-toolkit writes its own output in the
-  same place it does for every other model it supports.
+  ordinary ComfyUI LoRA file, and it is the one you load. ai-toolkit and musubi-tuner write their
+  output in the same place they do for every other model they support. **OneTrainer's output does
+  not load.** Its Ideogram4 extension writes split `to_q`/`to_k`/`to_v` keys, and ComfyUI logs
+  `lora key not loaded` for each of them; the issue has been open since 2026-06-14
+  `[community — ComfyUI issue #14477]`. If you see that message, the trainer is the cause, not
+  your graph.
 - **Where it plugs in.** The shipped template `image_ideogram4_t2i.json` contains **no LoRA loader
   node at all**, and no wired example has been published by Comfy-Org, by fal, or on Civitai
   `[flagged — re-verify]`. Ideogram 4 also loads **two** diffusion models (§4), so it is an open
   question rather than a settled default which branch the LoRA attaches to: the conditional model,
   the unconditional model, or both. Expect to wire it yourself, and to test whether the
-  unconditional branch needs the same patch.
+  unconditional branch needs the same patch. One data point now exists: ostris's TurboTime LoRA
+  (§4) removes the unconditional model entirely, so it patches the conditional branch alone. That
+  settles the question for a distillation LoRA. It does not settle it for a style LoRA that keeps
+  both branches.
 - **Strengths and stacking.** There are no published weight bands, and there are no reports on
   stacking two LoRAs `[flagged — re-verify]`. Sweep from 1.0 downward as you would on any DiT, and
   judge by eye. Do not import a band from another model's skill, because the dual-branch guider

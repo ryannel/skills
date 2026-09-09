@@ -40,7 +40,7 @@ Anima carries a very large character vocabulary, indexed as booru `character` + 
 
 **Check before you assume.** The knowledge cut-off is **September 2025**, and it bites both ways: recent characters are missing, and so are older ones with thin booru coverage. `u/Hi7u7`: *"I tried to recreate the RE:Zero character, Capella Emerada Lugunica. Unfortunately, Anima 1.0 couldn't recreate it, so I had to use a Lora… But, I realized that there were some old anime characters that I didn't recognize either."*
 
-The check is cheap. Use the community **"Animedex"** character index, or `tags.latent.moe`, which shows real per-model image references for a tag `[community — u/Hi7u7, u/Chemical-Nose-2985]`. If the character is absent, that is your signal to train one. Closing this gap is also what the **Anima-2.9B** fork was built for. See SKILL.md's *Licence & limitations* on why the forks stay a footnote.
+The check is cheap. Use the community **"Animedex"** character index, or `tags.latent.moe`, which shows real per-model image references for a tag `[community — u/Hi7u7, u/Chemical-Nose-2985]`. If the character is absent, that is your signal to train one. Closing this gap is also what the **Anima-2.9B** fork was built for. See SKILL.md's *Licence & limitations* on why the forks are still experiments, and [`setup-and-workflows.md`](setup-and-workflows.md) §7 before loading a Base LoRA on one.
 
 ---
 

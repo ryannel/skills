@@ -1,6 +1,6 @@
 # MiniMax H3 — characters and identity
 
-H3 handles identity differently from the rest of the suite. **Ref2VA conditions on references directly**, and those references can include audio. There is no mature LoRA path for H3 yet (see [`lora-training.md`](lora-training.md)). That means reference conditioning is not one option among several. It is essentially the only option.
+H3 handles identity differently from the rest of the suite. **Ref2VA conditions on references directly**, and those references can include audio. The LoRA path is young but now real: one lab's stills-only character LoRA holds identity in motion at thigh-up framing (see [`lora-training.md`](lora-training.md) and the section below). Reference conditioning is still the first reach, because it is free and better supported, and the two are partners rather than alternatives.
 
 > Most of this file reasons from the documented Ref2VA capability and the suite's established identity craft `[flagged — re-verify]`. The sections marked `[community]` were added 2026-08-22 from a sweep of named practitioners, and they are firmer.
 
@@ -41,6 +41,8 @@ Curate for **angle and expression coverage**, not for the nine prettiest images.
 ### Size the references by importance `[community]`
 
 Reference pixel size acts as a weighting. A working allocation is **character ~1000 px, environment ~500 px, prop ~300 px** on the long side. Supply a reference for anything unusual. H3 knows *named* characters and franchises deeply, but it barely knows generic-but-specific objects, such as an unusual weapon or a particular tool. `[community — erioca]`
+
+Two more rules follow from how H3 reads its inputs. **Reference order is semantic**: H3 labels references by input order and advances its positional clock on them, so the same files in a different order are a different request — keep the order fixed across shots, and reattach in the same order after any Context-IR pass `[community — Naxdy]`. And **name the wardrobe in the prompt even for a referenced subject**, because H3 drifts garments across generations and the reference alone does not hold them `[community — Naxdy]`.
 
 A related point is easy to miss: **H3's pre-trained knowledge of named characters is broad enough that people maintain lists of it**. A "MiniMax H3 Known Characters" list is being kept on Hugging Face by `malcolmrey`, with v2 dated 2026-08-21. If your character is famous, naming them may work better than referencing them. But if you are running a *projected* text encoder rather than the full 32B, naming them will actively hurt, because the smaller sibling remembers them wrongly. See `setup-and-workflows.md` §5.
 
@@ -99,9 +101,11 @@ The advice above was tested in anger across live sessions in late August 2026. T
 3. Pass that frame through a light img2img identity pass with a character **image** LoRA at denoise ~0.4. Backgrounds survive denoise 0.4–0.55.
 4. Use the result as the next keyframe.
 
-Drift cannot compound, because identity re-enters at every link. The image-side LoRA comes from [`character-lora-training`](../../character-lora-training/).
+Drift cannot compound, because identity re-enters at every link. The image-side LoRA comes from [`character-lora-training`](../../character-lora-training/). One correction from later live use: the micro-jump was also being used to manufacture *end frames* to stop unrequested cuts, and that half of the job turned out to be a prompt-format problem — one `[Shot 1]` block with no timestamps holds the room without pins (`prompting-guide.md §8`). Keep the chain for identity; do not need it for cuts `[live-use — media lab, Ciara hoop piece, 2026-09]`.
 
 **A character LoRA does not replace references.** When you have one, use both together. The LoRA anchors the identity. The references stop the model inventing detail the LoRA does not carry.
+
+**With a LoRA, what one lab measured.** A stills-only H3 LoRA (62 stills at 1536, r16, 3000 steps) carried the identity into motion: pure T2V at thigh-up scored a 0.200 median face-embed distance against 0.920 without it, and with a pinned keyframe the face held flat across 5 s (0.167→0.172) where the base drifted (0.161→0.263). Full body fell off on both, which is the framing ceiling above, not the LoRA. So the LoRA's production value is exactly drift insurance on top of the keyframe recipe, and the framing rule still governs `[live-use — media lab, Ciara h3-v1, 2026-09]`. The recipe and its traps are in [`lora-training.md`](lora-training.md).
 
 ---
 
@@ -114,7 +118,7 @@ The gaps are real and this model is new, so here they are, stated plainly:
 | Performance transfer from a driving video | Reference clips influence output, but there is no documented motion-transfer mode | **Animate** — purpose-built, but no longer the first reach; see the note under the table |
 | Pose / depth structural conditioning | No documented ControlNet-equivalent stack | **Fun Control** |
 | Explicit camera trajectories | Prompt-level only | **Fun Camera** — discrete, repeatable moves |
-| Trained character LoRA | Ecosystem too young | Established two-expert LoRA training |
+| Trained character LoRA | Young but working: a stills-only LoRA holds identity in motion at thigh-up, full body still falls off `[live-use — media lab, 2026-09]` | Established two-expert LoRA training |
 | Lip-sync to a supplied track | Generates audio; does not follow an existing track | **S2V** consumes an audio track |
 
 **In the first row, neither column is the answer any more.** For replacing a person in footage that already exists, [`scail-2`](../../scail-2/) has displaced Wan **Animate** in community practice. SCAIL-2 tracks the driving clip frame for frame using SAM3 identity masks, rather than transferring a performance onto a fresh render. That is the difference between a cut that *matches* the plate and one that merely resembles it, and that is exactly the axis H3 loses on too. Wan **Animate** remains the in-family alternative when you are already running Wan end to end and would rather not add a third checkpoint stack. Going to SCAIL-2 costs you everything this page is about: it has **no audio in either direction**, it cannot originate a shot, and it needs you to lock frame 0 with an image edit first. So the route is *identity → SCAIL-2* when the footage exists, and *identity → H3* when the shot does not exist yet.
@@ -134,5 +138,5 @@ For the rest of the table — pose and depth conditioning, explicit camera paths
 | Voice doesn't resemble the reference | Reference clip too short, noisy, or in a different register | One clean 2–15 s clip in the target register |
 | References seem ignored | Roles not stated; Context-IR would have resolved them, and it is absent locally | Name each reference's job explicitly in the prompt |
 | Identity degrades late in the clip | Conditioning influence decaying over duration — the standard temporal failure | Shorter clips; re-anchor per shot |
-| Wardrobe or setting drifts | Slots spent on identity only | Reallocate the 12-file budget to include wardrobe/setting references |
+| Wardrobe or setting drifts | Slots spent on identity only, or garments left to the reference | Reallocate the 12-file budget to include wardrobe/setting references, **and** name the garments in the prompt |
 | Multiple characters trade features | Global conditioning with no regional control — same limitation as the rest of the field | Separate shots per character; keep clips short |

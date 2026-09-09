@@ -15,7 +15,7 @@ That split is why you should read this file in order rather than grep it for a n
 3. Per-stage settings (community layered pipeline) — and the reverse ZIT→ZIB ladder
 4. Resolution strategy — generate small, upscale in layers
 5. Universal node settings
-6. Using LoRAs — wiring, the QKV gotcha, weights, stacking, ZIB↔ZIT cross-compat, the detailer "face-swap" method
+6. Using LoRAs — wiring (incl. the Nunchaku path), the QKV version floor, weights, per-layer loaders, stacking, ZIB↔ZIT cross-compat and the Turbo training adapter, the detailer "face-swap" method
 7. Optional improvement layers — skin contrast, upscale models, SeedVR2, the tiled-upscale prompt caveat, colour drift
 8. Build order summary
 9. Fun Union ControlNet (pose, depth, canny, and more)
@@ -141,11 +141,11 @@ CLIPLoader (qwen_3_4b, "lumina2") ───────────────�
 
 **Which loader:** the ComfyUI core PR #12717 repro adds the LoRA with the **full `LoraLoader`** (model + clip). **`LoraLoaderModelOnly`** also works and is the clean choice. Z-Image LoRAs target the DiT, and most (Ostris-trained, diffusers-format) carry **no text-encoder weights**, so the Qwen-3/CLIP side is usually a no-op either way. The DiT target is verified `[official — ComfyUI PR #12717]`. Which of the two loader nodes you pick is a usage detail, not a break-or-not fact. Don't agonize over it. If a LoRA *does* ship Qwen-3 keys, use the full `LoraLoader` so they apply.
 
-### The gotcha that makes a LoRA silently do almost nothing (Z-Image-SPECIFIC)
+**If the DiT is a Nunchaku SVDQuant build** (`SKILL.md § Setup & ecosystem`), the model path changes. `ComfyUI-nunchaku` loads the 4-bit weights with its own loader node and applies LoRAs through its own LoRA nodes, because the stock loaders cannot patch that format. Wire your LoRA into the Nunchaku LoRA node instead of `LoraLoader`; everything downstream (`ModelSamplingAuraFlow`, the sampler settings) is unchanged `[community — nunchaku-ai; strong]`.
 
-Most published Z-Image LoRAs ship in **diffusers format** with separate `to_q` / `to_k` / `to_v` attention keys. But Z-Image stores attention as a single **fused QKV** matrix. On older ComfyUI the loader **silently drops the attention deltas**: you see `lora key not loaded` warnings and the LoRA "barely does anything." The MLP/FFN weights still load, so the LoRA is *attention-degraded*, not fully dead. That is exactly why it's easy to misread as "this LoRA is weak, raise the weight."
+### The QKV version floor (Z-Image-SPECIFIC, now a footnote)
 
-**Fixed in ComfyUI core PR #12717.** So when a LoRA underperforms, **update ComfyUI first**, before touching weights. (Primary: ComfyUI PR #12717 "fix: Z-Image LoRA and model loading for HuggingFace format weights"; issue #10973. A third-party `Comfyui-ZiT-Lora-loader` did conversion before the core fix; on current ComfyUI you shouldn't need it.)
+Most published Z-Image LoRAs ship in **diffusers format** with separate `to_q` / `to_k` / `to_v` attention keys, while Z-Image stores attention as one **fused QKV** matrix. ComfyUI builds older than **2026-03-17** silently dropped those attention deltas: `lora key not loaded` warnings, and a LoRA that "barely does anything" because only its MLP/FFN weights applied. Core PR #12717 ("fix: Z-Image LoRA and model loading for HuggingFace format weights", issue #10973) fixed it, and every stable release since carries the fix `[official — ComfyUI PR #12717, merged 2026-03-17]`. On a current install this is not a suspect. It only matters on a pinned or frozen ComfyUI, such as a RunPod template image that has not been rebuilt, and there the fix is to update, not to raise the weight. (`Comfyui-ZiT-Lora-loader` began as a workaround for this bug and is now the per-layer loader described below.)
 
 ### Weight — there is no magic 0.8 cap
 
@@ -159,6 +159,15 @@ Start **~0.7–0.8** and sweep **0.5–1.2**. Named authors land at very differe
 
 These are **per-LoRA tunings, not a model-wide ceiling.** The old "1.0 overcooks Turbo" framing was overstated. There is no documented hard cap. A saturated result means *that* LoRA is hot, not that 1.0 is illegal. The exact numbers are fast-moving and sources mildly disagree, so treat the table as starting points and prefer the weight printed on the LoRA's own model card `[community — single report; re-verify]`.
 
+### Per-layer (block-weighted) loading — new and experimental (Z-Image-SPECIFIC)
+
+SDXL users reach for block-weighted loading when a LoRA drags a style or colour cast along with the thing it was trained for: lower the blocks carrying the cast and keep the rest. Until mid-2026 Z-Image had no equivalent, so the only lever was the dataset (`characters.md §6`). Two community loaders now expose that knob on the 30-block S3-DiT:
+
+- **Comfyui-ZiT-Lora-loader** (capitan01R, per-layer graph added 2026-09-01). An interactive per-layer strength graph, 30 columns with attention and feed-forward split, plus an "Auto Strength" node that sets each layer's strength from its Frobenius norm. It also fuses separate Q/K/V keys into Z-Image's fused QKV on load, which is the conversion job it started life doing `[community — capitan01R; single report, early]`.
+- **ComfyUI-Realtime-Lora** (shootthesound, 2026-08-01). A "Z-Image Analyzer + Selective Loader V2" that analyses a LoRA per block and applies it selectively. The same pack does this for Flux, SDXL and Wan 2.2, so the idea is spreading across families rather than staying a one-off `[community — shootthesound; early]`.
+
+What neither gives you is a **map**. Nobody has published a validated account of which Z-Image blocks carry style and which carry identity, so plan to sweep. The Auto Strength heuristic and one training-side report of restricting a character LoRA to layers 14–25 (`lora-training.md §3.2`) are the only starting points, and both are single reports `[flagged — no validated DiT block map; re-verify]`. Keep dataset-time prevention as the default. Use the loaders to rescue a LoRA you cannot retrain, and re-verify both before building a pipeline on them.
+
 ### Stacking multiple LoRAs (general ComfyUI craft — stable across models)
 
 Use the rgthree **Power Lora Loader** node. It takes multiple LoRAs in one node, with per-LoRA strength, on/off toggles, and "no real limit" (`FlexibleOptionalInputType`). Toggle to **separate model/clip strengths** via the advanced view if needed. On Turbo, **keep combined strength near or under ~1.0** to avoid burning/overexposure. That is a conservative heuristic; with normalization you can go higher. A Z-Image-specific LoRA-merger node (`ComfyUI-ZImage-LoRA-Merger`) exists precisely because chained strengths accumulate on distilled models. Ordering has minor effects `[community — rgthree README]`.
@@ -167,7 +176,7 @@ Use the rgthree **Power Lora Loader** node. It takes multiple LoRAs in one node,
 
 Base and Turbo share the **identical S3-DiT**, so any LoRA **loads on either without a format error.** But "loads" does not mean "transfers." A **Base-trained LoRA run on Turbo** shows **softer identity, dropped face consistency, shifted color/background**, and may need a strength bump.
 
-**Community best practice (incl. the official Tongyi-MAI HF discussion #18): train on Z-Image Base, generate on Z-Image-Turbo.** Base is the better base for cross-prompt control. Train *on* Turbo only if you specifically want fast-delivery behavior. The exact magnitude of Base→Turbo degradation is **genuinely contested** `[contested]` across sources. Reports range from "~100% similarity" to "little impact" `[community — Tongyi-MAI #18, RunComfy, lilting.ch]`. So **test it, don't assume.**
+**Community best practice (incl. the official Tongyi-MAI HF discussion #18): train on Z-Image Base, generate on Z-Image-Turbo.** Base is the better base for cross-prompt control. Train *on* Turbo only if you specifically want fast-delivery behavior. If you do, train through Ostris's **`zimage_turbo_training_adapter`** (v2). It de-distills Turbo *during training only*, so the LoRA learns against a normal diffusion target, and it is dropped at inference, so the result still runs the 8-step path. That is the named alternative to train-on-Base for people who need Turbo speed from the first sample. Its own write-up still calls Base training the straightforward choice `[official — Ostris adapter repo; lilting.ch 2026-05-04]`. Mechanics in `references/lora-training.md §3.1`. The exact magnitude of Base→Turbo degradation is **genuinely contested** `[contested]` across sources. Reports range from "~100% similarity" to "little impact" `[community — Tongyi-MAI #18, RunComfy, lilting.ch]`. So **test it, don't assume.**
 
 ### "Fights distillation" — why a Turbo-trained LoRA can look blurry (Z-Image-SPECIFIC)
 

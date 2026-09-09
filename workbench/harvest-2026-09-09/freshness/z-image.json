@@ -1,0 +1,161 @@
+{
+  "skill": "z-image",
+  "verdict": "drift",
+  "flux": "active",
+  "flux_evidence": "No new base-model variant shipped since the 2026-08-23 check (Edit and Omni-Base both still 'to be released' per Tongyi-MAI/Z-Image GitHub issues #163/#169), but community tooling kept moving: two new Z-Image-specific regional-prompting tools, two block-weighted LoRA loaders, and a maturing Nunchaku quantisation backend all surfaced this pass without being previously tracked.",
+  "findings": [
+    {
+      "id": "regional-tooling-now-exists",
+      "severity": "major",
+      "claim": "characters.md ~L68 (cross-referenced in mixed-model-recipes.md L66) states no regional-prompting or attention-masking tooling exists for Z-Image; per-face FaceDetailer passes are the only multi-character mitigation.",
+      "reality": "Two Z-Image-specific regional tools now exist: zit-regions (SD Forge extension, additive attention-bias masking in joint self-attention, 'working' on Z-Image-Turbo at 9 steps) and ZIT-Ideogram (ComfyUI node, box-based regional conditioning reusing the KJNodes Ideogram-4 editor pattern). Both are early/experimental: seed-sensitive, boundary blur, inconsistent per-region LoRA behaviour, 3+ regions lightly tested.",
+      "evidence": "https://github.com/MisterLotto/zit-regions ; https://github.com/bbc-s/ZIT-Ideogram",
+      "fix_hint": "references/characters.md ~L68 and image-production-workflows mixed-model-recipes.md L66 — add both as experimental options while keeping FaceDetailer as the reliable fallback."
+    },
+    {
+      "id": "block-weighted-lora-loaders-exist",
+      "severity": "major",
+      "claim": "characters.md failure-modes row ~L81 says there is no block-weighted LoRA application equivalent for Z-Image's DiT, so dataset-time prevention is the only lever against a character LoRA dragging a style/colour cast.",
+      "reality": "Two community per-layer LoRA loaders now target Z-Image's 30-block S3-DiT: Comfyui-ZiT-Lora-loader (interactive per-layer strength graph + Frobenius-norm auto-strength) and ComfyUI-Realtime-Lora (Z-Image Analyzer + Selective Loader V2). This is a real inference-time fix, not just prevention.",
+      "evidence": "https://github.com/capitan01R/Comfyui-ZiT-Lora-loader ; https://github.com/shootthesound/comfyUI-Realtime-Lora",
+      "fix_hint": "references/characters.md failure-modes row ~L81 — note the block-weighted loader option alongside dataset-time prevention."
+    },
+    {
+      "id": "lora-pr-12717-aged-out",
+      "severity": "minor",
+      "claim": "SKILL.md ~L102 and setup-and-workflows.md §6 flag ComfyUI core PR #12717 as a headline 'update ComfyUI first' gotcha.",
+      "reality": "PR #12717 merged into Comfy-Org/ComfyUI on 2026-03-17 and has shipped in every stable release since (~6 months). Per the watchlist's own ageing rule, this should demote from headline gotcha to a footnote/version-floor note.",
+      "evidence": "https://github.com/comfyanonymous/ComfyUI/pull/12717",
+      "fix_hint": "SKILL.md ~L102 and references/setup-and-workflows.md §6 — soften to a footnote."
+    },
+    {
+      "id": "nunchaku-quantization-uncovered",
+      "severity": "minor",
+      "claim": "SKILL.md ~L95-97 lists official int8/NVFP4 and community fp8/GGUF quantised builds as the complete quantisation landscape.",
+      "reality": "Nunchaku ships 4-bit SVDQuant Z-Image-Turbo builds (INT4 for pre-Blackwell, NVFP4 for 50-series; ranks 32/128/256) via ComfyUI-nunchaku, mature since v1.1.0 (2025-12-27) with a 20-30% perf boost added in v1.2.0 (2026-01-12) and a compat fix in v1.2.1 (2026-01-26).",
+      "evidence": "https://huggingface.co/nunchaku-ai/nunchaku-z-image-turbo ; https://github.com/nunchaku-ai/ComfyUI-nunchaku",
+      "fix_hint": "SKILL.md ~L96 quantisation list and references/setup-and-workflows.md — add Nunchaku SVDQuant as a fourth low-VRAM path."
+    },
+    {
+      "id": "base-turbo-transfer-adapter-nuance",
+      "severity": "minor",
+      "claim": "setup-and-workflows.md ~L140 frames train-on-Base as the flat consensus answer to Base↔Turbo LoRA transfer degradation.",
+      "reality": "Ostris's zimage_turbo_training_adapter (V2) lets you train directly on Turbo without breaking its 8-step distillation, by de-distilling only during training and removing the adapter at inference. Doctrine is unchanged — the source itself still calls Base training 'the straightforward choice' — but the adapter is now a documented named alternative, not just an ad hoc workaround.",
+      "evidence": "https://lilting.ch/en/articles/z-image-turbo-lora-dedistill-adapter (2026-05-04)",
+      "fix_hint": "references/setup-and-workflows.md ~L140 — mention the training_adapter V2 route for people who need Turbo speed from step one."
+    }
+  ],
+  "new_techniques": [
+    {
+      "id": "nunchaku-svdquant-zit",
+      "what": "Nunchaku's 4-bit SVDQuant engine now ships quantised Z-Image-Turbo DiT builds (INT4 for pre-Blackwell GPUs, NVFP4 for 50-series) at ranks 32/128/256, loaded via ComfyUI-nunchaku with native LoRA-stack nodes.",
+      "why_it_matters": "Gives Z-Image-Turbo a fourth, actively-maintained low-VRAM path (alongside official int8/NVFP4 and community fp8/GGUF) with a claimed 20-30% speed gain.",
+      "source_class": "community-consensus",
+      "evidence": "https://huggingface.co/nunchaku-ai/nunchaku-z-image-turbo ; https://github.com/nunchaku-ai/ComfyUI-nunchaku (v1.1.0 2025-12-27, v1.2.0 2026-01-12)",
+      "date": "2026-01-12",
+      "where_it_belongs": "SKILL.md quantisation list ~L96; references/setup-and-workflows.md",
+      "already_covered": false
+    },
+    {
+      "id": "zit-regions-attention-bias",
+      "what": "zit-regions is an SD Forge extension that does regional prompting for Z-Image/Z-Image-Turbo via additive bias masking inside joint self-attention (rather than cross-attention hooks), isolating per-region caption tokens and penalising cross-region image attention.",
+      "why_it_matters": "First architecture-aware regional-prompting tool for Z-Image's S3-DiT joint attention, directly closing the 'no regional tooling' gap the skill currently documents — though still early (seed-sensitive, boundary blur).",
+      "source_class": "single-report",
+      "evidence": "https://github.com/MisterLotto/zit-regions",
+      "date": "2026-06-08",
+      "where_it_belongs": "references/characters.md multi-character mitigation section",
+      "already_covered": false
+    },
+    {
+      "id": "zit-ideogram-box-regional",
+      "what": "ZIT-Ideogram is a ComfyUI custom node that reuses KJNodes' Ideogram-4 visual box editor to draw rectangular regions and route separate prompts/masks into Z-Image-Turbo conditioning.",
+      "why_it_matters": "A second, independent regional-prompting path for Z-Image-Turbo inside ComfyUI itself (not just Forge), giving the skill a ComfyUI-native option to point to.",
+      "source_class": "single-report",
+      "evidence": "https://github.com/bbc-s/ZIT-Ideogram",
+      "date": "2026-06-11",
+      "where_it_belongs": "references/characters.md multi-character mitigation section",
+      "already_covered": false
+    },
+    {
+      "id": "block-weighted-zit-lora-loader",
+      "what": "Comfyui-ZiT-Lora-loader is an architecture-aware LoRA loader for Z-Image Turbo with a per-layer (30-column, attention/feed-forward split) strength graph and a Frobenius-norm-based 'Auto Strength' node, plus auto-fusing of separate Q/K/V into Z-Image's fused QKV format.",
+      "why_it_matters": "Gives Z-Image's S3-DiT a real block-weighted LoRA application path, the missing equivalent to SDXL-world block weighting that characters.md currently says doesn't exist.",
+      "source_class": "single-report",
+      "evidence": "https://github.com/capitan01R/Comfyui-ZiT-Lora-loader",
+      "date": "2026-09-01",
+      "where_it_belongs": "references/characters.md failure-modes row ~L81",
+      "already_covered": false
+    },
+    {
+      "id": "realtime-lora-block-editor",
+      "what": "ComfyUI-Realtime-Lora adds a 'Z-Image Analyzer + Selective Loader V2' that trains, block-edits and saves LoRAs directly inside ComfyUI for Z-Image (plus Flux Klein, SDXL, Flux, WAN 2.2, SD 1.5), exposing per-block selective application.",
+      "why_it_matters": "A second, cross-model-family tool converging on the same block-weighted-loading idea, suggesting this is becoming an ecosystem pattern rather than a one-off.",
+      "source_class": "community-consensus",
+      "evidence": "https://github.com/shootthesound/comfyUI-Realtime-Lora",
+      "date": "2026-08-01",
+      "where_it_belongs": "references/characters.md failure-modes row ~L81",
+      "already_covered": false
+    },
+    {
+      "id": "zimage-turbo-training-adapter-v2",
+      "what": "Ostris's zimage_turbo_training_adapter (V2) temporarily de-distills Z-Image-Turbo during LoRA training only — making it behave like a normal diffusion model for training stability — then is removed at inference so the trained LoRA still runs Turbo's fast 8-step path.",
+      "why_it_matters": "A documented, named alternative to 'always train on Base' for people who want Turbo-speed-from-the-start LoRAs, without abandoning the Base-first default.",
+      "source_class": "official",
+      "evidence": "https://lilting.ch/en/articles/z-image-turbo-lora-dedistill-adapter",
+      "date": "2026-05-04",
+      "where_it_belongs": "references/setup-and-workflows.md ~L140 Base↔Turbo transfer section",
+      "already_covered": false
+    },
+    {
+      "id": "character-lora-layer-targeting",
+      "what": "A community research writeup reports targeting only transformer layers 14-25 (of Z-Image's 30) when training a character LoRA, claiming this preserves the base model's style range better than training all layers.",
+      "why_it_matters": "If corroborated, this is a concrete, actionable hyperparameter refinement for character LoRA training that the skill doesn't currently mention.",
+      "source_class": "single-report",
+      "evidence": "https://civitai.com/articles/24403/my-little-research-about-z-image-lora-training-fp32-model-different-text-encoders-upscaling",
+      "date": "2026-09-01",
+      "where_it_belongs": "references/lora-training.md hyperparameter section ~L50",
+      "already_covered": false
+    }
+  ],
+  "watchlist_updates": {
+    "resolved": [],
+    "add": [
+      {
+        "id": "nunchaku-quantization",
+        "type": "ecosystem-gap",
+        "claim": "Nunchaku 4-bit SVDQuant Z-Image-Turbo builds exist and are actively maintained (nunchaku-ai/ComfyUI-nunchaku) but are absent from the skill's quantisation coverage.",
+        "where": "SKILL.md ~L95-97; references/setup-and-workflows.md",
+        "check": "Confirm continued maintenance and whether Nunchaku becomes a commonly recommended low-VRAM path in community guides."
+      },
+      {
+        "id": "character-lora-layer-targeting",
+        "type": "flagged-inference",
+        "claim": "Single community report: targeting transformer layers 14-25 (of 30) for character LoRA training preserves base-model style range better than training all layers.",
+        "where": "references/lora-training.md hyperparameter section ~L50",
+        "check": "Look for corroboration or a named ablation on Z-Image layer-targeted training."
+      }
+    ],
+    "amend": [
+      {
+        "id": "regional-tooling",
+        "change": "No longer a flat ecosystem gap. Two experimental Z-Image-specific regional tools now exist (zit-regions, ZIT-Ideogram). Re-check for a more mature/ComfyUI-consensus option and whether either tool gains adoption."
+      },
+      {
+        "id": "dit-block-map",
+        "change": "Two community block-weighted LoRA loaders for Z-Image's S3-DiT now exist (Comfyui-ZiT-Lora-loader, ComfyUI-Realtime-Lora). Re-check adoption/validation before treating either as the standard fix."
+      },
+      {
+        "id": "lora-pr-12717",
+        "change": "Merged 2026-03-17, now ~6 months in every stable ComfyUI release. Recommend demoting from headline gotcha to footnote now."
+      },
+      {
+        "id": "base-turbo-transfer",
+        "change": "Ostris's zimage_turbo_training_adapter V2 (documented 2026-05-04) is now a named alternative for training directly on Turbo. Train-on-Base remains the stated default/consensus."
+      },
+      {
+        "id": "zit-bucket-and-noise",
+        "change": "Guidance has broadened beyond the single experimental-fork report into more widely documented practice (multiple training-strategy writeups now cover training_adapter V2, sigmoid timestep, and resolution-bucket choices). Re-verify whether ZiT support in ai-toolkit mainline is still 'experimental'."
+      }
+    ]
+  }
+}

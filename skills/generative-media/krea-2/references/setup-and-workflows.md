@@ -1,6 +1,6 @@
 # Krea 2 — Setup & workflows
 
-This file covers local setup (ComfyUI, diffusers, the reference CLI), quantisation and VRAM strategy, using LoRAs, and the multi-stage and mixed-model workflows. Facts were verified against the template JSON, HF repo listings, GitHub README, diffusers docs, and musubi-tuner docs on 2026-07-07. Community recipes are attributed inline.
+This file covers local setup (ComfyUI, diffusers, the reference CLI), quantisation and VRAM strategy, using LoRAs, and the multi-stage and mixed-model workflows. Facts were verified against the template JSON, HF repo listings, GitHub README, diffusers docs, and musubi-tuner docs on 2026-07-07; the diffusers release, the quant table and the VAE tooling were re-checked 2026-09-09. Community recipes are attributed inline.
 
 ## Contents
 1. [ComfyUI: the official template, node by node](#1-comfyui-the-official-template-node-by-node)
@@ -68,7 +68,7 @@ One more container trap: restart ComfyUI with **the same interpreter that starte
 | `qwen3vl_4b_bf16` / `_fp8_scaled` | 8.9 / 5.2 GB | text encoder |
 | `qwen_image_vae` | 0.25 GB | |
 
-**Community GGUF.** This time the ecosystem formed without city96. The repos are `gguf-org/krea-2-gguf`, `vantagewithai/Krea-2-Turbo-GGUF` and `-Raw-GGUF`, `molbal/krea2-gguf`, and `realrebelai/KREA-2_GGUFs`. The vantagewithai sizes are: Q2_K 4.9 GB, Q4_K_M 7.5 GB, Q6_K 10.6 GB, Q8_0 13.7 GB. GGUF requires the `ComfyUI-GGUF` custom node, because GGUF DiTs load via its loader rather than `UNETLoader`. **No per-quant quality comparison has been published yet.** The table below is size arithmetic plus the general GGUF experience from sibling models, not measured Krea-2 craft:
+**Community GGUF.** This time the ecosystem formed without city96. The repos are `gguf-org/krea-2-gguf`, `vantagewithai/Krea-2-Turbo-GGUF` and `-Raw-GGUF`, `molbal/krea2-gguf`, and `realrebelai/KREA-2_GGUFs`. The vantagewithai sizes are: Q2_K 4.9 GB, Q4_K_M 7.5 GB, Q6_K 10.6 GB, Q8_0 13.7 GB. GGUF requires the `ComfyUI-GGUF` custom node, because GGUF DiTs load via its loader rather than `UNETLoader`. **A per-quant comparison now exists, but read it before you lean on it.** A 150-image benchmark across BF16 / FP8 / INT8-ConvRot / INT4 / GGUF, scored on perceptual, semantic and latent-space metrics, is reported to recommend INT8-ConvRot as the primary pick for 16–24 GB and near-lossless against BF16 `[community — instasd formats guide, lilcheaty and Winnougan HF cards, 2026-08; re-verify]`. The benchmark itself could not be read for this pass — the HF cards only say "near-lossless in testing" and the write-up sits behind a wall — so it settles the overall-quality question provisionally and does **not** settle the complex-prompt-adherence dispute in the int8 row above `[contested]`. The table below is still size arithmetic plus the general GGUF experience from sibling models:
 
 | VRAM | Working setup |
 |---|---|
@@ -94,9 +94,10 @@ The flag defaults are: `--steps 28`, `--cfg 4.5` (0 disables it), and `--y1 0.5`
 
 ## 4. diffusers
 
-This requires **diffusers from source** as of early July 2026. The docs are on `main`; check pypi before assuming a stable release carries it.
+**`Krea2Pipeline` ships in the stable release since diffusers 0.40.0 (PyPI, 2026-08-20)**, with the modular pipeline, docs and tests in-tree `[official — diffusers 0.40.0 release notes]`. The source-only install that early guides describe is no longer needed:
 
 ```python
+# pip install "diffusers>=0.40.0"
 import torch
 from diffusers import Krea2Pipeline
 
@@ -121,6 +122,8 @@ Three decode paths now exist for the same latents, and the choice matters more o
 
 The single highest-leverage quality fix for the soft/airbrushed default and the halftone/dark-noise artefacts is to decode through the **Wan 2.1 VAE (FP32)** instead of `qwen_image_vae`. It was reported independently as "solves this" for the blur complaint `[community — mobiuscog, HN]` and adopted in the best-documented realism workflow `[community — nsfwVariant, Civitai]`. The mechanics are simple: drop the Wan 2.1 VAE file into `models/vae/` and point the `VAELoader` at it. The latent spaces are compatible enough for decode; you are changing the renderer, not the model. Keep the Qwen VAE for encode-side operations (img2img-style passes) to stay conservative. A/B the swap on your own content, because this is community craft, not an official configuration. It is also not a cure-all. Moiré/halftone artefacts on hair and clothing are reported *on the Wan VAE too*, notably on community checkpoint merges (Fascium-class) even with all LoRAs off `[community — derTommygun, r/StableDiffusion]`. When that happens on a merge, re-test the stock checkpoint before debugging settings.
 
+**Know what the swap does not fix.** It cures the *soft* default. It does nothing for texture that comes from rendering outside the checkpoint's resolution band: at 2048, the Wan 2.1 VAE and the Qwen VAE decoded to identical crumpled skin in a four-cell sweep, and the fix was rendering at 1024 native `[live-use — media lab, Ciara band sweep, 2026-09-08]`. If the artefact is a reticulated or "scale" skin rather than blur, the VAE is the wrong lever — see `lora-training.md §9`.
+
 ### 5b. Qwen Image VAE Sharp / Sharp Plus
 
 These are retuned decoders for Krea 2 Turbo and Raw. They lift fine-edge response, micro-contrast and high-frequency detail *without* shifting colour, composition or character. That is the whole reason they exist alongside the Wan swap, because the Wan VAE does move colour. There are two grades:
@@ -138,14 +141,14 @@ A decision shortcut: if the image is soft *and* the colour is fine, use Sharp or
 
 The **exposure, temperature, tint, detail/clarity and contrast vectors** have been extracted from Krea 2's (Qwen-Image) VAE. In principle, that makes Camera-Raw-style grading available *inside* the diffusion process rather than in post. Two things follow from that which post-processing cannot do. One is a higher dynamic range than a graded PNG allows. The other is the ability to steer generations into territory the model resists on its own — very dark or very bright frames, and reportedly even the morphology of objects. This works because the grade conditions the sample instead of correcting it afterwards.
 
-**It is not actionable yet.** A ComfyUI node was *announced*, not shipped. Vectors for Z-Image (Flux VAE) were in progress. If it lands, the method should transfer to anything sharing the Qwen-Image VAE, which is why it is worth watching rather than waiting on `[community — muerrilla; re-verify]`.
+**The node has shipped.** `muerrilla/ComfyUI-Colorcraft` supports the Qwen-Image VAE family, Krea 2 included, and the author tested it on both Krea 2 and Z-Image as intended `[community — muerrilla, github.com/muerrilla/ComfyUI-Colorcraft, 2026-08]`. It is a new capability class — grading inside sampling — not a replacement for the decode choice above. It does not change the §5a recommendation: the Wan swap and the Sharp decoders decide *how* the latent is rendered, Colorcraft decides *what* the sampler is steered toward. A/B it on a latent you have already paid for, the same way you would a decoder, and pin the version, because it is a single-maintainer pack weeks old.
 
 ## 6. Using LoRAs
 
 - **Node:** `LoraLoaderModelOnly`. Krea 2 LoRAs are DiT-only, because the encoder is never trained (encoder-class doctrine). GGUF DiT + LoRA works through the same node.
 - **Official style LoRAs:** run them at strengths 0.8–1.0. Their natural-phrase triggers are auto-appended by the template; `prompting-guide.md §5` has the verbatim table.
 - **The official Turbo LoRA:** `loras/krea2_turbo_lora_rank_64_bf16.safetensors` in Comfy-Org/Krea-2 is the Turbo distillation *as a rank-64 LoRA*. Applied over **Raw**, it turns Raw into a few-step model; at partial strength it blends distillation speed with Raw's diversity. This is the enabling piece of the two-stage recipe below.
-- **Trained LoRAs:** train on Raw, apply on Turbo — that is the official doctrine, covered in `lora-training.md`. Character LoRAs commonly hold identity at ~0.8 while stacking with style LoRAs `[community — JahJedi]`. Sweep 0.6–1.0 per LoRA. There is no established per-type weight table yet; the ecosystem is two weeks old, so expect this to firm up.
+- **Trained LoRAs:** train on Raw, apply on Turbo — that is the official doctrine, covered in `lora-training.md`. Two numbers exist for character LoRAs. A 474-image LoRA holds identity at ~0.8 while stacking with style LoRAs `[community — JahJedi]`. Protocol-size LoRAs (13–32 images) ship at **1.0**, and a LoRA that only reads right at 1.1 is underfit rather than strong `[live-use — media lab, 21 runs, 2026-08 → 09]`. Sweep 0.8–1.1 per LoRA; there is still no per-type weight table beyond that, eleven weeks in. Deploy strength, the different-body-per-checkpoint effect and the inference rules that go with a character LoRA are in `lora-training.md §10`.
 - **Slider/utility LoRAs** are already appearing (for example a Detail Slider on Civitai). Treat their weights per the author's card.
 
 ## 7. Multi-stage workflows
@@ -175,6 +178,10 @@ For weak GPUs, generate at **512×512 and upscale in pixel space with realESRGAN
 ### 7c. The full production ladder
 
 `[community — lonecatone23, "Pro Grade" workflow]` chains: caption/enhance (abliterated local LLM) → base gen → detailer-daemon sampling → **SAM3 face/eye detailers** → `UltimateSDUpscale` at low denoise with a simplified prompt → post FX. The character-LoRA swap belongs at the detailer stage, not the base gen (`characters.md §4`). Note the author's own honesty about a limitation: the workflow's image-edit stage underperforms, because there is no real edit model yet.
+
+### 7d. Turbo img2img: the denoise ladder
+
+Community practice for img2img and repaint on stock Turbo, at its native 8 steps / cfg 1.0, has settled on three rungs: **0.4 stays close to the source, 0.55 is the balanced default, 0.7 is a strong restyle.** A packaged Civitai workflow adds face preservation on top `[community — Civitai 2768351, kombitz.com, 2026-07-19; convergent]`. Read the rungs against the step-budget rule at the top of §7: at 8 steps, denoise 0.4 leaves only ~3 effective steps, so these numbers assume you either accept the community's 8-step result or raise the refine sampler's own step count. Once a character LoRA is in the graph the numbers change — a face pass wants LoRA 1.0 at denoise 0.5 into a 1024² crop, 0.3 is too timid and 0.6+ drifts the hair (`lora-training.md §10`).
 
 ## 8. Krea 2 in mixed-model pipelines
 

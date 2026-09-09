@@ -53,6 +53,10 @@ Krea 2's aesthetic prior leans soft, and the model has a mild **3D-render/digita
 - **Anchor texture explicitly.** The working anti-airbrush string is "natural skin texture, visible pores, subtle skin imperfections" `[community — amida168, kombitz.com]`. The official examples do the same for non-skin surfaces ("grainy paper texture", "tactile quality", "smooth vinyl texture"). The model responds well to named textures in general.
 - **Know what prompting can't fix.** If softness remains after all of the above, it comes from the VAE's rendering character. The fix is the Wan 2.1 VAE swap or a detailer pass, not more words (`setup-and-workflows.md §5`). Muted facial expressions are the safety-tuning tax. The fix there is a bypass LoRA, Rebalance nodes, or a Z-Image face pass, not adjectives (`SKILL.md`, *two taxes*).
 
+**Everything above inverts once a character LoRA is in the graph.** The texture stack is the right anchor on stock Turbo. Over a LoRA that already carries the skin, it doses the skin twice, and freckles come out as a reptile-scale pattern. Running the prompt long does the same (~95 words scaled, ~45 clean). Keep face and skin words out, stay near 45 words, and use `"an unretouched film photograph."` as the whole tail `[live-use — media lab, Amy canon grids, 2026-09-05]`. The full rule set is `lora-training.md §10`.
+
+One more piece of wording that costs skin, LoRA or not: **a textured or patterned wall.** On the adult finetunes, "white studio cyclorama" rendered as terrazzo and the speckle printed onto the skin; wallpaper printed its cell pattern across the torso; every seed, not luck. A *smooth, plain painted wall* was clean every time `[live-use — media lab, Ciara v4 inspection, 2026-09-09]`.
+
 Prompt-only expression coaxing helps at the margin. Name the *physical* expression rather than the emotion: "eyes crinkled, mouth open mid-laugh, head thrown slightly back" beats "laughing joyfully". Even so, expect a lower ceiling than on Z-Image. One named tester summarised the untooled base model this way: "only neutral and smile remain" `[community — liutyi]`.
 
 ## 4. Text rendering
@@ -100,3 +104,5 @@ Use the expander when your prompt is one line and you want the model's idea of a
 | "photo" buried at the end of a style-heavy prompt | The render bias wins the ambiguity | Medium first, camera stack early |
 | Long text passage to render | Weak text rendering | ≤ a few words, straight quotes, candidates + select, or [`ideogram-4`](../../ideogram-4/) |
 | Same prompt, different numbers across surfaces | Two guidance conventions (0-off vs 1-off) | Convert deliberately (SKILL.md, variant selector footnote) |
+| Face words and a realism tail over a character LoRA | The LoRA owns the skin; the words fight it and long prompts scale the freckles | No face words, ~45 words, `"an unretouched film photograph."` (§3, `lora-training.md §10`) |
+| Describing what is meant to be off camera | The model draws what you describe, so the frame widens to include it | Trigger, state of dress, then only what is in frame; a taller canvas beats framing words |

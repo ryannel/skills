@@ -146,9 +146,9 @@ Text encoder and VAE files stay `.safetensors`. GGUF quantisation applies only t
 
 **Recommended install:**
 ```bash
-pip install git+https://github.com/huggingface/diffusers -U
+pip install "diffusers>=0.40"
 ```
-Version v0.38.0 appears in diffusers source code URLs. Check `pypi.org/project/diffusers` to see whether it has landed as a stable pip release before you rely on the git-install path.
+diffusers 0.40.0 is a stable PyPI release (2026-08-20, verified 2026-09-09). It carries all three FLUX.2 pipeline classes below, and the official docs link source at the `v0.40.0` tag with no git-install caveat. The older `git+https://github.com/huggingface/diffusers` install is no longer needed `[official — diffusers 0.40.0 docs]`.
 
 **[dev] — `Flux2Pipeline`**
 
@@ -200,7 +200,7 @@ image = pipe(
 ).images[0]
 ```
 
-**[klein] 9B KV-cached — `Flux2KleinKVPipeline`**
+**[klein] 9B KV-cached — `Flux2KleinKVPipeline`** (diffusers 0.40.0+)
 
 ```python
 from diffusers import Flux2KleinKVPipeline
@@ -210,6 +210,8 @@ pipe = Flux2KleinKVPipeline.from_pretrained(
     torch_dtype=torch.bfloat16
 )
 ```
+
+This is the diffusers counterpart of the ComfyUI 9B KV template (§4). On the first denoising step the pipeline runs the reference-image tokens through the forward pass and caches their attention K/V projections. Every later step reuses that cache instead of recomputing the references. The saving scales with the number of references and the number of steps, so it matters most for a fixed multi-reference bundle re-rendered across many prompts. For a single one-reference generation it behaves like `Flux2KleinPipeline`. Check the class docstring for the reference-image argument name before you wire it in `[official — diffusers 0.40.0 docs]`.
 
 **[klein] 4B:** At research time, the diffusers docs had no dedicated named pipeline class for the 4B variant. Load it via the same `Flux2KleinPipeline` pattern, or directly from the 4B HF repo — check the model card for the recommended pipeline when you use it. Community reports say `Flux2KleinPipeline` works with the right config changes.
 

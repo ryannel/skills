@@ -19,7 +19,7 @@
 
 ## 1. Which variant to train on — train on Base, generate on Turbo
 
-The community-recommended path is to **train the LoRA on undistilled Z-Image Base and generate with it on Z-Image-Turbo.** The official Tongyi-MAI HF discussion #18 recommends the same. Base gives better cross-prompt control. A LoRA trained on Turbo tends to "fight" the distillation: it comes out blurry at 8 steps and only cleans up at around 30 (see `references/setup-and-workflows.md §6`). Train *on* Turbo only if you specifically want fast-delivery behavior baked in.
+The community-recommended path is to **train the LoRA on undistilled Z-Image Base and generate with it on Z-Image-Turbo.** The official Tongyi-MAI HF discussion #18 recommends the same. Base gives better cross-prompt control. A LoRA trained on Turbo tends to "fight" the distillation: it comes out blurry at 8 steps and only cleans up at around 30 (see `references/setup-and-workflows.md §6`). Train *on* Turbo only if you specifically want fast-delivery behavior baked in, and then do it through the training adapter (§3.1).
 
 A Base-trained LoRA still **loads** on Turbo without error, because both variants share the S3-DiT architecture. But the transfer is not perfect. Face and identity soften, and you may need a strength bump `[contested]`. Strong sources genuinely disagree about how much quality is lost. Rather than trusting either camp, test on the variant you will actually deploy on. The disagreement is laid out in `references/setup-and-workflows.md §6`.
 
@@ -64,6 +64,8 @@ Two variants ship in the `ostris/zimage_turbo_training_adapter` HF repo, and the
 - `zimage_turbo_training_adapter_v1.safetensors` — default; stable
 - `zimage_turbo_training_adapter_v2.safetensors` — experimental; often better for character work
 
+**What the adapter does.** It temporarily de-distills Turbo for the duration of training. The model behaves like an ordinary diffusion model, so the LoRA learns a normal target instead of fighting Decoupled-DMD's few-step trajectory. At inference the adapter is removed, so the trained LoRA still runs the 8-step path. That is why it fixes the "blurry at 8 steps" failure rather than masking it. The v2 adapter is the one the May 2026 write-ups document, and they still call training on Base "the straightforward choice". So read this as the route for people who need Turbo speed from the first sample, not as a new default `[official — Ostris adapter repo; lilting.ch 2026-05-04]`.
+
 > Z-Image (undistilled) does not require the training adapter.
 >
 > An alternative "de-turbo" route exists: train on Turbo *without* the adapter, and accept that the LoRA undoes some of the distillation. You then **infer at 20–30 steps, CFG 2–3** instead of the 8-step preset `[community — neurocanvas, Tongyi-MAI #64]`. This is a valid route when you don't care about Turbo's speed; otherwise use the adapter. There is also tooling beyond AI-Toolkit: `tdrussell/diffusion-pipe` supports Z-Image as well, with ComfyUI-format output. It documents the model's **shift = 3** timestep setting, which matches the `ModelSamplingAuraFlow` value at inference.
@@ -84,6 +86,10 @@ Two of those relationships decide whether the table above reads as sensible or a
 
 - **Total steps ≈ images × repeats × epochs ÷ batch.** Doubling the dataset halves the epochs for the same step count. So the 2000–3000 figure is only meaningful alongside the 15–25 image assumption.
 - **Effective learning rate scales as `alpha ÷ rank`.** `alpha = rank` means no scaling. `alpha < rank` quietly dampens learning; for example, alpha 8 with rank 16 gives roughly half the LR. Set `alpha = rank` to start. The old rule that alpha above rank "burns the image" is a myth. `alpha = 2×rank` is a legitimate and commonly used config; it simply doubles the effective LR, so compensate for that in the LR setting.
+
+**One optimiser report to know about before you blame the dataset.** `adamw8bit` is reported to zero out small updates under BF16 on Z-Image. In that report `optimi.AdamW`, which uses Kahan summation, converged at 900 steps where the `adamw8bit` run needed 3,000 or more, and the 2.15× inference strength the `adamw8bit` LoRA needed to assert identity was read as a symptom of the same bug `[community — AInVFX, 2026-04-06; single report; re-verify]`. The suite's own `adamw8bit` runs on Krea 2 and MiniMax H3 show no such symptom, so treat it as Z-Image-specific until someone reproduces it. If a Z-Image LoRA only reads as the person at strength 2 and up, swap the optimiser before you touch the set.
+
+**Layer targeting is a live but unconfirmed idea.** One community research write-up reports training a character LoRA on only transformer layers 14–25 of the 30, and claims this preserves the base model's style range better than training every layer `[flagged — Civitai 24403; single report, re-verify]`. Nobody has published an ablation, so treat it as an experiment to run on a dataset you already know, not as a setting to copy. The inference-side counterpart, per-layer loaders that dial blocks down after training, is in `references/setup-and-workflows.md §6`.
 
 **Train a "good citizen."** Keep the LoRA lower-rank and not over-trained, with a sweet spot **below 1.0**. A LoRA like that stacks with other LoRAs without frying or dominating them. This matters on Z-Image specifically, because you will be stacking *with* the realism and skin-texture LoRAs that fix the family's airbrushed default. The modest-delta principle is sound craft. Precise prescriptions of the form "alpha must be X for stacking" are folklore `[contested]`, so don't over-tune by ritual.
 
@@ -150,7 +156,8 @@ Three things bite specifically on Z-Image:
 | Colours over-saturated, edges over-cooked | LoRA inference weight too high for this LoRA | Lower the weight (try 0.5–0.8; style LoRAs often want less) — see `references/setup-and-workflows.md §6` |
 | Identity still generic at 2k steps | Too few images or insufficient caption specificity | Add more images; make captions more specific about identity markers |
 | Identity drifts across seeds | LR too high or rank too high | Drop to rank 8, LR 5e-5 |
-| LoRA loads but "barely does anything" | Not a training failure — the diffusers-format QKV loading gotcha | Update ComfyUI before touching weights (`references/setup-and-workflows.md §6`) |
+| Likeness only appears at strength ~2 and up | Reported `adamw8bit`-under-BF16 update loss (§3.2, single report) — or plain underfit | Retrain with `optimi.AdamW`; compare against a longer `adamw8bit` run before concluding |
+| LoRA loads but "barely does anything" | Not a training failure. On a ComfyUI older than March 2026, the diffusers-format QKV loading bug; on a current build, a hot weight or a Base/Turbo mismatch | Check the version floor, then the variant and the card weight (`references/setup-and-workflows.md §6`) |
 
 ---
 
