@@ -141,7 +141,9 @@ makes it a third revenue gate beside [`krea-2`](../krea-2/)'s $1M and [`ltx-2-5`
 cap `[official — model cards and licence files, read 2026-09-09]`. One more rule from the same sweep: run the
 ladder against the **specific checkpoint**, never against the vendor's reputation. Qwen-Image 3.0 went
 hosted-only with no weights and no licence in the same four months that Ideogram 4, Krea 2, MiniMax H3 and
-LTX-2.5 all released weights. "Historically open lab" predicts nothing.
+LTX-2.5 all released weights, and **Qwen-Image-2.1 (open weights 2026-09-20) arrived under a non-commercial
+Qwen Research License** while every 20B Qwen-Image checkpoint stays Apache 2.0. "Historically open lab"
+predicts nothing, and neither does the family name.
 
 ---
 
@@ -197,10 +199,12 @@ traps fail silently in a stock graph.** Krea 2 Identity Edit is an *unofficial* 
 the `ComfyUI-Krea2Edit` node pack for its dual conditioning `[community — Enshitification, 611 pts]`. And
 ComfyUI's Qwen edit node downscales every reference to 1 MP before the model sees it, which is where "Qwen Edit
 is blurry" comes from; the bypass is the first thing [`qwen-image`](../qwen-image/) teaches. **The largest of
-the three by ecosystem is the newest skill here.** The **Qwen-Image family** (Qwen-Image, Edit 2509/2511, 2512,
+the three by ecosystem is the newest skill here.** The **Qwen-Image 20B family** (Qwen-Image, Edit 2509/2511, 2512,
 Layered) is Apache-2.0, ComfyUI-native, and carries **1,637 Civitai LoRAs, 273 of them character-tagged**,
 counted by full pagination with `nsfw=true` on 2026-09-09; the 1,162 / 192 figure this suite carried earlier
-the same day excluded NSFW `[official — Civitai API, 2026-09-09]`.
+the same day excluded NSFW `[official — Civitai API, 2026-09-09]`. **Qwen-Image-2.1** (2026-09-20) takes up to
+ten references and claims stronger identity, but it is research-only by licence and has no independent
+likeness report; it does not move this ordering `[flagged — re-verify after 2026-09-28]`.
 
 **Easiest to train a character LoRA on — and this splits three ways.** There is no single winner. Treating it as
 one question is the mistake:
@@ -287,10 +291,12 @@ lettering; [`qwen-image`](../qwen-image/) is the second, and the first for bilin
 for editing text already in an image without losing its font.
 Anime goes to [`anima`](../anima/), or to [`sdxl`](../sdxl/)'s Illustrious/NoobAI/Pony V6 XL finetunes when you
 must ship the weights (Pony V7 is AuraFlow and is not an SDXL checkpoint). Widest aesthetic range:
-[`krea-2`](../krea-2/). Cleanest licence: [`z-image`](../z-image/), tied with [`qwen-image`](../qwen-image/) (Apache-2.0 on code and
-weights, open through 2512 and Edit-2511; 2.0 and 3.0 are hosted-only). Instruction-based editing, multi-image
+[`krea-2`](../krea-2/). Cleanest licence: [`z-image`](../z-image/), tied with [`qwen-image`](../qwen-image/)'s **20B family** (Apache-2.0 on code and
+weights, open through 2512 and Edit-2511; 2.0 and 3.0 are hosted-only; **2.1 is research-only** and fails the
+first rung). Instruction-based editing, multi-image
 fusion and layered RGBA output: [`qwen-image`](../qwen-image/) — Edit-2511 for the edits, Layered for RGBA,
-which is adopted but has no settings-level craft yet. Native 4K with region-controlled
+which is adopted but has no settings-level craft yet; for research work, 2.1 does all three in one
+checkpoint with native transparency, ten references and mask-guided local edits. Native 4K with region-controlled
 edits: **SenseNova U1.5**, ComfyUI core since 2026-09-01, not yet covered, and its licence is verify-gated.
 
 **Video, by what you are actually doing.** Animating a still is [`wan-2-2`](../wan-2-2/)'s job. Its I2V is far
@@ -463,7 +469,7 @@ Every published skill, and the question it answers. This table is the suite keye
 | [`flux-2`](../flux-2/) | "How do I keep this character without training anything?" — multi-reference identity, PuLID; [klein] 4B is the Apache-2.0 escape hatch |
 | [`sdxl`](../sdxl/) | "How do I control the pose/composition exactly?" — the deepest control, adapter and LoRA ecosystem, on 6–8 GB |
 | [`krea-2`](../krea-2/) | "How do I get a look that isn't the AI look?" — widest aesthetic range, style references, Identity Edit |
-| [`qwen-image`](../qwen-image/) | "How do I edit this image by instruction, or re-shoot this character without training anything?" — Edit-2511 identity engine and dataset factory, multi-image fusion, bilingual text; Apache-2.0, open through 2512/2511, 2.0/3.0 hosted-only |
+| [`qwen-image`](../qwen-image/) | "How do I edit this image by instruction, or re-shoot this character without training anything?" — Edit-2511 identity engine and dataset factory, multi-image fusion, bilingual text; Apache-2.0 through 2512/2511, 2.0/3.0 hosted-only; **2.1** (2026-09-20) unified T2I + edit with native RGBA and ten references, **non-commercial licence** |
 | [`ideogram-4`](../ideogram-4/) | "How do I put real text in the image?" — typography, layout, JSON captions. Open weights are non-commercial |
 | [`anima`](../anima/) | "How do I make anime that understands booru tags?" — 2B, ~6 GB, outputs commercially free, weights not |
 | [`wan-2-2`](../wan-2-2/) | "How do I make this still move?" — the strongest unencumbered I2V path, plus the camera and motion rigs |
@@ -551,7 +557,7 @@ exceeding it, and **where it disagrees with a model skill, the model skill is ri
 - Whether `runpodctl`'s timer flags come back (runpodctl#331, blocked on RunPod#5718) is
   [`comfyui-on-runpod`](../comfyui-on-runpod/)'s watch, not this skill's; until they do, no CLI flag is a cost guard.
 
-**Facts dated 2026-09-09**; the H3, Ideogram 4, Wan 2.2, FLUX.2 [klein] 9B and Qwen-Image Civitai rows re-counted
+**Facts dated 2026-09-09** (Qwen-Image-2.1 rows 2026-09-20); the H3, Ideogram 4, Wan 2.2, FLUX.2 [klein] 9B and Qwen-Image Civitai rows re-counted
 the same day (Qwen-Image by full pagination with `nsfw=true`), the rest on 2026-08-23. The fastest-moving parts are the external vendors' skill inventories (RunPod went
 6→7→8 across this suite's last three passes, and BFL appeared from nothing), the "not yet covered" table, and
 the `skills` CLI's flags. The Civitai counts move fast too, since Anima and Krea 2 add LoRAs weekly and H3

@@ -12,6 +12,7 @@ Qwen-Image's answer to identity is unusual in this suite. The **edit model is th
 6. Multi-subject and multi-outfit
 7. Failure modes
 8. When to use another model
+9. Qwen-Image-2.1 and identity — ten references, no evidence, no commercial use
 
 ---
 
@@ -19,7 +20,7 @@ Qwen-Image's answer to identity is unusual in this suite. The **edit model is th
 
 | Tool class | Qwen-Image status |
 |---|---|
-| PuLID | **does not exist** |
+| PuLID | **does not exist** (either generation) |
 | InstantID / IP-Adapter-FaceID | **does not exist** (searched 2026-09-09; that family remains SD1.5 / SDXL / Flux) |
 | Native multi-reference editing | **yes — the headline.** Edit-2509/2511 take 1–3 references through Qwen2.5-VL (semantics) and the VAE (appearance) |
 | Vendor statement on identity | Edit-2511: "Character consistency has been significantly improved… preserving the identity and visual characteristics"; "high-fidelity fusion of two separate person images into a coherent group shot" `[official — Edit-2511 card]` |
@@ -126,3 +127,17 @@ Then train per `lora-training.md`. The named Qwen character recipe is 40–60 im
 - **The video first frame**: build it here, then hand it to [`wan-2-2`](../../wan-2-2/). Compose, multiply the angles, and pick the frame that matches the driving clip's pose. The video model inherits whatever likeness the still carries.
 
 Qwen-Image earns the character job when the job is *editing*: many shots of one person from one good image, group fusion, outfit and angle changes, text that must survive the edit. It is not the model for the finished close-up skin.
+
+---
+
+## 9. Qwen-Image-2.1 and identity — ten references, no evidence, no commercial use
+
+`[official — card and blog, 2026-09-20]`. 2.1 accepts up to ten references and its launch showcase fuses six separate portraits into one group photograph, builds a five-input virtual try-on (model, garment, shoes, bag, hat) and claims it "better preserves facial features so that a person's identity remains more consistent across edits". The rewriter's own rule is the useful craft hint: **point at the reference image for identity, never describe the face** (`prompting-guide.md §9.4`).
+
+Three things stop it replacing Edit-2511 in §2's path selection today:
+
+1. **Zero independent likeness reports.** Weights were hours old at this pass; no author has run the nsfwVariant-style A/B on it. Whether identity holds across ten references, across sequential edits, or at 2K, is unknown.
+2. **The licence.** Research or evaluation only. Every commercial character pipeline this suite describes is out of scope without a separate licence from Qwen.
+3. **No LoRA path.** Nothing on Civitai, DiffSynth the only trainer, no Lightning for the dataset-factory speed that makes §4 practical (20 angles in ~130 s on Edit-2509).
+
+Where it may earn a place once tested: research-only group composition beyond three subjects; transparent character cut-outs straight from the model (`prompting-guide.md §9.2`); mask-guided local identity edits without an inpaint graph. Revisit after the 2026-09-28 early-access reviews.

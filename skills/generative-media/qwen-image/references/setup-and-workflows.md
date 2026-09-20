@@ -1,6 +1,6 @@
 # Qwen-Image — Setup & workflows
 
-This file owns the plumbing and the graphs: every official template's files and numbers, the quantisation and VRAM ladders with their maintainers, diffusers per checkpoint, the Edit reference-path bypass node by node, ControlNet and model-patch wiring, the upscale and halftone chains, **using and stacking LoRAs**, the multi-stage ladder and the handoffs to other families. It does not own **making** a LoRA (`lora-training.md`) or the character protocol (`characters.md`). Hard facts were read from the template JSON, the Comfy-Org HF trees, the model cards and the diffusers source on 2026-09-09. Community craft is attributed inline.
+This file owns the plumbing and the graphs: every official template's files and numbers, the quantisation and VRAM ladders with their maintainers, diffusers per checkpoint, the Edit reference-path bypass node by node, ControlNet and model-patch wiring, the upscale and halftone chains, **using and stacking LoRAs**, the multi-stage ladder and the handoffs to other families. It does not own **making** a LoRA (`lora-training.md`) or the character protocol (`characters.md`). Hard facts were read from the template JSON, the Comfy-Org HF trees, the model cards and the diffusers source on 2026-09-09; §11 (Qwen-Image-2.1) on 2026-09-20. Community craft is attributed inline.
 
 ## Contents
 
@@ -14,6 +14,7 @@ This file owns the plumbing and the graphs: every official template's files and 
 8. Upscale, restoration and the halftone round trip
 9. The multi-stage ladder
 10. Qwen-Image in mixed-model pipelines
+11. Qwen-Image-2.1 — files, nodes, templates, sizing, stacks
 
 ---
 
@@ -265,3 +266,78 @@ Qwen-Image-Edit has one role the rest of the suite already depends on: **the edi
 The reverse handoff is **Z-Image as the realism finisher** for a Qwen composition. Qwen's skin is "still a bit plastic" where "ZIT is clearly superior in terms of realism" `[community — Top_Buffalo1668]`. Compose and edit here, decode, and run the face or skin pass there at denoise ~0.2–0.35.
 
 The rules between families are the suite's. **Decode to pixels between VAE families**: Qwen's latent is not Z-Image's (Flux.1 VAE) or SDXL's. Krea 2 and Wan 2.2 *are* the same VAE family, but decode anyway unless you have verified the latent scale factors match. **Identity-preserving refines live at denoise ~0.2–0.5.** **Match resolution** to the receiving model's band before encoding. Cross-model craft in depth is [`image-production-workflows`](../../image-production-workflows/). The still that goes to video is built here: compose on T2I, give it angles and outfits on Edit, then hand the frame to [`wan-2-2`](../../wan-2-2/).
+
+---
+
+## 11. Qwen-Image-2.1 — files, nodes, templates, sizing, stacks
+
+`[official — Comfy-Org/Qwen-Image-2.1 HF tree, ComfyUI PR #16400 (kijai, merged 2026-09-19), workflow_templates v0.11.65–66, HF card and config.json, diffusers PR #14804, DiffSynth doc, vLLM recipe, SGLang cookbook, mflux PR #736 — all read 2026-09-20]`. **No community craft exists for 2.1 yet.** Everything here is implementation, not practice.
+
+### 11.1 Architecture in one table
+
+| Component | Class (diffusers) | Detail | On disk |
+|---|---|---|---|
+| DiT | `QwenImage21Transformer2DModel` | 32 layers, 32 heads × 128, 64 in/out channels, patch 1, `mlp_ratio 3`, `causal_condition: true`; block-causal attention `(q_idx >= kv_idx) or same_image_block` — text token-level causal, image blocks bidirectional | 14.23 GB `qwen_image_2.1_bf16`, 7.26 GB `int8_convrot` |
+| Text encoder | Qwen3-VL-8B | reads text and reference images; Comfy drops its vision hidden states and splices VAE latents at those positions, so vision-token count is decoupled from latent size | 17.53 GB `qwen3vl_8b_bf16`, 9.35 GB `int8_convrot`, 6.31 GB `w4a8` |
+| VAE | `AutoencoderKLQwenImage21` | 4 channels in/out (RGBA), **64-channel latent, 16× spatial**; the Wan-2.2 VAE module parametrised for single images | 1.35 GB (diffusers), 0.68 GB `qwen_image_2.1_vae_bf16` |
+| Scheduler | `FlowMatchEulerDiscreteScheduler` | dynamic shift, `base_shift 0.5` @ 256 tokens → `max_shift 0.9` @ 8192, `shift_terminal 0.02`, exponential | Comfy hardcodes `shift 0.69` (mu at 1024²) |
+
+Prefix KV cache: text and reference tokens are modulated at `t = 0`, so their keys and values never change across steps; they are computed once per run and reused (~1.7× on edits, Comfy PR). Prompt rewriters: `Qwen/Qwen-Image-2.1-PE-T2I` and `-PE-I2I`, Qwen3.5-VL 9B, ~19 GB each (`prompting-guide.md §9`).
+
+Everything above is architecturally disjoint from the 20B family. **No 20B file, LoRA, Lightning, ControlNet, GGUF or Nunchaku build binds to 2.1**, and the LoRA key map Comfy added (`img_mlp.gate_up` split into `gate_layer` / `proj`) is waiting for LoRAs that do not yet exist.
+
+### 11.2 ComfyUI — loaders, nodes, templates
+
+Folders and names verbatim from `Comfy-Org/Qwen-Image-2.1`:
+
+```
+ComfyUI/models/
+├── diffusion_models/ qwen_image_2.1_int8_convrot.safetensors   (template default)  |  qwen_image_2.1_bf16.safetensors
+├── text_encoders/    qwen3vl_8b_int8_convrot.safetensors        (template default)  |  qwen3vl_8b_bf16 | qwen3vl_8b_w4a8
+└── vae/              qwen_image_2.1_vae_bf16.safetensors
+```
+
+`UNETLoader` (weight_dtype `default`), `CLIPLoader` type **`qwen_image`**, `VAELoader`. Needs a ComfyUI build after v0.36.0 (2026-09-15) `[flagged — check the next tag]`.
+
+**`TextEncodeQwenImage21`** (category `model/conditioning/qwen image`). Inputs: `clip`, `prompt`, `negative_prompt`, optional `vae`, `resolution` (int, default 1024, 0–4096, step 32), autogrow `image_1` … `image_16`. Outputs: `positive`, `negative`, `latent`. Behaviour, from the source:
+- Each reference is resized with **Lanczos** to about `resolution × resolution` pixels, aspect preserved, both sides rounded to 32. `resolution 0` keeps each reference at its own size rounded to 32. So `resolution` is a pixel budget, not a side length.
+- The same resized image feeds both the vision tower and the VAE, "so every vision slot covers 2×2 latents". If the reference has alpha, the vision tower sees it composited over white; the VAE encodes all four channels.
+- With a VAE connected, each reference becomes a `reference_latents` entry on the conditioning. Without one, the image conditions through the encoder alone.
+- The `latent` output is an empty 64-channel latent on **`image_1`'s resized grid** (or `resolution²` for T2I). Use it: "any other size shifts the edit".
+- Slots are read in numeric order and empty slots are skipped, so `image_1` + `image_3` is read as two images and `<image2>` in the prompt means the picture in slot 3. Fill slots contiguously.
+
+**`QwenImage21Cache`** (experimental): `device` `auto` (spare VRAM, then RAM) / `gpu` / `cpu` (prefetched behind compute, "costs little speed") / `off` (recompute every step, the one way to rule the cache out); `dtype` `default` (lossless) / `int8` (half the cache at ~bf16 accuracy) / `int4` (a quarter, ~2× per-step error). It sets `transformer_options["qwen_image21_cache"]` on a cloned model.
+
+One implementation choice worth knowing when comparing against diffusers: reference grids are offset **half a token** when their parity differs from the target, "avoiding the more drastic position drift between source and result images". Outputs will not be bit-identical to the reference pipeline.
+
+**Templates** (all: `KSampler` `euler` / `simple` / **25 steps** / **CFG 1** / denoise 1; `SaveImageAdvanced` png 8-bit sRGB):
+
+| Template | Nodes | Defaults | Note |
+|---|---|---|---|
+| `image_qwen_image_2_1_t2i` | `ResolutionSelector` → subgraph (`EmptyLatentImage`, `TextEncodeQwenImage21` with no images) | 1:1, **1 MP**, seed fixed | "For native 2K, set 1:1 and 4 megapixels" |
+| `image_qwen_image_2_1_image_edit` | two `LoadImage` → subgraph with `QwenImage21Cache` (`auto`/`default`), `ComfySwitchNode` `custom_size` off, `resolution 0` | seed randomised | prompt: "Keep the character and pose in `<image1>` unchanged, put this light blue denim shirt from `<image2>` on the character, preserve …" |
+| `image_qwen_image_2_1_background_removal` | same subgraph, one image | `resolution 0` | prompt: `"Remove the background, and output a PNG image"` |
+
+Template note on steps: the official pipeline uses about 40–50 with euler; 25 is the template's starting point; "more advanced samplers need fewer steps" (no named sampler, no A/B). `custom_size` on swaps the canvas to the `ResolutionSelector`: keep it close to the resized `image_1` "or the edit can shift".
+
+### 11.3 diffusers, DiffSynth and the serving stacks
+
+```python
+from diffusers import QwenImage21Pipeline
+pipe = QwenImage21Pipeline.from_pretrained("Qwen/Qwen-Image-2.1", torch_dtype=torch.bfloat16).to("cuda")
+img  = pipe(prompt, width=2048, height=2048, num_inference_steps=40).images[0]          # T2I
+edit = pipe("Change the background to a sunset beach", image=img, num_inference_steps=40).images[0]
+grp  = pipe("These three characters sit around a campfire", image=[a, b, c]).images[0]  # multi-ref, order = read order
+```
+
+Defaults in the signature: `num_inference_steps=40`, `true_cfg_scale=1.0`, no `guidance_scale`. CFG engages only when `negative_prompt` is given with `true_cfg_scale > 1`, and doubles the work per step. `diffusers>=0.41.0`, `transformers>=5.17`, `torch>=2.4`. `enable_model_cpu_offload()` for memory. The default attention processor needs no compile; `QwenImage21FlexAttnProcessor` is faster **only** after `pipe.transformer.compile()`, and uncompiled flex materialises the full score matrix in fp32 and OOMs at 2K.
+
+Official aspect table: 1:1 2048², 4:3 2400×1792, 3:4 1792×2400, 3:2 2528×1696, 2:3 1696×2528, 16:9 2752×1536, 9:16 1536×2752.
+
+**DiffSynth-Studio** (`diffsynth.pipelines.qwen_image_21.QwenImage21Pipeline`): `cfg_scale` default 1.0, `edit_image` (PIL or list), `height`/`width` default 1024 rounded to 32 (edit inputs scaled into that area), `num_inference_steps` 40, `use_kv_cache` True, tiled VAE options; returns **RGBA PIL always**. Low-VRAM config with disk offload claims a **7 GB** floor. Training: `lora-training.md §11`.
+
+**vLLM-Omni** (recipe, PR #7759 unmerged at the time): 1024², 40 steps, **4.5 s and 34.0 GB peak on one GB300**; up to **4** references per request; `/v1/images/edits` takes a multipart form, not JSON; the server's own defaults are 50 steps and `true_cfg_scale 4.0`, so send 40 and 1.0 explicitly; output size on an edit derives from the **last** reference when omitted (Comfy follows the **first** — implementations disagree `[flagged]`). **SGLang-Diffusion**: cookbook lists H200/B200/RTX PRO 6000 resident, "full resident pipeline exceeds" a 4090 or 5090 (DiT + VAE resident, encoder layers streamed), NVFP4 on Blackwell only. **LightX2V**: inference scripts only; **no distillation LoRA for 2.1 exists**, on lightx2v's HF org or anywhere. **mflux** (Apple Silicon, PR #736, open): M5 Max 1024² 40 steps ≈ 1.5 s/step, ~78 s, **~46 GB bf16 / ~30.7 GB q8**; T2I and img2img only, no edit; text encoder kept bf16 because quantising the VL tower degrades conditioning `[community — ivanfioravanti]`.
+
+### 11.4 What is missing, dated 2026-09-20
+
+No fp8 build, no loadable GGUF, no Nunchaku, no Lightning, no LoRA, no ControlNet, no consumer-GPU VRAM report, no tagged ComfyUI release, no A/B against Edit-2511 or 2512. The HF Space demo (`Qwen/Qwen-Image-2.1`) calls a **hosted** DashScope model `pre-qwen-image-2.1-pro-yunqi` with `prompt_extend`, so its outputs say nothing about the local weights. Re-verify after the 2026-09-28 early-access deadline.

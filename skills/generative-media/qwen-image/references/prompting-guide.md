@@ -1,6 +1,6 @@
 # Qwen-Image — Prompting guide
 
-This file owns the prompt: the dialect the Qwen2.5-VL 7B encoder wants, the Edit instruction rules the community converged on, the multi-image format the model was trained on, the official rewriter's rules, and text rendering in both languages. It does not own settings (SKILL.md) or training captions (`lora-training.md §4`). Official rules are read from `QwenLM/Qwen-Image/src/examples/tools/prompt_utils.py` and the model cards. Community craft is attributed inline. Verified 2026-09-09.
+This file owns the prompt: the dialect the Qwen2.5-VL 7B encoder wants, the Edit instruction rules the community converged on, the multi-image format the model was trained on, the official rewriter's rules, and text rendering in both languages. It does not own settings (SKILL.md) or training captions (`lora-training.md §4`). Official rules are read from `QwenLM/Qwen-Image/src/examples/tools/prompt_utils.py` and the model cards. Community craft is attributed inline. Verified 2026-09-09; §9 (2.1) from the card, templates, the HF Space `cases.json` and the PE `system_prompt.txt` files, 2026-09-20.
 
 ## Contents
 
@@ -12,6 +12,7 @@ This file owns the prompt: the dialect the Qwen2.5-VL 7B encoder wants, the Edit
 6. Text rendering, English and Chinese
 7. Common mistakes
 8. Drop-in templates
+9. Qwen-Image-2.1 — `<image1>` tags, the RGBA wrapper, local-edit grammar, and the PE rewriters
 
 ---
 
@@ -217,3 +218,47 @@ Two things the research could not settle. **No first-hand Chinese-versus-Latin g
 
 ### F. Edit, text replacement
 > Replace "OPEN" with "CLOSED" on the sign. Keep the font, colour and size.
+
+---
+
+## 9. Qwen-Image-2.1 — `<image1>` tags, the RGBA wrapper, local-edit grammar, and the PE rewriters
+
+`[official — HF card, Comfy templates, `Qwen/Qwen-Image-2.1` Space `examples/cases.json` (26 official cases), PE-T2I / PE-I2I `system_prompt.txt`, 2026-09-20]`. The encoder is **Qwen3-VL-8B**, not Qwen2.5-VL, so §1's dialect notes are inherited by analogy, not evidence. Nothing in §2's Edit rules (short prompts, "talk to a child") has been tested on 2.1; the official demo prompts are, if anything, long.
+
+### 9.1 References are `<image1>` … `<image10>`
+
+The trained format is an angle-bracket tag per slot, four tokens each, inserted by the pipeline as `<image1><|vision_start|>…<|vision_end|>` before your text. **Not `Picture 1:`.** `image_1` is the edit target; the rest are references; order is read order (block-causal attention lets later blocks see earlier ones). Chinese demo prompts use `【图1】` interchangeably.
+
+> Keep the character and pose in `<image1>` unchanged, put this light blue denim shirt from `<image2>` on the character, preserve the original facial features, hair, body shape and pose, the denim shirt fits naturally on body, realistic denim fabric texture, natural clothing folds, keep the original background and original lighting. `[official — edit template]`
+
+> Using the six people in `<image1>`, `<image2>`, `<image3>`, `<image4>`, `<image5>` and `<image6>` as identity references, generate a brand-new vertical group portrait in the style of a 1980s sitcom promotional photo … `[official — demo case, 6 inputs]`
+
+The name-what-must-not-change rule from §2 carries over verbatim in every official example ("preserve the original facial features … keep the original background and original lighting").
+
+### 9.2 The RGBA wrapper
+
+Transparency is decided by the prompt; there is no flag. The card's recommended form, verbatim:
+
+> This is an RGBA image with transparency. `⟨your description⟩`. The image has alpha channel and the background is transparent.
+
+Chinese equivalent from the demo: `这是一张带有透明度的RGBA格式图像，… 该图像具有alpha通道，背景是透明的。` DiffSynth adds that "isolated on a fully transparent background", "alpha matte" and "die-cut sticker" also trigger it, and gives the two craft rules that exist: **do not describe environment or ambient light** ("underwater", "indoor", "light streaming through") or the model fills the canvas — recast atmosphere as properties of the subject and add "no background elements besides the subject"; and for hair, ribbons, water and glow, which produce wide mid-value alpha, add **"clear silhouette, clean edges"** if you need a hard cut. Save PNG; `.convert("RGB")` or JPEG drops the channel.
+
+Background removal is an edit with the same mechanism: `"Remove the background, and output a PNG image"` (template). Extraction: "extract the ⟨subject⟩ as a transparent RGBA layer".
+
+### 9.3 Local edits — three grammars
+
+1. **Drawn circles**, several colours at once, plus an instruction that the marks are not content: "Remove the brown-leather metal watch in the **blue circle** and fill the wrist with skin matching the arm; change the boy's blond hair in the **red circle** to black …; replace the clothing in the two **green circles** with grey short-sleeved linen pyjamas …; **the blue, red and green annotation lines must not be rendered in the image.**" `[official — demo case, translated]`
+2. **Painted region**: "In the **white-masked area on the right** add a scuba diver in a black wetsuit, mask and back-mounted tank, hovering slightly tilted, facing the camera, a stream of bubbles rising from the regulator."
+3. **Original + separate mask as two inputs** (keeps the original unobscured): image_1 the photo, image_2 the mask, prompt "At the **circled place** add a mounted cowboy: brown wide-brim hat, thick beard, face turned left, brown canvas jacket over a dark-blue denim shirt …"
+
+All three describe the *inserted* content in full detail and the *region* by its marker only.
+
+### 9.4 What the official rewriters enforce (PE-T2I, PE-I2I)
+
+Two Qwen3.5-VL 9B fine-tunes, thinking mode on, output `{"rewritten_prompt", "wh_ratio"}` (edits add `"ratio_follow": "<image1>"` when the output should inherit an input's aspect). Their system prompts are the best prompt-writing guidance Qwen has published for any generation:
+
+**T2I** — one long English paragraph "describing the finished image as if you were looking at it"; never address the renderer. Opening sentence ≈ 20 words: `The image is a ⟨vertical/wide/square⟩ ⟨style⟩ ⟨photograph | poster | illustration | infographic | …⟩ of ⟨subject⟩, ⟨background and palette⟩`; the medium noun is never omitted. Then background first, then the top band, then body left → centre → right, then the bottom band; a single subject is walked background → pose → head → body → held objects → edges. **8–14 positional phrases** ("in the upper-left corner", "across the lower third") reaching corners and edges, about a third of sentences opening on one. Every legible string in straight double quotes, in its own script, with weight, colour, case and relative size; a line break is "a second line", never a newline; unreadable text is "blurred / indistinct", never invented; about a third of images should have **no** text and inventing signage is a named mistake. **Never write a ratio, resolution or pixel count into the prompt** — it goes in `wh_ratio` (defaults 3:2 landscape, 2:3 portrait). Job instructions ("4K", "sharp text", "use double quotes") are obeyed silently and never echoed. A three-word brief and a three-hundred-word brief both become a description of the same size.
+
+**Edit** — "edit exactly the attribute(s) the user named, push each to a strong and unmistakable degree, and hold everything else at input fidelity"; the two symmetric failures are *leakage* (touching the unnamed) and *under-editing*. Name what stays **by type, position and role, not appearance** — "a preservation description reads to the model as a generation instruction: the more concretely you describe something you meant to keep, the more likely it drifts." Prefer one blanket preservation clause over walking the frame. Identity: "point at that image rather than describing features in words — verbal descriptions make the model regenerate and degrade the likeness." Rendering medium (photo, anime, sketch) survives every edit unless targeted. Rendered-text language: user-specified → the image's dominant existing text language → the instruction's language; monolingual inside quotes; genre never switches labels to English.
+
+Everything in §9.4 is what the rewriters *produce*; whether hand-writing to the same rubric beats a short instruction on 2.1 is untested.

@@ -1,0 +1,646 @@
+diff --git a/docs.json b/docs.json
+index 69eb1a6a5..5ec803aab 100644
+--- a/docs.json
++++ b/docs.json
+@@ -209,7 +209,8 @@
+                           "tutorials/image/qwen/qwen-image-2512",
+                           "tutorials/image/qwen/qwen-image-edit",
+                           "tutorials/image/qwen/qwen-image-edit-2511",
+-                          "tutorials/image/qwen/qwen-image-layered"
++                          "tutorials/image/qwen/qwen-image-layered",
++                          "tutorials/image/qwen/qwen-image-2-1"
+                         ]
+                       },
+                       {
+@@ -3932,7 +3933,8 @@
+                           "zh/tutorials/image/qwen/qwen-image-2512",
+                           "zh/tutorials/image/qwen/qwen-image-edit",
+                           "zh/tutorials/image/qwen/qwen-image-edit-2511",
+-                          "zh/tutorials/image/qwen/qwen-image-layered"
++                          "zh/tutorials/image/qwen/qwen-image-layered",
++                          "zh/tutorials/image/qwen/qwen-image-2-1"
+                         ]
+                       },
+                       {
+@@ -7679,7 +7681,8 @@
+                           "ja/tutorials/image/qwen/qwen-image-2512",
+                           "ja/tutorials/image/qwen/qwen-image-edit",
+                           "ja/tutorials/image/qwen/qwen-image-edit-2511",
+-                          "ja/tutorials/image/qwen/qwen-image-layered"
++                          "ja/tutorials/image/qwen/qwen-image-layered",
++                          "ja/tutorials/image/qwen/qwen-image-2-1"
+                         ]
+                       },
+                       {
+@@ -11439,7 +11442,8 @@
+                           "ko/tutorials/image/qwen/qwen-image-2512",
+                           "ko/tutorials/image/qwen/qwen-image-edit",
+                           "ko/tutorials/image/qwen/qwen-image-edit-2511",
+-                          "ko/tutorials/image/qwen/qwen-image-layered"
++                          "ko/tutorials/image/qwen/qwen-image-layered",
++                          "ko/tutorials/image/qwen/qwen-image-2-1"
+                         ]
+                       },
+                       {
+diff --git a/ja/tutorials/image/qwen/qwen-image-2-1.mdx b/ja/tutorials/image/qwen/qwen-image-2-1.mdx
+new file mode 100644
+index 000000000..edf161b91
+--- /dev/null
++++ b/ja/tutorials/image/qwen/qwen-image-2-1.mdx
+@@ -0,0 +1,146 @@
++---
++title: "Qwen-Image-2.1 ComfyUI ネイティブワークフロー例"
++description: "ComfyUI で Qwen-Image-2.1 を実行: 画像生成と編集を 1 つのモデルで行い、ネイティブ 2K 出力、プロフェッショナルなタイポグラフィ、アルファチャンネルのサポートを実現します。"
++sidebarTitle: "Qwen-Image-2.1"
++translationSourceHash: a3395516
++translationFrom: tutorials/image/qwen/qwen-image-2-1.mdx
++translationBlockHashes:
++  "_intro": efd2d43d
++  "Qwen-Image-2.1 workflow": 14844268
++  "Model links": eb7d714b
++  "Workflow settings": e8e71d9a
++---
++import UpdateReminder from "/snippets/ja/tutorials/update-reminder.mdx"
++
++**Qwen-Image-2.1** は、Alibaba の Qwen チームによる Qwen-Image シリーズの最新のオープンウェイトリリースです。単一のモデルがテキストから画像への生成と指示ベースの画像編集の両方をカバーし、ネイティブ 2K 出力、プロフェッショナルなタイポグラフィ、透明な背景のためのアルファチャンネルを備えています。
++
++**主な機能**:
++- **1 つのモデルで生成と編集**: 同じ重みがテキストから画像へのプロンプトと編集指示の両方に対応するため、ワークフローでチェックポイントを切り替える必要がありません
++- **ネイティブ 2K 出力**: 小さい結果をアップスケーリングするのではなく、最大 2048x2048 で直接生成できます
++- **プロフェッショナルなタイポグラフィ**: 高密度の小さなテキストや複雑なレイアウトも維持されるため、インフォグラフィック、スライド、UI モックアップ、ポスター、パッケージデザインに適しています
++- **アルファチャンネルのサポート**: VAE が 4 つのチャンネルを持つため、透明な背景の画像を直接生成および編集でき、後から切り抜く必要がありません
++- **マルチ画像編集**: 参照画像はスロットの順序でテキストエンコーダーに結合されます。ノードは `image_1` から `image_16` までのスロットを公開しており、プロンプトはインデックスでそれらを参照します。たとえば `image_1` は `<image1>` と記述します
++- **ローカル編集**: 変更したいオブジェクトや領域を記述すると、画像の残りの部分は保持されます
++
++**関連リンク**:
++- [GitHub リポジトリ](https://github.com/QwenLM/Qwen-Image)
++- [Hugging Face（ComfyUI サポート）](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)
++- [Comfy の Qwen Image 2.1](https://comfy.org/qwen-image-2.1/)
++
++## Qwen-Image-2.1 ワークフロー
++
++<UpdateReminder />
++
++### Qwen Image 2.1 テキストから画像へ {#image_qwen_image_2_1_t2i}
++
++選択したアスペクト比とメガピクセル数に合わせて、テキストプロンプトから画像を生成します。
++
++<img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/image_qwen_image_2_1_t2i-1.webp" alt="Qwen-Image-2.1 テキストから画像へのワークフローのプレビュー" />
++
++<CardGroup cols={2}>
++  <Card title="ワークフローをダウンロード" icon="download" href="https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_t2i.json">
++    JSON をダウンロードするか、テンプレートライブラリで「Qwen-Image-2.1」を検索してください
++  </Card>
++  <Card title="Comfy Cloud で実行" icon="cloud" href="https://cloud.comfy.org/?template=image_qwen_image_2_1_t2i&utm_source=docs&utm_medium=referral&utm_campaign=qwen-image-2-1">
++    セットアップ不要で ComfyUI をオンライン実行
++  </Card>
++</CardGroup>
++
++**出力例**
++
++![Qwen-Image-2.1 テキストから画像への出力例](https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/output/Qwen_image_2.1.png)
++
++### Qwen Image 2.1 画像編集 {#image_qwen_image_2_1_image_edit}
++
++指示に従って画像を編集します。編集にソース画像にないコンテンツが必要な場合は、参照画像を追加してください。たとえば、2 枚目の写真の衣服を 1 枚目の人物に着せる場合などです。
++
++<img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/image_qwen_image_2_1_image_edit-1.webp" alt="Qwen-Image-2.1 画像編集ワークフローのプレビュー" />
++
++<CardGroup cols={2}>
++  <Card title="ワークフローをダウンロード" icon="download" href="https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_image_edit.json">
++    JSON をダウンロードするか、テンプレートライブラリで「Qwen-Image-2.1」を検索してください
++  </Card>
++  <Card title="Comfy Cloud で実行" icon="cloud" href="https://cloud.comfy.org/?template=image_qwen_image_2_1_image_edit&utm_source=docs&utm_medium=referral&utm_campaign=qwen-image-2-1">
++    セットアップ不要で ComfyUI をオンライン実行
++  </Card>
++</CardGroup>
++
++**入力素材**
++
++以下のファイルを対応する `LoadImage` ノードにアップロードしてください:
++
++<CardGroup cols={2}>
++  <Card title="portrait_model_denim.png" icon="image" href="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/portrait_model_denim.png">
++    `LoadImage` ノード 470 · `portrait_model_denim.png`
++  </Card>
++  <Card title="clothing_light_blue_denim_shirt.png" icon="image" href="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/clothing_light_blue_denim_shirt.png">
++    `LoadImage` ノード 475 · `clothing_light_blue_denim_shirt.png`
++  </Card>
++</CardGroup>
++
++**出力例**
++
++<div style={{display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1rem', alignItems: 'start'}}>
++  <img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/portrait_model_denim.png" alt="入力画像" style={{width: '100%', height: 'auto', objectFit: 'contain'}} />
++  <img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/output/image_qwen_image_2_1_image_edit.png" alt="Qwen-Image-2.1 画像編集の出力例" style={{width: '100%', height: 'auto', objectFit: 'contain'}} />
++</div>
++
++## モデルのダウンロード先
++
++2 つのワークフローは同じファイルを読み込みます。どちらのテンプレートもデフォルトで int8 版の diffusion モデルを使用します。
++
++**text_encoders**
++
++- [qwen3vl_8b_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/text_encoders/qwen3vl_8b_bf16.safetensors)
++
++**diffusion_models**
++
++- [qwen_image_2.1_int8_convrot.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors)（テンプレートが読み込むデフォルト、メモリ使用量は少なめ）
++- [qwen_image_2.1_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/diffusion_models/qwen_image_2.1_bf16.safetensors)（フル精度、より多くのメモリが必要）
++
++**vae**
++
++- [qwen_image_2.1_vae_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/vae/qwen_image_2.1_vae_bf16.safetensors)
++
++**モデルの保存場所**
++
++```
++📂 ComfyUI/
++├── 📂 models/
++│   ├── 📂 text_encoders/
++│   │      └── qwen3vl_8b_bf16.safetensors
++│   ├── 📂 diffusion_models/
++│   │      ├── qwen_image_2.1_int8_convrot.safetensors
++│   │      └── qwen_image_2.1_bf16.safetensors
++│   └── 📂 vae/
++│          └── qwen_image_2.1_vae_bf16.safetensors
++```
++
++## ワークフロー設定
++
++### サンプラー設定
++
++両方のテンプレートは `steps` 25、`cfg` 1、`euler` サンプラー、`simple` スケジューラーでサンプリングします。text to image ワークフローはシードを固定し、image edit ワークフローはシードをランダム化します。
++
++### 解像度
++
++**Text to image**：**Resolution Selector** ノードがアスペクト比（1:1、16:9、9:16、3:2、2:3、4:3、3:4、21:9）とメガピクセルの目標値を設定します。1.0 MP はおよそ 1024x1024 です。テンプレートのデフォルトは 1 MP の 1:1 です。Qwen-Image-2.1 は 2K をネイティブに生成するため、2048x2048 の正方形出力を得るには目標値を約 4.0 MP に設定してください。
++
++**Image edit**：テンプレートのデフォルトである `custom_size` オフの場合、出力は `image_1` のアスペクト比に従い、約 `resolution` x `resolution` ピクセル（デフォルト 1024、32 の倍数に丸め）にスケーリングされます。これは `image_1` のオリジナルのピクセルサイズではありません。`resolution` を 0 に設定すると、各参照画像はそれぞれのサイズのまま（32 の倍数に丸めて）保持されます。`custom_size` をオンにすると、代わりに **Resolution Selector** キャンバスが使われます。このときはリサイズ後の `image_1` のサイズに近い値にしてください。そうしないと編集がずれる可能性があります。
++
++### 画像編集のためのプロンプト
++
++参照画像はスロット順にテキストエンコーダーへ連結され、プロンプトは各画像をインデックスで指定します。テンプレートのプロンプトはこのパターンの良い例です：
++
++```
++Keep the character and pose in <image1> unchanged, put this light blue denim shirt from <image2> on the character, preserve the original facial features, hair, body shape and pose
++```
++
++### KV キャッシュ
++
++image edit ワークフローには **Qwen Image 2.1 Cache** ノードが含まれており、キャッシュされたテキストと参照プレフィックスの保存先を設定します：
++
++| 設定 | 値 | 効果 |
++| --- | --- | --- |
++| `device` | `auto`（デフォルト）、`gpu`、`cpu`、`off` | `auto` は余っている VRAM を使い、次に RAM を使います。`cpu` は計算の背後で先読みされ、速度への影響はほとんどありません。`off` は毎ステップでプレフィックスを再計算するため遅くなりますが、デバッグ時にキャッシュの影響を排除できます |
++| `dtype` | `default`（デフォルト）、`int8`、`int4` | 保存精度です。`default` はロスレス、`int8` は約 bf16 の精度でキャッシュを半分にし、`int4` は 1/4 にしますがステップあたりのエラーがおよそ 2 倍になります |
+diff --git a/ko/tutorials/image/qwen/qwen-image-2-1.mdx b/ko/tutorials/image/qwen/qwen-image-2-1.mdx
+new file mode 100644
+index 000000000..1b0565b7f
+--- /dev/null
++++ b/ko/tutorials/image/qwen/qwen-image-2-1.mdx
+@@ -0,0 +1,146 @@
++---
++title: "Qwen-Image-2.1 ComfyUI 네이티브 워크플로 예시"
++description: "ComfyUI에서 Qwen-Image-2.1을 실행해 보세요. 이미지 생성과 편집을 하나의 모델로 처리하고, 네이티브 2K 출력, 전문적인 타이포그래피, 알파 채널 지원을 제공합니다."
++sidebarTitle: "Qwen-Image-2.1"
++translationSourceHash: a3395516
++translationFrom: tutorials/image/qwen/qwen-image-2-1.mdx
++translationBlockHashes:
++  "_intro": efd2d43d
++  "Qwen-Image-2.1 workflow": 14844268
++  "Model links": eb7d714b
++  "Workflow settings": e8e71d9a
++---
++import UpdateReminder from "/snippets/ko/tutorials/update-reminder.mdx"
++
++**Qwen-Image-2.1**은 Alibaba Qwen 팀의 Qwen-Image 시리즈에서 최신 오픈 웨이트 릴리스입니다. 단일 모델이 텍스트 기반 이미지 생성과 지시 기반 이미지 편집을 모두 처리하며, 네이티브 2K 출력, 전문적인 타이포그래피, 투명 배경을 위한 알파 채널을 갖추고 있습니다.
++
++**주요 기능**:
++- **하나의 모델에서 생성과 편집**: 동일한 가중치가 텍스트 기반 이미지 생성 프롬프트와 편집 지시를 모두 처리하므로, 워크플로에서 체크포인트를 교체할 필요가 없습니다
++- **네이티브 2K 출력**: 더 작은 결과를 업스케일링하는 대신 최대 2048x2048로 직접 생성합니다
++- **전문적인 타이포그래피**: 인포그래픽, 슬라이드, UI 목업, 포스터, 패키징 디자인에서 촘촘한 작은 텍스트와 복잡한 레이아웃이 유지됩니다
++- **알파 채널 지원**: VAE가 4개 채널을 가지므로 투명 배경 이미지를 나중에 잘라내는 대신 직접 생성하고 편집할 수 있습니다
++- **다중 이미지 편집**: 참조 이미지는 슬롯 순서대로 텍스트 인코더에 이어 붙습니다. 노드는 `image_1`부터 `image_16`까지의 슬롯을 노출하며, 프롬프트는 인덱스로 이를 지정합니다. 예를 들어 `image_1`은 `<image1>`로 작성합니다
++- **국소 편집**: 변경할 객체나 영역을 설명하면 이미지의 나머지 부분은 그대로 유지됩니다
++
++**관련 링크**:
++- [GitHub 저장소](https://github.com/QwenLM/Qwen-Image)
++- [Hugging Face (ComfyUI 지원)](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)
++- [Comfy의 Qwen 이미지 2.1](https://comfy.org/qwen-image-2.1/)
++
++## Qwen-Image-2.1 워크플로
++
++<UpdateReminder />
++
++### Qwen Image 2.1 텍스트 기반 이미지 생성 {#image_qwen_image_2_1_t2i}
++
++선택한 화면 비율과 메가픽셀 목표에 맞춰 텍스트 프롬프트로 이미지를 생성합니다.
++
++<img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/image_qwen_image_2_1_t2i-1.webp" alt="Qwen-Image-2.1 텍스트 기반 이미지 생성 워크플로 미리보기" />
++
++<CardGroup cols={2}>
++  <Card title="워크플로 다운로드" icon="download" href="https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_t2i.json">
++    JSON을 다운로드하거나 템플릿 라이브러리에서 "Qwen-Image-2.1"을 검색하세요
++  </Card>
++  <Card title="Comfy Cloud에서 실행" icon="cloud" href="https://cloud.comfy.org/?template=image_qwen_image_2_1_t2i&utm_source=docs&utm_medium=referral&utm_campaign=qwen-image-2-1">
++    복잡한 설정 없이 온라인에서 ComfyUI를 실행하세요
++  </Card>
++</CardGroup>
++
++**출력 예시**
++
++![Qwen-Image-2.1 텍스트 기반 이미지 생성 예시 출력](https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/output/Qwen_image_2.1.png)
++
++### Qwen Image 2.1 이미지 편집 {#image_qwen_image_2_1_image_edit}
++
++지시문으로 이미지를 편집합니다. 소스 이미지에 없는 콘텐츠가 편집에 필요할 때는 참조 이미지를 추가하세요. 예를 들어 두 번째 사진의 의상을 첫 번째 사진 속 인물에게 입히는 경우입니다.
++
++<img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/image_qwen_image_2_1_image_edit-1.webp" alt="Qwen-Image-2.1 이미지 편집 워크플로 미리보기" />
++
++<CardGroup cols={2}>
++  <Card title="워크플로 다운로드" icon="download" href="https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_image_edit.json">
++    JSON을 다운로드하거나 템플릿 라이브러리에서 "Qwen-Image-2.1"을 검색하세요
++  </Card>
++  <Card title="Comfy Cloud에서 실행" icon="cloud" href="https://cloud.comfy.org/?template=image_qwen_image_2_1_image_edit&utm_source=docs&utm_medium=referral&utm_campaign=qwen-image-2-1">
++    복잡한 설정 없이 온라인에서 ComfyUI를 실행하세요
++  </Card>
++</CardGroup>
++
++**입력 자료**
++
++다음 파일을 해당 `LoadImage` 노드에 업로드하세요:
++
++<CardGroup cols={2}>
++  <Card title="portrait_model_denim.png" icon="image" href="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/portrait_model_denim.png">
++    `LoadImage` 노드 470 · `portrait_model_denim.png`
++  </Card>
++  <Card title="clothing_light_blue_denim_shirt.png" icon="image" href="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/clothing_light_blue_denim_shirt.png">
++    `LoadImage` 노드 475 · `clothing_light_blue_denim_shirt.png`
++  </Card>
++</CardGroup>
++
++**출력 예시**
++
++<div style={{display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1rem', alignItems: 'start'}}>
++  <img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/portrait_model_denim.png" alt="입력 이미지" style={{width: '100%', height: 'auto', objectFit: 'contain'}} />
++  <img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/output/image_qwen_image_2_1_image_edit.png" alt="Qwen-Image-2.1 이미지 편집 예시 출력" style={{width: '100%', height: 'auto', objectFit: 'contain'}} />
++</div>
++
++## 모델 링크
++
++두 워크플로는 동일한 파일을 불러옵니다. 두 템플릿 모두 기본적으로 int8 버전의 diffusion 모델을 사용합니다.
++
++**text_encoders**
++
++- [qwen3vl_8b_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/text_encoders/qwen3vl_8b_bf16.safetensors)
++
++**diffusion_models**
++
++- [qwen_image_2.1_int8_convrot.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors) (템플릿이 기본으로 불러오며 메모리 사용량이 더 적습니다)
++- [qwen_image_2.1_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/diffusion_models/qwen_image_2.1_bf16.safetensors) (전체 정밀도, 더 많은 메모리가 필요합니다)
++
++**vae**
++
++- [qwen_image_2.1_vae_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/vae/qwen_image_2.1_vae_bf16.safetensors)
++
++**모델 저장 위치**
++
++```
++📂 ComfyUI/
++├── 📂 models/
++│   ├── 📂 text_encoders/
++│   │      └── qwen3vl_8b_bf16.safetensors
++│   ├── 📂 diffusion_models/
++│   │      ├── qwen_image_2.1_int8_convrot.safetensors
++│   │      └── qwen_image_2.1_bf16.safetensors
++│   └── 📂 vae/
++│          └── qwen_image_2.1_vae_bf16.safetensors
++```
++
++## 워크플로 설정
++
++### 샘플러 설정
++
++두 템플릿 모두 `steps` 25, `cfg` 1, `euler` 샘플러, `simple` scheduler로 샘플링합니다. 텍스트 기반 이미지 생성 워크플로는 시드를 고정하고, 이미지 편집 워크플로는 시드를 무작위로 설정합니다.
++
++### 해상도
++
++**텍스트 기반 이미지 생성**: **해상도 선택기** 노드가 화면 비율(1:1, 16:9, 9:16, 3:2, 2:3, 4:3, 3:4, 21:9)과 메가픽셀 목표값을 설정하며, 여기서 1.0 MP는 약 1024x1024입니다. 템플릿은 기본적으로 1 MP의 1:1로 설정됩니다. Qwen-Image-2.1은 2K로 네이티브 생성하므로, 2048x2048 정사각형 출력에는 목표값을 약 4.0 MP로 설정하세요.
++
++**이미지 편집**: 템플릿 기본값인 `custom_size` 끄기 상태에서는 출력이 `image_1`의 화면 비율을 따르며, 약 `resolution` x `resolution` 픽셀(기본 1024, 32의 배수로 반올림)로 조정됩니다. 이는 `image_1`의 원본 픽셀 크기가 아닙니다. 각 참조 이미지를 32의 배수로 반올림한 자체 크기로 유지하려면 `resolution`을 0으로 설정하세요. 대신 **해상도 선택기** 캔버스를 사용하려면 `custom_size`를 켜고, 크기를 조정된 `image_1` 크기에 가깝게 유지하세요. 그렇지 않으면 편집 결과가 어긋날 수 있습니다.
++
++### 이미지 편집 프롬프트 작성
++
++참조 이미지는 슬롯 순서대로 텍스트 인코더에 삽입되며, 프롬프트는 각 이미지를 인덱스로 지칭합니다. 템플릿 프롬프트가 이 패턴의 좋은 예입니다:
++
++```
++Keep the character and pose in <image1> unchanged, put this light blue denim shirt from <image2> on the character, preserve the original facial features, hair, body shape and pose
++```
++
++### KV 캐시
++
++이미지 편집 워크플로에는 **Qwen Image 2.1 Cache** 노드가 포함되어 있으며, 이 노드는 캐시된 텍스트와 참조 프리픽스가 저장되는 위치를 설정합니다:
++
++| 설정 | 값 | 효과 |
++| --- | --- | --- |
++| `device` | `auto`(기본값), `gpu`, `cpu`, `off` | `auto`는 남는 VRAM을 사용한 뒤 RAM을 사용합니다. `cpu`는 연산 뒤에서 프리페치되며 속도 손실이 거의 없습니다. `off`는 매 스텝마다 프리픽스를 다시 계산하므로 더 느리지만, 디버깅할 때 캐시를 배제할 수 있습니다 |
++| `dtype` | `default`(기본값), `int8`, `int4` | 저장 정밀도입니다. `default`는 무손실이고, `int8`은 bf16 정도의 정확도로 캐시를 절반으로 줄이며, `int4`는 4분의 1로 줄이지만 스텝당 오류가 대략 두 배가 됩니다 |
+diff --git a/tutorials/image/qwen/qwen-image-2-1.mdx b/tutorials/image/qwen/qwen-image-2-1.mdx
+new file mode 100644
+index 000000000..7e56d2f02
+--- /dev/null
++++ b/tutorials/image/qwen/qwen-image-2-1.mdx
+@@ -0,0 +1,140 @@
++---
++title: "Qwen-Image-2.1 ComfyUI Native Workflow Example"
++description: "Run Qwen-Image-2.1 in ComfyUI: one model for image generation and editing, native 2K output, professional typography, and alpha channel support."
++sidebarTitle: "Qwen-Image-2.1"
++---
++
++import UpdateReminder from '/snippets/tutorials/update-reminder.mdx'
++
++**Qwen-Image-2.1** is the latest open-weight release in the Qwen-Image series from Alibaba's Qwen team. A single model covers both text-to-image generation and instruction-based image editing, with native 2K output, professional typography, and an alpha channel for transparent backgrounds.
++
++**Key Features**:
++- **Generation and editing in one model**: the same weights serve text-to-image prompts and editing instructions, so a workflow does not need to swap checkpoints
++- **Native 2K output**: generate at up to 2048x2048 directly instead of upscaling a smaller result
++- **Professional typography**: dense small text and complex layouts hold up, for infographics, slides, UI mockups, posters, and packaging designs
++- **Alpha channel support**: the VAE carries four channels, so transparent-background images can be generated and edited directly instead of being cut out afterwards
++- **Multi-image editing**: reference images are spliced into the text encoder in slot order. The node exposes `image_1` through `image_16` slots, and the prompt addresses them by index, for example `image_1` is written as `<image1>`
++- **Localized edits**: describe the object or region to change and the rest of the image is preserved
++
++**Related Links**:
++- [GitHub Repository](https://github.com/QwenLM/Qwen-Image)
++- [Hugging Face (Comfy-Org/Qwen-Image-2.1)](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)
++- [Qwen Image 2.1 on Comfy](https://comfy.org/qwen-image-2.1/)
++
++## Qwen-Image-2.1 workflow
++
++<UpdateReminder />
++
++### Qwen Image 2.1 Text to Image {#image_qwen_image_2_1_t2i}
++
++Generate an image from a text prompt at the aspect ratio and megapixel target you select.
++
++<img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/image_qwen_image_2_1_t2i-1.webp" alt="Qwen-Image-2.1 text to image workflow preview" />
++
++<CardGroup cols={2}>
++  <Card title="Download Workflow" icon="download" href="https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_t2i.json">
++    Download JSON or search "Qwen-Image-2.1" in Template Library
++  </Card>
++  <Card title="Run on Comfy Cloud" icon="cloud" href="https://cloud.comfy.org/?template=image_qwen_image_2_1_t2i&utm_source=docs&utm_medium=referral&utm_campaign=qwen-image-2-1">
++    Run ComfyUI online with zero setup
++  </Card>
++</CardGroup>
++
++**Example output**
++
++![Qwen-Image-2.1 text to image example output](https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/output/Qwen_image_2.1.png)
++
++### Qwen Image 2.1 Image Edit {#image_qwen_image_2_1_image_edit}
++
++Edit an image with an instruction. Add reference images when the edit needs content that is not in the source image, such as putting a garment from a second photo onto the person in the first.
++
++<img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/image_qwen_image_2_1_image_edit-1.webp" alt="Qwen-Image-2.1 image edit workflow preview" />
++
++<CardGroup cols={2}>
++  <Card title="Download Workflow" icon="download" href="https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_image_edit.json">
++    Download JSON or search "Qwen-Image-2.1" in Template Library
++  </Card>
++  <Card title="Run on Comfy Cloud" icon="cloud" href="https://cloud.comfy.org/?template=image_qwen_image_2_1_image_edit&utm_source=docs&utm_medium=referral&utm_campaign=qwen-image-2-1">
++    Run ComfyUI online with zero setup
++  </Card>
++</CardGroup>
++
++**Input materials**
++
++Upload these files to the matching `LoadImage` nodes:
++
++<CardGroup cols={2}>
++  <Card title="portrait_model_denim.png" icon="image" href="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/portrait_model_denim.png">
++    `LoadImage` node 470 · `portrait_model_denim.png`
++  </Card>
++  <Card title="clothing_light_blue_denim_shirt.png" icon="image" href="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/clothing_light_blue_denim_shirt.png">
++    `LoadImage` node 475 · `clothing_light_blue_denim_shirt.png`
++  </Card>
++</CardGroup>
++
++**Example output**
++
++<div style={{display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1rem', alignItems: 'start'}}>
++  <img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/portrait_model_denim.png" alt="Input image" style={{width: '100%', height: 'auto', objectFit: 'contain'}} />
++  <img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/output/image_qwen_image_2_1_image_edit.png" alt="Qwen-Image-2.1 image edit example output" style={{width: '100%', height: 'auto', objectFit: 'contain'}} />
++</div>
++
++## Model links
++
++The two workflows load the same files. Both templates use the int8 version of the diffusion model by default.
++
++**text_encoders**
++
++- [qwen3vl_8b_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/text_encoders/qwen3vl_8b_bf16.safetensors)
++
++**diffusion_models**
++
++- [qwen_image_2.1_int8_convrot.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors) (loaded by the templates, lower memory)
++- [qwen_image_2.1_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/diffusion_models/qwen_image_2.1_bf16.safetensors) (full precision, needs more memory)
++
++**vae**
++
++- [qwen_image_2.1_vae_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/vae/qwen_image_2.1_vae_bf16.safetensors)
++
++**Model Storage Location**
++
++```
++📂 ComfyUI/
++├── 📂 models/
++│   ├── 📂 text_encoders/
++│   │      └── qwen3vl_8b_bf16.safetensors
++│   ├── 📂 diffusion_models/
++│   │      ├── qwen_image_2.1_int8_convrot.safetensors
++│   │      └── qwen_image_2.1_bf16.safetensors
++│   └── 📂 vae/
++│          └── qwen_image_2.1_vae_bf16.safetensors
++```
++
++## Workflow settings
++
++### Sampler settings
++
++Both templates sample with `steps` 25, `cfg` 1, the `euler` sampler, and the `simple` scheduler. The text to image workflow keeps the seed fixed, and the image edit workflow randomizes it.
++
++### Resolution
++
++**Text to image**: the **Resolution Selector** node sets the aspect ratio (1:1, 16:9, 9:16, 3:2, 2:3, 4:3, 3:4, 21:9) and a megapixel target, where 1.0 MP is about 1024x1024. The template defaults to 1:1 at 1 MP. Qwen-Image-2.1 generates natively at 2K, so set the target to about 4.0 MP for a 2048x2048 square output.
++
++**Image edit**: with `custom_size` off, which is the template default, the output follows `image_1`'s aspect ratio, scaled to about `resolution` x `resolution` pixels (default 1024, rounded to multiples of 32). That is not the original pixel size of `image_1`. Set `resolution` to 0 to keep each reference image at its own size, rounded to a multiple of 32. Turn `custom_size` on to use the **Resolution Selector** canvas instead, and keep it close to the resized `image_1` size, otherwise the edit can shift.
++
++### Prompting for image edit
++
++Reference images are spliced into the text encoder in slot order, and the prompt addresses each one by index. The template prompt is a good example of the pattern:
++
++```
++Keep the character and pose in <image1> unchanged, put this light blue denim shirt from <image2> on the character, preserve the original facial features, hair, body shape and pose
++```
++
++### KV cache
++
++The image edit workflow includes the **Qwen Image 2.1 Cache** node, which sets where the cached text and reference prefix lives:
++
++| Setting | Values | Effect |
++| --- | --- | --- |
++| `device` | `auto` (default), `gpu`, `cpu`, `off` | `auto` uses spare VRAM, then RAM. `cpu` is prefetched behind compute and costs little speed. `off` recomputes the prefix every step, which is slower but rules the cache out when debugging |
++| `dtype` | `default` (default), `int8`, `int4` | Storage precision. `default` is lossless, `int8` halves the cache at about bf16 accuracy, `int4` quarters it but roughly doubles the per-step error |
+diff --git a/zh/tutorials/image/qwen/qwen-image-2-1.mdx b/zh/tutorials/image/qwen/qwen-image-2-1.mdx
+new file mode 100644
+index 000000000..d45ee9a56
+--- /dev/null
++++ b/zh/tutorials/image/qwen/qwen-image-2-1.mdx
+@@ -0,0 +1,146 @@
++---
++title: "Qwen-Image-2.1 ComfyUI 原生工作流示例"
++description: "在 ComfyUI 中运行 Qwen-Image-2.1：一个模型即可完成图像生成与编辑，原生 2K 输出，专业级文字排版，并支持透明度通道。"
++sidebarTitle: "Qwen-Image-2.1"
++translationSourceHash: a3395516
++translationFrom: tutorials/image/qwen/qwen-image-2-1.mdx
++translationBlockHashes:
++  "_intro": efd2d43d
++  "Qwen-Image-2.1 workflow": 14844268
++  "Model links": eb7d714b
++  "Workflow settings": e8e71d9a
++---
++import UpdateReminder from "/snippets/zh/tutorials/update-reminder.mdx"
++
++**Qwen-Image-2.1** 是阿里 Qwen 团队 Qwen-Image 系列中最新发布的开放权重版本。单一模型同时涵盖文生图生成和基于指令的图像编辑，原生支持 2K 输出、专业排版，并具备用于透明背景的 alpha 通道。
++
++**主要特性**：
++- **生成与编辑合一**：同一套权重既可用于文生图提示词，也可用于编辑指令，因此工作流无需切换模型
++- **原生 2K 输出**：直接生成最高 2048x2048 的图像，而无需对较小结果进行图像放大
++- **专业排版**：密集的小号文字和复杂版式依然清晰，适用于信息图、幻灯片、UI 原型图、海报和包装设计
++- **Alpha 通道支持**：VAE 携带四个通道，因此可以直接生成和编辑透明背景图像，而无需事后再进行抠图
++- **多图像编辑**：参考图像按槽位顺序拼接到文本编码器中。节点提供 `image_1` 到 `image_16` 槽位，提示词通过索引引用它们，例如 `image_1` 写作 `<image1>`
++- **局部编辑**：描述要更改的对象或区域，图像的其余部分保持不变
++
++**相关链接**：
++- [GitHub 仓库](https://github.com/QwenLM/Qwen-Image)
++- [Hugging Face（ComfyUI 模型）](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)
++- [Comfy 上的 Qwen Image 2.1](https://comfy.org/qwen-image-2.1/)
++
++## Qwen-Image-2.1 工作流
++
++<UpdateReminder />
++
++### Qwen Image 2.1 文本到图像 {#image_qwen_image_2_1_t2i}
++
++根据您选择的宽高比和百万像素目标，从文本提示生成图像。
++
++<img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/image_qwen_image_2_1_t2i-1.webp" alt="Qwen-Image-2.1 文本到图像工作流预览" />
++
++<CardGroup cols={2}>
++  <Card title="下载工作流" icon="download" href="https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_t2i.json">
++    下载 JSON 或在模板库中搜索 “Qwen-Image-2.1”
++  </Card>
++  <Card title="在 Comfy Cloud 上运行" icon="cloud" href="https://cloud.comfy.org/?template=image_qwen_image_2_1_t2i&utm_source=docs&utm_medium=referral&utm_campaign=qwen-image-2-1">
++    零设置在线运行 ComfyUI
++  </Card>
++</CardGroup>
++
++**示例输出**
++
++![Qwen-Image-2.1 文本到图像示例输出](https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/output/Qwen_image_2.1.png)
++
++### Qwen Image 2.1 图像编辑 {#image_qwen_image_2_1_image_edit}
++
++使用指令编辑图像。当编辑需要源图像中不存在的内容时，添加参考图像，例如将第二张照片中的服装穿到第一张照片中的人物身上。
++
++<img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/image_qwen_image_2_1_image_edit-1.webp" alt="Qwen-Image-2.1 图像编辑工作流预览" />
++
++<CardGroup cols={2}>
++  <Card title="下载工作流" icon="download" href="https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_image_edit.json">
++    下载 JSON 或在模板库中搜索 “Qwen-Image-2.1”
++  </Card>
++  <Card title="在 Comfy Cloud 上运行" icon="cloud" href="https://cloud.comfy.org/?template=image_qwen_image_2_1_image_edit&utm_source=docs&utm_medium=referral&utm_campaign=qwen-image-2-1">
++    零设置在线运行 ComfyUI
++  </Card>
++</CardGroup>
++
++**输入材料**
++
++将这些文件上传到匹配的 `LoadImage` 节点：
++
++<CardGroup cols={2}>
++  <Card title="portrait_model_denim.png" icon="image" href="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/portrait_model_denim.png">
++    `LoadImage` 节点 470 · `portrait_model_denim.png`
++  </Card>
++  <Card title="clothing_light_blue_denim_shirt.png" icon="image" href="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/clothing_light_blue_denim_shirt.png">
++    `LoadImage` 节点 475 · `clothing_light_blue_denim_shirt.png`
++  </Card>
++</CardGroup>
++
++**示例输出**
++
++<div style={{display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1rem', alignItems: 'start'}}>
++  <img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/input/portrait_model_denim.png" alt="输入图像" style={{width: '100%', height: 'auto', objectFit: 'contain'}} />
++  <img src="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/output/image_qwen_image_2_1_image_edit.png" alt="Qwen-Image-2.1 图像编辑示例输出" style={{width: '100%', height: 'auto', objectFit: 'contain'}} />
++</div>
++
++## 模型下载
++
++两个工作流加载相同的文件。两个模板默认都使用 int8 版本的扩散模型。
++
++**text_encoders**
++
++- [qwen3vl_8b_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/text_encoders/qwen3vl_8b_bf16.safetensors)
++
++**diffusion_models**
++
++- [qwen_image_2.1_int8_convrot.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors)（模板默认加载，内存占用更低）
++- [qwen_image_2.1_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/diffusion_models/qwen_image_2.1_bf16.safetensors)（完整精度，需要更多内存）
++
++**vae**
++
++- [qwen_image_2.1_vae_bf16.safetensors](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/vae/qwen_image_2.1_vae_bf16.safetensors)
++
++**模型保存位置**
++
++```
++📂 ComfyUI/
++├── 📂 models/
++│   ├── 📂 text_encoders/
++│   │      └── qwen3vl_8b_bf16.safetensors
++│   ├── 📂 diffusion_models/
++│   │      ├── qwen_image_2.1_int8_convrot.safetensors
++│   │      └── qwen_image_2.1_bf16.safetensors
++│   └── 📂 vae/
++│          └── qwen_image_2.1_vae_bf16.safetensors
++```
++
++## 工作流设置
++
++### Sampler 设置
++
++两个模板均使用 `steps` 25、`cfg` 1、`euler` sampler 和 `simple` scheduler 进行采样。文本到图像工作流保持种子固定，而图像编辑工作流则将其随机化。
++
++### 分辨率
++
++**文本到图像**：**分辨率选择器**节点设置宽高比（1:1、16:9、9:16、3:2、2:3、4:3、3:4、21:9）和百万像素目标，其中 1.0 MP 约为 1024x1024。模板默认为 1:1、1 MP。Qwen-Image-2.1 原生生成 2K 图像，因此对于 2048x2048 的方形输出，将目标设置为约 4.0 MP。
++
++**图像编辑**：当 `custom_size` 关闭时（这是模板默认设置），输出会遵循 `image_1` 的宽高比，缩放为约 `resolution` x `resolution` 像素（默认 1024，四舍五入到 32 的倍数）。这不是 `image_1` 的原始像素尺寸。将 `resolution` 设为 0 以让每个参考图像保持其自身尺寸，并四舍五入到 32 的倍数。开启 `custom_size` 以改用**分辨率选择器**画布，并使其接近调整大小后的 `image_1` 尺寸，否则编辑可能会偏移。
++
++### 图像编辑提示
++
++参考图像按插槽顺序拼接到文本编码器中，提示词通过索引来指向每个图像。模板提示词是该模式的良好示例：
++
++```
++Keep the character and pose in <image1> unchanged, put this light blue denim shirt from <image2> on the character, preserve the original facial features, hair, body shape and pose
++```
++
++### KV 缓存
++
++图像编辑工作流包含 **Qwen Image 2.1 Cache** 节点，它设置缓存的文本和参考前缀所在的位置：
++
++| 设置 | 值 | 效果 |
++| --- | --- | --- |
++| `device` | `auto`（默认）、`gpu`、`cpu`、`off` | `auto` 使用空闲的 VRAM，然后使用 RAM。`cpu` 在计算后台预取，对速度影响很小。`off` 每一步都重新计算前缀，这较慢，但在调试时可以排除缓存问题 |
++| `dtype` | `default`（默认）、`int8`、`int4` | 存储精度。`default` 是无损的，`int8` 将缓存减半且精度约与 bf16 相当，`int4` 将其减为四分之一，但每一步的误差大约翻倍 |

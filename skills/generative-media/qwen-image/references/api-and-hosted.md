@@ -14,15 +14,15 @@ This file covers renting rather than running: Alibaba Cloud Model Studio (DashSc
 
 ## 1. Hosted vs open — what is actually different
 
-| | Open (Qwen-Image … 2512, Edit … 2511, Layered) | Hosted (2.0, 2.0 Pro, 3.0, 3.0 Pro, max, plus) |
+| | Open (Qwen-Image … 2512, Edit … 2511, Layered; **2.1 since 2026-09-20**) | Hosted (2.0, 2.0 Pro, 3.0, 3.0 Pro, max, plus; the 2.1 demo's `pre-qwen-image-2.1-pro`) |
 |---|---|---|
-| Weights | downloadable, Apache 2.0 | **none** — no `Qwen/Qwen-Image-2.0` or `-3` repo exists on Hugging Face |
-| Model | 20B MMDiT, same geometry across variants | 2.0 is "a next-generation foundational image generation model" with a "lighter model architecture"; 3.0 is undocumented by Qwen on GitHub `[official — QwenLM README News]` |
+| Weights | downloadable — Apache 2.0 for the 20B family, **Qwen Research License (non-commercial) for 2.1** | **none** — no `Qwen/Qwen-Image-2.0` or `-3` repo exists on Hugging Face; the `Qwen/Qwen-Image-2.1` Space calls a hosted `pre-qwen-image-2.1-pro-yunqi` model with `prompt_extend`, not the open weights |
+| Model | 20B MMDiT, same geometry across variants; 2.1 is a 7B single-stream DiT (`setup-and-workflows.md §11`) | 2.0 is "a next-generation foundational image generation model" with a "lighter model architecture"; 3.0 is undocumented by Qwen on GitHub `[official — QwenLM README News]` |
 | Resolution | the 1328 class (~1.5 MP); Edit natively 2–3 MP via the bypass | **native 2K**; 2.0 takes any size with total pixels between 512×512 and 2048×2048 |
 | Prompt handling | what you type is what the encoder sees | **`prompt_extend` defaults to `true`** — a hosted LLM rewrites the prompt before rendering |
 | Instruction length | Edit wants short prompts | 2.0 advertises "1k-token instructions" |
 | Regions | your GPU | Singapore (`ap-southeast-1`) and Beijing (`cn-beijing`) |
-| Licence | Apache 2.0 | Model Studio terms of service |
+| Licence | Apache 2.0 (20B); research-only (2.1) | Model Studio terms of service |
 
 **`prompt_extend` on by default is the single most important hosted-vs-local difference.** Local inference never rewrites your prompt; the API does unless you set the flag false. That matters for reproducibility, for text-to-render, and for anything you A/B against a local render. The rewriter's rules are in `prompting-guide.md §5`. No independent hosted-vs-open shootout has been published. Assume 3.0 Pro beats 2512 on fidelity and treat the size of the gap as unknown.
 
@@ -87,4 +87,4 @@ Alibaba's model-list page carries no per-image figures, and the separate "Model 
 - Qwen-Image-3.0 (standard): a flat ~$0.03 per image.
 - A ¥0.18-per-image figure also circulates.
 
-None of these was confirmed against Alibaba's own price list. Do not put a number in a budget from this file. The same caution applies to the launch timeline. Secondary sources say 3.0 was announced 2026-07-21, invite-only, then generally available on the API around 2026-08-04/05, which is consistent with the ComfyUI templates dated 2026-08-06. The QwenLM README's News block stops at 2.0 (2026-02-10) and never mentions 3.0.
+None of these was confirmed against Alibaba's own price list. Do not put a number in a budget from this file. The same caution applies to the launch timeline. Secondary sources say 3.0 was announced 2026-07-21, invite-only, then generally available on the API around 2026-08-04/05, which is consistent with the ComfyUI templates dated 2026-08-06. The QwenLM README's News block stops at 2.0 (2026-02-10) and never mentions 3.0. Qwen-Image-2.1 has its own repo (`QwenLM/Qwen-Image-2.1`) and, as of 2026-09-20, no Model Studio model string, no ComfyUI API node and no third-party host; the 'Pro' variant behind the demo is unannounced and unpriced `[flagged — re-verify]`.

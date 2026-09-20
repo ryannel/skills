@@ -16,6 +16,7 @@ This file is about **making** a LoRA. Loading and stacking one is `setup-and-wor
 8. Hyperparameter table and the contested points
 9. What transfers from Krea 2, and what does not
 10. Evaluation and debugging
+11. Qwen-Image-2.1 — DiffSynth only, RGBA datasets, and the licence
 
 ---
 
@@ -288,3 +289,21 @@ The shared method (blind pairs, a strength-0 control in every comparison, the he
 | LoRA destroys the image on 2512 / 2511 | Trained for another generation; the base absorbed community LoRAs | Retrain on the deploy generation; strength does not fix it |
 
 Once trained: `setup-and-workflows.md §7` for loading and weights; `characters.md` for deploying it with Edit.
+
+---
+
+## 11. Qwen-Image-2.1 — DiffSynth only, RGBA datasets, and the licence
+
+`[official — DiffSynth-Studio commits and `docs/zh/Model_Details/Qwen-Image-2.1.md`, `examples/qwen_image_21/`, 2026-09-20; ai-toolkit, musubi-tuner and SimpleTuner trees checked the same day]`. Nothing here is community-tested; no 2.1 LoRA exists on Civitai or Hugging Face.
+
+**Support matrix.** DiffSynth-Studio: full fine-tune and LoRA, day 0. ai-toolkit: none (last Qwen commit 2026-09-16, pre-release). musubi-tuner: none. SimpleTuner: none. `[flagged — re-verify weekly]`. None of §1's Qwen defaults apply; 2.1 is a different transformer, encoder and latent space.
+
+**The DiffSynth example, verbatim numbers:** `train.py` with `--lora_base_model dit --lora_rank 32 --lora_target_modules ""` (framework default set), `--learning_rate 1e-4`, `--num_epochs 5`, `--dataset_repeat 50`, `--max_pixels 1048576` (dynamic resolution, 1 MP cap — the model's native band is 2K, so this is a compute choice, not a doctrine), `--use_gradient_checkpointing`, `--find_unused_parameters`, `--remove_prefix_in_ckpt "pipe.dit."`. Loads all three components from `Qwen/Qwen-Image-2.1` by origin path; `--processor_path` and `--initialize_model_on_cpu` are the two 2.1-specific flags. `--fp8_models` can hold the frozen encoder in fp8.
+
+**RGBA is the default training format.** Images are loaded as RGBA, so a dataset with real alpha trains transparent generation directly; an RGB dataset trains opaque output. This is the one genuinely new lever: a sticker, icon or cut-out character LoRA can be trained on transparent PNGs without a matting stage.
+
+**Edit LoRAs** use the same script with `--data_file_keys "image,edit_image" --extra_inputs "edit_image"`; the shipped example points at the Edit-2511 paired dataset, so paired data made for the 20B Edit transfers as data (§6's pairing rules hold).
+
+**No Lightning, no doctrine yet.** §2's "train on the base, stack Lightning at inference" has no second half here. Train and evaluate at 40 steps, CFG 1.
+
+**Licence gate before you start.** §4(b) of the Qwen Research License: anything trained on or with 2.1 that is distributed must "prominently display 'Built with Qwen' or 'Improved using Qwen'". §2: the grant is non-commercial; a paid LoRA, a paid dataset generated with 2.1, or a commercial deployment needs a separate licence from Qwen. The publishing gates in [`character-lora-training`](../../character-lora-training/references/publishing-and-likeness.md) apply on top.

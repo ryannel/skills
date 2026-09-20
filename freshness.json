@@ -2053,10 +2053,10 @@
       "path": "skills/generative-media/qwen-image",
       "tier": "hot",
       "cadence_days": 1,
-      "last_checked": "2026-09-09",
+      "last_checked": "2026-09-20",
       "last_drift_found": null,
       "quiet_streak": 0,
-      "why_tier": "Registered hot on 2026-09-09 (authoring pass counts as a full verification): six open variants shipped across five months plus two hosted-only models (2.0, 3.0) since, the packaging layer moves weekly — GGUF changed maintainer at 2511, Nunchaku SVDQuant stalled at 2509, a new int8 quant and API templates landed within the last five weeks — and a 2.0/3.0 weights drop would rewrite the variant selector and licence table in one pass. Review down to active once the weights question settles or a quiet streak accrues.",
+      "why_tier": "Registered hot on 2026-09-09 (authoring pass counts as a full verification): six open variants shipped across five months plus two hosted-only models (2.0, 3.0) since, the packaging layer moves weekly — GGUF changed maintainer at 2511, Nunchaku SVDQuant stalled at 2509, a new int8 quant and API templates landed within the last five weeks — and a 2.0/3.0 weights drop would rewrite the variant selector and licence table in one pass. Review down to active once the weights question settles or a quiet streak accrues. 2026-09-20: Qwen-Image-2.1 open weights shipped under a non-commercial Qwen Research License — a new 7B architecture folded in as a second generation. Its packaging (quants, GGUF loader, trainers, Lightning, ComfyUI tag) and first community craft (early-access reviews due 2026-09-28) will all move within days; stay hot.",
       "linked_skills": [
         "krea-2",
         "z-image",
@@ -2066,9 +2066,9 @@
         {
           "id": "qwen-image-open-vs-hosted-variants",
           "type": "pending-release",
-          "claim": "Qwen-Image 2.0 (announced 2026-02-10) and 3.0 (API by 2026-08) are hosted-only — no downloadable weights, API node only in ComfyUI; the QwenLM README's News block stops at 2.0 and never mentions 3.0. 'Closed' as of 2026-09-09 carries no Qwen statement ruling out a future release.",
+          "claim": "Qwen-Image 2.0 (announced 2026-02-10) and 3.0 (API by 2026-08) remain hosted-only. Qwen-Image-2.1 open weights shipped 2026-09-20 (Qwen Research License, non-commercial); the HF Space demo calls a hosted 'pre-qwen-image-2.1-pro-yunqi' model that has no Model Studio string, API node or price yet.",
           "where": "SKILL.md variant table ~L53, ~L310; references/api-and-hosted.md §5 (~L90)",
-          "check": "Check the QwenLM GitHub README, the Qwen-Image HF org and Model Studio announcements for open weights for 2.0 or 3.0. A weights drop rewrites the variant selector, licence table and open/closed framing across SKILL.md — MAJOR."
+          "check": "Check QwenLM/Qwen-Image-2.1 README, the Qwen HF org and Model Studio for: a 2.1 Pro API string, a commercial-licence path or re-licence of 2.1 to Apache, or weights for 2.0/3.0. A licence change on 2.1 rewrites the variant selector, suite table, licence table and the atlas ladder — MAJOR."
         },
         {
           "id": "qwen-image-template-fp8-lightning-pairing",
@@ -2125,6 +2125,20 @@
           "claim": "Hosted 2.0/3.0 pricing is entirely secondary and unverified against Alibaba's own price list: 3.0 Pro ~$0.04/image at 1K and ~$0.075 at 2K, 3.0 standard ~$0.03 flat, and a ¥0.18-per-image figure also circulates. The 3.0 launch timeline (announced 2026-07-21, GA ~2026-08-04/05) is also secondary; the QwenLM README stops at 2.0.",
           "where": "references/api-and-hosted.md §5 (~L86-90)",
           "check": "Check Alibaba Cloud Model Studio's own pricing page for Qwen-Image-3.0 and re-verify the launch date against an official Alibaba/Qwen announcement, not aggregator coverage."
+        },
+        {
+          "id": "qwen-image-21-packaging",
+          "type": "version-pin",
+          "claim": "Qwen-Image-2.1 ships only bf16 and int8_convrot (Comfy-Org/Qwen-Image-2.1), no fp8, no loadable GGUF (ComfyUI-GGUF last commit 2026-01-12), no Nunchaku, no Lightning/distill LoRA, no ControlNet; DiffSynth-Studio is the only trainer; ComfyUI support merged 2026-09-19 (PR #16400) with no tagged release yet; templates v0.11.66 default to int8_convrot for both DiT and encoder at 25 steps / CFG 1.",
+          "where": "SKILL.md variant table, ComfyUI and quant paragraphs, 2.1 per-variant section; references/setup-and-workflows.md §11; references/lora-training.md §11",
+          "check": "Re-read the Comfy-Org/Qwen-Image-2.1 tree, ComfyUI releases, ComfyUI-GGUF, lightx2v HF org, ai-toolkit/musubi/SimpleTuner commits, and the templates JSON. Any new file, loader, trainer or template default changes the 'what is missing' list."
+        },
+        {
+          "id": "qwen-image-21-community-craft",
+          "type": "flagged-inference",
+          "claim": "Every Qwen-Image-2.1 claim in the skill is official-only; no community A/B on identity across ten references, plastic-skin status, alpha-edge quality, consumer-GPU VRAM, sampler/step craft, or the edit output-size rule (Comfy follows image_1, vLLM-Omni the last reference). ModelScope early-access testers publish by 2026-09-28.",
+          "where": "SKILL.md 2.1 per-variant section, failure table 2.1 rows, two-bar section; references/characters.md §9; references/prompting-guide.md §9",
+          "check": "After 2026-09-28 sweep r/StableDiffusion, Civitai (base model filter), HF discussions and the Qwen Discord/Banodoco for named-author 2.1 reports; promote findings from official-only to community-attributed and fill the VRAM table."
         }
       ],
       "open_findings": []
