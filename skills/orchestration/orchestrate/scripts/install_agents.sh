@@ -1,6 +1,7 @@
 #!/bin/bash
 # Links the orchestrate agent definitions into a project (or globally with --global), for Claude Code and Codex.
-# Usage: install_agents.sh <repo>   |   install_agents.sh --global
+# Usage: install_agents.sh --global [--codex-only]   |   install_agents.sh <repo> [--codex-only]
+# Prefer --global: project installs write absolute symlinks that break for teammates and CI if committed.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/../agents" && pwd)"
 if [ "${1:-}" = "--global" ]; then
@@ -8,8 +9,8 @@ if [ "${1:-}" = "--global" ]; then
 elif [ -n "${1:-}" ]; then
   claude_dir="$1/.claude/agents"; codex_dir="$1/.codex/agents"
 else
-  echo "usage: $0 <repo> | --global" >&2; exit 2
+  echo "usage: $0 --global|<repo> [--codex-only]" >&2; exit 2
 fi
 mkdir -p "$claude_dir" "$codex_dir"
-for f in "$here"/claude/*.md; do ln -sfn "$f" "$claude_dir/$(basename "$f")"; echo "linked $claude_dir/$(basename "$f")"; done
+if [ "${2:-}" != "--codex-only" ]; then for f in "$here"/claude/*.md; do ln -sfn "$f" "$claude_dir/$(basename "$f")"; echo "linked $claude_dir/$(basename "$f")"; done; fi
 for f in "$here"/codex/*.toml; do ln -sfn "$f" "$codex_dir/$(basename "$f")"; echo "linked $codex_dir/$(basename "$f")"; done

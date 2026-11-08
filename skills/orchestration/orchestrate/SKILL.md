@@ -21,8 +21,10 @@ one lead for fan-out. It runs in Claude Code or Codex. Rationale and sources: [p
 | Fan-out | `/build-parallel <module> …` | Several modules' milestones at once, under one lead | Claude lead at medium; Codex generators |
 
 Each command reads the level above it and writes only its own. A change needed above goes up as a proposal, and work
-that doesn't depend on it carries on. The project's `ORCHESTRATE.md` can override any model or effort; every launch
-names both.
+that doesn't depend on it carries on. Every launch names its model and effort. `ORCHESTRATE.md` sets the Codex
+generator's; the Claude agents' are in their agent files (edit the installed copies to change them).
+
+A project with a single module can skip `/plan-project`: `/plan-module` writes the module's brief from the purpose doc.
 
 **Speed 1** is one chat: the owner runs `/build-milestone` in Claude Code or Codex, and can switch vendor at a
 milestone boundary, because the handover is the plan, the done-when file and the progress note. **Speed 2** is
@@ -34,21 +36,28 @@ planner subagents.
 Done when the repository has:
 1. **`ORCHESTRATE.md` at its root**, filled in from [the profile template](references/profile.md). Derive what you can
    from the repository (check command, targets, where docs live) and ask the owner, in one round, only for what you
-   can't: purpose, what goes to them, integration policy and licences.
-2. **A pointer in `AGENTS.md`** (and `CLAUDE.md` if the project uses it): one line saying work follows the orchestrate
+   can't: purpose, what goes to them, integration and merge policy, and licences. `agent_loop.py profile --worktree
+   <repo>` (in the build-parallel skill's `scripts/`) exits 0 on it.
+2. **The evidence directory and graded-examples file exist,** the latter copied from
+   [the format](../review-milestone/references/graded-examples.md).
+3. **A pointer in `AGENTS.md`** (and `CLAUDE.md` if the project uses it): one line saying work follows the orchestrate
    process as configured in `ORCHESTRATE.md`. Propose the edit to the owner if those files have their own uncommitted
    changes.
-3. **The agents installed** for both vendors, by running `scripts/install_agents.sh <repo>` from this skill. It
-   links the evaluator, planner and researcher agent definitions into the project's `.claude/agents/` and
-   `.codex/agents/`.
-4. **Project guidance linked from the profile,** not copied into these skills. Domain rules (an engine's hot-path
+4. **The agents available** to both vendors. Installed as a Claude Code plugin, the Claude agents come with it (named
+   `orchestrate:orchestrate-evaluator` and so on); only the Codex agents need `scripts/install_agents.sh --global
+   --codex-only`. Installed with `npx skills add`, run `scripts/install_agents.sh --global` once per machine. Global
+   install keeps machine-specific symlinks out of the repository.
+5. **Project guidance linked from the profile,** not copied into these skills. Domain rules (an engine's hot-path
    rules, a web app's accessibility standard, a CLI's compatibility promise) live in the project, usually as a project
    skill or doc, and the profile says which level reads them.
 
 If the project already has plans in another shape, leave them; `/plan-module` converts a module when it next plans it.
 
+Plugin installs namespace the skills too (`/orchestrate:plan-module`); the bare names in these skills mean the same
+skills.
+
 ## Status
 
-`python3 <build-parallel>/scripts/agent_loop.py status --module <M> --worktree <repo>` lists a module's milestones,
+`python3 <build-parallel skill folder>/scripts/agent_loop.py status --module <M> --worktree <repo>` lists a module's milestones,
 states, fail counts and passing items. `agent_loop.py quota` forecasts the Codex weekly limit. For an overview, read
 each module plan's status lines (`Milestone:`, `Now:`, `Next:`, `Blocked:`).

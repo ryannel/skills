@@ -1,16 +1,15 @@
 ---
 name: review-milestone
-description: Judges a milestone from a clean context against its JSON done-when file and inspection list, by running the oracle checks and inspecting captures from the named target, then records the verdict, as part of the orchestrate process. Use when a milestone marked for review has all items claimed, at module close, or to review a module design and plan before building. Not for building or fixing (build-milestone).
+description: Judges a milestone from a clean context against its JSON done-when file and inspection list, by running the oracle checks and inspecting captures from the named target, then records the verdict, in a repository using the orchestrate process (ORCHESTRATE.md). Use when a milestone marked for review has all items claimed, at module close, or to review a module design and plan before building. Not for building or fixing (build-milestone).
 ---
 
 # Review a milestone
 
 Run as Claude Opus 5.5 at medium effort in a clean context, as the `orchestrate-evaluator` agent (from a Codex chat,
-its `gpt-6.1-sol` medium twin), unless `ORCHESTRATE.md` says otherwise. Read `ORCHESTRATE.md` first, and the reviewing
-guidance and graded examples it lists.
+its `gpt-6.1-sol` medium twin). Read `ORCHESTRATE.md` first, and the reviewing guidance and graded examples it lists.
 
 **Outcome:** a verdict on one milestone the generator, the loop and the owner can act on without asking you anything,
-written to `<evidence>/<module>/<milestone>-review.md` and summarised in the done-when file.
+written to `<evidence>/<module, lower case>/<milestone>-review.md` and summarised in the done-when file.
 
 Your value is that you haven't seen the author's reasoning. Work from the requirements and raw artifacts: the done-when
 file (items, inspection list, bar), the design, the commit range, the captures and logs. Don't read the author's
@@ -18,13 +17,13 @@ progress narrative until you've formed your own view.
 
 ## Done when
 
-1. **Each item has a verdict,** `pass`, `fail` or `can't tell`, with evidence.
+1. **Each item has a verdict,** `pass`, `fail` or can't tell (`cant_tell` in the file), with evidence.
    - **Oracle items:** run the check yourself on the named target at the commit under review.
    - **Inspection items:** inspect captures from that build on the named target, using the profile's capture method:
      screenshot sequences, frame sequences or contact sheets, traces, or command transcripts. Say what you inspected,
      at what size, and which build. Judge against the item and the `bar`, which is acceptance in a well-reviewed shipped
-     product of this kind, in words; there's no target image. Cover transitions (empty, loading, error, first use,
-     resize, start and stop) where faults hide. Capture what you need yourself if it's missing.
+     product of this kind, in words; there's no target image. Cover the target's edge conditions from the profile,
+     where faults hide. Capture what you need yourself if it's missing.
    - **Review items:** read the code or contract change across its producers and consumers.
 2. **Everything else wrong is listed, ranked by consequence,** each marked verified (file and line, a reproduction or a
    capture) or suspected. Include items too weak to catch the plausible wrong substitute.
@@ -56,4 +55,5 @@ behaviour, milestones that wouldn't show it, and items that couldn't be judged.
 - **Read-only on code.** You may build, run checks and capture. You may edit only the review file, the done-when file
   and the status ledger.
 - **Don't fix what you find,** so findings stay independent.
-- **Commit and integrate** the verdict files from the worktree you were given, so the generator's next rebase has them.
+- **Commit and integrate** the verdict files from the worktree you were given, so the generator's next rebase has
+  them. In pull-request mode, push them to the milestone's branch.

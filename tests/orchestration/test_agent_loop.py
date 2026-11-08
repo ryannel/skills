@@ -1,4 +1,4 @@
-"""Checks for agent_loop's mechanical decisions: milestone choice, escalation, pace, pins and report lines."""
+"""Checks for agent_loop's mechanical decisions: milestone choice, escalation, claims, profile, pins and report lines."""
 
 import argparse
 import json
@@ -10,7 +10,8 @@ import sys
 import tempfile
 import unittest
 
-import agent_loop
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skills/orchestration/build-parallel/scripts"))
+import agent_loop  # noqa: E402
 
 
 def done(*milestones):
@@ -33,8 +34,10 @@ class Decisions(unittest.TestCase):
             agent_loop.pick_milestone(done(milestone("M1", "open", [])), "M9")
 
     def test_escalation_ladder(self):
-        self.assertEqual([agent_loop.escalation(n) for n in range(7)],
-                         ["none", "same-session", "same-session", "fresh-session", "replan", "park", "park"])
+        self.assertEqual([agent_loop.escalation(n) for n in range(6)],
+                         ["none", "same-session", "same-session", "fresh-session", "replan", "replan"])
+        self.assertEqual(agent_loop.escalation(4, replans=1), "park")
+        self.assertEqual(agent_loop.escalation(2, replans=1), "same-session")
 
     def test_forecast_from_last_day(self):
         h, now, reset = 3600, 1_000_000.0, 1_000_000.0 + 72 * 3600
@@ -55,11 +58,13 @@ class Decisions(unittest.TestCase):
     def test_profile_reads_labelled_lines(self):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "ORCHESTRATE.md").write_text(
-                "- **Plans:** docs/design/modules  *(read by the loop)*\n- **Integrate:** pull-request\n"
-                "- **Codex generator:** gpt-6.1-sol high\n")
+                "- **Plans:** [docs/design/modules](docs/design/modules/)  *(read by the loop)*\n"
+                "- **Integrate:** pull-request  *(read by the loop: `main` = ...)*\n"
+                "- **Codex generator:** gpt-6.1-sol, high\n- **Writable roots:** ~/.cargo, ~/.npm\n")
             p = agent_loop.profile(Path(tmp))
             self.assertEqual((p["plans"], p["integrate"], p["model"], p["effort"], p["evidence"]),
                              ("docs/design/modules", "pull-request", "gpt-6.1-sol", "high", "docs/evidence"))
+            self.assertEqual(p["roots"], ["~/.cargo", "~/.npm"])
             self.assertEqual(agent_loop.profile(Path(tmp, "missing"))["plans"], "docs/modules")
 
     def test_pin_mismatch_lists_wrong_turns(self):
@@ -83,8 +88,11 @@ class Decisions(unittest.TestCase):
 
 
 FAKE_CODEX = """#!/usr/bin/env python3
-import json, os, sys
+import json, os, subprocess, sys
 from pathlib import Path
+if "--help" in sys.argv:
+    print("usage: codex exec [--json]")
+    sys.exit(0)
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps(sys.argv[1:]) + "\\n")
 path = Path(os.environ["FAKE_WT"]) / "docs/modules/WATER-DONE.json"
@@ -94,6 +102,10 @@ if os.environ.get("FAKE_PASS") == "1":
         for i in m["items"]:
             i["status"] = "pass"
     path.write_text(json.dumps(d))
+    if os.environ.get("FAKE_COMMIT", "1") == "1":
+        wt = os.environ["FAKE_WT"]
+        subprocess.run(["git", "-C", wt, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "pass"])
+        subprocess.run(["git", "-C", wt, "push", "-q", "origin", "main"])
 print(json.dumps({"type": "thread.started", "thread_id": "t1"}))
 print(json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": os.environ.get("FAKE_REPLY", "DONE")}}))
 """
@@ -112,7 +124,8 @@ class RunLoop(unittest.TestCase):
         git("init", "-b", "main", str(self.wt))
         (self.wt / "docs/modules").mkdir(parents=True)
         self.write_done([milestone("M1", "open", ["open"])])
-        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "init", cwd=self.wt)
+        git("add", "-A", cwd=self.wt)
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init", cwd=self.wt)
         git("remote", "add", "origin", str(origin), cwd=self.wt)
         git("push", "-q", "origin", "main", cwd=self.wt)
         fake = root / "codex"
@@ -121,7 +134,8 @@ class RunLoop(unittest.TestCase):
         self.log = root / "log"
         self.saved = (agent_loop.CODEX, agent_loop.CODEX_HOME)
         agent_loop.CODEX, agent_loop.CODEX_HOME = str(fake), self.home
-        os.environ.update(FAKE_LOG=str(self.log), FAKE_WT=str(self.wt), FAKE_PASS="1", FAKE_REPLY="DONE")
+        os.environ.update(FAKE_LOG=str(self.log), FAKE_WT=str(self.wt), FAKE_PASS="1", FAKE_REPLY="DONE",
+                          FAKE_COMMIT="1")
 
     def tearDown(self):
         agent_loop.CODEX, agent_loop.CODEX_HOME = self.saved
@@ -129,6 +143,11 @@ class RunLoop(unittest.TestCase):
 
     def write_done(self, milestones):
         (self.wt / "docs/modules/WATER-DONE.json").write_text(json.dumps(done(*milestones)))
+
+    def commit_done(self):
+        subprocess.run(["git", "-C", str(self.wt), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "x"],
+                       check=True)
+        subprocess.run(["git", "-C", str(self.wt), "push", "-q", "origin", "main"], check=True)
 
     def run_loop(self, **kw):
         args = dict(module="WATER", worktree=str(self.wt), milestone=None, fresh=False, message=None,
@@ -152,6 +171,7 @@ class RunLoop(unittest.TestCase):
         d = json.loads((self.wt / "docs/modules/WATER-DONE.json").read_text())
         d["milestones"][0]["items"][0]["status"] = "fail"
         (self.wt / "docs/modules/WATER-DONE.json").write_text(json.dumps(d))
+        self.commit_done()
         self.run_loop(message="FINDINGS")
         last = self.calls()[-1]
         self.assertEqual(last[:3], ["exec", "resume", "t1"])
@@ -174,6 +194,36 @@ class RunLoop(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.run_loop()
         self.assertIn("quota", json.loads(out.getvalue().splitlines()[-1]))
+
+    def test_uncommitted_pass_is_not_claimed(self):
+        os.environ.update(FAKE_COMMIT="0")
+        state = self.run_loop(budget_hours=0.0)
+        self.assertEqual(state["result"], "BUDGET")
+        self.assertIn("uncommitted", state["claim_blocked"])
+
+    def test_failing_oracle_check_goes_back_to_generator(self):
+        item = {"id": "M1.1", "status": "open", "proof": "oracle", "check": "exit 3"}
+        self.write_done([{"id": "M1", "name": "M1", "state": "open", "fails": 0, "items": [item]}])
+        self.commit_done()
+        state = self.run_loop(budget_hours=0.0)
+        self.assertEqual(state["result"], "BUDGET")
+        self.assertIn("M1.1 `exit 3` exited 3", state["claim_blocked"])
+
+    def test_passing_oracle_check_claims(self):
+        item = {"id": "M1.1", "status": "open", "proof": "oracle", "check": "true"}
+        self.write_done([{"id": "M1", "name": "M1", "state": "open", "fails": 0, "items": [item]}])
+        self.commit_done()
+        self.assertEqual(self.run_loop()["result"], "CLAIMED")
+
+    def test_lock_refuses_outside_a_repository(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(SystemExit):
+                agent_loop.cmd_lock(argparse.Namespace(name="gpu", worktree=tmp, command_args=["--", "true"]))
+
+    def test_profile_strict_rejects_unfilled_and_invalid(self):
+        (self.wt / "ORCHESTRATE.md").write_text("- **Evidence:** <where review files go>\n- **Integrate:** pull request\n")
+        with self.assertRaises(SystemExit):
+            agent_loop.profile(self.wt, strict=True)
 
     def test_second_report_without_progress_finishes(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: no device")

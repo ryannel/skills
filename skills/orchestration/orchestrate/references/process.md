@@ -20,9 +20,11 @@
 ## Design choices
 
 - **Done-when files are JSON,** because models overwrite structured files less than prose (effective harnesses).
-  Each field has one writer.
+  Each writer has defined fields.
 - **Escalation is by count,** recorded by the evaluator and mapped by the loop: 1–2 failed closes, same session; 3,
-  fresh session; 4, re-plan; 5, park and report. Effort never rises automatically.
+  fresh session; 4, re-plan; 4 again after a re-plan, park and report. Effort never rises automatically.
+- **The loop checks claims itself:** committed, integrated, and every oracle check rerun, so a milestone without
+  review closes on evidence rather than the generator's word.
 - **Models and effort are always explicit,** because defaults drift between releases and between vendors.
 - **The owner sets the pace** by how many streams run. The loop forecasts quota and never holds work back.
 - **Research before experimenting.** Most of what a module needs has been solved in shipped products and published
@@ -38,6 +40,6 @@ NEEDS_CONTEXT; a deferred list for minor findings; a per-stream claims ledger be
 
 - Visual evaluators are the weakest part. Watch their verdicts in the first week, and add overturned ones to the
   project's graded examples.
-- Fan-out depends on the lead session staying up. The fallback is evaluators launched by the loop as `claude -p`,
-  which bills through the API and loses sidebar nesting.
+- Fan-out depends on the lead session staying up. A possible fallback, not built, is evaluators launched by the loop as
+  `claude -p`, which bills through the API and loses sidebar nesting.
 - Whether a high-effort planner subagent runs at high under a medium lead is untested; check its first transcript.

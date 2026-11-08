@@ -2,36 +2,44 @@
 """Run one Codex generator on one milestone of the orchestrate process, with model and effort pinned, until a stop
 rule fires.
 
-Used by the build-parallel lead and runnable by hand. Project settings come from ORCHESTRATE.md at the worktree root:
-the plans directory, the evidence directory, the integration mode and the Codex generator's model and effort. Subcommands:
+Used by the build-parallel lead and runnable by hand. Project settings come from ORCHESTRATE.md at the worktree root
+(`profile` prints what was read). Needs git, the Codex CLI, and `gh` for pull-request integration; POSIX only (fcntl).
+The goal-status and quota readers use Codex's local session files and work on a ChatGPT-plan login; without them those
+stop rules and the forecast are skipped. Subcommands:
 
-  run   --module WATER --worktree PATH [--milestone M2] [--fresh] [--budget-hours 4]
+  run   --module ONBOARDING --worktree PATH [--milestone M2] [--fresh] [--message TEXT] [--budget-hours 4]
         Starts (or resumes) a Codex session on the milestone and drives it one turn per `codex exec resume` until:
-        CLAIMED   every item of the milestone has status pass in the worktree's done-when file
+        CLAIMED   every item passes in the committed done-when file, the tree is clean, the work is integrated (on the
+                  base branch, or an open PR with passing checks), and every oracle item's check exits 0 when the loop
+                  runs it. A failing check goes back to the generator instead.
         DONE / BLOCKED / NEEDS_CONTEXT   the agent's final report line
         BUDGET    no new passing item or commit for --budget-hours
         FLOOR     two failed turns in a row, or the goal is usage- or budget-limited (likely quota or outage)
         PIN       a turn ran on a model or effort other than the pinned ones
         PAUSED    the goal is paused; only the Codex app's play button resumes it
-        CLAIMED also needs the work integrated: HEAD on origin/main, or pushed to a remote branch for pull requests. A run on the same milestone resumes
-        its session (with --message as the first prompt, e.g. the evaluator's findings) unless --fresh is given.
+        A run on the same milestone resumes its session (with --message as the first prompt, e.g. the evaluator's
+        findings) unless --fresh is given; with --fresh, --message is added to the new goal.
         Prints one JSON line with the result and the quota forecast as the last line of output.
         The owner sets the pace by how many streams run; the loop never holds work back for quota.
 
-  next  --module WATER --worktree PATH --milestone M2
-        Reads the milestone's `fails` count (written by the evaluator) and prints the escalation:
-        same-session (1-2), fresh-session (3), replan (4), park (5+), or none (0).
+  next  --module ONBOARDING --worktree PATH --milestone M2
+        Reads the milestone's `fails` (written by the evaluator) and `replans` (written by the planner) and prints the
+        escalation: same-session (1-2 fails), fresh-session (3), replan (4+ with no re-plan yet), park (4+ after a
+        re-plan), or none (0), with the message to pass on.
 
-  status --module WATER --worktree PATH
+  status --module ONBOARDING --worktree PATH
         Prints each milestone's state, fails and passing items.
 
   quota
         Forecasts the weekly Codex limit from the last day of use across all sessions: used %, burn per day, and
         when it runs out compared with the reset.
 
-  lock NAME -- COMMAND...
-        Runs COMMAND under a named lock shared by every worktree of this repository, so runs that need an exclusive
-        resource (a GPU for timing, a fixed port, a device) never overlap across parallel streams.
+  profile --worktree PATH
+        Prints the settings read from ORCHESTRATE.md, or exits 1 naming the fields that are unfilled or invalid.
+
+  lock NAME [--worktree PATH] -- COMMAND...
+        Runs COMMAND under a named lock shared by every worktree of the repository, so runs that need an exclusive
+        resource (a device, a fixed port, a simulator, a GPU for timing) never overlap across parallel streams.
 
 State lives in <git dir>/orchestrate/<module>.json for the worktree, so re-running the same command resumes.
 """
@@ -60,6 +68,8 @@ CODEX = os.environ.get("ORCHESTRATE_CODEX") or shutil.which("codex") or \
 CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
 REPORT_WORDS = ("DONE", "BLOCKED", "NEEDS_CONTEXT")
 
+LOOP = Path(__file__).resolve()
+
 GOAL_TEMPLATE = """Model {model}, effort {effort}. Call your create_goal tool with this objective, then work it:
 
 Milestone {milestone} of module {module} is done: every item for {milestone} in {plans}/{module}-DONE.json has status \
@@ -67,38 +77,66 @@ pass with evidence on its named target, and the change is integrated as ORCHESTR
 fresh on the integrated tip. Use $build-milestone, which covers method, constraints and \
 permissions. Work only in this worktree. Keep the plan's status lines and log current. If you are blocked (probed \
 directly) or missing context, stop and end with `BLOCKED: ...` or `NEEDS_CONTEXT: ...` and the evidence. When finished, \
-end with `DONE` and the evidence."""
+end with `DONE` and the evidence. Commit the done-when file with the work. Don't launch the evaluator: the lead runs \
+review. Take exclusive resources with `python3 {loop} lock <name> -- <command>`."""
 
 FINDINGS_TEMPLATE = """The evaluator failed {milestone}: see {evidence}/{module_lower}/{milestone}-review.md. Add its \
 findings to the plan as work items, fix them, re-verify the affected items, integrate, and end with DONE, BLOCKED or \
 NEEDS_CONTEXT."""
 
 
-def profile(worktree: Path) -> dict:
-    """Reads the loop's settings from ORCHESTRATE.md (`- **Label:** value` lines), with defaults."""
+PROFILE_DEFAULTS = {"plans": "docs/modules", "evidence": "docs/evidence", "integrate": "main", "branch": "main",
+                    "remote": "origin", "sandbox": "workspace-write", "writable roots": ""}
+ALLOWED = {"integrate": {"main", "pull-request"}, "sandbox": {"workspace-write", "danger-full-access"}}
+
+
+def profile(worktree: Path, strict: bool = False) -> dict:
+    """Reads the loop's settings from ORCHESTRATE.md (`- **Label:** value` lines). Missing labels take defaults;
+    unfilled or invalid values raise SystemExit when strict, and fall back to defaults with a warning otherwise."""
     path = worktree / "ORCHESTRATE.md"
     text = path.read_text() if path.exists() else ""
-    def field(label: str, default: str) -> str:
-        m = re.search(rf"\*\*{re.escape(label)}:\*\*\s*`?([^`\s]+)", text)
-        return m.group(1) if m else default
-    model_line = re.search(r"\*\*Codex generator:\*\*\s*`?([\w.\-]+)`?\s+`?(\w+)", text)
-    return {
-        "plans": field("Plans", "docs/modules").rstrip("/"),
-        "evidence": field("Evidence", "docs/evidence").rstrip("/"),
-        "integrate": field("Integrate", "main"),
-        "model": model_line.group(1) if model_line else DEFAULT_MODEL,
-        "effort": model_line.group(2) if model_line else DEFAULT_EFFORT,
-    }
+    out, problems = {}, []
+    for key, default in PROFILE_DEFAULTS.items():
+        m = re.search(rf"\*\*{re.escape(key)}:\*\*[ \t]*(.*)", text, re.IGNORECASE)
+        raw = m.group(1) if m else ""
+        raw = re.sub(r"\*\(.*?\)\*", "", raw)                 # trailing *(read by the loop)* notes
+        raw = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", raw)  # markdown links keep their text
+        value = raw.replace("`", "").strip()
+        if key != "writable roots":
+            value = value.split()[0] if value else ""
+        if not value:
+            out[key] = default
+        elif "<" in value or (key in ALLOWED and value not in ALLOWED[key]):
+            problems.append(f"{key}: {value!r}")
+            out[key] = default
+        else:
+            out[key] = value.rstrip("/") if key in ("plans", "evidence") else value
+    model = re.search(r"\*\*Codex generator:\*\*[ \t]*`?([\w.\-]+)`?[ ,]+`?(\w+)", text)
+    out["model"], out["effort"] = (model.group(1), model.group(2)) if model else (DEFAULT_MODEL, DEFAULT_EFFORT)
+    out["roots"] = [r.strip() for r in out.pop("writable roots").split(",") if r.strip()]
+    if problems:
+        message = "ORCHESTRATE.md has unfilled or invalid fields: " + "; ".join(problems)
+        if strict:
+            raise SystemExit(message)
+        print("warning: " + message, file=sys.stderr)
+    return out
 
 
-def codex_flags(model: str, effort: str) -> list[str]:
-    return [
-        "-m", model,
-        "-c", f"model_reasoning_effort={effort}",
-        "-c", "approval_policy=on-request",
-        "-c", "approvals_reviewer=auto_review",
-        "-c", "sandbox_workspace_write.network_access=true",
-    ]
+def codex_flags(prof: dict) -> list[str]:
+    flags = ["-m", prof["model"], "-c", f"model_reasoning_effort={prof['effort']}",
+             "-c", "approval_policy=on-request", "-c", "approvals_reviewer=auto_review",
+             "-c", f"sandbox_mode={prof['sandbox']}"]
+    if prof["sandbox"] == "workspace-write":
+        flags += ["-c", "sandbox_workspace_write.network_access=true"]
+        if prof["roots"]:
+            roots = ",".join(json.dumps(str(Path(r).expanduser())) for r in prof["roots"])
+            flags += ["-c", f"sandbox_workspace_write.writable_roots=[{roots}]"]
+    return flags
+
+
+def codex_supports(flag: str) -> bool:
+    out = subprocess.run([CODEX, "exec", "--help"], capture_output=True, text=True)
+    return flag in out.stdout
 
 
 def load_done(worktree: Path, module: str) -> dict:
@@ -127,16 +165,14 @@ def passing(milestone: dict) -> int:
     return sum(1 for item in milestone["items"] if item.get("status") == "pass")
 
 
-def escalation(fails: int) -> str:
+def escalation(fails: int, replans: int = 0) -> str:
     if fails <= 0:
         return "none"
     if fails <= 2:
         return "same-session"
     if fails == 3:
         return "fresh-session"
-    if fails == 4:
-        return "replan"
-    return "park"
+    return "replan" if replans == 0 else "park"
 
 
 def rollout_for(thread_id: str) -> Path | None:
@@ -218,15 +254,46 @@ def head_commit(worktree: Path) -> str:
     return subprocess.run(["git", "-C", str(worktree), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
 
 
-def integrated(worktree: Path, mode: str) -> bool:
-    """main: HEAD is on origin/main. pull-request: HEAD is on some remote branch."""
+def integration(worktree: Path, prof: dict) -> tuple[bool, str]:
+    """Whether the committed work is integrated, with a reason. The tree must be clean, so claims are committed.
+    main: HEAD is on <remote>/<branch>. pull-request: HEAD is on a pushed branch with an open PR whose checks pass."""
     git = ["git", "-C", str(worktree)]
-    subprocess.run([*git, "fetch", "--quiet", "origin"], capture_output=True)
-    if mode == "pull-request":
-        out = subprocess.run([*git, "branch", "-r", "--contains", "HEAD"], capture_output=True, text=True).stdout
-        return bool(out.strip())
-    return subprocess.run([*git, "merge-base", "--is-ancestor", "HEAD", "origin/main"],
-                          capture_output=True).returncode == 0
+    if subprocess.run([*git, "status", "--porcelain", "--untracked-files=no"], capture_output=True,
+                      text=True).stdout.strip():
+        return False, "uncommitted changes"
+    subprocess.run([*git, "fetch", "--quiet", prof["remote"]], capture_output=True)
+    base = f"{prof['remote']}/{prof['branch']}"
+    if prof["integrate"] == "main":
+        ok = subprocess.run([*git, "merge-base", "--is-ancestor", "HEAD", base], capture_output=True).returncode == 0
+        return ok, "" if ok else f"HEAD is not on {base}"
+    branch = subprocess.run([*git, "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True).stdout.strip()
+    pushed = subprocess.run([*git, "merge-base", "--is-ancestor", "HEAD", f"{prof['remote']}/{branch}"],
+                            capture_output=True).returncode == 0
+    if branch in ("HEAD", prof["branch"]) or not pushed:
+        return False, "HEAD is not pushed on its own branch"
+    pr = subprocess.run(["gh", "pr", "view", branch, "--json", "url,state"], cwd=worktree, capture_output=True, text=True)
+    if pr.returncode != 0 or json.loads(pr.stdout).get("state") not in ("OPEN", "MERGED"):
+        return False, f"no open pull request for {branch}"
+    checks = subprocess.run(["gh", "pr", "checks", branch], cwd=worktree, capture_output=True, text=True)
+    if checks.returncode not in (0,) and "no checks" not in (checks.stdout + checks.stderr):
+        return False, "pull request checks are not passing yet"
+    return True, json.loads(pr.stdout)["url"]
+
+
+def oracle_failures(worktree: Path, milestone: dict, timeout_s: float = 3600) -> list[str]:
+    """Runs each oracle item's check in the worktree; returns the failing items with the tail of their output."""
+    failed = []
+    for item in milestone["items"]:
+        if item.get("proof") != "oracle" or not item.get("check"):
+            continue
+        try:
+            run = subprocess.run(item["check"], shell=True, cwd=worktree, capture_output=True, text=True,
+                                 timeout=timeout_s)
+            if run.returncode != 0:
+                failed.append(f"{item['id']} `{item['check']}` exited {run.returncode}: {(run.stdout + run.stderr)[-600:]}")
+        except subprocess.TimeoutExpired:
+            failed.append(f"{item['id']} `{item['check']}` timed out")
+    return failed
 
 
 def git_common_dir(worktree: Path) -> str:
@@ -278,7 +345,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     state_dir = Path(git_dir) / "orchestrate"
     state_dir.mkdir(parents=True, exist_ok=True)
     state_path = state_dir / f"{a.module}.json"
-    prof = profile(worktree)
+    prof = profile(worktree, strict=True)
     milestone = pick_milestone(load_done(worktree, a.module), a.milestone)
     state = json.loads(state_path.read_text()) if state_path.exists() else {}
     fresh = a.fresh or state.get("milestone") != milestone["id"] or state.get("result") == "PIN"
@@ -288,18 +355,19 @@ def cmd_run(a: argparse.Namespace) -> None:
     state.update(module=a.module, milestone=milestone["id"], failed_turns=0, reports=0, progress_at=time.time(),
                  passing=passing(milestone), head=head_commit(worktree))
     state.pop("result", None)
-    flags = codex_flags(prof["model"], prof["effort"])
+    flags = codex_flags(prof)
+    source = ["--thread-source", "vscode"] if codex_supports("--thread-source") else []
     timeout_s = a.turn_timeout_hours * 3600
 
     while True:
         if state.get("thread") is None:
             prompt = GOAL_TEMPLATE.format(model=prof["model"], effort=prof["effort"], milestone=milestone["id"],
-                                          module=a.module, plans=prof["plans"])
+                                          module=a.module, plans=prof["plans"], loop=LOOP)
             if a.message:
                 prompt += "\n\n" + a.message
                 a.message = None
             code, thread_id, message = run_turn(["exec", *flags, "--add-dir", git_common_dir(worktree),
-                                                 "--thread-source", "vscode", "-C", str(worktree), "--json", prompt],
+                                                 *source, "-C", str(worktree), "--json", prompt],
                                                 timeout_s)
             state["thread"] = thread_id
         else:
@@ -325,8 +393,15 @@ def cmd_run(a: argparse.Namespace) -> None:
         now_passing, head = passing(current), head_commit(worktree)
         if now_passing > state["passing"] or head != state["head"]:
             state.update(progress_at=time.time(), passing=now_passing, head=head)
-        if now_passing == len(current["items"]) and integrated(worktree, prof["integrate"]):
-            finish(state_path, state, "CLAIMED", review=bool(current.get("review")))
+        if now_passing == len(current["items"]):
+            ok, detail = integration(worktree, prof)
+            failures = oracle_failures(worktree, current) if ok else []
+            if ok and not failures:
+                finish(state_path, state, "CLAIMED", review=bool(current.get("review")), integrated=detail or "main")
+            # Not claimable yet: tell the generator why on its next turn rather than stopping.
+            state["claim_blocked"] = "; ".join(failures) if failures else detail
+            a.message = f"The loop can't accept the claim yet: {state['claim_blocked']}. Fix it, then end with DONE."
+            message = ""
         word = report_word(message)
         state["reports"] = state.get("reports", 0) + 1 if word else 0
         if word and (status != "active" or state["reports"] >= 2):
@@ -339,11 +414,15 @@ def cmd_run(a: argparse.Namespace) -> None:
 
 def cmd_next(a: argparse.Namespace) -> None:
     milestone = pick_milestone(load_done(Path(a.worktree), a.module), a.milestone)
-    fails = int(milestone.get("fails", 0))
+    fails, replans = int(milestone.get("fails", 0)), int(milestone.get("replans", 0))
     message = FINDINGS_TEMPLATE.format(milestone=milestone["id"], module_lower=a.module.lower(),
                                        evidence=profile(Path(a.worktree))["evidence"])
-    print(json.dumps({"milestone": milestone["id"], "fails": fails, "action": escalation(fails),
-                      "resume_message": message}))
+    print(json.dumps({"milestone": milestone["id"], "fails": fails, "replans": replans,
+                      "action": escalation(fails, replans), "message": message}))
+
+
+def cmd_profile(a: argparse.Namespace) -> None:
+    print(json.dumps(profile(Path(a.worktree).resolve(), strict=True), indent=2))
 
 
 def cmd_status(a: argparse.Namespace) -> None:
@@ -359,7 +438,10 @@ def cmd_lock(a: argparse.Namespace) -> None:
     command = a.command_args[1:] if a.command_args[:1] == ["--"] else a.command_args
     if not command or not re.fullmatch(r"[\w.-]+", a.name):
         raise SystemExit("error: usage: lock NAME -- COMMAND...")
-    lock = Path(git_common_dir(Path.cwd())) / f"orchestrate-{a.name}.lock"
+    where = Path(a.worktree or Path.cwd()).resolve()
+    if subprocess.run(["git", "-C", str(where), "rev-parse"], capture_output=True).returncode != 0:
+        raise SystemExit(f"error: {where} is not in a git repository, so there is no shared lock location")
+    lock = Path(git_common_dir(where)) / f"orchestrate-{a.name}.lock"
     with open(lock, "w") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         sys.exit(subprocess.run(command).returncode)
@@ -385,8 +467,12 @@ def main() -> None:
             p.add_argument("--milestone", required=True)
         p.set_defaults(func=func)
     sub.add_parser("quota").set_defaults(func=cmd_quota)
+    prof = sub.add_parser("profile")
+    prof.add_argument("--worktree", default=".")
+    prof.set_defaults(func=cmd_profile)
     lock = sub.add_parser("lock")
     lock.add_argument("name")
+    lock.add_argument("--worktree")
     lock.add_argument("command_args", nargs=argparse.REMAINDER)
     lock.set_defaults(func=cmd_lock)
     args = parser.parse_args()

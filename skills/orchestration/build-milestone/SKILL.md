@@ -1,15 +1,15 @@
 ---
 name: build-milestone
-description: Builds, verifies and integrates the next milestone of a module from its plan and JSON done-when file, in Claude Code or Codex, as part of the orchestrate process. Use to implement, fix or refactor code toward a milestone, including ordinary fixes and small slices, in web apps, native apps, CLI tools, libraries or engines. Not for designing or re-planning a module (plan-module), project-wide boundaries (plan-project) or judging a milestone (review-milestone).
+description: Builds, verifies and integrates the next milestone of a module from its plan and JSON done-when file, in Claude Code or Codex, in a repository using the orchestrate process (it has an ORCHESTRATE.md). Use to implement, fix or refactor code toward a milestone there, including ordinary fixes and small slices. Not for designing or re-planning a module (plan-module), project-wide boundaries (plan-project) or judging a milestone (review-milestone).
 ---
 
 # Build a milestone
 
 Run as Codex `gpt-6.1-sol` at medium effort, or Claude Opus 5.5 at medium for a bounded slice, unless
-`ORCHESTRATE.md` says otherwise. Read `ORCHESTRATE.md` first, and the building guidance it lists.
+`ORCHESTRATE.md` says otherwise. Read `ORCHESTRATE.md` first; if the repository has none, set it up with `/orchestrate` before anything else. Then read the building guidance it lists.
 
 **Outcome:** the next open milestone in `<plans>/<MODULE>-PLAN.md` works correctly and looks right on its named
-targets, every item for it in `<MODULE>-DONE.json` has `status: pass` with evidence, and it's integrated as the profile
+targets (behaves correctly, and looks right where it has a look), every item for it in `<MODULE>-DONE.json` has `status: pass` with evidence, and it's integrated as the profile
 says. Without a module plan, for example an ordinary fix, the work serves the current goal and the done-when is the
 fix's own test.
 
@@ -20,10 +20,14 @@ fix's own test.
    item is wrong or can't be met, say so in your report; the rest of the file isn't yours to edit.
    - `oracle` items pass when their command exits 0 on the named target.
    - `inspection` and `review` items: record your own look and the captures as evidence. The evaluator decides the
-     final pass for milestones with `"review": true`.
-2. **The change is integrated.** With `Integrate: main`: rebase on `origin/main`, run the profile's check fresh on the
-   rebased tip, push without force; if the push is rejected, rebase and check again. With `Integrate: pull-request`:
-   push a branch, open a PR, and wait for the gating checks the profile names.
+     final pass for milestones with `"review": true`. In a single chat, run it yourself once everything is
+     integrated: the `orchestrate-evaluator` subagent in Claude Code, or its Codex agent, briefed with the module,
+     milestone, commit and worktree only. Under `/build-parallel`, don't: the lead runs it.
+2. **The change, including the done-when file, is committed and integrated.** With `Integrate: main`: rebase on the
+   profile's remote and branch, run its check fresh on the rebased tip, push without force; if the push is rejected,
+   rebase and check again. With `Integrate: pull-request`: push your own branch, open a PR against the base branch, and
+   wait for its checks to pass; the profile's `Merge` line says who merges. The loop reruns every oracle check before it
+   accepts the claim.
 3. **The plan's status lines and your progress note are current.** The progress note is the plan's `Now:` and the
    log: decisions with reasons, and claims kept apart as verified, approximate or open.
 4. **You end with one report line,** `DONE`, `BLOCKED: <what you probed, the evidence, what would unblock it>` or
@@ -53,11 +57,12 @@ Before claiming items, check each is complete, clear and checkable on its target
   specialised path is the point and can show its win.
 - **Tests** cover behaviour and plausible failure, including rejected, stale and duplicate input at trust boundaries.
 - **Look at the output yourself.** Capture from the exact build on the named target with the profile's capture method,
-  covering transitions (empty, loading, error, first use, resize, back-navigation, start and stop) where faults hide.
-  Judge against the inspection list and bar. Tests and source review don't replace looking.
+  covering the target's edge conditions from the profile (for a UI: empty, loading, error, resize; for a CLI: bad
+  arguments, piped input, interrupts, exit codes), where faults hide. Judge against the inspection list and bar. Tests
+  and source review don't replace looking.
 - **Claims about devices, speed or visuals** come only from runs on named targets; label stand-ins `proxy`. Wrap runs
-  that use an exclusive resource from the profile in `python3 <build-parallel>/scripts/agent_loop.py lock <name> --
-  <command>`.
+  that use an exclusive resource from the profile in `python3 <agent_loop.py> lock <name> -- <command>`; the loop's
+  goal gives the script's path, and in a single chat it's in the build-parallel skill's `scripts/` folder.
 - **Cost:** follow the project's performance guidance, or [cost](../plan-module/references/cost.md). Record
   measurements; investigate tripwires.
 - **Evidence** is at most one page per milestone in the profile's evidence location, linked from the done-when items.

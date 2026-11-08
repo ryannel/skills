@@ -5,7 +5,7 @@ where possible: `scripts/agent_loop.py`, the evaluator and the owner all read it
 
 ## The plan: `<plans>/<MODULE>-PLAN.md`
 
-- **Milestones are outcomes a user could watch,** such as "a new user signs up, verifies email and lands on an empty
+- **Milestones are outcomes a user could observe,** such as "a new user signs up, verifies email and lands on an empty
   dashboard on mobile Safari", not components such as "the auth service".
   - The riskiest behaviour comes first, at shipped quality.
   - A milestone that needs more than about three done-when items is usually two milestones.
@@ -43,7 +43,7 @@ JSON, so agents edit fields rather than rewriting prose. Who writes what:
 - **Evaluator:** items' `status`, adding its review link to `evidence`; `state: done` on a pass; `fails` on a fail.
   `agent_loop.py next` turns `fails` into the escalation.
 - **Lead:** `state: parked` when the loop says park.
-- **Planner:** everything else.
+- **Planner:** everything else, including `replans`, increased by one on each re-plan.
 
 ```json
 {
@@ -55,6 +55,7 @@ JSON, so agents edit fields rather than rewriting prose. Who writes what:
       "state": "open",
       "review": true,
       "fails": 0,
+      "replans": 0,
       "bar": "Would pass in a well-reviewed consumer app: sign-up as quick and calm as Linear's, empty state as clear as Things', judged in words, not against screenshots.",
       "items": [
         {
@@ -83,6 +84,9 @@ JSON, so agents edit fields rather than rewriting prose. Who writes what:
 
 Fields:
 - **`state`:** `open`, `in_progress`, `done` or `parked`.
+- **item `status`:** `open`, `pass`, `fail` or `cant_tell` (the evaluator's "can't tell").
+- **The inspection list** of a milestone is its `inspection` items: each statement is one observable quality, and its
+  `check` says which scenario and captures show it.
 - **`review`:** `true` when an evaluator must close the milestone: visual or interaction milestones, milestones that
   change a shared contract, and the module's last milestone. Otherwise the oracle closes it.
 - **`proof`:** `oracle` (a command whose exit status decides), `inspection` (an inspection-list item judged on the
@@ -97,7 +101,8 @@ What makes a good item:
   canned response standing in for the real query.
 - **Only behaviour this module's mechanisms produce.** Anything that hinges on another module uses a fixed setup or
   moves to the milestone that integrates them.
-- **No cost targets.** Cost appears as recorded measurements and tripwires ([cost](cost.md)).
+- **No invented cost targets.** A real target from the purpose doc or the owner (Core Web Vitals, an SLO, a frame
+  budget) can be an item; otherwise cost appears as recorded measurements and tripwires ([cost](cost.md)).
 
 ## Changing a milestone
 

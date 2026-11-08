@@ -36,7 +36,7 @@ the change reviewed while you carry on.
 ## A subagent brief
 
 ```text
-Find every caller of `FrameHost::capture` across the workspace, including tests, examples and the browser crate.
+Find every caller of `Cache::invalidate` across the workspace, including tests, examples and the web crate.
 I've already checked crates/render/src/runtime.rs; skip it.
 For each caller, return the file and line, whether it waits on completion, and whether it can run after device loss.
 Return a table, then one line naming any caller that both skips waiting and can run after loss.

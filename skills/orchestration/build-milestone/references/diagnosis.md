@@ -9,7 +9,7 @@ restores the intended behaviour, verified across its consumers. A local bug can 
 - **Reproduce first.** Use known inputs and a known build. Hold inputs, data and environment constant where
   that helps, and compare intermediate state, not only the final output. Separate a local fault from a system-wide
   stall.
-- **Ask whether the model can produce the missing behaviour at all.** Reproduce the core equations outside the engine,
+- **Ask whether the model can produce the missing behaviour at all.** Reproduce the core logic or model outside the product,
   for example in a short script with the real inputs and constants, and compare the result with the expected behaviour
   and a reference. This often settles in minutes what iteration in the product doesn't settle in hours.
 - **Trace the path.** Follow it from source through state, transforms and composition to every important
@@ -17,7 +17,7 @@ restores the intended behaviour, verified across its consumers. A local bug can 
   fault can start upstream in timing, encoding, caching, sampling or resource lifecycle.
 - **Look for one shared cause.** When several symptoms appear together, such as stale data, missing updates after
   navigation and a flicker on load, look for a common cause before fixing each one: a frozen input, a cache that never
-  invalidates, a filter cancelling the signal, or state that stops updating after an error.
+  invalidates, a handler swallowing the error, or state that stops updating after an error.
 - **Classify the failure:**
   - an implementation mistake;
   - a missing or incompatible mechanism;
@@ -27,7 +27,7 @@ restores the intended behaviour, verified across its consumers. A local bug can 
   - a presentation fault;
   - a lifecycle fault (stall, reset, resize, reconnect, device or session loss).
 
-  Correct it at that layer. Damping a response, turning a term off or adding noise can isolate a defect or hide it;
+  Correct it at that layer. Suppressing an error, disabling a step or adding a retry can isolate a defect or hide it;
   keep such a change only if it restores the intended contract.
 - **Bound the next experiment.** After a negative result, choose a bounded experiment that can change the responsible
   decision; it counts toward the [stop rule](../SKILL.md#staying-on-course). Don't run a more expensive version of the
@@ -37,18 +37,16 @@ restores the intended behaviour, verified across its consumers. A local bug can 
 ## Make shared representations explicit
 
 For each quantity that crosses a boundary, state:
-- its source or band;
-- units and frame of reference;
-- spatial and temporal support;
-- physical time;
-- encoding;
+- its source;
+- units, format and encoding;
+- where and when it's valid (scope, freshness, time zone);
 - composition rule;
 - each consumer's fidelity.
 
 Where consumers must agree, use one authority. Others may approximate it within a stated bound.
 
 - **Derived quantities follow their source.** A cached or derived value must invalidate when its source changes.
-- **Never count a contribution twice,** or amplify a weak signal until it resembles the target.
+- **Never count a contribution twice,** or exaggerate a weak result until it resembles the target.
 - **Shared resources live where they're reused,** for example as a shared service or cache, not allocated by
   every instance.
 
