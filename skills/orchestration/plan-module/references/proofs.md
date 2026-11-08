@@ -30,40 +30,17 @@ Combine these freely. A project adds its own kinds in its profile, in the same s
 
 ## How to inspect
 
-Unplanned looking is random and stays on the surface, so write the list before capturing anything. This works the
-same for 3D scenes, 2D images, UI and motion:
-
-1. **Break the subject into its parts and behaviours.** A 3D boat has a bow, a stern, mast placement, rigging, guns
-   and a hull at the waterline. A bow wave has a crest at the stem, spray, a foam trail, a join with the hull, and a
-   change with speed. A cloud image has silhouettes and edges, the lit and shadowed sides, the sun's glow and silver
-   lining, the thin wisps, the layering against the sky, and the horizon. A screen has its regions and states.
-2. **Say how each part has to be seen.** For 3D, that's the angles (front, side, three-quarter, above, below the
-   waterline). For a 2D image, it's the views: the whole frame, crops of each region at full resolution, and the
-   size it's actually seen at. Then add:
-   - the distances or zoom levels, from close-up to far away;
-   - the conditions (calm, storm, low sun, night, every time of day the clouds must hold up in);
-   - for motion, the moments (at rest, accelerating, turning; a cloud forming, drifting and dissolving).
-
-   One view hides what another shows. A bow wave that looks right from the side can clip through the hull from the
-   front. A cloud that reads well in a thumbnail can show banding or tiling in a full-resolution crop.
-3. **Capture each entry, then judge each one** against the item's statement and the `bar`, and record a verdict per
-   entry.
-
-The list goes in the review file, or in the evidence for the generator's own look, so anyone can see what was
-covered and what wasn't. The planner's `inspect` field names the quality to judge and may seed parts; whoever
-inspects completes the list.
+Write the inspection list before capturing anything: the subject's parts, and the views each needs. Views are angles
+for 3D, crops and the display size for 2D, plus conditions, and moments for anything that moves. Without a list,
+inspection has been random and surface-level. One view also hides what another shows: a bow wave that looks right
+from the side can clip through the hull from the front, and a cloud that looks fine as a thumbnail can show banding
+in a full-resolution crop. Judge each entry, and keep the list in the review or evidence so the coverage is visible.
 
 ## Mixing
 
-Behaviour often needs a measurement and a look, because each catches what the other misses:
-- **Buoyancy:** a property test that energy never grows (`check`), plus a frame sequence of a boat in a storm swell
-  (`inspect`). The test catches drift the eye misses. The eye catches motion that is stable but looks wrong.
-- **A sign-up flow:** a Playwright test of the journey (`check`), plus a mobile screenshot sequence of every
-  validation state (`inspect`).
-- **A contract change:** the shared test suite (`check`), plus "does every consumer handle the new error case?"
-  (`ask`).
-- **A CLI command:** golden output for the standard cases (`check`), plus a transcript of bad arguments, a piped
-  stream and Ctrl-C (`inspect`).
+Behaviour often needs a measurement and a look, because each catches what the other misses. For buoyancy, a property
+test that energy never grows catches drift the eye misses. A frame sequence of a boat in a storm swell catches motion
+that is stable but looks wrong.
 
 Agents can't watch live video or hear audio, so anything that moves is captured as frames, and anything an agent can't
 perceive is judged by a measurement or reported as `cant_tell`. Golden screenshots are regression tripwires, never
