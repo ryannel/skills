@@ -37,8 +37,8 @@ generator didn't fix that on its own. The rules below are there to counter it.
 1. **Every item has a verdict,** `pass`, `fail` or `cant_tell`. An item with several proofs needs each of them to
    pass ([proofs](../plan-module/references/proofs.md)):
    - **`check`:** run it yourself.
-   - **`inspect`:** first write an inspection list: the subject's parts and behaviours, and the angles, distances,
-     conditions and moments each needs ([how to inspect](../plan-module/references/proofs.md#how-to-inspect)).
+   - **`inspect`:** first write an inspection list: the subject's parts and behaviours, and the angles or crops,
+     distances, conditions and moments each needs ([how to inspect](../plan-module/references/proofs.md#how-to-inspect)).
      Then capture every entry from the build under review and judge each one against the statement and the `bar`.
    - **`ask`:** read the producers and consumers together and answer the question.
 

@@ -22,6 +22,7 @@ Combine these freely. A project adds its own kinds in its profile, in the same s
 | Golden output | check | The expected output, the tolerance, and why it's right | The golden file came from the code under test without being checked |
 | Benchmark tripwire | check | The measurement and a threshold from the purpose doc or a recorded baseline | The budget was invented, or it ran on a busy or different machine |
 | Visual quality | inspect | One quality, and the stills that show it, including edge conditions | Only a beauty shot or one angle, or captures from another build |
+| 2D image | inspect | The image's regions and features, each seen whole and as a full-resolution crop, and at the size it's shown | Judged only as a thumbnail, or one condition |
 | 3D asset | inspect | The asset's parts, each seen from several angles and distances in its real lighting | One hero angle, or the turntable skips the underside |
 | Motion or behaviour | inspect | The motion (physics, animation, simulation) and the scenario that shows it, as a frame sequence | One still, or a slowed or close-up capture |
 | User journey | inspect | The steps and states: empty, loading, error and resize for a UI; bad arguments, piped input and exit codes for a CLI | Only the happy path |
@@ -29,15 +30,22 @@ Combine these freely. A project adds its own kinds in its profile, in the same s
 
 ## How to inspect
 
-Unplanned looking is random and stays on the surface, so write the list before capturing anything:
+Unplanned looking is random and stays on the surface, so write the list before capturing anything. This works the
+same for 3D scenes, 2D images, UI and motion:
 
-1. **Break the subject into its parts and behaviours.** For a 3D boat: the bow, the stern, the mast placement, the
-   rigging, the guns, the hull at the waterline. For a bow wave: the crest at the stem, the spray, the foam trail, how
-   it meets the hull, and how it changes with speed.
-2. **Say how each part has to be seen.** Give the angles (front, side, three-quarter, above, below the waterline),
-   the distances (close-up, the normal camera, far away), the conditions (calm, storm, low sun, night), and, for
-   motion, the moments (at rest, accelerating, cruising, turning, stopping). One view hides what another shows: a bow
-   wave that looks right from the side can clip through the hull from the front.
+1. **Break the subject into its parts and behaviours.** A 3D boat has a bow, a stern, mast placement, rigging, guns
+   and a hull at the waterline. A bow wave has a crest at the stem, spray, a foam trail, a join with the hull, and a
+   change with speed. A cloud image has silhouettes and edges, the lit and shadowed sides, the sun's glow and silver
+   lining, the thin wisps, the layering against the sky, and the horizon. A screen has its regions and states.
+2. **Say how each part has to be seen.** For 3D, that's the angles (front, side, three-quarter, above, below the
+   waterline). For a 2D image, it's the views: the whole frame, crops of each region at full resolution, and the
+   size it's actually seen at. Then add:
+   - the distances or zoom levels, from close-up to far away;
+   - the conditions (calm, storm, low sun, night, every time of day the clouds must hold up in);
+   - for motion, the moments (at rest, accelerating, turning; a cloud forming, drifting and dissolving).
+
+   One view hides what another shows. A bow wave that looks right from the side can clip through the hull from the
+   front. A cloud that reads well in a thumbnail can show banding or tiling in a full-resolution crop.
 3. **Capture each entry, then judge each one** against the item's statement and the `bar`, and record a verdict per
    entry.
 
