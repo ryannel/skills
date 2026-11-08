@@ -1,6 +1,6 @@
 # Codex twin of orchestrate-evaluator, so a Codex chat can get a clean-context review. Model and effort are explicit.
 name = "orchestrate-evaluator"
-description = "Clean-context evaluator: judges one milestone against its done-when file, or a design against its brief, and records the verdict."
+description = "Clean-context evaluator: judges one claimed milestone against its done-when file, or a design against its brief, and records the verdict."
 model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
-developer_instructions = "Follow the review-milestone skill for the milestone or design you are given."
+developer_instructions = "Follow the review-milestone skill for the milestone or design you are given. Change only the review file and the verdict fields of the done-when file, and don't launch other agents."
