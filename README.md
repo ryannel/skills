@@ -42,6 +42,32 @@ npx skills add ryannel/skills --skill generative-media-atlas
 | [`comfyui-on-runpod`](./skills/generative-media/comfyui-on-runpod/) | Infrastructure | Running ComfyUI on rented GPUs so a fresh instance finds every model: the dual mount root (`/workspace` vs `/runpod-volume`), `extra_model_paths.yaml`, volume layout by loader, model manifests, pod vs serverless, API-format workflow deployment, cost guards |
 | [`image-production-workflows`](./skills/generative-media/image-production-workflows/) | Cross-model | Multi-stage production pipelines (refine → detail → tiled upscale → finish), mixed-model handoffs between SDXL/Flux/Z-Image/Ideogram, regional prompting & inpainting craft, ComfyScript & workflows-as-code |
 
+## Orchestration
+
+A process for building software with AI agents in Claude Code and Codex: web apps, native apps, CLI tools, libraries,
+engines. It follows the planner, generator, evaluator and oracle pattern from Anthropic's long-running harness work.
+A project describes itself once in an `ORCHESTRATE.md` profile (check command, targets, plans location, what goes to
+the owner), and the skills stay generic.
+
+**Start here:** [`orchestrate`](./skills/orchestration/orchestrate/) explains the levels and sets a project up.
+
+| Skill | What it does |
+|---|---|
+| [`orchestrate`](./skills/orchestration/orchestrate/) | **Entry point.** The levels and commands, the `ORCHESTRATE.md` profile, agent install for both vendors, status |
+| [`plan-project`](./skills/orchestration/plan-project/) | Module map, build order, shared contracts and a brief per module |
+| [`plan-module`](./skills/orchestration/plan-module/) | A module's design, its milestones and a JSON done-when file per module |
+| [`build-milestone`](./skills/orchestration/build-milestone/) | Build, verify and integrate the next milestone, in Claude Code or Codex |
+| [`review-milestone`](./skills/orchestration/review-milestone/) | A clean-context verdict against the done-when file and an inspection list, with no target images |
+| [`build-parallel`](./skills/orchestration/build-parallel/) | One Claude lead runs several Codex generators via `agent_loop.py`: pinned model and effort, escalation by count, quota forecast, exclusive-resource locks |
+| [`instructing-agents`](./skills/orchestration/instructing-agents/) | Writing goals, briefs, steers, skills and AGENTS.md that Opus and GPT agents act on without being boxed in |
+
+```bash
+npx skills add ryannel/skills --skill orchestrate --skill plan-project --skill plan-module \
+  --skill build-milestone --skill review-milestone --skill build-parallel --skill instructing-agents
+```
+
+Then, in each project, run `/orchestrate` to write its profile and link the agents.
+
 ## Install
 
 ```bash
@@ -76,4 +102,5 @@ As a Claude Code plugin instead:
 ```bash
 /plugin marketplace add ryannel/skills
 /plugin install generative-media-skills@ryannel-skills
+/plugin install orchestrate@ryannel-skills
 ```

@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills organised by domain — deeply researched, provenance-tracked, and kept current against fast-moving ecosystems",
-    "version": "2.4.0"
+    "version": "2.5.0"
   },
   "plugins": [
     {
@@ -44,6 +44,39 @@
         "./skills/generative-media/character-lora-training",
         "./skills/generative-media/comfyui-on-runpod",
         "./skills/generative-media/image-production-workflows"
+      ]
+    },
+    {
+      "name": "orchestrate",
+      "description": "A process for building software with AI agents in Claude Code and Codex, for web apps, native apps, CLI tools, libraries and engines: plan the project and each module, build milestones against JSON done-when files, judge them with a clean-context evaluator against inspection lists, and fan out several Codex generators under one Claude lead with model and effort pinned, escalation by count and a quota forecast. Includes a guide to writing instructions for Opus and GPT agents.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "development",
+      "keywords": [
+        "agents",
+        "orchestration",
+        "codex",
+        "claude-code",
+        "planning",
+        "code-review",
+        "evaluator",
+        "milestones",
+        "multi-agent"
+      ],
+      "skills": [
+        "./skills/orchestration/orchestrate",
+        "./skills/orchestration/plan-project",
+        "./skills/orchestration/plan-module",
+        "./skills/orchestration/build-milestone",
+        "./skills/orchestration/review-milestone",
+        "./skills/orchestration/build-parallel",
+        "./skills/orchestration/instructing-agents"
+      ],
+      "agents": [
+        "./skills/orchestration/orchestrate/agents/claude/orchestrate-evaluator.md",
+        "./skills/orchestration/orchestrate/agents/claude/orchestrate-planner.md",
+        "./skills/orchestration/orchestrate/agents/claude/orchestrate-researcher.md"
       ]
     }
   ]

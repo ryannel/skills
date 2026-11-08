@@ -19,6 +19,7 @@ npx skills add ryannel/skills --skill <skill-name>
 | Domain | What belongs in it |
 |---|---|
 | [`generative-media/`](generative-media/) | Image and video models, and the craft spanning them — model setup, prompting, LoRA training, production pipelines, GPU deployment |
+| [`orchestration/`](orchestration/) | Building software with AI agents: planning, building and reviewing milestones in Claude Code and Codex, fan-out under one lead, and writing instructions agents act on |
 
 ## Adding a new domain
 
