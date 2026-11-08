@@ -59,11 +59,11 @@ class Decisions(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "ORCHESTRATE.md").write_text(
                 "- **Plans:** [docs/design/modules](docs/design/modules/)  *(read by the loop)*\n"
-                "- **Integrate:** pull-request  *(read by the loop: `main` = ...)*\n"
+                "- **Branch:** trunk  *(loop: integrate here)*\n"
                 "- **Codex generator:** gpt-6.1-sol, high\n- **Writable roots:** ~/.cargo, ~/.npm\n")
             p = agent_loop.profile(Path(tmp))
-            self.assertEqual((p["plans"], p["integrate"], p["model"], p["effort"], p["evidence"]),
-                             ("docs/design/modules", "pull-request", "gpt-6.1-sol", "high", "docs/evidence"))
+            self.assertEqual((p["plans"], p["branch"], p["model"], p["effort"], p["evidence"]),
+                             ("docs/design/modules", "trunk", "gpt-6.1-sol", "high", "docs/evidence"))
             self.assertEqual(p["roots"], ["~/.cargo", "~/.npm"])
             self.assertEqual(agent_loop.profile(Path(tmp, "missing"))["plans"], "docs/modules")
 
@@ -221,7 +221,7 @@ class RunLoop(unittest.TestCase):
                 agent_loop.cmd_lock(argparse.Namespace(name="gpu", worktree=tmp, command_args=["--", "true"]))
 
     def test_profile_strict_rejects_unfilled_and_invalid(self):
-        (self.wt / "ORCHESTRATE.md").write_text("- **Evidence:** <where review files go>\n- **Integrate:** pull request\n")
+        (self.wt / "ORCHESTRATE.md").write_text("- **Evidence:** <where review files go>\n- **Codex sandbox:** open\n")
         with self.assertRaises(SystemExit):
             agent_loop.profile(self.wt, strict=True)
 

@@ -2143,42 +2143,6 @@
       ],
       "open_findings": []
     },
-    "orchestrate": {
-      "path": "skills/orchestration/orchestrate",
-      "tier": "active",
-      "cadence_days": 7,
-      "last_checked": "2026-11-08",
-      "last_drift_found": null,
-      "quiet_streak": 0,
-      "why_tier": "Registered 2026-11-08. Names current models (Opus 5.5, gpt-6.1-sol) and Codex CLI flags and local files, which move with each release.",
-      "watchlist": [
-        {
-          "id": "orchestrate-models",
-          "type": "model-names",
-          "claim": "Default models are claude-opus-5-5 and gpt-6.1-sol; Codex flags and rollout fields as used by agent_loop.py.",
-          "where": "skills/orchestration/orchestrate",
-          "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
-        }
-      ]
-    },
-    "plan-project": {
-      "path": "skills/orchestration/plan-project",
-      "tier": "active",
-      "cadence_days": 7,
-      "last_checked": "2026-11-08",
-      "last_drift_found": null,
-      "quiet_streak": 0,
-      "why_tier": "Registered 2026-11-08. Names current models (Opus 5.5, gpt-6.1-sol) and Codex CLI flags and local files, which move with each release.",
-      "watchlist": [
-        {
-          "id": "plan-project-models",
-          "type": "model-names",
-          "claim": "Default models are claude-opus-5-5 and gpt-6.1-sol; Codex flags and rollout fields as used by agent_loop.py.",
-          "where": "skills/orchestration/plan-project",
-          "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
-        }
-      ]
-    },
     "plan-module": {
       "path": "skills/orchestration/plan-module",
       "tier": "active",

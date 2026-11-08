@@ -3,14 +3,14 @@
 rule fires.
 
 Used by the build-parallel lead and runnable by hand. Project settings come from ORCHESTRATE.md at the worktree root
-(`profile` prints what was read). Needs git, the Codex CLI, and `gh` for pull-request integration; POSIX only (fcntl).
+(`profile` prints what was read). Needs git and the Codex CLI; POSIX only (fcntl).
 The goal-status and quota readers use Codex's local session files and work on a ChatGPT-plan login; without them those
 stop rules and the forecast are skipped. Subcommands:
 
   run   --module ONBOARDING --worktree PATH [--milestone M2] [--fresh] [--message TEXT] [--budget-hours 4]
         Starts (or resumes) a Codex session on the milestone and drives it one turn per `codex exec resume` until:
-        CLAIMED   every item passes in the committed done-when file, the tree is clean, the work is integrated (on the
-                  base branch, or an open PR with passing checks), and every oracle item's check exits 0 when the loop
+        CLAIMED   every item passes in the committed done-when file, the tree is clean, the work is on the base branch,
+                  and every oracle item's check exits 0 when the loop
                   runs it. A failing check goes back to the generator instead.
         DONE / BLOCKED / NEEDS_CONTEXT   the agent's final report line
         BUDGET    no new passing item or commit for --budget-hours
@@ -73,8 +73,8 @@ LOOP = Path(__file__).resolve()
 GOAL_TEMPLATE = """Model {model}, effort {effort}. Call your create_goal tool with this objective, then work it:
 
 Milestone {milestone} of module {module} is done: every item for {milestone} in {plans}/{module}-DONE.json has status \
-pass with evidence on its named target, and the change is integrated as ORCHESTRATE.md says, with its check passing \
-fresh on the integrated tip. Use $build-milestone, which covers method, constraints and \
+pass with evidence on its named target, and the change is on the profile's branch, with its check passing fresh on the \
+integrated tip. Use $build-milestone, which covers method, constraints and \
 permissions. Work only in this worktree. Keep the plan's status lines and log current. If you are blocked (probed \
 directly) or missing context, stop and end with `BLOCKED: ...` or `NEEDS_CONTEXT: ...` and the evidence. When finished, \
 end with `DONE` and the evidence. Commit the done-when file with the work. Don't launch the evaluator: the lead runs \
@@ -85,9 +85,9 @@ findings to the plan as work items, fix them, re-verify the affected items, inte
 NEEDS_CONTEXT."""
 
 
-PROFILE_DEFAULTS = {"plans": "docs/modules", "evidence": "docs/evidence", "integrate": "main", "branch": "main",
+PROFILE_DEFAULTS = {"plans": "docs/modules", "evidence": "docs/evidence", "branch": "main",
                     "remote": "origin", "sandbox": "workspace-write", "writable roots": ""}
-ALLOWED = {"integrate": {"main", "pull-request"}, "sandbox": {"workspace-write", "danger-full-access"}}
+ALLOWED = {"sandbox": {"workspace-write", "danger-full-access"}}
 
 
 def profile(worktree: Path, strict: bool = False) -> dict:
@@ -255,29 +255,15 @@ def head_commit(worktree: Path) -> str:
 
 
 def integration(worktree: Path, prof: dict) -> tuple[bool, str]:
-    """Whether the committed work is integrated, with a reason. The tree must be clean, so claims are committed.
-    main: HEAD is on <remote>/<branch>. pull-request: HEAD is on a pushed branch with an open PR whose checks pass."""
+    """Whether the committed work is integrated: a clean tree whose HEAD is on <remote>/<branch>."""
     git = ["git", "-C", str(worktree)]
     if subprocess.run([*git, "status", "--porcelain", "--untracked-files=no"], capture_output=True,
                       text=True).stdout.strip():
         return False, "uncommitted changes"
     subprocess.run([*git, "fetch", "--quiet", prof["remote"]], capture_output=True)
     base = f"{prof['remote']}/{prof['branch']}"
-    if prof["integrate"] == "main":
-        ok = subprocess.run([*git, "merge-base", "--is-ancestor", "HEAD", base], capture_output=True).returncode == 0
-        return ok, "" if ok else f"HEAD is not on {base}"
-    branch = subprocess.run([*git, "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True).stdout.strip()
-    pushed = subprocess.run([*git, "merge-base", "--is-ancestor", "HEAD", f"{prof['remote']}/{branch}"],
-                            capture_output=True).returncode == 0
-    if branch in ("HEAD", prof["branch"]) or not pushed:
-        return False, "HEAD is not pushed on its own branch"
-    pr = subprocess.run(["gh", "pr", "view", branch, "--json", "url,state"], cwd=worktree, capture_output=True, text=True)
-    if pr.returncode != 0 or json.loads(pr.stdout).get("state") not in ("OPEN", "MERGED"):
-        return False, f"no open pull request for {branch}"
-    checks = subprocess.run(["gh", "pr", "checks", branch], cwd=worktree, capture_output=True, text=True)
-    if checks.returncode not in (0,) and "no checks" not in (checks.stdout + checks.stderr):
-        return False, "pull request checks are not passing yet"
-    return True, json.loads(pr.stdout)["url"]
+    ok = subprocess.run([*git, "merge-base", "--is-ancestor", "HEAD", base], capture_output=True).returncode == 0
+    return ok, base if ok else f"HEAD is not on {base}"
 
 
 def oracle_failures(worktree: Path, milestone: dict, timeout_s: float = 3600) -> list[str]:
@@ -397,7 +383,7 @@ def cmd_run(a: argparse.Namespace) -> None:
             ok, detail = integration(worktree, prof)
             failures = oracle_failures(worktree, current) if ok else []
             if ok and not failures:
-                finish(state_path, state, "CLAIMED", review=bool(current.get("review")), integrated=detail or "main")
+                finish(state_path, state, "CLAIMED", review=bool(current.get("review")), integrated=detail)
             # Not claimable yet: tell the generator why on its next turn rather than stopping.
             state["claim_blocked"] = "; ".join(failures) if failures else detail
             a.message = f"The loop can't accept the claim yet: {state['claim_blocked']}. Fix it, then end with DONE."

@@ -1,80 +1,42 @@
 ---
 name: build-milestone
-description: Builds, verifies and integrates the next milestone of a module from its plan and JSON done-when file, in Claude Code or Codex, in a repository using the orchestrate process (it has an ORCHESTRATE.md). Use to implement, fix or refactor code toward a milestone there, including ordinary fixes and small slices. Not for designing or re-planning a module (plan-module), project-wide boundaries (plan-project) or judging a milestone (review-milestone).
+description: Builds, verifies and integrates the next milestone of a module from its plan and JSON done-when file, in Claude Code or Codex, in a repository with an ORCHESTRATE.md. Use for any implementation, fix or refactor there, including small slices. Not for planning (plan-module) or judging a milestone (review-milestone).
 ---
 
 # Build a milestone
 
-Run as Codex `gpt-6.1-sol` at medium effort, or Claude Opus 5.5 at medium for a bounded slice, unless
-`ORCHESTRATE.md` says otherwise. Read `ORCHESTRATE.md` first; if the repository has none, set it up with `/orchestrate` before anything else. Then read the building guidance it lists.
+Run as Codex `gpt-6.1-sol` at medium effort, or as Claude Opus 5.5 at medium effort for a bounded slice. The profile
+can change this. Read `ORCHESTRATE.md` first, and the building guidance it links to.
 
-**Outcome:** the next open milestone in `<plans>/<MODULE>-PLAN.md` works correctly and looks right on its named
-targets (behaves correctly, and looks right where it has a look), every item for it in `<MODULE>-DONE.json` has `status: pass` with evidence, and it's integrated as the profile
-says. Without a module plan, for example an ordinary fix, the work serves the current goal and the done-when is the
-fix's own test.
+**Outcome:** the next open milestone in `<MODULE>-PLAN.md` works on its named targets, and it's integrated. For
+an ordinary fix with no plan, the outcome is the fix and a test of it.
 
 ## Done when
 
-1. **Every item in the milestone is `pass`, with evidence.** You may change only items' `status` and `evidence`, and
-   the milestone's `state`: `in_progress` when you start, `done` when every item passes and `review` is `false`. If an
-   item is wrong or can't be met, say so in your report; the rest of the file isn't yours to edit.
-   - `oracle` items pass when their command exits 0 on the named target.
-   - `inspection` and `review` items: record your own look and the captures as evidence. The evaluator decides the
-     final pass for milestones with `"review": true`. In a single chat, run it yourself once everything is
-     integrated: the `orchestrate-evaluator` subagent in Claude Code, or its Codex agent, briefed with the module,
-     milestone, commit and worktree only. Under `/build-parallel`, don't: the lead runs it.
-2. **The change, including the done-when file, is committed and integrated.** With `Integrate: main`: rebase on the
-   profile's remote and branch, run its check fresh on the rebased tip, push without force; if the push is rejected,
-   rebase and check again. With `Integrate: pull-request`: push your own branch, open a PR against the base branch, and
-   wait for its checks to pass; the profile's `Merge` line says who merges. The loop reruns every oracle check before it
-   accepts the claim.
-3. **The plan's status lines and your progress note are current.** The progress note is the plan's `Now:` and the
-   log: decisions with reasons, and claims kept apart as verified, approximate or open.
-4. **You end with one report line,** `DONE`, `BLOCKED: <what you probed, the evidence, what would unblock it>` or
-   `NEEDS_CONTEXT: <what is missing>`, followed by the evidence. `DONE` needs fresh evidence from this session.
+1. **Every item for the milestone in `<MODULE>-DONE.json` is `pass`, with evidence.** You write items' `status` and
+   `evidence`, and the milestone's `state`. Set it to `in_progress` when you start, and to `done` when everything
+   passes and `review` is `false`. If an item is wrong or can't be met, say so in your report rather than editing it.
+   How each kind of item is proved is in [proofs](../plan-module/references/proofs.md).
+2. **The work is committed and integrated.** Rebase on the profile's branch, run its `Check` fresh, and push without
+   force. If you're under `/build-parallel`, the loop reruns every oracle check before it accepts the claim.
+3. **The plan's status lines and log are current.** Keep verified, approximate and open claims separate.
+4. **The milestone is reviewed, if its `review` is `true`.** In a single chat, launch the `orchestrate-evaluator`
+   agent and brief it with only the module, milestone, commit and worktree. Under `/build-parallel`, the lead launches
+   it instead.
+5. **You end with one line:** `DONE`, `BLOCKED: <what you probed, evidence, what would unblock it>`, or
+   `NEEDS_CONTEXT: <what's missing>`.
 
-Before claiming items, check each is complete, clear and checkable on its target. If one isn't, report it.
+## Method
 
-## Staying on course
+- **Research how it's done before experimenting.** Shipped products and published work have solved most problems,
+  and current practice beats older code that happens to be available.
+- **After about three failed attempts at a behaviour, stop tuning.** Check whether the mechanism can produce the
+  behaviour at all, using a minimal reproduction. If it can't, report `BLOCKED` with the evidence.
+- **Look at the output yourself.** Capture it from the exact build on its target, including the edge conditions the
+  profile lists for that target, and judge it against the inspection items. Tests don't replace looking.
+- **Label stand-ins `proxy`.** Wrap runs that use a resource listed under the profile's `Exclusive resources` in
+  `agent_loop.py lock <name> -- <command>` (in build-parallel's `scripts/`).
+- **Contract or design changes go in the plan log as a proposal.** Carry on with work that doesn't depend on them.
 
-- **Research before experimenting.** Shipped products and published work have solved most of what a module needs.
-  Needing to try things usually means the research or design is missing, so find how it's done first, favouring
-  current state-of-the-art and shipped practice. An experiment answers a question, has a stopping point, and goes in
-  the log. Delegate hard research to a subagent (the `orchestrate-researcher` agent) where it helps.
-- **If a behaviour won't come after about three attempts,** stop tuning it. Find out whether the mechanism can produce
-  it at all ([diagnosis](references/diagnosis.md)), and work the milestone's other items meanwhile. If it can't, report
-  `BLOCKED` with the evidence. Escalation to a fresh session and then the planner is counted by the loop, not decided
-  by you.
-- **Contract or design changes** don't happen locally. Write the proposal into the plan's log and your report, and carry
-  on with work that doesn't depend on it.
-
-## Build and prove
-
-- **Extend running paths before hardening inactive ones.** Code with no consumer by the end of a slice doesn't land.
-- **Make the product able to show the milestone.** If it can't yet host the scenario a milestone needs, adding that
-  scenario through public interfaces is part of the work. Label stand-ins for neighbours that don't exist yet.
-- **Prefer proven libraries** that meet the targets over building a general subsystem; build your own where a
-  specialised path is the point and can show its win.
-- **Tests** cover behaviour and plausible failure, including rejected, stale and duplicate input at trust boundaries.
-- **Look at the output yourself.** Capture from the exact build on the named target with the profile's capture method,
-  covering the target's edge conditions from the profile (for a UI: empty, loading, error, resize; for a CLI: bad
-  arguments, piped input, interrupts, exit codes), where faults hide. Judge against the inspection list and bar. Tests
-  and source review don't replace looking.
-- **Claims about devices, speed or visuals** come only from runs on named targets; label stand-ins `proxy`. Wrap runs
-  that use an exclusive resource from the profile in `python3 <agent_loop.py> lock <name> -- <command>`; the loop's
-  goal gives the script's path, and in a single chat it's in the build-parallel skill's `scripts/` folder.
-- **Cost:** follow the project's performance guidance, or [cost](../plan-module/references/cost.md). Record
-  measurements; investigate tripwires.
-- **Evidence** is at most one page per milestone in the profile's evidence location, linked from the done-when items.
-
-## Permissions
-
-- **Without asking, you may:** research; delegate research to subagents; write throwaway reproductions in the profile's
-  scratch location; run tests, fixtures and captures; change this module's code; update the plan's status and log;
-  integrate verified checkpoints as the profile says.
-- **Never:** force-push or rewrite shared history.
-- **What goes to the owner:** whatever the profile's "Owner decides" line lists. Continue unblocked work meanwhile.
-- **Licences and untouchable paths:** as the profile says.
-
-When work stops, clean build outputs and scratch you created, and remove your worktree once its commit is on the
-integration branch.
+You may research, run anything local, change this module's code and integrate verified work without asking. Never
+force-push. The profile's "Owner decides" list says what goes to the owner.
