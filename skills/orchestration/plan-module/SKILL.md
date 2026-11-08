@@ -19,7 +19,8 @@ in the profile's `Plans` directory:
 
 ## Whole project
 
-When a project has more than one module, `ARCHITECTURE.md` in the plans directory holds:
+When a project has more than one module, `ARCHITECTURE.md` in the plans directory (or wherever the profile's project
+guidance says) holds:
 - the module map, drawn around who owns each kind of state;
 - the build order, riskiest and most depended-on first;
 - the shared contracts, each with its producer, consumers and how a violation is detected;
