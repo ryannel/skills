@@ -1,6 +1,9 @@
-"""Checks for agent_loop's mechanical decisions: milestone choice, escalation, claims, profile, pins and report lines."""
+"""Checks for agent_loop's mechanical decisions: milestone choice, escalation, claims, profile, pins, locks and
+report lines."""
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import sqlite3
@@ -18,9 +21,14 @@ def done(*milestones):
     return {"module": "WATER", "milestones": list(milestones)}
 
 
-def milestone(mid, state, statuses, fails=0):
-    items = [{"id": f"{mid}.{i}", "status": s} for i, s in enumerate(statuses, 1)]
-    return {"id": mid, "name": mid, "state": state, "fails": fails, "items": items}
+def item(iid, status="open", **proof):
+    proof = proof or {"check": "true"}
+    return {"id": iid, "statement": f"{iid} works", **proof, "status": status, "evidence": ""}
+
+
+def milestone(mid, state, statuses, fails=0, **proof):
+    items = [item(f"{mid}.{i}", s, **proof) for i, s in enumerate(statuses, 1)]
+    return {"id": mid, "name": mid, "state": state, "fails": fails, "replans": 0, "items": items}
 
 
 class Decisions(unittest.TestCase):
@@ -31,7 +39,7 @@ class Decisions(unittest.TestCase):
 
     def test_named_milestone_must_exist(self):
         with self.assertRaises(SystemExit):
-            agent_loop.pick_milestone(done(milestone("M1", "open", [])), "M9")
+            agent_loop.pick_milestone(done(milestone("M1", "open", ["open"])), "M9")
 
     def test_escalation_ladder(self):
         self.assertEqual([agent_loop.escalation(n) for n in range(6)],
@@ -50,41 +58,82 @@ class Decisions(unittest.TestCase):
         old_window = [(now - 20 * h, 90.0, now - 10 * h), (now - 2 * h, 1.0, reset), (now, 2.0, reset)]
         self.assertEqual(agent_loop.forecast(old_window, now)["per_day"], 12.0)
 
-    def test_report_word_reads_last_report_line(self):
-        self.assertEqual(agent_loop.report_word("work\nBLOCKED: no Metal device\nevidence"), "BLOCKED")
+    def test_report_word_reads_only_the_last_line(self):
+        self.assertEqual(agent_loop.report_word("work\nevidence\nBLOCKED: no Metal device"), "BLOCKED")
         self.assertEqual(agent_loop.report_word("`DONE`"), "DONE")
+        self.assertIsNone(agent_loop.report_word("DONE\nActually the milestone is not complete yet."))
         self.assertIsNone(agent_loop.report_word("still working"))
 
     def test_profile_reads_labelled_lines(self):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "ORCHESTRATE.md").write_text(
                 "- **Plans:** [docs/design/modules](docs/design/modules/)  *(read by the loop)*\n"
+                "- **Evidence:** docs/my evidence  *(loop)*\n"
+                "- **Check:** `npm run check`  *(loop)*\n"
                 "- **Branch:** trunk  *(loop: integrate here)*\n"
+                "- **Codex sandbox:** danger-full-access  *(loop)*\n"
                 "- **Codex generator:** gpt-6.1-sol, high\n- **Writable roots:** ~/.cargo, ~/.npm\n")
-            p = agent_loop.profile(Path(tmp))
-            self.assertEqual((p["plans"], p["branch"], p["model"], p["effort"], p["evidence"]),
-                             ("docs/design/modules", "trunk", "gpt-6.1-sol", "high", "docs/evidence"))
+            p = agent_loop.profile(Path(tmp), strict=True)
+            self.assertEqual((p["plans"], p["branch"], p["model"], p["effort"], p["evidence"], p["check"], p["sandbox"]),
+                             ("docs/design/modules", "trunk", "gpt-6.1-sol", "high", "docs/my evidence",
+                              "npm run check", "danger-full-access"))
             self.assertEqual(p["roots"], ["~/.cargo", "~/.npm"])
+            self.assertEqual(p["graded_examples"], "docs/my evidence/graded-examples.md")
             self.assertEqual(agent_loop.profile(Path(tmp, "missing"))["plans"], "docs/modules")
 
-    def test_pin_mismatch_lists_wrong_turns(self):
+    def test_profile_strict_rejects_missing_unfilled_and_invalid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(SystemExit):
+                agent_loop.profile(Path(tmp), strict=True)  # no ORCHESTRATE.md at all
+            for bad in ("- **Evidence:** <where review files go>\n", "- **Codex sandbox:** open\n",
+                        "- **Codex generator:** gpt-6.1-sol turbo\n", "- **Integrate:** pull-request\n"):
+                Path(tmp, "ORCHESTRATE.md").write_text(bad)
+                with self.assertRaises(SystemExit, msg=bad):
+                    agent_loop.profile(Path(tmp), strict=True)
+
+    def test_pin_mismatch_lists_wrong_turns_and_skips_partial_lines(self):
         with tempfile.TemporaryDirectory() as tmp:
             rollout = Path(tmp) / "rollout.jsonl"
             lines = [
-                {"type": "turn_context", "payload": {"turn_id": "a", "model": "gpt-6.1-sol", "effort": "medium"}},
-                {"type": "turn_context", "payload": {"turn_id": "b", "model": "gpt-6.1-sol", "effort": "xhigh"}},
-                {"type": "event_msg", "payload": {}},
+                json.dumps({"type": "turn_context", "payload": {"turn_id": "a", "model": "gpt-6.1-sol", "effort": "medium"}}),
+                json.dumps({"type": "turn_context", "payload": {"turn_id": "b", "model": "gpt-6.1-sol", "effort": "xhigh"}}),
+                '{"type": "turn_context", "payload": {"turn_id": "c", "mod',
             ]
-            rollout.write_text("\n".join(json.dumps(l) for l in lines))
+            rollout.write_text("\n".join(lines))
             self.assertEqual(agent_loop.pin_mismatches(rollout), ["b: gpt-6.1-sol/xhigh"])
 
-
-    def test_oracle_closed_milestone_is_skipped(self):
+    def test_checks_alone_close_a_middle_milestone_but_not_the_last(self):
         d = done(milestone("M1", "open", ["pass"]), milestone("M2", "open", ["open"]))
         self.assertEqual(agent_loop.pick_milestone(d, None)["id"], "M2")
-        reviewed = milestone("M1", "open", ["pass"])
-        reviewed["items"][0]["inspect"] = "frame sequence of the wake"
-        self.assertEqual(agent_loop.pick_milestone(done(reviewed), None)["id"], "M1")
+        self.assertFalse(agent_loop.needs_review(d["milestones"][0], d))
+        self.assertTrue(agent_loop.needs_review(d["milestones"][1], d))
+        reviewed = milestone("M1", "open", ["pass"], inspect="frame sequence of the wake")
+        self.assertEqual(agent_loop.pick_milestone(done(reviewed, milestone("M2", "open", ["open"])), None)["id"], "M1")
+
+    def test_validate_rejects_items_with_no_proof_and_empty_milestones(self):
+        bare = milestone("M1", "open", ["open"])
+        del bare["items"][0]["check"]
+        self.assertTrue(any("nothing proves it" in p for p in agent_loop.validate(done(bare))))
+        self.assertTrue(any("no items" in p for p in agent_loop.validate(done(milestone("M1", "open", [])))))
+        dup = done(milestone("M1", "open", ["open"]), milestone("M1", "open", ["open"]))
+        self.assertTrue(any("duplicate" in p for p in agent_loop.validate(dup)))
+        self.assertEqual(agent_loop.validate(done(milestone("M1", "open", ["open"]))), [])
+
+    def test_builder_marked_done_on_a_reviewed_milestone_is_still_owed_review(self):
+        m = milestone("M1", "done", ["pass"], inspect="captures")
+        d = done(m, milestone("M2", "open", ["open"]))
+        self.assertTrue(agent_loop.awaiting_review(m, d))
+        for i in m["items"]:
+            i["verdict"] = "pass"
+        self.assertFalse(agent_loop.awaiting_review(m, d))
+
+    def test_definitions_ignore_claims_but_not_checks(self):
+        m = milestone("M1", "open", ["open"])
+        before = agent_loop.definitions(m)
+        m["items"][0].update(status="pass", evidence="log", verdict="pass")
+        self.assertEqual(agent_loop.definitions(m), before)
+        m["items"][0]["check"] = "true # weakened"
+        self.assertNotEqual(agent_loop.definitions(m), before)
 
 
 FAKE_CODEX = """#!/usr/bin/env python3
@@ -94,16 +143,22 @@ if "--help" in sys.argv:
     print("usage: codex exec [--json]")
     sys.exit(0)
 with open(os.environ["FAKE_LOG"], "a") as log:
-    log.write(json.dumps(sys.argv[1:]) + "\\n")
-path = Path(os.environ["FAKE_WT"]) / "docs/modules/WATER-DONE.json"
+    log.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd()}) + "\\n")
+wt = os.environ["FAKE_WT"]
+path = Path(wt) / "docs/modules/WATER-DONE.json"
 if os.environ.get("FAKE_PASS") == "1":
     d = json.loads(path.read_text())
     for m in d["milestones"]:
-        for i in m["items"]:
-            i["status"] = "pass"
+        if m["state"] in ("open", "in_progress"):
+            m["state"] = os.environ.get("FAKE_STATE", "claimed")
+            for i in m["items"]:
+                i["status"] = "pass"
+                i["evidence"] = "run log"
+                if os.environ.get("FAKE_WEAKEN") == "1":
+                    i["check"] = "true"
+            break
     path.write_text(json.dumps(d))
     if os.environ.get("FAKE_COMMIT", "1") == "1":
-        wt = os.environ["FAKE_WT"]
         subprocess.run(["git", "-C", wt, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "pass"])
         subprocess.run(["git", "-C", wt, "push", "-q", "origin", "main"])
 print(json.dumps({"type": "thread.started", "thread_id": "t1"}))
@@ -117,16 +172,17 @@ class RunLoop(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
-        self.wt, origin, self.home = root / "wt", root / "origin.git", root / "codex-home"
+        self.wt, self.origin, self.home = root / "wt", root / "origin.git", root / "codex-home"
         self.home.mkdir()
         git = lambda *a, cwd=None: subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True)
-        git("init", "--bare", "-b", "main", str(origin))
+        git("init", "--bare", "-b", "main", str(self.origin))
         git("init", "-b", "main", str(self.wt))
         (self.wt / "docs/modules").mkdir(parents=True)
-        self.write_done([milestone("M1", "open", ["open"])])
+        (self.wt / "ORCHESTRATE.md").write_text("- **Plans:** docs/modules\n")
+        self.write_done([milestone("M1", "open", ["open"]), milestone("M2", "open", ["open"])])
         git("add", "-A", cwd=self.wt)
         git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init", cwd=self.wt)
-        git("remote", "add", "origin", str(origin), cwd=self.wt)
+        git("remote", "add", "origin", str(self.origin), cwd=self.wt)
         git("push", "-q", "origin", "main", cwd=self.wt)
         fake = root / "codex"
         fake.write_text(FAKE_CODEX)
@@ -134,6 +190,8 @@ class RunLoop(unittest.TestCase):
         self.log = root / "log"
         self.saved = (agent_loop.CODEX, agent_loop.CODEX_HOME)
         agent_loop.CODEX, agent_loop.CODEX_HOME = str(fake), self.home
+        for key in ("FAKE_STATE", "FAKE_WEAKEN"):
+            os.environ.pop(key, None)
         os.environ.update(FAKE_LOG=str(self.log), FAKE_WT=str(self.wt), FAKE_PASS="1", FAKE_REPLY="DONE",
                           FAKE_COMMIT="1")
 
@@ -144,40 +202,155 @@ class RunLoop(unittest.TestCase):
     def write_done(self, milestones):
         (self.wt / "docs/modules/WATER-DONE.json").write_text(json.dumps(done(*milestones)))
 
-    def commit_done(self):
+    def read_done(self):
+        return json.loads((self.wt / "docs/modules/WATER-DONE.json").read_text())
+
+    def commit_all(self):
         subprocess.run(["git", "-C", str(self.wt), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "x"],
                        check=True)
         subprocess.run(["git", "-C", str(self.wt), "push", "-q", "origin", "main"], check=True)
 
     def run_loop(self, **kw):
         args = dict(module="WATER", worktree=str(self.wt), milestone=None, fresh=False, message=None,
-                    budget_hours=4.0, pace_per_day=10.0, turn_timeout_hours=0.1)
+                    budget_hours=4.0, turn_timeout_hours=0.1)
         args.update(kw)
-        with self.assertRaises(SystemExit):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             agent_loop.cmd_run(argparse.Namespace(**args))
-        return json.loads((self.wt / ".git/orchestrate/WATER.json").read_text())
+        return json.loads(out.getvalue().splitlines()[-1])
 
     def calls(self):
         return [json.loads(l) for l in self.log.read_text().splitlines()]
 
-    def test_claims_when_items_pass_and_head_is_on_main(self):
-        self.assertEqual(self.run_loop()["result"], "CLAIMED")
+    def test_claims_with_the_commit_when_everything_holds(self):
+        result = self.run_loop()
+        self.assertEqual((result["result"], result["review"]), ("CLAIMED", False))
+        self.assertEqual(result["commit"], agent_loop.head_commit(self.wt))
+        self.assertIn("quota", result)
 
-    def test_rerun_after_failed_review_resumes_with_message(self):
-        reviewed = milestone("M1", "open", ["open"])
-        reviewed["items"][0]["inspect"] = "frame sequence of the wake"
-        self.write_done([reviewed])
-        self.run_loop()
-        d = json.loads((self.wt / "docs/modules/WATER-DONE.json").read_text())
-        d["milestones"][0]["items"][0]["status"] = "fail"
+    def test_rerun_after_failed_review_resumes_in_the_worktree_with_message(self):
+        self.write_done([milestone("M1", "open", ["open"], inspect="frame sequence of the wake")])
+        self.commit_all()
+        self.assertEqual(self.run_loop()["review"], True)
+        d = self.read_done()
+        d["milestones"][0].update(state="in_progress", fails=1)
+        d["milestones"][0]["items"][0]["verdict"] = "fail"
         (self.wt / "docs/modules/WATER-DONE.json").write_text(json.dumps(d))
-        self.commit_done()
-        self.run_loop(message="FINDINGS")
+        self.commit_all()
+        self.run_loop(milestone="M1", message="FINDINGS")
         last = self.calls()[-1]
-        self.assertEqual(last[:3], ["exec", "resume", "t1"])
-        self.assertEqual(last[-1], "FINDINGS")
+        argv = last["argv"]
+        self.assertEqual(argv[argv.index("resume") + 1], "t1")
+        self.assertIn("-C", argv[:argv.index("resume")])
+        self.assertIn("--add-dir", argv[:argv.index("resume")])
+        self.assertEqual(argv[-1], "FINDINGS")
+        self.assertEqual(Path(last["cwd"]).resolve(), self.wt.resolve())
 
-    def test_quota_reads_only_the_weekly_codex_limit(self):
+    def test_a_changed_pin_starts_a_fresh_session(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: x")
+        self.run_loop()
+        (self.wt / "ORCHESTRATE.md").write_text("- **Plans:** docs/modules\n- **Codex generator:** gpt-6.1-sol high\n")
+        self.commit_all()
+        self.run_loop()
+        self.assertNotIn("resume", self.calls()[-1]["argv"])
+
+    def test_weakened_checks_are_rejected(self):
+        os.environ.update(FAKE_WEAKEN="1")
+        self.write_done([milestone("M1", "open", ["open"], check="exit 0 && test -f real-proof")])
+        self.commit_all()
+        result = self.run_loop()
+        self.assertEqual(result["result"], "INVALID")
+        self.assertIn("definitions", result["problems"][0])
+
+    def test_invalid_file_stops_before_any_turn(self):
+        bare = milestone("M1", "open", ["open"])
+        del bare["items"][0]["check"]
+        self.write_done([bare])
+        self.commit_all()
+        self.assertEqual(self.run_loop()["result"], "INVALID")
+        self.assertFalse(self.log.exists())
+
+    def test_uncommitted_pass_is_not_claimed(self):
+        os.environ.update(FAKE_COMMIT="0")
+        state = self.run_loop(budget_hours=0.0)
+        self.assertEqual(state["result"], "BUDGET")
+        saved = json.loads((self.wt / ".git/orchestrate/WATER.json").read_text())
+        self.assertIn("uncommitted", saved["claim_blocked"])
+
+    def test_untracked_files_block_the_claim(self):
+        (self.wt / "helper.sh").write_text("echo hi\n")
+        self.run_loop(budget_hours=0.0)
+        saved = json.loads((self.wt / ".git/orchestrate/WATER.json").read_text())
+        self.assertIn("untracked", saved["claim_blocked"])
+
+    def test_failed_fetch_blocks_the_claim(self):
+        subprocess.run(["git", "-C", str(self.wt), "remote", "set-url", "origin", str(self.wt.parent / "gone.git")],
+                       check=True)
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="working")
+        d = self.read_done()
+        d["milestones"][0]["state"] = "claimed"
+        for i in d["milestones"][0]["items"]:
+            i.update(status="pass", evidence="log")
+        (self.wt / "docs/modules/WATER-DONE.json").write_text(json.dumps(d))
+        subprocess.run(["git", "-C", str(self.wt), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "x"],
+                       check=True)
+        self.run_loop(milestone="M1", budget_hours=0.0)
+        saved = json.loads((self.wt / ".git/orchestrate/WATER.json").read_text())
+        self.assertIn("fetch", saved["claim_blocked"])
+
+    def test_failing_item_check_goes_back_to_generator(self):
+        self.write_done([milestone("M1", "open", ["open"], check="exit 3"), milestone("M2", "open", ["open"])])
+        self.commit_all()
+        self.assertEqual(self.run_loop(budget_hours=0.0)["result"], "BUDGET")
+        saved = json.loads((self.wt / ".git/orchestrate/WATER.json").read_text())
+        self.assertIn("M1.1 `exit 3` exited 3", saved["claim_blocked"])
+
+    def test_failing_profile_check_blocks_the_claim(self):
+        (self.wt / "ORCHESTRATE.md").write_text("- **Plans:** docs/modules\n- **Check:** `sh -c 'exit 4'`\n")
+        self.commit_all()
+        self.run_loop(budget_hours=0.0)
+        saved = json.loads((self.wt / ".git/orchestrate/WATER.json").read_text())
+        self.assertIn("Check `sh -c 'exit 4'` exited 4", saved["claim_blocked"])
+
+    def test_done_without_a_claim_never_finishes_as_done(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="DONE")
+        result = self.run_loop()
+        self.assertEqual(result["result"], "UNCLAIMED")
+        self.assertIn("items not yet pass", result["reasons"][0])
+        self.assertEqual(len(self.calls()), 3)
+
+    def test_builder_done_on_reviewed_milestone_is_not_a_claim(self):
+        os.environ.update(FAKE_STATE="done")
+        self.write_done([milestone("M1", "open", ["open"], inspect="captures"), milestone("M2", "open", ["open"])])
+        self.commit_all()
+        self.run_loop(budget_hours=0.0)
+        saved = json.loads((self.wt / ".git/orchestrate/WATER.json").read_text())
+        self.assertIn("set its state to claimed", saved["claim_blocked"])
+
+    def test_claimed_milestone_blocks_the_next_until_reviewed(self):
+        self.write_done([milestone("M1", "claimed", ["pass"], inspect="captures"), milestone("M2", "open", ["open"])])
+        self.commit_all()
+        result = self.run_loop()
+        self.assertEqual((result["result"], result["milestone"]), ("REVIEW_OWED", "M1"))
+
+    def test_second_blocked_report_with_an_active_goal_finishes(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: no device")
+        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
+            conn.execute("create table thread_goals (thread_id text, status text)")
+            conn.execute("insert into thread_goals values ('t1', 'active')")
+        self.assertEqual(self.run_loop()["result"], "BLOCKED")
+        self.assertEqual(len(self.calls()), 2)
+
+    def test_paused_goal_stops_before_dispatching_another_turn(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="working")
+        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
+            conn.execute("create table thread_goals (thread_id text, status text)")
+            conn.execute("insert into thread_goals values ('t1', 'paused')")
+        self.assertEqual(self.run_loop()["result"], "PAUSED")
+        self.assertEqual(self.run_loop()["result"], "PAUSED")
+        self.assertEqual(len(self.calls()), 1)
+
+    def test_quota_reads_only_the_weekly_codex_limit_and_survives_bad_lines(self):
         sessions = self.home / "sessions"
         sessions.mkdir()
         def line(ts, limit_id, used, window):
@@ -185,54 +358,22 @@ class RunLoop(unittest.TestCase):
                 "limit_id": limit_id, "primary": {"used_percent": used, "window_minutes": window,
                                                   "resets_at": 4_000_000_000}}}})
         (sessions / "rollout-x.jsonl").write_text("\n".join([
-            line("2026-11-08T10:00:00Z", "codex", 47.0, 10080), line("2026-11-08T11:00:00Z", "premium", 0.0, 0)]))
+            line("2026-11-08T10:00:00Z", "codex", 47.0, 10080), line("2026-11-08T11:00:00Z", "premium", 0.0, 0),
+            '{"type": "event_msg", "payload": {"type": "token_count", "rate']))
         self.assertEqual(agent_loop.quota_samples(0), [(1794132000.0, 47.0, 4e9)])
 
-    def test_result_line_carries_quota(self):
-        import contextlib, io
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            self.run_loop()
-        self.assertIn("quota", json.loads(out.getvalue().splitlines()[-1]))
-
-    def test_uncommitted_pass_is_not_claimed(self):
-        os.environ.update(FAKE_COMMIT="0")
-        state = self.run_loop(budget_hours=0.0)
-        self.assertEqual(state["result"], "BUDGET")
-        self.assertIn("uncommitted", state["claim_blocked"])
-
-    def test_failing_oracle_check_goes_back_to_generator(self):
-        item = {"id": "M1.1", "status": "open", "check": "exit 3"}
-        self.write_done([{"id": "M1", "name": "M1", "state": "open", "fails": 0, "items": [item]}])
-        self.commit_done()
-        state = self.run_loop(budget_hours=0.0)
-        self.assertEqual(state["result"], "BUDGET")
-        self.assertIn("M1.1 `exit 3` exited 3", state["claim_blocked"])
-
-    def test_passing_oracle_check_claims(self):
-        item = {"id": "M1.1", "status": "open", "check": "true"}
-        self.write_done([{"id": "M1", "name": "M1", "state": "open", "fails": 0, "items": [item]}])
-        self.commit_done()
-        self.assertEqual(self.run_loop()["result"], "CLAIMED")
+    def test_lock_takes_worktree_after_the_name_and_runs_there(self):
+        marker = self.wt.parent / "where"
+        with self.assertRaises(SystemExit) as exit_:
+            agent_loop.cmd_lock(argparse.Namespace(name="gpu", worktree=None, command_args=[
+                "--worktree", str(self.wt), "--", "sh", "-c", f"pwd > {marker}"]))
+        self.assertEqual(exit_.exception.code, 0)
+        self.assertEqual(Path(marker.read_text().strip()).resolve(), self.wt.resolve())
 
     def test_lock_refuses_outside_a_repository(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(SystemExit):
                 agent_loop.cmd_lock(argparse.Namespace(name="gpu", worktree=tmp, command_args=["--", "true"]))
-
-    def test_profile_strict_rejects_unfilled_and_invalid(self):
-        (self.wt / "ORCHESTRATE.md").write_text("- **Evidence:** <where review files go>\n- **Codex sandbox:** open\n")
-        with self.assertRaises(SystemExit):
-            agent_loop.profile(self.wt, strict=True)
-
-    def test_second_report_without_progress_finishes(self):
-        os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: no device")
-        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
-            conn.execute("create table thread_goals (thread_id text, status text)")
-            conn.execute("insert into thread_goals values ('t1', 'active')")
-        state = self.run_loop()
-        self.assertEqual(state["result"], "BLOCKED")
-        self.assertEqual(state["turns"], 2)
 
 
 if __name__ == "__main__":
