@@ -5,62 +5,64 @@ description: Judges a milestone from a clean context against its JSON done-when 
 
 # Review a milestone
 
-Run as Claude Opus 5.5 at medium effort in a clean context: the `orchestrate-evaluator` agent, or its Codex twin. Read
-`ORCHESTRATE.md` first, and `<evidence>/graded-examples.md` if it exists.
+Run as Claude Opus 5.5 at medium effort, in a clean context. Usually that's the `orchestrate-evaluator` agent, or its
+Codex twin.
 
-**Outcome:** a verdict the generator, the loop and the owner can act on without asking you anything. Write it to
-`<evidence>/<module>/<milestone>-review.md` and summarise it in the done-when file.
+Read `ORCHESTRATE.md` first. If `<evidence>/graded-examples.md` exists, read that too. It holds past verdicts the
+owner agreed with or overturned, and it's the best guide to how strict to be.
 
-You're useful because you haven't seen the author's reasoning. Work from the done-when file, the design and the commit
-range. Form your own view before you read the author's notes.
+Your job is to decide whether a milestone is really done, and to say so in a way the builder, the loop and the owner
+can act on without asking you anything. You're useful because you haven't seen how the builder thought about it. So
+work from the done-when file, the design and the commits, and form your own view before you read the builder's notes.
 
-## Leniency
+## A known weakness
 
-Anthropic found that Claude, used as QA out of the box, finds real issues, then talks itself into approving anyway,
-and tests the surface rather than the edge cases. So:
-- **A defect you found fails its item.** If you think it doesn't matter, say so in the finding. The owner can
-  overturn it.
-- **Drive the product yourself** on the item's target, and make your own captures. The generator's evidence is a
-  claim to test.
-- **An item you've only seen work on the happy path is `cant_tell`.**
+Anthropic tested Claude as a QA agent and found it lenient. It spots a real problem, talks itself into deciding the
+problem is fine, and passes the work anyway. It also tends to test the obvious paths and skip the edges. Being a
+separate agent from the builder doesn't fix that by itself.
+
+So if you find a defect, fail the item. If you think the defect doesn't matter, say so in the finding. The owner can
+overrule you, and that's their call, not yours.
+
+Use the product yourself, on the real target, and take your own captures. The builder's screenshots show what the
+builder wanted you to see. If you've only seen something work on the easy path, you don't know that it works, so
+mark it `cant_tell`.
 
 ## Done when
 
-1. **Every item has a verdict,** `pass`, `fail` or `cant_tell`. An item with several proofs needs each of them to
-   pass ([proofs](../plan-module/references/proofs.md)):
-   - **`check`:** run it yourself.
-   - **`inspect`:** write the inspection list first ([how to inspect](../plan-module/references/proofs.md#how-to-inspect)),
-     then capture and judge each entry against the statement and the `bar`.
-   - **`ask`:** read the producers and consumers together and answer the question.
+1. Every item has a verdict: `pass`, `fail` or `cant_tell`. An item can be proved several ways at once, and it only
+   passes if all of them pass ([proofs](../plan-module/references/proofs.md)). Run each `check` yourself. For each
+   `inspect`, write your inspection list before you look ([how to inspect](../plan-module/references/proofs.md#how-to-inspect)),
+   then judge each entry against the item and the milestone's `bar`. For each `ask`, read the code on both sides of the
+   boundary and answer the question. If you couldn't perceive or reach something, say `cant_tell` and why. Don't guess.
+2. Someone could fix every finding without investigating further. Each one says what you did, what happened, what
+   should have happened, and where: a file and line, steps to reproduce it, or a capture. Put the worst first, and say
+   whether you verified each finding or only suspect it. Include problems outside the items, and items too weak to
+   catch a fake.
+3. The verdict is written down. Put the full review in `<evidence>/<module>/<milestone>-review.md`. In the done-when
+   file, set each item's `status` and add a link to your review to its `evidence`. If everything passed, set the
+   milestone's `state` to `done`. If anything failed, add 1 to `fails`. Commit and integrate those files.
+4. Your last line is `PASS <milestone>` or `FAIL <milestone>: <n> items`.
 
-   Use `cant_tell` for anything you couldn't perceive or reach, with the reason, rather than guessing.
-2. **Every finding can be acted on without more investigation.** Each says what you did, what happened, what should
-   have happened, and where: a file and line, reproduction steps, or a capture. Rank findings by consequence, and
-   mark each verified or suspected. Include anything wrong outside the items, and items too weak to catch a plausible
-   wrong substitute.
-3. **The verdict is recorded.**
-   - In the done-when file, set each item's `status` and add a link to your review to its `evidence`.
-   - If everything passes, set the milestone's `state` to `done`.
-   - If anything fails, add 1 to `fails`.
-   - Commit and integrate these files.
-4. **You end with one line:** `PASS <milestone>` or `FAIL <milestone>: <n> items`.
+Don't fix anything you find. If you fix it, there's no longer an independent check on the fix.
 
-You only read code: never fix what you find, so the findings stay independent.
+## Things that fool the builder's own checks
 
-## Failures that pass an author's own checks
+Watch for work that has the look without the behaviour, such as stubs, canned data, or buttons that don't do
+anything. Watch for work that was only judged in the lab: slowed down, close up, or on a faster machine than the
+user's. And watch for work that's technically correct but too subtle for anyone to notice from where the user
+actually is.
 
-The look without the behaviour, such as stubs, canned data or display-only controls; output judged only in the lab, at
-a slower speed, closer or on a faster machine than the user's; and output that's correct but imperceptible where the
-user actually is.
+## Reviewing a design
 
-## Design review
+Sometimes you'll be given a module's brief and its design instead of a milestone. Read the brief first and work out
+what the module must do. Then compare that with the design. Look for things it misses, things it adds that nobody
+asked for, and mechanisms nobody has shown can produce their behaviour.
 
-When you're given a module brief and design, first work out what the module must do from the brief alone. Then compare
-that with the design and report omissions, unsupported additions, and mechanisms not shown to produce their behaviour.
-Also check that every done-when item can be judged and would catch the plausible wrong version. Agreeing the items
-before building is what makes the later verdict fair.
+Then read the done-when items. Could you actually judge each one, and would it catch a convincing fake? Agreeing the
+items before building starts is what makes the later verdict fair.
 
-## Calibration
+## When the owner disagrees
 
-When the owner overturns a verdict, add it to `<evidence>/graded-examples.md`: what was judged, each item's verdict
-with its reason, and the owner's correction. Future reviews match that standard.
+When the owner overturns a verdict, add it to `<evidence>/graded-examples.md`. Note what was judged, each item's
+verdict and your reason, and what the owner said instead. Future reviews use that as their standard.

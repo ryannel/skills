@@ -1,47 +1,58 @@
 # Ways to prove work
 
-An item is proved by any mix of three things. Give it whichever fields would catch the plausible wrong version of the
-work, and add more when one alone wouldn't:
-- **`check`:** a command whose exit code decides. The generator runs it, and so does the loop before it accepts a
-  claim.
-- **`inspect`:** what to capture and look at. The evaluator drives the running product, captures it, and judges the
-  result against the statement and the milestone's `bar`.
-- **`ask`:** a question the evaluator answers by reading code, a contract or a design.
+Every done-when item needs some way to prove it. There are three, and an item can use any mix of them:
 
-An item passes only when every field it has passes. A milestone with any `inspect` or `ask` is closed by the
-evaluator. One with only `check` items is closed by the checks.
+- `check` is a command. If it exits with 0, it passed. The builder runs it, and the loop runs it again before it
+  believes the builder.
+- `inspect` says what to look at. The reviewer runs the product, captures it, and judges what it sees against the
+  item and the milestone's quality bar.
+- `ask` is a question the reviewer answers by reading code, a contract or a design.
 
-## Kinds to draw on
+An item passes only when everything it uses passes. If any item in a milestone has `inspect` or `ask`, a reviewer has
+to close that milestone. If every item only has `check`, the checks close it.
 
-Combine these freely. A project adds its own kinds in its profile, in the same shape.
+Pick whatever would catch a convincing fake. Often one proof isn't enough, because each kind misses different
+things. Take a boat bobbing in waves. A test that the energy never grows will catch slow drift that no one would
+notice by eye. Watching a frame sequence of the boat in a storm will catch motion that's perfectly stable and still
+looks wrong. So that item gets both.
 
-| Kind | Field | What to write | Too weak when |
+## Kinds to start from
+
+These are starting points, not a fixed list. A project can describe its own kinds in its profile, in the same shape.
+
+| Kind | Uses | What to write | It's too weak if |
 |---|---|---|---|
-| Automated test | check | The behaviour, and the command that tests it end to end | It tests the mock, or only the happy path |
-| Property or fuzz | check | The invariant, the input space and the run length | The inputs miss what actually occurs |
-| Golden output | check | The expected output, the tolerance, and why it's right | The golden file came from the code under test without being checked |
-| Benchmark tripwire | check | The measurement and a threshold from the purpose doc or a recorded baseline | The budget was invented, or it ran on a busy or different machine |
-| Visual quality | inspect | One quality, and the stills that show it, including edge conditions | Only a beauty shot or one angle, or captures from another build |
-| 2D image | inspect | The image's regions and features, each seen whole and as a full-resolution crop, and at the size it's shown | Judged only as a thumbnail, or one condition |
-| 3D asset | inspect | The asset's parts, each seen from several angles and distances in its real lighting | One hero angle, or the turntable skips the underside |
-| Motion or behaviour | inspect | The motion (physics, animation, simulation) and the scenario that shows it, as a frame sequence | One still, or a slowed or close-up capture |
-| User journey | inspect | The steps and states: empty, loading, error and resize for a UI; bad arguments, piped input and exit codes for a CLI | Only the happy path |
-| Code or contract | ask | A question with an answer, such as "is every consumer updated for the new contract?" | It asks for an opinion |
+| Automated test | check | The behaviour, and a command that tests it end to end | It tests a mock, or only the happy path |
+| Property or fuzz test | check | The rule that must always hold, what inputs to throw at it, and for how long | The inputs miss the cases that happen in real use |
+| Golden output | check | The expected output, how close is close enough, and why it's right | The golden file was made by the code it's testing, and nobody checked it |
+| Benchmark tripwire | check | What to measure, and a threshold from the purpose doc or a recorded baseline | Someone made the number up, or it ran on a busy or different machine |
+| Visual quality | inspect | One quality, and the views that show it | It's one flattering shot, or captures from a different build |
+| 2D image | inspect | The parts of the image, each seen whole, cropped at full resolution, and at the size it's shown | It was only judged as a thumbnail, or in one condition |
+| 3D asset | inspect | The parts of the model, each seen from several angles and distances, in its real lighting | It's one hero angle, or the turntable never shows the underside |
+| Motion or behaviour | inspect | What moves (physics, animation, simulation), and a scenario that shows it, as a frame sequence | It's one still, or a slowed-down or close-up capture |
+| User journey | inspect | The steps and their states: empty, loading, error and resize for a screen; bad arguments, piped input and exit codes for a CLI | Only the happy path was tried |
+| Code or contract | ask | A question with a real answer, such as "does every consumer handle the new error case?" | It asks for an opinion |
 
 ## How to inspect
 
-Write the inspection list before capturing anything: the subject's parts, and the views each needs. Views are angles
-for 3D, crops and the display size for 2D, plus conditions, and moments for anything that moves. Without a list,
-inspection has been random and surface-level. One view also hides what another shows: a bow wave that looks right
-from the side can clip through the hull from the front, and a cloud that looks fine as a thumbnail can show banding
-in a full-resolution crop. Judge each entry, and keep the list in the review or evidence so the coverage is visible.
+Before you look at anything, write down what you're going to look at.
 
-## Mixing
+This sounds too obvious to need saying. But agents that skipped it looked at whatever caught their eye, decided it
+looked fine, and missed the broken parts. So break the thing into pieces first. For a boat, that might be the bow,
+the stern, where the mast sits, and the guns. For a cloud, it might be the edges, the lit side, the shadowed side, and
+the glow around the sun.
 
-Behaviour often needs a measurement and a look, because each catches what the other misses. For buoyancy, a property
-test that energy never grows catches drift the eye misses. A frame sequence of a boat in a storm swell catches motion
-that is stable but looks wrong.
+Then decide how you need to see each piece. A 3D model needs a few angles. An image needs close crops as well as the
+whole frame. Most things need a few conditions, like different times of day. Anything that moves needs the moments
+where it changes.
 
-Agents can't watch live video or hear audio, so anything that moves is captured as frames, and anything an agent can't
-perceive is judged by a measurement or reported as `cant_tell`. Golden screenshots are regression tripwires, never
-the proof of how something looks.
+You need more than one view because every view hides something. A bow wave can look perfect from the side while
+cutting straight through the hull from the front. A cloud can look great as a thumbnail and turn into stripy bands
+when you zoom in.
+
+Then go through the list and judge each entry. Keep the list in the review or the evidence, so anyone can see what
+was checked and what wasn't.
+
+Agents can't watch live video or hear sound. Capture anything that moves as a sequence of frames. Prove anything you
+can't perceive with a measurement, or call it `cant_tell`. Golden screenshots are good for catching regressions, but
+they never prove that something looks right.

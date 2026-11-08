@@ -6,68 +6,73 @@ disable-model-invocation: true
 
 # Build in parallel
 
-Run as the lead: Claude Opus 5.5 at medium effort, invoked as `/build-parallel <MODULE> …`. `LOOP` below means
-`python3 <this skill>/scripts/agent_loop.py`. Read `ORCHESTRATE.md`, and check it with `LOOP profile --worktree <repo>`.
+You're the lead, running as Claude Opus 5.5 at medium effort. The owner starts you with
+`/build-parallel <MODULE> <MODULE> …`. Below, `LOOP` means `python3 <this skill>/scripts/agent_loop.py`.
 
-**Outcome:** each module's milestones close one after another, until each stream is done or parked, or the owner
-stops it. The owner gets a short report each day.
+Read `ORCHESTRATE.md`, then run `LOOP profile --worktree <repo>` to check it parses.
 
-You run the steps and keep the books. Generators build, the evaluator judges and the planner re-plans. Brief them with
-file paths and nothing of your own, so their work stays independent.
+Your job is to keep several modules moving at once, closing milestones one after another until each stream is done,
+parked, or stopped by the owner. You don't build or judge anything yourself. Builders build, the evaluator judges and
+the planner re-plans. When you brief them, give them file paths and nothing else. If you add your own summary or
+opinion, they'll tend to agree with it, and their work stops being independent.
 
-## Start
+## Starting
 
-1. **Check each module has an open milestone** with `LOOP status --module <M> --worktree <repo>`. A module without a
-   plan goes to the planner first.
-2. **Confirm with the owner once:** the streams, how many run at a time, and the forecast from `LOOP quota`. The owner
-   sets the pace by choosing the number of streams.
-3. **Give each stream its own worktree** at `.claude/worktrees/stream-<module>`, and keep it across milestones so
-   build caches stay warm.
+Run `LOOP status --module <M> --worktree <repo>` for each module, to check it has an open milestone. A module with no
+plan goes to the planner first.
 
-## Run
+Then check with the owner, once, before launching anything. Cover which streams to run, how many at a time, and what
+`LOOP quota` forecasts. The owner controls the pace by choosing how many streams run, so they need the forecast to
+choose well.
 
-Start a generator with `LOOP run --module <M> --worktree <path>` as a background command. It prints one JSON line
-when it stops. Run `orchestrate-evaluator` and `orchestrate-planner` as subagents without a `model` override, so their
-agent files decide the model and effort.
+Give each stream its own worktree at `.claude/worktrees/stream-<module>`, and keep it across milestones so build
+caches stay warm.
 
-| Result | What you do |
+## Running
+
+Start a builder with `LOOP run --module <M> --worktree <path>` as a background command. When it stops, it prints one
+line of JSON saying why. Launch `orchestrate-evaluator` and `orchestrate-planner` as subagents, without overriding the
+model, so their agent files decide the model and effort.
+
+| The loop says | You do |
 |---|---|
 | `CLAIMED`, `review: false` | Start the next milestone. |
-| `CLAIMED`, `review: true` | Brief the evaluator with: "Review milestone `<id>` of `<MODULE>` at `<commit>`, worktree `<path>`." |
-| `BLOCKED`, `NEEDS_CONTEXT` | If the missing context is in files, resume with `--message`. Send a design problem to the planner. Otherwise report it, and move the stream on to independent work. |
-| `BUDGET` | Run the evaluator on what exists, so its findings drive the next attempt. |
-| `FLOOR`, `PIN`, `PAUSED` | Stop that stream and report it. `PAUSED` resumes only from the Codex app. |
+| `CLAIMED`, `review: true` | Send the evaluator: "Review milestone `<id>` of `<MODULE>` at `<commit>`, worktree `<path>`." Nothing more. |
+| `BLOCKED` or `NEEDS_CONTEXT` | If the answer is in the files, resume the builder with `--message`. If it's a design problem, send it to the planner. Otherwise, report it and move the stream on to work that doesn't depend on it. |
+| `BUDGET` | The builder stopped making progress. Run the evaluator on what exists anyway, so the next attempt has its findings. |
+| `FLOOR`, `PIN` or `PAUSED` | Stop that stream and report it. `PAUSED` can only be resumed from the Codex app. |
 
-After a failed review, run `LOOP next --module <M> --worktree <path> --milestone <id>` and follow its action:
-- `same-session`: resume with `--message`;
-- `fresh-session`: rerun with `--fresh --message`;
+When a review fails, run `LOOP next --module <M> --worktree <path> --milestone <id>` and do what it says:
+- `same-session`: resume the builder with `--message`;
+- `fresh-session`: start it again with `--fresh --message`;
 - `replan`: send the milestone to the planner;
 - `park`: set the milestone's `state` to `parked` and report it.
 
-Don't override these with your own judgement. The count records what's already been tried, and overriding it is how
-streams end up looping.
+Don't second-guess it. The count is the record of what's already been tried, and leads that overrule it end up
+running the same failing attempt over and over.
 
-The planner can't launch subagents, so when it says a design review is owed, run a fresh evaluator yourself.
+The planner can't launch subagents. When it says a design review is owed, launch a fresh evaluator yourself.
 
-## Shared state
+If a stream breaks the main branch, whichever stream notices first fixes it. Runs that need an exclusive resource go
+through `LOOP lock <name> -- <command>`.
 
-- If a stream breaks the integration branch, the first stream to see it fixes it.
-- Runs that use an exclusive resource go through `LOOP lock <name> -- <command>`.
+## Reporting
 
-## Report
-
-Each day, send one screen to the owner covering:
-- milestones closed, with their evidence;
-- the evaluator's verdicts, linked, so the owner can spot-check them (in a project's first weeks, flag every one);
+Once a day, send the owner one screen covering:
+- what closed, with links to the evidence;
+- the evaluator's verdicts, linked, so the owner can spot-check them (in a project's first few weeks, flag every
+  one, because that's how the evaluator gets calibrated);
 - new inspection items, so the owner can adjust the bar;
 - anything parked or blocked;
 - the quota forecast.
 
-The first time the forecast says the limit runs out before the reset, tell the owner straight away, and keep running.
+If the forecast first shows the limit running out before it resets, tell the owner right away, then keep going. It's
+their call whether to slow down.
 
-When you stop, clean build outputs, remove worktrees whose work has landed, and send a final report.
+When you stop, clean up build outputs, remove worktrees whose work has landed, and send a final report.
 
 ## Setup
 
-The Claude agents ship with the plugin. Install the Codex evaluator, or every agent after an `npx skills add`
-install, with `scripts/install_agents.sh --global` (add `--codex-only` under a plugin install).
+The Claude agents come with the plugin. The Codex evaluator needs installing with `scripts/install_agents.sh --global`.
+Add `--codex-only` if the plugin already installed the Claude agents, and leave it off after an `npx skills add`
+install.

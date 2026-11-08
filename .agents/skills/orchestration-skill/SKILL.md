@@ -23,6 +23,10 @@ metadata:
   through the API.
 - **Agent files** for Claude live in `build-parallel/agents/claude/` and are listed in the marketplace entry; Codex twins
   live in `build-parallel/agents/codex/` and install with `install_agents.sh`.
+- **Plain prose.** Write like Randall Munroe explains things: short sentences, concrete examples, the obvious said
+  out loud, and the reason before or with the rule. Leave out the jokes. Use lists for real checklists, not as a
+  substitute for sentences, and avoid bold-led bullets, chains of semicolons, and clauses packed together to save
+  words.
 - **Lean by default.** Each SKILL.md stays near 400 words: outcome, done-when, method, permissions. Add a line only for
   a failure that has been seen, and record deliberate omissions in the domain README.
 - **Check packaging** with `claude plugin validate .` and `npx skills add ./ --list`.

@@ -2,7 +2,7 @@
 
 ## `<MODULE>-PLAN.md`
 
-Rewrite it in place so it always reads as current. Tools read the status lines.
+Rewrite this in place, so it always describes the present. Scripts read the status lines, so keep their shape.
 
 ```markdown
 # <Module> plan
@@ -22,7 +22,8 @@ Blocked: none
 
 ## `<MODULE>-DONE.json`
 
-This file decides when a milestone is closed. It's JSON so agents edit fields rather than rewriting prose.
+This file decides when a milestone is done. It's JSON because agents are less likely to rewrite a whole JSON file
+than a page of prose, so each agent changes only its own fields.
 
 ```json
 {
@@ -59,26 +60,29 @@ This file decides when a milestone is closed. It's JSON so agents edit fields ra
 }
 ```
 
-- **`state`:** `open`, `in_progress`, `done` or `parked`.
-- **`status`:** `open`, `pass`, `fail` or `cant_tell`.
-- **`check`, `inspect`, `ask`:** how the item is proved, in any mix, with at least one. See [proofs](proofs.md). Any
-  `inspect` or `ask` means the evaluator closes the milestone. Give contract changes and a module's last milestone
-  an `ask` item, so they get a review.
-- **`target`:** a target from the profile, or `proxy:<what it stands in for>`.
-- **`bar`:** the profile's quality bar made specific to this milestone, in words.
+What the fields mean:
+- `state` is `open`, `in_progress`, `done` or `parked`.
+- `status` is `open`, `pass`, `fail` or `cant_tell`.
+- `check`, `inspect` and `ask` are how the item is proved. Use any mix, but at least one ([proofs](proofs.md)). If
+  any item has `inspect` or `ask`, a reviewer closes the milestone. Contract changes and a module's last milestone
+  should always get a review, so give them an `ask` item.
+- `target` is one of the profile's targets, or `proxy:<what it stands in for>` when you're using a stand-in.
+- `bar` is the profile's quality bar, made specific to this milestone, in words. It's what inspection is judged
+  against, so name real examples.
 
 ## Who writes what
 
-Each field has one writer, so agents never overwrite each other's work.
+Each field has exactly one writer, so agents never overwrite each other's work.
 
 | Who | Writes |
 |---|---|
-| Generator | Items' `status` and `evidence`; `state` (`in_progress`, or `done` when every item passes and none has `inspect` or `ask`) |
-| Evaluator | Items' `status`, adding a review link to `evidence`; `state: done` on a pass; `fails` + 1 on a fail |
+| Builder | Items' `status` and `evidence`. The milestone's `state`: `in_progress` when it starts, `done` when everything passes and no item has `inspect` or `ask`. |
+| Reviewer | Items' `status`, plus a link to the review in `evidence`. `state: done` on a pass, and 1 more `fails` on a fail. |
 | Lead | `state: parked` |
-| Planner | Everything else, including `replans` + 1 on a re-plan |
+| Planner | Everything else, including 1 more `replans` on each re-plan |
 
-A good item is something you'd refuse to call the milestone done without. Its proof would catch the plausible wrong
-substitute, and it depends only on this module's mechanisms. Inspection items should be granular: one observable
-quality each, so a fail points at something specific. A milestone can have many items, as long as it delivers one
-outcome.
+## What makes a good item
+
+A good item is something you'd refuse to call the milestone done without. Its proof would catch a convincing fake,
+and it only depends on this module. Keep inspection items small, one quality each, so that when one fails it points
+at something specific. A milestone can have lots of items, as long as it delivers one outcome.

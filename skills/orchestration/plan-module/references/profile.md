@@ -1,9 +1,11 @@
 # The project profile: `ORCHESTRATE.md`
 
-Every orchestrate skill reads this file first. It holds everything that differs between projects, so the skills
-themselves stay generic. Keep it to about a page, and link to longer project docs rather than copying them in.
-`agent_loop.py` parses the lines marked *(loop)*, so keep their `- **Label:** value` shape. Running
-`agent_loop.py profile` checks them.
+Every orchestrate skill reads this file first. It holds everything that's different about this project, which is
+what lets the skills themselves stay generic. Keep it to about a page, and link to longer docs rather than copying
+them in.
+
+`agent_loop.py` reads the lines marked *(loop)*, so keep them in the `- **Label:** value` shape. Run
+`agent_loop.py profile` to check they parse.
 
 ```markdown
 # Orchestrate profile: <project>
