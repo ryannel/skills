@@ -5,71 +5,81 @@ description: Writes and audits instructions that Claude Code or Codex agents act
 
 # Instructing agents
 
-**Outcome:** instructions a capable agent can act on without stopping to ask, and without being boxed in. It knows:
-- what finished looks like, and how to prove it;
-- what it may and may not touch;
-- where to look.
+Good instructions let a capable agent get on with the job without stopping to ask, and without boxing it in. The
+agent should know three things: what finished looks like and how to prove it, what it may and may not touch, and where
+to find what it needs. How to do the work is its call.
 
-It chooses the method.
-
-Current models are strong, and both vendors now warn that some older habits hurt them. Start minimal, and add a line
-only to correct a failure you have seen. Keep that correction narrow, put it where it applies, and say why it's there.
-[Models](references/models.md) says which vendor warns against which habit, and how each model differs.
+Today's models are strong, and both Anthropic and OpenAI now warn that some old prompting habits make them worse. So
+start with as little as you can. Add a line only when you've seen the agent get something wrong, keep that line
+narrow, put it where it applies, and say why it's there. [Models](references/models.md) says which vendor warns
+against which habit, and how the models differ.
 
 ## The core
 
-- **Outcome, done, constraints, pointers.** Say what must exist or be true at the end and the evidence that proves it.
-  Then say what must not change and where the material is. Prescribe steps only where order or completeness matters,
-  such as a fragile sequence or a migration; give heuristics where many approaches work.
-- **Define completion before work starts.** Done is evidence the agent can produce: an exit code, a test, a capture, a
-  measured figure, a reviewer's verdict. Include a stop rule for when the agent is blocked or out of budget. Hitting the
-  budget isn't completion.
-- **Give the reason with the rule.** Models generalise from the reason. "Avoid ellipses because a text-to-speech
-  engine reads this" beats "NEVER use ellipses".
-- **Write plainly.** Strong emphasis tends to make current models over-apply a rule or over-trigger. A rule that must
-  never bend belongs in a hook, permission rule or sandbox.
-- **State the scope and the ambition.** Filters such as "only report critical issues" are taken literally and suppress
-  findings, so ask for everything, ranked, and filter afterwards. Say how far to go and what's out of scope.
-- **Grant standing permission for safe work.** Name the reversible, local actions the agent may take without asking.
-  Reserve questions for decisions that are irreversible, destructive, outward-facing, spending money or changing
-  direction.
-- **Point to material by use.** Write "Use architecture.md for service boundaries", not "read these three files before
-  every edit".
-- **Keep state outside the context.** Long work needs a spec, a plan and a short status in files the agent re-reads.
-  They survive compaction, and they let you see progress.
-- **Ask for honest claims.** Keep verified, approximate, unverified and blocked separate, and never call a proxy the
-  real thing.
+Say what has to be true at the end, and what evidence proves it. Then say what mustn't change, and where the material
+is. Only spell out steps when the order really matters, like a fragile migration. Where many approaches would work,
+give a rule of thumb and let the agent choose.
 
-Whether to push an agent to persist depends on the model and harness, and the vendors disagree. See
+Decide what "done" means before the work starts. Done should be something the agent can show you: a passing test, an
+exit code, a screenshot, a measured number, or a reviewer's verdict. Also say what to do when it gets stuck or runs
+out of budget. Running out of budget isn't the same as finishing.
+
+Give the reason along with the rule. Models generalise from reasons. "Don't use ellipses, because a text-to-speech
+engine will read this aloud" works better than "NEVER use ellipses", because the model can work out the cases you
+didn't list.
+
+Write plainly. Capital letters and strong emphasis make current models over-apply a rule, or apply it where it doesn't
+belong. If a rule truly must never bend, don't rely on wording at all: put it in a hook, a permission rule or a
+sandbox.
+
+Say how far to go, and what's out of scope. Models take filters literally. Tell a reviewer "only report critical
+issues" and it will hide things you'd have wanted to know. Ask for everything, ranked, and do the filtering yourself.
+
+Tell the agent which safe, reversible, local actions it can take without asking. Save questions for things that are
+hard to undo, destructive, visible to other people, cost money, or change direction.
+
+Point to material by what it's for. "Use architecture.md for service boundaries" is better than "read these three
+files before every edit", because the agent reads it when it needs it, not every time.
+
+For long work, keep the state in files: a spec, a plan and a short status the agent re-reads. Files survive when the
+context gets compacted, and they let you see progress without asking.
+
+Ask for honest claims. The agent should keep what it verified apart from what it thinks is roughly right, what it
+hasn't checked, and what's blocked. A stand-in is never the real thing, and the agent should say which one it used.
+
+Whether to tell an agent to keep going depends on the model and the harness, and the vendors disagree. Read
 [models](references/models.md#persistence-by-model-and-harness) before adding any "keep going" or "carry on" line.
 
-## Routes
+## Where to look next
 
-- [Goals and briefs](references/goals-and-briefs.md): a goal or long prompt, an unattended run, a plan, a steer, a
-  brief for a subagent or session, or a reviewer brief.
-- [Examples](references/examples.md): one worked example of each, to copy the shape from.
-- [Skills and instruction files](references/skills-and-instruction-files.md): a skill's content and description, or
-  AGENTS.md and CLAUDE.md.
-- [Models](references/models.md): per-model behaviour, persistence, effort, and the harness stop causes to rule out.
-- [Sources](references/sources.md): where each claim comes from.
+- [Goals and briefs](references/goals-and-briefs.md) covers goals and long prompts, unattended runs, plans, steers,
+  and briefs for subagents, sessions and reviewers.
+- [Examples](references/examples.md) has one worked example of each, to copy the shape from.
+- [Skills and instruction files](references/skills-and-instruction-files.md) covers a skill's content and
+  description, and AGENTS.md and CLAUDE.md.
+- [Models](references/models.md) covers how each model behaves, persistence, effort, and the harness problems to rule
+  out first.
+- [Sources](references/sources.md) says where each claim comes from.
 
-## Auditing instructions when an agent misbehaves
+## When an agent misbehaves
 
-Rule out the harness first ([stop causes](references/models.md#harness-stop-causes)); then read the instructions
-before writing more. Look for:
-- recipes where an outcome would do;
-- missing or unverifiable done criteria;
-- emphasis, or ALWAYS/NEVER without a reason;
-- review gates or strong "ask first" lines that stop the agent early;
-- mandatory reading lists;
-- generic "keep going", "be thorough", "think carefully" or "double-check" lines;
-- filter words in review prompts;
-- contradictions between skills, AGENTS.md and the prompt;
-- corrections written for one model sitting in files that every model reads.
+Check the harness first, because a lot of "the agent stopped" turns out to be a timeout or a limit
+([stop causes](references/models.md#harness-stop-causes)). Then read the instructions it was given before you write
+any more. These are the usual culprits:
+- a recipe where an outcome would have done;
+- no definition of done, or one the agent can't check;
+- emphasis, or ALWAYS and NEVER with no reason given;
+- review gates or strong "ask first" lines that make it stop early;
+- lists of files it must read every time;
+- vague lines like "keep going", "be thorough", "think carefully" or "double-check";
+- filter words in a review prompt;
+- the skill, AGENTS.md and the prompt contradicting each other;
+- a fix written for one model, sitting in a file every model reads.
 
-Ask the agent to name the exact file and line that made it pause or diverge, and to separate what the text requires
-from its own interpretation. When a model changes, re-test the scaffolding. Each piece assumes something the model
-can't do alone, and that assumption may no longer hold.
+Ask the agent which exact file and line made it stop or go off course, and to separate what the text actually says
+from how it read it. When you switch models, re-test your scaffolding. Each piece exists because of something an
+older model couldn't do alone, and the new one might be able to.
 
-Steering a running agent is covered in [goals and briefs](references/goals-and-briefs.md#a-steer-to-a-running-agent).
-Every steer is a symptom: after it, fix whatever in the goal, plan, skill or method let it happen.
+Steering an agent that's already running is covered in
+[goals and briefs](references/goals-and-briefs.md#a-steer-to-a-running-agent). Every steer is a symptom. Once it's
+sent, go and fix whatever in the goal, plan, skill or method let the problem happen.
