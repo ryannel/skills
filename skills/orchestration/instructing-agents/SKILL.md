@@ -1,6 +1,6 @@
 ---
 name: instructing-agents
-description: Writes and audits instructions that Claude Code or Codex agents act on, such as a goal or /goal condition, a steer to a running thread, a brief for a subagent, session or reviewer, an agent-facing plan, or AGENTS.md and CLAUDE.md. Use when drafting or revising these for Claude (Opus 5.5) or OpenAI (GPT-6 Astra, GPT-6.1 Sol), or when diagnosing why an agent stopped early, over-reached, meandered or ignored an instruction. Not for building, packaging or evaluating a skill's mechanics (use skill-creator), or for ordinary documentation.
+description: Writes and audits instructions Claude Code or Codex agents act on, such as goals, steers, briefs for subagents, sessions or reviewers, and AGENTS.md or CLAUDE.md. Use when drafting these, or when an agent stopped early, over-reached, meandered or ignored an instruction. Not for writing or testing a skill (skill-creator).
 ---
 
 # Instructing agents
@@ -24,7 +24,8 @@ Decide what "done" means before the work starts. Done should be something the ag
 exit code, a screenshot, a measured number, or a reviewer's verdict. Also say what to do when it gets stuck or runs
 out of budget. Running out of budget isn't the same as finishing.
 
-Give the reason along with the rule. Models generalise from reasons. "Don't use ellipses, because a text-to-speech
+Give the reason along with the rule. Anthropic says models generalise from reasons, and OpenAI says to give the intent
+and the outcome rather than the steps. "Don't use ellipses, because a text-to-speech
 engine will read this aloud" works better than "NEVER use ellipses", because the model can work out the cases you
 didn't list.
 
@@ -32,8 +33,10 @@ Write plainly. Capital letters and strong emphasis make current models over-appl
 belong. If a rule truly must never bend, don't rely on wording at all: put it in a hook, a permission rule or a
 sandbox.
 
-Say how far to go, and what's out of scope. Models take filters literally. Tell a reviewer "only report critical
-issues" and it will hide things you'd have wanted to know. Ask for everything, ranked, and do the filtering yourself.
+Say how far to go, and what's out of scope. Models take filters literally. In the owner's experience, a reviewer told
+to "only report critical issues" hides things you'd have wanted to know, so ask for everything, ranked, and do the
+filtering yourself. A filter by kind is different: Claude Code's own reviewer prompt says to skip style, because a
+reviewer asked to find problems always finds something.
 
 Tell the agent which safe, reversible, local actions it can take without asking. Save questions for things that are
 hard to undo, destructive, visible to other people, cost money, or change direction.
@@ -55,8 +58,8 @@ Whether to tell an agent to keep going depends on the model and the harness, and
 - [Goals and briefs](references/goals-and-briefs.md) covers goals and long prompts, unattended runs, plans, steers,
   and briefs for subagents, sessions and reviewers.
 - [Examples](references/examples.md) has one worked example of each, to copy the shape from.
-- [Skills and instruction files](references/skills-and-instruction-files.md) covers a skill's content and
-  description, and AGENTS.md and CLAUDE.md.
+- [Skills and instruction files](references/skills-and-instruction-files.md) covers AGENTS.md and CLAUDE.md, and
+  the two points about skills that belong here. Writing a skill itself is `skill-creator`'s job.
 - [Models](references/models.md) covers how each model behaves, persistence, effort, and the harness problems to rule
   out first.
 - [Sources](references/sources.md) says where each claim comes from.
@@ -81,5 +84,6 @@ from how it read it. When you switch models, re-test your scaffolding. Each piec
 older model couldn't do alone, and the new one might be able to.
 
 Steering an agent that's already running is covered in
-[goals and briefs](references/goals-and-briefs.md#a-steer-to-a-running-agent). Every steer is a symptom. Once it's
-sent, go and fix whatever in the goal, plan, skill or method let the problem happen.
+[goals and briefs](references/goals-and-briefs.md#a-steer-to-a-running-agent). A steer that corrects a mistake is a
+symptom: once it's sent, fix whatever in the goal, plan, skill or method let the mistake happen. A steer that adds a
+new preference needs no fix.

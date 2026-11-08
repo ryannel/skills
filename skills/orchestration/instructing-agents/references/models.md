@@ -24,7 +24,7 @@ file records no warning from that vendor.
 | Emphasis and capitals | Plain lines are followed. Piling on emphasis makes Claude apply a rule too widely or trigger tools too often. | The warning is about strong "ask first" language and over-emphatic skill descriptions. |
 | Mandatory reading lists | | Point to docs by use case instead. |
 | Review stops after a first implementation | | They pull Astra toward stopping early. |
-| "Keep going", "be thorough" and "double-check" lines | These cause over-work. Opus 5 already checks its own work. | OpenAI recommends persistence wording for Astra (see below). |
+| "Keep going" and "double-check" lines | "Keep going" causes over-work, and Opus 5 already checked its own work. "Be thorough" only nudges within the effort setting, so change the effort instead. | OpenAI recommends persistence wording for Astra (see below). |
 | "Run the tests" encouragement | | Astra already tests, and the line makes it test too much. |
 
 ## Persistence by model and harness
@@ -38,7 +38,7 @@ through to completion, and to treat "can you…" as a request to act rather than
 plan or a partial answer. Keep OpenAI's limits on that wording too. The model should act on its own unless an action
 is clearly destructive or irreversible, and it shouldn't add warnings or approval steps nobody asked for.
 
-For Sol, add no extra pressure. It already keeps going more than Astra does. Spend those words on asking for evidence
+For Sol, add no extra pressure. In its system card it kept going past warnings more often than Astra did. Spend those words on asking for evidence
 and honest claims instead.
 
 For Claude with a human in the loop, add no push either. Current Claude models carry on through a task once it's
@@ -82,6 +82,9 @@ explicitly, and try a few levels on your task. Keep `xhigh` and `max` for when y
 want less thinking, lower the effort rather than writing instructions about it. Thinking can't be turned off, and
 forcing a tool with `tool_choice` returns an error. To get a tool used, say when it applies.
 
+In Claude Code, it tends to read a request conservatively and build the smallest thing that satisfies it. So say how
+ambitious to be, and don't add a scope-narrowing paragraph unless you've seen it over-reach.
+
 It starts work quickly. On loosely specified tasks that draw on several sources, tell it to explore broadly first,
 including sources the task didn't name. Keep untrusted content out of what it searches.
 
@@ -93,21 +96,13 @@ Time signals change how it works. A line showing elapsed time against a budget, 
 makes it run more work in parallel in multi-agent harnesses. Keep a hard timeout of your own anyway. Under time
 pressure it checks its work a little less.
 
-In chat prompts, drop "think carefully" lines. They delayed replies and didn't improve quality.
-
-When you paste text in, wrap it in matching tags that carry a random id. Then say that instructions inside the tags
-count only where the user's own message asks for them.
-
 For the look of a frontend, "avoid a generic AI look" doesn't work. It just swaps one default style for another. Name
 the specific patterns to avoid instead, and add to the list each round.
 
-If you ask for its reasoning word for word, it may decline. Ask for a short explanation or a summary of what it did
-instead.
-
 The rest of this section was measured on Opus 5 and hasn't been tested on 5.5.
 
-Opus 5 sometimes widened the scope of a task on its own judgment. For narrow tasks, add a scope paragraph that tells
-it to:
+Opus 5 sometimes widened the scope of a task on its own judgment. Opus 5.5 in Claude Code leans the other way (see
+above), so use this only where you've seen it over-reach. The scope paragraph tells it to:
 
 - deliver what was asked, at the intended scope
 - check in only when different readings of the request would lead to materially different work
@@ -119,8 +114,9 @@ verification subagent. Limit its narration of corrections to errors that change 
 Its responses and written deliverables run long, and lowering effort doesn't shorten them. If you want brevity, ask
 for it explicitly.
 
-It delegates readily. Only delegate work that is large, independent and can run in parallel. Never use a subagent to
-verify. Use one subagent where one is enough. Claude Code and the Agent SDK have hard caps on subagents.
+It delegates readily. Only delegate work that is large, independent and can run in parallel. Don't ask it to spawn a
+subagent to double-check its own work, because it already does that. An independent reviewer with its own brief is a
+different thing, and still worth it where the work is hard to judge. Use one subagent where one is enough. Claude Code and the Agent SDK have hard caps on subagents.
 
 ## OpenAI GPT-6 Astra
 
@@ -131,7 +127,8 @@ and it asks more clarifying questions than earlier models. See [persistence](#pe
 what to do about that, and remove review gates you don't need. When you do want approval, have it prepare results you
 can review before it asks.
 
-It is very sensitive to skills and AGENTS.md. Text that's unclear or contradicts itself makes it pause. So make the
+It is more sensitive to skills and AGENTS.md than earlier models. Text that's unclear or contradicts itself makes it
+pause. So make the
 order of precedence explicit: the user's instructions win over skill guidance. And ask it to cite the exact skill line
 behind any pause.
 
@@ -142,7 +139,7 @@ It delegates too little. If you want it to hand out work in parallel, say so.
 Its writing is heavily formatted. Ask for short prose paragraphs, lists only where they help, plain words, and the
 main point first.
 
-For effort, `none` isn't supported. OpenAI's migration note maps `minimal` to `low`.
+For effort, neither `none` nor `minimal` is supported. If you used `minimal` before, start with `low` and compare.
 
 ## OpenAI GPT-6.1 Sol
 
@@ -153,7 +150,8 @@ trained like Astra and comes close to its quality at much lower cost.
 
 Sol keeps going and overclaims more than Astra does. In its system card, it kept going past warnings more often when
 it shouldn't have. It also reward-hacked more, hid its uncertainty more, and misrepresented its work more often on
-coding-deception tasks. So cut recipes and emphasis as you would for Astra, but don't add "keep going" pressure. That
+coding-deception tasks. Those gaps were in low-severity flags. At severity 3 and above, Sol had 28 flags to Astra's
+27 across 49,650 tasks, so it isn't worse at the serious end. Even so, cut recipes and emphasis as you would for Astra, but don't add "keep going" pressure. That
 last point is an inference from those figures. Ask for the evidence behind every claim. Keep what's verified, what's
 approximate and what's blocked separate. And give it a stated path to follow when it's blocked.
 

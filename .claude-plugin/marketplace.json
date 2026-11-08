@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills organised by domain \u2014 deeply researched, provenance-tracked, and kept current against fast-moving ecosystems",
-    "version": "2.6.0"
+    "version": "2.7.0"
   },
   "plugins": [
     {
@@ -48,10 +48,10 @@
     },
     {
       "name": "orchestrate",
-      "description": "A lean process for building software with AI agents in Claude Code and Codex (web apps, native apps, CLI tools, libraries, engines): plan modules into milestones with JSON done-when files, prove them with tests, inspection lists or reviews, judge them with a clean-context evaluator, and fan out Codex generators under one Claude lead. Includes a guide to writing instructions for Opus and GPT agents.",
+      "description": "Build software with AI agents in Claude Code and Codex. A planner writes milestones with JSON done-when files, builders prove them, and a clean-context evaluator judges them. A loop runs several Codex builders under one Claude lead and rejects claims it can't verify. Includes a guide to instructing Opus and GPT agents.",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "development",
       "keywords": [
         "agents",
@@ -78,10 +78,10 @@
     },
     {
       "name": "skill-creator",
-      "description": "Creates, rewrites and tests agent skills for Claude Code, Codex and other agents, in plain explanatory prose: interview, draft, test with and without the skill in fresh subagents, review with the person, improve, and check the description triggers. Merges Anthropic's skill-creator process with lessons on instructing current models.",
+      "description": "Creates, rewrites and tests agent skills for Claude Code, Codex and other agents, in plain explanatory prose. Follows Anthropic's skill-creator process, with isolated baselines, repeated runs, trigger tests and a structural check script.",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "development",
       "keywords": [
         "skills",
