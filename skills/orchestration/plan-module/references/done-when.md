@@ -32,7 +32,6 @@ This file decides when a milestone is closed. It's JSON so agents edit fields ra
       "id": "M2",
       "name": "A new user signs up and lands on an empty dashboard",
       "state": "open",
-      "review": true,
       "fails": 0,
       "replans": 0,
       "bar": "As quick and calm as Linear's sign-up, with an empty state as clear as Things'",
@@ -40,7 +39,6 @@ This file decides when a milestone is closed. It's JSON so agents edit fields ra
         {
           "id": "M2.1",
           "statement": "A valid email reaches the dashboard in three screens or fewer; invalid input is rejected inline",
-          "proof": "oracle",
           "check": "npx playwright test e2e/signup.spec.ts",
           "target": "web-chrome",
           "status": "open",
@@ -49,8 +47,8 @@ This file decides when a milestone is closed. It's JSON so agents edit fields ra
         {
           "id": "M2.2",
           "statement": "Every step is readable and tappable at 375 px with no layout shift as fields validate",
-          "proof": "inspection",
-          "check": "screenshot sequence of each step and validation state",
+          "check": "npx playwright test e2e/signup-mobile.spec.ts",
+          "inspect": "screenshot sequence of each step and validation state at 375 px",
           "target": "web-mobile-safari",
           "status": "open",
           "evidence": ""
@@ -63,9 +61,9 @@ This file decides when a milestone is closed. It's JSON so agents edit fields ra
 
 - **`state`:** `open`, `in_progress`, `done` or `parked`.
 - **`status`:** `open`, `pass`, `fail` or `cant_tell`.
-- **`proof`:** `oracle`, `inspection` or `review`. See [proofs](proofs.md).
-- **`review`:** `true` when an evaluator must close the milestone. Use it for visual or interaction work, contract
-  changes and a module's last milestone. Otherwise the oracle checks close it.
+- **`check`, `inspect`, `ask`:** how the item is proved, in any mix, with at least one. See [proofs](proofs.md). Any
+  `inspect` or `ask` means the evaluator closes the milestone. Give contract changes and a module's last milestone
+  an `ask` item, so they get a review.
 - **`target`:** a target from the profile, or `proxy:<what it stands in for>`.
 - **`bar`:** the profile's quality bar made specific to this milestone, in words.
 
@@ -75,10 +73,12 @@ Each field has one writer, so agents never overwrite each other's work.
 
 | Who | Writes |
 |---|---|
-| Generator | Items' `status` and `evidence`; `state` (`in_progress`, or `done` when every item passes and `review` is `false`) |
+| Generator | Items' `status` and `evidence`; `state` (`in_progress`, or `done` when every item passes and none has `inspect` or `ask`) |
 | Evaluator | Items' `status`, adding a review link to `evidence`; `state: done` on a pass; `fails` + 1 on a fail |
 | Lead | `state: parked` |
 | Planner | Everything else, including `replans` + 1 on a re-plan |
 
-A good item is something you'd refuse to call the milestone done without. Its check would catch the plausible wrong
-substitute, and it depends only on this module's mechanisms.
+A good item is something you'd refuse to call the milestone done without. Its proof would catch the plausible wrong
+substitute, and it depends only on this module's mechanisms. Inspection items should be granular: one observable
+quality each, so a fail points at something specific. A milestone can have many items, as long as it delivers one
+outcome.

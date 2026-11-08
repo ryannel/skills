@@ -35,8 +35,9 @@ producers and consumers.
   practice. Earlier code in the repository is evidence, not a template.
 - **Check each mechanism can produce its behaviour across the range** before anyone builds on it. Leave
   implementation technique to the generator, because a wrong detail in a plan carries through the whole build.
-- **Milestones are small outcomes a user could observe on a named target,** riskiest first. A milestone with more
-  than about three items is usually two milestones.
+- **Milestones are small outcomes a user could observe on a named target,** riskiest first. A milestone that
+  delivers more than one outcome is two milestones. Its items can be many and granular, each proved by whatever mix
+  would catch the plausible wrong version.
 - **Use real cost targets only,** from the purpose doc or the owner. Otherwise record measurements and tripwires.
 - **For existing code,** choose the target first, then decide what to keep, adapt, replace or remove.
 
@@ -44,7 +45,7 @@ producers and consumers.
 
 - The design, plan and done-when file exist and agree with each other, with the contracts and with the module brief.
 - An independent reviewer has worked out what the module must do from the brief alone and compared that with your
-  design (`/review-milestone`, design review), and you've acted on its findings. Record it on the plan's `Reviews:`
+  design and done-when items (`/review-milestone`, design review), and you've acted on its findings. Record it on the plan's `Reviews:`
   line. If you're running as a subagent and can't launch one, say the review is still owed.
 - The plan's `Milestone:`, `Now:`, `Next:` and `Blocked:` lines are current.
 

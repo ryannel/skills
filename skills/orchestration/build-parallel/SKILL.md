@@ -58,7 +58,7 @@ The planner can't launch subagents, so when it says a design review is owed, run
 
 Each day, send one screen to the owner covering:
 - milestones closed, with their evidence;
-- the evaluator's verdicts;
+- the evaluator's verdicts, linked, so the owner can spot-check them (in a project's first weeks, flag every one);
 - new inspection items, so the owner can adjust the bar;
 - anything parked or blocked;
 - the quota forecast.

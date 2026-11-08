@@ -28,9 +28,9 @@ There are two speeds:
   [Cursor on scaling agents](https://cursor.com/blog/scaling-agents).
 - **Done-when files are JSON, and every field has one writer,** because models overwrite structured files less than
   prose.
-- **Ways to prove work** ([proofs](plan-module/references/proofs.md)): oracle commands, inspection lists judged on
-  captures against a quality bar in words, and reviews. Several kinds come packaged, and projects add their own.
-  Visuals are never judged against a target image.
+- **Ways to prove work** ([proofs](plan-module/references/proofs.md)): each item mixes commands (`check`), captures
+  judged against a quality bar in words (`inspect`), and questions answered by reading (`ask`). Several kinds come
+  packaged, and projects add their own. Visuals are never judged against a target image.
 - **The loop checks claims itself.** Work must be committed and integrated, and the loop reruns the oracle checks.
 - **Escalation goes by count:** 1–2 failed reviews, the same session; 3, a fresh session; 4, a re-plan; 4 more after a
   re-plan, park it.
@@ -45,5 +45,7 @@ Start minimal and add a feature only when its absence causes a failure someone h
 - parallel design approaches, and a confirmer for each finding;
 - report states beyond `DONE`, `BLOCKED` and `NEEDS_CONTEXT`.
 
-Visual evaluators are the least proven part. Watch their first verdicts, and add overturned ones to the project's
-graded examples.
+The evaluator is the least proven part. Anthropic found Claude, out of the box, a lenient QA agent that tests
+superficially. So `review-milestone` makes it drive the product itself, probe edge cases, and fail any defect it
+finds rather than argue it away, and the owner calibrates it by spot-checking early verdicts. An overturned verdict
+becomes a graded example.

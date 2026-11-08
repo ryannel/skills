@@ -15,12 +15,14 @@ an ordinary fix with no plan, the outcome is the fix and a test of it.
 
 1. **Every item for the milestone in `<MODULE>-DONE.json` is `pass`, with evidence.** You write items' `status` and
    `evidence`, and the milestone's `state`. Set it to `in_progress` when you start, and to `done` when everything
-   passes and `review` is `false`. If an item is wrong or can't be met, say so in your report rather than editing it.
+   passes and no item has `inspect` or `ask`. If an item is wrong or can't be met, say so in your report rather
+   than editing it.
    How each kind of item is proved is in [proofs](../plan-module/references/proofs.md).
 2. **The work is committed and integrated.** Rebase on the profile's branch, run its `Check` fresh, and push without
-   force. If you're under `/build-parallel`, the loop reruns every oracle check before it accepts the claim.
+   force. If you're under `/build-parallel`, the loop reruns every item's `check` before it accepts the claim.
 3. **The plan's status lines and log are current.** Keep verified, approximate and open claims separate.
-4. **The milestone is reviewed, if its `review` is `true`.** In a single chat, launch the `orchestrate-evaluator`
+4. **The milestone is reviewed, if any item has `inspect` or `ask`.** Before handing over, judge those items yourself
+   the way the evaluator will, by driving the product on its target. In a single chat, launch the `orchestrate-evaluator`
    agent and brief it with only the module, milestone, commit and worktree. Under `/build-parallel`, the lead launches
    it instead.
 5. **You end with one line:** `DONE`, `BLOCKED: <what you probed, evidence, what would unblock it>`, or
@@ -28,6 +30,7 @@ an ordinary fix with no plan, the outcome is the fix and a test of it.
 
 ## Method
 
+- **Start by checking the product still runs end to end** on its main target, so you don't build on a broken tip.
 - **Research how it's done before experimenting.** Shipped products and published work have solved most problems,
   and current practice beats older code that happens to be available.
 - **After about three failed attempts at a behaviour, stop tuning.** Check whether the mechanism can produce the

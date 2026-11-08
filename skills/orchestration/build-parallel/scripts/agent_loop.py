@@ -10,8 +10,8 @@ stop rules and the forecast are skipped. Subcommands:
   run   --module ONBOARDING --worktree PATH [--milestone M2] [--fresh] [--message TEXT] [--budget-hours 4]
         Starts (or resumes) a Codex session on the milestone and drives it one turn per `codex exec resume` until:
         CLAIMED   every item passes in the committed done-when file, the tree is clean, the work is on the base branch,
-                  and every oracle item's check exits 0 when the loop
-                  runs it. A failing check goes back to the generator instead.
+                  and every item's `check` exits 0 when the loop runs it. A failing check goes back to the generator instead.
+                  `review` is true when any item has `inspect` or `ask`, so the lead runs the evaluator.
         DONE / BLOCKED / NEEDS_CONTEXT   the agent's final report line
         BUDGET    no new passing item or commit for --budget-hours
         FLOOR     two failed turns in a row, or the goal is usage- or budget-limited (likely quota or outage)
@@ -155,10 +155,15 @@ def pick_milestone(done: dict, wanted: str | None) -> dict:
         raise SystemExit(f"error: milestone {wanted} not in done-when file")
     for state in ("in_progress", "open"):
         for m in milestones:
-            closed_by_oracle = not m.get("review") and passing(m) == len(m["items"])
+            closed_by_oracle = not needs_evaluator(m) and passing(m) == len(m["items"])
             if m.get("state") == state and not closed_by_oracle:
                 return m
     raise SystemExit("error: no open milestone")
+
+
+def needs_evaluator(milestone: dict) -> bool:
+    """An item with `inspect` or `ask` needs the evaluator's judgement; items with only `check` close on the oracle."""
+    return any(item.get("inspect") or item.get("ask") for item in milestone["items"])
 
 
 def passing(milestone: dict) -> int:
@@ -270,7 +275,7 @@ def oracle_failures(worktree: Path, milestone: dict, timeout_s: float = 3600) ->
     """Runs each oracle item's check in the worktree; returns the failing items with the tail of their output."""
     failed = []
     for item in milestone["items"]:
-        if item.get("proof") != "oracle" or not item.get("check"):
+        if not item.get("check"):
             continue
         try:
             run = subprocess.run(item["check"], shell=True, cwd=worktree, capture_output=True, text=True,
@@ -383,7 +388,7 @@ def cmd_run(a: argparse.Namespace) -> None:
             ok, detail = integration(worktree, prof)
             failures = oracle_failures(worktree, current) if ok else []
             if ok and not failures:
-                finish(state_path, state, "CLAIMED", review=bool(current.get("review")), integrated=detail)
+                finish(state_path, state, "CLAIMED", review=needs_evaluator(current), integrated=detail)
             # Not claimable yet: tell the generator why on its next turn rather than stopping.
             state["claim_blocked"] = "; ".join(failures) if failures else detail
             a.message = f"The loop can't accept the claim yet: {state['claim_blocked']}. Fix it, then end with DONE."

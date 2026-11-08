@@ -83,7 +83,7 @@ class Decisions(unittest.TestCase):
         d = done(milestone("M1", "open", ["pass"]), milestone("M2", "open", ["open"]))
         self.assertEqual(agent_loop.pick_milestone(d, None)["id"], "M2")
         reviewed = milestone("M1", "open", ["pass"])
-        reviewed["review"] = True
+        reviewed["items"][0]["inspect"] = "frame sequence of the wake"
         self.assertEqual(agent_loop.pick_milestone(done(reviewed), None)["id"], "M1")
 
 
@@ -165,7 +165,7 @@ class RunLoop(unittest.TestCase):
 
     def test_rerun_after_failed_review_resumes_with_message(self):
         reviewed = milestone("M1", "open", ["open"])
-        reviewed["review"] = True
+        reviewed["items"][0]["inspect"] = "frame sequence of the wake"
         self.write_done([reviewed])
         self.run_loop()
         d = json.loads((self.wt / "docs/modules/WATER-DONE.json").read_text())
@@ -202,7 +202,7 @@ class RunLoop(unittest.TestCase):
         self.assertIn("uncommitted", state["claim_blocked"])
 
     def test_failing_oracle_check_goes_back_to_generator(self):
-        item = {"id": "M1.1", "status": "open", "proof": "oracle", "check": "exit 3"}
+        item = {"id": "M1.1", "status": "open", "check": "exit 3"}
         self.write_done([{"id": "M1", "name": "M1", "state": "open", "fails": 0, "items": [item]}])
         self.commit_done()
         state = self.run_loop(budget_hours=0.0)
@@ -210,7 +210,7 @@ class RunLoop(unittest.TestCase):
         self.assertIn("M1.1 `exit 3` exited 3", state["claim_blocked"])
 
     def test_passing_oracle_check_claims(self):
-        item = {"id": "M1.1", "status": "open", "proof": "oracle", "check": "true"}
+        item = {"id": "M1.1", "status": "open", "check": "true"}
         self.write_done([{"id": "M1", "name": "M1", "state": "open", "fails": 0, "items": [item]}])
         self.commit_done()
         self.assertEqual(self.run_loop()["result"], "CLAIMED")
