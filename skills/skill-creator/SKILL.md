@@ -1,6 +1,7 @@
 ---
 name: skill-creator
-description: Creates, rewrites and tests agent skills (a SKILL.md with optional references, scripts and assets) for Claude Code, Codex and other agents, written in plain, explanatory prose. Use when someone wants to make a skill, turn a workflow into one, improve or trim an existing skill, fix one that triggers badly or gets ignored, write its description, or test it against realistic tasks. Not for one-off goals, briefs or AGENTS.md files (instructing-agents).
+description: Creates, rewrites and tests agent skills for Claude Code, Codex and other agents, in plain explanatory prose. Use when someone wants to make a skill, turn a workflow into one, improve, trim or fix one that triggers badly, or test one on realistic tasks. Not for one-off goals, briefs or AGENTS.md files (instructing-agents).
+license: Apache-2.0. Adapted from Anthropic's skill-creator; see LICENSE.txt.
 ---
 
 # Skill creator
@@ -25,13 +26,11 @@ yourself. Look at how others have solved the same problem, and check whether a s
 
 ## 2. Write the draft
 
-Read [writing](references/writing.md) before you write a word. It covers the folder layout, the description, how
-much to put in the body and what to move into references, and the voice.
+Read [writing](references/writing.md) before you start. It covers the folder, the description, what goes in the body
+and what moves to references, the voice, and the host facts that change.
 
-The short version is this. Write plain, explanatory prose, the way Randall Munroe explains things in "What If?". Use
-short sentences and concrete examples, and give the reason with every rule. Start with as little as you can, because
-today's models are capable and extra instructions often make them worse. Add a line only for a mistake you've seen
-the agent make, or one the person has told you about.
+Draft the skill somewhere agents don't scan for skills, like a scratch folder, until testing is done. Otherwise the
+draft leaks into runs that are supposed to go without it.
 
 When the draft exists, read it again as if you were the agent seeing it for the first time. Cut anything that agent
 already knows, and anything it would do anyway.
@@ -39,20 +38,24 @@ already knows, and anything it would do anyway.
 ## 3. Test it on real tasks
 
 Write two or three prompts a real user would actually type, with the messy details real requests have. Show them to
-the person and ask if they're right. Then run each one twice, in fresh subagents: once with the skill, and once
-without it (or with the old version, if you're improving a skill). Fresh contexts matter, because anything left over
-from this conversation hides gaps in the skill.
+the person and ask if they're right. Then run each one with the skill and without it (or against the old version, if
+you're improving a skill), in fresh subagents. Fresh contexts matter, because anything left over from this
+conversation hides gaps in the skill.
+
+The run without the skill has to really be without it. A subagent can load any installed skill on its own, so turn
+the skill off for that run and check its transcript afterwards. One run of each is a smoke test. When you're
+comparing two versions, run each two or three times, because results vary.
 
 While the runs work, write down what a good result must contain, as statements someone could check. Some skills make
 things you can check, like a file, a number or a format. Others make things only a person can judge, like writing,
 design or advice. Don't force checkable statements onto the second kind. Just show the person the results.
 
-[Testing](references/testing.md) has the folder format for test cases, how to grade runs, and how to test whether the
-description triggers.
+[Testing](references/testing.md) covers the test-case format, isolation, grading, the results record, and how to
+test whether the description triggers.
 
 ## 4. Review with the person, then improve
 
-Show the person each prompt with both outputs side by side, plus anything you graded. Ask what they think before you
+Show the person each prompt with the outputs side by side, plus anything you graded. Ask what they think before you
 start fixing things, because their eye is the real test.
 
 When you revise, fix the cause, not the test case. The skill will run on thousands of prompts you'll never see, so a
@@ -64,16 +67,17 @@ Then run the tests again, and repeat until the person is happy or the changes st
 
 ## 5. Check the description and package it
 
-The description decides whether the skill ever gets used, so test it on its own. Write about twenty realistic
-prompts, with roughly half that should fire the skill and half near misses that shouldn't. Check the description
-against them, as [testing](references/testing.md#does-the-description-trigger) explains, and tighten it until the
-misses are rare.
+The description decides whether the skill ever gets used, so test it on its own, in real sessions where the skill is
+installed. [Testing](references/testing.md#does-the-description-trigger) explains how.
 
-Finally, check the folder. Is the frontmatter valid, does every link resolve, and does any script run? Then install
-it where the person's agents will find it, as [writing](references/writing.md#where-skills-live) describes.
+Then run `python3 scripts/check_skill.py <skill-folder>` from this skill's folder. It checks the frontmatter, the
+name and description limits, every relative link, and contents lists on long references. These are the mistakes that
+make a skill fail silently: a skill whose frontmatter doesn't parse still loads, but with no description, so it never
+fires. Install it where the person's agents will find it, as [writing](references/writing.md#where-skills-live)
+describes.
 
 ## What you may do without asking
 
 You can research, read the person's files, write drafts, run tests in subagents, and edit the skill's own folder.
-Ask before installing it somewhere shared, publishing it, or running anything that costs money. For example, some
-test tools bill every run through the API, and it's worth checking that first.
+Ask before installing it somewhere shared, publishing it, or starting headless model runs such as `claude -p` or
+`claude plugin eval`. Those use the person's quota or credits.
