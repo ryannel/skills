@@ -35,8 +35,9 @@ an ordinary fix with no plan, the outcome is the fix and a test of it.
   and current practice beats older code that happens to be available.
 - **After about three failed attempts at a behaviour, stop tuning.** Check whether the mechanism can produce the
   behaviour at all, using a minimal reproduction. If it can't, report `BLOCKED` with the evidence.
-- **Look at the output yourself.** Capture it from the exact build on its target, including the edge conditions the
-  profile lists for that target, and judge it against the inspection items. Tests don't replace looking.
+- **Look at the output yourself.** For each `inspect` item, list the parts and the angles, distances, conditions and
+  moments to see them from ([how to inspect](../plan-module/references/proofs.md#how-to-inspect)). Capture each from
+  the exact build on its target and judge it. Tests don't replace looking.
 - **Label stand-ins `proxy`.** Wrap runs that use a resource listed under the profile's `Exclusive resources` in
   `agent_loop.py lock <name> -- <command>` (in build-parallel's `scripts/`).
 - **Contract or design changes go in the plan log as a proposal.** Carry on with work that doesn't depend on them.
