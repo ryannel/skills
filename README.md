@@ -56,6 +56,7 @@ the owner), and the skills stay generic.
 | [`review-milestone`](./skills/orchestration/review-milestone/) | A clean-context verdict on a milestone or design, with packaged ways to prove work (tests, inspection lists, reviews) |
 | [`build-parallel`](./skills/orchestration/build-parallel/) | One Claude lead runs several Codex generators via `agent_loop.py`: pinned model and effort, escalation by count, quota forecast |
 | [`instructing-agents`](./skills/orchestration/instructing-agents/) | Writing goals, briefs, steers, skills and AGENTS.md that Opus and GPT agents act on without being boxed in |
+| [`skill-creator`](./skills/orchestration/skill-creator/) | Creates, rewrites and tests skills in plain, explanatory prose, merging Anthropic's skill-creator process with the lessons in `instructing-agents`. Install it alone with `npx skills add ryannel/skills --skill skill-creator -g` |
 
 ```bash
 npx skills add ryannel/skills --skill plan-module --skill build-milestone --skill review-milestone \

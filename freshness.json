@@ -2232,6 +2232,24 @@
           "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
         }
       ]
+    },
+    "skill-creator": {
+      "path": "skills/orchestration/skill-creator",
+      "tier": "active",
+      "cadence_days": 14,
+      "last_checked": "2026-11-08",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "Registered 2026-11-08. Describes harness behaviour (skill listing limits, frontmatter fields, install locations, claude plugin eval's case format) that moves with Claude Code and Codex releases.",
+      "watchlist": [
+        {
+          "id": "skill-creator-harness",
+          "type": "tool-behaviour",
+          "claim": "Skill locations, description limits, frontmatter fields and the claude plugin eval case layout (schema_version 1.1) are as described.",
+          "where": "skills/orchestration/skill-creator",
+          "check": "Compare with the current Claude Code skills and plugin eval docs, Codex skills docs and Anthropic's skill-creator; update writing.md and testing.md together."
+        }
+      ]
     }
   },
   "repo_findings": [

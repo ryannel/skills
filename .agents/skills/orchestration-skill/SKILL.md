@@ -23,7 +23,7 @@ metadata:
   through the API.
 - **Agent files** for Claude live in `build-parallel/agents/claude/` and are listed in the marketplace entry; Codex twins
   live in `build-parallel/agents/codex/` and install with `install_agents.sh`.
-- **Plain prose.** Write like Randall Munroe explains things: short sentences, concrete examples, the obvious said
+- **Plain prose,** as `skill-creator` describes. Write like Randall Munroe explains things: short sentences, concrete examples, the obvious said
   out loud, and the reason before or with the rule. Leave out the jokes. Use lists for real checklists, not as a
   substitute for sentences, and avoid bold-led bullets, chains of semicolons, and clauses packed together to save
   words.

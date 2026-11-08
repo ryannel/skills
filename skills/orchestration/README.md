@@ -11,6 +11,7 @@ the skills read it, so they don't need to know anything project-specific.
 | [`review-milestone`](review-milestone/) | Opus 5.5, medium | Judges a milestone or a design with fresh eyes |
 | [`build-parallel`](build-parallel/) | Opus 5.5 lead, medium | Runs several Codex builders at once, with reviewers and a planner on call |
 | [`instructing-agents`](instructing-agents/) | | Writes goals, briefs, steers and skills that agents act on |
+| [`skill-creator`](skill-creator/) | | Creates, rewrites and tests skills in this suite's plain voice. Based on [Anthropic's skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator) (Apache 2.0) |
 
 You can work at two speeds. In one chat, you run `/plan-module`, then `/build-milestone`, in Claude Code or Codex.
 You can even switch between them partway, because everything the next agent needs is in the files. Or you can fan

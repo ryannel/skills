@@ -4,8 +4,8 @@ Contents:
 - [Skills](#skills)
 - [AGENTS.md and CLAUDE.md](#agentsmd-and-claudemd)
 
-How to build, package and evaluate a skill belongs to skill-creator. That's either Anthropic's, or the `$skill-creator`
-that comes bundled with Codex. This page is about what to write in a skill.
+How to build, package and test a skill belongs to `skill-creator`, which sits alongside this skill. This page is about
+what to write in a skill.
 
 ## Skills
 

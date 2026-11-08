@@ -2,7 +2,7 @@
 *.log
 *.tmp
 
-# Python bytecode from the vendored skill-creator
+# Python bytecode
 __pycache__/
 *.pyc
 

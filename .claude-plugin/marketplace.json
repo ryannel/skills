@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills organised by domain \u2014 deeply researched, provenance-tracked, and kept current against fast-moving ecosystems",
-    "version": "2.5.0"
+    "version": "2.6.0"
   },
   "plugins": [
     {
@@ -74,6 +74,25 @@
       "agents": [
         "./skills/orchestration/build-parallel/agents/claude/orchestrate-evaluator.md",
         "./skills/orchestration/build-parallel/agents/claude/orchestrate-planner.md"
+      ]
+    },
+    {
+      "name": "skill-creator",
+      "description": "Creates, rewrites and tests agent skills for Claude Code, Codex and other agents, in plain explanatory prose: interview, draft, test with and without the skill in fresh subagents, review with the person, improve, and check the description triggers. Merges Anthropic's skill-creator process with lessons on instructing current models.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "development",
+      "keywords": [
+        "skills",
+        "skill-creator",
+        "authoring",
+        "evals",
+        "prompting",
+        "agents"
+      ],
+      "skills": [
+        "./skills/orchestration/skill-creator"
       ]
     }
   ]
