@@ -92,7 +92,7 @@
         "agents"
       ],
       "skills": [
-        "./skills/orchestration/skill-creator"
+        "./skills/skill-creator"
       ]
     }
   ]

@@ -21,6 +21,9 @@ npx skills add ryannel/skills --skill <skill-name>
 | [`generative-media/`](generative-media/) | Image and video models, and the craft spanning them — model setup, prompting, LoRA training, production pipelines, GPU deployment |
 | [`orchestration/`](orchestration/) | Building software with AI agents: planning, building and reviewing milestones in Claude Code and Codex, fan-out under one lead, and writing instructions agents act on |
 
+Standalone skills that belong to no domain sit directly under `skills/`, such as
+[`skill-creator/`](skill-creator/), which creates and tests skills of any kind.
+
 ## Adding a new domain
 
 1. Create `skills/<domain>/` and put the skill folders inside it.

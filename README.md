@@ -56,7 +56,6 @@ the owner), and the skills stay generic.
 | [`review-milestone`](./skills/orchestration/review-milestone/) | A clean-context verdict on a milestone or design, with packaged ways to prove work (tests, inspection lists, reviews) |
 | [`build-parallel`](./skills/orchestration/build-parallel/) | One Claude lead runs several Codex generators via `agent_loop.py`: pinned model and effort, escalation by count, quota forecast |
 | [`instructing-agents`](./skills/orchestration/instructing-agents/) | Writing goals, briefs, steers, skills and AGENTS.md that Opus and GPT agents act on without being boxed in |
-| [`skill-creator`](./skills/orchestration/skill-creator/) | Creates, rewrites and tests skills in plain, explanatory prose, merging Anthropic's skill-creator process with the lessons in `instructing-agents`. Install it alone with `npx skills add ryannel/skills --skill skill-creator -g` |
 
 ```bash
 npx skills add ryannel/skills --skill plan-module --skill build-milestone --skill review-milestone \
@@ -64,6 +63,16 @@ npx skills add ryannel/skills --skill plan-module --skill build-milestone --skil
 ```
 
 Then run `/plan-module` in a project: it writes `ORCHESTRATE.md` first. [Why it looks like this](./skills/orchestration/README.md).
+
+## Skill creator
+
+[`skill-creator`](./skills/skill-creator/) is a standalone skill for creating, rewriting and testing skills. It
+follows Anthropic's skill-creator process (interview, draft, test with and without the skill, review, improve, check
+the description triggers), and writes in plain, explanatory prose. It bundles no scripts that bill the API.
+
+```bash
+npx skills add ryannel/skills --skill skill-creator -g
+```
 
 ## Install
 

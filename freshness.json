@@ -2234,7 +2234,7 @@
       ]
     },
     "skill-creator": {
-      "path": "skills/orchestration/skill-creator",
+      "path": "skills/skill-creator",
       "tier": "active",
       "cadence_days": 14,
       "last_checked": "2026-11-08",
@@ -2246,7 +2246,7 @@
           "id": "skill-creator-harness",
           "type": "tool-behaviour",
           "claim": "Skill locations, description limits, frontmatter fields and the claude plugin eval case layout (schema_version 1.1) are as described.",
-          "where": "skills/orchestration/skill-creator",
+          "where": "skills/skill-creator",
           "check": "Compare with the current Claude Code skills and plugin eval docs, Codex skills docs and Anthropic's skill-creator; update writing.md and testing.md together."
         }
       ]
