@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills organised by domain \u2014 deeply researched, provenance-tracked, and kept current against fast-moving ecosystems",
-    "version": "2.8.0"
+    "version": "2.9.0"
   },
   "plugins": [
     {
@@ -48,10 +48,10 @@
     },
     {
       "name": "orchestrate",
-      "description": "Build software with AI agents in Claude Code, Codex or another host. A planner writes milestones with JSON done-when files and dependencies between modules, builders prove them, and fresh reviewers judge them. /build keeps a chosen number of builders busy on ready milestones and rejects claims it can't verify. Includes a guide to instructing Opus and GPT agents.",
+      "description": "Build software with AI agents in Claude Code, Codex or another host. A planner writes milestones with JSON done-when files and dependencies between modules, builders prove them, and fresh reviewers judge them. /build keeps a chosen number of builders busy on ready milestones and rejects claims it can't verify.",
       "source": "./",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.3.0",
       "category": "development",
       "keywords": [
         "agents",
@@ -68,8 +68,7 @@
         "./skills/orchestration/plan-module",
         "./skills/orchestration/build-milestone",
         "./skills/orchestration/review-milestone",
-        "./skills/orchestration/build",
-        "./skills/orchestration/instructing-agents"
+        "./skills/orchestration/build"
       ],
       "agents": [
         "./skills/orchestration/build/agents/claude/orchestrate-evaluator.md",
@@ -93,6 +92,27 @@
       ],
       "skills": [
         "./skills/skill-creator"
+      ]
+    },
+    {
+      "name": "instructing-agents",
+      "description": "Writes and checks the text one agent hands another: Agent or Task prompts, codex exec and claude -p prompts, goals, steers, review requests and AGENTS.md or CLAUDE.md, for Claude Code and Codex. Carries what the agent can't find out itself (purpose, done, boundaries, where things are) and leaves out the method and what to look at.",
+      "source": "./",
+      "strict": false,
+      "version": "2.0.0",
+      "category": "development",
+      "keywords": [
+        "agents",
+        "prompting",
+        "subagents",
+        "codex",
+        "claude-code",
+        "goals",
+        "code-review",
+        "agents-md"
+      ],
+      "skills": [
+        "./skills/instructing-agents"
       ]
     }
   ]

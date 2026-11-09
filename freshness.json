@@ -2216,10 +2216,10 @@
       ]
     },
     "instructing-agents": {
-      "path": "skills/orchestration/instructing-agents",
+      "path": "skills/instructing-agents",
       "tier": "active",
       "cadence_days": 7,
-      "last_checked": "2026-11-08",
+      "last_checked": "2026-11-09",
       "last_drift_found": null,
       "quiet_streak": 0,
       "why_tier": "Registered 2026-11-08. Names current models (Opus 5.5, gpt-6.1-sol) and Codex CLI flags and local files, which move with each release.",
@@ -2227,9 +2227,9 @@
         {
           "id": "instructing-agents-models",
           "type": "model-names",
-          "claim": "Default models are claude-opus-5-5 and gpt-6.1-sol; Codex flags and rollout fields as used by agent_loop.py.",
-          "where": "skills/orchestration/instructing-agents",
-          "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
+          "claim": "Model behaviour and host facts for claude-opus-5-5 and gpt-6.1-sol: effort defaults, what a Codex or Claude Code subagent inherits, what the Codex system prompt and /goal templates already say, and why runs stop.",
+          "where": "skills/instructing-agents",
+          "check": "Re-read the Codex models.json system prompts and goal templates, the Opus 5.5 prompting guide and the Claude Code subagent docs. Update references/hosts-and-models.md and sources.md; the Codex templates can change on the server with no model release."
         }
       ]
     },

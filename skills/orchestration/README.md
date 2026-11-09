@@ -10,9 +10,8 @@ the skills read it, so they don't need to know anything project-specific.
 | [`build-milestone`](build-milestone/) | Codex `gpt-6.1-sol` or Opus 5.5, medium | Builds the next milestone, proves it, and integrates it |
 | [`review-milestone`](review-milestone/) | Opus 5.5, medium | Judges a claimed milestone or a design with fresh eyes |
 | [`build`](build/) | Opus 5.5 lead, medium (any host can lead) | Builds the planned project unattended: keeps N builders busy on ready milestones, on Codex, Claude Code or another host, with fresh reviewers and a planner |
-| [`instructing-agents`](instructing-agents/) | | Writes goals, briefs, steers and AGENTS.md files that agents act on |
 
-The first four link to each other's files, so install them together: the `orchestrate` plugin, or all four with
+They link to each other's files, so install them together: the `orchestrate` plugin, or all four with
 `npx skills add`. The Claude agents come with the plugin. The Codex evaluator needs
 `build/scripts/install_agents.sh --global` (add `--codex-only` if the plugin already installed the Claude
 agents).

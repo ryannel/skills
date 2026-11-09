@@ -55,14 +55,25 @@ the owner), and the skills stay generic.
 | [`build-milestone`](./skills/orchestration/build-milestone/) | Build, verify and integrate the next milestone, in Claude Code or Codex |
 | [`review-milestone`](./skills/orchestration/review-milestone/) | A clean-context verdict on a milestone or design, with packaged ways to prove work (tests, inspection lists, reviews) |
 | [`build`](./skills/orchestration/build/) | Builds the planned project unattended with N builders on Codex, Claude Code or another host, via `agent_loop.py`, which accepts a claim only after running the checks itself |
-| [`instructing-agents`](./skills/orchestration/instructing-agents/) | Writing goals, briefs, steers and AGENTS.md that Opus and GPT agents act on without being boxed in |
 
 ```bash
 npx skills add ryannel/skills --skill plan-module --skill build-milestone --skill review-milestone \
-  --skill build --skill instructing-agents
+  --skill build
 ```
 
 Then run `/plan-module` in a project: it writes `ORCHESTRATE.md` first. [Why it looks like this](./skills/orchestration/README.md).
+
+## Instructing agents
+
+[`instructing-agents`](./skills/instructing-agents/) is a standalone skill for the text one agent hands another:
+an Agent or Task prompt, a `codex exec` or `claude -p` prompt, a goal, a steer, a review request, or AGENTS.md and
+CLAUDE.md. It works in Claude Code, Codex and any other host, and pairs well with the orchestration skills. It carries
+what the receiving agent can't find out for itself (purpose, done, boundaries, where things are) and leaves out the
+method and the list of things to look at.
+
+```bash
+npx skills add ryannel/skills --skill instructing-agents -g
+```
 
 ## Skill creator
 
