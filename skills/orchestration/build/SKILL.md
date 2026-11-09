@@ -85,7 +85,8 @@ done-when file, have the planner plan it now, so the queue doesn't run dry.
 ## Running
 
 Start a builder with `LOOP run --module <M> --worktree <path> --host <host>` as a background command. When it stops,
-it prints one line of JSON saying why.
+it prints one line of JSON saying why. A `warnings` field there names a loader gap for that host, such as an
+`AGENTS.md` the Claude CLI won't read, with its fix; tell the owner in your next report rather than stopping.
 
 Reviewers and planners also run through the loop, each in a fresh session, because only the loop can check their
 work and record it:

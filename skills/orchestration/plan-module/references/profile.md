@@ -46,8 +46,8 @@ where secrets come from, and how parallel worktrees avoid sharing a port or data
 ## Rules
 - **Exclusive resources:** <things one run at a time may use, e.g. "simulator", "gpu: timing runs"; or none>
 - **Large captures:** <where frame sequences and other bulky evidence go if not committed, and how a reviewer gets them>
-- **Owner decides:** <e.g. changing the goal; spending; publishing or deploying; irreversible actions>
-- **Licences and paths not to touch:** <e.g. no GPL code; never modify ../other-repo>
+- **Owner decides:** <e.g. changing the goal; spending; publishing or deploying; irreversible actions>  *(loop: restated on resumed turns)*
+- **Licences and paths not to touch:** <e.g. no GPL code; never modify ../other-repo>  *(loop: restated on resumed turns)*
 
 ## Project guidance
 - <domain rules each level reads, e.g. "Building: .agents/skills/<project>-engineering">

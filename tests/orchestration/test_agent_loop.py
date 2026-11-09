@@ -363,6 +363,9 @@ from pathlib import Path
 if "--help" in sys.argv:
     print("usage: codex exec [--json]")
     sys.exit(0)
+if "--version" in sys.argv:
+    print(os.environ.get("FAKE_VERSION", "fake-cli 9.9.9"))
+    sys.exit(0)
 role = os.environ.get("ORCHESTRATE_ROLE", "build")
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "role": role,
@@ -451,7 +454,7 @@ else:
     print(json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": reply}}))
 """
 
-FAKE_ENV = ("FAKE_STATE", "FAKE_WEAKEN", "FAKE_FORGE", "FAKE_UPSTREAM_BREAK", "FAKE_REVIEW", "FAKE_PLAN",
+FAKE_ENV = ("FAKE_VERSION", "FAKE_STATE", "FAKE_WEAKEN", "FAKE_FORGE", "FAKE_UPSTREAM_BREAK", "FAKE_REVIEW", "FAKE_PLAN",
             "FAKE_EXIT", "FAKE_SKIP_ATTENDED", "ORCHESTRATE_ROLE", "ORCHESTRATE_HEADLESS")
 
 
@@ -478,7 +481,9 @@ class Repo(unittest.TestCase):
         fake.write_text(FAKE_HOST)
         fake.chmod(0o755)
         self.log = root / "log"
-        self.saved = (agent_loop.CODEX, agent_loop.CODEX_HOME, agent_loop.CLAUDE, agent_loop.CLAUDE_APP_STORE)
+        self.saved = (agent_loop.CODEX, agent_loop.CODEX_HOME, agent_loop.CLAUDE, agent_loop.CLAUDE_APP_STORE,
+                      agent_loop.CLAUDE_HOME, agent_loop.AGENTS_HOME)
+        agent_loop.CLAUDE_HOME, agent_loop.AGENTS_HOME = root / "claude-home", root / "agents-home"
         agent_loop.CODEX, agent_loop.CODEX_HOME = str(fake), self.home
         # No app on this machine counts: the Codex IPC socket lives under the fake CODEX_HOME, and Claude desktop's
         # session store is pointed at a folder that doesn't exist. Visible-session tests fake the apps explicitly.
@@ -489,7 +494,8 @@ class Repo(unittest.TestCase):
 
     def tearDown(self):
         release()
-        agent_loop.CODEX, agent_loop.CODEX_HOME, agent_loop.CLAUDE, agent_loop.CLAUDE_APP_STORE = self.saved
+        (agent_loop.CODEX, agent_loop.CODEX_HOME, agent_loop.CLAUDE, agent_loop.CLAUDE_APP_STORE,
+         agent_loop.CLAUDE_HOME, agent_loop.AGENTS_HOME) = self.saved
         for key in FAKE_ENV:
             os.environ.pop(key, None)
         self.tmp.cleanup()
@@ -794,7 +800,7 @@ class Reviewing(Repo):
         last = self.calls()[-1]
         self.assertEqual(last["argv"][last["argv"].index("resume") + 1], "t1")
         self.assertIn("--add-dir", last["argv"][:last["argv"].index("resume")])
-        self.assertEqual(last["argv"][-1], "FINDINGS")
+        self.assertTrue(last["argv"][-1].startswith("FINDINGS\n\nStill binding: change only M1's state"))
 
     def test_the_loop_parks_a_milestone_when_the_ladder_runs_out(self):
         self.write_done([dict(milestone("M1", "open", ["open"], inspect="frames"), fails=3, replans=1),
@@ -1081,7 +1087,8 @@ class FakeCodexApp:
             codex_thread_create=self.create, codex_owner=self.owner, codex_queue=self.queue, open_link=self.link,
             codex_interrupt=self.interrupt, codex_queued=lambda t: int(t in self.queued),
             codex_goal_activate=lambda t: self.activated.append(t) or True,
-            SETTLE_S=0.0, POLL_S=0.01, START_S=0.2, CLAUDE_IMPORT_WAIT_S=0.0).items()]
+            SETTLE_S=0.0, POLL_S=0.01, START_S=0.2, CLAUDE_IMPORT_WAIT_S=0.0,
+            CODEX_APP_CLI=agent_loop.CODEX).items()]
         for p in patches:
             p.start()
         try:
@@ -1113,8 +1120,9 @@ class VisibleCodex(Repo):
             self.assertEqual(self.run_loop()["result"], "NEEDS_CONTEXT")
             self.run_loop(message="Use the simulator.")
         self.assertEqual(len(app.threads), 1)
-        self.assertTrue(app.sent[0].startswith("Model gpt-6.1-sol, effort medium."))
-        self.assertEqual(app.sent[-1], "Use the simulator.")
+        self.assertTrue(app.sent[0].startswith(agent_loop.GOAL_LINE + "Objective: milestone M1"))
+        self.assertTrue(app.sent[0].endswith("(Launched on gpt-6.1-sol at medium effort.)"))
+        self.assertTrue(app.sent[-1].startswith("Use the simulator.\n\nStill binding:"))
 
     def test_decision_8_a_turn_on_another_effort_in_the_app_is_PIN(self):
         with FakeCodexApp(self, effort_seen="xhigh").installed():
@@ -1262,6 +1270,235 @@ class VisibleChoice(unittest.TestCase):
             with open(f, "a") as h:
                 h.write(': 3}\n')
             self.assertEqual(agent_loop.new_events(f, offset)[0], [{"c": 3}])
+
+
+BOUNDS_PROFILE = PROFILE + ("- **Licences and paths not to touch:** no GPL code; never modify ../other-repo\n"
+                            "- **Owner decides:** spending and publishing\n")
+ECHO_HOST = """#!/usr/bin/env python3
+import json, os, sys
+with open(os.environ["FAKE_LOG"], "a") as log:
+    log.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "role": "build"}) + "\\n")
+print("NEEDS_CONTEXT: which device?")
+"""
+
+
+class Fold(Repo):
+    """Fold-learnings part B (workbench/fold-learnings-2026-11-09/PLAN.md items 5-8)."""
+
+    def use_claude(self):
+        fake = self.root / "claude"
+        fake.write_text(FAKE_HOST)
+        fake.chmod(0o755)
+        agent_loop.CLAUDE = str(fake)
+
+    def prompt(self, call):
+        argv = call["argv"]
+        return argv[argv.index("-p") + 1] if "-p" in argv else argv[-1]
+
+    def bounds(self):
+        (self.wt / "ORCHESTRATE.md").write_text(BOUNDS_PROFILE)
+        self.commit_all()
+
+    # Item 5: constraints that survive a resumed turn.
+
+    def test_item5_a_resumed_claude_turn_restates_the_binding_constraints(self):
+        self.use_claude()
+        self.bounds()
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: which device?")
+        self.run_loop(host="claude")
+        result = self.run_loop(host="claude", message="Use the simulator.")
+        first, resumed = (self.prompt(c) for c in self.calls())
+        self.assertNotIn("Still binding", first)
+        message, _, restated = resumed.partition("\n\n")
+        self.assertEqual(message, "Use the simulator.")
+        for part in ("change only M1's state and its items' status and evidence in docs/modules/WATER-DONE.json",
+                     f"`python3 {agent_loop.LOOP} land --worktree .` (push:", "Check: none.",
+                     "Licences and paths not to touch: no GPL code; never modify ../other-repo.",
+                     "Owner decides: spending and publishing."):
+            self.assertIn(part, restated)
+        self.assertLessEqual(len(restated.split()), 75, "the restatement stays terse")
+        self.assertNotIn("constraints_missing", result)
+
+    def test_item5_a_turn_resumed_inside_a_run_restates_too(self):
+        self.use_claude()
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="DONE")
+        self.assertEqual(self.run_loop(host="claude")["result"], "UNCLAIMED")
+        later = [self.prompt(c) for c in self.calls()[1:]]
+        self.assertEqual(len(later), 2)
+        for p in later:
+            self.assertTrue(p.startswith("The loop can't accept the claim yet"))
+            self.assertIn("\n\nStill binding: change only M1's state", p)
+
+    def test_item5_codex_restates_only_when_no_goal_is_active_and_records_the_goal(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: which device?")
+        self.assertEqual(self.run_loop()["goal"], "none")
+        self.run_loop(message="Use the simulator.")
+        self.assertIn("\n\nStill binding:", self.prompt(self.calls()[-1]))
+        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
+            conn.execute("create table thread_goals (thread_id text, status text)")
+            conn.execute("insert into thread_goals values ('t1', 'active')")
+        before = len(self.calls())
+        result = self.run_loop(message="Use the simulator.")
+        self.assertEqual(result["goal"], "active")
+        prompts = [self.prompt(c) for c in self.calls()[before:]]
+        self.assertEqual(prompts, ["Use the simulator.", "Continue the objective."])
+
+    def test_item5_a_generic_host_continuation_restates(self):
+        host = self.root / "echo-host"
+        host.write_text(ECHO_HOST)
+        host.chmod(0o755)
+        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + f"- **Host echo:** {host} {{prompt}}\n- **Echo model:** m\n")
+        self.commit_all()
+        self.run_loop(host="echo")
+        self.run_loop(host="echo")
+        first, second = (c["argv"][-1] for c in self.calls())
+        self.assertNotIn("Still binding", first)
+        self.assertIn("This continues earlier work", second)
+        self.assertTrue(second.endswith("Check: none."))
+
+    def test_item5_a_missing_out_of_bounds_line_is_reported_not_guessed(self):
+        self.use_claude()
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
+        self.run_loop(host="claude")
+        result = self.run_loop(host="claude", message="go on")
+        self.assertEqual(result["constraints_missing"], list(agent_loop.BOUNDS))
+        restated = self.prompt(self.calls()[-1])
+        self.assertNotIn("Owner decides", restated)
+        self.assertNotIn("not to touch", restated)
+        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Owner decides:** <e.g. spending>\n")
+        self.assertIsNone(agent_loop.profile(self.wt)["bounds"]["Owner decides"], "a placeholder isn't a rule")
+
+    def test_item5_a_reviewer_restatement_never_tells_it_to_integrate(self):
+        prof = agent_loop.profile(self.wt)
+        text, _ = agent_loop.binding(prof, "review", done="docs/modules/WATER-DONE.json",
+                                     review="docs/evidence/WATER/M1-review.md")
+        self.assertIn("change only docs/evidence/WATER/M1-review.md and the verdict fields", text)
+        self.assertNotIn("land", text)
+        self.assertIn("don't commit, push or launch agents", text)
+
+    # Item 6: launch records.
+
+    def test_item6_the_build_prompt_no_longer_opens_with_the_model(self):
+        prompt = agent_loop.BUILD_TEMPLATE.format(model="m", effort="e", goal=agent_loop.GOAL_LINE, milestone="M1",
+                                                  module="W", done="d", loop="l", skill="s")
+        self.assertTrue(prompt.startswith(agent_loop.GOAL_LINE + "Objective:"))
+        self.assertTrue(prompt.endswith("(Launched on m at e effort.)"))
+
+    def test_item6_a_claude_claim_records_effort_cli_and_only_the_observed_model(self):
+        self.use_claude()
+        os.environ.update(FAKE_VERSION="2.1.400 (Claude Code)")
+        self.assertEqual(self.run_loop(host="claude")["result"], "CLAIMED")
+        claim = self.read_record()["milestones"]["M1"]["claim"]
+        self.assertEqual({k: claim[k] for k in ("host", "model", "effort", "cli", "observed")},
+                         {"host": "claude", "model": "claude-opus-5-5", "effort": "medium",
+                          "cli": "2.1.400 (Claude Code)", "observed": {"model": "claude-opus-5-5"}})
+
+    def test_item6_a_codex_claim_without_a_rollout_observes_nothing(self):
+        self.assertEqual(self.run_loop(effort="high")["result"], "CLAIMED")
+        claim = self.read_record()["milestones"]["M1"]["claim"]
+        self.assertEqual((claim["effort"], claim["observed"], claim["cli"], claim["path"]),
+                         ("high", {}, "fake-cli 9.9.9", "headless"))
+
+    def test_item6_a_visible_review_records_what_the_rollout_showed(self):
+        self.write_done([milestone("M1", "open", ["open"], inspect="frames"), milestone("M2", "open", ["open"])])
+        self.commit_all()
+        os.environ.update(FAKE_VERSION="codex-cli 0.167.0")
+        with FakeCodexApp(self).installed():
+            commit = self.run_loop()["commit"]
+            self.assertEqual(self.review(commit=commit, effort="high")["verdict"], "PASS")
+        rec = self.read_record()["milestones"]["M1"]
+        self.assertEqual(rec["claim"]["observed"], {"model": "gpt-6.1-sol", "effort": "medium"})
+        review = rec["reviews"][-1]
+        self.assertEqual({k: review[k] for k in ("model", "effort", "observed", "cli", "path")},
+                         {"model": "gpt-6.1-sol", "effort": "high", "cli": "codex-cli 0.167.0", "path": "visible",
+                          "observed": {"model": "gpt-6.1-sol", "effort": "high"}})
+
+    def test_item6_one_unverified_turn_drops_a_field_for_good(self):
+        self.assertEqual(agent_loop.still_observed(None, {"model": "m"}), {"model": "m"})
+        self.assertEqual(agent_loop.still_observed({"model": "m"}, {}), {})
+        self.assertEqual(agent_loop.still_observed({}, {"model": "m"}), {})
+
+    # Item 7: the loader check runs on the resolved launch.
+
+    def test_item7_an_agents_md_only_repo_warns_on_the_claude_binary_the_launch_uses(self):
+        self.use_claude()
+        (self.wt / "AGENTS.md").write_text("rules")
+        self.commit_all()
+        os.environ.update(FAKE_VERSION="2.1.239 (Claude Code)")
+        result = self.run_loop(host="claude")
+        self.assertEqual(result["result"], "CLAIMED", "a warning, not a failure")
+        agents = [w for w in result["warnings"] if "AGENTS.md" in w]
+        self.assertEqual(len(agents), 1)
+        self.assertIn("2.1.239", agents[0])
+        self.assertIn("`@AGENTS.md`", agents[0])
+        self.assertIn(agent_loop.CLAUDE, agents[0])
+
+    def test_item7_the_profile_default_host_isnt_checked_when_the_launch_resolves_to_another(self):
+        (self.wt / "AGENTS.md").write_text("rules")
+        self.commit_all()
+        os.environ.update(FAKE_VERSION="2.1.239 (Claude Code)")
+        result = self.run_loop()  # codex, which reads AGENTS.md itself
+        self.assertFalse([w for w in result.get("warnings", []) if "AGENTS.md" in w])
+
+    def test_item7_which_instruction_files_stop_claude_reading_agents_md(self):
+        wt = self.wt
+        (wt / "AGENTS.md").write_text("rules")
+        check = agent_loop.instruction_warnings
+        self.assertEqual(check(wt, "2.1.300 (Claude Code)"), [])
+        self.assertIn("unknown", check(wt, None)[0])
+        (wt / "CLAUDE.local.md").write_text("mine")
+        self.assertIn("stops Claude reading", check(wt, "2.1.300 (Claude Code)")[0])
+        (wt / "CLAUDE.md").write_text("@AGENTS.md\nmore\n")
+        self.assertEqual(check(wt, "2.1.100"), [], "an import works on any version")
+        (wt / "CLAUDE.md").write_text("Read AGENTS.md first.\n")
+        self.assertIn("CLAUDE.md", check(wt, "2.1.300")[0])
+        (wt / "CLAUDE.md").unlink()
+        (wt / "CLAUDE.local.md").unlink()
+        (wt / "AGENTS.md").unlink()
+        self.assertEqual(check(wt, "2.1.100"), [], "no AGENTS.md, nothing to load")
+
+    def test_item7_a_skill_missing_where_the_host_loads_it_is_a_warning(self):
+        warn = agent_loop.skill_warnings
+        self.assertIn("review-milestone isn't installed where claude", warn("claude", self.wt, "review")[0])
+        self.assertIn("plan-module isn't installed where codex", warn("codex", self.wt, "plan")[0])
+        self.assertEqual(warn("echo", self.wt, "build"), [])
+        for folder in (agent_loop.CLAUDE_HOME / "skills/review-milestone",
+                       agent_loop.AGENTS_HOME / "skills/plan-module", self.home / "skills/build-milestone"):
+            folder.mkdir(parents=True)
+            (folder / "SKILL.md").write_text("x")
+        self.assertEqual(warn("claude", self.wt, "review"), [])
+        self.assertEqual(warn("codex", self.wt, "plan"), [])
+        self.assertIn("docs don't list", warn("codex", self.wt, "build")[0])
+        plugin = agent_loop.CLAUDE_HOME / "plugins/cache/m/orchestrate/1.0/skills/plan-module"
+        plugin.mkdir(parents=True)
+        (plugin / "SKILL.md").write_text("x")
+        self.assertEqual(warn("claude", self.wt, "plan"), [])
+
+    # Item 8: reviewers and planners start with no inherited context.
+
+    def fresh_review_and_plan(self, host, resume_flag):
+        self.write_done([milestone("M1", "open", ["open"], inspect="frames"), milestone("M2", "open", ["open"])])
+        self.commit_all()
+        commit = self.run_loop(host=host)["commit"]
+        builder = self.calls()[-1]
+        self.assertEqual(self.review(commit=commit, host=host)["verdict"], "PASS")
+        self.call(agent_loop.cmd_plan, worktree=str(self.wt), task="plan PAY", host=host, model=None, effort=None,
+                  turn_timeout_hours=0.1)
+        for role in ("review", "plan"):
+            call = next(c for c in self.calls() if c["role"] == role)
+            self.assertNotIn(resume_flag, call["argv"], f"{host} {role} resumes nothing")
+            skill = "review-milestone" if role == "review" else "plan-module"
+            self.assertRegex(self.prompt(call), rf"^Model \S+, effort \w+\. Use the {skill} skill",
+                             f"{host} {role} gets only its own task")
+            if role == "review":
+                self.assertNotEqual(call["cwd"], builder["cwd"], "a clean checkout, not the builder's tree")
+
+    def test_item8_codex_reviewers_and_planners_start_a_new_session(self):
+        self.fresh_review_and_plan("codex", "resume")
+
+    def test_item8_claude_reviewers_and_planners_start_a_new_session(self):
+        self.use_claude()
+        self.fresh_review_and_plan("claude", "--resume")
 
 
 class Locks(unittest.TestCase):
