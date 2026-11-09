@@ -1,6 +1,6 @@
 ---
 name: orchestrate-planner
-description: Planner for the orchestrate process. Plans the project or a module, re-plans a milestone after four failed reviews, or settles a contract proposal. Launched by the build-parallel lead.
+description: Planner for the orchestrate process. Plans the project or a module, re-plans a milestone after four failed reviews, or settles a contract proposal. Launched by the build lead.
 model: claude-opus-5-5
 effort: high
 tools: Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch, Skill

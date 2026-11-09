@@ -19,10 +19,10 @@ metadata:
   updates that list, the skills that write, and the loop.
 - **Links stay inside the domain** (`../sibling/…`); installs flatten the domain folder.
 - **Scripts are stdlib Python** with tests in `tests/orchestration/` (not shipped with the skill). Run
-  `python3 -m unittest discover tests/orchestration` before committing. Don't call `claude -p` from scripts: it bills
-  through the API.
-- **Agent files** for Claude live in `build-parallel/agents/claude/` and are listed in the marketplace entry; Codex twins
-  live in `build-parallel/agents/codex/` and install with `install_agents.sh`.
+  `python3 -m unittest discover tests/orchestration` before committing. Scripts that launch agents go through `agent_loop.py`'s host adapters, so
+  every host (Codex, Claude Code, others) is handled in one place and Claude runs get no API key.
+- **Agent files** for Claude live in `build/agents/claude/` and are listed in the marketplace entry; Codex twins
+  live in `build/agents/codex/` and install with `install_agents.sh`.
 - **Plain prose,** as `skill-creator` describes. Write like Randall Munroe explains things: short sentences, concrete examples, the obvious said
   out loud, and the reason before or with the rule. Leave out the jokes. Use lists for real checklists, not as a
   substitute for sentences, and avoid bold-led bullets, chains of semicolons, and clauses packed together to save

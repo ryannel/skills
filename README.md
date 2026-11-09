@@ -54,12 +54,12 @@ the owner), and the skills stay generic.
 | [`plan-module`](./skills/orchestration/plan-module/) | Sets a project up with its profile, plans the module map, then each module's design, milestones and JSON done-when file |
 | [`build-milestone`](./skills/orchestration/build-milestone/) | Build, verify and integrate the next milestone, in Claude Code or Codex |
 | [`review-milestone`](./skills/orchestration/review-milestone/) | A clean-context verdict on a milestone or design, with packaged ways to prove work (tests, inspection lists, reviews) |
-| [`build-parallel`](./skills/orchestration/build-parallel/) | One Claude lead runs several Codex generators via `agent_loop.py`: pinned model and effort, escalation by count, quota forecast |
-| [`instructing-agents`](./skills/orchestration/instructing-agents/) | Writing goals, briefs, steers, skills and AGENTS.md that Opus and GPT agents act on without being boxed in |
+| [`build`](./skills/orchestration/build/) | Builds the planned project unattended with N builders on Codex, Claude Code or another host, via `agent_loop.py`, which accepts a claim only after running the checks itself |
+| [`instructing-agents`](./skills/orchestration/instructing-agents/) | Writing goals, briefs, steers and AGENTS.md that Opus and GPT agents act on without being boxed in |
 
 ```bash
 npx skills add ryannel/skills --skill plan-module --skill build-milestone --skill review-milestone \
-  --skill build-parallel --skill instructing-agents
+  --skill build --skill instructing-agents
 ```
 
 Then run `/plan-module` in a project: it writes `ORCHESTRATE.md` first. [Why it looks like this](./skills/orchestration/README.md).
@@ -68,7 +68,8 @@ Then run `/plan-module` in a project: it writes `ORCHESTRATE.md` first. [Why it 
 
 [`skill-creator`](./skills/skill-creator/) is a standalone skill for creating, rewriting and testing skills. It
 follows Anthropic's skill-creator process (interview, draft, test with and without the skill, review, improve, check
-the description triggers), and writes in plain, explanatory prose. It bundles no scripts that bill the API.
+the description triggers), and writes in plain, explanatory prose. Its one script, `check_skill.py`, checks a skill's
+structure locally.
 
 ```bash
 npx skills add ryannel/skills --skill skill-creator -g

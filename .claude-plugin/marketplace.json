@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills organised by domain \u2014 deeply researched, provenance-tracked, and kept current against fast-moving ecosystems",
-    "version": "2.6.0"
+    "version": "2.8.0"
   },
   "plugins": [
     {
@@ -48,10 +48,10 @@
     },
     {
       "name": "orchestrate",
-      "description": "A lean process for building software with AI agents in Claude Code and Codex (web apps, native apps, CLI tools, libraries, engines): plan modules into milestones with JSON done-when files, prove them with tests, inspection lists or reviews, judge them with a clean-context evaluator, and fan out Codex generators under one Claude lead. Includes a guide to writing instructions for Opus and GPT agents.",
+      "description": "Build software with AI agents in Claude Code, Codex or another host. A planner writes milestones with JSON done-when files and dependencies between modules, builders prove them, and fresh reviewers judge them. /build keeps a chosen number of builders busy on ready milestones and rejects claims it can't verify. Includes a guide to instructing Opus and GPT agents.",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.2.0",
       "category": "development",
       "keywords": [
         "agents",
@@ -68,20 +68,20 @@
         "./skills/orchestration/plan-module",
         "./skills/orchestration/build-milestone",
         "./skills/orchestration/review-milestone",
-        "./skills/orchestration/build-parallel",
+        "./skills/orchestration/build",
         "./skills/orchestration/instructing-agents"
       ],
       "agents": [
-        "./skills/orchestration/build-parallel/agents/claude/orchestrate-evaluator.md",
-        "./skills/orchestration/build-parallel/agents/claude/orchestrate-planner.md"
+        "./skills/orchestration/build/agents/claude/orchestrate-evaluator.md",
+        "./skills/orchestration/build/agents/claude/orchestrate-planner.md"
       ]
     },
     {
       "name": "skill-creator",
-      "description": "Creates, rewrites and tests agent skills for Claude Code, Codex and other agents, in plain explanatory prose: interview, draft, test with and without the skill in fresh subagents, review with the person, improve, and check the description triggers. Merges Anthropic's skill-creator process with lessons on instructing current models.",
+      "description": "Creates, rewrites and tests agent skills for Claude Code, Codex and other agents, in plain explanatory prose. Follows Anthropic's skill-creator process, with isolated baselines, repeated runs, trigger tests and a structural check script.",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "development",
       "keywords": [
         "skills",

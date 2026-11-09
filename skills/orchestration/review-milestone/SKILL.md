@@ -1,19 +1,22 @@
 ---
 name: review-milestone
-description: Judges a milestone from a clean context against its JSON done-when file, by running its checks, driving the running product on its target and reading what its items ask, and records the verdict, in a repository with an ORCHESTRATE.md. Also reviews a module design and its done-when items before building. Use when a milestone is claimed and has items to inspect or ask, or a design needs an independent read. Not for building or fixing (build-milestone).
+description: Judges a claimed milestone from a clean context against its JSON done-when file, by running its checks, driving the running product on its targets, reading its diff and answering its questions, then records the verdict. Also reviews a module design before building. Part of the orchestrate set. Use when a milestone is claimed for review, or a design needs an independent read. Not for building or fixing (build-milestone).
+model: claude-opus-5-5
+effort: medium
 ---
 
 # Review a milestone
 
-Run as Claude Opus 5.5 at medium effort, in a clean context. Usually that's the `orchestrate-evaluator` agent, or its
-Codex twin.
+In Codex, the `orchestrate-evaluator` agent runs this on `gpt-6.1-sol` at medium effort.
 
-Read `ORCHESTRATE.md` first. If `<evidence>/graded-examples.md` exists, read that too. It holds past verdicts the
-owner agreed with or overturned, and it's the best guide to how strict to be.
+Read `ORCHESTRATE.md` first. Then read the graded examples: the file the profile's `Graded examples` line names (by
+default `<evidence>/graded-examples.md`), and [the starting set](references/graded-examples.md) that comes with this
+skill. They're past verdicts the owner agreed with or overturned, and they're the best guide to how strict to be.
 
 Your job is to decide whether a milestone is really done, and to say so in a way the builder, the loop and the owner
 can act on without asking you anything. You're useful because you haven't seen how the builder thought about it. So
-work from the done-when file, the design and the commits, and form your own view before you read the builder's notes.
+work from the done-when file's definitions, the design, the diff and the running product. Form your own view of each
+item before you read the builder's `evidence` and notes.
 
 ## A known weakness
 
@@ -24,27 +27,38 @@ separate agent from the builder doesn't fix that by itself.
 So if you find a defect, fail the item. If you think the defect doesn't matter, say so in the finding. The owner can
 overrule you, and that's their call, not yours.
 
-Use the product yourself, on the real target, and take your own captures. The builder's screenshots show what the
-builder wanted you to see. If you've only seen something work on the easy path, you don't know that it works, so
-mark it `cant_tell`.
+Use the product yourself, on the real target, built from the commit you were given in a clean checkout of it. Take
+your own captures. The builder's screenshots show what the builder wanted you to see. Run the edge conditions the
+profile lists for each item's target, and say which ones you ran. If you've only seen something work on the easy
+path, you don't know that it works, so mark it `cant_tell`.
 
 ## Done when
 
-1. Every item has a verdict: `pass`, `fail` or `cant_tell`. An item can be proved several ways at once, and it only
-   passes if all of them pass ([proofs](../plan-module/references/proofs.md)). Run each `check` yourself. For each
-   `inspect`, write your inspection list before you look ([how to inspect](../plan-module/references/proofs.md#how-to-inspect)),
-   then judge each entry against the item and the milestone's `bar`. For each `ask`, read the code on both sides of the
-   boundary and answer the question. If you couldn't perceive or reach something, say `cant_tell` and why. Don't guess.
-2. Someone could fix every finding without investigating further. Each one says what you did, what happened, what
-   should have happened, and where: a file and line, steps to reproduce it, or a capture. Put the worst first, and say
-   whether you verified each finding or only suspect it. Include problems outside the items, and items too weak to
-   catch a fake.
-3. The verdict is written down. Put the full review in `<evidence>/<module>/<milestone>-review.md`. In the done-when
-   file, set each item's `status` and add a link to your review to its `evidence`. If everything passed, set the
-   milestone's `state` to `done`. If anything failed, add 1 to `fails`. Commit and integrate those files.
-4. Your last line is `PASS <milestone>` or `FAIL <milestone>: <n> items`.
+1. Every item has a `verdict`: `pass`, `fail` or `cant_tell`. An item only passes if every proof it uses passes
+   ([proofs](../plan-module/references/proofs.md)). Run each `check` yourself. For each `inspect`, write your
+   inspection list before you look ([how to inspect](../plan-module/references/proofs.md#how-to-inspect)), then
+   judge each entry against the item and the milestone's `bar`. For each `ask`, read the code on both sides of the
+   boundary and answer the question. If you couldn't perceive or reach something, mark it `cant_tell` and say what
+   evidence would settle it. Don't guess.
+2. You've read the milestone's whole diff, not just the files the items mention. On a module's last milestone, read
+   the whole module. Look for the fingerprints of work that only looks finished: hard-coded returns, canned data,
+   feature flags defaulted on, branches that only run under test, tests that were weakened or deleted, warnings
+   silenced, and output files committed instead of computed.
+3. Each finding gives enough for someone to reproduce and locate it: what you did, what happened, what should have
+   happened, and where (a file and line, steps to reproduce it, or a capture). Put the worst first, and say whether
+   you verified each finding or only suspect it. Include problems outside the items, and items too weak to catch a
+   fake.
+4. The verdict is written down. Put the full review in `<evidence>/<MODULE>/<milestone>-review.md`, with your
+   inspection lists. In the done-when file, set each item's `verdict` and point its `review` at that file. Then move
+   the milestone on as [the transition table](../plan-module/references/done-when.md#who-changes-what-and-when) says.
+   If every verdict is `pass` and nothing outside the items fails it, set `state` to `done`. Otherwise, set `state`
+   back to `in_progress` and add 1 to `fails`. A `cant_tell` counts as a fail, because nobody could check it. A
+   defect outside the items fails the milestone too, and the review proposes an item that would have caught it.
+   Commit only those two files, and integrate them the way the profile says, holding the `integrate` lock.
+5. Your last line is `PASS <milestone>` or `FAIL <milestone>: <n> fail, <n> cant_tell, <n> outside the items`.
 
-Don't fix anything you find. If you fix it, there's no longer an independent check on the fix.
+Don't change anything else. If you fix what you find, there's no longer an independent check on the fix, and if you
+change the definitions, the loop rejects the next claim.
 
 ## Things that fool the builder's own checks
 
@@ -62,7 +76,11 @@ asked for, and mechanisms nobody has shown can produce their behaviour.
 Then read the done-when items. Could you actually judge each one, and would it catch a convincing fake? Agreeing the
 items before building starts is what makes the later verdict fair.
 
+Write the review to `<evidence>/<MODULE>/design-review.md`, ranked the same way. Don't touch the done-when file,
+because no milestone is being judged. Your last line is `DESIGN OK` or `DESIGN CHANGES: <n> findings`.
+
 ## When the owner disagrees
 
-When the owner overturns a verdict, add it to `<evidence>/graded-examples.md`. Note what was judged, each item's
-verdict and your reason, and what the owner said instead. Future reviews use that as their standard.
+When the owner overturns a verdict, add it to the project's graded examples. Note what was judged, each item's verdict
+and your reason, and what the owner said instead. Add the verdicts the owner confirmed too, especially close calls,
+so the examples show where the line is from both sides.

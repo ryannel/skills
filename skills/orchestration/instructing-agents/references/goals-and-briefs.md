@@ -147,7 +147,8 @@ For running or visual output, have it say whether it watched the motion or sampl
 build it saw.
 
 Where you can, build the independence into its setup. Give it read-only tools, and no way to spawn other agents or
-edit files.
+edit files. The exception is a reviewer that records its own verdict. It needs write access to the review and verdict
+files, so take away its ability to spawn agents and check afterwards that its commit touched only those files.
 
 A reviewer asked to find problems always finds something. Act on the findings that change a decision. Skip style
 nitpicks and tests for cases that can't happen. Record each verdict along with the revision the reviewer saw and the
