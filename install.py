@@ -423,61 +423,16 @@ def checkout_revision(source: str) -> str:
     return f"{source} at {sha.stdout.strip() or 'no git revision'}" + (" with uncommitted changes" if dirty else "")
 
 
-def choose(prompt: str, options: list[tuple[str, str]]) -> str:
-    print(prompt)
-    for number, (_, label) in enumerate(options, 1):
-        print(f"  {number}. {label}")
-    while True:
-        answer = input("Choose a number (or q to quit): ").strip().lower()
-        if answer == "q":
-            sys.exit("Installation cancelled.")
-        if answer in [str(number) for number in range(1, len(options) + 1)]:
-            return options[int(answer) - 1][0]
-        print("Choose one of the numbers shown above.")
-
-
-def choose_orchestration_install(a: argparse.Namespace) -> None:
-    if not sys.stdin.isatty():
-        sys.exit("Run this command in an interactive terminal to choose an agent and scope.")
-    hosts = []
-    if shutil.which("claude"):
-        hosts.append(("claude", "Claude Code"))
-    if codex_binary():
-        hosts.append(("codex", "Codex"))
-    if not hosts:
-        sys.exit("Install the Claude Code or Codex CLI before running this installer.")
-    if len(hosts) == 2:
-        hosts.append(("both", "Claude Code and Codex"))
-    try:
-        a.host = choose("Which agents should get the full orchestration setup?", hosts)
-        scopes = [("user", "Global (all projects)")]
-        if a.host == "claude":
-            scopes.append(("project", "Project (this Git repository)"))
-        else:
-            print("The full Codex plugin and evaluator install at global scope.")
-        a.scope = choose("Where should orchestration be installed?", scopes)
-    except (EOFError, KeyboardInterrupt):
-        sys.exit("Installation cancelled.")
-    a.plugins = "orchestrate"
-    a.source = "ryannel/skills"
-    a.repo = None
-    if a.scope == "project":
-        git_root = subprocess.run(["git", "rev-parse", "--show-toplevel"], text=True, capture_output=True)
-        if git_root.returncode:
-            sys.exit("Run the project install from inside the target Git repository.")
-        a.repo = Path(git_root.stdout.strip())
-
-
 def main() -> None:
-    if sys.argv[1:2] == ["--interactive"]:
-        ap = argparse.ArgumentParser(description="Install the orchestration plugin and its agents interactively.")
-        ap.add_argument("--replace-standalone", action="store_true",
-                        help="move aside earlier standalone copies of the orchestration skills")
-        a = ap.parse_args(sys.argv[2:])
-        choose_orchestration_install(a)
-    else:
-        a = parse_scripted_args()
-    install(a)
+    if sys.argv[1:] == ["--detect-orchestration-targets"]:
+        git_root = subprocess.run(["git", "rev-parse", "--show-toplevel"], text=True, capture_output=True)
+        print(json.dumps({
+            "claude": bool(shutil.which("claude")),
+            "codex": bool(codex_binary()),
+            "project": git_root.stdout.strip() if git_root.returncode == 0 else None,
+        }))
+        return
+    install(parse_scripted_args())
 
 
 def parse_scripted_args() -> argparse.Namespace:

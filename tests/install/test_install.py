@@ -162,17 +162,6 @@ class Repo(unittest.TestCase):
 
 
 class InteractiveOrchestration(unittest.TestCase):
-    def test_codex_offers_global_only(self):
-        args = install.argparse.Namespace()
-        with mock.patch.object(sys.stdin, "isatty", return_value=True), \
-                mock.patch.object(install.shutil, "which", return_value=None), \
-                mock.patch.object(install, "codex_binary", return_value="codex"), \
-                mock.patch.object(install, "choose", side_effect=["codex", "user"]) as choose:
-            quietly(install.choose_orchestration_install, args)
-        self.assertEqual(choose.call_args.args[1], [("user", "Global (all projects)")])
-        self.assertEqual((args.host, args.scope, args.plugins, args.source, args.repo),
-                         ("codex", "user", "orchestrate", "ryannel/skills", None))
-
     def test_project_fallback_copies_both_claude_agents_and_can_be_rerun(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)

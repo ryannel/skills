@@ -1,9 +1,9 @@
 {
   "name": "@ryannel/orchestrate",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Install the ryannel/skills orchestration plugin and its agents",
   "bin": {
-    "ryannel-orchestrate": "bin/orchestrate.cjs"
+    "ryannel-orchestrate": "bin/orchestrate.mjs"
   },
   "files": [
     "bin/",
@@ -19,5 +19,11 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "dependencies": {
+    "@clack/prompts": "1.8.1"
   }
 }
