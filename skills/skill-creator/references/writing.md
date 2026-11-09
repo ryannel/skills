@@ -71,7 +71,16 @@ the agent should run it or read it.
 Keep each rule in one place and point to it from elsewhere. Use one word for each idea throughout.
 
 Anything that truly must never happen belongs in a hook, a permission rule, a sandbox or a script that checks it.
-Prose is advice, and agents weigh it against everything else.
+Prose is advice, and agents weigh it against everything else. When the skill depends on such a hook or script, ship
+it inside the skill's package together with its setup step, so installing the skill installs the mechanism. A hook
+someone added to their own settings by hand doesn't travel to the next machine or repo. In a Claude Code plugin, that
+means a `hooks/hooks.json` that calls a bundled script through `${CLAUDE_PLUGIN_ROOT}`, and installing the plugin
+installs the hook (Claude Code 2.1.239, checked 9 November 2026). Where a host can't install it from the package,
+bundle a setup script and say what it does, and what stays manual.
+
+Facts about a host, like a folder it reads, a flag, a limit or a minimum version, change between releases. Write
+each with the date you checked it and the host version you checked it on, so a reader can tell when it has gone
+stale and what to re-check.
 
 ## The voice
 
@@ -130,7 +139,8 @@ to false for the same effect as `disable-model-invocation`.
 
 ## Where skills live
 
-These facts change between releases. They were checked on 8 November 2026.
+These facts change between releases. They were checked on 8 November 2026. The host versions weren't recorded then,
+so add them at the next check.
 
 Claude Code looks in `.claude/skills/` in a project and `~/.claude/skills/` for the user. It watches those folders,
 so an added or edited skill shows up in the running session. A new top-level skills folder needs `/reload-skills`.

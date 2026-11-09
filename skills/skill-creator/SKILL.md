@@ -46,12 +46,13 @@ The run without the skill has to really be without it. A subagent can load any i
 the skill off for that run and check its transcript afterwards. One run of each is a smoke test. When you're
 comparing two versions, run each two or three times, because results vary.
 
-While the runs work, write down what a good result must contain, as statements someone could check. Some skills make
+While the runs work, and before you look at their outputs, write down what a good result must contain, as
+statements someone could check. Some skills make
 things you can check, like a file, a number or a format. Others make things only a person can judge, like writing,
 design or advice. Don't force checkable statements onto the second kind. Just show the person the results.
 
-[Testing](references/testing.md) covers the test-case format, isolation, grading, the results record, and how to
-test whether the description triggers.
+[Testing](references/testing.md) covers the test-case format, isolation, grading, receiver-side runs for skills whose
+output another agent acts on, the results record, and how to test whether the description triggers.
 
 ## 4. Review with the person, then improve
 

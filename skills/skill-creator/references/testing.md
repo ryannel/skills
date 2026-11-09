@@ -5,6 +5,7 @@ Contents:
 - [Keeping the runs apart](#keeping-the-runs-apart)
 - [Running them](#running-them)
 - [Grading](#grading)
+  - [When another agent acts on the output](#when-another-agent-acts-on-the-output)
 - [The results record](#the-results-record)
 - [Does the description trigger?](#does-the-description-trigger)
 - [Running the cases with claude plugin eval](#running-the-cases-with-claude-plugin-eval)
@@ -86,8 +87,8 @@ The comparison only means something if the only difference between the two runs 
 1. An installed copy of the skill. A subagent can invoke any skill it can see through the Skill tool, even one it
    wasn't given. Keep the draft outside the skill folders until testing is done. For a skill that's already installed,
    turn it off for the baseline: in Claude Code, set `"skillOverrides": {"<name>": "off"}` in
-   `.claude/settings.local.json` for that run. Plugin skills are managed through `/plugin` instead. In Codex, disable
-   the skill in its skills settings.
+   `.claude/settings.local.json` for that run (written 8 November 2026; host version not recorded). Plugin skills are
+   managed through `/plugin` instead. In Codex, disable the skill in its skills settings.
 2. This conversation. Use fresh subagents that start empty, not forks that inherit the conversation; in Claude Code a
    fork carries your history, and an ordinary subagent doesn't.
 3. A shared working folder. Give each run its own folder and its own copy of the inputs, so one run can't read or
@@ -141,12 +142,35 @@ doubles the time, say so.
 Show the person every result before you change anything. Their judgement of the outputs matters more than your
 grades, especially for writing, design or advice.
 
+### When another agent acts on the output
+
+Some skills make something another agent then acts on: a brief, a goal, a plan, a handoff, a prompt. For those, the
+output isn't the result. What the receiving agent does with it is. Grading the brief itself tends to reward briefs
+that look the way the skill says briefs should look, which proves nothing. So the results need at least one
+receiver-side run: hand each output to a fresh agent with the same inputs and launch settings, let it do the work,
+and grade what it did.
+
+Take the grading statements from the task, not from the skill's rules. Ask whether the receiver kept to the scope,
+respected the boundaries, actually finished, backed its claims with real evidence, and handled what it couldn't do,
+rather than whether the brief used the skill's recommended shape. The exception is a contract, like an exact format a
+program reads, which the statements should restate. Write the statements before you look at any output, and don't
+change them afterwards, because statements written after seeing the results drift towards whichever output you
+already prefer.
+
 ## The results record
 
 Keep a short `results.md` in each iteration folder. Write down the revision of the skill under test and of the
 baseline, the model and effort, the cases and how many runs each, every grade with its evidence, the time and tokens
 (or "unavailable"), and what the person said. Without it, you can't tell next round whether a change helped or the
 dice just rolled differently.
+
+It also needs these fields, filled in even when the answer is "not done", because a record that leaves them out looks
+complete when it isn't:
+- Leakage checked: whether you read each baseline's and each trigger trial's transcript for leaks, and what you
+  found.
+- Trigger trials: for each, the context state (fresh, long, or after compaction), whether it fired, and its cost
+  in tokens.
+- Receiver-side run: for a skill whose output another agent acts on, whether one was done, and its grades.
 
 ## Does the description trigger?
 
@@ -166,6 +190,19 @@ doesn't mention the skill, and see whether it loads it. Run each prompt three ti
 varies from run to run, and count how often it fired. Don't ask a model which skill it would pick from a list. That
 tells the model it's being tested on skill choice, and it picks far more eagerly than it does in real work.
 
+A fresh session is the easy case. A skill whose moment comes late in long work, like a handoff after hours of
+building, has to fire when the context is full of other things, and possibly after compaction. For a skill like that,
+add one or two trials in a long session and one or two after compaction. That's enough. These are a check on the
+case that matters, not a suite. Compaction happens near the host's auto-compact window, which on one machine in
+November 2026 was 350,000 tokens for Opus 5.5 (`autoCompactWindow` in `~/.claude/settings.json`). You can't fake
+that state cheaply, so resume a real long session the person has already paid for (`claude --resume`, then `/compact`,
+then the task) and record what each trial cost. Afterwards check what actually survived: Claude Code may re-attach a
+skill's start after compacting, so an agent that doesn't call the skill again may still have it.
+
+Check each trigger trial for leaks before you count it. A prompt that names the skill, a session that already loaded
+it, or a hook that forces it all make it fire for reasons that have nothing to do with the description. A hook-forced
+load tests the hook, which is worth testing too, but separately.
+
 Tune the description on the prompts you kept, then judge the final version on the ones you set aside. If it does much
 worse on those, it has been fitted to the test, so make it more general rather than adding the missed phrasings.
 
@@ -177,8 +214,8 @@ prompts, and a few real sessions with the neighbouring skills installed.
 ## Running the cases with claude plugin eval
 
 `claude plugin eval` runs the same cases headless, three times per arm by default, with and without the skill, and
-reports the difference. It needs Claude Code 2.1.269 or later, and it evaluates plugins, so the skill folder needs a
-`.claude-plugin/plugin.json` manifest. With that in place, Claude Code treats the folder as a plugin called
+reports the difference. It needs Claude Code 2.1.269 or later (checked 8 November 2026), and it evaluates plugins,
+so the skill folder needs a `.claude-plugin/plugin.json` manifest. With that in place, Claude Code treats the folder as a plugin called
 `<name>@skills-dir`. Pass `--scaffold` if any case uses a scaffold script, and `--allow-tools` for the tools the runs
 need.
 
