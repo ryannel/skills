@@ -64,7 +64,14 @@ Subcommands:
         A run on the same milestone resumes its session (with --message as the first prompt, e.g. the reviewer's
         findings) unless --fresh is given or the host, model or effort changed. A new milestone starts a new session.
         --milestone only confirms which milestone you expect; it never skips one that comes first.
-        Prints one JSON line with the result as the last line of output.
+        Each resumed turn restates what binds the builder (its fields, `land`, the Check, the profile's
+        `Licences and paths not to touch` and `Owner decides` lines, attended items), except on a Codex thread
+        whose goal is active; `goal` in the result says which, and `constraints_missing` names profile lines that
+        weren't there to restate. Claims and reviews record the requested host, model and effort, the CLI's
+        version, and under `observed` only what the host's own output showed.
+        Prints one JSON line with the result as the last line of output. Its `warnings` are the launch's loader
+        checks for the resolved host and binary (an AGENTS.md that Claude won't read, a skill not installed where
+        the host finds skills by name); they never stop a run.
 
   review --module CORE --milestone M2 --commit SHA --worktree PATH [--host H] [--model M] [--effort E]
         Runs a fresh reviewer in a clean checkout of the claimed commit (or of the integrated tip, with --milestone
@@ -90,7 +97,8 @@ Subcommands:
   owner accept|rereview|unpark|scope|release --module CORE --milestone M2|design --worktree PATH --reason TEXT
         Owner decisions, typed at a terminal by the owner; refused inside any session the loop started.
   quota        Forecasts the weekly Codex limit from the last day of use across all sessions.
-  profile --worktree PATH       Prints the settings read from ORCHESTRATE.md, or exits 1 naming what's wrong.
+  profile --worktree PATH [--host H]   Prints the settings read from ORCHESTRATE.md, or exits 1 naming what's wrong,
+        plus the loader checks for that host (`preflight`).
   lock [--worktree PATH] NAME -- COMMAND...
         Runs COMMAND under a named lock shared by every worktree of the repository (not the whole machine).
 
@@ -147,7 +155,7 @@ SKILLS = LOOP.parents[2]  # the folder holding build, build-milestone, review-mi
 
 GOAL_LINE = "Call your create_goal tool with this objective, then work it.\n\n"
 
-BUILD_TEMPLATE = """Model {model}, effort {effort}. {goal}Objective: milestone {milestone} of module {module} is \
+BUILD_TEMPLATE = """{goal}Objective: milestone {milestone} of module {module} is \
 claimed. That means every item for {milestone} in {done} has status pass with evidence from its named target, the \
 milestone's state is claimed (or done, if no item has inspect or ask and it isn't the module's last milestone), and \
 the work is committed and integrated.
@@ -162,7 +170,9 @@ Take other exclusive resources with `python3 {loop} lock <name> -- <command>`.
 
 Don't launch a reviewer; the lead runs review. End with DONE and the evidence when the claim is made. If you're \
 blocked (probed directly) or missing context, end with `BLOCKED: ...` (what would unblock it) or \
-`NEEDS_CONTEXT: ...`, with the evidence."""
+`NEEDS_CONTEXT: ...`, with the evidence.
+
+(Launched on {model} at {effort} effort.)"""
 
 REVIEW_TEMPLATE = """Model {model}, effort {effort}. Use the review-milestone skill ({skill}) to review milestone \
 {milestone} of module {module}. This folder is a clean checkout of commit {commit}, made for you by the loop; build \
@@ -203,6 +213,7 @@ ONE_WORD = {"branch", "remote", "integrate", "codex sandbox", "effort", "claude 
 ALLOWED = {"codex sandbox": {"workspace-write", "danger-full-access"}, "integrate": {"push", "local"},
            "effort": EFFORTS, "claude permissions": {"auto", "acceptEdits", "bypassPermissions", "dontAsk"}}
 PLACEHOLDER = re.compile(r"<[A-Za-z][^<>]*>")  # "<where review files go>", not "cmd < input"
+BOUNDS = ("Licences and paths not to touch", "Owner decides")  # the profile's out-of-bounds lines
 
 
 def profile_value(text: str, label: str) -> str | None:
@@ -265,6 +276,11 @@ def profile(worktree: Path, strict: bool = False) -> dict:
     out["default_host"] = out.pop("default host").lower()
     out["roots"] = [r.strip() for r in out.pop("writable roots").split(",") if r.strip()]
     out["graded_examples"] = out.pop("graded examples") or f"{out['evidence']}/graded-examples.md"
+    # Prose rules the loop restates on resumed turns; None when the line is missing or still a placeholder.
+    out["bounds"] = {}
+    for label in BOUNDS:
+        value = profile_value(text, label)
+        out["bounds"][label] = value if value and not PLACEHOLDER.search(value) else None
     if problems:
         message = "ORCHESTRATE.md has missing, unfilled or invalid fields: " + "; ".join(problems)
         if strict:
@@ -1110,15 +1126,16 @@ def json_lines(path: Path, marker: str):
         return
 
 
+def turn_settings(rollout: Path) -> list[tuple[str, str, str]]:
+    """(turn id, model, effort) for each turn a Codex rollout records."""
+    return [(p.get("turn_id"), p.get("model"), p.get("effort"))
+            for p in (e.get("payload", {}) for e in json_lines(rollout, '"turn_context"'))]
+
+
 def pin_mismatches(rollout: Path, model_pin: str = DEFAULT_MODEL, effort_pin: str = DEFAULT_EFFORT) -> list[str]:
     # Codex's auto-review turns run in their own rollout files, so they don't show up here.
-    bad = []
-    for event in json_lines(rollout, '"turn_context"'):
-        payload = event.get("payload", {})
-        model, effort = payload.get("model"), payload.get("effort")
-        if (model, effort) != (model_pin, effort_pin):
-            bad.append(f"{payload.get('turn_id')}: {model}/{effort}")
-    return bad
+    return [f"{turn}: {model}/{effort}" for turn, model, effort in turn_settings(rollout)
+            if (model, effort) != (model_pin, effort_pin)]
 
 
 def quota_samples(since: float) -> list[tuple[float, float, float]]:
@@ -1336,15 +1353,20 @@ def report_word(message: str) -> str | None:
     return word if word in REPORT_WORDS else None
 
 
+WARNINGS: list = []  # the launch's preflight warnings, for the result line
+
+
 def emit(result: str, **fields) -> None:
-    print(json.dumps({"result": result, **fields, **SESSION_PATH, "quota": quota_now()}))
+    extra = {"warnings": WARNINGS} if WARNINGS else {}
+    print(json.dumps({"result": result, **fields, **SESSION_PATH, **extra, "quota": quota_now()}))
     sys.exit(0)
 
 
 def finish(state_path: Path, state: dict, result: str, **extra) -> None:
     state.update(result=result, finished=time.time(), **extra)
     state_path.write_text(json.dumps(state, indent=2))
-    emit(result, module=state["module"], milestone=state["milestone"], thread=state.get("thread"), **extra)
+    noted = {k: state[k] for k in ("goal", "constraints_missing") if state.get(k)}
+    emit(result, module=state["module"], milestone=state["milestone"], thread=state.get("thread"), **noted, **extra)
 
 
 def resolve(a: argparse.Namespace, prof: dict, role: str) -> tuple[str, str, str]:
@@ -1359,14 +1381,145 @@ def resolve(a: argparse.Namespace, prof: dict, role: str) -> tuple[str, str, str
     return host, model, effort
 
 
-def pin_problem(host: str, session: str | None, seen: str | None, model: str, effort: str) -> list[str]:
-    """Turns that ran on another model or effort, where the host lets us see that."""
-    if host == "codex" and session:
-        rollout = rollout_for(session)
-        return pin_mismatches(rollout, model, effort) if rollout else []
-    if host == "claude" and seen and not seen.startswith(model):
-        return [f"ran on {seen}, not {model}"]
+def pin_check(host: str, session: str | None, seen: str | None, model: str, effort: str) -> tuple[list[str], dict]:
+    """(turns that ran on another model or effort, what the loop verified the session ran on). The second holds a
+    field only when the host's own output showed it: Codex's rollout shows model and effort, Claude's stream shows the
+    model only, and other hosts show neither. Missing telemetry stays missing, never assumed."""
+    if host == "codex" and session and (rollout := rollout_for(session)):
+        bad, turns = pin_mismatches(rollout, model, effort), turn_settings(rollout)
+        return bad, ({"model": model, "effort": effort} if turns and not bad else {})
+    if host == "claude" and seen:
+        return ([f"ran on {seen}, not {model}"], {}) if not seen.startswith(model) else ([], {"model": seen})
+    return [], {}
+
+
+def still_observed(before: dict | None, now_seen: dict) -> dict:
+    """What every turn so far was verified on: a field drops out as soon as one turn couldn't show it."""
+    return dict(now_seen) if before is None else {k: v for k, v in before.items() if now_seen.get(k) == v}
+
+
+_VERSIONS: dict = {}
+
+
+def cli_version(host: str, path: str | None = None) -> str | None:
+    """What the binary that ran the turns says its version is (`--version`), or None where it can't be read. A
+    visible Codex turn runs in the app, so its version is the app's bundled CLI."""
+    exe = (CODEX_APP_CLI if path == "visible" else CODEX) if host == "codex" else CLAUDE if host == "claude" else None
+    if not exe:
+        return None
+    if exe not in _VERSIONS:
+        try:
+            out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=20)
+            _VERSIONS[exe] = (out.stdout.strip().splitlines() or [None])[0] if out.returncode == 0 else None
+        except (OSError, subprocess.SubprocessError):
+            _VERSIONS[exe] = None
+    return _VERSIONS[exe]
+
+
+def launch_record(host: str, model: str, effort: str, path: str | None, observed: dict | None) -> dict:
+    """Who ran a claim or review. `model` and `effort` are what the loop asked for; `observed` is only what it
+    verified from the host's output; `cli` is the binary's own version string, or null when it couldn't be read."""
+    rec = {"host": host, "model": model, "effort": effort, "observed": observed or {}, "cli": cli_version(host, path)}
+    return {**rec, "path": path} if path else rec
+
+
+def binding(prof: dict, role: str, mid: str = "", milestone: dict | None = None, done: str = "",
+            review: str = "") -> tuple[str, list[str]]:
+    """The terse restatement of what binds this role, for resumed turns, and the sources it couldn't find. Built only
+    from the profile (as read at the start of the run, before the agent could edit it), the done-when file and the
+    loop's own contracts. A reviewer gets its own boundaries, never the builder's instruction to integrate."""
+    missing = [label for label, value in prof.get("bounds", {}).items() if not value]
+    if role == "review":
+        own = f"{review}" + (f" and the verdict fields, state and fails in {done}" if done else "")
+        text = f"Still binding: change only {own}; don't commit, push or launch agents."
+    else:
+        how = "push: it rebases and pushes, never force" if prof["integrate"] == "push" else \
+            "local: it fast-forwards the local branch; don't push"
+        text = (f"Still binding: change only {mid}'s state and its items' status and evidence in {done}. Integrate "
+                f"only with `python3 {LOOP} land --worktree .` ({how}). Check: " +
+                (f"`{prof['check']}`." if prof["check"] else "none."))
+        attended = [i["id"] for i in (milestone or {}).get("items", []) if i.get("attended")]
+        if attended:
+            text += f" Attended items {', '.join(attended)}: do the rest, then BLOCKED naming them."
+    for label, value in prof.get("bounds", {}).items():
+        if value:
+            text += f" {label}: {value.rstrip('.')}."
+    return text, missing
+
+
+def claude_version_tuple(text: str | None) -> tuple[int, ...] | None:
+    m = re.search(r"(\d+)\.(\d+)\.(\d+)", text or "")
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
+CLAUDE_AGENTS_MD = (2, 1, 277)  # the first Claude Code that reads AGENTS.md itself (Claude Code memory docs, 9 Nov 2026)
+AGENTS_HOME = Path.home() / ".agents"
+ROLE_SKILLS = {"build": "build-milestone", "review": "review-milestone", "plan": "plan-module"}
+
+
+def instruction_warnings(worktree: Path, exe_version: str | None) -> list[str]:
+    """Whether a Claude session started in `worktree` reads the repository's AGENTS.md, as far as files and the CLI
+    version can show. By default Claude reads AGENTS.md only when no CLAUDE.md, .claude/CLAUDE.md or CLAUDE.local.md
+    sits in the folder or above it, and only from v2.1.277; an `@AGENTS.md` import in CLAUDE.md works on any."""
+    if not (worktree / "AGENTS.md").exists():
+        return []
+    fix = "add a CLAUDE.md beside it whose first line is `@AGENTS.md`"
+    imports = [p for p in (worktree / "CLAUDE.md", worktree / ".claude/CLAUDE.md") if p.exists() and (
+        (p.is_symlink() and p.resolve() == (worktree / "AGENTS.md").resolve())
+        or re.search(r"^@(\./|\.\./)?AGENTS\.md\b", p.read_text(errors="replace"), re.MULTILINE))]
+    if imports:
+        return []
+    user = {Path.home() / ".claude/CLAUDE.md", CLAUDE_HOME / "CLAUDE.md"}  # the user's own file doesn't count
+    counted = [p for d in (worktree, *worktree.parents)
+               for p in (d / "CLAUDE.md", d / ".claude/CLAUDE.md", d / "CLAUDE.local.md") if p.exists()
+               and p not in user]
+    if counted:
+        return [f"{counted[0]} stops Claude reading {worktree / 'AGENTS.md'} (unless Project instructions is "
+                f"claude-md-and-agents-md); to share it, add `@AGENTS.md` to {worktree / 'CLAUDE.md'}"]
+    version = claude_version_tuple(exe_version)
+    if version is None:
+        return [f"couldn't read the version of {CLAUDE}, so whether it reads AGENTS.md is unknown; to be sure, {fix}"]
+    if version < CLAUDE_AGENTS_MD:
+        return [f"{CLAUDE} is {'.'.join(map(str, version))}, which doesn't read AGENTS.md (needs 2.1.277), and this "
+                f"repository has no CLAUDE.md, so Claude agents start without its rules; upgrade the CLI or {fix}"]
     return []
+
+
+def skill_warnings(host: str, worktree: Path, role: str) -> list[str]:
+    """Whether the role's skill is installed where `host` finds skills by name. The prompt names the skill's file
+    either way, so a miss is a warning: the agent can still read it, but Claude agent files that list the skill
+    need it by name."""
+    name = ROLE_SKILLS.get(role)
+    if not name or host not in ("codex", "claude"):
+        return []
+    dirs = (worktree, *worktree.parents)
+    if host == "claude":
+        places = [CLAUDE_HOME / "skills", *(d / ".claude/skills" for d in dirs)]
+        found = any((p / name / "SKILL.md").exists() for p in places) or \
+            bool(glob.glob(str(CLAUDE_HOME / "plugins" / "**" / "skills" / name / "SKILL.md"), recursive=True))
+        where = f"{CLAUDE_HOME}/skills, .claude/skills or an installed plugin"
+    else:
+        places = [AGENTS_HOME / "skills", Path("/etc/codex/skills"), *(d / ".agents/skills" for d in dirs)]
+        found = any((p / name / "SKILL.md").exists() for p in places)
+        where = f"{AGENTS_HOME}/skills or .agents/skills"
+        if not found and (CODEX_HOME / "skills" / name / "SKILL.md").exists():
+            where += f" (it's in {CODEX_HOME}/skills, which Codex's skills docs don't list)"
+    if found:
+        return []
+    return [f"{name} isn't installed where {host} finds skills by name ({where}); the prompt gives its file path, "
+            "so the agent can still read it"]
+
+
+def preflight(host: str, worktree: Path, role: str) -> list[str]:
+    """Launch-aware loader checks for the resolved host and its actual binary. Warnings only: each names its fix,
+    and none stops the launch."""
+    found = skill_warnings(host, worktree, role)
+    if host == "claude":
+        found = instruction_warnings(worktree, cli_version("claude")) + found
+    for w in found:
+        print("warning: " + w, file=sys.stderr)
+    WARNINGS[:] = found
+    return found
 
 
 def floor_reason(host: str, code: int, err: str) -> str:
@@ -1812,6 +1965,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, strict=True)
     host, model, effort = resolve(a, prof, "build")
+    preflight(host, worktree, "build")
     stem = module_stem(worktree, prof, a.module)
     key = stem.upper()
     if not run_lock(worktree, key):
@@ -1864,6 +2018,11 @@ def cmd_run(a: argparse.Namespace) -> None:
     state.update(failed_turns=0, reports=0, unclaimed=0, progress_at=time.time(), passing=passing(milestone),
                  reflog=reflog, host=host, model=model, effort=effort, start_tip=start_tip)
     state.pop("result", None)
+    restate, missing = binding(prof, "build", mid, milestone, done_rel(prof, stem))
+    state["constraints_missing"] = missing
+    if missing:
+        print("warning: ORCHESTRATE.md has no filled-in " + " or ".join(f"`{m}`" for m in missing) +
+              " line, so resumed turns can't restate it", file=sys.stderr)
     timeout_s = a.turn_timeout_hours * 3600
     resumable = host in ("codex", "claude")
 
@@ -1898,9 +2057,15 @@ def cmd_run(a: argparse.Namespace) -> None:
             if a.message:
                 prompt += "\n\n" + a.message
                 a.message = None
+            if state["turns"] and not resumable:
+                prompt += "\n\n" + restate
         else:
             prompt = a.message or "Continue the objective."
             a.message = None
+            # A resumed turn may follow a compaction that dropped the first prompt. An active Codex goal already
+            # re-sends its objective each turn, so only a thread without one gets the restatement.
+            if status != "active":
+                prompt += "\n\n" + restate
         code, session, message, err, seen = run_turn(host, prof, model, effort, worktree, prompt,
                                                      None if first else state["thread"], timeout_s,
                                                      title=f"build {stem} {mid}")
@@ -1915,9 +2080,13 @@ def cmd_run(a: argparse.Namespace) -> None:
             finish(state_path, state, "PAUSED", **({} if _STOP else {"reason": err.strip()}))
         if code == 127 or (resumable and state["thread"] is None) or state["failed_turns"] >= 2:
             finish(state_path, state, "FLOOR", reason=floor_reason(host, code, err), exit_code=code, stderr=err)
-        if bad := pin_problem(host, state.get("thread"), seen, model, effort):
+        bad, seen_now = pin_check(host, state.get("thread"), seen, model, effort)
+        state["observed"] = still_observed(state.get("observed"), seen_now)
+        if bad:
             finish(state_path, state, "PIN", mismatches=bad[:5])
         status = goal_status(state["thread"]) if host == "codex" else None
+        if host == "codex":
+            state["goal"] = status or "none"  # whether the builder created its goal; without one, turns restate
         if status in ("usage_limited", "budget_limited"):
             finish(state_path, state, "FLOOR", reason=f"goal {status}")
         if status == "paused":
@@ -1951,7 +2120,8 @@ def cmd_run(a: argparse.Namespace) -> None:
                     doc = json.loads((tree / done_rel(prof, stem)).read_text())
                     rec = record_in(tree, prof, stem, doc)
                     e = entry(rec, mid)
-                    e["claim"] = {"commit": head, "checked": checked, "at": now(), "host": host, "model": model}
+                    e["claim"] = {"commit": head, "checked": checked, "at": now(),
+                                  **launch_record(host, model, effort, state.get("path"), state.get("observed"))}
                     paths = [record_rel(prof, stem)]
                     if not review:
                         e["accepted"] = {"by": "checks", "commit": head, "checked": checked, "at": now()}
@@ -2000,19 +2170,25 @@ def cmd_run(a: argparse.Namespace) -> None:
 # ------------------------------------------------------------------------------------------ reviewing and planning
 
 def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, prompt: str, role: str,
-                done_when, timeout_s: float, max_turns: int = 3, title: str = "") -> dict:
-    """Runs a reviewer or planner until its last line satisfies `done_when`, nudging it at most twice. Host failures
-    come back as FLOOR, PIN or PAUSED with their reasons, so the lead can fall back to another host."""
-    session, message, turns = None, "", 0
+                done_when, timeout_s: float, max_turns: int = 3, title: str = "", restate: str = "") -> dict:
+    """Runs a reviewer or planner until its last line satisfies `done_when`, nudging it at most twice. Its first turn
+    is always a new session, so it inherits nothing from the builder or the lead. Host failures come back as FLOOR,
+    PIN or PAUSED with their reasons, so the lead can fall back to another host."""
+    session, message, turns, observed = None, "", 0, None
     while turns < max_turns:
         resume = session if (turns and host in ("codex", "claude")) else None
-        text = prompt if not resume else "Finish the task and end with the last line it asks for."
+        text = prompt if not turns else "Finish the task and end with the last line it asks for." + \
+            (f"\n\n{restate}" if restate else "")
+        if turns and not resume:  # a host with no sessions gets the whole task again
+            text = prompt + "\n\n" + text
         code, session, message, err, seen = run_turn(host, prof, model, effort, worktree, text, resume, timeout_s,
                                                      role, title)
         turns += 1
         if _STOP or code == 130:
             return {"result": "PAUSED", "session": session, **({} if _STOP else {"reason": err.strip()})}
-        if bad := pin_problem(host, session, seen, model, effort):
+        bad, seen_now = pin_check(host, session, seen, model, effort)
+        observed = still_observed(observed, seen_now)
+        if bad:
             return {"result": "PIN", "mismatches": bad[:5], "session": session}
         if code != 0:
             return {"result": "FLOOR", "reason": floor_reason(host, code, err) if code == 127 else
@@ -2022,7 +2198,7 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
             break
     last = next((l.strip() for l in reversed(message.splitlines()) if l.strip()), "")
     return {"result": "FINISHED" if done_when(message) else "UNFINISHED", "last_line": last,
-            "report": message[-1500:], "session": session, "turns": turns}
+            "report": message[-1500:], "session": session, "turns": turns, "observed": observed or {}}
 
 
 REVIEW_LINE = re.compile(r"^(PASS|FAIL)\s+([A-Za-z0-9_.-]+)\b|^(DESIGN OK|DESIGN CHANGES)\b")
@@ -2032,6 +2208,7 @@ def cmd_review(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, strict=True)
     host, model, effort = resolve(a, prof, "review")
+    preflight(host, worktree, "review")
     stem = module_stem(worktree, prof, a.module)
     key, mid, design = stem.upper(), a.milestone, a.milestone == "design"
     info = dict(host=host, model=model, effort=effort, module=stem, milestone=mid)
@@ -2079,8 +2256,10 @@ def cmd_review(a: argparse.Namespace) -> None:
     wanted = ("DESIGN OK", "DESIGN CHANGES") if design else ("PASS", "FAIL")
     out = one_session(host, prof, model, effort, tree, prompt, "review",
                       lambda msg: report_line(msg).startswith(wanted), a.turn_timeout_hours * 3600,
-                      title=f"review {stem} {mid}")
+                      title=f"review {stem} {mid}",
+                      restate=binding(prof, "review", done="" if design else done_path, review=review_path)[0])
     result = out.pop("result")
+    launch = launch_record(host, model, effort, SESSION_PATH.get("path"), out.pop("observed", None))
     if result != "FINISHED":
         emit(result, **info, **out)
 
@@ -2131,7 +2310,7 @@ def cmd_review(a: argparse.Namespace) -> None:
             record["design"] = {"verdict": "ok" if passed else "changes", "review": review_path, "commit": start,
                                 "hash": text_hash((t / prof["plans"] / f"{stem}.md").read_text()
                                                   if (t / prof["plans"] / f"{stem}.md").exists() else None),
-                                "by": "review", "host": host, "model": model, "at": now()}
+                                "by": "review", **launch, "at": now()}
         else:
             reviewed, target = find(after, mid), find(doc, mid)
             target.update(state=reviewed["state"], fails=reviewed.get("fails", 0))
@@ -2146,7 +2325,7 @@ def cmd_review(a: argparse.Namespace) -> None:
             write.append(done_path)
             e = entry(record, mid)
             e.setdefault("reviews", []).append({"verdict": "pass" if passed else "fail", "commit": start,
-                                                "review": review_path, "host": host, "model": model, "at": now()})
+                                                "review": review_path, **launch, "at": now()})
             if passed:
                 e["accepted"] = {"by": "review", "commit": start, "review": review_path,
                                  "checked": (e.get("claim") or {}).get("checked"), "at": now()}
@@ -2168,6 +2347,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree)  # a first plan writes the profile itself
     host, model, effort = resolve(a, prof, "plan")
+    preflight(host, worktree, "plan")
     info = dict(host=host, model=model, effort=effort)
     if not run_lock(worktree, "_plan"):
         emit("TAKEN", **info, by="another planner on this repository")
@@ -2186,6 +2366,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
     out = one_session(host, prof, model, effort, worktree, prompt, "plan", lambda msg: bool(msg.strip()),
                       a.turn_timeout_hours * 3600, max_turns=1, title=f"plan: {a.task.splitlines()[0][:60]}")
     result = out.pop("result")
+    out.pop("observed", None)
     if result != "FINISHED":
         emit(result, **info, **out)
     try:
@@ -2330,7 +2511,13 @@ def cmd_next(a: argparse.Namespace) -> None:
 
 
 def cmd_profile(a: argparse.Namespace) -> None:
-    print(json.dumps(profile(Path(a.worktree).resolve(), strict=True), indent=2))
+    worktree = Path(a.worktree).resolve()
+    prof = profile(worktree, strict=True)
+    host = (a.host or default_host(prof)).lower()
+    found = instruction_warnings(worktree, cli_version("claude")) if host == "claude" else []
+    found += [w for role in ROLE_SKILLS for w in skill_warnings(host, worktree, role)]
+    prof["preflight"] = {"host": host, "warnings": found}
+    print(json.dumps(prof, indent=2))
 
 
 def cmd_quota(a: argparse.Namespace) -> None:
@@ -2570,6 +2757,7 @@ def main() -> None:
     sub.add_parser("quota").set_defaults(func=cmd_quota)
     prof = sub.add_parser("profile")
     prof.add_argument("--worktree", default=".")
+    prof.add_argument("--host", help="also check that host's loader (default: see above)")
     prof.set_defaults(func=cmd_profile)
     lock = sub.add_parser("lock")
     lock.add_argument("--worktree")

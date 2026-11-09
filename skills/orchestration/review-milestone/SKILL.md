@@ -9,6 +9,8 @@ effort: medium
 
 `agent_loop.py review` (in the build skill's `scripts/`) starts you at medium effort, in a clean checkout of the
 claimed commit that the loop owns, and it records and integrates your verdict once it has checked your work.
+Reviewers and planners start with no inherited context, as a new session that has seen none of the builder's or the
+lead's conversation, so everything you know comes from the files.
 
 Read `ORCHESTRATE.md` first. Then read the graded examples: the file the profile's `Graded examples` line names (by
 default `<evidence>/graded-examples.md`), and [the starting set](references/graded-examples.md) that comes with this
