@@ -2217,9 +2217,28 @@ class CodexIpc:
         self.s.close()
 
 
+def codex_project_for(projects: list[dict], paths: list[str]) -> str | None:
+    """The id of the Codex project whose root is, or holds, the first of `paths` that one does: the worktree, then
+    the repository it belongs to. The deepest root wins, so a project for a subfolder beats one for its parent."""
+    for path in paths:
+        best = None
+        for p in projects:
+            for root in p.get("roots") or []:
+                r = str(Path(root.get("path", "")).resolve()) if root.get("path") else ""
+                if r and (path == r or path.startswith(r.rstrip("/") + "/")) and (best is None or len(r) > best[0]):
+                    best = (len(r), p.get("id"))
+        if best:
+            return best[1]
+    return None
+
+
 def codex_thread_create(prof: dict, model: str, effort: str, worktree: Path, role: str, title: str) -> str:
-    """Creates a thread the app lists under the project whose folder holds `worktree`, recorded with the model,
-    effort and permissions the headless path would use, and named `title`. Returns its id."""
+    """Creates a thread recorded with the model, effort and permissions the headless path would use, named `title`,
+    and placed in the Codex project that holds the repository, if there is one. Returns its id.
+
+    The project goes on the app server's record (experimental `projectId`). As of the 9 Nov 2026 desktop app, the
+    sidebar groups threads by its own assignments, which only the app writes, so these threads still list under
+    Recents there; they move under the project if the app starts reading the server's record."""
     sandbox = prof.get("sandbox", "workspace-write")
     if sandbox == "danger-full-access":
         policy = {"type": "dangerFullAccess"}
@@ -2232,8 +2251,16 @@ def codex_thread_create(prof: dict, model: str, effort: str, worktree: Path, rol
     approvals = {"approvalPolicy": "on-request", "approvalsReviewer": "auto_review"}
     srv = CodexAppServer()
     try:
-        thread = srv.call("thread/start", {"cwd": str(worktree), "model": model, "threadSource": "user",
-                                           "sandbox": sandbox, "config": config, **approvals})["thread"]["id"]
+        start = {"cwd": str(worktree), "model": model, "threadSource": "user", "sandbox": sandbox, "config": config,
+                 **approvals}
+        try:
+            projects = srv.call("project/list", {}).get("data") or []
+            repo = str(Path(git_common_dir(worktree)).parent)
+            if project := codex_project_for(projects, [str(worktree.resolve()), repo]):
+                start["projectId"] = project
+        except (RuntimeError, OSError, KeyError, AttributeError) as e:  # placement is a convenience; never block a launch
+            print(f"warning: couldn't find the Codex project for {worktree}: {e}", file=sys.stderr)
+        thread = srv.call("thread/start", start)["thread"]["id"]
         srv.call("turn/start", {"threadId": thread, "model": model, "effort": effort, "sandboxPolicy": policy,
                                 "input": text_input(BOOTSTRAP), **approvals})
         done = srv.wait_for("turn/completed", timeout=180)

@@ -2028,3 +2028,20 @@ class Locks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CodexProject(unittest.TestCase):
+    PROJECTS = [{"id": "thrum", "roots": [{"path": "/w/thrum"}]},
+                {"id": "sub", "roots": [{"path": "/w/thrum/tools"}]},
+                {"id": "thrumbo", "roots": [{"path": "/w/thrumbo"}]}]
+
+    def test_a_worktree_inside_the_repository_gets_its_project(self):
+        self.assertEqual(agent_loop.codex_project_for(self.PROJECTS, ["/w/thrum/.claude/worktrees/x", "/w/thrum"]),
+                         "thrum")
+
+    def test_a_worktree_elsewhere_falls_back_to_the_repository(self):
+        self.assertEqual(agent_loop.codex_project_for(self.PROJECTS, ["/tmp/wt/x", "/w/thrum"]), "thrum")
+
+    def test_the_deepest_root_wins_and_names_need_a_path_boundary(self):
+        self.assertEqual(agent_loop.codex_project_for(self.PROJECTS, ["/w/thrum/tools/a"]), "sub")
+        self.assertIsNone(agent_loop.codex_project_for(self.PROJECTS, ["/w/thru", "/w/other"]))
