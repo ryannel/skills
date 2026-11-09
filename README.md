@@ -56,8 +56,37 @@ the owner), and the skills stay generic.
 | [`review-milestone`](./skills/orchestration/review-milestone/) | A clean-context verdict on a milestone or design, with packaged ways to prove work (tests, inspection lists, reviews) |
 | [`build`](./skills/orchestration/build/) | Builds the planned project unattended with N builders on Codex, Claude Code or another host, via `agent_loop.py`, which accepts a claim only after running the checks itself |
 
-Install with `python3 install.py --plugins orchestrate` from a clone of this repo (see
-[Setting up for Claude Code and Codex](#setting-up-for-claude-code-and-codex)). Then run `/plan-module` in a project: it writes `ORCHESTRATE.md` first. [Why it looks like this](./skills/orchestration/README.md).
+Install the orchestration plugin and evaluator from an interactive terminal with Node.js, Git and Python 3:
+
+```sh
+npx @ryannel/orchestrate
+```
+
+Choose Claude Code, Codex or both when their CLIs are available. Choose **Global** for all projects, or
+**Project** for Claude Code from inside the target Git repository. The full Codex plugin and evaluator
+are installed globally. When Claude Code needs the project agents installed separately, the installer
+writes portable copies to the project's `.claude/agents/` directory.
+
+Restart open sessions and run `/plan-module` in the target project to write `ORCHESTRATE.md`.
+For scripted installs, see [Setting up for Claude Code and Codex](#setting-up-for-claude-code-and-codex).
+[Why it looks like this](./skills/orchestration/README.md).
+
+<details>
+<summary>Publish the installer</summary>
+
+After merging, check out the merged revision. Sign in to npm with an account that can publish to the
+`@ryannel` scope. Set a new version in `package.json` for each subsequent release, then run:
+
+```sh
+npm pack --dry-run
+npm publish
+```
+
+The package is configured for public access on the npm registry. After publishing, verify with
+`npx @ryannel/orchestrate --help`. The package versions the installer. Claude Code and Codex fetch
+the orchestration plugin from the GitHub marketplace.
+
+</details>
 
 ## Instructing agents
 
