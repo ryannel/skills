@@ -8,3 +8,6 @@ __pycache__/
 
 # Verbatim third-party forum text harvested during research — synthesis lives in FINDINGS.md
 workbench/**/raw/
+
+# Local npm dependencies
+node_modules/

@@ -56,16 +56,19 @@ the owner), and the skills stay generic.
 | [`review-milestone`](./skills/orchestration/review-milestone/) | A clean-context verdict on a milestone or design, with packaged ways to prove work (tests, inspection lists, reviews) |
 | [`build`](./skills/orchestration/build/) | Builds the planned project unattended with N builders on Codex, Claude Code or another host, via `agent_loop.py`, which accepts a claim only after running the checks itself |
 
-Install the orchestration plugin and evaluator from an interactive terminal with Node.js, Git and Python 3:
+Install the orchestration plugin and evaluator from an interactive terminal with Node.js 20.12 or later, Git and Python 3:
 
 ```sh
 npx @ryannel/orchestrate
 ```
 
-Choose Claude Code, Codex or both when their CLIs are available. Choose **Global** for all projects, or
-**Project** for Claude Code from inside the target Git repository. The full Codex plugin and evaluator
-are installed globally. When Claude Code needs the project agents installed separately, the installer
+Use the arrow keys and Space to select Claude Code, Codex or both. For Claude Code, choose **Global**
+or **Local to this project** when running from a Git repository. Codex installs globally. Review the
+destinations before confirming. When Claude Code needs the agents installed separately, a local install
 writes portable copies to the project's `.claude/agents/` directory.
+
+From inside the `ryannel/skills` source checkout, use `npx @ryannel/orchestrate@latest` to run the
+published version.
 
 Restart open sessions and run `/plan-module` in the target project to write `ORCHESTRATE.md`.
 For scripted installs, see [Setting up for Claude Code and Codex](#setting-up-for-claude-code-and-codex).
