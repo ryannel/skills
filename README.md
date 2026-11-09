@@ -68,8 +68,7 @@ what the receiving agent can't find out for itself (purpose, done, boundaries, w
 method and the list of things to look at.
 
 Install it with `python3 install.py --plugins instructing-agents` (see [Setting up for Claude Code and
-Codex](#setting-up-for-claude-code-and-codex)). In Claude Code the plugin brings a hook that refuses the first handoff
-in each context once, with a one-line nudge to apply the skill; `npx skills` would copy the skill without it.
+Codex](#setting-up-for-claude-code-and-codex)). It relies on its description to trigger, with no hook.
 
 ## Skill creator
 
@@ -122,8 +121,8 @@ through `install.py`, below.
 
 ## Setting up for Claude Code and Codex
 
-For `instructing-agents`, `orchestrate` and `skill-creator`, one command from a clone of this repo sets up both hosts,
-hooks included, without editing settings by hand:
+For `instructing-agents`, `orchestrate` and `skill-creator`, one command from a clone of this repo sets up both hosts
+without editing settings by hand:
 
 ```bash
 python3 install.py                       # all three plugins, both hosts, user scope
@@ -144,17 +143,13 @@ inside the Codex app):
 |---|---|---|
 | How | adds this repo as the `ryannel-skills` marketplace, then `claude plugin install` for each plugin | the same marketplace through `codex plugin marketplace add` and `codex plugin add`; Codex reads `.claude-plugin/marketplace.json` itself. Without `codex` on PATH it uses the CLI inside `/Applications/ChatGPT.app` |
 | Skills | each plugin's skills, as `plugin:skill` | each plugin's skills, listed as `plugin:skill`, where the app loads them (`$CODEX_HOME/plugins/cache`) |
-| instructing-agents | its PreToolUse hook comes with the plugin and loads with that plugin only | no hook; one line in `$CODEX_HOME/AGENTS.md` saying to apply the skill before a handoff |
+| instructing-agents | the skill only; its description is what makes it trigger | the skill, plus one line in `$CODEX_HOME/AGENTS.md` saying to apply it before a handoff |
 | orchestrate | the planner and evaluator agents, linked into `~/.claude/agents` from the installed plugin, because neither Claude Code version loads the `agents` a marketplace entry lists (`claude plugin details` shows `Agents (0)`) | the evaluator agent, linked into `$CODEX_HOME/agents` from the plugin cache by `install_agents.sh --global --codex-only` |
 | `--repo` | says whether Claude will read the repo's AGENTS.md, judged from the CLI version and any `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the repo or above it; when it won't and the repo has no `CLAUDE.md`, writes one holding `@AGENTS.md`. With orchestrate it checks `ORCHESTRATE.md`, and a failed check fails the run. `--scope project` declares the plugins in the repo's `.claude/settings.json` instead of user settings (use `--source ryannel/skills` so the entry works on other machines) | nothing; Codex reads AGENTS.md |
 
-The hook nudges once per context per agent, again after a compaction or a long stretch of transcript, and fails open.
-It's off under `~/Workspace/scratch/ia-trial`, or under any paths listed in `INSTRUCTING_AGENTS_NUDGE_SKIP`
-(separated by `:`), so trigger trials can measure the description alone.
-
 **Replacing an earlier install.** Skills installed earlier with `npx skills` (in `~/.claude/skills`, `~/.agents/skills`
-or `~/.codex/skills`) and a hand-installed copy of the hook in `settings.json` would load next to the plugins: two
-descriptions per skill and two refusals per handoff. `install.py` finds them and stops before installing anything,
+or `~/.codex/skills`) would load next to the plugins, giving two descriptions per skill, and an older hand-installed handoff hook in
+`settings.json` would still fire. `install.py` finds them and stops before installing anything,
 listing each one. `--replace-standalone` moves those copies to `~/.ryannel-skills-backup/<time>/`, removes the links
 into them, and drops only the old hook's entry from `settings.json`, keeping a copy of the file there. A skill with
 the same name that doesn't match any committed version of these skills is left alone.
@@ -169,13 +164,10 @@ the checkout. Codex copies on every `install.py` run.
 loads.
 
 What stays manual:
-- **Restart** open sessions; hooks and skills load at session start.
+- **Restart** open sessions; skills load at session start.
 - **ORCHESTRATE.md.** `/plan-module` writes it, since its values are the project's.
-- **Codex hook.** Codex 0.167 can load hooks from a plugin's own `.codex-plugin/plugin.json`, but marks them untrusted
-  until approved in the app, and doesn't read hooks from a Claude marketplace entry, so the Codex side relies on the
-  AGENTS.md line.
 
-Not yet verified, because each needs a signed-in session and the owner's quota: the plugin hook firing in a live
-Claude Code session (it has only been run directly on hook payloads), a handoff after compaction with the plugin hook
-installed and the hand-installed one removed, and whether the instructing-agents description triggers without the
-hook.
+**No hook, for now.** An earlier version shipped a PreToolUse hook that refused the first handoff in each context
+with a one-line nudge to apply instructing-agents. It was removed on 9 November 2026 to test whether the description
+alone triggers the skill, including late in a long session and after compaction. It's in git history if the trial
+says it's needed.

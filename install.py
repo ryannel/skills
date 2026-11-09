@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sets this repo's skills up for Claude Code and Codex, hooks included, with no settings edited by hand.
+"""Sets this repo's skills up for Claude Code and Codex, with no settings edited by hand.
 
 Usage:
   python3 install.py                          # instructing-agents, orchestrate and skill-creator, both hosts, user scope
@@ -11,14 +11,14 @@ Usage:
 
 Claude Code: registers this checkout (or --source) as the `ryannel-skills` plugin marketplace and installs each
 plugin. If that marketplace is already registered from another source, it says so and re-registers it from this one,
-reinstalling the plugins it had. A plugin's hooks come with it (instructing-agents carries the handoff nudge).
+reinstalling the plugins it had.
 
 Codex: the same marketplace with the Codex CLI (the copy inside the Codex app when `codex` isn't on PATH), which
-reads `.claude-plugin/marketplace.json`. Codex doesn't get the hook (see README); instead, with instructing-agents,
-one line goes into the global AGENTS.md.
+reads `.claude-plugin/marketplace.json`. With instructing-agents, one line goes into the
+global AGENTS.md.
 
-Earlier standalone installs: copies of these skills in ~/.claude/skills, ~/.agents/skills or ~/.codex/skills, and a
-hand-installed handoff hook in settings.json, would load next to the plugin's. The installer finds them first and
+Earlier standalone installs: copies of these skills in ~/.claude/skills, ~/.agents/skills or ~/.codex/skills, and an
+older hand-installed handoff hook in settings.json, would load next to the plugins. The installer finds them first and
 stops, listing them. With --replace-standalone it moves the copies to ~/.ryannel-skills-backup/<time>/, removes
 links into them, and drops the old hook entry from settings.json (backed up there too). A same-named skill that
 doesn't match any committed version of this repo's skill is left alone.
@@ -48,7 +48,7 @@ DEFAULT_PLUGINS = ["instructing-agents", "orchestrate", "skill-creator"]
 CODEX_APP_CLI = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
 CLAUDE_READS_AGENTS_MD = (2, 1, 277)
 AGENTS_LINE = "Apply the `instructing-agents` skill before you hand a prompt to another agent."
-OLD_HOOKS = ("instructing-agents-gate.py", "handoff_nudge.py")  # a hand-installed copy of the plugin's hook
+OLD_HOOKS = ("instructing-agents-gate.py", "handoff_nudge.py")  # hand-installed copies of the retired handoff hook
 failures: list[str] = []
 
 

@@ -17,8 +17,8 @@ Before you send text another agent will act on, read it as that agent, knowing n
 4. Are model and effort set in the launch call, and recorded where the person can see them?
 5. Have you checked the claims you're passing on?
 
-If a hook refused your launch and sent you here, run this check on the prompt and resend. For a short prompt the
-check is often all you need; read on for a goal, a long unattended run, a reviewer brief or an instruction file. The
+Run this check on every prompt before you send it. For a short prompt the check is often all you
+need; read on for a goal, a long unattended run, a reviewer brief or an instruction file. The
 rest of this file explains the five.
 
 The agent you're writing for is capable, and on most tasks at least as capable as you. Writers fail in two ways. The
