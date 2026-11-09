@@ -43,6 +43,7 @@ to rewrite a whole JSON file than a page of prose.
       "state": "open",
       "fails": 0,
       "replans": 0,
+      "needs": ["AUTH:M1"],
       "bar": "As quick and calm as Linear's sign-up, with an empty state as clear as Things'",
       "items": [
         {
@@ -77,6 +78,8 @@ The planner writes what each milestone asks for:
   when it reruns the check.
 - `bar` is the profile's quality bar, made specific to this milestone, in words. It's what inspection is judged
   against, so name real examples.
+- `needs` (optional) lists milestones that must be `done` before this one starts: `"M1"` in this module, or
+  `"AUTH:M1"` in another. Milestones within a module run in order anyway, so list only what isn't already implied.
 
 The loop pins those fields. If they change during a build, it rejects the claim, because a builder who could edit
 them could pass anything. Only a re-plan changes them.
@@ -100,7 +103,7 @@ Only one role changes each field at any one time, and the hand-offs happen in th
 | `state` open → in_progress | Builder | It starts the milestone. |
 | items' `status` and `evidence` | Builder | While building. `pass` means it has proof from the item's target. |
 | `state` in_progress → claimed | Builder | Every item is `pass` with evidence, the checks pass, and the work is integrated, on a milestone that needs review. |
-| `state` in_progress → done | Builder | The same, on a milestone that doesn't need review. Under `/build-parallel`, the loop reruns the checks before anyone believes it. |
+| `state` in_progress → done | Builder | The same, on a milestone that doesn't need review. Under `/build`, the loop reruns the checks before anyone believes it. |
 | items' `verdict` and `review` | Reviewer | Reviewing a claimed milestone. Every item gets a verdict. |
 | `state` claimed → done | Reviewer | Every verdict is `pass`, and nothing outside the items fails the milestone. |
 | `state` claimed → in_progress, and 1 more `fails` | Reviewer | Any verdict is `fail` or `cant_tell`, or a defect outside the items fails it. |

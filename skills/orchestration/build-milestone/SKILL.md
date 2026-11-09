@@ -7,7 +7,8 @@ effort: medium
 
 # Build a milestone
 
-In Codex, run as `gpt-6.1-sol` at medium effort, or whatever the profile's `Codex generator` says.
+Run at medium effort, on the model the profile names for your host (in Codex, `gpt-6.1-sol` unless it says
+otherwise).
 
 Read `ORCHESTRATE.md` first, and any building guidance it links to. Then find the next open milestone in
 `<MODULE>-PLAN.md` and its items in `<MODULE>-DONE.json`. Your job is to make that milestone work on its real
@@ -23,7 +24,7 @@ fault coming back.
    explains how each kind of item is proved.
 2. The work is committed and integrated the way the profile's `Integrate` line says. For `push`, rebase onto the
    profile's branch, run its `Check` fresh, and push without force, all while holding the `integrate` lock so
-   parallel streams don't race each other. Under `/build-parallel`, the loop reruns the `Check` and every item's
+   parallel builders don't race each other. Under `/build`, the loop reruns the `Check` and every item's
    `check` itself before it believes you.
 3. The milestone's `state` says what happens next: `claimed` if it needs review, or `done` if it doesn't. It needs
    review if any item has `inspect` or `ask`, or if it's the module's last milestone.
@@ -35,9 +36,10 @@ fault coming back.
 
 Before you claim, check the `inspect` and `ask` items yourself, the same way the reviewer will.
 
-In a single chat, you're also the lead. Launch the `orchestrate-evaluator` agent, and tell it only the module,
-milestone, commit and worktree, so it forms its own view. If you're running as a subagent and can't launch one, end
-with `DONE` and say the review is owed. Under `/build-parallel`, the lead launches the evaluator.
+In a single chat, you're also the lead, so start a fresh reviewer. Run `agent_loop.py review` (in the build
+skill's `scripts/`) with the module, milestone, commit and worktree, ideally on another host, or launch the
+`orchestrate-evaluator` agent where your host has one. Tell it nothing else, so it forms its own view. If you can't
+start either, end with `DONE` and say the review is owed. Under `/build`, the lead runs review.
 
 When a review fails, how you carry on depends on how many times this milestone has failed. After one or two, fix the
 findings in the same session. After three, hand over to a fresh session with only the files and the review. After
@@ -62,10 +64,13 @@ using the exact build on its real target.
 
 When you use a stand-in, such as a Mac standing in for an iPhone, label the result `proxy`. If a run needs a resource
 listed under the profile's `Exclusive resources`, wrap it in `agent_loop.py lock <name> -- <command>`. The script is
-in build-parallel's `scripts/`.
+in the build skill's `scripts/`.
 
 If the work needs a contract or the design to change, don't change it yourself. Write a proposal in the plan log and
-carry on with whatever doesn't depend on it.
+carry on with whatever doesn't depend on it. If it needs something another module owns that isn't there yet, don't
+build it here: end with `BLOCKED` and name it, so the planner can give it to the module that owns it.
+
+To run unattended, or to keep going past this milestone, use `/build`. This skill covers one milestone.
 
 You can research, run anything locally, change this module's code, and integrate verified work as the profile allows,
 without asking. Don't force-push. Anything on the profile's "Owner decides" list goes to the owner.

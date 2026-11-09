@@ -2197,8 +2197,8 @@
         }
       ]
     },
-    "build-parallel": {
-      "path": "skills/orchestration/build-parallel",
+    "build": {
+      "path": "skills/orchestration/build",
       "tier": "active",
       "cadence_days": 7,
       "last_checked": "2026-11-08",
@@ -2207,10 +2207,10 @@
       "why_tier": "Registered 2026-11-08. Names current models (Opus 5.5, gpt-6.1-sol) and Codex CLI flags and local files, which move with each release.",
       "watchlist": [
         {
-          "id": "build-parallel-models",
+          "id": "build-models",
           "type": "model-names",
           "claim": "Default models are claude-opus-5-5 and gpt-6.1-sol; Codex flags and rollout fields as used by agent_loop.py.",
-          "where": "skills/orchestration/build-parallel",
+          "where": "skills/orchestration/build",
           "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
         }
       ]

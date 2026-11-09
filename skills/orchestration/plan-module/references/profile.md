@@ -20,9 +20,14 @@ but the value and an optional `*( )*` note, because the loop takes the whole lin
 - **Integrate:** push  *(loop: push = rebase onto Remote/Branch and push without force; local = commit to Branch only)*
 - **Branch:** main  *(loop)*
 - **Remote:** origin  *(loop)*
-- **Codex generator:** gpt-6.1-sol medium  *(loop)*
+- **Builders:** usually one Codex builder  *(how many builders, on which hosts, when the owner doesn't say)*
+- **Codex model:** gpt-6.1-sol  *(loop)*
+- **Claude model:** claude-opus-5-5  *(loop)*
+- **Effort:** medium  *(loop: optional; medium is the default for builders and reviewers, high for planners)*
+- **Claude permissions:** auto  *(loop: the permission mode for headless Claude runs: auto, acceptEdits, dontAsk or bypassPermissions)*
 - **Codex sandbox:** workspace-write  *(loop: or danger-full-access)*
 - **Writable roots:** <paths the build writes outside the worktree, e.g. ~/.cargo, ~/.npm>  *(loop)*
+- **Host gemini:** gemini -p {prompt} -m {model}  *(loop: optional; any other agent CLI, with {prompt}, {model}, {effort} and {cwd} placeholders)*
 
 ## Starting from a clean clone
 <how a fresh worktree gets to a running product: setup command, seed data and test accounts, services it needs,

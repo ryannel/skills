@@ -9,17 +9,18 @@ the skills read it, so they don't need to know anything project-specific.
 | [`plan-module`](plan-module/) | Opus 5.5, high | Sets the project up, plans the modules and how they connect, then plans each module's design, milestones and done-when file |
 | [`build-milestone`](build-milestone/) | Codex `gpt-6.1-sol` or Opus 5.5, medium | Builds the next milestone, proves it, and integrates it |
 | [`review-milestone`](review-milestone/) | Opus 5.5, medium | Judges a claimed milestone or a design with fresh eyes |
-| [`build-parallel`](build-parallel/) | Opus 5.5 lead, medium | Runs several Codex builders at once, with reviewers and a planner on call |
+| [`build`](build/) | Opus 5.5 lead, medium (any host can lead) | Builds the planned project unattended: keeps N builders busy on ready milestones, on Codex, Claude Code or another host, with fresh reviewers and a planner |
 | [`instructing-agents`](instructing-agents/) | | Writes goals, briefs, steers and AGENTS.md files that agents act on |
 
 The first four link to each other's files, so install them together: the `orchestrate` plugin, or all four with
 `npx skills add`. The Claude agents come with the plugin. The Codex evaluator needs
-`build-parallel/scripts/install_agents.sh --global` (add `--codex-only` if the plugin already installed the Claude
+`build/scripts/install_agents.sh --global` (add `--codex-only` if the plugin already installed the Claude
 agents).
 
 You can work at two speeds. In one chat, you run `/plan-module`, then `/build-milestone`, in Claude Code or Codex.
 You can even switch between them partway, because everything the next agent needs is in the files. Or you can fan
-out with `/build-parallel`.
+hand the whole build over with `/build`, saying how many builders on which hosts, such as "two Claude builders and one
+Codex".
 
 ## What it borrows, and what's house practice
 
@@ -47,7 +48,7 @@ something we saw, not because a source proved it:
   agents told to match an image copy its accidents too.
 - Every agent is launched with its model and effort named, in agent files, skill frontmatter and the profile, because
   defaults change between releases.
-- The owner sets the pace by choosing how many streams run. The loop forecasts quota, but never slows down on its own.
+- The owner sets the pace by choosing how many builders run. The loop forecasts quota, but never slows down on its own.
 
 ## What the loop enforces
 

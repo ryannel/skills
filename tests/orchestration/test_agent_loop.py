@@ -13,7 +13,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skills/orchestration/build-parallel/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skills/orchestration/build/scripts"))
 import agent_loop  # noqa: E402
 
 
@@ -166,6 +166,82 @@ print(json.dumps({"type": "item.completed", "item": {"type": "agent_message", "t
 """
 
 
+FAKE_CLAUDE = """#!/usr/bin/env python3
+import json, os, subprocess, sys
+from pathlib import Path
+log = os.environ.get("FAKE_LOG") or open(os.environ["FAKE_LOG_FILE_HINT"]).read()
+with open(sys.argv[0] + ".log", "a") as f:
+    f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),
+                        "api_key": "ANTHROPIC_API_KEY" in os.environ}) + "\\n")
+wt = os.getcwd()
+path = Path(wt) / "docs/modules/WATER-DONE.json"
+d = json.loads(path.read_text())
+for m in d["milestones"]:
+    if m["state"] in ("open", "in_progress"):
+        m["state"] = "claimed"
+        for i in m["items"]:
+            i["status"], i["evidence"] = "pass", "run log"
+        break
+path.write_text(json.dumps(d))
+subprocess.run(["git", "-C", wt, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "pass"])
+subprocess.run(["git", "-C", wt, "push", "-q", "origin", "main"])
+model = sys.argv[sys.argv.index("--model") + 1]
+print(json.dumps({"type": "system", "subtype": "init", "session_id": "s1", "model": model}))
+print(json.dumps({"type": "result", "subtype": "success", "session_id": "s1", "result": "DONE", "is_error": False}))
+"""
+
+
+class Needs(unittest.TestCase):
+    def test_unmet_needs_hold_a_milestone_back(self):
+        core = done(milestone("M1", "done", ["pass"]), milestone("M2", "open", ["open"]))
+        water = done(dict(milestone("M1", "open", ["open"]), needs=["CORE:M2"]), milestone("M2", "open", ["open"]))
+        with self.assertRaises(SystemExit) as e:
+            agent_loop.pick_milestone(water, None, "WATER", {"CORE": core, "WATER": water})
+        self.assertEqual(e.exception.waiting, [{"milestone": "M1", "needs": ["CORE:M2"]}])
+        core["milestones"][1]["state"] = "done"
+        self.assertEqual(agent_loop.pick_milestone(water, None, "WATER", {"CORE": core})["id"], "M1")
+        self.assertEqual(agent_loop.pick_milestone(water, None, "WATER", {"CORE": core})["id"], "M1")
+
+    def test_needs_are_validated_and_pinned(self):
+        bad = done(dict(milestone("M1", "open", ["open"]), needs="CORE:M2"))
+        self.assertTrue(any("needs" in p for p in agent_loop.validate(bad)))
+        a = milestone("M1", "open", ["open"])
+        b = dict(a, needs=["CORE:M1"])
+        self.assertNotEqual(agent_loop.definitions(a), agent_loop.definitions(b))
+        self.assertEqual(agent_loop.unmet(b, "WATER", {}), ["CORE:M1 (not planned)"])
+
+    def test_profile_reads_hosts_models_and_effort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "ORCHESTRATE.md").write_text(
+                "- **Claude model:** claude-opus-5-5\n- **Effort:** high\n"
+                "- **Host gemini:** `gemini -p {prompt} -m {model}`\n- **Host bad:** gemini\n")
+            with contextlib.redirect_stderr(io.StringIO()):
+                p = agent_loop.profile(Path(tmp))
+            self.assertEqual((p["models"]["codex"], p["models"]["claude"], p["effort"]),
+                             ("gpt-6.1-sol", "claude-opus-5-5", "high"))
+            self.assertEqual(p["hosts"], {"gemini": "gemini -p {prompt} -m {model}"})
+            args, env = agent_loop.host_command("gemini", p, "g-2", "medium", Path(tmp), "do it now", None)
+            self.assertEqual(args, ["gemini", "-p", "do it now", "-m", "g-2"])
+
+    def test_claude_environment_drops_keys_but_keeps_config_dir(self):
+        os.environ.update(ANTHROPIC_API_KEY="x", CLAUDE_CONFIG_DIR="/c", CLAUDECODE="1")
+        try:
+            env = agent_loop.clean_env()
+        finally:
+            for k in ("ANTHROPIC_API_KEY", "CLAUDE_CONFIG_DIR", "CLAUDECODE"):
+                os.environ.pop(k, None)
+        self.assertNotIn("ANTHROPIC_API_KEY", env)
+        self.assertNotIn("CLAUDECODE", env)
+        self.assertEqual(env["CLAUDE_CONFIG_DIR"], "/c")
+
+    def test_claude_stream_parsing(self):
+        out = "\n".join(json.dumps(e) for e in [
+            {"type": "system", "subtype": "init", "session_id": "s9", "model": "claude-opus-5-5"},
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": "working"}]}},
+            {"type": "result", "result": "BLOCKED: no device", "is_error": False}])
+        self.assertEqual(agent_loop.parse_output("claude", out), ("s9", "BLOCKED: no device", "claude-opus-5-5", False))
+
+
 class RunLoop(unittest.TestCase):
     """Drives cmd_run against a fake codex and a throwaway repo with an origin."""
 
@@ -212,7 +288,7 @@ class RunLoop(unittest.TestCase):
 
     def run_loop(self, **kw):
         args = dict(module="WATER", worktree=str(self.wt), milestone=None, fresh=False, message=None,
-                    budget_hours=4.0, turn_timeout_hours=0.1)
+                    budget_hours=4.0, turn_timeout_hours=0.1, host=None, model=None, effort=None)
         args.update(kw)
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
@@ -369,6 +445,56 @@ class RunLoop(unittest.TestCase):
                 "--worktree", str(self.wt), "--", "sh", "-c", f"pwd > {marker}"]))
         self.assertEqual(exit_.exception.code, 0)
         self.assertEqual(Path(marker.read_text().strip()).resolve(), self.wt.resolve())
+
+    def test_claude_builder_claims_with_a_clean_environment(self):
+        fake = Path(self.tmp.name) / "claude"
+        fake.write_text(FAKE_CLAUDE.replace('log = os.environ.get("FAKE_LOG") or open(os.environ["FAKE_LOG_FILE_HINT"]).read()\n', ""))
+        fake.chmod(0o755)
+        saved = agent_loop.CLAUDE
+        agent_loop.CLAUDE = str(fake)
+        os.environ["ANTHROPIC_API_KEY"] = "secret"
+        try:
+            result = self.run_loop(host="claude")
+        finally:
+            agent_loop.CLAUDE = saved
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+        self.assertEqual(result["result"], "CLAIMED")
+        call = json.loads(Path(str(fake) + ".log").read_text().splitlines()[0])
+        self.assertFalse(call["api_key"])
+        self.assertIn("--effort", call["argv"])
+        self.assertEqual(call["argv"][call["argv"].index("--model") + 1], "claude-opus-5-5")
+
+    def test_waiting_when_needs_are_unmet(self):
+        self.write_done([dict(milestone("M1", "open", ["open"]), needs=["CORE:M1"])])
+        self.commit_all()
+        self.assertEqual(self.run_loop()["result"], "WAITING")
+
+    def test_ready_lists_ready_waiting_and_finished(self):
+        (self.wt / "docs/modules/CORE-DONE.json").write_text(json.dumps(
+            {"module": "CORE", "milestones": [milestone("M1", "done", ["pass"])]}).replace('"evidence": ""', '"evidence": "x", "verdict": "pass"'))
+        self.write_done([dict(milestone("M1", "open", ["open"]), needs=["CORE:M1"]),
+                         dict(milestone("M2", "open", ["open"]), needs=["CORE:M9"])])
+        subprocess.run(["git", "-C", str(self.wt), "add", "-A"], check=True)
+        self.commit_all()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            agent_loop.cmd_ready(argparse.Namespace(worktree=str(self.wt)))
+        r = json.loads(out.getvalue())
+        self.assertEqual(r["ready"], [{"module": "WATER", "milestone": "M1", "state": "open"}])
+        self.assertEqual(r["finished"], [{"module": "CORE", "parked": []}])
+
+    def test_reviewer_overreach_flags_builder_fields_and_other_files(self):
+        before = agent_loop.head_commit(self.wt)
+        d = self.read_done()
+        d["milestones"][0]["items"][0].update(verdict="fail", status="pass")
+        (self.wt / "docs/modules/WATER-DONE.json").write_text(json.dumps(d))
+        (self.wt / "src.txt").write_text("fix")
+        subprocess.run(["git", "-C", str(self.wt), "add", "-A"], check=True)
+        self.commit_all()
+        problems = agent_loop.reviewer_overreach(self.wt, agent_loop.profile(self.wt), "WATER", before,
+                                                 agent_loop.head_commit(self.wt))
+        self.assertTrue(any("src.txt" in p for p in problems))
+        self.assertTrue(any("status or evidence" in p for p in problems))
 
     def test_lock_refuses_outside_a_repository(self):
         with tempfile.TemporaryDirectory() as tmp:

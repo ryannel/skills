@@ -37,6 +37,20 @@ they're the ones most likely to force everything else to change.
 Modules don't change contracts on their own. When one needs a change, it writes a proposal in its plan log, and you
 settle it here with every module that produces or uses that contract.
 
+## Linking modules that depend on each other
+
+When you plan a module, list every capability it uses from other modules. For each one, the module map says which
+module owns it. Find the milestone in that module that delivers it, and add it to the `needs` of the first milestone
+here that can't work without the real thing, as `"CORE:M3"`. If no milestone there delivers it yet, add one to that
+module, or move one earlier, as a re-plan of that module. Write the contract first, so this module can build against
+a stand-in until the milestone that needs the real thing. The lead won't start a milestone until everything in its
+`needs` is done, so a missing link lets a builder start too early, and an unnecessary one holds work back.
+
+When a builder reports `BLOCKED` because something another module owns is missing, decide who owns it from the map.
+If another module does, add the milestone there and the `needs` link here. If it's really this module's work, add it
+to this module's plan. If the map was wrong, fix the map and the contract first. Never let the blocked builder build
+another module's capability inside its own module, because then two modules own the same thing.
+
 ## How to plan well
 
 Research before you design. Most problems have been solved before, in shipped products or published work, so find
