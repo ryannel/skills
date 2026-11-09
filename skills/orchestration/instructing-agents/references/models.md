@@ -20,7 +20,7 @@ file records no warning from that vendor.
 
 | Habit | Anthropic | OpenAI |
 |---|---|---|
-| Step-by-step recipes and itineraries | Prefer judgment, and give heuristics for open-ended work. But still give sequential steps and checklists for complex, fragile operations. | These now hurt Astra. |
+| Step-by-step recipes and itineraries | Prefer judgment, and give heuristics for open-ended work. But still give sequential steps and checklists for complex, fragile operations. | These now hurt Astra ([why](#openai-gpt-6-astra)). |
 | Emphasis and capitals | Plain lines are followed. Piling on emphasis makes Claude apply a rule too widely or trigger tools too often. | The warning is about strong "ask first" language and over-emphatic skill descriptions. |
 | Mandatory reading lists | | Point to docs by use case instead. |
 | Review stops after a first implementation | | They pull Astra toward stopping early. |
@@ -76,11 +76,10 @@ only text, it may have been a progress report that the harness treated as the fi
 
 Model id: `claude-opus-5-5`.
 
-Effort is the main control. The default is `medium`. Opus 5 defaulted to `high`, but Opus 5.5 at `medium` matched or
-beat Opus 5 at `high` on multistep repository work, and `low` comes close on several coding evals. So set effort
-explicitly, and try a few levels on your task. Keep `xhigh` and `max` for when you've measured that they help. If you
-want less thinking, lower the effort rather than writing instructions about it. Thinking can't be turned off, and
-forcing a tool with `tool_choice` returns an error. To get a tool used, say when it applies.
+Effort is the main control. The default is `medium` (Opus 5 defaulted to `high`). Anthropic's advice is to set it
+explicitly and test a few levels against your own task. Keep `xhigh` and `max` for when you've measured that they
+help. If you want less thinking, lower the effort rather than writing instructions about it. To get a tool used, say
+when it applies.
 
 In Claude Code, it tends to read a request conservatively and build the smallest thing that satisfies it. So say how
 ambitious to be, and don't add a scope-narrowing paragraph unless you've seen it over-reach.
@@ -92,15 +91,8 @@ In unattended loops, keep the parts of the task in a checklist that it updates. 
 hasn't stated a blocker, continue it with a short message that names those items. Stop after two or three automatic
 continuations. Wait for background work to finish before treating the task as done.
 
-Time signals change how it works. A line showing elapsed time against a budget, such as `elapsed 340s / 1200s`, mainly
-makes it run more work in parallel in multi-agent harnesses. Keep a hard timeout of your own anyway. Under time
-pressure it checks its work a little less.
-
 Don't ask it to write out its step-by-step reasoning or `<thinking>` blocks in a plan or review. It may decline as a
 safeguard. Ask for a short explanation of what it decided and why instead.
-
-For the look of a frontend, "avoid a generic AI look" doesn't work. It just swaps one default style for another. Name
-the specific patterns to avoid instead, and add to the list each round.
 
 The rest of this section was measured on Opus 5 and hasn't been tested on 5.5.
 
@@ -119,7 +111,7 @@ for it explicitly.
 
 It delegates readily. Only delegate work that is large, independent and can run in parallel. Don't ask it to spawn a
 subagent to double-check its own work, because it already does that. An independent reviewer with its own brief is a
-different thing, and still worth it where the work is hard to judge. Use one subagent where one is enough. Claude Code and the Agent SDK have hard caps on subagents.
+different thing, and still worth it where the work is hard to judge. Use one subagent where one is enough.
 
 ## OpenAI GPT-6 Astra
 

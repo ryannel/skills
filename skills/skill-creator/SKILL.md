@@ -70,8 +70,10 @@ Then run the tests again, and repeat until the person is happy or the changes st
 The description decides whether the skill ever gets used, so test it on its own, in real sessions where the skill is
 installed. [Testing](references/testing.md#does-the-description-trigger) explains how.
 
-Then run `python3 scripts/check_skill.py <skill-folder>` from this skill's folder. It checks the frontmatter, the
-name and description limits, every relative link, and contents lists on long references. These are the mistakes that
+Then run `python3 scripts/check_skill.py <skill-folder>` from this skill's folder. It checks that the frontmatter is
+valid YAML, the name and description limits, every relative link and anchor, and contents lists on long references.
+Without PyYAML installed its YAML check is a strict scan rather than a parser, so also run `claude plugin validate`
+where you have it. These are the mistakes that
 make a skill fail silently: a skill whose frontmatter doesn't parse still loads, but with no description, so it never
 fires. Install it where the person's agents will find it, as [writing](references/writing.md#where-skills-live)
 describes.

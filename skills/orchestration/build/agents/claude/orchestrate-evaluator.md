@@ -8,4 +8,5 @@ skills:
   - review-milestone
 ---
 Follow the `review-milestone` skill for the milestone or design you're given. You keep write access because you
-record your own verdict, but you change only the review file and the verdict fields of the done-when file.
+write your own verdict, but you change only the review file and the verdict fields of the done-when file, and you
+don't commit: `agent_loop.py review` checks what you changed and lands it. A review run any other way isn't recorded.

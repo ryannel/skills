@@ -43,8 +43,8 @@ When you plan a module, list every capability it uses from other modules. For ea
 module owns it. Find the milestone in that module that delivers it, and add it to the `needs` of the first milestone
 here that can't work without the real thing, as `"CORE:M3"`. If no milestone there delivers it yet, add one to that
 module, or move one earlier, as a re-plan of that module. Write the contract first, so this module can build against
-a stand-in until the milestone that needs the real thing. The lead won't start a milestone until everything in its
-`needs` is done, so a missing link lets a builder start too early, and an unnecessary one holds work back.
+a stand-in until the milestone that needs the real thing. The loop won't start a milestone until everything in its
+`needs` is accepted, so a missing link lets a builder start too early, and an unnecessary one holds work back.
 
 When a builder reports `BLOCKED` because something another module owns is missing, decide who owns it from the map.
 If another module does, add the milestone there and the `needs` link here. If it's really this module's work, add it
@@ -71,6 +71,9 @@ something a user could notice on a real target. For internal work, like a solver
 property you can measure, as long as the items say how it's observed. It can have as many done-when items as it
 needs, and small specific items make better reviews than big vague ones.
 
+Mark an item `attended` when it needs a person or physical hardware, such as a phone plugged in or a permission
+prompt approved. Builders then do everything else first and the owner gets those items in one batch.
+
 Only use cost targets that are real, from the purpose doc or the owner. If nobody has set one, record measurements
 and set tripwires instead of making a number up.
 
@@ -78,10 +81,11 @@ and set tripwires instead of making a number up.
 
 - The design, the plan and the done-when file exist, and they agree with each other, with the contracts and with the
   module's brief.
-- Someone else has reviewed them. Give a fresh `/review-milestone` reviewer only the brief, and let it work out what
-  the module must do. Then it compares that with your design and done-when items. Act on what it finds, and put the
-  review on the plan's `Reviews:` line. If you're running as a subagent and can't launch one, say that the review
-  is still owed.
+- Someone else has reviewed them. Run `agent_loop.py review --module <M> --milestone design --worktree .` (in the
+  build skill's `scripts/`), which gives a fresh reviewer only the brief and design and records the verdict, so the
+  loop won't build the module until a design review passes. Act on what it finds, and put the review on the plan's
+  `Reviews:` line. If you're running inside a loop session and can't start one, say that the design review is owed;
+  the lead runs it.
 - The plan's `Milestone:`, `Now:`, `Next:` and `Blocked:` lines are up to date.
 
 ## When a milestone fails review four times
@@ -90,6 +94,12 @@ Something about the plan is wrong. Read the reviews and decide whether the miles
 depended on something outside this module (re-scope it), or used a mechanism that can't work (redesign it). Write down
 why in the log. Then, in one commit, change the definitions, set `fails` to 0, add 1 to `replans`, and set `state` to
 `open`. Milestones you split off start with the same `replans` count, so a second run of failures still ends in
-parking rather than another re-plan.
+parking rather than another re-plan. The loop records the new definitions after your turn and clears the old proof,
+because it proved something else. Never edit a `-ACCEPTED.json` file: only the loop writes those, and it rejects a
+plan that touches one.
+
+When the owner changes what they want, rather than a milestone failing, they apply it with `owner scope`, which
+doesn't spend a re-plan. If you're asked to write that change, edit the done-when file and leave it uncommitted for
+the owner to apply.
 
 The profile's "Owner decides" list says what has to go to the owner. Everything else is yours to decide.

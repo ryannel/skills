@@ -7,7 +7,8 @@ effort: medium
 
 # Review a milestone
 
-In Codex, the `orchestrate-evaluator` agent runs this on `gpt-6.1-sol` at medium effort.
+`agent_loop.py review` (in the build skill's `scripts/`) starts you at medium effort, in a clean checkout of the
+claimed commit that the loop owns, and it records and integrates your verdict once it has checked your work.
 
 Read `ORCHESTRATE.md` first. Then read the graded examples: the file the profile's `Graded examples` line names (by
 default `<evidence>/graded-examples.md`), and [the starting set](references/graded-examples.md) that comes with this
@@ -54,11 +55,12 @@ path, you don't know that it works, so mark it `cant_tell`.
    If every verdict is `pass` and nothing outside the items fails it, set `state` to `done`. Otherwise, set `state`
    back to `in_progress` and add 1 to `fails`. A `cant_tell` counts as a fail, because nobody could check it. A
    defect outside the items fails the milestone too, and the review proposes an item that would have caught it.
-   Commit only those two files, and integrate them the way the profile says, holding the `integrate` lock.
+   Change only those two files, and don't commit: the loop checks that nothing else changed, sets failed items back
+   to `open`, and lands the verdict on the integrated tip itself.
 5. Your last line is `PASS <milestone>` or `FAIL <milestone>: <n> fail, <n> cant_tell, <n> outside the items`.
 
 Don't change anything else. If you fix what you find, there's no longer an independent check on the fix, and if you
-change the definitions, the loop rejects the next claim.
+change the definitions or touch another milestone, the loop rejects the whole review and nothing of it lands.
 
 ## Things that fool the builder's own checks
 
@@ -77,7 +79,9 @@ Then read the done-when items. Could you actually judge each one, and would it c
 items before building starts is what makes the later verdict fair.
 
 Write the review to `<evidence>/<MODULE>/design-review.md`, ranked the same way. Don't touch the done-when file,
-because no milestone is being judged. Your last line is `DESIGN OK` or `DESIGN CHANGES: <n> findings`.
+because no milestone is being judged. Your last line is `DESIGN OK` or `DESIGN CHANGES: <n> findings`. The loop
+records the verdict against the design as it stands, so no milestone of the module is built until a design review
+passes, and a later change to the design needs another.
 
 ## When the owner disagrees
 

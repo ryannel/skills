@@ -23,8 +23,8 @@ my-skill/evals/flags-negative-quantity/
 └── fixtures/      input files, if the test needs any
 ```
 
-The folder name says what's being tested, in lowercase with hyphens. Avoid `results`, `mocks`, `files`, `true`,
-`false` and `null`, which the CLI treats specially.
+The folder name says what's being tested, in lowercase with hyphens. Avoid `results` and `mocks`, which the CLI
+uses for its own folders.
 
 `prompt.md` starts with a settings block, then the prompt:
 
@@ -33,13 +33,15 @@ The folder name says what's being tested, in lowercase with hyphens. Avoid `resu
 tags: [my-skill]
 max_turns: 20
 timeout_seconds: 600
-allowed_tools: [Read, Glob, Grep, Skill, Write, Edit, Bash]
+allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
 ok so my boss sent me Q4 sales final v2.xlsx and wants a profit margin column. revenue is C, costs are D i think
 ```
 
 The settings block ends at the first `---`, so keep free text out of it. An unknown key there stops the case loading.
+`allowed_tools` takes only read-only tools; a run that needs to write or run commands gets them from `--allow-tools`
+on the command line, and listing `Write` or `Bash` here does nothing.
 
 `case.yaml` holds the schema version (in quotes, or it's read as a number), the name, and what success looks like.
 Input files go in a fixtures folder that the run can read, listed under `context.add_dirs`:
@@ -86,13 +88,20 @@ The comparison only means something if the only difference between the two runs 
    turn it off for the baseline: in Claude Code, set `"skillOverrides": {"<name>": "off"}` in
    `.claude/settings.local.json` for that run. Plugin skills are managed through `/plugin` instead. In Codex, disable
    the skill in its skills settings.
-2. This conversation. Use fresh subagents.
+2. This conversation. Use fresh subagents that start empty, not forks that inherit the conversation; in Claude Code a
+   fork carries your history, and an ordinary subagent doesn't.
 3. A shared working folder. Give each run its own folder and its own copy of the inputs, so one run can't read or
    overwrite the other's output.
-4. A different model or effort. Run both arms on the same model and effort, and write them down.
+4. A different model or effort. A skill's own `model` or `effort` frontmatter can switch the with-skill run onto
+   something else, so record the model and effort each run actually used, from its transcript or result, not what
+   you asked for. Then say whether you're testing the instructions alone or the whole skill including its model
+   choice.
 
-Afterwards, read the baseline's transcript for any sign it loaded the skill. If it did, the baseline isn't one, so
-fix the isolation and run it again.
+Afterwards, read the baseline's transcript for any sign it loaded the skill or read its files. If it did, the
+baseline isn't one, so fix the isolation and run it again.
+
+If the skill is meant for several models, such as Claude and a Codex model, run the cases on each, because a skill
+that works on one can misfire on another.
 
 ## Running them
 
@@ -153,14 +162,17 @@ Show the list to the person before using it, because bad test prompts produce a 
 third of the prompts and don't look at them while you tune.
 
 Test in real sessions where the skill is installed alongside the person's usual skills. Give each one a prompt that
-doesn't mention the skill, and see whether it loads it. Don't ask a model which skill it would pick from a list. That
+doesn't mention the skill, and see whether it loads it. Run each prompt three times, because whether a skill fires
+varies from run to run, and count how often it fired. Don't ask a model which skill it would pick from a list. That
 tells the model it's being tested on skill choice, and it picks far more eagerly than it does in real work.
 
 Tune the description on the prompts you kept, then judge the final version on the ones you set aside. If it does much
 worse on those, it has been fitted to the test, so make it more general rather than adding the missed phrasings.
 
-The most reliable way to run this is a `tool_used` grader under `claude plugin eval`, described below, because it
-runs real sessions and checks whether the Skill tool was actually called.
+A `tool_used` grader under `claude plugin eval`, described below, runs real sessions and checks whether the Skill
+tool was actually called. But its sessions load only the plugin under test, so it tells you whether the description
+fires on its own, not whether it wins against the person's other skills. Do both: the eval for the bulk of the
+prompts, and a few real sessions with the neighbouring skills installed.
 
 ## Running the cases with claude plugin eval
 
@@ -181,7 +193,12 @@ arm: both
 ---
 ```
 
-For a near miss, set `min: 0` and `max: 0` so the case passes only when the skill wasn't used.
+For a near miss, set `min: 0` and `max: 0` so the case passes only when the skill wasn't used. In a with-and-without
+run, a positive trigger case always shows a difference, because the arm without the plugin can't call it. Report it
+as a trigger rate, not as evidence that the skill improves the work.
+
+Eval runs also load none of your settings, `CLAUDE.md` files, memory or other skills, so the CLI gives you a clean
+baseline for free. The subagent route is the one that can leak.
 
 These are real model runs. Signed in with a Claude plan, they draw on the plan's limits. With an API key, they bill
 the API. Either way, offer to run them rather than starting them yourself. `claude plugin validate <skills-folder>`

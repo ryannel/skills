@@ -1665,6 +1665,8 @@ def cmd_review(a: argparse.Namespace) -> None:
                 i["verdict"], i["review"] = by_id[i["id"]].get("verdict", ""), by_id[i["id"]].get("review", "")
             if not passed:
                 reset_proof(target, only_failed=True)
+                if escalation(target.get("fails", 0), target.get("replans", 0)) == "park":
+                    target["state"] = "parked"  # the ladder has run out; only the owner unparks it
             write_json(t / done_path, doc)
             write.append(done_path)
             e = entry(record, mid)
@@ -1682,8 +1684,9 @@ def cmd_review(a: argparse.Namespace) -> None:
     if passed and not design:
         drop_claim(worktree, prof, key, mid)
     fails = find(after, mid).get("fails", 0) if after else None
+    action = None if passed or design else escalation(fails, find(after, mid).get("replans", 0))
     emit("REVIEWED", **info, verdict=verdict, commit=start, review=review_path, review_commit=landed, fails=fails,
-         last_line=out["last_line"], session=out.get("session"))
+         next=action, last_line=out["last_line"], session=out.get("session"))
 
 
 def cmd_plan(a: argparse.Namespace) -> None:

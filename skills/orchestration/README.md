@@ -18,7 +18,7 @@ The first four link to each other's files, so install them together: the `orches
 agents).
 
 You can work at two speeds. In one chat, you run `/plan-module`, then `/build-milestone`, in Claude Code or Codex.
-You can even switch between them partway, because everything the next agent needs is in the files. Or you can fan
+You can even switch between them partway, because everything the next agent needs is in the files. Or you can
 hand the whole build over with `/build`, saying how many builders on which hosts, such as "two Claude builders and one
 Codex".
 
@@ -27,20 +27,26 @@ Codex".
 From the sources:
 - A planner that says what to build and leaves the how to the builder, and a separate evaluator that uses the running
   product, because Claude grading its own work is lenient. These come from Anthropic's
-  [harness design](https://www.anthropic.com/engineering/harness-design-long-running-apps) post. That post also had
-  the evaluator agree testable criteria before building, which is what design review does here.
+  [harness design](https://www.anthropic.com/engineering/harness-design-long-running-apps) post. Its first harness
+  also had the evaluator agree testable criteria per sprint, and the author later dropped sprints for a stronger
+  model. Design review keeps one such agreement per module, because a reviewer who agreed the items up front judges
+  them more fairly later.
 - Acceptance kept in a JSON file, progress kept in files, and checking the product end to end before building on it,
   from [long-running harnesses](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents).
 - Automated checks as the oracle, and locks so parallel agents don't collide, from
-  [the C compiler](https://www.anthropic.com/engineering/building-c-compiler), which had no orchestrator at all.
+  [the C compiler](https://www.anthropic.com/engineering/building-c-compiler), which had no orchestrator at all and
+  locked tasks rather than integration.
 - Planners and workers kept separate, from [Cursor's work on scaling agents](https://cursor.com/blog/scaling-agents).
+  The same post found locks became the bottleneck at twenty agents. Here one lock covers rebase, the Check and push,
+  which is a deliberate trade at two or three builders; revisit it if more run, since a slow Check caps integration
+  at one claim per Check.
 - A durable spec, plan and status that survive compaction, from OpenAI's
   [long-horizon Codex](https://developers.openai.com/blog/run-long-horizon-tasks-with-codex) guide.
 
 These sources describe different setups, not one shared recipe. The rest is house practice, kept because it fixed
 something we saw, not because a source proved it:
-- The escalation ladder. After one or two failed reviews, the same session tries again. After three, a fresh session
-  takes over. After four, the planner re-plans. Four more after that, and the milestone is parked for the owner.
+- The escalation ladder in [the done-when reference](plan-module/references/done-when.md#when-a-review-fails): the
+  same session, then a fresh one, then a re-plan, then parked for the owner.
 - Milestones proved only by commands close without a reviewer, except a module's last milestone, whose review reads
   the whole module. Anthropic's rule for when an evaluator is worth its cost was how hard the task is for the model,
   not what kind of proof it has, so treat this as a trade-off to revisit.
@@ -52,11 +58,57 @@ something we saw, not because a source proved it:
 
 ## What the loop enforces
 
-The loop doesn't take a builder's word for anything. Before it accepts a claim, it checks four things. The done-when
-file has to be valid, with the acceptance definitions unchanged since the planner wrote them. The work has to be
-committed with nothing untracked, and integrated after a fresh fetch. The profile's `Check` and every item's `check`
-have to pass when the loop runs them itself. And the milestone's state has to say what happens next. A builder saying
-`DONE` is never enough on its own.
+The loop doesn't take any agent's word for anything, and it is the only thing that decides what is accepted. It keeps
+`<MODULE>-ACCEPTED.json` beside each done-when file, written only in its own commits, holding the authorised
+definitions, the commit it checked, the reviews, and whether each milestone was accepted and by what.
+
+- **Builders.** Before it accepts a claim, the done-when file has to be valid, with only the builder's own fields
+  changed and the definitions the ones last authorised. The work has to be committed, with nothing untracked, and
+  integrated after a fresh fetch. The profile's `Check` and every item's `check` have to pass when the loop runs them
+  itself, in a clean checkout of the integrated tip. A builder saying `DONE` is never enough.
+- **Reviewers.** They work in a clean checkout of the claimed commit. The loop checks that they changed only the
+  review file and their own fields on that milestone, that the verdicts agree with the last line, and that a fail
+  added one to `fails`, then lands the verdict itself. Anything else, and nothing lands.
+- **Planners.** The loop validates what they wrote, rejects a plan that grants passes or touches a record, commits and
+  integrates the rest, and records the new definitions. A new module waits for a design review.
+- **The queue.** One rule decides what's ready, for `ready`, `status` and `run` alike: a milestone starts only when
+  the ones before it in its module, and its `needs` elsewhere, are accepted. Claims on milestones are refs every clone
+  can see, so two leads don't start the same one.
+- **The owner.** Accepting without review, re-reviewing, unparking and changing scope are owner commands, refused
+  inside any session the loop started and confirmed at a terminal.
+
+## Hosts
+
+| | Codex | Claude Code | Another CLI |
+|---|---|---|---|
+| Launch | `codex exec --json`, resumable | `claude -p` with stream-json, resumable | the profile's `Host <name>:` command, one fresh process per turn |
+| Model and effort | pinned at launch and checked per turn from the session file | pinned at launch; the model is checked from the stream, the effort isn't | pinned in the command; not checked |
+| Reviewers and planners can't launch agents | `-c features.multi_agent=false` | `--disallowedTools Agent`, plus the orchestrate agent files when installed | only the prompt says so |
+| Goals and quota | goal status and a weekly-quota forecast, from Codex's local files | neither (Claude's `/goal` exists under `-p`, but the loop doesn't use it) | neither |
+| Skills | found by name | found by name | the prompt gives each skill's path |
+
+## Known limits
+
+- Everything the loop starts runs inside the lead's process, with its sandbox and operating-system permissions. A
+  lead in a sandbox without network or `.git` writes can't run builders that integrate, and a builder that needs
+  screen recording or a camera needs it granted to the app the lead runs in.
+- The checks run with the lead's own permissions, outside any host's sandbox. The check strings are pinned, but a
+  script a check calls can still be changed by the builder, so review new check scripts. Proper isolation would need
+  a container.
+- The acceptance record is protected by convention and detection, not cryptography: a commit that edits it without
+  the loop's trailer blocks the next claim, but an agent that forges the trailer deliberately could get past that. A
+  module the loop hasn't seen before is taken as it stands, once.
+- Claude runs use the signed-in plan because the loop removes `ANTHROPIC_API_KEY` from their environment; a
+  configured credential helper could still supply other credentials. Anthropic has said `--bare` will become the
+  default for `claude -p`, and bare mode reads only API-key credentials and skips agent and skill discovery, so
+  Claude builders will need a change then. Tested with Claude Code 2.1.239 and Codex 0.167.
+- The reviewer is the least proven part. `review-milestone` makes it use the product itself, read the whole diff,
+  write down what it's going to inspect before it looks, and fail what it finds rather than argue it away. It ships
+  with four graded examples, and the owner calibrates it by spot-checking early verdicts. That's the method
+  Anthropic used, but nobody has yet measured how often this reviewer catches a fake, or wrongly fails a sound one.
+- The loop is POSIX only. Its goal-based stop rules depend on Codex's local goal database, and whether `codex exec`
+  writes to it hasn't been confirmed. Without it, those rules are skipped.
+- No project has run a complete milestone cycle under this version yet.
 
 ## Known limits
 
@@ -67,8 +119,6 @@ have to pass when the loop runs them itself. And the milestone's state has to sa
   write down what it's going to inspect before it looks, and fail what it finds rather than argue it away. It ships
   with four graded examples, and the owner calibrates it by spot-checking early verdicts. That's the method
   Anthropic used, but nobody has yet measured how often this reviewer catches a fake.
-- The reviewer has write access, because it records its own verdict. It can't launch other agents, the lead checks
-  what its commit touched, and the loop rejects changed definitions.
 - The loop is POSIX only. Its goal-based stop rules depend on Codex's local goal database, and whether `codex exec`
   writes to it hasn't been confirmed. Without it, those rules are skipped.
 - No project has run a complete milestone cycle under this version yet.

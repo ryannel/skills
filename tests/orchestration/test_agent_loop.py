@@ -777,7 +777,8 @@ class Reviewing(Repo):
         commit = self.claim()
         os.environ.update(FAKE_REVIEW="fail")
         result = self.review(commit=commit)
-        self.assertEqual((result["result"], result["verdict"], result["fails"]), ("REVIEWED", "FAIL", 1))
+        self.assertEqual((result["result"], result["verdict"], result["fails"], result["next"]),
+                         ("REVIEWED", "FAIL", 1, "same-session"))
         m1 = self.read_done()["milestones"][0]
         self.assertEqual((m1["state"], m1["items"][0]["status"], m1["items"][0]["evidence"]), ("in_progress", "open", ""))
         self.assertEqual(m1["items"][0]["verdict"], "fail")
@@ -788,6 +789,15 @@ class Reviewing(Repo):
         self.assertEqual(last["argv"][last["argv"].index("resume") + 1], "t1")
         self.assertIn("--add-dir", last["argv"][:last["argv"].index("resume")])
         self.assertEqual(last["argv"][-1], "FINDINGS")
+
+    def test_the_loop_parks_a_milestone_when_the_ladder_runs_out(self):
+        self.write_done([dict(milestone("M1", "open", ["open"], inspect="frames"), fails=3, replans=1),
+                         milestone("M2", "open", ["open"])])
+        self.commit_all()
+        commit = self.claim()
+        os.environ.update(FAKE_REVIEW="fail")
+        self.assertEqual(self.review(commit=commit)["next"], "park")
+        self.assertEqual(self.read_done()["milestones"][0]["state"], "parked")
 
     def test_astra_3_review_of_a_missing_commit_is_invalid(self):
         self.claim()

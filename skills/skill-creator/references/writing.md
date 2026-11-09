@@ -80,8 +80,8 @@ out the jokes, because agents can take them literally and they cost attention.
 
 Give the reason with the rule. Anthropic's prompting guide shows that Claude generalises from the explanation:
 "Don't use ellipses, because a text-to-speech engine reads this aloud" lets the agent handle cases you never listed,
-and "NEVER use ellipses" doesn't. OpenAI's Astra guidance makes the matching point from the other side: state the
-intent and the outcome, and stop prescribing steps. Both come to the same thing. The agent should know what you're
+and "NEVER use ellipses" doesn't. OpenAI's Astra guidance makes the matching point from the other side: define
+completion and where to stop, and stop prescribing steps. Both come to the same thing. The agent should know what you're
 after and why.
 
 Say the obvious out loud only when agents have been seen to skip it, and attach what happened. "Agents that skipped

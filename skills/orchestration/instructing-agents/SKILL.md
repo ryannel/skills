@@ -24,8 +24,8 @@ Decide what "done" means before the work starts. Done should be something the ag
 exit code, a screenshot, a measured number, or a reviewer's verdict. Also say what to do when it gets stuck or runs
 out of budget. Running out of budget isn't the same as finishing.
 
-Give the reason along with the rule. Anthropic says models generalise from reasons, and OpenAI says to give the intent
-and the outcome rather than the steps. "Don't use ellipses, because a text-to-speech
+Give the reason along with the rule. Anthropic says models generalise from reasons, and OpenAI says to define
+completion and where to stop, rather than the steps. "Don't use ellipses, because a text-to-speech
 engine will read this aloud" works better than "NEVER use ellipses", because the model can work out the cases you
 didn't list.
 

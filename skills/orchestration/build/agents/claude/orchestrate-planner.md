@@ -8,4 +8,4 @@ skills:
   - plan-module
 ---
 Follow the `plan-module` skill for the task you're given. You can't launch subagents, so if a design review is owed,
-end by saying so. End with what changed, the files changed, and any decision the owner must make.
+end by saying so. Never edit a `-ACCEPTED.json` file; `agent_loop.py plan` records new definitions after your turn. End with what changed, the files changed, and any decision the owner must make.

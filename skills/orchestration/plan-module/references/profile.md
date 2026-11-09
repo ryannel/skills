@@ -6,7 +6,8 @@ them in.
 
 `agent_loop.py` reads the lines marked *(loop)*. Keep them in the `- **Label:** value` shape, with nothing on the line
 but the value and an optional `*( )*` note, because the loop takes the whole line as the value. Run
-`agent_loop.py profile` to check they parse.
+`agent_loop.py profile` to check they parse. `Integrate` and `Check` are required, and the loop refuses to run
+without them, because guessing either one would either push without permission or integrate without a gate.
 
 ```markdown
 # Orchestrate profile: <project>
@@ -16,18 +17,20 @@ but the value and an optional `*( )*` note, because the loop takes the whole lin
 - **Plans:** docs/modules  *(loop)*
 - **Evidence:** docs/evidence  *(loop: review files and evidence pages)*
 - **Graded examples:** docs/evidence/graded-examples.md  *(past verdicts the owner agreed with or overturned)*
-- **Check:** npm run check  *(loop: the exact command that must pass before integrating)*
-- **Integrate:** push  *(loop: push = rebase onto Remote/Branch and push without force; local = commit to Branch only)*
+- **Check:** npm run check  *(loop: required; the exact command that must pass before integrating, or `none`)*
+- **Integrate:** local  *(loop: required; push = rebase onto Remote/Branch and push without force; local = fast-forward the local Branch only)*
 - **Branch:** main  *(loop)*
 - **Remote:** origin  *(loop)*
 - **Builders:** usually one Codex builder  *(how many builders, on which hosts, when the owner doesn't say)*
-- **Codex model:** gpt-6.1-sol  *(loop)*
+- **Default host:** codex  *(loop: optional; the host used when the lead doesn't name one; otherwise the host the loop runs inside)*
+- **Codex model:** gpt-6.1-sol  *(loop: any `<host> model:` line sets that host's model)*
 - **Claude model:** claude-opus-5-5  *(loop)*
 - **Effort:** medium  *(loop: optional; medium is the default for builders and reviewers, high for planners)*
 - **Claude permissions:** auto  *(loop: the permission mode for headless Claude runs: auto, acceptEdits, dontAsk or bypassPermissions)*
 - **Codex sandbox:** workspace-write  *(loop: or danger-full-access)*
 - **Writable roots:** <paths the build writes outside the worktree, e.g. ~/.cargo, ~/.npm>  *(loop)*
 - **Host gemini:** gemini -p {prompt} -m {model}  *(loop: optional; any other agent CLI, with {prompt}, {model}, {effort} and {cwd} placeholders)*
+- **Gemini model:** <model>  *(loop: needed for each host line)*
 
 ## Starting from a clean clone
 <how a fresh worktree gets to a running product: setup command, seed data and test accounts, services it needs,
@@ -51,4 +54,6 @@ where secrets come from, and how parallel worktrees avoid sharing a port or data
 ```
 
 `Integrate: push` is standing permission to push verified work to the branch. Only set it if the owner has given that
-permission. Without it, use `local`, and the owner merges.
+permission, and if the project's `AGENTS.md` or `CLAUDE.md` says not to push without authorisation, say in the note
+that this line is that authorisation, so an agent reading both knows which wins. Without it, use `local`, and the
+owner merges.
