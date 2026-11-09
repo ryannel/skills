@@ -9,6 +9,15 @@
     "bin/",
     "install.py",
     ".claude-plugin/marketplace.json",
-    "skills/orchestration/"
-  ]
+    "skills/orchestration/",
+    "!**/__pycache__/**"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ryannel/skills.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

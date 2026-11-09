@@ -59,7 +59,7 @@ the owner), and the skills stay generic.
 Install the orchestration plugin and evaluator from an interactive terminal with Node.js, Git and Python 3:
 
 ```sh
-npx github:ryannel/skills
+npx @ryannel/orchestrate
 ```
 
 Choose Claude Code, Codex or both when their CLIs are available. Choose **Global** for all projects, or
@@ -70,6 +70,23 @@ writes portable copies to the project's `.claude/agents/` directory.
 Restart open sessions and run `/plan-module` in the target project to write `ORCHESTRATE.md`.
 For scripted installs, see [Setting up for Claude Code and Codex](#setting-up-for-claude-code-and-codex).
 [Why it looks like this](./skills/orchestration/README.md).
+
+<details>
+<summary>Publish the installer</summary>
+
+After merging, check out the merged revision. Sign in to npm with an account that can publish to the
+`@ryannel` scope. Set a new version in `package.json` for each subsequent release, then run:
+
+```sh
+npm pack --dry-run
+npm publish
+```
+
+The package is configured for public access on the npm registry. After publishing, verify with
+`npx @ryannel/orchestrate --help`. The package versions the installer. Claude Code and Codex fetch
+the orchestration plugin from the GitHub marketplace.
+
+</details>
 
 ## Instructing agents
 

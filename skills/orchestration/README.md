@@ -12,7 +12,7 @@ the skills read it, so they don't need to know anything project-specific.
 | [`build`](build/) | Opus 5.5 lead, medium (any host can lead) | Builds the planned project unattended: keeps N builders busy on ready milestones, on Codex, Claude Code or another host, with fresh reviewers and a planner |
 
 They link to each other's files, so install them together. For an interactive install, run
-`npx github:ryannel/skills` and choose the agents and scope.
+`npx @ryannel/orchestrate` and choose the agents and scope.
 Claude Code supports global or project installation. Codex supports global installation.
 From a clone of the skills repo,
 `python3 install.py --plugins orchestrate` installs the `orchestrate` plugin in Claude Code (skills and the planner
