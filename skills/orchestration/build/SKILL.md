@@ -24,22 +24,30 @@ The owner says it in plain words, like "build it with two Claude builders and on
 going on Core and Water". Work out four things from that:
 - how many builders, and on which hosts (`codex`, `claude`, or a host the profile names);
 - any model or effort the owner named (otherwise each host's model comes from the profile, and effort is `medium`);
-- which modules (if none are named, the whole build order in the module map);
+- which modules (if none are named, the whole build order in the module map, `ARCHITECTURE.md` in the profile's
+  plans folder);
 - anything the owner ruled out.
 
-If the request leaves something open, use the profile's usual mix and say what you chose in your first report. Don't
-stop to ask. Check `LOOP quota` before launching Codex builders, and include its forecast in that report.
+If the request leaves something open, use the profile's `Builders` line and say what you chose in your first report.
+Don't stop to ask. Pass `--model` or `--effort` to the loop only when the owner asked for something other than the
+default, because the loop already uses the profile's model and medium effort. Check `LOOP quota` before launching Codex builders, and include its forecast in that report.
 
 ## The queue
 
-`LOOP ready --worktree <repo>` reads every done-when file at the integrated tip. It lists the milestones that are
-ready, those waiting on a milestone in another module (their `needs`), those owed review, and the modules with
-nothing left. A milestone is ready when everything in its `needs` is done.
+`LOOP ready --worktree <repo>` reads every done-when file (`<plans>/<MODULE>-DONE.json`) at the integrated tip. For
+each module it lists the next milestone, as ready, waiting on a milestone in another module (its `needs`), or owed
+review, plus the modules with nothing left. It shows only each module's next milestone, because milestones in a
+module run in order.
 
-Keep the chosen number of builders running. When one stops, start the next ready milestone, preferring the module it
-was just in. Each builder gets a fresh session per milestone, and only one builder works in a module at a time. Give
-each module its own worktree outside the main checkout, such as `.claude/worktrees/<module>`, and keep it across
-milestones so build caches stay warm.
+Keep the chosen number of builders running, up to the number of ready milestones. When one stops, start the next
+ready milestone, preferring the module it was just in. When there are fewer ready milestones than builders, give
+them to the hosts in the order the owner listed. Each builder gets a fresh session per milestone, and only one
+builder works in a module at a time.
+
+Give each module its own worktree on its own branch, in a folder git ignores, and keep it across milestones so build
+caches stay warm: `git worktree add -b build/<module> <folder>/<module> <remote>/<branch>`. A worktree can't check out
+the base branch while the main checkout has it, so builders integrate by rebasing onto `<remote>/<branch>` and
+pushing `HEAD:<branch>`, which leaves HEAD on the base branch as the loop checks.
 
 If nothing is ready, run fewer builders and say why in the report. Never have anyone build ahead of an unfinished
 dependency. That's how two modules end up with two versions of the same thing.
@@ -49,15 +57,17 @@ done-when file, have the planner plan it now, so the queue doesn't run dry.
 
 ## Running
 
-Start a builder with `LOOP run --module <M> --worktree <path> --host <host>` as a background command, adding
-`--model` or `--effort` only if the owner named them. When it stops, it prints one line of JSON saying why.
+Start a builder with `LOOP run --module <M> --worktree <path> --host <host>` as a background command. When it stops,
+it prints one line of JSON saying why.
 
 Reviewers and planners also run through the loop, each in a fresh session:
-- `LOOP review --module <M> --milestone <id> --commit <sha> --worktree <path> --host <host>`
-- `LOOP plan --worktree <path> --task "<what to plan>" --host <host>`
+- a milestone: `LOOP review --module <M> --milestone <id> --commit <sha> --worktree <path> --host <host>`
+- a design: `LOOP review --module <M> --milestone design --commit HEAD --worktree <path> --host <host>`
+- planning: `LOOP plan --worktree <path> --task "<what to plan>" --host <host>`
 
-Run each review on a different host from the one that built the milestone, when you have two. A reviewer from
-another vendor shares fewer of the builder's blind spots. On Claude Code you may launch the `orchestrate-evaluator`
+Run each review on a different host from the one that built the milestone, when two hosts work. A reviewer from
+another vendor shares fewer of the builder's blind spots. If the other host fails to start (a `FLOOR`), use the same
+host in a fresh session, and say so in the report. On Claude Code you may launch the `orchestrate-evaluator`
 and `orchestrate-planner` agents as subagents instead, without overriding their model.
 
 | The loop says | You do |
@@ -82,8 +92,7 @@ doesn't own. If it isn't empty, revert those changes and report it. Then, if the
 Don't second-guess it. The count is the record of what's already been tried, and leads that overrule it end up
 running the same failing attempt over and over.
 
-When the planner plans a new module, or says a design review is owed, run a review of the design
-(`LOOP review --milestone design --commit HEAD …`) before any of that
+When the planner plans a new module, or says a design review is owed, run a design review before any of that
 module's milestones go to a builder. If the review says `DESIGN CHANGES`, send it back to the planner once. If the
 second review still asks for changes, park the module and report it.
 
@@ -91,15 +100,16 @@ If a builder breaks the main branch, whichever builder notices first fixes it.
 
 ## Reporting
 
-Once a day, and when you stop, send the owner one screen covering:
+Once a day, and when you stop, write the owner one screen in `<evidence>/build-reports/<date>.md`, and send it
+however the owner follows this session. Cover:
 - what closed, with links to the evidence;
-- the reviewers' verdicts, linked, so the owner can spot-check them (in a project's first few weeks, flag every one,
-  because that's how the reviewer gets calibrated);
+- the reviewers' verdicts, linked, so the owner can spot-check them (while the project's graded examples hold fewer
+  than about ten verdicts, flag every one, because that's how the reviewer gets calibrated);
 - new inspection items, so the owner can adjust the bar;
 - anything parked, blocked or waiting, and how many builders ran;
 - the Codex quota forecast.
 
-If the forecast first shows the limit running out before it resets, tell the owner right away, then keep going. It's
+If the forecast first shows the limit running out before it resets (its `runs_out` is set), tell the owner right away, then keep going. It's
 their call whether to slow down.
 
 Stop when the build order is finished, or when everything left is parked, waiting or needs the owner. Then clean up
