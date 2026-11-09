@@ -37,7 +37,7 @@ scripts.
 Subcommands:
 
   run   --module CORE --worktree PATH [--host H] [--model M] [--effort E] [--milestone M2] [--fresh]
-        [--message TEXT] [--budget-hours 4]
+        [--message TEXT] [--owner-rule TEXT]... [--clear-owner-rules] [--budget-hours 4]
         Starts (or resumes) a builder session on the module's next milestone and drives it one turn at a time until:
         CLAIMED       the claim holds: the done-when file is valid and only the builder's own fields changed, the
                       milestone's state is `claimed` (or `done` when it needs no review), every item is `pass` with
@@ -56,6 +56,8 @@ Subcommands:
         TAKEN         another lead or run holds this module or milestone
         BUDGET        no new passing item, and no commit of the builder's own outside the plans folder, for
                       --budget-hours
+        STALLED       three turns in a row changed nothing and reported nothing (progress updates); the two
+                      continuations between them named the open items
         FLOOR         two failed turns in a row, the host CLI is missing, the integrated tip can't be fetched, or
                       the goal is usage- or budget-limited (likely quota, sign-in or outage)
         PIN           a turn ran on a model or effort other than the named ones
@@ -64,9 +66,9 @@ Subcommands:
         A run on the same milestone resumes its session (with --message as the first prompt, e.g. the reviewer's
         findings) unless --fresh is given or the host, model or effort changed. A new milestone starts a new session.
         --milestone only confirms which milestone you expect; it never skips one that comes first.
-        Each resumed turn restates what binds the builder (its fields, `land`, the Check, the profile's
-        `Licences and paths not to touch` and `Owner decides` lines, attended items), except on a Codex thread
-        whose goal is active; `goal` in the result says which, and `constraints_missing` names profile lines that
+        Each resumed turn restates the objective and what binds the builder (its fields, `land`, the Check, the
+        profile's `Licences and paths not to touch` and `Owner decides` lines, attended items, owner rules), except
+        on a Codex thread whose goal is active, which gets only the owner rules; `goal` in the result says which, and `constraints_missing` names profile lines that
         weren't there to restate. Claims and reviews record the requested host, model and effort, the CLI's
         version, and under `observed` only what the host's own output showed.
         Prints one JSON line with the result as the last line of output. Its `warnings` are the launch's loader
@@ -81,9 +83,12 @@ Subcommands:
         FLOOR, PIN or PAUSED.
 
   plan  --worktree PATH --task TEXT [--host H] [--model M] [--effort high]
-        Runs a fresh planner in a clean worktree, checks its done-when files, commits and lands whatever it left,
-        and authorises the new definitions (resetting proof on milestones whose definitions changed). PLANNED lists
-        the modules whose design review is now owed.
+        Runs a fresh planner in a clean worktree. Its last line must be `PLANNED: <files>` naming files it
+        changed that exist (a design beside every changed done-when file), else it's nudged with what's missing, at
+        most twice. Then the loop checks its done-when files, commits and lands its files, and authorises the new
+        definitions (resetting proof on milestones whose definitions changed). PLANNED lists the modules whose
+        design review is now owed. BLOCKED or NEEDS_CONTEXT from the planner, or UNFINISHED, lands nothing and
+        leaves its files uncommitted.
 
   land  --worktree PATH [--no-check]
         Integrates the worktree's commits under the integrate lock: rebase onto the base, run the profile's Check,
@@ -169,32 +174,31 @@ something another module owns that isn't there yet, don't build it here: end wit
 Take other exclusive resources with `python3 {loop} lock <name> -- <command>`.
 
 Don't launch a reviewer; the lead runs review. End with DONE and the evidence when the claim is made. If you're \
-blocked (probed directly) or missing context, end with `BLOCKED: ...` (what would unblock it) or \
-`NEEDS_CONTEXT: ...`, with the evidence.
+blocked (you tried it and it failed) or missing context, end with `BLOCKED: ...` (what would unblock it) or \
+`NEEDS_CONTEXT: ...`, with the evidence."""
 
-(Launched on {model} at {effort} effort.)"""
-
-REVIEW_TEMPLATE = """Model {model}, effort {effort}. Use the review-milestone skill ({skill}) to review milestone \
+REVIEW_TEMPLATE = """Use the review-milestone skill ({skill}) to review milestone \
 {milestone} of module {module}. This folder is a clean checkout of commit {commit}, made for you by the loop; build \
 and run the product from it. The done-when file is {done}. Write the review to {review}, and set the verdict fields, \
 state and fails as the skill says. Don't commit, push or change anything else: the loop checks what you changed, \
 then integrates the review itself. Don't launch other agents. End with the skill's last line."""
 
-DESIGN_REVIEW_TEMPLATE = """Model {model}, effort {effort}. Use the review-milestone skill ({skill}) to review the \
+DESIGN_REVIEW_TEMPLATE = """Use the review-milestone skill ({skill}) to review the \
 design of module {module}, as its "Reviewing a design" section describes. This folder is a clean checkout of the \
 integrated tip. Write the review to {review} and change nothing else; the loop integrates it. Don't launch other \
 agents. End with the skill's last line."""
 
-PLAN_TEMPLATE = """Model {model}, effort {effort}. Use the plan-module skill ({skill}) for this task: {task}
+PLAN_TEMPLATE = """Use the plan-module skill ({skill}) for this task: {task}
 
 You can't launch other agents. The loop commits and integrates the files you leave, and records the new \
-definitions; never edit a *-ACCEPTED.json file. End with what changed, the files changed, and any decision the owner \
-must make."""
+definitions; never edit a *-ACCEPTED.json file. Say what changed and any decision the owner must make. Your last line \
+is `PLANNED: <every file you wrote or changed, comma-separated>` once those files are written, or `BLOCKED: ...` or \
+`NEEDS_CONTEXT: ...` (including when nothing should change); the loop lands nothing then."""
 
 FINDINGS_TEMPLATE = """The reviewer failed {milestone}: see {evidence}/{module}/{milestone}-review.md. The loop has \
-set the items that didn't pass back to open, so each needs fresh evidence. Every finding counts, including cant_tell \
-items (they need evidence the reviewer could reach) and defects outside the items. Add them to the plan as work \
-items, fix them, re-verify the affected items, integrate, set the state back to claimed, and end with DONE, BLOCKED \
+set the items that didn't pass back to open, so each needs fresh evidence. Every blocking finding counts, including \
+cant_tell items (they need evidence the reviewer could reach) and blocking defects outside the items; advisory ones \
+are your call. Add them to the plan as work items, fix them, re-verify the affected items, integrate, set the state back to claimed, and end with DONE, BLOCKED \
 or NEEDS_CONTEXT."""
 
 
@@ -1216,16 +1220,59 @@ def clean_env(role: str = "build") -> dict:
     return {**env, "ORCHESTRATE_ROLE": role}
 
 
+def plugin_components(home: Path, kind: str) -> dict[str, str]:
+    """{component name: plugin} for the `kind` ("skills" or "agents") of every plugin installed under `home`
+    (CLAUDE_HOME or CODEX_HOME). Both hosts copy an installed plugin to plugins/cache/<marketplace>/<plugin>/<version>/;
+    a copy of this repository holds every plugin's files, so only the components its marketplace entry lists count.
+    Without an entry, the standard layout (skills/<name>/SKILL.md, agents/<name>.md) does. Claude also loads a plugin
+    from a local-path marketplace in place, enabled in settings.json."""
+    roots = [(Path(v), Path(v).parent.name) for v in glob.glob(str(home / "plugins/cache/*/*/*")) if Path(v).is_dir()]
+    try:
+        enabled = json.loads((home / "settings.json").read_text()).get("enabledPlugins") or {}
+        known = json.loads((home / "plugins/known_marketplaces.json").read_text())
+    except (OSError, ValueError, AttributeError):
+        enabled, known = {}, {}
+    for key, on in enabled.items():
+        plugin, _, market = key.partition("@")
+        where = (known.get(market) or {}).get("installLocation") if on and isinstance(known, dict) else None
+        if where and Path(where).is_dir():
+            roots.append((Path(where), plugin))
+    found = {}
+    for root, plugin in roots:
+        try:
+            entries = json.loads((root / ".claude-plugin/marketplace.json").read_text()).get("plugins") or []
+            listed = next((e.get(kind) for e in entries if e.get("name") == plugin), None)
+        except (OSError, ValueError, AttributeError):
+            listed = None
+        if isinstance(listed, str):
+            listed = [listed]
+        if listed:
+            paths = [root / p for p in listed]
+        else:
+            paths = list((root / kind).glob("*")) if (root / kind).is_dir() else []
+        for p in paths:
+            if kind == "skills" and (p / "SKILL.md").exists():
+                found.setdefault(p.name, plugin)
+            elif kind == "agents" and p.suffix == ".md" and p.exists():
+                found.setdefault(p.stem, plugin)
+    return found
+
+
 def agent_installed(name: str, worktree: Path) -> bool:
-    return any(p.exists() for p in (Path.home() / ".claude/agents" / f"{name}.md",
-                                    worktree / ".claude/agents" / f"{name}.md"))
+    return any(p.exists() for p in (CLAUDE_HOME / "agents" / f"{name}.md", worktree / ".claude/agents" / f"{name}.md")) \
+        or name in plugin_components(CLAUDE_HOME, "agents")
 
 
-def skill_note(name: str) -> str:
-    """How a host finds a skill: by name where it has a skill mechanism, by path where it doesn't."""
+def skill_note(name: str, host: str = "codex") -> str:
+    """How the agent finds a skill: the file always, plus the name Codex knows it by (namespaced when a plugin
+    installed it). Claude finds a plugin skill by its bare name when no other skill has it."""
     path = SKILLS / name / "SKILL.md"
-    where = f"; the file is {path}" if path.exists() else ""
-    return f"${name} in Codex{where}"
+    where = f"the file is {path}" if path.exists() else ""
+    if host != "codex":
+        return where or name
+    plugin = plugin_components(CODEX_HOME, "skills").get(name)
+    named = f"`{plugin}:{name}` in Codex" if plugin else f"${name} in Codex"
+    return named + (f"; {where}" if where else "")
 
 
 def default_host(prof: dict) -> str:
@@ -1423,11 +1470,17 @@ def launch_record(host: str, model: str, effort: str, path: str | None, observed
     return {**rec, "path": path} if path else rec
 
 
+def owner_rules_line(rules: list[str]) -> str:
+    return " ".join(f"Owner: {r.strip().rstrip('.')}." for r in rules)
+
+
 def binding(prof: dict, role: str, mid: str = "", milestone: dict | None = None, done: str = "",
-            review: str = "") -> tuple[str, list[str]]:
+            review: str = "", rules: list[str] | None = None) -> tuple[str, list[str]]:
     """The terse restatement of what binds this role, for resumed turns, and the sources it couldn't find. Built only
-    from the profile (as read at the start of the run, before the agent could edit it), the done-when file and the
-    loop's own contracts. A reviewer gets its own boundaries, never the builder's instruction to integrate."""
+    from the profile (as read at the start of the run, before the agent could edit it), the done-when file, the
+    owner's rules stored with the run (`--owner-rule`) and the loop's own contracts. A builder's opens with its
+    objective, which a compaction may have dropped. A reviewer gets its own boundaries, never the instruction to
+    integrate."""
     missing = [label for label, value in prof.get("bounds", {}).items() if not value]
     if role == "review":
         own = f"{review}" + (f" and the verdict fields, state and fails in {done}" if done else "")
@@ -1435,7 +1488,8 @@ def binding(prof: dict, role: str, mid: str = "", milestone: dict | None = None,
     else:
         how = "push: it rebases and pushes, never force" if prof["integrate"] == "push" else \
             "local: it fast-forwards the local branch; don't push"
-        text = (f"Still binding: change only {mid}'s state and its items' status and evidence in {done}. Integrate "
+        text = (f"Objective: {mid} claimed, every item pass with evidence and the work integrated. "
+                f"Still binding: change only {mid}'s state and its items' status and evidence in {done}. Integrate "
                 f"only with `python3 {LOOP} land --worktree .` ({how}). Check: " +
                 (f"`{prof['check']}`." if prof["check"] else "none."))
         attended = [i["id"] for i in (milestone or {}).get("items", []) if i.get("attended")]
@@ -1444,6 +1498,8 @@ def binding(prof: dict, role: str, mid: str = "", milestone: dict | None = None,
     for label, value in prof.get("bounds", {}).items():
         if value:
             text += f" {label}: {value.rstrip('.')}."
+    if rules:
+        text += " " + owner_rules_line(rules)
     return text, missing
 
 
@@ -1495,13 +1551,12 @@ def skill_warnings(host: str, worktree: Path, role: str) -> list[str]:
     dirs = (worktree, *worktree.parents)
     if host == "claude":
         places = [CLAUDE_HOME / "skills", *(d / ".claude/skills" for d in dirs)]
-        found = any((p / name / "SKILL.md").exists() for p in places) or \
-            bool(glob.glob(str(CLAUDE_HOME / "plugins" / "**" / "skills" / name / "SKILL.md"), recursive=True))
+        found = any((p / name / "SKILL.md").exists() for p in places) or name in plugin_components(CLAUDE_HOME, "skills")
         where = f"{CLAUDE_HOME}/skills, .claude/skills or an installed plugin"
     else:
         places = [AGENTS_HOME / "skills", Path("/etc/codex/skills"), *(d / ".agents/skills" for d in dirs)]
-        found = any((p / name / "SKILL.md").exists() for p in places)
-        where = f"{AGENTS_HOME}/skills or .agents/skills"
+        found = any((p / name / "SKILL.md").exists() for p in places) or name in plugin_components(CODEX_HOME, "skills")
+        where = f"{AGENTS_HOME}/skills, .agents/skills or an installed plugin"
         if not found and (CODEX_HOME / "skills" / name / "SKILL.md").exists():
             where += f" (it's in {CODEX_HOME}/skills, which Codex's skills docs don't list)"
     if found:
@@ -1961,6 +2016,23 @@ RUN_RESULTS = {"review_owed": "REVIEW_OWED", "waiting": "WAITING", "design_owed"
                "invalid": "INVALID"}
 
 
+STALL_TURNS = 3  # turns in a row with no change and no report: the first, then two continuations naming open items
+
+
+def work_marks(worktree: Path, milestone: dict | None) -> str:
+    """A fingerprint of the builder's uncommitted work and its milestone's builder fields, so a turn that changed
+    neither is told apart from one that did work without committing it."""
+    tree = git(worktree, "status", "--porcelain").stdout + git(worktree, "diff", "HEAD").stdout
+    fields = json.dumps([(milestone or {}).get("state")] + [(i.get("id"), i.get("status"), i.get("evidence"))
+                                                          for i in (milestone or {}).get("items", [])])
+    return hashlib.sha256((tree + fields).encode()).hexdigest()
+
+
+def open_items(milestone: dict | None) -> str:
+    ids = [i["id"] for i in (milestone or {}).get("items", []) if i.get("status") != "pass"]
+    return f" Still open: {', '.join(ids)}." if ids else ""
+
+
 def cmd_run(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, strict=True)
@@ -2011,14 +2083,19 @@ def cmd_run(a: argparse.Namespace) -> None:
     pin = [host, model, effort]
     state = json.loads(state_path.read_text()) if state_path.exists() else {}
     fresh = (a.fresh or state.get("milestone") != mid or state.get("result") == "PIN" or state.get("pin") != pin)
+    # The owner's rules outlive fresh sessions and milestones, until the owner has them cleared.
+    rules = [] if getattr(a, "clear_owner_rules", False) else list(state.get("owner_rules") or [])
+    rules += [r.strip() for r in getattr(a, "owner_rule", None) or [] if r.strip() and r.strip() not in rules]
     if fresh:
         state = {"module": stem, "milestone": mid, "thread": None, "turns": 0, "pin": pin}
+    state["owner_rules"] = rules
     # Every run starts its own counters, so a resume after BUDGET or a failed review isn't judged on old progress.
     _, reflog = own_progress(worktree, 10 ** 9, prof["plans"])
-    state.update(failed_turns=0, reports=0, unclaimed=0, progress_at=time.time(), passing=passing(milestone),
-                 reflog=reflog, host=host, model=model, effort=effort, start_tip=start_tip)
+    state.update(failed_turns=0, reports=0, unclaimed=0, idle=0, progress_at=time.time(), passing=passing(milestone),
+                 reflog=reflog, host=host, model=model, effort=effort, start_tip=start_tip,
+                 marks=work_marks(worktree, milestone))
     state.pop("result", None)
-    restate, missing = binding(prof, "build", mid, milestone, done_rel(prof, stem))
+    restate, missing = binding(prof, "build", mid, milestone, done_rel(prof, stem), rules=rules)
     state["constraints_missing"] = missing
     if missing:
         print("warning: ORCHESTRATE.md has no filled-in " + " or ".join(f"`{m}`" for m in missing) +
@@ -2049,9 +2126,9 @@ def cmd_run(a: argparse.Namespace) -> None:
             finish(state_path, state, "PAUSED")
         first = state.get("thread") is None or not resumable
         if first:
-            prompt = BUILD_TEMPLATE.format(model=model, effort=effort, goal=GOAL_LINE if host == "codex" else "",
+            prompt = BUILD_TEMPLATE.format(goal=GOAL_LINE if host == "codex" else "",
                                            milestone=mid, module=stem, done=done_rel(prof, stem), loop=LOOP,
-                                           skill=skill_note("build-milestone"))
+                                           skill=skill_note("build-milestone", host))
             if state["turns"] and not resumable:
                 prompt += "\n\nThis continues earlier work on the same milestone; the files show where it got to."
             if a.message:
@@ -2059,13 +2136,18 @@ def cmd_run(a: argparse.Namespace) -> None:
                 a.message = None
             if state["turns"] and not resumable:
                 prompt += "\n\n" + restate
+            elif rules:
+                prompt += "\n\n" + owner_rules_line(rules)
         else:
-            prompt = a.message or "Continue the objective."
+            prompt = a.message or "Continue the objective." + open_items(find(load_done(worktree, stem, prof), mid))
             a.message = None
             # A resumed turn may follow a compaction that dropped the first prompt. An active Codex goal already
-            # re-sends its objective each turn, so only a thread without one gets the restatement.
+            # re-sends its objective each turn, so only a thread without one gets the restatement; the owner's rules
+            # may postdate the goal, so they go every time.
             if status != "active":
                 prompt += "\n\n" + restate
+            elif rules:
+                prompt += "\n\n" + owner_rules_line(rules)
         code, session, message, err, seen = run_turn(host, prof, model, effort, worktree, prompt,
                                                      None if first else state["thread"], timeout_s,
                                                      title=f"build {stem} {mid}")
@@ -2108,7 +2190,9 @@ def cmd_run(a: argparse.Namespace) -> None:
         now_passing = passing(current)
         if now_passing > state["passing"] or moved:
             state["progress_at"] = time.time()
-        state.update(passing=now_passing, head=head_commit(worktree))
+        marks = work_marks(worktree, current)
+        changed_anything = moved or marks != state.get("marks")
+        state.update(passing=now_passing, head=head_commit(worktree), marks=marks)
 
         word = report_word(message)
         if now_passing == len(current["items"]):
@@ -2160,6 +2244,12 @@ def cmd_run(a: argparse.Namespace) -> None:
                 finish(state_path, state, word, report=message[-1500:])
         else:
             state["reports"] = 0
+        # A turn that changed nothing and reported nothing is a progress update, not work. After STALL_TURNS of
+        # them in a row (each answered with the open items), the loop stops rather than nudging forever.
+        state["idle"] = 0 if (changed_anything or word) else state.get("idle", 0) + 1
+        if state["idle"] >= STALL_TURNS:
+            finish(state_path, state, "STALLED", turns=state["idle"], open=[
+                i["id"] for i in current["items"] if i.get("status") != "pass"], report=message[-1500:])
         if status == "blocked":
             record_block(report_line(message) or "the Codex goal is blocked")
             finish(state_path, state, "BLOCKED", report=message[-1500:])
@@ -2169,16 +2259,19 @@ def cmd_run(a: argparse.Namespace) -> None:
 
 # ------------------------------------------------------------------------------------------ reviewing and planning
 
+FINISH = "Finish the task and end with the last line it asks for."
+
+
 def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, prompt: str, role: str,
-                done_when, timeout_s: float, max_turns: int = 3, title: str = "", restate: str = "") -> dict:
-    """Runs a reviewer or planner until its last line satisfies `done_when`, nudging it at most twice. Its first turn
-    is always a new session, so it inherits nothing from the builder or the lead. Host failures come back as FLOOR,
-    PIN or PAUSED with their reasons, so the lead can fall back to another host."""
-    session, message, turns, observed = None, "", 0, None
+                missing, timeout_s: float, max_turns: int = 3, title: str = "", restate: str = "") -> dict:
+    """Runs a reviewer or planner until `missing(message)` returns None, nudging it at most twice with what
+    `missing` says is still owed. Its first turn is always a new session, so it inherits nothing from the builder or
+    the lead. Host failures come back as FLOOR, PIN or PAUSED with their reasons, so the lead can fall back to
+    another host."""
+    session, message, turns, observed, owed = None, "", 0, None, FINISH
     while turns < max_turns:
         resume = session if (turns and host in ("codex", "claude")) else None
-        text = prompt if not turns else "Finish the task and end with the last line it asks for." + \
-            (f"\n\n{restate}" if restate else "")
+        text = prompt if not turns else owed + (f"\n\n{restate}" if restate else "")
         if turns and not resume:  # a host with no sessions gets the whole task again
             text = prompt + "\n\n" + text
         code, session, message, err, seen = run_turn(host, prof, model, effort, worktree, text, resume, timeout_s,
@@ -2194,10 +2287,11 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
             return {"result": "FLOOR", "reason": floor_reason(host, code, err) if code == 127 else
                     f"the {role} turn on {host} failed (exit {code}); likely quota, sign-in or outage",
                     "exit_code": code, "stderr": err, "session": session}
-        if done_when(message):
+        owed = missing(message)
+        if owed is None:
             break
     last = next((l.strip() for l in reversed(message.splitlines()) if l.strip()), "")
-    return {"result": "FINISHED" if done_when(message) else "UNFINISHED", "last_line": last,
+    return {"result": "FINISHED" if owed is None else "UNFINISHED", "last_line": last, "owed": owed,
             "report": message[-1500:], "session": session, "turns": turns, "observed": observed or {}}
 
 
@@ -2251,11 +2345,12 @@ def cmd_review(a: argparse.Namespace) -> None:
         emit("FLOOR", **info, reason=str(e))
     before_review = (tree / review_path).read_text() if (tree / review_path).exists() else None
     template = DESIGN_REVIEW_TEMPLATE if design else REVIEW_TEMPLATE
-    prompt = template.format(model=model, effort=effort, milestone=mid, module=stem, commit=start, done=done_path,
-                             review=review_path, skill=skill_note("review-milestone"))
+    prompt = template.format(milestone=mid, module=stem, commit=start, done=done_path,
+                             review=review_path, skill=skill_note("review-milestone", host))
     wanted = ("DESIGN OK", "DESIGN CHANGES") if design else ("PASS", "FAIL")
     out = one_session(host, prof, model, effort, tree, prompt, "review",
-                      lambda msg: report_line(msg).startswith(wanted), a.turn_timeout_hours * 3600,
+                      lambda msg: None if report_line(msg).startswith(wanted) else FINISH,
+                      a.turn_timeout_hours * 3600,
                       title=f"review {stem} {mid}",
                       restate=binding(prof, "review", done="" if design else done_path, review=review_path)[0])
     result = out.pop("result")
@@ -2343,6 +2438,31 @@ def cmd_review(a: argparse.Namespace) -> None:
          next=action, last_line=out["last_line"], session=out.get("session"))
 
 
+def plan_owed(worktree: Path, start: str, message: str) -> str | None:
+    """None when the planner's turn ended with a result: BLOCKED or NEEDS_CONTEXT, or `PLANNED: <files>` naming
+    files it changed that exist, with a design beside every done-when file it changed. Otherwise what's missing,
+    for the nudge. A progress report isn't a result."""
+    line = report_line(message)
+    word, _, rest = line.partition(":")
+    if report_word(message) in ("BLOCKED", "NEEDS_CONTEXT"):
+        return None
+    if word.strip("`* ") != "PLANNED":
+        return "Your last line wasn't `PLANNED: <files>`. Finish the plan's files, then end with that line, or with " \
+               "BLOCKED or NEEDS_CONTEXT."
+    plans = profile(worktree)["plans"]
+    named = [n.strip("`*'\" ") for n in re.split(r"[,\s]+", rest) if n.strip("`*'\" ")]
+    changed = changed_paths(worktree, start)
+    gaps = [f"{n} doesn't exist" for n in named if not (worktree / n).exists()]
+    gaps += [f"{n} isn't changed" for n in named if (worktree / n).exists() and n not in changed]
+    gaps += [f"{p} has no design at {plans}/{Path(p).name[:-len('-DONE.json')]}.md" for p in changed
+             if p.startswith(plans + "/") and p.endswith("-DONE.json") and (worktree / p).exists()
+             and not (worktree / plans / (Path(p).name[:-len("-DONE.json")] + ".md")).exists()]
+    if not named or not changed:
+        gaps.insert(0, "no changed files are named")
+    return None if not gaps else "The plan isn't complete: " + "; ".join(gaps) + \
+        ". Finish it, then end with `PLANNED: <files>`."
+
+
 def cmd_plan(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree)  # a first plan writes the profile itself
@@ -2362,13 +2482,18 @@ def cmd_plan(a: argparse.Namespace) -> None:
             before[path.name] = json.loads(path.read_text())
         except json.JSONDecodeError:
             pass
-    prompt = PLAN_TEMPLATE.format(model=model, effort=effort, task=a.task, skill=skill_note("plan-module"))
-    out = one_session(host, prof, model, effort, worktree, prompt, "plan", lambda msg: bool(msg.strip()),
-                      a.turn_timeout_hours * 3600, max_turns=1, title=f"plan: {a.task.splitlines()[0][:60]}")
+    prompt = PLAN_TEMPLATE.format(task=a.task, skill=skill_note("plan-module", host))
+    out = one_session(host, prof, model, effort, worktree, prompt, "plan", lambda msg: plan_owed(worktree, start, msg),
+                      a.turn_timeout_hours * 3600, title=f"plan: {a.task.splitlines()[0][:60]}")
     result = out.pop("result")
     out.pop("observed", None)
-    if result != "FINISHED":
-        emit(result, **info, **out)
+    if out.get("owed") is None:
+        out.pop("owed", None)
+    word = report_word(out.get("report", ""))
+    if result == "FINISHED" and word in ("BLOCKED", "NEEDS_CONTEXT"):
+        result = word
+    if result != "FINISHED":  # a progress report, a blocker or a host failure: nothing lands
+        emit(result, **info, **out, landed=False, left_uncommitted=changed_paths(worktree, start))
     try:
         prof = profile(worktree, strict=True)
     except SystemExit as e:
@@ -2712,6 +2837,9 @@ def main() -> None:
     run.add_argument("--milestone")
     run.add_argument("--fresh", action="store_true", help="start a new session even if one exists")
     run.add_argument("--message", help="first prompt on resume, e.g. the reviewer's findings message")
+    run.add_argument("--owner-rule", action="append", help="a restriction the owner gave in conversation; stored "
+                     "with the module's run state and restated every turn, across --fresh and milestones")
+    run.add_argument("--clear-owner-rules", action="store_true", help="drop stored owner rules (when the owner says)")
     run.add_argument("--budget-hours", type=float, default=4.0)
     host_args(run)
     run.set_defaults(func=cmd_run)

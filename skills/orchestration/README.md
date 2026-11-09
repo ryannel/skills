@@ -4,7 +4,7 @@ These skills are for building software with AI agents in Claude Code and Codex. 
 apps, CLI tools, libraries and engines. Each project describes itself once, in a file called `ORCHESTRATE.md`, and
 the skills read it, so they don't need to know anything project-specific.
 
-| Skill | Model, effort | What it does |
+| Skill | Loop's default model, effort | What it does |
 |---|---|---|
 | [`plan-module`](plan-module/) | Opus 5.5, high | Sets the project up, plans the modules and how they connect, then plans each module's design, milestones and done-when file |
 | [`build-milestone`](build-milestone/) | Codex `gpt-6.1-sol` or Opus 5.5, medium | Builds the next milestone, proves it, and integrates it |
@@ -53,8 +53,11 @@ something we saw, not because a source proved it:
   not what kind of proof it has, so treat this as a trade-off to revisit.
 - Looks are judged against a quality bar written in words, never against a target image. That's the owner's rule:
   agents told to match an image copy its accidents too.
-- Every agent is launched with its model and effort named, in agent files, skill frontmatter and the profile, because
-  defaults change between releases.
+- Every agent is launched with its model and effort named on the command line, from the lead's flags or the profile,
+  because defaults change between releases. The skills and Claude agent files carry no `model` or `effort`, since
+  Claude lets those override the launch for the turn. The launch record holds the values, not the prompts.
+- Medium effort is the owner's default for builders and reviewers, and planners run at high; raise it where a run has
+  been seen falling short, as the vendors advise measuring rather than assuming.
 - The owner sets the pace by choosing how many builders run. The loop forecasts quota, but never slows down on its own.
 
 ## What the loop enforces
@@ -66,12 +69,15 @@ definitions, the commit it checked, the reviews, and whether each milestone was 
 - **Builders.** Before it accepts a claim, the done-when file has to be valid, with only the builder's own fields
   changed and the definitions the ones last authorised. The work has to be committed, with nothing untracked, and
   integrated after a fresh fetch. The profile's `Check` and every item's `check` have to pass when the loop runs them
-  itself, in a clean checkout of the integrated tip. A builder saying `DONE` is never enough.
+  itself, in a clean checkout of the integrated tip. A builder saying `DONE` is never enough. Three turns in a row
+  that change nothing and report nothing stop it as `STALLED`, the continuations between them naming the open items.
 - **Reviewers.** They work in a clean checkout of the claimed commit. The loop checks that they changed only the
   review file and their own fields on that milestone, that the verdicts agree with the last line, and that a fail
   added one to `fails`, then lands the verdict itself. Anything else, and nothing lands.
-- **Planners.** The loop validates what they wrote, rejects a plan that grants passes or touches a record, commits and
-  integrates the rest, and records the new definitions. A new module waits for a design review.
+- **Planners.** A planner's turn counts only when it ends `PLANNED: <files>` and those files changed and exist, with
+  a design beside each done-when file; a progress report gets a nudge naming what's missing. The loop validates what
+  they wrote, rejects a plan that grants passes or touches a record, commits and integrates the rest, and records the
+  new definitions. A new module waits for a design review.
 - **The queue.** One rule decides what's ready, for `ready`, `status` and `run` alike: a milestone starts only when
   the ones before it in its module, and its `needs` elsewhere, are accepted. Claims on milestones are refs every clone
   can see, so two leads don't start the same one.
@@ -86,10 +92,10 @@ definitions, the commit it checked, the reviews, and whether each milestone was 
 | Owner in the app | watch, steer by typing, Stop (the loop reports `PAUSED`), take over after Stop; `run` again hands it back | watch the transcript; open the session to take over, and the loop pauses rather than write to it at the same time | none |
 | Model and effort | pinned at launch and checked per turn from the session file | pinned at launch; the model is checked from the stream, the effort isn't | pinned in the command; not checked |
 | Launch records | claims and reviews record the requested model and effort, the CLI version, and under `observed` only what the session file showed | the same; `observed` can hold the model, never the effort | requested model and effort only |
-| Resumed turns | restate the binding rules (field ownership, `land`, Check, the profile's out-of-bounds lines) only when no goal is active; the result says `goal` | restate them on every resumed turn | each turn after the first carries them |
-| Reviewers and planners can't launch agents | `-c features.multi_agent=false` | `--disallowedTools Agent`, plus the orchestrate agent files when installed | only the prompt says so |
+| Resumed turns | restate the objective and binding rules (field ownership, `land`, Check, the profile's out-of-bounds lines, owner rules) only when no goal is active, else the owner rules alone; the result says `goal` | restate them on every resumed turn | each turn after the first carries them |
+| Reviewers and planners can't launch agents | `-c features.multi_agent=false` | `--disallowedTools Agent`, plus the orchestrate agent files when installed by hand or by the plugin | only the prompt says so |
 | Goals and quota | goal status and a weekly-quota forecast, from Codex's local files | neither (Claude's `/goal` exists under `-p`, but the loop doesn't use it) | neither |
-| Skills | found by name | found by name | the prompt gives each skill's path |
+| Skills | found by name (`orchestrate:<skill>` from the plugin); the prompt also gives the path | found by name; the prompt also gives the path | the prompt gives each skill's path |
 
 ## Known limits
 

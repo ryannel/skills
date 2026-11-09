@@ -25,7 +25,7 @@ without them, because guessing either one would either push without permission o
 - **Default host:** codex  *(loop: optional; the host used when the lead doesn't name one; otherwise the host the loop runs inside)*
 - **Codex model:** gpt-6.1-sol  *(loop: any `<host> model:` line sets that host's model)*
 - **Claude model:** claude-opus-5-5  *(loop)*
-- **Effort:** medium  *(loop: optional; medium is the default for builders and reviewers, high for planners)*
+- **Effort:** medium  *(loop: optional; builders and reviewers, default medium; planners run at high unless `--effort` says otherwise)*
 - **Claude permissions:** auto  *(loop: the permission mode for headless Claude runs: auto, acceptEdits, dontAsk or bypassPermissions)*
 - **Codex sandbox:** workspace-write  *(loop: or danger-full-access)*
 - **Writable roots:** <paths the build writes outside the worktree, e.g. ~/.cargo, ~/.npm>  *(loop)*

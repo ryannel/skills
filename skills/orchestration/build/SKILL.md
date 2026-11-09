@@ -2,8 +2,6 @@
 name: build
 description: Builds a planned project unattended, as part of the orchestrate set. Keeps a chosen number of builders busy on ready milestones across modules, on Codex, Claude Code or another host, with reviewers and a planner launched fresh through scripts/agent_loop.py. Use when the owner says to build, run or keep going on planned modules, with one builder or several. Not for building one milestone by hand (build-milestone).
 disable-model-invocation: true
-model: claude-opus-5-5
-effort: medium
 ---
 
 # Build
@@ -19,7 +17,9 @@ left needs the owner. You don't build or judge anything yourself. Builders build
 plans. When you brief them, give them file paths and nothing else. If you add your own summary or opinion, they'll
 tend to agree with it, and their work stops being independent. That means withholding your conclusions, not the task:
 a restriction the owner gave only in conversation, such as "don't touch the schema", goes to the builder with
-`--message`.
+`--owner-rule`. The loop stores it with the module's run state and restates it every turn, across `--fresh` and later
+milestones, until you pass `--clear-owner-rules` because the owner said so. Use `--message` for one-off text such as
+findings.
 
 The loop decides what is accepted, not you and not the agents. It keeps `<MODULE>-ACCEPTED.json` next to each
 done-when file, writes it only in its own commits, and counts a milestone finished only when that record accepts it.
@@ -50,7 +50,8 @@ on Core and Water", or "just do Water M3". Work out from that:
 
 If the request leaves something open, use the profile's `Builders` line and say what you chose in your first report.
 Don't stop to ask. Pass `--model` or `--effort` to the loop only when the owner asked for something other than the
-default, because the loop already uses the profile's model and medium effort. Without `--host`, the loop uses the
+default, because the loop already uses the profile's model and medium effort (high for planners). Medium is the
+owner's choice for builders and reviewers; raise it only where a run has been seen falling short. Without `--host`, the loop uses the
 profile's `Default host`, else the host it runs inside. Check `LOOP quota` before launching Codex builders, and
 include its forecast in that report.
 
@@ -92,7 +93,9 @@ Reviewers and planners also run through the loop, each in a fresh session, becau
 work and record it:
 - a milestone: `LOOP review --module <M> --milestone <id> --commit <sha> --worktree <path> --host <host>`
 - a design: `LOOP review --module <M> --milestone design --worktree <path> --host <host>`
-- planning: `LOOP plan --worktree <path> --task "<what to plan>" --host <host>` (in a clean worktree)
+- planning: `LOOP plan --worktree <path> --task "<what to plan>" --host <host>` (in a clean worktree). Only
+  `PLANNED` lands anything; on `BLOCKED`, `NEEDS_CONTEXT` or `UNFINISHED` its files stay uncommitted for you to
+  report, then clear.
 
 Run each review on a different host from the one that built the milestone, when two hosts work. A reviewer from
 another vendor shares fewer of the builder's blind spots. If the other host fails to start (a `FLOOR`), use the same
@@ -106,7 +109,7 @@ host in a fresh session, and say so in the report.
 | `WAITING` or `TAKEN` | The milestone needs another module's work, or another lead has it. Give the builder other ready work. |
 | `BLOCKED` | The loop has recorded `state: blocked` and what unblocks it. If you can supply that from the files, do, then run `LOOP unblock`. If something another module owns is missing, or it's a design problem, send it to the planner. Otherwise, put it in the report and move the builder on. |
 | `NEEDS_CONTEXT` | If the answer is in the files, resume the builder with `--message`. Otherwise treat it like `BLOCKED`. |
-| `UNCLAIMED` or `BUDGET` | The builder keeps saying it's done without a claim that holds, or it stopped making progress. Run a review on what exists, so the next attempt has concrete findings. |
+| `UNCLAIMED`, `BUDGET` or `STALLED` | The builder keeps saying it's done without a claim that holds, stopped making progress, or kept ending turns with progress updates. Run a review on what exists, so the next attempt has concrete findings. |
 | `INVALID` | The done-when file is malformed, an agent changed something its role doesn't own, or the definitions aren't the authorised ones. Send the problems to the planner, and don't resume that builder until a planner turn has fixed them. |
 | `PARKED` or `FINISHED` | Nothing more for this module. Report a parked milestone. |
 | `FLOOR`, `PIN` or `PAUSED` | Stop that builder and report it, with the reason the loop gave. A `FLOOR` on one host doesn't stop builders on another. A `PAUSED` with a `reason` means the owner stopped the session in the app or has it open there: leave it to them until they say to carry on. |
