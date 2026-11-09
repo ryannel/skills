@@ -138,8 +138,12 @@ running the same failing attempt over and over. The whole ladder is in
 [the done-when reference](../plan-module/references/done-when.md#when-a-review-fails).
 
 When the planner plans a new module, its result lists the modules owed a design review, and the queue holds them
-until one passes. If the review says `DESIGN CHANGES`, send it back to the planner once. If the second review still
-asks for changes, leave the module out and report it.
+until one passes. If the review says `DESIGN CHANGES`, send its blocking findings to the planner, then review
+again. Stop and report the module only when a blocking finding comes back after the planner said it was fixed, or a
+finding needs something on the profile's "Owner decides" list.
+
+A stop whose `next` says `by: lead` or `by: planner` is yours to carry out, not a question for the owner. Do it and
+carry on. Only `by: owner` waits for the owner, and meanwhile give the builder other ready work.
 
 If a builder breaks the main branch, whichever builder notices first fixes it.
 

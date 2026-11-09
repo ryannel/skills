@@ -3020,8 +3020,9 @@ def design_review_next(out: dict, stem: str, worktree: Path, prof: dict) -> dict
     if out.get("verdict") == "DESIGN CHANGES":
         return next_cmd(loop_cmd("plan", "--worktree", wt, "--task",
                                  f"Revise {stem}'s design and plan as {out.get('review')} asks"), "lead",
-                        "the design review asked for changes; send them to the planner once, and if a second review "
-                        "still asks for changes, leave the module out and report it")
+                        "the design review found blocking changes; plan them, then review the design again. Report "
+                        "the module only if a blocking finding returns after the planner fixed it, or needs an "
+                        "owner decision")
     host = out.get("host") or default_host(prof)
     return next_cmd(loop_cmd("review", "--module", stem, "--milestone", "design", "--worktree", wt, "--host",
                              other_host(host)), "lead",

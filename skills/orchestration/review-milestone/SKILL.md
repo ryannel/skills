@@ -83,8 +83,18 @@ asked for, and mechanisms nobody has shown can produce their behaviour.
 Then read the done-when items. Could you actually judge each one, and would it catch a convincing fake? Agreeing the
 items before building starts is what makes the later verdict fair.
 
-Write the review to `<evidence>/<MODULE>/design-review.md`, ranked the same way. Don't touch the done-when file,
-because no milestone is being judged. Your last line is `DESIGN OK` or `DESIGN CHANGES: <n> findings`. The loop
+Write the review to `<evidence>/<MODULE>/design-review.md`, with every finding ranked and marked blocking or advisory.
+A finding is blocking when building as designed would go wrong: a mechanism that can't produce the behaviour, a gap
+against the brief or a contract, or an item no reviewer could judge or that a convincing fake would pass. A sharper
+proof, an extra edge case or clearer wording is advisory. The planner folds advisory findings in without another
+review, and the milestone reviews catch what's left, so don't hold the design back for them.
+
+If a `design-review.md` is already there, it's the last round. Check each of its blocking findings first and say
+whether it's resolved. Then raise a new blocking finding only for something the revision broke, or something missed
+last time that really is blocking. Reviews that find one more refinement each round never let the build start.
+
+Don't touch the done-when file, because no milestone is being judged. Your last line is `DESIGN OK` (advisory
+findings can come with it) or `DESIGN CHANGES: <n> blocking findings`. The loop
 records the verdict against the design as it stands, so no milestone of the module is built until a design review
 passes, and a later change to the design needs another.
 
