@@ -1036,7 +1036,7 @@ class FakeCodexApp:
     def __init__(self, case, behaviour="run", effort_seen=None):
         self.case, self.behaviour, self.effort_seen = case, behaviour, effort_seen
         self.threads, self.queued, self.links, self.interrupts, self.activated = {}, {}, [], [], []
-        self.sent = []
+        self.sent, self.unqueued, self.ignored_wakes = [], [], 0
 
     def write(self, t, *events):
         with open(self.threads[t]["path"], "a") as f:
@@ -1066,7 +1066,15 @@ class FakeCodexApp:
             self.wake(url.rsplit("/", 1)[1])
         return True
 
+    def unqueue(self, t):
+        self.unqueued.append(t)
+        self.queued.pop(t, None)
+        return True
+
     def wake(self, t):
+        if self.behaviour == "never" or (self.behaviour == "late" and self.ignored_wakes < 3):
+            self.ignored_wakes += 1
+            return
         text = self.queued.pop(t, None)
         if text is None:
             return
@@ -1097,9 +1105,9 @@ class FakeCodexApp:
         patches = [mock.patch.object(agent_loop, name, value) for name, value in dict(
             visible_unavailable=lambda host: None if host == "codex" or claude else "no app",
             codex_thread_create=self.create, codex_owner=self.owner, codex_queue=self.queue, open_link=self.link,
-            codex_interrupt=self.interrupt, codex_queued=lambda t: int(t in self.queued),
+            codex_interrupt=self.interrupt, codex_queued=lambda t: int(t in self.queued), codex_unqueue=self.unqueue,
             codex_goal_activate=lambda t: self.activated.append(t) or True,
-            SETTLE_S=0.0, POLL_S=0.01, START_S=0.2, CLAUDE_IMPORT_WAIT_S=0.0,
+            SETTLE_S=0.0, POLL_S=0.01, START_S=0.2, STALL_START_S=1.0, CLAUDE_IMPORT_WAIT_S=0.0,
             CODEX_APP_CLI=agent_loop.CODEX).items()]
         for p in patches:
             p.start()
@@ -1187,6 +1195,20 @@ class VisibleCodex(Repo):
         review = [i for i in app.threads.values() if i["role"] == "review"][0]
         self.assertEqual((review["title"], review["effort"]), ("review WATER M1", "high"))
         self.assertIn("orchestrate/verify", str(review["cwd"]))
+
+    def test_decision_8_a_turn_the_app_starts_late_is_waited_for_not_given_up_on(self):
+        with FakeCodexApp(self, behaviour="late").installed() as app:
+            result = self.run_loop()
+        self.assertEqual(result["result"], "CLAIMED")
+        self.assertEqual(app.unqueued, [])
+
+    def test_decision_8_a_turn_the_app_never_starts_is_unqueued_so_it_cant_run_unwatched(self):
+        with FakeCodexApp(self, behaviour="never").installed() as app:
+            result = self.run_loop()
+        self.assertEqual(result["result"], "FLOOR")
+        self.assertIn("queued message was removed", result["stderr"])
+        self.assertEqual(app.queued, {})
+        self.assertTrue(app.unqueued)
 
     def test_decision_8_without_the_app_the_loop_runs_headless_and_says_why(self):
         result = self.run_loop()

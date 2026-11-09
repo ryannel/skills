@@ -1609,7 +1609,8 @@ CODEX_APP_CLI = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/code
 CLAUDE_APP_STORE = Path.home() / "Library/Application Support/Claude/claude-code-sessions"
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
 SETTLE_S = 20.0  # quiet time after the last turn ends, so a goal's chained turn isn't mistaken for the end
-START_S = 120.0  # how long the app gets to start a woken turn before it's woken again, and then given up on
+START_S = 120.0  # how often a queued turn that hasn't started is woken again
+STALL_START_S = 3 * 3600.0  # how long a turn may stay queued (the app asleep or busy) before it's given up on
 POLL_S = 1.0
 CLAUDE_IMPORT_WAIT_S = 15.0
 BOOTSTRAP = ("The orchestrate loop started this thread from a script; its task arrives as the next message. "
@@ -1849,6 +1850,19 @@ def codex_queue(thread: str, text: str) -> None:
         raise RuntimeError(f"codex queue failed: {(out.stdout + out.stderr).strip()[-300:]}")
 
 
+def codex_unqueue(thread: str) -> bool:
+    """Removes the thread's queued messages, so a turn the loop gave up on can't start later unwatched."""
+    try:
+        ipc = CodexIpc()
+        try:
+            ipc.request("thread-follower-clear-queued-messages", {"conversationId": thread})
+            return True
+        finally:
+            ipc.close()
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
 def codex_queued(thread: str) -> int:
     db = CODEX_HOME / "queue_1.sqlite"
     if not db.exists():
@@ -1907,7 +1921,7 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
         return 1, thread, "", f"the Codex app path failed: {type(e).__name__}: {e}", None
 
     began = time.time()
-    deadline, running, started, quiet, woken = began + timeout_s, set(), False, began, False
+    deadline, running, started, quiet, woken = began + timeout_s, set(), False, began, 0
     message, error, aborted = "", "", False
     while True:
         rollout = rollout or rollout_for(thread)
@@ -1933,16 +1947,24 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
             codex_interrupt(thread)
             return 130, thread, message, "(stopped)", None
         if time.time() > deadline:
+            if not started:
+                codex_unqueue(thread)
             goal = goal_status(thread)
             codex_interrupt(thread)
             if goal == "active":  # Stop pauses the goal; a timeout isn't the owner pausing it
                 codex_goal_activate(thread)
             return 124, thread, message, "(timed out)", None
         if not started:
-            if time.time() - began > 2 * START_S:
-                return 1, thread, "", "the Codex app didn't start the queued turn (signed out, or not running?)", None
-            if time.time() - began > START_S and not woken:
-                woken = open_link(f"codex://threads/wake/{thread}")
+            # The app can hold a queued turn a long time (sleep, a busy window), so keep waking it while the message
+            # waits; give up early only when the message has gone without a turn starting, or the app is gone.
+            waited = time.time() - began
+            gone = waited > 2 * START_S and (not codex_queued(thread) or visible_unavailable("codex"))
+            if gone or waited > 2 * START_S + STALL_START_S:
+                codex_unqueue(thread)
+                return 1, thread, "", ("the Codex app didn't start the queued turn (signed out, or not running?); "
+                                       "its queued message was removed"), None
+            if waited > START_S * (woken + 1):
+                woken += 1 if open_link(f"codex://threads/wake/{thread}") else 0
         elif not running and time.time() - quiet >= SETTLE_S and not codex_queued(thread):
             if aborted:
                 return 130, thread, message, "the turn was stopped in the Codex app", None
