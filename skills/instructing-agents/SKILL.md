@@ -22,11 +22,12 @@ check is often all you need; read on for a goal, a long unattended run, a review
 rest of this file explains the five.
 
 The agent you're writing for is capable, and on most tasks at least as capable as you. Writers fail in two ways. The
-common one is saying how. Each list of steps, files to read, questions or report sections caps the agent at what you
-thought of. One review brief listed 24 sources, 11 scenarios and nine report topics, 101 lines in all. The person it
-was for said: "You're being too explicit. These models are smarter than you are. Don't list what to look at." The
-rewrite is in [examples](references/examples.md#a-reviewer-brief). The other way is dropping a fact the agent needed,
-like a quota limit or a rule the project sets, because the brief was trimmed by shape rather than by content.
+common one is saying how. A list of steps, files to read, questions or report sections you made up tends to cap the
+agent at what you thought of. One review brief listed 24 sources, 11 scenarios and nine report topics, 101 lines in
+all. The person it was for said: "You're being too explicit. These models are smarter than you are. Don't list what to
+look at." The rewrite is in [examples](references/examples.md#a-reviewer-brief). The other way is dropping a fact the
+agent needed, like a quota limit or a rule the project sets, because the brief was trimmed by shape rather than by
+content.
 
 ## What goes in
 
@@ -66,8 +67,8 @@ models](references/hosts-and-models.md) shows.
 
 ## What stays out
 
-- An invented method: steps, techniques, tools and their order. Give numbered steps only when the order is fragile and
-  getting it wrong does damage, as in a data migration.
+- An invented method: steps, techniques, tools and their order. Give steps when the order or completeness matters,
+  as in a data migration.
 - Reading lists, question lists and cases you made up. In Codex, `/goal` derives requirements from the objective and
   the files it points to, so a list you add can turn into a checklist. Say which material is required, which is
   evidence and which is background.
