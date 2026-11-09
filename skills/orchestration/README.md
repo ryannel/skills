@@ -11,10 +11,12 @@ the skills read it, so they don't need to know anything project-specific.
 | [`review-milestone`](review-milestone/) | Opus 5.5, medium | Judges a claimed milestone or a design with fresh eyes |
 | [`build`](build/) | Opus 5.5 lead, medium (any host can lead) | Builds the planned project unattended: keeps N builders busy on ready milestones, on Codex, Claude Code or another host, with fresh reviewers and a planner |
 
-They link to each other's files, so install them together: the `orchestrate` plugin, or all four with
-`npx skills add`. The Claude agents come with the plugin. The Codex evaluator needs
-`build/scripts/install_agents.sh --global` (add `--codex-only` if the plugin already installed the Claude
-agents).
+They link to each other's files, so install them together. From a clone of the skills repo,
+`python3 install.py --plugins orchestrate` installs the `orchestrate` plugin in Claude Code (skills and the planner
+and evaluator agents) and in Codex (the skills, read from the same marketplace, plus the evaluator agent through
+`build/scripts/install_agents.sh --global --codex-only`). Add `--repo <repo>` to also add a `CLAUDE.md` holding
+`@AGENTS.md` when an older Claude CLI would otherwise miss AGENTS.md, and to check `ORCHESTRATE.md` with
+`agent_loop.py profile` once `/plan-module` has written it. `npx skills add` still works for the skills alone.
 
 You can work at two speeds. In one chat, you run `/plan-module`, then `/build-milestone`, in Claude Code or Codex.
 You can even switch between them partway, because everything the next agent needs is in the files. Or you can
