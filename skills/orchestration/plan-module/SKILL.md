@@ -72,6 +72,10 @@ needs, and small specific items make better reviews than big vague ones.
 Mark an item `attended` when it needs a person or physical hardware, such as a phone plugged in or a permission
 prompt approved. Builders then do everything else first and the owner gets those items in one batch.
 
+A condition the work must survive, such as a locked screen or a denied permission, isn't a precondition for checking
+it. Have the check record that state and pass either way, unless the claim really depends on it. Otherwise
+verification stops whenever the owner uses the machine.
+
 Only use cost targets that are real, from the purpose doc or the owner. If nobody has set one, record measurements
 and set tripwires instead of making a number up.
 
