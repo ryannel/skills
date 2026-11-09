@@ -2428,6 +2428,14 @@ def cmd_review(a: argparse.Namespace) -> None:
                                 "hash": text_hash((t / prof["plans"] / f"{stem}.md").read_text()
                                                   if (t / prof["plans"] / f"{stem}.md").exists() else None),
                                 "by": "review", **launch, "at": now()}
+            if passed:  # the reviewer judged these definitions, so a plan revised before review needs no re-plan
+                for m in doc["milestones"]:
+                    e = record["milestones"].get(m["id"])
+                    if e and e.get("definitions") != definitions(m) and not e.get("reviews") \
+                            and not e.get("accepted"):
+                        e["definitions"] = definitions(m)
+                        e["authorised"] = {"by": "design review", "review": review_path, "commit": start,
+                                           "at": now()}
         else:
             reviewed, target = find(after, mid), find(doc, mid)
             target.update(state=reviewed["state"], fails=reviewed.get("fails", 0))

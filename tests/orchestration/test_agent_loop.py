@@ -691,6 +691,24 @@ class Building(Repo):
         os.environ.pop("FAKE_REVIEW")
         self.assertEqual(self.run_loop()["result"], "CLAIMED")
 
+    def test_a_plan_revised_before_its_design_review_is_authorised_by_that_review(self):
+        self.write_done([milestone("M1", "open", ["open"])], design_ok=False)
+        self.commit_all()
+        os.environ.update(FAKE_REVIEW="design")
+        self.review("design")  # the record adopts the first definitions here
+        self.git("pull", "-q", "--rebase", "origin", "main")
+        self.write_done([milestone("M1", "open", ["open"], check="test -n revised")], authorise=False)
+        (self.wt / "docs/evidence/WATER/design-review.md").unlink()  # the fake reviewer rewrites the same text
+        self.commit_all()
+        os.environ.pop("FAKE_REVIEW")
+        self.assertEqual(self.run_loop()["result"], "INVALID")  # revised outside a planner turn
+        os.environ.update(FAKE_REVIEW="design")
+        second = self.review("design")
+        self.assertEqual(second.get("verdict"), "DESIGN OK", second)
+        os.environ.pop("FAKE_REVIEW")
+        self.assertEqual(self.run_loop()["result"], "CLAIMED")
+        self.assertEqual(self.read_record()["milestones"]["M1"]["authorised"]["by"], "design review")
+
     def test_blocked_report_records_blocked_state_and_unblock_requeues(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: no device attached")
         self.assertEqual(self.run_loop()["result"], "BLOCKED")
