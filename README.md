@@ -59,7 +59,7 @@ the owner), and the skills stay generic.
 Install the orchestration plugin and evaluator from an interactive terminal with Node.js, Git and Python 3:
 
 ```sh
-npx --yes --package=github:ryannel/skills ryannel-orchestrate
+npx github:ryannel/skills
 ```
 
 Choose Claude Code, Codex or both when their CLIs are available. Choose **Global** for all projects, or
