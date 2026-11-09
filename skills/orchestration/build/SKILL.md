@@ -17,7 +17,9 @@ Read `ORCHESTRATE.md`, then run `LOOP profile --worktree <repo>` to check it par
 Your job is to keep the project moving, milestone after milestone, until the build order is finished or everything
 left needs the owner. You don't build or judge anything yourself. Builders build, reviewers judge and the planner
 plans. When you brief them, give them file paths and nothing else. If you add your own summary or opinion, they'll
-tend to agree with it, and their work stops being independent.
+tend to agree with it, and their work stops being independent. That means withholding your conclusions, not the task:
+a restriction the owner gave only in conversation, such as "don't touch the schema", goes to the builder with
+`--message`.
 
 The loop decides what is accepted, not you and not the agents. It keeps `<MODULE>-ACCEPTED.json` next to each
 done-when file, writes it only in its own commits, and counts a milestone finished only when that record accepts it.

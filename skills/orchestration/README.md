@@ -98,8 +98,9 @@ definitions, the commit it checked, the reviews, and whether each milestone was 
 - The acceptance record is protected by convention and detection, not cryptography: a commit that edits it without
   the loop's trailer blocks the next claim, but an agent that forges the trailer deliberately could get past that. A
   module the loop hasn't seen before is taken as it stands, once.
-- Claude runs use the signed-in plan because the loop removes `ANTHROPIC_API_KEY` from their environment; a
-  configured credential helper could still supply other credentials. Anthropic has said `--bare` will become the
+- Claude runs are meant to use the signed-in plan, so the loop removes every `ANTHROPIC_*` and `CLAUDE*` variable
+  except `CLAUDE_CONFIG_DIR` from their environment. That also drops any provider or deployment settings kept in
+  those variables, and a configured credential helper could still supply other credentials. Anthropic has said `--bare` will become the
   default for `claude -p`, and bare mode reads only API-key credentials and skips agent and skill discovery, so
   Claude builders will need a change then. Tested with Claude Code 2.1.239 and Codex 0.167.
 - The reviewer is the least proven part. `review-milestone` makes it use the product itself, read the whole diff,
