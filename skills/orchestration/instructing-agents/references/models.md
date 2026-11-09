@@ -96,6 +96,9 @@ Time signals change how it works. A line showing elapsed time against a budget, 
 makes it run more work in parallel in multi-agent harnesses. Keep a hard timeout of your own anyway. Under time
 pressure it checks its work a little less.
 
+Don't ask it to write out its step-by-step reasoning or `<thinking>` blocks in a plan or review. It may decline as a
+safeguard. Ask for a short explanation of what it decided and why instead.
+
 For the look of a frontend, "avoid a generic AI look" doesn't work. It just swaps one default style for another. Name
 the specific patterns to avoid instead, and add to the list each round.
 
