@@ -67,16 +67,47 @@ class Decisions(unittest.TestCase):
         self.assertEqual(agent_loop.escalation(4, replans=1), "park")
         self.assertEqual(agent_loop.escalation(2, replans=1), "same-session")
 
-    def test_forecast_from_last_day(self):
-        h, now, reset = 3600, 1_000_000.0, 1_000_000.0 + 72 * 3600
-        samples = [(now - 24 * h, 40.0, reset), (now - 12 * h, 45.0, reset), (now, 50.0, reset)]
-        f = agent_loop.forecast(samples, now)
-        self.assertEqual(f["per_day"], 10.0)
-        self.assertIsNone(f["runs_out"])
-        fast = [(now - 24 * h, 20.0, reset), (now, 50.0, reset)]
-        self.assertIsNotNone(agent_loop.forecast(fast, now)["runs_out"])
-        old_window = [(now - 20 * h, 90.0, now - 10 * h), (now - 2 * h, 1.0, reset), (now, 2.0, reset)]
-        self.assertEqual(agent_loop.forecast(old_window, now)["per_day"], 12.0)
+    def test_plan_forecast_lasts_when_the_open_work_fits(self):
+        acc = {"used_percent": 50.0, "hours_left": 100.0}
+        history = [{"state": "done", "rounds": 3, "pct": [1.0, 1.2, 1.5]},
+                   {"state": "done", "rounds": 1, "pct": [2.0, 2.4, 3.0]}]
+        open_ms = [{"state": "open", "rounds": 1}] * 4
+        recent = {"hours": 12.0, "loop": [1.0, 1.0, 1.0], "other": [0.6, 1.2, 1.8]}
+        f = agent_loop.plan_forecast(acc, history, open_ms, recent)
+        self.assertEqual(f["per_milestone"], [1.0, 1.8, 3.0])
+        self.assertEqual(f["rounds_per_milestone"], 2.0)
+        self.assertEqual(f["plan_pct"], [4.0, 7.2, 12.0])
+        self.assertEqual(f["other_use_before_reset"], [5.0, 10.0, 15.0])  # at the last 12 h's rate, not the week's
+        self.assertFalse(f["warn"])
+        self.assertTrue(f["verdict"].startswith("Quota lasts"), f["verdict"])
+        self.assertNotIn("runs_out", f)
+
+    def test_plan_forecast_warns_only_when_it_wont_last(self):
+        history = [{"state": "done", "rounds": 1, "pct": [4.0, 5.0, 6.0], "builder_hours": 2.0}] * 2
+        recent = {"hours": 10.0, "loop": [1.0, 1.0, 1.0], "other": [0.0, 0.0, 0.0]}
+        short = agent_loop.plan_forecast({"used_percent": 90.0, "hours_left": 100.0}, history,
+                                         [{"state": "open"}] * 4, recent)  # 16-24 % against 10 % left
+        self.assertTrue(short["warn"])
+        self.assertTrue(short["verdict"].startswith("Quota runs short"), short["verdict"])
+        self.assertEqual(short["plan_hours_one_builder"], 8.0)
+        self.assertIn("runs_out", short)  # 2.5 %/h uses the 10 % up in four hours
+        maybe = agent_loop.plan_forecast({"used_percent": 95.0, "hours_left": 100.0}, history,
+                                         [{"state": "open"}], recent)  # 4-6 % against 5 % left
+        self.assertTrue(maybe["warn"])
+        self.assertTrue(maybe["verdict"].startswith("Quota may run short"), maybe["verdict"])
+
+    def test_plan_forecast_says_too_little_data_without_history(self):
+        acc = {"used_percent": 20.0, "hours_left": 100.0}
+        recent = {"hours": 12.0, "loop": [0.0] * 3, "other": [0.0] * 3}
+        f = agent_loop.plan_forecast(acc, [{"state": "open", "pct": [1, 1, 1]}], [{"state": "open"}] * 2, recent)
+        self.assertIsNone(f["plan_pct"])
+        self.assertFalse(f["warn"])
+        self.assertIn("Too little data", f["verdict"])
+
+    def test_quota_never_fails_the_result_line(self):
+        with mock.patch.object(agent_loop.codex_quota, "read", side_effect=OSError("disk gone")):
+            self.assertEqual(agent_loop.quota_now(), {"unavailable": "OSError: disk gone"})
+
 
     def test_report_word_reads_only_the_last_line(self):
         self.assertEqual(agent_loop.report_word("work\nevidence\nBLOCKED: no Metal device"), "BLOCKED")
@@ -496,6 +527,8 @@ class Repo(unittest.TestCase):
                       agent_loop.CLAUDE_HOME, agent_loop.AGENTS_HOME)
         agent_loop.CLAUDE_HOME, agent_loop.AGENTS_HOME = root / "claude-home", root / "agents-home"
         agent_loop.CODEX, agent_loop.CODEX_HOME = str(fake), self.home
+        self.cache_dir = agent_loop.codex_quota.CACHE_DIR
+        agent_loop.codex_quota.CACHE_DIR = root / "quota-cache"
         # No app on this machine counts: the Codex IPC socket lives under the fake CODEX_HOME, and Claude desktop's
         # session store is pointed at a folder that doesn't exist. Visible-session tests fake the apps explicitly.
         agent_loop.CLAUDE_APP_STORE = root / "no-claude-desktop"
@@ -507,6 +540,7 @@ class Repo(unittest.TestCase):
         release()
         (agent_loop.CODEX, agent_loop.CODEX_HOME, agent_loop.CLAUDE, agent_loop.CLAUDE_APP_STORE,
          agent_loop.CLAUDE_HOME, agent_loop.AGENTS_HOME) = self.saved
+        agent_loop.codex_quota.CACHE_DIR = self.cache_dir
         for key in FAKE_ENV:
             os.environ.pop(key, None)
         self.tmp.cleanup()
@@ -583,6 +617,39 @@ class Repo(unittest.TestCase):
 
 
 class Building(Repo):
+    def test_quota_costs_the_loops_milestones_and_counts_other_threads_apart(self):
+        import test_codex_quota as fixtures
+        self.assertEqual(self.run_loop()["result"], "CLAIMED")  # M1, in the fake host's thread t1
+        ledger = (self.wt / ".git/orchestrate/threads.jsonl").read_text()
+        self.assertIn('"thread": "t1"', ledger)
+        now = fixtures.NOW
+        builder = fixtures.Rollout(self.home, "t1", now - 10 * 3600, cwd=str(self.wt), origin="codex_exec",
+                                   source="exec")
+        builder.turn("b1", now - 10 * 3600, now - 6 * 3600,
+                     [(now - 10 * 3600 + i * 600, 2_000_000, i) for i in range(1, 21)])  # about 20 % at 0.5 %/M
+        mine = fixtures.Rollout(self.home, "owner", now - 5 * 3600, name="Clouds")
+        mine.turn("o1", now - 5 * 3600, now - 3 * 3600, [(now - 5 * 3600 + i * 600, 2_000_000, 20 + i)
+                                                         for i in range(1, 11)])
+        guard = fixtures.Rollout(self.home, "g", now - 9 * 3600, cwd=str(self.wt), origin="codex_exec",
+                                 source={"subagent": {"other": "guardian"}})
+        guard.turn("g1", now - 9 * 3600, now - 9 * 3600 + 60, [(now - 9 * 3600 + 30, 10_000, None)],
+                   model="codex-auto-review", effort="low")
+        reading = agent_loop.codex_quota.read(budget_s=10, home=self.home, cache=False, now=now)
+        own = agent_loop.loop_threads(self.wt, reading)
+        self.assertEqual(own["t1"]["milestone"], "M1")
+        self.assertEqual(own["g"]["milestone"], "M1")  # the auto-review served the builder
+        self.assertNotIn("owner", own)
+        acc = agent_loop.quota_report(self.wt, reading=reading)
+        m1 = next(m for m in acc["milestones"] if m["milestone"] == "M1")
+        self.assertTrue(m1["pct"][0] <= 20 <= m1["pct"][2], m1)
+        self.assertEqual(acc["forecast"]["open_milestones"], 1)
+        use = acc["use_this_window"]
+        self.assertTrue(use["other_local_pct"][0] <= 10 <= use["other_local_pct"][2], use)
+        self.assertEqual(use["other_local_threads"][0]["name"], "Clouds")
+        summary = agent_loop.quota_summary(acc)
+        self.assertEqual(set(summary) - {"runs_out", "note"}, {"used_percent", "resets_at", "burn", "verdict", "warn",
+                                                                "detail"})
+
     def test_claims_check_only_milestone_and_accepts_it_in_the_record(self):
         result = self.run_loop()
         self.assertEqual((result["result"], result["review"]), ("CLAIMED", False))

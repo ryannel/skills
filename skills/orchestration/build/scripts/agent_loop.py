@@ -101,7 +101,14 @@ Subcommands:
   pause [--module CORE] --worktree PATH   Stops running loops in this repository, and their agents, cleanly.
   owner accept|rereview|unpark|scope|release --module CORE --milestone M2|design --worktree PATH --reason TEXT
         Owner decisions, typed at a terminal by the owner; refused inside any session the loop started.
-  quota        Forecasts the weekly Codex limit from the last day of use across all sessions.
+  quota [--worktree PATH] [--budget 120]
+        The weekly Codex limit, read from Codex's local rollouts by codex_quota.py beside this file: burn per active
+        hour (idle time excluded) and per builder-hour by model and effort, a tokens-to-percent fit with its range, what
+        each milestone cost (its turns and rounds), the loop's own use apart from other local threads and from usage
+        no local rollout explains, and a forecast of the open milestones against what's left before the reset, with a
+        one-sentence verdict. Every result line carries a short `quota` field: used, reset, recent burn, the verdict,
+        `warn` (only when the quota won't last) and `runs_out` when one builder at the usual pace would use it up.
+        Reading is cached and capped at two seconds on a result line; a first, cold read finishes here.
   profile --worktree PATH [--host H]   Prints the settings read from ORCHESTRATE.md, or exits 1 naming what's wrong,
         plus the loader checks for that host (`preflight`).
   lock [--worktree PATH] NAME -- COMMAND...
@@ -136,6 +143,9 @@ import threading
 import time
 import uuid
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import codex_quota  # noqa: E402  (beside this file)
 
 DEFAULT_MODELS = {"codex": "gpt-6.1-sol", "claude": "claude-opus-5-5"}
 DEFAULT_MODEL = DEFAULT_MODELS["codex"]
@@ -1142,56 +1152,282 @@ def pin_mismatches(rollout: Path, model_pin: str = DEFAULT_MODEL, effort_pin: st
             if (model, effort) != (model_pin, effort_pin)]
 
 
-def quota_samples(since: float) -> list[tuple[float, float, float]]:
-    """(time, used_percent, resets_at) for the weekly Codex limit, from rollouts touched since `since`."""
-    samples = []
-    for f in glob.glob(str(CODEX_HOME / "sessions" / "**" / "rollout-*.jsonl"), recursive=True):
-        try:
-            if os.path.getmtime(f) < since:
-                continue
-        except OSError:
-            continue
-        for event in json_lines(Path(f), '"token_count"'):
+# The quota forecast. codex_quota reads the account's usage (burn per active hour, the tokens-to-percent fit, usage
+# from elsewhere); the loop adds what only it knows: which threads are its own, what each milestone cost, and what the
+# open milestones are likely to cost before the reset.
+
+LOOP_PROMPT = re.compile(r"milestone (\S+) of module (\S+?)[ .,]")
+LOOP_TITLE = re.compile(r"^(build|review) (\S+) (\S+)$")
+QUOTA_BUDGET_S = 2.0          # reading budget on a result line; `quota` takes longer and warms the cache
+QUOTA_WORKTREE: list = []     # the worktree a command runs on, for the result line's plan forecast
+
+
+def note_thread(worktree: Path, host: str, session: str | None, role: str, title: str) -> None:
+    """Appends a session the loop started to the repository's thread ledger, so the forecast can tell its own threads
+    from the owner's. Never fails the caller."""
+    if not session:
+        return
+    try:
+        path = loop_dir(worktree) / "threads.jsonl"
+        known = path.read_text() if path.exists() else ""
+        if f'"{session}"' in known:
+            return
+        with open(path, "a") as handle:
+            handle.write(json.dumps({"thread": session, "host": host, "role": role, "title": title,
+                                     "at": now()}) + "\n")
+    except Exception:
+        pass
+
+
+def loop_threads(worktree: Path, reading: dict) -> dict[str, dict]:
+    """{thread: {module, milestone, role}} for every thread the loop ran, from its ledger and state files, and
+    (for threads from before the ledger) the loop's own titles and objective wording. Auto-review and sub-agent
+    threads count with the loop thread they served."""
+    own: dict[str, dict] = {}
+    try:
+        common = Path(git_common_dir(worktree))
+        ledger = common / "orchestrate" / "threads.jsonl"
+        for line in ledger.read_text().splitlines() if ledger.exists() else []:
             try:
-                limits = event.get("payload", {}).get("rate_limits") or {}
-                primary = limits.get("primary") or {}
-                if limits.get("limit_id") != "codex" or primary.get("window_minutes") != 10080:
-                    continue
-                when = datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).timestamp()
-                samples.append((when, float(primary["used_percent"]), float(primary["resets_at"])))
-            except (KeyError, TypeError, ValueError):
+                d = json.loads(line)
+            except json.JSONDecodeError:
                 continue
-    return sorted(samples)
+            m = LOOP_TITLE.match(d.get("title") or "")
+            own[d["thread"]] = {"module": m and m.group(2), "milestone": m and m.group(3), "role": d.get("role")}
+        for state_file in common.glob("**/orchestrate/*.json"):
+            try:
+                st = json.loads(state_file.read_text())
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(st, dict) and st.get("thread"):
+                own.setdefault(st["thread"], {"module": st.get("module"), "milestone": st.get("milestone"),
+                                              "role": "build"})
+    except Exception:
+        pass
+    threads = reading["threads"]
+    for tid, meta in threads.items():
+        if tid in own:
+            continue
+        title = LOOP_TITLE.match(meta.get("name") or "")
+        prompt = next((LOOP_PROMPT.search(p) for p in meta.get("prompts") or [] if LOOP_PROMPT.search(p)), None)
+        if title:
+            own[tid] = {"module": title.group(2), "milestone": title.group(3), "role": title.group(1)}
+        elif prompt and meta.get("kind") in ("app", "exec"):
+            own[tid] = {"module": prompt.group(2), "milestone": prompt.group(1), "role": "build"}
+        elif meta.get("origin") == "orchestrate" and meta.get("kind") in ("app", "exec"):
+            own[tid] = {"module": None, "milestone": None, "role": None}
+    spans: dict[str, list] = {}
+    for t in reading["turns"]:
+        if t["thread"] in own:
+            spans.setdefault(t["thread"], []).append((t["start"], t["end"]))
+    for tid, meta in threads.items():
+        if tid in own:
+            continue
+        parent = meta.get("parent")
+        if parent in own:
+            own[tid] = dict(own[parent])
+        elif meta.get("kind") == "guardian":
+            first = min((t["start"] for t in reading["turns"] if t["thread"] == tid), default=None)
+            for other, ivs in spans.items():
+                if first is not None and threads.get(other, {}).get("cwd") == meta.get("cwd") and \
+                        any(a - 60 <= first <= b + 60 for a, b in ivs):
+                    own[tid] = dict(own[other])
+                    break
+    return own
 
 
-def forecast(samples: list[tuple[float, float, float]], now_s: float, window_h: float = 24.0) -> dict | None:
-    """Burn rate over the last `window_h` hours of the current limit window, and when the limit runs out at that rate."""
-    if not samples:
+def milestone_costs(worktree: Path, reading: dict, fit: dict, own: dict) -> tuple[list[dict], list[dict], dict]:
+    """(history, open milestones, notes): what each milestone with local rollouts cost, and what is left to build,
+    read from the done-when files at the last-fetched integrated tip (no fetch)."""
+    prof = profile(worktree)
+    ref = base_ref(prof) if git(worktree, "rev-parse", "--verify", "-q", base_ref(prof)).returncode == 0 else "HEAD"
+    proj = project(worktree, prof, ref)
+    tokens = codex_quota.tokens_by(reading, lambda r: r["thread"])
+    turns: dict[str, int] = {}
+    hours: dict[str, float] = {}
+    for t in reading["turns"]:
+        turns[t["thread"]] = turns.get(t["thread"], 0) + 1
+        hours[t["thread"]] = hours.get(t["thread"], 0.0) + max(0.0, t["end"] - t["start"]) / 3600
+    by_ms: dict[tuple, dict] = {}
+    for tid, who in own.items():
+        if not who.get("module") or tid not in tokens:
+            continue
+        key = (who["module"].upper(), who["milestone"])
+        g = by_ms.setdefault(key, {"tokens": [0, 0, 0], "threads": 0, "turns": 0, "hours": 0.0})
+        g["tokens"] = codex_quota.add(g["tokens"], tokens[tid])
+        top = codex_quota.top_level(reading["threads"].get(tid) or {})
+        g["threads"] += 1 if top else 0
+        g["turns"] += turns.get(tid, 0) if top else 0
+        g["hours"] += hours.get(tid, 0.0) if top else 0.0
+    history, open_ms = [], []
+    behind_parked = 0
+    for key, e in sorted(proj.items()):
+        doc = e["doc"]
+        parked = False
+        for m in doc.get("milestones") or [] if isinstance(doc, dict) else []:
+            if not isinstance(m, dict) or "id" not in m:
+                continue
+            state = m.get("state")
+            parked = parked or state == "parked"
+            done = state == "done" or accepted(m, e["record"])
+            g = by_ms.get((key, m["id"]))
+            row = {"module": e["stem"], "milestone": m["id"], "state": state,
+                   "rounds": (m.get("fails") or 0) + 1}
+            if g:
+                row.update(pct=codex_quota.cost(g["tokens"], fit), turns=g["turns"], builder_hours=round(g["hours"], 1))
+                history.append(row)
+            if not done and state != "parked":
+                if parked:
+                    behind_parked += 1  # milestones run in order, so these wait on the owner
+                else:
+                    open_ms.append(row)
+    return history, open_ms, {"plans_at": ref, "behind_parked": behind_parked}
+
+
+RECENT_H = 12.0  # other use is projected at its rate over this many hours, so last night's threads don't count twice
+
+
+def plan_forecast(acc: dict, history: list[dict], open_ms: list[dict], recent: dict) -> dict:
+    """The verdict: the expected cost of the open milestones, from what finished ones cost, plus other use (local
+    threads not the loop's, and usage from elsewhere) at its rate over the last RECENT_H hours, against what's left
+    before the reset. `recent` holds {"loop": [lo, mid, hi], "other": [lo, mid, hi], "hours": h} for that span."""
+    left = max(0.0, 100.0 - acc["used_percent"])
+    hours_left = acc["hours_left"]
+    finished = [h for h in history if h["state"] == "done" and h.get("pct")]
+    out = {"left_pct": left, "open_milestones": len(open_ms)}
+    other_need = [round(x / recent["hours"] * hours_left, 1) for x in recent["other"]]
+    out["other_use_before_reset"] = other_need
+    if not open_ms:
+        out["plan_pct"] = [0.0, 0.0, 0.0]
+        need = other_need
+    elif not finished:
+        out["plan_pct"] = None
+        out["verdict"] = (f"Too little data to cost the {len(open_ms)} open milestones: no finished milestone has "
+                          f"local rollouts to learn from. {left:.0f}% is left until the reset in {hours_left:.0f} h.")
+        out["warn"] = False
+        return out
+    else:
+        mean = sum(h["pct"][1] for h in finished) / len(finished)
+        lo, hi = min(h["pct"][0] for h in finished), max(h["pct"][2] for h in finished)
+        if len(finished) == 1:
+            lo, hi = lo / 2, hi * 2  # one milestone of history says little about the next
+        rounds = sum(h["rounds"] for h in finished) / len(finished)
+        spent = [h.get("pct") or [0, 0, 0] for h in open_ms]
+        plan = [max(0.0, x * len(open_ms) - sum(s[i] for s in spent)) for i, x in enumerate((lo, mean, hi))]
+        out.update(per_milestone=[round(lo, 2), round(mean, 2), round(hi, 2)], rounds_per_milestone=round(rounds, 1),
+                   learned_from=len(finished), plan_pct=[round(x, 1) for x in plan])
+        need = [plan[i] + other_need[i] for i in range(3)]
+    out["need_pct"] = [round(x, 1) for x in need]
+    what = f"the {len(open_ms)} open milestones and other use" if open_ms else "other use"
+    if need[2] <= left:
+        verdict = f"Quota lasts: {what} need about {need[1]:.0f}% (at most {need[2]:.0f}%) before the reset in " \
+                  f"{hours_left:.0f} h, and {left:.0f}% is left."
+        warn = False
+    elif need[0] > left:
+        verdict = f"Quota runs short: {what} need at least {need[0]:.0f}% before the reset in {hours_left:.0f} h, " \
+                  f"and only {left:.0f}% is left."
+        warn = True
+    else:
+        verdict = f"Quota may run short: {what} need {need[0]:.0f}-{need[2]:.0f}% before the reset in " \
+                  f"{hours_left:.0f} h, and {left:.0f}% is left."
+        warn = True
+    # Pace: one builder working through the open milestones at the finished ones' cost per builder-hour.
+    paced = [h for h in finished if h.get("builder_hours")]
+    if open_ms and paced:
+        per_hour = sum(h["pct"][1] for h in paced) / sum(h["builder_hours"] for h in paced)
+        out["plan_hours_one_builder"] = round(len(open_ms) * sum(h["builder_hours"] for h in paced) / len(paced), 1)
+        rate = per_hour + recent["other"][1] / recent["hours"]
+        if warn and rate > 0 and left / rate < hours_left:
+            out["runs_out"] = codex_quota.iso(time.time() + left / rate * 3600)
+            verdict += f" One builder at the usual pace would use it up by {out['runs_out']}."
+    out["verdict"], out["warn"] = verdict, warn
+    return out
+
+
+def quota_report(worktree: Path | None, budget_s: float = QUOTA_BUDGET_S, reading: dict | None = None) -> dict | None:
+    """The full quota picture: the account (codex_quota), the loop's own and other use this window, what milestones
+    cost, and the plan forecast."""
+    reading = reading or codex_quota.read(budget_s=budget_s, home=CODEX_HOME)
+    acc = codex_quota.account(reading)
+    if not acc:
         return None
-    _, used, resets_at = samples[-1]
-    recent = [s for s in samples if s[2] == resets_at and s[0] >= now_s - window_h * 3600]
-    out = {"used_percent": used, "resets_at": iso(resets_at)}
-    if len(recent) < 2 or recent[-1][0] - recent[0][0] < 3600:
-        return {**out, "per_day": None, "runs_out": None, "note": "not enough recent use to forecast"}
-    per_day = (recent[-1][1] - recent[0][1]) / ((recent[-1][0] - recent[0][0]) / 86400)
-    out["per_day"] = round(per_day, 1)
-    if per_day <= 0:
-        return {**out, "runs_out": None, "note": "no use in the window"}
-    runs_out = now_s + (100 - used) / per_day * 86400
-    if runs_out >= resets_at:
-        return {**out, "runs_out": None, "note": f"lasts to the reset at this rate ({round(100 - used - per_day * (resets_at - now_s) / 86400)}% left then)"}
-    return {**out, "runs_out": iso(runs_out),
-            "note": f"runs out {round((resets_at - runs_out) / 3600)} h before the reset at this rate"}
+    fit = acc.pop("_fit")
+    lo, now_s = acc["window_start"], reading["now"]
+    own = loop_threads(worktree, reading) if worktree else {}
+    by_thread = codex_quota.tokens_by(reading, lambda r: r["thread"], lo, now_s)
+    mine = [t for t in by_thread if t in own]
+    others = [t for t in by_thread if t not in own]
+    own_pct = codex_quota.cost(codex_quota.add(*(by_thread[t] for t in mine)), fit) if mine else [0.0, 0.0, 0.0]
+    local_pct = codex_quota.cost(codex_quota.add(*(by_thread[t] for t in others)), fit) if others else [0.0] * 3
+    names = reading["threads"]
+    top_other = sorted(others, key=lambda t: -codex_quota.weighted(*by_thread[t]))[:5]
+    acc["use_this_window"] = {
+        "loop_pct": own_pct, "other_local_pct": local_pct, "elsewhere_pct": acc["outside"]["pct"],
+        "other_local_threads": [{"thread": t, "name": names.get(t, {}).get("name") or names.get(t, {}).get("cwd"),
+                                 "pct": codex_quota.cost(by_thread[t], fit)} for t in top_other]}
+    since = max(lo, now_s - RECENT_H * 3600)
+    recent_h = max(1.0, (now_s - since) / 3600)
+    recent_tokens = codex_quota.tokens_by(reading, lambda r: r["thread"] in own, since, now_s)
+    elsewhere = sum(j["outside"] for j in fit.get("outside") or [] if j["t1"] >= since)
+    recent = {"hours": recent_h,
+              "loop": codex_quota.cost(recent_tokens.get(True, [0, 0, 0]), fit) or [0.0] * 3,
+              "other": [x + elsewhere for x in codex_quota.cost(recent_tokens.get(False, [0, 0, 0]), fit) or [0.0] * 3]}
+    acc["recent"] = {"hours": round(recent_h, 1), "loop_pct": recent["loop"], "other_pct": recent["other"],
+                     "burn": codex_quota.burn(reading, fit, since, now_s, elsewhere)}
+    history, open_ms, notes = [], [], {}
+    if worktree:
+        try:
+            history, open_ms, notes = milestone_costs(worktree, reading, fit, own)
+        except (SystemExit, Exception) as e:  # no profile, no plans: the account picture still stands
+            notes = {"plan_unavailable": f"{type(e).__name__}: {e}"}
+        acc["milestones"] = history
+    else:
+        notes = {"plan_unavailable": "no --worktree, so no plan to cost"}
+    acc["forecast"] = {**plan_forecast(acc, history, open_ms, recent), **notes}
+    return acc
 
 
-def iso(ts: float) -> str:
-    return datetime.fromtimestamp(ts, timezone.utc).astimezone().strftime("%a %d %b %H:%M")
+def burn_line(acc: dict) -> str:
+    """Recent burn in a phrase: measured from the usage figure when it moved enough, else fitted for the busiest
+    model and effort."""
+    hours = acc["recent"]["hours"]
+    burn = acc["recent"]["burn"]
+    if burn.get("per_active_hour"):
+        lo, _, hi = burn["per_active_hour"]
+        return f"{lo}-{hi}%/active h over the last {hours:.0f} h"
+    groups = [(g["hours"], name, g["pct_per_hour"]) for name, g in burn.get("per_builder_hour", {}).items()
+              if g.get("pct_per_hour")]
+    if not groups:
+        return f"too little use to measure over the last {hours:.0f} h"
+    _, name, rate = max(groups)
+    return f"about {rate[0]}-{rate[2]}%/builder-h on {name} over the last {hours:.0f} h (fitted; the figure moved " \
+           "too little to measure directly)"
+
+
+def quota_summary(acc: dict | None) -> dict | None:
+    """The result line's few fields: used, reset, recent burn, a one-sentence verdict, and whether to warn."""
+    if not acc:
+        return None
+    f = acc["forecast"]
+    recent = acc["recent"]["burn"].get("per_active_hour")
+    out = {"used_percent": acc["used_percent"], "resets_at": acc["resets_at"],
+           "burn": burn_line(acc),
+           "verdict": f.get("verdict"), "warn": bool(f.get("warn"))}
+    if f.get("runs_out"):
+        out["runs_out"] = f["runs_out"]
+    if not acc.get("complete"):
+        out["verdict"] = (f"No forecast yet: up to {acc['behind_mb']} MB of Codex rollouts are still unread "
+                          "(each result line reads more; `quota` reads them all).")
+        out["warn"] = False
+        out["burn"] = "not measured yet"
+        out.pop("runs_out", None)
+    out["detail"] = "agent_loop.py quota --worktree <path>"
+    return out
 
 
 def quota_now() -> dict | None:
     try:
-        t = time.time()
-        return forecast(quota_samples(t - 26 * 3600), t)
+        return quota_summary(quota_report(QUOTA_WORKTREE[0] if QUOTA_WORKTREE else None))
     except Exception as e:  # optional telemetry must never cost the result line
         return {"unavailable": f"{type(e).__name__}: {e}"}
 
@@ -2175,6 +2411,7 @@ def cmd_run(a: argparse.Namespace) -> None:
                                                      title=f"build {stem} {mid}")
         if resumable:
             state["thread"] = session
+            note_thread(worktree, host, session, "build", f"build {stem} {mid}")
         state["turns"] += 1
         state["failed_turns"] = state["failed_turns"] + 1 if code not in (0, 130) else 0
         state["path"] = SESSION_PATH.get("path")
@@ -2298,6 +2535,7 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
             text = prompt + "\n\n" + text
         code, session, message, err, seen = run_turn(host, prof, model, effort, worktree, text, resume, timeout_s,
                                                      role, title)
+        note_thread(worktree, host, session, role, title)
         turns += 1
         if _STOP or code == 130:
             return {"result": "PAUSED", "session": session, **({} if _STOP else {"reason": err.strip()})}
@@ -2676,7 +2914,8 @@ def cmd_profile(a: argparse.Namespace) -> None:
 
 
 def cmd_quota(a: argparse.Namespace) -> None:
-    print(json.dumps(quota_now()))
+    worktree = Path(a.worktree).resolve() if a.worktree else None
+    print(json.dumps(quota_report(worktree, budget_s=a.budget), indent=2))
 
 
 def cmd_lock(a: argparse.Namespace) -> None:
@@ -2912,7 +3151,10 @@ def main() -> None:
     for flag in ("--module", "--milestone", "--worktree", "--reason"):
         owner.add_argument(flag, required=True)
     owner.set_defaults(func=cmd_owner)
-    sub.add_parser("quota").set_defaults(func=cmd_quota)
+    quota = sub.add_parser("quota")
+    quota.add_argument("--worktree", help="also forecast this repository's open milestones")
+    quota.add_argument("--budget", type=float, default=120.0, help="seconds to spend reading rollouts")
+    quota.set_defaults(func=cmd_quota)
     prof = sub.add_parser("profile")
     prof.add_argument("--worktree", default=".")
     prof.add_argument("--host", help="also check that host's loader (default: see above)")
@@ -2923,6 +3165,8 @@ def main() -> None:
     lock.add_argument("command_args", nargs=argparse.REMAINDER)
     lock.set_defaults(func=cmd_lock)
     args = parser.parse_args()
+    if getattr(args, "worktree", None) and args.func is not cmd_quota:
+        QUOTA_WORKTREE[:] = [Path(args.worktree).resolve()]
     args.func(args)
 
 

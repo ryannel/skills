@@ -52,8 +52,8 @@ If the request leaves something open, use the profile's `Builders` line and say 
 Don't stop to ask. Pass `--model` or `--effort` to the loop only when the owner asked for something other than the
 default, because the loop already uses the profile's model and medium effort (high for planners). Medium is the
 owner's choice for builders and reviewers; raise it only where a run has been seen falling short. Without `--host`, the loop uses the
-profile's `Default host`, else the host it runs inside. Check `LOOP quota` before launching Codex builders, and
-include its forecast in that report.
+profile's `Default host`, else the host it runs inside. Check `LOOP quota --worktree <path>` before launching Codex builders, and
+include its verdict in that report.
 
 When the owner names one milestone or one module, that is the whole job. Once it's accepted, report and stop, rather
 than moving on to the next ready milestone.
@@ -157,8 +157,8 @@ however the owner follows this session. Cover:
   hardware gathered into one list, so the owner can do them in one sitting;
 - how many builders ran, and the Codex quota forecast.
 
-If the forecast first shows the limit running out before it resets (its `runs_out` is set), tell the owner right
-away, then keep going. It's their call whether to slow down.
+If a result line's `quota` first sets `warn` (the open milestones and other use won't fit in what's left before the
+reset), tell the owner right away with its verdict, then keep going. It's their call whether to slow down.
 
 Stop when the build order is finished, or when everything left is parked, blocked, waiting or needs the owner. Then
 clean up build outputs, remove worktrees whose work has landed, and send the final report.
