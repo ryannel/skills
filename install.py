@@ -285,6 +285,8 @@ def setup_claude(plugins: list[str], scope: str, repo: Path | None, source: str)
     for x in installed.values():
         print(f"  {x['id']} {x.get('version')} ({x.get('scope')}) loads from "
               f"{x.get('readFromFolder') or x.get('installPath')}")
+    if "orchestrate" in plugins and "orchestrate" not in installed:
+        sys.exit(f"Claude Code: could not verify orchestrate at {scope} scope.")
     if "orchestrate" in installed:
         link_claude_agents(claude, installed["orchestrate"], scope, repo)
 
@@ -292,26 +294,32 @@ def setup_claude(plugins: list[str], scope: str, repo: Path | None, source: str)
 def link_claude_agents(claude: str, rec: dict, scope: str, repo: Path | None) -> None:
     """Claude Code 2.1.239 and 2.1.317 don't load the `agents` a marketplace entry lists (`claude plugin details`
     shows Agents (0)), so link the orchestrate agents from the installed copy, as install_agents.sh would."""
-    details = subprocess.run([claude, "plugin", "details", rec["id"]], text=True, capture_output=True,
-                             cwd=repo if scope != "user" else None).stdout
-    if not re.search(r"Agents \(0\)", details):
-        return
-    if scope != "user":
-        print("  the orchestrate agents don't load from the plugin; for them, also run install.py --plugins"
-              " orchestrate --host claude at user scope")
+    details = subprocess.run([claude, "plugin", "details", rec["id"]], cwd=repo if scope != "user" else None,
+                             text=True, capture_output=True)
+    if details.returncode == 0 and re.search(r"Agents \([1-9][0-9]*\)", details.stdout):
         return
     root = Path(rec.get("readFromFolder") or rec["installPath"])
-    folder = claude_home() / "agents"
+    folder = claude_home() / "agents" if scope == "user" else repo / ".claude" / "agents"
     folder.mkdir(parents=True, exist_ok=True)
+    marker = "<!-- Managed by the ryannel/skills orchestrate installer. -->"
     for path in ENTRIES["orchestrate"].get("agents", []):
-        link, target = folder / Path(path).name, root / path
-        if link.is_symlink() or not link.exists():
-            if link.is_symlink():
-                link.unlink()
-            link.symlink_to(target)
-            print(f"  linked {link} -> {target} (the plugin's agents don't load from its marketplace entry)")
-        else:
-            print(f"  {link} exists and isn't a link; left as is")
+        destination, target = folder / Path(path).name, root / path
+        if not target.is_file():
+            sys.exit(f"Claude Code: missing agent definition {target}")
+        if scope == "user" and (destination.is_symlink() or not destination.exists()):
+            destination.unlink(missing_ok=True)
+            destination.symlink_to(target)
+            print(f"  linked {destination} -> {target}")
+            continue
+        contents = target.read_text()
+        if destination.exists() or destination.is_symlink():
+            existing = destination.read_text() if destination.is_file() else ""
+            if existing == contents:
+                continue
+            if destination.is_symlink() or not existing.endswith(f"\n{marker}\n"):
+                sys.exit(f"Claude Code: {destination} already exists. Move it aside and rerun to install the agent.")
+        destination.write_text(f"{contents.rstrip()}\n\n{marker}\n")
+        print(f"  wrote {destination}")
 
 
 def codex_registered(codex: str) -> str | None:
@@ -349,10 +357,18 @@ def setup_codex(plugins: list[str], source: str) -> None:
             print(f"  added the instructing-agents line to {agents_md}")
     if "orchestrate" in plugins:
         # The Codex evaluator agent isn't a plugin component. Link it from the plugin's installed copy so it keeps
-        # working if this checkout moves; fall back to the checkout.
+        # working if this checkout moves. Copy the definition if there is no plugin cache.
         script = "skills/orchestration/build/scripts/install_agents.sh"
         cached = sorted((codex_home() / "plugins/cache" / MARKETPLACE / "orchestrate").glob(f"*/{script}"))
-        run(["bash", str(cached[-1] if cached else HERE / script), "--global", "--codex-only"], check=False)
+        if cached:
+            run(["bash", str(cached[-1]), "--global", "--codex-only"])
+        else:
+            target = (HERE / script).parent.parent / "agents/codex/orchestrate-evaluator.toml"
+            destination = codex_home() / "agents" / target.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.unlink(missing_ok=True)
+            shutil.copyfile(target, destination)
+            print(f"  copied {destination}")
 
 
 # ---- one repository -------------------------------------------------------------------------------------------
@@ -407,7 +423,64 @@ def checkout_revision(source: str) -> str:
     return f"{source} at {sha.stdout.strip() or 'no git revision'}" + (" with uncommitted changes" if dirty else "")
 
 
+def choose(prompt: str, options: list[tuple[str, str]]) -> str:
+    print(prompt)
+    for number, (_, label) in enumerate(options, 1):
+        print(f"  {number}. {label}")
+    while True:
+        answer = input("Choose a number (or q to quit): ").strip().lower()
+        if answer == "q":
+            sys.exit("Installation cancelled.")
+        if answer in [str(number) for number in range(1, len(options) + 1)]:
+            return options[int(answer) - 1][0]
+        print("Choose one of the numbers shown above.")
+
+
+def choose_orchestration_install(a: argparse.Namespace) -> None:
+    if not sys.stdin.isatty():
+        sys.exit("Run this command in an interactive terminal to choose an agent and scope.")
+    hosts = []
+    if shutil.which("claude"):
+        hosts.append(("claude", "Claude Code"))
+    if codex_binary():
+        hosts.append(("codex", "Codex"))
+    if not hosts:
+        sys.exit("Install the Claude Code or Codex CLI before running this installer.")
+    if len(hosts) == 2:
+        hosts.append(("both", "Claude Code and Codex"))
+    try:
+        a.host = choose("Which agents should get the full orchestration setup?", hosts)
+        scopes = [("user", "Global (all projects)")]
+        if a.host == "claude":
+            scopes.append(("project", "Project (this Git repository)"))
+        else:
+            print("The full Codex plugin and evaluator install at global scope.")
+        a.scope = choose("Where should orchestration be installed?", scopes)
+    except (EOFError, KeyboardInterrupt):
+        sys.exit("Installation cancelled.")
+    a.plugins = "orchestrate"
+    a.source = "ryannel/skills"
+    a.repo = None
+    if a.scope == "project":
+        git_root = subprocess.run(["git", "rev-parse", "--show-toplevel"], text=True, capture_output=True)
+        if git_root.returncode:
+            sys.exit("Run the project install from inside the target Git repository.")
+        a.repo = Path(git_root.stdout.strip())
+
+
 def main() -> None:
+    if sys.argv[1:2] == ["--interactive"]:
+        ap = argparse.ArgumentParser(description="Install the orchestration plugin and its agents interactively.")
+        ap.add_argument("--replace-standalone", action="store_true",
+                        help="move aside earlier standalone copies of the orchestration skills")
+        a = ap.parse_args(sys.argv[2:])
+        choose_orchestration_install(a)
+    else:
+        a = parse_scripted_args()
+    install(a)
+
+
+def parse_scripted_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", choices=["claude", "codex", "both"], default="both")
     ap.add_argument("--plugins", default=",".join(DEFAULT_PLUGINS),
@@ -420,13 +493,17 @@ def main() -> None:
     ap.add_argument("--replace-standalone", action="store_true",
                     help="move aside earlier standalone copies of these skills and the hand-installed hook")
     a = ap.parse_args()
+    if a.scope != "user" and not a.repo:
+        ap.error("--scope project|local needs --repo")
+    return a
+
+
+def install(a: argparse.Namespace) -> None:
     plugins = [p.strip() for p in a.plugins.split(",") if p.strip()]
     unknown = [p for p in plugins if p not in ENTRIES]
     if unknown:
-        ap.error(f"unknown plugin(s) {', '.join(unknown)}; choose from {', '.join(ENTRIES)}")
+        sys.exit(f"unknown plugin(s) {', '.join(unknown)}; choose from {', '.join(ENTRIES)}")
     repo = a.repo.expanduser().resolve() if a.repo else None
-    if a.scope != "user" and not repo:
-        ap.error("--scope project|local needs --repo")
     hosts = ["claude", "codex"] if a.host == "both" else [a.host]
     migrate(plugins, hosts, a.replace_standalone)
     if "claude" in hosts:

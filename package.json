@@ -1,0 +1,14 @@
+{
+  "name": "@ryannel/orchestrate",
+  "version": "1.0.0",
+  "description": "Install the ryannel/skills orchestration plugin and its agents",
+  "bin": {
+    "ryannel-orchestrate": "bin/orchestrate.cjs"
+  },
+  "files": [
+    "bin/",
+    "install.py",
+    ".claude-plugin/marketplace.json",
+    "skills/orchestration/"
+  ]
+}
