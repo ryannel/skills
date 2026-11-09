@@ -99,7 +99,7 @@
       "description": "Writes and checks the text one agent hands another: Agent or Task prompts, codex exec and claude -p prompts, goals, steers, review requests and AGENTS.md or CLAUDE.md, for Claude Code and Codex. Carries what the agent can't find out itself (purpose, done, boundaries, where things are) and leaves out the method and what to look at.",
       "source": "./",
       "strict": false,
-      "version": "2.0.0",
+      "version": "2.1.0",
       "category": "development",
       "keywords": [
         "agents",
@@ -113,7 +113,21 @@
       ],
       "skills": [
         "./skills/instructing-agents"
-      ]
+      ],
+      "hooks": {
+        "PreToolUse": [
+          {
+            "matcher": "Agent|Task|SendMessage|Bash",
+            "hooks": [
+              {
+                "type": "command",
+                "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/instructing-agents/hooks/handoff_nudge.py\"",
+                "timeout": 10
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }
