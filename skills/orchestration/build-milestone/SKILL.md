@@ -23,7 +23,7 @@ fault coming back.
    report, because the loop rejects a claim whose definitions changed. [Proofs](../plan-module/references/proofs.md)
    explains how each kind of item is proved.
 2. The work is committed and integrated the way the profile's `Integrate` line says. For `push`, rebase onto the
-   profile's branch, run its `Check` fresh, and push without force, all while holding the `integrate` lock so
+   profile's branch, run its `Check` fresh, and push `HEAD:<branch>` without force, all while holding the `integrate` lock so
    parallel builders don't race each other. Under `/build`, the loop reruns the `Check` and every item's
    `check` itself before it believes you.
 3. The milestone's `state` says what happens next: `claimed` if it needs review, or `done` if it doesn't. It needs

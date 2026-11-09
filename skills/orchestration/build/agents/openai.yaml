@@ -1,0 +1,5 @@
+interface:
+  display_name: "Build (orchestrate)"
+  short_description: "Builds a planned project unattended with N builders on any host"
+policy:
+  allow_implicit_invocation: false
