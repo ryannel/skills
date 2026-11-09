@@ -11,9 +11,13 @@ and the Codex system prompts can change on the server with no release. Re-check 
 - Codex goal templates, [continuation](https://github.com/openai/codex/blob/main/codex-rs/ext/goal/templates/goals/continuation.md)
   and [budget limit](https://github.com/openai/codex/blob/main/codex-rs/ext/goal/templates/goals/budget_limit.md). How
   `/goal` derives requirements from the objective and referenced files, and when it may call itself blocked.
-- [Codex changelog](https://developers.openai.com/codex/changelog). Empty-continuation and interruption limits.
-- [Using GPT-6](https://developers.openai.com/api/docs/guides/latest-model). Measured on Astra. Its GPT-5.6 section
-  has the lean-prompt figures.
+- The `spawn_agent` tool schema in the Codex CLI bundled with ChatGPT.app (built 6 November 2026), read from the
+  binary. Effort and model inherited unless overridden, no overrides on a full-history fork, `fork_turns`.
+- [Codex changelog](https://learn.chatgpt.com/docs/changelog). The empty-continuation and interruption limits, which
+  weren't re-found on 9 November.
+- [Using GPT-6](https://developers.openai.com/api/docs/guides/latest-model). Measured on Astra.
+- [GPT-5.6 prompt guidance](https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6). The lean-prompt
+  figures (roughly 10–15% better scores, 41–66% fewer tokens).
 - [Rethinking skills and prompts for GPT-6 Astra](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra).
   Recipes, reading lists, "ask first" language and short descriptions.
 - [Maintaining software with the GPT-6 family](https://developers.openai.com/blog/maintaining-software-with-the-gpt-6-family).
@@ -42,9 +46,12 @@ and the Codex system prompts can change on the server with no release. Re-check 
   Reasons with rules.
 - [Claude Code best practices](https://code.claude.com/docs/en/best-practices). Emphasis, "keep going", effort,
   delegation, reviewer prompts.
+- [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents).
+  Attention as a finite budget that thins as context grows.
 - Claude Code [subagents](https://code.claude.com/docs/en/sub-agents), [memory](https://code.claude.com/docs/en/memory),
   [goal](https://code.claude.com/docs/en/goal) and [skills](https://code.claude.com/docs/en/skills). What a subagent
-  loads, AGENTS.md loading, the goal evaluator, `context: fork`.
+  loads, `omitClaudeMd`, AGENTS.md loading and its version gate, `@` imports, the goal evaluator, `context: fork`, and
+  that loaded skills aren't re-read each turn and can be cut short by compaction.
 - Claude Code's Agent tool description and the `prompt-audit` catalogue in the bundled `claude-api` skill (Claude Code
   2.1.317). Briefing a subagent like a peer, hedges, the recency trap.
 - [When to fold subagents into your main agent loop](https://claude.com/blog/building-agents-when-to-fold-subagents-into-your-main-agent-loop)
@@ -56,6 +63,7 @@ and the Codex system prompts can change on the server with no release. Re-check 
 
 ## Practice
 
-The rules against listing what to look at, against technique recipes in goals, against invented numeric targets, and
+Two reviews of this skill on 9 November 2026 (GPT-6 Astra and Claude Fable 5.1) corrected the host facts and
+narrowed the rule against lists to invented ones. The rules against listing what to look at, against technique recipes in goals, against invented numeric targets, and
 for treating repeated trials as a sign of missing research come from corrections one maintainer made to agent-written
 goals, steers and briefs in November 2026.

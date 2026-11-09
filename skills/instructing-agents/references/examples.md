@@ -5,6 +5,7 @@ Contents:
 - [A Codex goal](#a-codex-goal)
 - [A Claude Code goal condition](#a-claude-code-goal-condition)
 - [A subagent brief](#a-subagent-brief)
+- [A brief where the list is the task](#a-brief-where-the-list-is-the-task)
 - [A steer](#a-steer)
 - [An audit of an agent that went wrong](#an-audit-of-an-agent-that-went-wrong)
 
@@ -31,11 +32,9 @@ Read these yourself. Check that the suite applies them correctly, and look for n
 ```
 
 The person it was for rejected it: "These models are smarter than you are. Don't list what to look at." This is what
-went instead:
+went instead, launched with `codex exec -m gpt-6-astra -c model_reasoning_effort=high`:
 
 ```text
-Model gpt-6-astra, effort high.
-
 Review the orchestrate suite (skills/orchestration/) and skill-creator (skills/skill-creator/) in this repo, second
 round. They're meant to let capable agents plan, build and review software of any kind, on Claude Code, Codex or any
 other agent host, with "done" resting on evidence rather than a builder's word, in the fewest plain words that work.
@@ -75,15 +74,19 @@ first. Be thorough and keep going until it looks right.
 
 The rewrite says where the work ends up and leaves the method to the agent:
 
+Launched in a Sol thread set to high effort:
+
 ```text
-/goal Model gpt-6.1-sol, effort high.
-A player on the deck of the moving ship sees a bow wake that reads correctly at every speed the game allows, in the
+/goal A player on the deck of the moving ship sees a bow wake that reads correctly at every speed the game allows, in the
 shipped build. Done when the water inspection list in docs/water/M2-DONE.md passes in a capture you've watched in
 motion, and `./dev check` passes. The wake research is in research/wake/. Several hull-contact trials have already
 been rejected, so look for the established technique before trying another variant. Work in crates/water and its
 docs. Don't change the ship or camera crates. If the build can't run on the device, or the inspection list asks for
 something the design can't show, stop and report what you tried and what would unblock it.
 ```
+
+Pointing at M2-DONE.md makes its items requirements, which is the intent here. The research folder is named as
+background, so the loop doesn't audit against it.
 
 ## A Claude Code goal condition
 
@@ -105,6 +108,18 @@ after loss (yes, no or unsure). Read only.
 
 It gives the reason, what's ruled out, the scope, and a return shape that will be merged. It doesn't say how to search.
 
+## A brief where the list is the task
+
+```text
+The CSV export must open correctly in each spreadsheet the customer contract names: Excel 365 on Windows, Numbers 14,
+LibreOffice 24.8 and Google Sheets. Last release broke dates in Numbers (issue #412 has the file that reproduces it).
+Find out which of the four handle the current export, fix what doesn't, and add a fixture test for each. Don't change
+the column order; two downstream importers depend on it. Report each app with pass or fail and how you checked it.
+```
+
+The four apps, the reproduction and the column-order rule stay because the agent couldn't know them. Leaving the apps
+out to keep the brief short would lose the requirement.
+
 ## A steer
 
 ```text
@@ -121,8 +136,7 @@ while you carry on. This adds to your current goal; it doesn't replace it.
 ## An audit of an agent that went wrong
 
 ```text
-Before changing any instruction, check the harness: was the goal paused, over budget, or stopped after turns with no
-tool calls? Then quote each line in AGENTS.md, the active skills and the goal that bears on what you did, and mark each
-as a requirement or as your reading of it. Say which one made you stop after M1's first implementation. Report only,
-don't edit.
+You stopped after M1's first implementation with work left. First say whether the harness stopped you: a paused
+goal, the budget, or turns with no tool calls. Then quote any line in AGENTS.md, the active skills or the goal that bore
+on stopping, and mark each as what it says or how you read it. If no line caused it, say so. Report only, don't edit.
 ```

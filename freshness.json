@@ -2229,7 +2229,7 @@
           "type": "model-names",
           "claim": "Model behaviour and host facts for claude-opus-5-5 and gpt-6.1-sol: effort defaults, what a Codex or Claude Code subagent inherits, what the Codex system prompt and /goal templates already say, and why runs stop.",
           "where": "skills/instructing-agents",
-          "check": "Re-read the Codex models.json system prompts and goal templates, the Opus 5.5 prompting guide and the Claude Code subagent docs. Update references/hosts-and-models.md and sources.md; the Codex templates can change on the server with no model release."
+          "check": "Re-read GitHub models.json and diff both ~/.codex/models_cache*.json (CLI and desktop templates differ), the goal templates, the spawn_agent schema in the bundled Codex CLI, the Opus 5.5 prompting guide and the Claude Code subagent, memory and skills docs (note version gates). Update references/hosts-and-models.md and sources.md with dates; the Codex templates can change on the server with no model release."
         }
       ]
     },

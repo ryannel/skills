@@ -2,15 +2,18 @@
 
 Contents:
 - [What a new agent can already see](#what-a-new-agent-can-already-see)
-- [What the harness already tells the model](#what-the-harness-already-tells-the-model)
+- [What the harness may already tell the model](#what-the-harness-may-already-tell-the-model)
 - [Persistence](#persistence)
 - [Why runs stop](#why-runs-stop)
 - [Claude Opus 5.5](#claude-opus-55)
 - [GPT-6.1 Sol and GPT-6 Astra](#gpt-61-sol-and-gpt-6-astra)
 - [Choosing effort](#choosing-effort)
 
-These facts move with each release, and some change on the server with no release at all. They were checked on
-9 November 2026. Each vendor's advice was measured on one model, so a tip may not carry over to the next one.
+These are observations, not contracts. They move with each release, and some change on the server with no release
+at all. They were checked on 9 November 2026 against Claude Code 2.1.317 (the desktop app; the `claude` on one
+machine's PATH was 2.1.239) and the Codex CLI bundled with ChatGPT.app (built 6 November). When the host's own tool
+schema, agent definition or launch configuration says something different, believe it. Each vendor's advice was
+measured on one model, so a tip may not carry over to the next one.
 
 ## What a new agent can already see
 
@@ -18,35 +21,46 @@ The brief has to supply whatever the new agent can't see, so this decides how mu
 
 | Launch | Sees your conversation? | Loads project instructions? | Effort |
 |---|---|---|---|
-| Claude Code subagent (Agent tool) | No | CLAUDE.md and AGENTS.md, except the built-in Explore and Plan agents | The session's level on the same model. On another model, set `effort` on the call or in the agent file |
+| Claude Code subagent (Agent tool) | No | CLAUDE.md and AGENTS.md, except Explore, Plan and custom agents with `omitClaudeMd` | The session's level on the same model. On another model, set `effort` on the call or in the agent file |
 | Claude Code fork | Yes, up to the fork | Yes | Same as the parent |
 | Claude Code skill with `context: fork` | No, despite the name | Yes | The skill's `effort` field, if set |
-| `claude -p` | No | Yes | `--model` and `--effort` |
-| Codex `spawn_agent` | Yes by default (`fork_turns="all"`). Pass `"none"` for a fresh start | Yes | `xhigh` by default, whatever the parent's |
-| `codex exec` | No | Yes | `-m` and `-c model_reasoning_effort=…`. The default is low for Sol |
+| `claude -p` | No | Yes, but AGENTS.md only from 2.1.277 (check `claude --version`) | `--model` and `--effort` |
+| Codex `spawn_agent` | Yes by default (`fork_turns="all"`). Pass `"none"` for a fresh start | Yes | Inherits the parent's model and effort. A full-history fork refuses overrides, so set `reasoning_effort` with `fork_turns="none"` |
+| `codex exec` | No | Yes | `-m` and `-c model_reasoning_effort=…`. Otherwise `~/.codex/config.toml`, then the catalog default (low for Sol) |
+
+Codex's `spawn_agent` schema tells the model to set `model` or `reasoning_effort` only when the user, AGENTS.md or a
+skill asks for it, so a brief or AGENTS.md line that names them is what permits the override. The model catalogue in
+`~/.codex/models_cache*.json` also carries `multi_agent_reasoning_effort: xhigh` for Sol and Astra. What that field
+controls isn't documented, and it doesn't match the tool schema, so set effort explicitly when it matters and check
+what the subagent ran at.
 
 No Claude Code subagent gets your auto memory, output style or the skills you loaded. In Codex all agents share one
 workspace and tool state, and a subagent's tokens count against the root goal's budget.
 
 In Claude Code, AGENTS.md loads only when there's no project CLAUDE.md or CLAUDE.local.md. A CLAUDE.local.md added for
 private notes silently stops AGENTS.md loading. `~/.claude/CLAUDE.md` doesn't count, so it loads alongside AGENTS.md.
+Claude Code reads AGENTS.md directly only from version 2.1.277. Older versions, and projects that also need a
+CLAUDE.md, should import it with an `@AGENTS.md` line in CLAUDE.md ([instruction files](instruction-files.md#layering)).
 
-## What the harness already tells the model
+## What the harness may already tell the model
 
-Codex sends GPT-6.1 Sol and GPT-6 Astra almost the same system prompt. It already tells them to persist until the
-goal is done, to act without asking unless something is destructive or irreversible, to treat "can you…" as a request
-to act, to put the user's instructions above skills, to quote the skill line behind any pause, to test in proportion
-to the change, and to write plain connected prose. Don't repeat these in a goal, brief or AGENTS.md. OpenAI found
-leaner prompts scored 10–15% better on its coding evals (measured on GPT-5.6).
+Codex sends GPT-6.1 Sol and GPT-6 Astra a system prompt that pushes them to persist until the goal is done, to act
+without asking unless something is destructive or irreversible, to put the user's instructions above skills and to
+write plain prose. The exact text differs by surface and date. On 9 November the CLI's Sol template also told it to
+treat "can you…" as a request to act and to link and quote the skill line behind any pause. The desktop template
+from 7 November had neither clause, and it told Sol to "make the smallest change that fully solves the problem" and
+to skip new tests unless they were requested, required by the repository, or needed to catch a specific regression.
+Each surface's template is in `~/.codex/models_cache*.json`. Read the one you're launching into rather than relying on
+this list.
 
-The Codex `/goal` template treats your goal as data, below the system prompt. A goal can state requirements, but it
-can't override the harness's defaults. Change those in AGENTS.md, config or the approval policy.
+That shapes the brief in two ways. Don't spend words repeating a general push the template gives. OpenAI found leaner
+system prompts scored roughly 10–15% better on its evals with far fewer tokens (measured on GPT-5.6). But state
+anything that's part of done, such as tests, broad scope or a quality bar, because the template may say the opposite
+and is far from the current step by the end of a long run.
 
-OpenAI updates these prompts from the server, and the desktop app and the CLI can carry different versions. On
-7 November the desktop version told Sol to "make the smallest change that fully solves the problem" and to skip new
-tests unless they were requested, required by the repository, or needed to catch a specific regression. So if tests
-or a broad scope are part of done, say so in the goal or in AGENTS.md. The template each surface has is in
-`~/.codex/models_cache*.json`.
+The Codex `/goal` template treats your goal as data with no more authority than the system and developer
+instructions. Goal text can specialise the task within them. Runtime controls such as approval policy, sandbox, model
+and effort are set in configuration.
 
 Claude Code adds its own guidance on delegation to Opus under its default system prompt, so a brief that also damps
 delegation may double it.
@@ -76,7 +90,8 @@ Check these before blaming the text.
 Codex `/goal`:
 - An interruption pauses the goal, and only the user can resume it.
 - Running out of budget stops new work. The model summarises progress and what's left.
-- Three automatic continuation turns in a row with no activity block the goal. Interrupted continuations count.
+- Three automatic continuation turns in a row with no activity block the goal, and interrupted continuations count.
+  This is from the Codex changelog and wasn't re-found on 9 November, so treat it as unconfirmed.
 - The model may call itself blocked only when the same blocker has held for three goal turns.
 - Long runs at `xhigh` sometimes fail with "model is at capacity" or dropped streams.
 - A server-side template change can alter behaviour with no model release.
@@ -110,7 +125,9 @@ and that hasn't been re-tested on 5.5. A fresh reviewer with its own brief is a 
 
 For honest status reports, Anthropic's measured wording (on Fable 5) is: "Before reporting progress, audit each claim
 against a tool result from this session. Only report work you can point to evidence for; if something is not yet
-verified, say so explicitly." It hasn't been re-tested on Opus 5.5.
+verified, say so explicitly. Report outcomes faithfully: if tests fail, say so with the output; if a step was skipped,
+say that; when something is done and verified, state it plainly without hedging." It hasn't been re-tested on Opus
+5.5.
 
 Don't ask it to write out its reasoning step by step in a plan or review. It may decline that as reasoning
 extraction. Ask for a short explanation of what it decided and why.
@@ -128,9 +145,9 @@ and above the two were level (28 flags against 27 in 49,650 tasks). So ask for t
 verified, approximate and blocked apart, and give a stated path for when it's blocked. Sol is far better on all of
 these than GPT-5.6 Sol, so guardrails written for GPT-5.6 are probably stronger than it needs.
 
-Sol misses some subtle patterns Astra catches. In OpenAI's audit, Sol at Ultra found 92% of Astra's findings at 14% of
-the cost, and missed constant feature flags that other flags depended on. Name a known blind spot like that in the
-brief for that run, and keep it out of shared files.
+Sol misses some subtle patterns Astra catches. In OpenAI's audit, Sol at Ultra reported 131 findings to Astra's 142
+(92% as many, not 92% of the same ones) at 14% of the cost, and missed constant feature flags that other flags depended
+on. Name a known blind spot like that in the brief for that run, and keep it out of shared files.
 
 Broad goals work on Sol when the region is bounded. OpenAI ran a broad dead-code `/goal` on Sol over named
 subdirectories with good results. Its advice is to start with one small task, compare models and efforts on it, then
