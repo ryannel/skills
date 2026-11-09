@@ -81,7 +81,8 @@ definitions, the commit it checked, the reviews, and whether each milestone was 
 
 | | Codex | Claude Code | Another CLI |
 |---|---|---|---|
-| Launch | `codex exec --json`, resumable | `claude -p` with stream-json, resumable | the profile's `Host <name>:` command, one fresh process per turn |
+| Launch | on a Mac with the Codex app running, a thread the app lists under the project and runs itself; else `codex exec --json`; resumable either way | `claude -p` with stream-json, resumable; on a Mac with Claude desktop running and the CLI signed in, the session is also imported into the Code tab | the profile's `Host <name>:` command, one fresh process per turn |
+| Owner in the app | watch, steer by typing, Stop (the loop reports `PAUSED`), take over after Stop; `run` again hands it back | watch the transcript; open the session to take over, and the loop pauses rather than write to it at the same time | none |
 | Model and effort | pinned at launch and checked per turn from the session file | pinned at launch; the model is checked from the stream, the effort isn't | pinned in the command; not checked |
 | Reviewers and planners can't launch agents | `-c features.multi_agent=false` | `--disallowedTools Agent`, plus the orchestrate agent files when installed | only the prompt says so |
 | Goals and quota | goal status and a weekly-quota forecast, from Codex's local files | neither (Claude's `/goal` exists under `-p`, but the loop doesn't use it) | neither |
@@ -99,7 +100,7 @@ definitions, the commit it checked, the reviews, and whether each milestone was 
   the loop's trailer blocks the next claim, but an agent that forges the trailer deliberately could get past that. A
   module the loop hasn't seen before is taken as it stands, once.
 - Claude runs are meant to use the signed-in plan, so the loop removes every `ANTHROPIC_*` and `CLAUDE*` variable
-  except `CLAUDE_CONFIG_DIR` from their environment. That also drops any provider or deployment settings kept in
+  except `CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_OAUTH_TOKEN` (the plan's token) from their environment. That also drops any provider or deployment settings kept in
   those variables, and a configured credential helper could still supply other credentials. Anthropic has said `--bare` will become the
   default for `claude -p`, and bare mode reads only API-key credentials and skips agent and skill discovery, so
   Claude builders will need a change then. Tested with Claude Code 2.1.239 and Codex 0.167.
@@ -107,19 +108,12 @@ definitions, the commit it checked, the reviews, and whether each milestone was 
   write down what it's going to inspect before it looks, and fail what it finds rather than argue it away. It ships
   with four graded examples, and the owner calibrates it by spot-checking early verdicts. That's the method
   Anthropic used, but nobody has yet measured how often this reviewer catches a fake, or wrongly fails a sound one.
-- The loop is POSIX only. Its goal-based stop rules depend on Codex's local goal database, and whether `codex exec`
-  writes to it hasn't been confirmed. Without it, those rules are skipped.
-- No project has run a complete milestone cycle under this version yet.
-
-## Known limits
-
-- The checks run with the lead's own permissions, outside Codex's sandbox. The check strings are pinned, but a script
-  a check calls can still be changed by the builder, so review new check scripts. Proper isolation would need a
-  container.
-- The reviewer is the least proven part. `review-milestone` makes it use the product itself, read the whole diff,
-  write down what it's going to inspect before it looks, and fail what it finds rather than argue it away. It ships
-  with four graded examples, and the owner calibrates it by spot-checking early verdicts. That's the method
-  Anthropic used, but nobody has yet measured how often this reviewer catches a fake.
+- Sessions in the apps rest on internal surfaces: Codex deep links, its IPC socket and experimental app-server
+  methods, and Claude desktop's `claude://resume` import. They were proven with the Codex app 26.1103 (CLI
+  0.167.0-alpha.3.2) and Claude desktop 4.23118.0, and can change with an app update. Each result line says which
+  path ran (`path`, and `path_reason` when headless); `ORCHESTRATE_HEADLESS=1` forces the old path. A new Codex thread
+  opens in the app's window, which brings the app forward, and starts with a one-line bootstrap turn. A Claude
+  session runs in the loop's own CLI, so the CLI must be signed in; signed out, Claude runs fail as before.
 - The loop is POSIX only. Its goal-based stop rules depend on Codex's local goal database, and whether `codex exec`
   writes to it hasn't been confirmed. Without it, those rules are skipped.
 - No project has run a complete milestone cycle under this version yet.

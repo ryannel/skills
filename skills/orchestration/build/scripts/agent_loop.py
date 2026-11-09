@@ -15,6 +15,13 @@ Hosts:
   With no --host, the host is the profile's `Default host`, else the host this command runs inside, else the only
   one installed, else codex.
 
+  On a Mac with the Codex app or Claude desktop running, codex and claude sessions are ones the app lists under the
+  project, where the owner can watch, steer, pause (Stop) and take over; the loop still drives and checks every turn.
+  Codex threads run in the app itself. Claude turns run in the loop's own signed-in `claude -p`, imported into the
+  Code tab. Otherwise (another OS, app not installed or not running, Claude CLI signed out, or ORCHESTRATE_HEADLESS=1)
+  they run headless as above. Every result line from a turn says which: `path` is `visible` or `headless`, with
+  `path_reason` when headless. Stopping a turn in the app gives PAUSED, and `run` again carries on.
+
 What the loop owns. Next to each done-when file it keeps `<MODULE>-ACCEPTED.json`, which only the loop writes and
 which is committed, so every worktree, clone and lead sees the same thing. Per milestone it holds the authorised hash
 of the acceptance definitions, the claim the loop checked (code commit and the integrated tip it ran the checks on),
@@ -52,7 +59,8 @@ Subcommands:
         FLOOR         two failed turns in a row, the host CLI is missing, the integrated tip can't be fetched, or
                       the goal is usage- or budget-limited (likely quota, sign-in or outage)
         PIN           a turn ran on a model or effort other than the named ones
-        PAUSED        `pause` stopped it, or the Codex goal is paused; `run` again carries on
+        PAUSED        `pause` stopped it, the owner stopped it or has it open in the app, or the Codex goal is
+                      paused; `run` again carries on (re-activating a paused goal on a visible thread)
         A run on the same milestone resumes its session (with --message as the first prompt, e.g. the reviewer's
         findings) unless --fresh is given or the host, model or effort changed. A new milestone starts a new session.
         --milestone only confirms which milestone you expect; it never skips one that comes first.
@@ -101,15 +109,19 @@ import glob
 import hashlib
 import json
 import os
+import queue
 import re
 import shlex
 import shutil
 import signal
 import socket
 import sqlite3
+import struct
 import subprocess
 import sys
+import threading
 import time
+import uuid
 from pathlib import Path
 
 DEFAULT_MODELS = {"codex": "gpt-6.1-sol", "claude": "claude-opus-5-5"}
@@ -783,9 +795,10 @@ def kill_group(proc: subprocess.Popen) -> None:
 
 
 def run_proc(args, cwd: Path | None, timeout_s: float, shell: bool = False,
-             env: dict | None = None) -> tuple[int, str, str]:
+             env: dict | None = None, tick=None) -> tuple[int, str, str]:
     """Runs a command in its own process group, so a timeout or a pause stops everything it started. 124 means it
-    timed out, 130 that it was stopped, 127 that the command couldn't start."""
+    timed out, 130 that it was stopped, 127 that the command couldn't start. `tick` is called about once a second
+    while it runs."""
     try:
         proc = subprocess.Popen(args, shell=shell, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=True, start_new_session=True, env=env)
@@ -797,6 +810,8 @@ def run_proc(args, cwd: Path | None, timeout_s: float, shell: bool = False,
             out, err = proc.communicate(timeout=1.0)
             return proc.returncode, out, err
         except subprocess.TimeoutExpired:
+            if tick:
+                tick()
             if _STOP or time.time() > deadline:
                 kill_group(proc)
                 out, err = proc.communicate()
@@ -1176,9 +1191,11 @@ def goal_status(thread_id: str | None) -> str | None:
 
 def clean_env(role: str = "build") -> dict:
     """The environment for a Claude run: no API key or parent-session variables, so it uses the signed-in plan and
-    doesn't mistake itself for a nested session. CLAUDE_CONFIG_DIR is kept, because it says which sign-in to use."""
+    doesn't mistake itself for a nested session. CLAUDE_CONFIG_DIR is kept, because it says which sign-in to use, and
+    so is CLAUDE_CODE_OAUTH_TOKEN, the plan's own token from `claude setup-token`."""
     env = {k: v for k, v in os.environ.items()
-           if not (k.startswith("ANTHROPIC_") or k.startswith("CLAUDE")) or k == "CLAUDE_CONFIG_DIR"}
+           if not (k.startswith("ANTHROPIC_") or k.startswith("CLAUDE"))
+           or k in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN")}
     return {**env, "ORCHESTRATE_ROLE": role}
 
 
@@ -1207,8 +1224,8 @@ def default_host(prof: dict) -> str:
 
 
 def host_command(host: str, prof: dict, model: str, effort: str, worktree: Path, prompt: str,
-                 session: str | None, role: str = "build") -> tuple[list[str], dict | None]:
-    """The command line and environment for one turn on `host`."""
+                 session: str | None, role: str = "build", new_id: str | None = None) -> tuple[list[str], dict | None]:
+    """The command line and environment for one headless turn on `host`. `new_id` names a new Claude session."""
     env = {**os.environ, "ORCHESTRATE_ROLE": role}
     if host == "codex":
         flags = codex_flags({**prof, "model": model, "effort": effort}, role)
@@ -1229,6 +1246,8 @@ def host_command(host: str, prof: dict, model: str, effort: str, worktree: Path,
             args += ["--disallowedTools", "Agent"]
         if session:
             args += ["--resume", session]
+        elif new_id:
+            args += ["--session-id", new_id]
         return args, clean_env(role)
     template = prof.get("hosts", {}).get(host)
     if not template:
@@ -1270,11 +1289,34 @@ def parse_output(host: str, stdout: str) -> tuple[str | None, str, str | None, b
 
 
 def run_turn(host: str, prof: dict, model: str, effort: str, worktree: Path, prompt: str, session: str | None,
-             timeout_s: float, role: str = "build") -> tuple[int, str | None, str, str, str | None]:
-    """Runs one turn; returns (exit code, session id, last agent message, stderr tail, model the host reported)."""
-    args, env = host_command(host, prof, model, effort, worktree, prompt, session, role)
-    code, stdout, stderr = run_proc(args, worktree, timeout_s, env=env)
+             timeout_s: float, role: str = "build", title: str = "") -> tuple[int, str | None, str, str, str | None]:
+    """Runs one turn; returns (exit code, session id, last agent message, stderr tail, model the host reported).
+    Codex and Claude turns run as sessions their desktop apps show when they can (see `visible_unavailable`), else
+    headless; PATH records which, for the result line. 130 means stopped: by `pause`, or by the owner in the app."""
+    SESSION_PATH.clear()
+    why = visible_unavailable(host) if host in ("codex", "claude") else "not an app host"
+    if host in ("codex", "claude"):
+        SESSION_PATH.update(path="headless" if why else "visible", **({"path_reason": why} if why else {}))
+    if host == "codex" and not why:
+        return codex_visible_turn(prof, model, effort, worktree, prompt, session, timeout_s, role, title)
+    new_id = None
+    if host == "claude" and not why:
+        new_id = None if session else str(uuid.uuid4())
+        sid = session or new_id
+        if session and (pid := claude_app_process(session)):
+            return 130, session, "", f"the owner has this session open in Claude desktop (pid {pid}); the loop " \
+                                     "won't write to it at the same time", None
+    args, env = host_command(host, prof, model, effort, worktree, prompt, session, role, new_id)
+    tick = None
+    if host == "claude" and not why:
+        tick = lambda: claude_import(sid)  # noqa: E731
+    code, stdout, stderr = run_proc(args, worktree, timeout_s, env=env, tick=tick)
     new_session, message, seen, error = parse_output(host, stdout)
+    if tick:
+        claude_import(sid, wait_s=CLAUDE_IMPORT_WAIT_S)
+        if not claude_app_record(sid):
+            SESSION_PATH.update(path="headless", path_reason="Claude desktop didn't list the session after the "
+                                                             "import link")
     if error and code == 0:
         code, stderr = 1, (stderr + "\n" + message)[-800:]
     return code, new_session or session, message, stderr[-800:], seen
@@ -1295,7 +1337,7 @@ def report_word(message: str) -> str | None:
 
 
 def emit(result: str, **fields) -> None:
-    print(json.dumps({"result": result, **fields, "quota": quota_now()}))
+    print(json.dumps({"result": result, **fields, **SESSION_PATH, "quota": quota_now()}))
     sys.exit(0)
 
 
@@ -1331,6 +1373,432 @@ def floor_reason(host: str, code: int, err: str) -> str:
     if code == 127:
         return f"the {host} CLI couldn't start: {err.strip()[-200:]}"
     return f"two failed turns or no session on {host}; likely quota, sign-in or outage"
+
+
+# ------------------------------------------------------------------------------------ sessions the apps show (macOS)
+#
+# On a Mac where the Codex app or Claude desktop is running, the loop's sessions are made so that the app lists them
+# under the project, and the owner can watch, steer, pause and take over there. The loop still drives every turn and
+# checks every claim itself. Elsewhere (another OS, no app, app not running, Claude CLI signed out, or
+# ORCHESTRATE_HEADLESS=1) it runs `codex exec` and `claude -p` headless, as before. The methods were proven with the
+# Codex app 26.1103 (CLI 0.167.0-alpha.3.2) and Claude desktop 4.23118.0; they rest on deep links, a local IPC
+# socket and experimental app-server methods, so re-check them after an app update.
+#
+# Codex: a short-lived `codex app-server` creates the thread (source `vscode`, like the app's own) and runs one tiny
+# bootstrap turn, so the rollout records the model, effort and sandbox the app then resumes with. Each loop turn
+# queues the prompt (`codex queue`) and fires `codex://threads/wake/<id>`; the app's own app-server runs it. The
+# loop waits on the thread's rollout file until the turn (and any goal turns the app chains after it) has ended.
+# `codex://threads/<id>` makes the app window own the thread, so the IPC router can stop it on a pause or timeout.
+#
+# Claude: only the app can sign in a process it starts, so the loop keeps running its own signed-in `claude -p` per
+# turn, under a session id it chooses, and imports the session into the app with `claude://resume?session=<id>`.
+# The Code tab then lists it with its transcript. A session the owner has open in the app (a live app process on it)
+# is never written to by the loop at the same time: the turn reports PAUSED instead.
+
+SESSION_PATH: dict = {}  # which path the last turn ran on, for the result line
+_IMPORTS_SENT: set = set()
+CODEX_APP_CLI = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
+CLAUDE_APP_STORE = Path.home() / "Library/Application Support/Claude/claude-code-sessions"
+CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+SETTLE_S = 20.0  # quiet time after the last turn ends, so a goal's chained turn isn't mistaken for the end
+START_S = 120.0  # how long the app gets to start a woken turn before it's woken again, and then given up on
+POLL_S = 1.0
+CLAUDE_IMPORT_WAIT_S = 15.0
+BOOTSTRAP = ("The orchestrate loop started this thread from a script; its task arrives as the next message. "
+             "Reply with exactly: ready")
+
+
+def visible_unavailable(host: str) -> str | None:
+    """Why `host` can't run a session its desktop app shows, or None when it can."""
+    if os.environ.get("ORCHESTRATE_HEADLESS", "") not in ("", "0"):
+        return "ORCHESTRATE_HEADLESS is set"
+    if sys.platform != "darwin":
+        return "the apps' session links are macOS-only"
+    if host == "codex":
+        if not Path(CODEX_APP_CLI).exists():
+            return "the Codex app isn't installed"
+        try:
+            CodexIpc(timeout=5).close()
+        except (OSError, RuntimeError, ValueError, KeyError) as e:
+            return f"the Codex app isn't running (no IPC router: {type(e).__name__})"
+        return None
+    if not CLAUDE_APP_STORE.is_dir():
+        return "Claude desktop isn't installed (no Code tab session store)"
+    if not claude_app_running():
+        return "Claude desktop isn't running"
+    if not claude_signed_in():
+        return ("the Claude CLI is signed out (`claude auth login`, or CLAUDE_CODE_OAUTH_TOKEN from "
+                "`claude setup-token`)")
+    return None
+
+
+def open_link(url: str) -> bool:
+    """Hands a deep link to the app that owns its scheme, in the background. Works with the screen locked."""
+    try:
+        return subprocess.run(["open", "-g", url], capture_output=True, timeout=30).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def text_input(text: str) -> list[dict]:
+    return [{"type": "text", "text": text, "text_elements": []}]
+
+
+class CodexAppServer:
+    """A short-lived JSON-RPC client for the app's bundled `codex app-server` over stdio. It exists only to create a
+    thread record (and to change a goal's status); the app's own app-server runs every turn after the bootstrap."""
+
+    def __init__(self):
+        self.p = subprocess.Popen([CODEX_APP_CLI, "app-server", "--listen", "stdio://"], stdin=subprocess.PIPE,
+                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        self.q, self.n, self.notes = queue.Queue(), 0, []
+        threading.Thread(target=self._read, daemon=True).start()
+        self.call("initialize", {"clientInfo": {"name": "orchestrate", "title": "orchestrate", "version": "1"},
+                                 "capabilities": {"experimentalApi": True}})
+        self._send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
+
+    def _read(self):
+        for line in self.p.stdout:
+            try:
+                self.q.put(json.loads(line))
+            except ValueError:
+                pass
+
+    def _send(self, obj):
+        self.p.stdin.write(json.dumps(obj) + "\n")
+        self.p.stdin.flush()
+
+    def _next(self, deadline):
+        try:
+            return self.q.get(timeout=max(0.05, min(1.0, deadline - time.time())))
+        except queue.Empty:
+            return None
+
+    def _note(self, m):
+        if "method" in m and "id" in m:  # a server request, such as an approval; the bootstrap needs none
+            self._send({"jsonrpc": "2.0", "id": m["id"], "error": {"code": -32601, "message": "not handled"}})
+        self.notes.append(m)
+
+    def call(self, method, params, timeout=60):
+        self.n += 1
+        rid, deadline = self.n, time.time() + timeout
+        self._send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
+        while time.time() < deadline:
+            m = self._next(deadline)
+            if m is None:
+                continue
+            if m.get("id") == rid and "method" not in m:
+                if "error" in m:
+                    raise RuntimeError(f"{method}: {m['error']}")
+                return m["result"]
+            self._note(m)
+        raise TimeoutError(method)
+
+    def wait_for(self, method, timeout=180):
+        deadline = time.time() + timeout
+        if hit := next((m for m in self.notes if m.get("method") == method), None):
+            return hit
+        while time.time() < deadline:
+            m = self._next(deadline)
+            if m is not None:
+                self._note(m)
+                if m.get("method") == method:
+                    return m
+        raise TimeoutError(method)
+
+    def close(self):
+        try:
+            self.p.stdin.close()
+            self.p.wait(10)
+        except Exception:
+            self.p.kill()
+
+
+class CodexIpc:
+    """The Codex app's local IPC router, `<CODEX_HOME>/ipc/ipc.sock`: frames are a 4-byte little-endian length and
+    JSON. The router forwards thread-follower requests to the app window that owns the thread."""
+    VERSIONS = {"initialize": 0, "thread-follower-read-model-settings": 1, "thread-follower-interrupt-turn": 3}
+
+    def __init__(self, timeout: float = 20):
+        self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.s.settimeout(timeout)
+        try:
+            self.s.connect(str(CODEX_HOME / "ipc" / "ipc.sock"))
+            self.buf, self.client_id = b"", None
+            self.client_id = self.request("initialize", {"clientType": "orchestrate-loop"})["clientId"]
+        except BaseException:
+            self.s.close()
+            raise
+
+    def _send(self, obj):
+        data = json.dumps(obj).encode()
+        self.s.sendall(struct.pack("<I", len(data)) + data)
+
+    def _recv(self):
+        while True:
+            if len(self.buf) >= 4:
+                (n,) = struct.unpack("<I", self.buf[:4])
+                if len(self.buf) >= 4 + n:
+                    msg, self.buf = self.buf[4:4 + n], self.buf[4 + n:]
+                    return json.loads(msg)
+            chunk = self.s.recv(65536)
+            if not chunk:
+                raise ConnectionError("the IPC socket closed")
+            self.buf += chunk
+
+    def request(self, method, params, timeout_ms=20000):
+        rid = str(uuid.uuid4())
+        self._send({"type": "request", "requestId": rid, "sourceClientId": self.client_id,
+                    "version": self.VERSIONS.get(method, 0), "method": method, "params": params,
+                    "timeoutMs": timeout_ms})
+        while True:
+            m = self._recv()
+            if m.get("type") == "response" and m.get("requestId") == rid:
+                if m.get("resultType") == "error":
+                    raise RuntimeError(f"{method}: {m.get('error')}")
+                return m.get("result")
+            if m.get("type") == "client-discovery-request":
+                self._send({"type": "client-discovery-response", "requestId": m.get("requestId"),
+                            "response": {"canHandle": False}})
+
+    def close(self):
+        self.s.close()
+
+
+def codex_thread_create(prof: dict, model: str, effort: str, worktree: Path, role: str, title: str) -> str:
+    """Creates a thread the app lists under the project whose folder holds `worktree`, recorded with the model,
+    effort and permissions the headless path would use, and named `title`. Returns its id."""
+    sandbox = prof.get("sandbox", "workspace-write")
+    if sandbox == "danger-full-access":
+        policy = {"type": "dangerFullAccess"}
+    else:
+        roots = [git_common_dir(worktree)] + [str(Path(r).expanduser()) for r in prof.get("roots") or []]
+        policy = {"type": "workspaceWrite", "networkAccess": True, "writableRoots": roots}
+    config = {"model_reasoning_effort": effort}
+    if role in ("review", "plan"):
+        config["features.multi_agent"] = False
+    approvals = {"approvalPolicy": "on-request", "approvalsReviewer": "auto_review"}
+    srv = CodexAppServer()
+    try:
+        thread = srv.call("thread/start", {"cwd": str(worktree), "model": model, "threadSource": "user",
+                                           "sandbox": sandbox, "config": config, **approvals})["thread"]["id"]
+        srv.call("turn/start", {"threadId": thread, "model": model, "effort": effort, "sandboxPolicy": policy,
+                                "input": text_input(BOOTSTRAP), **approvals})
+        done = srv.wait_for("turn/completed", timeout=180)
+        status = done["params"]["turn"].get("status")
+        if status != "completed":
+            raise RuntimeError(f"the bootstrap turn ended {status}")
+        srv.call("thread/name/set", {"threadId": thread, "name": (title or "orchestrate")[:80]})
+    finally:
+        srv.close()
+    return thread
+
+
+def codex_owner(thread: str) -> dict | None:
+    """The model settings the app window holding `thread` reports, or None if no window holds it."""
+    try:
+        ipc = CodexIpc()
+        try:
+            return (ipc.request("thread-follower-read-model-settings", {"conversationId": thread}) or {}).get(
+                "settings") or {}
+        finally:
+            ipc.close()
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def codex_interrupt(thread: str) -> bool:
+    """The app's Stop button: interrupts the running turn and pauses the thread's goal."""
+    try:
+        ipc = CodexIpc()
+        try:
+            ipc.request("thread-follower-interrupt-turn", {"conversationId": thread, "mode": "user-stop"})
+            return True
+        finally:
+            ipc.close()
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
+def codex_goal_activate(thread: str) -> bool:
+    """The app's play button, minus the wake: a status-only goal change, which writes only the goal store (with an
+    `origin` it would also write the rollout, which the app holds), picked up when the thread is next woken."""
+    try:
+        srv = CodexAppServer()
+        try:
+            srv.call("thread/goal/set", {"threadId": thread, "status": "active"})
+            return True
+        finally:
+            srv.close()
+    except (OSError, RuntimeError, TimeoutError, ValueError):
+        return False
+
+
+def codex_queue(thread: str, text: str) -> None:
+    out = subprocess.run([CODEX_APP_CLI, "queue", "--thread", thread, "--resume", "--message", text],
+                         capture_output=True, text=True, timeout=60)
+    if out.returncode != 0 or "Queued" not in out.stdout + out.stderr:
+        raise RuntimeError(f"codex queue failed: {(out.stdout + out.stderr).strip()[-300:]}")
+
+
+def codex_queued(thread: str) -> int:
+    db = CODEX_HOME / "queue_1.sqlite"
+    if not db.exists():
+        return 0
+    try:
+        with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as conn:
+            return conn.execute("select count(*) from queued_items where thread_id=?", (thread,)).fetchone()[0]
+    except sqlite3.Error:
+        return 0
+
+
+def new_events(path: Path | None, offset: int) -> tuple[list[dict], int]:
+    """Complete JSON lines appended to `path` since `offset`, and the offset after them."""
+    if path is None:
+        return [], offset
+    try:
+        with open(path, "rb") as handle:
+            handle.seek(offset)
+            data = handle.read()
+    except OSError:
+        return [], offset
+    end = data.rfind(b"\n") + 1
+    events = []
+    for line in data[:end].splitlines():
+        try:
+            events.append(json.loads(line))
+        except ValueError:
+            continue
+    return events, offset + end
+
+
+def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prompt: str, thread: str | None,
+                       timeout_s: float, role: str, title: str) -> tuple[int, str | None, str, str, str | None]:
+    """One loop turn on a thread the Codex app runs and shows. The same contract as a headless turn: (exit code,
+    thread id, last agent message, error text, None); the pin check reads the same rollout file."""
+    try:
+        if thread is None:
+            thread = codex_thread_create(prof, model, effort, worktree, role, title)
+        settings = codex_owner(thread)
+        if settings is None:  # the window must hold the thread for a pause or timeout to stop it
+            open_link(f"codex://threads/{thread}")
+            for _ in range(30):
+                if (settings := codex_owner(thread)) is not None:
+                    break
+                time.sleep(POLL_S)
+        if settings:
+            SESSION_PATH["app_settings"] = f"{settings.get('model')} {settings.get('reasoningEffort')}"
+        else:
+            SESSION_PATH["path_note"] = "no app window holds the thread, so a pause or timeout can't stop its turn"
+        rollout = rollout_for(thread)
+        offset = rollout.stat().st_size if rollout else 0
+        codex_queue(thread, prompt)
+        if not open_link(f"codex://threads/wake/{thread}"):
+            raise RuntimeError("couldn't open the wake link")
+    except (OSError, RuntimeError, TimeoutError, ValueError, KeyError, subprocess.SubprocessError) as e:
+        return 1, thread, "", f"the Codex app path failed: {type(e).__name__}: {e}", None
+
+    began = time.time()
+    deadline, running, started, quiet, woken = began + timeout_s, set(), False, began, False
+    message, error, aborted = "", "", False
+    while True:
+        rollout = rollout or rollout_for(thread)
+        events, offset = new_events(rollout, offset)
+        for event in events:
+            p = event.get("payload") or {}
+            kind = p.get("type")
+            if event.get("type") == "response_item" and kind == "message" and p.get("role") == "assistant":
+                text = [c.get("text", "") for c in p.get("content") or [] if isinstance(c, dict)]
+                message = "\n".join(t for t in text if t) or message
+            if event.get("type") != "event_msg":
+                continue
+            if kind == "task_started":
+                running.add(p.get("turn_id"))
+                started, aborted, quiet = True, False, time.time()
+            elif kind in ("task_complete", "turn_complete", "turn_aborted"):
+                running.discard(p.get("turn_id"))
+                aborted, quiet = kind == "turn_aborted", time.time()
+                message = p.get("last_agent_message") or message
+            elif kind == "error":
+                error = str(p.get("message") or p)[:500]
+        if _STOP:
+            codex_interrupt(thread)
+            return 130, thread, message, "(stopped)", None
+        if time.time() > deadline:
+            goal = goal_status(thread)
+            codex_interrupt(thread)
+            if goal == "active":  # Stop pauses the goal; a timeout isn't the owner pausing it
+                codex_goal_activate(thread)
+            return 124, thread, message, "(timed out)", None
+        if not started:
+            if time.time() - began > 2 * START_S:
+                return 1, thread, "", "the Codex app didn't start the queued turn (signed out, or not running?)", None
+            if time.time() - began > START_S and not woken:
+                woken = open_link(f"codex://threads/wake/{thread}")
+        elif not running and time.time() - quiet >= SETTLE_S and not codex_queued(thread):
+            if aborted:
+                return 130, thread, message, "the turn was stopped in the Codex app", None
+            return (1 if error and not message else 0), thread, message, error, None
+        time.sleep(POLL_S)
+
+
+def claude_app_running() -> bool:
+    try:  # `pgrep -x Claude` misses the app on macOS 26, so read the executables' paths
+        out = subprocess.run(["ps", "-axo", "comm="], capture_output=True, text=True, timeout=30).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return any(line.strip().endswith("Claude.app/Contents/MacOS/Claude") for line in out.splitlines())
+
+
+def claude_signed_in() -> bool:
+    if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        return True
+    try:
+        out = subprocess.run([CLAUDE, "auth", "status"], capture_output=True, text=True, timeout=30,
+                             env=clean_env())
+        return bool(json.loads(out.stdout).get("loggedIn"))
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return False
+
+
+def claude_app_record(session: str) -> Path | None:
+    """The Code tab's record of `session`, which is what makes the app list it."""
+    hits = glob.glob(str(CLAUDE_APP_STORE / "*" / "*" / f"local_{session}.json"))
+    return Path(hits[0]) if hits else None
+
+
+def claude_transcript(session: str) -> Path | None:
+    hits = glob.glob(str(CLAUDE_HOME / "projects" / "*" / f"{session}.jsonl"))
+    return Path(hits[0]) if hits else None
+
+
+def claude_import(session: str, wait_s: float = 0.0) -> None:
+    """Imports a CLI session into the Code tab once its transcript exists (`claude://resume` writes the app's
+    record). Called while the turn runs, so the owner can watch the first turn too."""
+    if claude_app_record(session) or not claude_transcript(session):
+        return
+    if session not in _IMPORTS_SENT:
+        _IMPORTS_SENT.add(session)
+        open_link(f"claude://resume?session={session}")
+    deadline = time.time() + wait_s
+    while time.time() < deadline and not claude_app_record(session):
+        time.sleep(POLL_S)
+
+
+def claude_app_process(session: str) -> int | None:
+    """The pid of a live Claude desktop process on `session`, if the owner has it open in the app."""
+    for f in glob.glob(str(CLAUDE_HOME / "sessions" / "*.json")):
+        try:
+            reg = json.loads(Path(f).read_text())
+            if reg.get("sessionId") != session or not (reg.get("hostSessionId") or
+                                                       reg.get("entrypoint") == "claude-desktop"):
+                continue
+            pid = int(reg.get("pid") or Path(f).stem)
+            os.kill(pid, 0)
+            return pid
+        except (OSError, ValueError, TypeError):
+            continue
+    return None
 
 
 # ------------------------------------------------------------------------------------------------------- building
@@ -1399,6 +1867,10 @@ def cmd_run(a: argparse.Namespace) -> None:
     timeout_s = a.turn_timeout_hours * 3600
     resumable = host in ("codex", "claude")
 
+    if host == "codex" and state.get("thread") and goal_status(state["thread"]) == "paused" \
+            and not visible_unavailable("codex"):
+        codex_goal_activate(state["thread"])  # `run` again carries on after a pause, as the app's play button would
+
     def record_block(reason: str) -> None:
         def change(tree):
             path = tree / done_rel(prof, stem)
@@ -1430,15 +1902,17 @@ def cmd_run(a: argparse.Namespace) -> None:
             prompt = a.message or "Continue the objective."
             a.message = None
         code, session, message, err, seen = run_turn(host, prof, model, effort, worktree, prompt,
-                                                     None if first else state["thread"], timeout_s)
+                                                     None if first else state["thread"], timeout_s,
+                                                     title=f"build {stem} {mid}")
         if resumable:
             state["thread"] = session
         state["turns"] += 1
-        state["failed_turns"] = state["failed_turns"] + 1 if code != 0 else 0
+        state["failed_turns"] = state["failed_turns"] + 1 if code not in (0, 130) else 0
+        state["path"] = SESSION_PATH.get("path")
         state_path.write_text(json.dumps(state, indent=2))
 
-        if _STOP:
-            finish(state_path, state, "PAUSED")
+        if _STOP or code == 130:
+            finish(state_path, state, "PAUSED", **({} if _STOP else {"reason": err.strip()}))
         if code == 127 or (resumable and state["thread"] is None) or state["failed_turns"] >= 2:
             finish(state_path, state, "FLOOR", reason=floor_reason(host, code, err), exit_code=code, stderr=err)
         if bad := pin_problem(host, state.get("thread"), seen, model, effort):
@@ -1526,7 +2000,7 @@ def cmd_run(a: argparse.Namespace) -> None:
 # ------------------------------------------------------------------------------------------ reviewing and planning
 
 def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, prompt: str, role: str,
-                done_when, timeout_s: float, max_turns: int = 3) -> dict:
+                done_when, timeout_s: float, max_turns: int = 3, title: str = "") -> dict:
     """Runs a reviewer or planner until its last line satisfies `done_when`, nudging it at most twice. Host failures
     come back as FLOOR, PIN or PAUSED with their reasons, so the lead can fall back to another host."""
     session, message, turns = None, "", 0
@@ -1534,10 +2008,10 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
         resume = session if (turns and host in ("codex", "claude")) else None
         text = prompt if not resume else "Finish the task and end with the last line it asks for."
         code, session, message, err, seen = run_turn(host, prof, model, effort, worktree, text, resume, timeout_s,
-                                                     role)
+                                                     role, title)
         turns += 1
-        if _STOP:
-            return {"result": "PAUSED", "session": session}
+        if _STOP or code == 130:
+            return {"result": "PAUSED", "session": session, **({} if _STOP else {"reason": err.strip()})}
         if bad := pin_problem(host, session, seen, model, effort):
             return {"result": "PIN", "mismatches": bad[:5], "session": session}
         if code != 0:
@@ -1604,7 +2078,8 @@ def cmd_review(a: argparse.Namespace) -> None:
                              review=review_path, skill=skill_note("review-milestone"))
     wanted = ("DESIGN OK", "DESIGN CHANGES") if design else ("PASS", "FAIL")
     out = one_session(host, prof, model, effort, tree, prompt, "review",
-                      lambda msg: report_line(msg).startswith(wanted), a.turn_timeout_hours * 3600)
+                      lambda msg: report_line(msg).startswith(wanted), a.turn_timeout_hours * 3600,
+                      title=f"review {stem} {mid}")
     result = out.pop("result")
     if result != "FINISHED":
         emit(result, **info, **out)
@@ -1709,7 +2184,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
             pass
     prompt = PLAN_TEMPLATE.format(model=model, effort=effort, task=a.task, skill=skill_note("plan-module"))
     out = one_session(host, prof, model, effort, worktree, prompt, "plan", lambda msg: bool(msg.strip()),
-                      a.turn_timeout_hours * 3600, max_turns=1)
+                      a.turn_timeout_hours * 3600, max_turns=1, title=f"plan: {a.task.splitlines()[0][:60]}")
     result = out.pop("result")
     if result != "FINISHED":
         emit(result, **info, **out)

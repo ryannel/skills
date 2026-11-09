@@ -28,12 +28,15 @@ loop's result says what, and the table below says who fixes it.
 
 ## Where you run
 
-Every builder, reviewer and planner the loop starts runs inside your process, so it gets your sandbox and your
-operating-system permissions, not its own. If your host sandboxes you without network or without writes to `.git`,
+Every builder, reviewer and planner the loop starts headless runs inside your process, so it gets your sandbox and
+your operating-system permissions, not its own. On a Mac where the Codex app is running, Codex sessions run inside
+the app instead, as threads it lists under the project, with the sandbox the loop sets and the app's permissions.
+Claude sessions run in the loop's own `claude -p`, and with Claude desktop running and the CLI signed in, they're also
+listed in its Code tab. Each result line says which path ran (`path`, with `path_reason` when it's `headless`). If your host sandboxes you without network or without writes to `.git`,
 the builders can't fetch, commit or integrate either, so start the lead where those are allowed. On macOS, a builder
 that records the screen or uses the camera needs that permission granted to the app you run in (Terminal, the Codex
-app or Claude), and its first attempt fails until the owner grants it. Say which app you're running in, in your first
-report.
+app or Claude), and its first attempt fails until the owner grants it. Say which app you're running in, and which
+path the sessions ran on, in your first report.
 
 ## What the owner asked for
 
@@ -105,7 +108,7 @@ host in a fresh session, and say so in the report.
 | `UNCLAIMED` or `BUDGET` | The builder keeps saying it's done without a claim that holds, or it stopped making progress. Run a review on what exists, so the next attempt has concrete findings. |
 | `INVALID` | The done-when file is malformed, an agent changed something its role doesn't own, or the definitions aren't the authorised ones. Send the problems to the planner, and don't resume that builder until a planner turn has fixed them. |
 | `PARKED` or `FINISHED` | Nothing more for this module. Report a parked milestone. |
-| `FLOOR`, `PIN` or `PAUSED` | Stop that builder and report it, with the reason the loop gave. A `FLOOR` on one host doesn't stop builders on another. |
+| `FLOOR`, `PIN` or `PAUSED` | Stop that builder and report it, with the reason the loop gave. A `FLOOR` on one host doesn't stop builders on another. A `PAUSED` with a `reason` means the owner stopped the session in the app or has it open there: leave it to them until they say to carry on. |
 
 A review prints `REVIEWED` with the verdict, or `INVALID` when the reviewer did something a reviewer doesn't, such as
 editing source, writing no review or naming the wrong milestone. Nothing from an invalid review lands, so run it
@@ -128,8 +131,11 @@ If a builder breaks the main branch, whichever builder notices first fixes it.
 
 ## The owner's controls
 
-Tell the owner in your first report that these exist. The owner types them at a terminal, and the loop refuses them
-inside any session it started, so no agent can make these calls for the owner:
+Tell the owner in your first report that these exist. Sessions on the visible path can be watched in the Codex app or
+Claude's Code tab, and the owner can type into a Codex thread to steer it. Pressing Stop on a Codex thread, or opening
+a Claude session to work in it, pauses that builder (`PAUSED`) and leaves the session to the owner; `LOOP run` hands it
+back. The commands below the owner types at a terminal, and the loop refuses them inside any session it started, so
+no agent can make these calls for the owner:
 - `LOOP pause --worktree <repo>` stops running loops and their agents cleanly, and `LOOP run` carries on later;
 - `LOOP owner accept|rereview|unpark|scope --module <M> --milestone <id> --reason "..."` accepts without review,
   sends an accepted milestone back for a fresh review (keeping the old one), unparks, or takes the owner's edited

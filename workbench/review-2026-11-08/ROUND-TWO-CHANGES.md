@@ -3,8 +3,8 @@
 9 November 2026, branch `round-two`. This maps each decision in `SYNTHESIS-2.md`, and each ranked finding in
 `astra-REVIEW-2.md` (P1 and P2) and `fable-REVIEW-2.md` (all 23, which are unbanded), to what changed, what was
 deferred, and why. Tests are in `tests/orchestration/`. A test named `test_astra_N_...` or `test_fable_N_...`
-reproduces that finding and now passes. Decision 8, sessions visible in the apps' GUIs, wasn't part of this round,
-because its research is still running.
+reproduces that finding and now passes. Decision 8, sessions visible in the apps' GUIs, came after the rest of the
+round, once its research had finished; it has its own section below.
 
 `LOOP` below is `skills/orchestration/build/scripts/agent_loop.py`.
 
@@ -33,6 +33,80 @@ function, `next_step`, used by `ready`, `status` and `run`.
 | 6 | Engineers' workflows | **Blocked:** `BLOCKED` writes `state: blocked` plus `blocked: <reason>` through the loop, and `LOOP unblock` re-queues it. **Attended items:** an `attended` field (a definition key); the builder does the rest first, and the loop batches unpassed attended items into the blocked reason. **Pause:** `LOOP pause` sends SIGTERM to the pid in each run lock; the loop stops its child's process group (TERM, then KILL) and reports PAUSED. **Owner commands:** `LOOP owner accept, rereview, unpark, scope, release`, refused when `ORCHESTRATE_ROLE` is set (every child the loop starts has it), and needing a TTY with the target typed back; rereview keeps the old review as `<mid>-review-<n>.md`. **Needs errors:** forward and self needs in a module are validation errors, and needs on parked milestones and cross-module cycles are reported as invalid. **Status:** project-wide `LOOP status`, or `--module`. **Two leads:** claim refs at `refs/orchestrate/claims/<MODULE>/<mid>`, created on the remote (a push that fails if the ref exists) or locally with `update-ref` and a zero old value; the second lead gets `TAKEN`. **One milestone:** the lead stops after the named milestone is accepted. **Fix a bug:** build-milestone's ordinary-fix route integrates with `LOOP land`. The loop also parks a milestone itself when the ladder says `park`. | Two leads on the *same* clone share the run lock, so the second gets TAKEN at the module level; that's intended. Claims aren't released automatically if a lead dies (`owner release`). |
 | 7 | Host neutrality | README "Where you run" and "Known limits" say the lead's sandbox and OS permissions wrap every child. Codex reviewers and planners get `-c features.multi_agent=false` (the flag exists in local codex 0.167 `features list`). Prompts give each skill's file path for hosts without skills. The README notes the `claude -p` sign-in dependency and the `--bare` risk, with tested versions. A host table sets the per-host gaps side by side. | Claude effort isn't checked per turn (the stream doesn't report it); stated in the host table. |
 | 9 | Docs and fidelity | The sprint-contract citation is corrected, and the Cursor lock-bottleneck finding is cited as a deliberate trade. The stray "fan" is fixed. The "Unverified" comparisons are removed: the Opus 5.5 medium-vs-Opus 5 high comparison and the "hard caps on subagents" claim in `models.md`. The OpenAI attribution in `instructing-agents/SKILL.md` and `skill-creator/references/writing.md` now reads "define completion and where to stop". skill-creator: the `allowed_tools` example is read-only with a note on `--allow-tools`; trigger prompts run three times; `plugin eval` isolation versus competition and the `arm: both` delta are explained; the effective model and effort are recorded; contexts are fresh and not forked; the cases run on each target model; reserved folder names are cut to the two the page names. `check_skill.py` uses PyYAML when present, otherwise a strict scan (an unquoted `: `, an unterminated quote, a duplicate key, a stray line), and adds reserved words and anchor checks. Trimmed: the escalation ladder lives once in `done-when.md#when-a-review-fails`; `build`, `build-milestone`, the README and `next` point there; `models.md`'s time-signal and frontend-look paragraphs and the `tool_choice` line are gone. | `instructing-agents/SKILL.md` 72–80, the noun list: left alone, because a separate rebuild of that skill is in progress and edits there would collide. |
+
+## Decision 8: sessions the owner can see in the apps
+
+**What changed.** On a Mac, `run_turn` now picks a path per turn for the `codex` and `claude` hosts, and every result
+line from a turn says which ran: `path` is `visible` or `headless`, with `path_reason` when headless (and
+`app_settings` for Codex, the model and effort the app window reports). Other hosts are untouched and get no `path`
+field. The methods come from `~/Workspace/codexctl` (`VISIBLE-THREADS.md`, `CLAUDE-VISIBLE-SESSIONS.md`); what the
+loop needs was brought into `LOOP` itself (`CodexAppServer`, `CodexIpc` and the functions around them), so the skill
+still ships one self-contained file.
+
+- **Codex, visible.** For a new session a short-lived bundled `codex app-server` creates the thread (source
+  `vscode`, cwd the worktree or verify tree), runs one bootstrap turn at the requested model and effort so the rollout
+  records them, and names it `build <MODULE> <M>`, `review <MODULE> <M>` or `plan: <task>`. `codex://threads/<id>`
+  gives the app window the thread, so the IPC router can stop it. Each loop turn queues the prompt (`codex queue`) and
+  fires `codex://threads/wake/<id>`; the app's own app-server runs it. The loop reads the rollout from the offset it
+  noted, and the turn ends when every started turn has completed or aborted, nothing is queued, and nothing new has
+  started for `SETTLE_S` (20 s), so the goal turns the app chains count as one loop turn. The pin check, goal status
+  and quota read the same files as before. Pause (`LOOP pause`) and timeouts send the app's Stop over IPC; a timeout
+  then re-activates a goal that was active, since Stop pauses it. The owner pressing Stop, which aborts the turn, gives
+  `PAUSED` with a reason rather than a failed turn, and `run` again re-activates the paused goal and carries on.
+- **Claude, visible.** Only the app can sign in a process it starts, and a shell can't start or wake an app session
+  without a relay session, so the loop keeps running its own `claude -p` per turn, now under a session id it chooses
+  (`--session-id`), and imports the session into the Code tab with `claude://resume?session=<id>` as soon as its
+  transcript exists, so the first turn can be watched too. If the app doesn't list the session within 15 s, the
+  result says `headless` with that reason. Before resuming, the loop looks in `~/.claude/sessions/` for a live app
+  process on the session; if the owner has it open, the turn reports `PAUSED` instead of writing to it at the same
+  time. `clean_env` now keeps `CLAUDE_CODE_OAUTH_TOKEN`, the plan's own token, so `claude setup-token` can sign the
+  loop in.
+- **Fallback.** `visible_unavailable` names the reason to run headless: `ORCHESTRATE_HEADLESS=1`, not macOS, the app
+  not installed, the app not running (no Codex IPC router; no Claude desktop process), or the Claude CLI signed out
+  (`claude auth status`). Headless is the old path, unchanged. It's checked per turn; a Codex thread made visibly can
+  be resumed headless with `codex exec resume`, and the reverse, so a switch doesn't start a fresh session.
+- **Skill text.** `build/SKILL.md` ("Where you run", the `PAUSED` row and the owner's controls) and the README's host
+  table and known limits say what the owner can do in each app and which path ran. The README's duplicated, stale
+  "Known limits" section was removed.
+
+**Verified.**
+- Unit tests with fake hosts (`VisibleCodex`, `VisibleClaude`, `VisibleChoice`; 104 tests in all, all pass): a build
+  claimed on a visible thread with the requested model, effort, role, title and folder; resumed turns go to the same
+  thread with the message; a turn on another effort is `PIN`; Stop in the app is `PAUSED`; a pause and a timeout stop
+  the app's turn, and the timeout keeps an active goal active; `run` again re-activates a goal paused in the app; a
+  review runs in its own visible thread in the verify tree; without the app the result says `headless` and why; a
+  Claude build gets `--session-id` and one import link; the loop won't resume a Claude session the owner has open;
+  each fallback reason; other hosts unaffected.
+- One live Codex run (9 Nov, driven only through links, IPC and files; whether the Mac was locked wasn't checked): a one-item milestone in
+  `~/Workspace/scratch/orch-vis-test`, `--effort low`. Result `CLAIMED`, `path: visible`, `app_settings:
+  gpt-6.1-sol low`; the builder committed, landed through `LOOP land`, and the loop recorded the claim. Both turns in
+  the rollout (bootstrap and build) ran on gpt-6.1-sol low. The app's own sidebar query (`thread/list`, `sourceKinds:
+  []`, `useStateDbOnly: true`) lists the thread as "build HELLO M1", source `vscode`, cwd under the `scratch` project
+  root, so the app groups it under that project. Not seen on screen.
+- Claude, partly, because the standalone CLI is signed out: `visible_unavailable("claude")` correctly reports the
+  CLI signed out, so Claude runs fall back to headless (which then fails on sign-in, as before). The import itself was
+  run live: a signed-out `claude -p --session-id` wrote the transcript, and `claude_import` produced the Code tab's
+  record (`local_<id>.json`, `fromCliTranscript: true`) in 2.5 s. `pgrep -x Claude` turned out not to see the app on
+  this Mac, so the check reads `ps` instead.
+
+**Not verified, and limits.**
+- A signed-in Claude turn on the visible path, and whether the Code tab refreshes live while the loop's process
+  writes. The relay method (an app session that wakes imported sessions) isn't built: it needs a session the owner
+  keeps open, and a relay acts on a peer's word, which can't carry the owner's authority.
+- **The Codex app applies its own permissions to the thread.** The bootstrap turn records the loop's sandbox
+  (writable roots including the git common dir, network on), but when the app resumes the thread it applies its
+  default profile: workspace-write on the folder only, network restricted, `.git` read-only, approvals by
+  auto_review. In the live run the push to a repository outside the folder still went through, by escalation, but a
+  worktree's commits and any network use will escalate too. Setting the app's thread permissions (the IPC
+  `thread-follower-update-thread-settings`) wasn't explored. The same goes for `features.multi_agent=false` on
+  reviewers and planners: it's passed in the thread's config, but whether the app keeps it is unchecked.
+- A new Codex thread opens in the app window, bringing the app forward; the thread's preview is the bootstrap line;
+  the bootstrap costs one tiny turn. The deep links, IPC method versions and experimental app-server methods are
+  pinned to app 26.1103 and CLI 0.167.0-alpha.3.2. Owner steering by typing into a Codex thread wasn't tested inside
+  a loop run.
+- Left for the owner to archive (the app holds them, so only the app can): the Codex thread "build HELLO M1"
+  (`01a1be11-a7c4-7443-8527-c4e481c5e672`) in the scratch project, and the imported, untitled Claude Code session
+  `93a4733b-2686-42a7-901b-4e8bd594c7fe` (cwd `~/Workspace/scratch/orch-vis-claude`). Their folders are deleted.
 
 ## Astra review 2
 
@@ -102,7 +176,8 @@ function, `next_step`, used by `ready`, `status` and `run`.
 
 ## Verification
 
-- `python3 -m unittest discover tests/orchestration`: 90 tests, all pass (fake hosts only; no model launched).
+- `python3 -m unittest discover tests/orchestration`: 104 tests, all pass (fake hosts only; no model launched). The
+  live decision 8 checks are in its section.
 - `check_skill.py` on the five orchestrate skills and skill-creator: all ok. Output on the generative-media skills
   is identical before and after the checker change.
 - `claude plugin validate .`: the marketplace manifest passes.

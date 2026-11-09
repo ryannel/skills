@@ -320,10 +320,12 @@ class Profiles(unittest.TestCase):
         self.assertIn(str(SCRIPTS.parents[1] / "build-milestone" / "SKILL.md"), agent_loop.skill_note("build-milestone"))
 
     def test_claude_environment_drops_keys_but_keeps_config_dir(self):
-        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x", "CLAUDE_CONFIG_DIR": "/c", "CLAUDECODE": "1"}):
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x", "CLAUDE_CONFIG_DIR": "/c", "CLAUDECODE": "1",
+                                          "CLAUDE_CODE_OAUTH_TOKEN": "plan"}):
             env = agent_loop.clean_env("review")
         self.assertNotIn("ANTHROPIC_API_KEY", env)
         self.assertNotIn("CLAUDECODE", env)
+        self.assertEqual(env["CLAUDE_CODE_OAUTH_TOKEN"], "plan")
         self.assertEqual((env["CLAUDE_CONFIG_DIR"], env["ORCHESTRATE_ROLE"]), ("/c", "review"))
 
     def test_claude_stream_parsing(self):
@@ -441,15 +443,16 @@ elif role == "plan":
     reply = "Planned PAY. Files: docs/modules/PAY*. No owner decisions."
 if "claude" in Path(sys.argv[0]).name:
     model = sys.argv[sys.argv.index("--model") + 1]
-    print(json.dumps({"type": "system", "subtype": "init", "session_id": "s1", "model": model}))
-    print(json.dumps({"type": "result", "subtype": "success", "session_id": "s1", "result": reply, "is_error": False}))
+    sid = next((sys.argv[i + 1] for i, a in enumerate(sys.argv) if a in ("--session-id", "--resume")), "s1")
+    print(json.dumps({"type": "system", "subtype": "init", "session_id": sid, "model": model}))
+    print(json.dumps({"type": "result", "subtype": "success", "session_id": sid, "result": reply, "is_error": False}))
 else:
     print(json.dumps({"type": "thread.started", "thread_id": "t1"}))
     print(json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": reply}}))
 """
 
 FAKE_ENV = ("FAKE_STATE", "FAKE_WEAKEN", "FAKE_FORGE", "FAKE_UPSTREAM_BREAK", "FAKE_REVIEW", "FAKE_PLAN",
-            "FAKE_EXIT", "FAKE_SKIP_ATTENDED", "ORCHESTRATE_ROLE")
+            "FAKE_EXIT", "FAKE_SKIP_ATTENDED", "ORCHESTRATE_ROLE", "ORCHESTRATE_HEADLESS")
 
 
 class Repo(unittest.TestCase):
@@ -475,15 +478,18 @@ class Repo(unittest.TestCase):
         fake.write_text(FAKE_HOST)
         fake.chmod(0o755)
         self.log = root / "log"
-        self.saved = (agent_loop.CODEX, agent_loop.CODEX_HOME, agent_loop.CLAUDE)
+        self.saved = (agent_loop.CODEX, agent_loop.CODEX_HOME, agent_loop.CLAUDE, agent_loop.CLAUDE_APP_STORE)
         agent_loop.CODEX, agent_loop.CODEX_HOME = str(fake), self.home
+        # No app on this machine counts: the Codex IPC socket lives under the fake CODEX_HOME, and Claude desktop's
+        # session store is pointed at a folder that doesn't exist. Visible-session tests fake the apps explicitly.
+        agent_loop.CLAUDE_APP_STORE = root / "no-claude-desktop"
         for key in FAKE_ENV:
             os.environ.pop(key, None)
         os.environ.update(FAKE_LOG=str(self.log), FAKE_PASS="1", FAKE_REPLY="DONE", FAKE_COMMIT="1")
 
     def tearDown(self):
         release()
-        agent_loop.CODEX, agent_loop.CODEX_HOME, agent_loop.CLAUDE = self.saved
+        agent_loop.CODEX, agent_loop.CODEX_HOME, agent_loop.CLAUDE, agent_loop.CLAUDE_APP_STORE = self.saved
         for key in FAKE_ENV:
             os.environ.pop(key, None)
         self.tmp.cleanup()
@@ -1003,6 +1009,259 @@ class Landing(unittest.TestCase):
             self.assertTrue(ok, landed)
             self.assertEqual(agent_loop.head_commit(main), agent_loop.head_commit(wt))
             self.assertTrue((main / "feature").exists())
+
+
+class FakeCodexApp:
+    """Stands in for the Codex desktop app. A thread is a rollout file under the fake CODEX_HOME; a wake link runs the
+    fake host as the app's turn would (in the thread's folder, with its role) and appends the turn's events."""
+
+    def __init__(self, case, behaviour="run", effort_seen=None):
+        self.case, self.behaviour, self.effort_seen = case, behaviour, effort_seen
+        self.threads, self.queued, self.links, self.interrupts, self.activated = {}, {}, [], [], []
+        self.sent = []
+
+    def write(self, t, *events):
+        with open(self.threads[t]["path"], "a") as f:
+            for e in events:
+                f.write(json.dumps(e) + "\n")
+
+    def create(self, prof, model, effort, worktree, role, title):
+        t = f"019a0000-0000-7000-8000-{len(self.threads):012d}"
+        path = self.case.home / "sessions/2026/11/09" / f"rollout-2026-11-09T00-00-00-{t}.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.threads[t] = dict(path=path, model=model, effort=effort, cwd=Path(worktree), role=role, title=title)
+        self.write(t, {"type": "session_meta", "payload": {"id": t, "cwd": str(worktree)}},
+                   {"type": "turn_context", "payload": {"turn_id": "boot", "model": model, "effort": effort}})
+        return t
+
+    def owner(self, t):
+        info = self.threads.get(t)
+        return {"model": info["model"], "reasoningEffort": info["effort"]} if info else None
+
+    def queue(self, t, text):
+        self.queued[t] = text
+        self.sent.append(text)
+
+    def link(self, url):
+        self.links.append(url)
+        if "/wake/" in url:
+            self.wake(url.rsplit("/", 1)[1])
+        return True
+
+    def wake(self, t):
+        text = self.queued.pop(t, None)
+        if text is None:
+            return
+        info, turn = self.threads[t], f"turn-{len(self.links)}"
+        self.write(t, {"type": "event_msg", "payload": {"type": "task_started", "turn_id": turn}},
+                   {"type": "turn_context", "payload": {"turn_id": turn, "model": info["model"],
+                                                        "effort": self.effort_seen or info["effort"]}})
+        if self.behaviour == "hang":
+            info["running"] = turn
+            return
+        if self.behaviour == "owner_stop":
+            self.write(t, {"type": "event_msg", "payload": {"type": "turn_aborted", "turn_id": turn}})
+            return
+        out = subprocess.run([agent_loop.CODEX], cwd=info["cwd"], capture_output=True, text=True,
+                             env={**os.environ, "ORCHESTRATE_ROLE": info["role"]})
+        message = agent_loop.parse_output("codex", out.stdout)[1]
+        self.write(t, {"type": "event_msg", "payload": {"type": "task_complete", "turn_id": turn,
+                                                        "last_agent_message": message}})
+
+    def interrupt(self, t):
+        self.interrupts.append(t)
+        if running := self.threads[t].pop("running", None):
+            self.write(t, {"type": "event_msg", "payload": {"type": "turn_aborted", "turn_id": running}})
+        return True
+
+    @contextlib.contextmanager
+    def installed(self, claude=False):
+        patches = [mock.patch.object(agent_loop, name, value) for name, value in dict(
+            visible_unavailable=lambda host: None if host == "codex" or claude else "no app",
+            codex_thread_create=self.create, codex_owner=self.owner, codex_queue=self.queue, open_link=self.link,
+            codex_interrupt=self.interrupt, codex_queued=lambda t: int(t in self.queued),
+            codex_goal_activate=lambda t: self.activated.append(t) or True,
+            SETTLE_S=0.0, POLL_S=0.01, START_S=0.2, CLAUDE_IMPORT_WAIT_S=0.0).items()]
+        for p in patches:
+            p.start()
+        try:
+            yield self
+        finally:
+            for p in patches:
+                p.stop()
+
+
+class VisibleCodex(Repo):
+    """Decision 8: the loop's Codex sessions are threads the Codex app lists and runs."""
+
+    def test_decision_8_a_build_runs_in_a_thread_the_app_shows_and_the_loop_still_claims(self):
+        with FakeCodexApp(self).installed() as app:
+            result = self.run_loop()
+        self.assertEqual((result["result"], result["path"], result["app_settings"]),
+                         ("CLAIMED", "visible", "gpt-6.1-sol medium"))
+        (t, info), = app.threads.items()
+        self.assertEqual((info["model"], info["effort"], info["role"], info["title"], info["cwd"]),
+                         ("gpt-6.1-sol", "medium", "build", "build WATER M1", self.wt.resolve()))
+        self.assertIn(f"codex://threads/wake/{t}", app.links)
+        self.assertEqual((self.state()["thread"], self.state()["path"]), (t, "visible"))
+        self.assertTrue(self.calls(), "the app ran the turn")
+        self.assertEqual(self.read_record()["milestones"]["M1"]["accepted"]["by"], "checks")
+
+    def test_decision_8_a_resumed_turn_goes_to_the_same_thread_with_the_message(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: which device?")
+        with FakeCodexApp(self).installed() as app:
+            self.assertEqual(self.run_loop()["result"], "NEEDS_CONTEXT")
+            self.run_loop(message="Use the simulator.")
+        self.assertEqual(len(app.threads), 1)
+        self.assertTrue(app.sent[0].startswith("Model gpt-6.1-sol, effort medium."))
+        self.assertEqual(app.sent[-1], "Use the simulator.")
+
+    def test_decision_8_a_turn_on_another_effort_in_the_app_is_PIN(self):
+        with FakeCodexApp(self, effort_seen="xhigh").installed():
+            result = self.run_loop()
+        self.assertEqual(result["result"], "PIN")
+        self.assertIn("gpt-6.1-sol/xhigh", result["mismatches"][0])
+
+    def test_decision_8_the_owner_pressing_stop_in_the_app_is_PAUSED_not_a_failure(self):
+        with FakeCodexApp(self, behaviour="owner_stop").installed() as app:
+            result = self.run_loop()
+        self.assertEqual(result["result"], "PAUSED")
+        self.assertIn("stopped in the Codex app", result["reason"])
+        self.assertEqual(app.interrupts, [])
+
+    def test_decision_8_pause_stops_the_turn_running_in_the_app(self):
+        with FakeCodexApp(self, behaviour="hang").installed() as app:
+            threading.Timer(0.5, lambda: setattr(agent_loop, "_STOP", True)).start()
+            result = self.run_loop()
+        self.assertEqual(result["result"], "PAUSED")
+        self.assertEqual(len(app.interrupts), 1)
+
+    def test_decision_8_a_timeout_interrupts_the_apps_turn_and_keeps_an_active_goal(self):
+        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
+            conn.execute("create table thread_goals (thread_id text, status text)")
+            conn.execute("insert into thread_goals values ('019a0000-0000-7000-8000-000000000000', 'active')")
+        with FakeCodexApp(self, behaviour="hang").installed() as app:
+            result = self.run_loop(turn_timeout_hours=0.5 / 3600)
+        self.assertEqual(result["result"], "FLOOR")
+        self.assertEqual(len(app.interrupts), 2)
+        self.assertEqual(len(app.activated), 2)
+
+    def test_decision_8_run_again_reactivates_a_goal_paused_in_the_app(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
+        with FakeCodexApp(self).installed() as app:
+            self.run_loop()
+            t = self.state()["thread"]
+            with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
+                conn.execute("create table thread_goals (thread_id text, status text)")
+                conn.execute("insert into thread_goals values (?, 'paused')", (t,))
+            self.run_loop()
+        self.assertEqual(app.activated, [t])
+
+    def test_decision_8_a_review_runs_in_its_own_visible_thread_in_the_verify_tree(self):
+        self.write_done([milestone("M1", "open", ["open"], inspect="frames"), milestone("M2", "open", ["open"])])
+        self.commit_all()
+        with FakeCodexApp(self).installed() as app:
+            commit = self.run_loop()["commit"]
+            result = self.review(commit=commit, effort="high")
+        self.assertEqual((result["result"], result["verdict"], result["path"]), ("REVIEWED", "PASS", "visible"))
+        review = [i for i in app.threads.values() if i["role"] == "review"][0]
+        self.assertEqual((review["title"], review["effort"]), ("review WATER M1", "high"))
+        self.assertIn("orchestrate/verify", str(review["cwd"]))
+
+    def test_decision_8_without_the_app_the_loop_runs_headless_and_says_why(self):
+        result = self.run_loop()
+        self.assertEqual((result["result"], result["path"]), ("CLAIMED", "headless"))
+        self.assertTrue(result["path_reason"])
+        self.assertEqual(self.calls()[0]["argv"][0], "exec")
+
+
+class VisibleClaude(Repo):
+    """Decision 8: Claude turns run in the loop's own signed-in CLI, imported into the Code tab."""
+
+    def setUp(self):
+        super().setUp()
+        fake = self.root / "claude"
+        fake.write_text(FAKE_HOST)
+        fake.chmod(0o755)
+        agent_loop.CLAUDE = str(fake)
+        self.records = set()
+
+    def link(self, url):
+        self.links.append(url)
+        self.records.add(url.split("session=")[1])
+        return True
+
+    @contextlib.contextmanager
+    def app(self, owner_pid=None):
+        self.links = []
+        with FakeCodexApp(self).installed(claude=True), \
+                mock.patch.object(agent_loop, "open_link", self.link), \
+                mock.patch.object(agent_loop, "claude_transcript", lambda s: Path("/t") / s), \
+                mock.patch.object(agent_loop, "claude_app_record", lambda s: s in self.records and Path("/r")), \
+                mock.patch.object(agent_loop, "claude_app_process", lambda s: owner_pid):
+            yield
+
+    def test_decision_8_a_claude_build_names_its_session_and_imports_it_into_the_app(self):
+        with self.app():
+            result = self.run_loop(host="claude")
+        self.assertEqual((result["result"], result["path"]), ("CLAIMED", "visible"))
+        argv = self.calls()[0]["argv"]
+        sid = argv[argv.index("--session-id") + 1]
+        self.assertEqual(self.links, [f"claude://resume?session={sid}"])
+        self.assertEqual(self.state()["thread"], sid)
+
+    def test_decision_8_the_loop_wont_write_to_a_session_the_owner_has_open_in_the_app(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
+        with self.app():
+            self.run_loop(host="claude")
+        with self.app(owner_pid=4242):
+            result = self.run_loop(host="claude")
+        self.assertEqual(result["result"], "PAUSED")
+        self.assertIn("pid 4242", result["reason"])
+        self.assertEqual(len(self.calls()), 1)
+
+
+class VisibleChoice(unittest.TestCase):
+    def test_decision_8_each_reason_to_fall_back_is_named(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(agent_loop, "CODEX_HOME", Path(tmp)), \
+                mock.patch.object(agent_loop, "CODEX_APP_CLI", sys.executable), \
+                mock.patch.object(agent_loop, "CLAUDE_APP_STORE", Path(tmp)), \
+                mock.patch.object(agent_loop.sys, "platform", "darwin"):
+            with mock.patch.dict(os.environ, {"ORCHESTRATE_HEADLESS": "1"}):
+                self.assertIn("ORCHESTRATE_HEADLESS", agent_loop.visible_unavailable("codex"))
+            with mock.patch.dict(os.environ, {"ORCHESTRATE_HEADLESS": ""}):
+                self.assertIn("isn't running", agent_loop.visible_unavailable("codex"))
+                with mock.patch.object(agent_loop, "CODEX_APP_CLI", "/no/such/app"):
+                    self.assertIn("isn't installed", agent_loop.visible_unavailable("codex"))
+                with mock.patch.object(agent_loop, "claude_app_running", lambda: False):
+                    self.assertIn("isn't running", agent_loop.visible_unavailable("claude"))
+                with mock.patch.object(agent_loop, "claude_app_running", lambda: True), \
+                        mock.patch.object(agent_loop, "claude_signed_in", lambda: False):
+                    self.assertIn("signed out", agent_loop.visible_unavailable("claude"))
+                with mock.patch.object(agent_loop, "claude_app_running", lambda: True), \
+                        mock.patch.object(agent_loop, "claude_signed_in", lambda: True):
+                    self.assertIsNone(agent_loop.visible_unavailable("claude"))
+                with mock.patch.object(agent_loop, "CLAUDE_APP_STORE", Path(tmp) / "none"):
+                    self.assertIn("isn't installed", agent_loop.visible_unavailable("claude"))
+                with mock.patch.object(agent_loop.sys, "platform", "linux"):
+                    self.assertIn("macOS", agent_loop.visible_unavailable("codex"))
+
+    def test_decision_8_other_hosts_are_unaffected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prof = {"hosts": {"gemini": "echo {prompt}"}}
+            code, _, message, _, _ = agent_loop.run_turn("gemini", prof, "g", "medium", Path(tmp), "hi", None, 10)
+        self.assertEqual((code, message, agent_loop.SESSION_PATH), (0, "hi", {}))
+
+    def test_decision_8_codex_events_read_only_whole_new_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "r.jsonl"
+            f.write_text('{"a": 1}\n{"b": 2}\n{"c"')
+            events, offset = agent_loop.new_events(f, 0)
+            self.assertEqual(events, [{"a": 1}, {"b": 2}])
+            with open(f, "a") as h:
+                h.write(': 3}\n')
+            self.assertEqual(agent_loop.new_events(f, offset)[0], [{"c": 3}])
 
 
 class Locks(unittest.TestCase):
