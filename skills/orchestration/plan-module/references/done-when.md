@@ -128,7 +128,7 @@ Only one role changes each field at any one time, and the hand-offs happen in th
 | `state` blocked → open | Lead, through the loop | Whatever blocked it is resolved (`unblock`). |
 | items' `verdict` and `review` | Reviewer | Reviewing a claimed milestone. Every item gets a verdict. |
 | `state` claimed → done | Reviewer | Every verdict is `pass`, and nothing outside the items fails the milestone. |
-| `state` claimed → in_progress, and 1 more `fails` | Reviewer | Any verdict is `fail` or `cant_tell`, or a defect outside the items fails it. |
+| `state` claimed → in_progress, and 1 more `fails` | Reviewer | Any verdict is `fail` or `cant_tell`, or a blocking defect outside the items fails it (advisory findings never do). |
 | items' `status` back to open, `evidence` cleared, on items that didn't pass | Loop | After a failed review, so the next claim is verified again. |
 | `state` → parked | Loop | After a failed review, when the ladder below says `park`. |
 | the definitions, `fails` back to 0, 1 more `replans`, `state` → open | Planner | A re-plan, all in one commit. Milestones split from a re-planned one start with its `replans` count. The loop records the new definitions and clears old proof. |

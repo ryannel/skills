@@ -5,7 +5,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")/../agents" && pwd)"
 if [ "${1:-}" = "--global" ]; then
-  claude_dir="$HOME/.claude/agents"; codex_dir="${CODEX_HOME:-$HOME/.codex}/agents"
+  claude_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agents"; codex_dir="${CODEX_HOME:-$HOME/.codex}/agents"
 elif [ -n "${1:-}" ]; then
   claude_dir="$1/.claude/agents"; codex_dir="$1/.codex/agents"
 else

@@ -1,8 +1,6 @@
 ---
 name: plan-module
 description: Plans software work for AI agents to build, as part of the orchestrate set. For a project, it draws the module map, build order and contracts; for a module, it writes the design, milestones and JSON done-when file; it also writes the ORCHESTRATE.md profile. Use when starting or re-planning a project, goal or module, settling a contract change, or after a milestone fails review four times. Not for building (build-milestone) or judging (review-milestone).
-model: claude-opus-5-5
-effort: high
 ---
 
 # Plan

@@ -1,14 +1,9 @@
 ---
 name: build-milestone
 description: Builds, verifies and integrates the next milestone of a module from its plan and JSON done-when file, as part of the orchestrate set, in Claude Code or Codex. Use for implementation, fixes and refactors in a repository with an ORCHESTRATE.md. Not for planning (plan-module) or judging a milestone (review-milestone).
-model: claude-opus-5-5
-effort: medium
 ---
 
 # Build a milestone
-
-Run at medium effort, on the model the profile names for your host (in Codex, `gpt-6.1-sol` unless it says
-otherwise).
 
 Read `ORCHESTRATE.md` first, and any building guidance it links to. Then find the next open milestone in
 `<MODULE>-PLAN.md` and its items in `<MODULE>-DONE.json`. Your job is to make that milestone work on its real

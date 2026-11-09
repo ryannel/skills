@@ -435,15 +435,26 @@ elif role == "review":
             (cwd / "src.txt").write_text("fixed it myself")
         reply = f"PASS {mid}" if verdict == "pass" else f"FAIL {mid}: 1 fail, 0 cant_tell, 0 outside the items"
 elif role == "plan":
-    if os.environ.get("FAKE_PLAN") == "forge":
+    mode = os.environ.get("FAKE_PLAN", "")
+    turn = sum(json.loads(l)["role"] == "plan" for l in open(os.environ["FAKE_LOG"]))
+    files = ["docs/modules/PAY-DONE.json"] + ([] if mode == "nodesign" else ["docs/modules/PAY.md",
+                                                                             "docs/modules/PAY-PLAN.md"])
+    if mode == "forge":
         (cwd / "docs/modules/WATER-ACCEPTED.json").write_text("{}")
+        reply = "PLANNED: docs/modules/WATER-ACCEPTED.json"
+    elif mode == "progress" or (mode == "late" and turn == 1):
+        reply = "I've read the brief. Next I'll write the PAY design and its done-when file."
+    elif mode == "blocked":
+        (cwd / "docs/modules/PAY.md").write_text("# Pay design, half done")
+        reply = "BLOCKED: the owner must choose the payment provider"
     else:
-        (cwd / "docs/modules/PAY.md").write_text("# Pay design")
-        (cwd / "docs/modules/PAY-PLAN.md").write_text("# Pay plan")
+        if mode != "nodesign":
+            (cwd / "docs/modules/PAY.md").write_text("# Pay design")
+            (cwd / "docs/modules/PAY-PLAN.md").write_text("# Pay plan")
         (cwd / "docs/modules/PAY-DONE.json").write_text(json.dumps({"module": "PAY", "milestones": [
             {"id": "M1", "name": "pay", "state": "open", "fails": 0, "replans": 0,
              "items": [{"id": "M1.1", "statement": "pays", "check": "true", "status": "open", "evidence": ""}]}]}))
-    reply = "Planned PAY. Files: docs/modules/PAY*. No owner decisions."
+        reply = "Planned PAY. No owner decisions.\\nPLANNED: " + ", ".join(files)
 if "claude" in Path(sys.argv[0]).name:
     model = sys.argv[sys.argv.index("--model") + 1]
     sid = next((sys.argv[i + 1] for i, a in enumerate(sys.argv) if a in ("--session-id", "--resume")), "s1")
@@ -542,7 +553,8 @@ class Repo(unittest.TestCase):
 
     def run_loop(self, **kw):
         args = dict(module="WATER", worktree=str(self.wt), milestone=None, fresh=False, message=None,
-                    budget_hours=4.0, turn_timeout_hours=0.1, host=None, model=None, effort=None)
+                    budget_hours=4.0, turn_timeout_hours=0.1, host=None, model=None, effort=None, owner_rule=None,
+                    clear_owner_rules=False)
         args.update(kw)
         return self.call(agent_loop.cmd_run, **args)
 
@@ -800,7 +812,7 @@ class Reviewing(Repo):
         last = self.calls()[-1]
         self.assertEqual(last["argv"][last["argv"].index("resume") + 1], "t1")
         self.assertIn("--add-dir", last["argv"][:last["argv"].index("resume")])
-        self.assertTrue(last["argv"][-1].startswith("FINDINGS\n\nStill binding: change only M1's state"))
+        self.assertTrue(last["argv"][-1].startswith("FINDINGS\n\nObjective: M1 claimed"))
 
     def test_the_loop_parks_a_milestone_when_the_ladder_runs_out(self):
         self.write_done([dict(milestone("M1", "open", ["open"], inspect="frames"), fails=3, replans=1),
@@ -1121,8 +1133,8 @@ class VisibleCodex(Repo):
             self.run_loop(message="Use the simulator.")
         self.assertEqual(len(app.threads), 1)
         self.assertTrue(app.sent[0].startswith(agent_loop.GOAL_LINE + "Objective: milestone M1"))
-        self.assertTrue(app.sent[0].endswith("(Launched on gpt-6.1-sol at medium effort.)"))
-        self.assertTrue(app.sent[-1].startswith("Use the simulator.\n\nStill binding:"))
+        self.assertNotIn("gpt-6.1-sol", app.sent[0])
+        self.assertTrue(app.sent[-1].startswith("Use the simulator.\n\nObjective: M1 claimed"))
 
     def test_decision_8_a_turn_on_another_effort_in_the_app_is_PIN(self):
         with FakeCodexApp(self, effort_seen="xhigh").installed():
@@ -1316,7 +1328,8 @@ class Fold(Repo):
                      "Licences and paths not to touch: no GPL code; never modify ../other-repo.",
                      "Owner decides: spending and publishing."):
             self.assertIn(part, restated)
-        self.assertLessEqual(len(restated.split()), 75, "the restatement stays terse")
+        self.assertTrue(restated.startswith("Objective: M1 claimed, every item pass with evidence"))
+        self.assertLessEqual(len(restated.split()), 90, "the restatement stays terse")
         self.assertNotIn("constraints_missing", result)
 
     def test_item5_a_turn_resumed_inside_a_run_restates_too(self):
@@ -1327,13 +1340,14 @@ class Fold(Repo):
         self.assertEqual(len(later), 2)
         for p in later:
             self.assertTrue(p.startswith("The loop can't accept the claim yet"))
-            self.assertIn("\n\nStill binding: change only M1's state", p)
+            self.assertIn("\n\nObjective: M1 claimed", p)
+            self.assertIn("Still binding: change only M1's state", p)
 
     def test_item5_codex_restates_only_when_no_goal_is_active_and_records_the_goal(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: which device?")
         self.assertEqual(self.run_loop()["goal"], "none")
         self.run_loop(message="Use the simulator.")
-        self.assertIn("\n\nStill binding:", self.prompt(self.calls()[-1]))
+        self.assertIn("\n\nObjective: M1 claimed", self.prompt(self.calls()[-1]))
         with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
             conn.execute("create table thread_goals (thread_id text, status text)")
             conn.execute("insert into thread_goals values ('t1', 'active')")
@@ -1341,7 +1355,7 @@ class Fold(Repo):
         result = self.run_loop(message="Use the simulator.")
         self.assertEqual(result["goal"], "active")
         prompts = [self.prompt(c) for c in self.calls()[before:]]
-        self.assertEqual(prompts, ["Use the simulator.", "Continue the objective."])
+        self.assertEqual(prompts, ["Use the simulator.", "Continue the objective. Still open: M1.1."])
 
     def test_item5_a_generic_host_continuation_restates(self):
         host = self.root / "echo-host"
@@ -1378,11 +1392,24 @@ class Fold(Repo):
 
     # Item 6: launch records.
 
-    def test_item6_the_build_prompt_no_longer_opens_with_the_model(self):
-        prompt = agent_loop.BUILD_TEMPLATE.format(model="m", effort="e", goal=agent_loop.GOAL_LINE, milestone="M1",
-                                                  module="W", done="d", loop="l", skill="s")
-        self.assertTrue(prompt.startswith(agent_loop.GOAL_LINE + "Objective:"))
-        self.assertTrue(prompt.endswith("(Launched on m at e effort.)"))
+    def test_holistic_5_model_and_effort_are_in_no_prompt_only_the_launch_record(self):
+        values = dict(goal=agent_loop.GOAL_LINE, milestone="M1", module="W", done="d", loop="l", skill="s", commit="c",
+                      review="r", task="t", evidence="e")
+        for name in ("BUILD_TEMPLATE", "REVIEW_TEMPLATE", "DESIGN_REVIEW_TEMPLATE", "PLAN_TEMPLATE",
+                     "FINDINGS_TEMPLATE"):
+            template = getattr(agent_loop, name)
+            self.assertNotIn("{model}", template, name)
+            self.assertNotIn("{effort}", template, name)
+            text = template.format(**values).lower()
+            for word in ("effort", "gpt-6", "opus", "launched on"):
+                self.assertNotIn(word, text, f"{name} mentions {word}")
+        self.assertTrue(agent_loop.BUILD_TEMPLATE.format(**values).startswith(agent_loop.GOAL_LINE + "Objective:"))
+        self.use_claude()
+        self.assertEqual(self.run_loop(host="claude", effort="high")["result"], "CLAIMED")
+        argv = self.calls()[-1]["argv"]
+        self.assertEqual(argv[argv.index("--effort") + 1], "high")
+        self.assertNotIn("high", self.prompt(self.calls()[-1]))
+        self.assertEqual(self.read_record()["milestones"]["M1"]["claim"]["effort"], "high")
 
     def test_item6_a_claude_claim_records_effort_cli_and_only_the_observed_model(self):
         self.use_claude()
@@ -1488,7 +1515,7 @@ class Fold(Repo):
             call = next(c for c in self.calls() if c["role"] == role)
             self.assertNotIn(resume_flag, call["argv"], f"{host} {role} resumes nothing")
             skill = "review-milestone" if role == "review" else "plan-module"
-            self.assertRegex(self.prompt(call), rf"^Model \S+, effort \w+\. Use the {skill} skill",
+            self.assertRegex(self.prompt(call), rf"^Use the {skill} skill",
                              f"{host} {role} gets only its own task")
             if role == "review":
                 self.assertNotEqual(call["cwd"], builder["cwd"], "a clean checkout, not the builder's tree")
@@ -1499,6 +1526,171 @@ class Fold(Repo):
     def test_item8_claude_reviewers_and_planners_start_a_new_session(self):
         self.use_claude()
         self.fresh_review_and_plan("claude", "--resume")
+
+
+class Holistic(Repo):
+    """Decisions 1-9 of workbench/holistic-review-2026-11-09/SYNTHESIS.md."""
+
+    use_claude, prompt = Fold.use_claude, Fold.prompt
+
+    def plan(self, **kw):
+        args = dict(worktree=str(self.wt), task="plan PAY", host=None, model=None, effort=None, turn_timeout_hours=0.1)
+        args.update(kw)
+        return self.call(agent_loop.cmd_plan, **args)
+
+    def plan_calls(self):
+        return [c for c in self.calls() if c["role"] == "plan"]
+
+    # 1. A planner's progress report isn't a plan.
+
+    def test_holistic_1_a_progress_report_from_the_planner_lands_nothing(self):
+        os.environ.update(FAKE_PLAN="progress")
+        result = self.plan()
+        self.assertEqual((result["result"], result["landed"]), ("UNFINISHED", False))
+        self.assertIn("wasn't `PLANNED", result["owed"])
+        self.assertEqual(len(self.plan_calls()), 3, "the first turn and two nudges, no more")
+        self.git("fetch", "-q", "origin")
+        self.assertNotIn("PAY", self.git("ls-tree", "-r", "--name-only", "origin/main").stdout)
+
+    def test_holistic_1_a_planner_nudged_after_a_progress_report_lands_its_plan(self):
+        os.environ.update(FAKE_PLAN="late")
+        result = self.plan()
+        self.assertEqual((result["result"], result["landed"], result["modules"]), ("PLANNED", True, ["PAY"]))
+        nudge = self.prompt(self.plan_calls()[1])
+        self.assertTrue(nudge.startswith("Your last line wasn't `PLANNED: <files>`"))
+
+    def test_holistic_1_a_plan_missing_its_design_is_nudged_with_the_gap_and_never_lands(self):
+        os.environ.update(FAKE_PLAN="nodesign")
+        result = self.plan()
+        self.assertEqual((result["result"], result["landed"]), ("UNFINISHED", False))
+        self.assertIn("docs/modules/PAY-DONE.json has no design at docs/modules/PAY.md", result["owed"])
+        self.assertIn("docs/modules/PAY-DONE.json", result["left_uncommitted"])
+
+    def test_holistic_1_a_blocked_planner_lands_nothing_and_says_what_it_left(self):
+        os.environ.update(FAKE_PLAN="blocked")
+        result = self.plan()
+        self.assertEqual((result["result"], result["landed"]), ("BLOCKED", False))
+        self.assertEqual(result["left_uncommitted"], ["docs/modules/PAY.md"])
+        self.assertEqual(len(self.plan_calls()), 1)
+
+    def test_holistic_1_named_files_must_exist_and_be_changed(self):
+        owed = agent_loop.plan_owed(self.wt, agent_loop.head_commit(self.wt), "PLANNED: docs/modules/NOPE.md, "
+                                    "docs/modules/WATER-DONE.json")
+        self.assertIn("docs/modules/NOPE.md doesn't exist", owed)
+        self.assertIn("docs/modules/WATER-DONE.json isn't changed", owed)
+        self.assertIsNone(agent_loop.plan_owed(self.wt, "HEAD", "NEEDS_CONTEXT: which provider?"))
+
+    # 2. Owner rules survive fresh sessions.
+
+    def test_holistic_2_an_owner_rule_survives_fresh_sessions_and_milestones_until_cleared(self):
+        self.use_claude()
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
+        rule = "never edit the schema"
+        self.run_loop(host="claude", owner_rule=[rule])
+        self.run_loop(host="claude", fresh=True, message="Findings: see the review.")
+        self.run_loop(host="claude", message="go on")
+        first, fresh, resumed = (self.prompt(c) for c in self.calls())
+        self.assertIn("Owner: never edit the schema.", first)
+        self.assertIn("Owner: never edit the schema.", fresh, "a fresh session keeps the rule")
+        self.assertIn("Findings: see the review.", fresh)
+        self.assertIn("Owner: never edit the schema.", resumed)
+        self.assertEqual(self.state()["owner_rules"], [rule])
+        self.run_loop(host="claude", fresh=True, clear_owner_rules=True)
+        self.assertNotIn("Owner:", self.prompt(self.calls()[-1]))
+        self.assertEqual(self.state()["owner_rules"], [])
+
+    def test_holistic_2_an_active_codex_goal_still_gets_owner_rules_added_after_it(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
+        self.run_loop()
+        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
+            conn.execute("create table thread_goals (thread_id text, status text)")
+            conn.execute("insert into thread_goals values ('t1', 'active')")
+        self.run_loop(message="go on", owner_rule=["keep the public API"])
+        resumed = self.prompt(self.calls()[1])
+        self.assertEqual(resumed, "go on\n\nOwner: keep the public API.")
+
+    # 3. Progress-only turns are capped.
+
+    def test_holistic_3_progress_updates_stop_as_stalled_after_two_continuations_naming_open_items(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="Read the code; next I'll write the parser.")
+        result = self.run_loop()
+        self.assertEqual((result["result"], result["open"]), ("STALLED", ["M1.1"]))
+        prompts = [self.prompt(c) for c in self.calls()]
+        self.assertEqual(len(prompts), agent_loop.STALL_TURNS)
+        for p in prompts[1:]:
+            self.assertTrue(p.startswith("Continue the objective. Still open: M1.1."))
+
+    def test_holistic_3_uncommitted_work_is_progress_not_a_stall(self):
+        marks = agent_loop.work_marks(self.wt, None)
+        (self.wt / "parser.py").write_text("x = 1")
+        self.assertNotEqual(agent_loop.work_marks(self.wt, None), marks)
+
+    # 4. No model or effort frontmatter overrides the launch.
+
+    def test_holistic_4_no_skill_or_claude_agent_file_sets_model_or_effort(self):
+        root = agent_loop.SKILLS
+        files = [root / n / "SKILL.md" for n in ("build", "build-milestone", "review-milestone", "plan-module")]
+        files += sorted((root / "build/agents/claude").glob("*.md"))
+        for f in files:
+            front = f.read_text().split("\n---\n")[0]
+            self.assertNotRegex(front, r"(?m)^(model|effort):", str(f))
+
+    # 6. A resumed Claude turn restates the objective (covered with item 5 above), terse.
+
+    def test_holistic_6_the_restatement_opens_with_the_objective(self):
+        text, _ = agent_loop.binding(agent_loop.profile(self.wt), "build", "M2", None, "d.json")
+        self.assertTrue(text.startswith("Objective: M2 claimed, every item pass with evidence and the work integrated."))
+
+    # 7. Plugin installs: skills, namespaced names and agents.
+
+    def install_plugin(self, home):
+        ver = home / "plugins/cache/ryannel-skills/orchestrate/1.3.0"
+        for name in ("review-milestone", "plan-module", "build-milestone"):
+            (ver / "skills/orchestration" / name).mkdir(parents=True)
+            (ver / "skills/orchestration" / name / "SKILL.md").write_text("x")
+        (ver / "skills/orchestration/build/agents/claude").mkdir(parents=True)
+        (ver / "skills/orchestration/build/agents/claude/orchestrate-evaluator.md").write_text("x")
+        (ver / ".claude-plugin").mkdir()
+        (ver / ".claude-plugin/marketplace.json").write_text(json.dumps({"plugins": [
+            {"name": "orchestrate", "skills": ["./skills/orchestration/review-milestone",
+                                               "./skills/orchestration/plan-module",
+                                               "./skills/orchestration/build-milestone"],
+             "agents": ["./skills/orchestration/build/agents/claude/orchestrate-evaluator.md"]},
+            {"name": "skill-creator", "skills": ["./skills/skill-creator"]}]}))
+        # the same repository copied for another plugin doesn't provide orchestrate's skills
+        other = home / "plugins/cache/ryannel-skills/skill-creator/1.0.0/skills/orchestration/build"
+        other.mkdir(parents=True)
+        (other / "SKILL.md").write_text("x")
+
+    def test_holistic_7_plugin_installed_skills_are_found_on_both_hosts_in_this_repos_layout(self):
+        warn = agent_loop.skill_warnings
+        self.install_plugin(agent_loop.CLAUDE_HOME)
+        self.install_plugin(self.home)
+        self.assertEqual(warn("claude", self.wt, "review"), [])
+        self.assertEqual(warn("codex", self.wt, "plan"), [])
+        self.assertEqual(agent_loop.plugin_components(self.home, "skills").get("build"), None)
+        note = agent_loop.skill_note("review-milestone", "codex")
+        self.assertTrue(note.startswith("`orchestrate:review-milestone` in Codex; the file is "), note)
+        self.assertTrue(agent_loop.skill_note("review-milestone", "claude").startswith("the file is "))
+
+    def test_holistic_7_a_plugin_agent_is_used_for_claude_reviews(self):
+        self.use_claude()
+        self.write_done([milestone("M1", "open", ["open"], inspect="frames"), milestone("M2", "open", ["open"])])
+        self.commit_all()
+        commit = self.run_loop(host="claude")["commit"]
+        self.install_plugin(agent_loop.CLAUDE_HOME)
+        self.assertEqual(self.review(commit=commit, host="claude")["verdict"], "PASS")
+        argv = next(c for c in self.calls() if c["role"] == "review")["argv"]
+        self.assertEqual(argv[argv.index("--agent") + 1], "orchestrate-evaluator")
+
+    # 8. The reviewer fails only on blocking defects.
+
+    def test_holistic_8_review_skill_and_findings_message_separate_blocking_from_advisory(self):
+        review = (agent_loop.SKILLS / "review-milestone/SKILL.md").read_text()
+        self.assertIn("Advisory findings never change the state.", review)
+        self.assertIn("counting\n   blocking findings only", review)
+        self.assertNotIn("If you think the defect doesn't matter, say so in the finding", review)
+        self.assertIn("Every blocking finding counts", agent_loop.FINDINGS_TEMPLATE)
 
 
 class Locks(unittest.TestCase):
