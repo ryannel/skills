@@ -1,6 +1,6 @@
 ---
 name: instructing-agents
-description: Use before sending any prompt another agent will act on, even a short one, such as an Agent or Task prompt, `codex exec` or `claude -p` text, a goal, a steer or message to a running agent, a review request, a session brief, or AGENTS.md and CLAUDE.md. Also use when an agent stopped early, over-reached, meandered or ignored an instruction. Covers Claude Code, Codex and other hosts. Not for writing or testing a skill (skill-creator).
+description: Use before sending any prompt another agent will act on, even a short one, such as an Agent or Task prompt, `codex exec` or `claude -p` text, a goal, a steer or message to a running agent, a review request, or AGENTS.md and CLAUDE.md. Also use when an agent stopped early, over-reached, meandered or ignored an instruction. The check at the top is often enough for a short prompt. Not for writing or testing a skill (skill-creator).
 ---
 
 # Instructing agents
@@ -17,7 +17,9 @@ Before you send text another agent will act on, read it as that agent, knowing n
 4. Are model and effort set in the launch call, and recorded where the person can see them?
 5. Have you checked the claims you're passing on?
 
-The rest of this file explains those five.
+If a hook refused your launch and sent you here, run this check on the prompt and resend. For a short prompt the
+check is often all you need; read on for a goal, a long unattended run, a reviewer brief or an instruction file. The
+rest of this file explains the five.
 
 The agent you're writing for is capable, and on most tasks at least as capable as you. Writers fail in two ways. The
 common one is saying how. Each list of steps, files to read, questions or report sections caps the agent at what you

@@ -74,9 +74,12 @@ Anything that truly must never happen belongs in a hook, a permission rule, a sa
 Prose is advice, and agents weigh it against everything else. When the skill depends on such a hook or script, ship
 it inside the skill's package together with its setup step, so installing the skill installs the mechanism. A hook
 someone added to their own settings by hand doesn't travel to the next machine or repo. In a Claude Code plugin, that
-means a `hooks/hooks.json` that calls a bundled script through `${CLAUDE_PLUGIN_ROOT}`, and installing the plugin
-installs the hook (Claude Code 2.1.239, checked 9 November 2026). Where a host can't install it from the package,
-bundle a setup script and say what it does, and what stays manual.
+means a `hooks/hooks.json` at the plugin's root that calls a bundled script through `${CLAUDE_PLUGIN_ROOT}`, and
+installing the plugin installs the hook. When several marketplace entries share one folder as their source, a root
+`hooks/hooks.json` would load with every one of them, so put the hook inline in that plugin's marketplace entry as
+an object; the file-path form is refused there at load time even though `claude plugin validate` passes it (Claude
+Code 2.1.239, checked 9 November 2026). Where a host can't install it from the package, bundle a setup script and
+say what it does, and what stays manual.
 
 Facts about a host, like a folder it reads, a flag, a limit or a minimum version, change between releases. Write
 each with the date you checked it and the host version you checked it on, so a reader can tell when it has gone
