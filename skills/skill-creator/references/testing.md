@@ -193,8 +193,8 @@ tells the model it's being tested on skill choice, and it picks far more eagerly
 A fresh session is the easy case. A skill whose moment comes late in long work, like a handoff after hours of
 building, has to fire when the context is full of other things, and possibly after compaction. For a skill like that,
 add one or two trials in a long session and one or two after compaction. That's enough. These are a check on the
-case that matters, not a suite. Compaction happens near the host's auto-compact window, which on one machine in
-November 2026 was 350,000 tokens for Opus 5.5 (`autoCompactWindow` in `~/.claude/settings.json`). You can't fake
+case that matters, not a suite. Compaction happens near the host's auto-compact window, which on one machine on
+9 November 2026 was 500,000 tokens for Opus 5.5 (`autoCompactWindow` in `~/.claude/settings.json`). You can't fake
 that state cheaply, so resume a real long session the person has already paid for (`claude --resume`, then `/compact`,
 then the task) and record what each trial cost. Afterwards check what actually survived: Claude Code may re-attach a
 skill's start after compacting, so an agent that doesn't call the skill again may still have it.
@@ -215,9 +215,10 @@ prompts, and a few real sessions with the neighbouring skills installed.
 
 `claude plugin eval` runs the same cases headless, three times per arm by default, with and without the skill, and
 reports the difference. It needs Claude Code 2.1.269 or later (checked 8 November 2026), and it evaluates plugins,
-so the skill folder needs a `.claude-plugin/plugin.json` manifest. With that in place, Claude Code treats the folder as a plugin called
-`<name>@skills-dir`. Pass `--scaffold` if any case uses a scaffold script, and `--allow-tools` for the tools the runs
-need.
+so the skill folder needs a `.claude-plugin/plugin.json` manifest. With that in place, Claude Code treats the folder
+as a plugin called `<name>@skills-dir`. Don't add one to a folder that a marketplace entry with `strict: false` uses
+as its source: the entry's component fields then conflict with it, and the plugin fails to load. Pass `--scaffold`
+if any case uses a scaffold script, and `--allow-tools` for the tools the runs need.
 
 For trigger tests, a case per prompt with this grader passes when the skill was invoked:
 

@@ -155,3 +155,10 @@ Codex documents that it follows symlinks. On one machine in November 2026, Claud
 and the cause wasn't found, so the real folder lives on the Claude side.
 
 `npx skills add <owner/repo> --skill <name> -g` installs a published skill for every agent at once.
+
+A plugin carries skills together with hooks and agents, which a plain skill folder can't. Both Claude Code and Codex
+install plugins from a marketplace (`.claude-plugin/marketplace.json`) and list their skills as `plugin:skill`.
+Checked 9 November 2026: Claude Code 2.1.317 loads a plugin from a marketplace added by local path in place, while
+2.1.239 copies it into its cache and re-copies only when the plugin's `version` changes; Codex 0.167 copies on each
+install. Neither Claude Code version showed the `agents` a marketplace entry lists (`claude plugin details`:
+`Agents (0)`). A skill installed both ways loads twice, so remove the standalone copy.
