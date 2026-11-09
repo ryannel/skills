@@ -83,7 +83,10 @@ definitions, the commit it checked, the reviews, and whether each milestone was 
   new definitions. A new module waits for a design review.
 - **The queue.** One rule decides what's ready, for `ready`, `status` and `run` alike: a milestone starts only when
   the ones before it in its module, and its `needs` elsewhere, are accepted. Claims on milestones are refs every clone
-  can see, so two leads don't start the same one.
+  can see, so two leads don't start the same one. Plans count only once integrated: `ready` and `run` name plan files
+  left uncommitted or unintegrated, and `adopt` lands just those. An owed design review runs inside `run`, which
+  builds on `DESIGN OK`. Every stop short of building carries `next`, the command to run, with owner decisions marked
+  for the owner to type.
 - **The owner.** Accepting without review, re-reviewing, unparking and changing scope are owner commands, refused
   inside any session the loop started and confirmed at a terminal.
 
@@ -104,7 +107,8 @@ definitions, the commit it checked, the reviews, and whether each milestone was 
 
 - Everything the loop starts runs inside the lead's process, with its sandbox and operating-system permissions. A
   lead in a sandbox without network or `.git` writes can't run builders that integrate, and a builder that needs
-  screen recording or a camera needs it granted to the app the lead runs in.
+  screen recording or a camera needs it granted to the app the lead runs in. A loop command that hits such a sandbox
+  stops naming the path it couldn't write, rather than retrying or deleting lock files.
 - The checks run with the lead's own permissions, outside any host's sandbox. The check strings are pinned, but a
   script a check calls can still be changed by the builder, so review new check scripts. Proper isolation would need
   a container.

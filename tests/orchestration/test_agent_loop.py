@@ -448,6 +448,9 @@ elif role == "review":
     if mode == "design":
         (ev / "design-review.md").write_text("design is fine")
         reply = "DESIGN OK"
+    elif mode == "design_changes":
+        (ev / "design-review.md").write_text("the design needs a second pass")
+        reply = "DESIGN CHANGES: the water surface has no LOD plan"
     elif mode == "nothing":
         reply = "PASS M999"
     else:
@@ -588,7 +591,7 @@ class Repo(unittest.TestCase):
     def run_loop(self, **kw):
         args = dict(module="WATER", worktree=str(self.wt), milestone=None, fresh=False, message=None,
                     budget_hours=4.0, turn_timeout_hours=0.1, host=None, model=None, effort=None, owner_rule=None,
-                    clear_owner_rules=False)
+                    clear_owner_rules=False, no_design_review=False)
         args.update(kw)
         return self.call(agent_loop.cmd_run, **args)
 
@@ -752,7 +755,7 @@ class Building(Repo):
     def test_design_owed_holds_the_module(self):
         self.write_done([milestone("M1", "open", ["open"])], design_ok=False)
         self.commit_all()
-        self.assertEqual(self.run_loop()["result"], "DESIGN_OWED")
+        self.assertEqual(self.run_loop(no_design_review=True)["result"], "DESIGN_OWED")
         os.environ.update(FAKE_REVIEW="design")
         self.assertEqual(self.review("design")["verdict"], "DESIGN OK")
         os.environ.pop("FAKE_REVIEW")
@@ -1090,6 +1093,212 @@ class Leads(Repo):
             agent_loop.cmd_status(argparse.Namespace(module=None, worktree=str(self.wt)))
         self.assertIn("CORE: design_owed", out.getvalue())
         self.assertIn("WATER: ready (M1)", out.getvalue())
+
+
+class Guidance(Repo):
+    """The four things a lead had to work out by hand before a milestone could run: plans left uncommitted, a
+    sandbox refusing writes under .git, an owed design review, and what to run after any stop short of building."""
+
+    def adopt(self, *paths):
+        return self.call(agent_loop.cmd_adopt, worktree=str(self.wt), message=None, paths=list(paths))
+
+    def plan_core(self):
+        (self.wt / "docs/modules/CORE-DONE.json").write_text(json.dumps(done(milestone("M1", "open", ["open"]),
+                                                                            module="CORE")))
+        (self.wt / "docs/modules/CORE.md").write_text("# Core design")
+
+    def main(self, *argv):
+        out = io.StringIO()
+        with mock.patch.object(sys, "argv", ["agent_loop.py", *argv]), contextlib.redirect_stdout(out), \
+                self.assertRaises(SystemExit) as stop:
+            agent_loop.main()
+        release()
+        return stop.exception.code, json.loads(out.getvalue().strip().splitlines()[-1])
+
+    # 1. Uncommitted plans
+
+    def test_fix1_ready_and_run_name_plan_files_the_tip_doesnt_have(self):
+        self.plan_core()
+        r = self.ready()
+        self.assertEqual(r["unlanded_plans"]["uncommitted"], ["docs/modules/CORE-DONE.json", "docs/modules/CORE.md"])
+        self.assertIn(" adopt --worktree ", r["next"]["command"])
+        result = self.run_loop(module="CORE")
+        self.assertEqual(result["result"], "INVALID")
+        self.assertIn("no done-when file at the integrated tip", result["problems"][0])
+        self.assertIn("CORE-DONE.json", result["next"]["why"])
+        self.assertIn(" adopt ", result["next"]["command"])
+        self.assertFalse(self.log.exists())
+        (self.wt / "docs/modules/WATER.md").write_text("# Water design")  # committed here, never integrated
+        self.git("add", "docs/modules/WATER.md")
+        self.git("commit", "-qm", "water design")
+        self.assertEqual(self.ready()["unlanded_plans"]["unintegrated"], ["docs/modules/WATER.md"])
+
+    def test_fix1_adopt_lands_only_the_plan_files_and_refuses_anything_else(self):
+        self.plan_core()
+        (self.wt / "src").mkdir()
+        (self.wt / "src/engine.rs").write_text("unfinished work")
+        refused = self.adopt("src/engine.rs")
+        self.assertEqual(refused["result"], "REFUSED")
+        self.assertIn("isn't under docs/modules/", refused["problems"][0])
+        result = self.adopt()
+        self.assertEqual(result["result"], "ADOPTED", result)
+        self.assertEqual(result["files"], ["docs/modules/CORE-DONE.json", "docs/modules/CORE.md"])
+        self.git("fetch", "-q", "origin")
+        landed = self.git("show", "--name-only", "--format=", "origin/main").stdout.split()
+        self.assertEqual(sorted(landed), ["docs/modules/CORE-DONE.json", "docs/modules/CORE.md"])
+        self.assertEqual((self.wt / "src/engine.rs").read_text(), "unfinished work")  # left alone, not swept in
+        self.assertNotIn(agent_loop.TRAILER, self.git("log", "-1", "--format=%B", "origin/main").stdout)
+        r = self.ready()
+        self.assertNotIn("unlanded_plans", r)
+        self.assertEqual(r["design_owed"], [{"module": "CORE"}])
+        self.assertTrue(result["worktree"].startswith("fast-forwarded"), result["worktree"])
+
+    def test_fix1_adopt_refuses_a_plan_that_grants_what_a_planner_cant(self):
+        forged = milestone("M1", "done", ["pass"])
+        (self.wt / "docs/modules/WATER-DONE.json").write_text(json.dumps(done(forged, milestone("M2", "open", ["open"]))))
+        (self.wt / "docs/modules/WATER-ACCEPTED.json").write_text("{}")
+        result = self.adopt()
+        self.assertEqual(result["result"], "REFUSED")
+        self.assertTrue(any("only the loop writes" in p for p in result["problems"]), result)
+        self.assertTrue(any("a planner can't set" in p for p in result["problems"]), result)
+        with mock.patch.dict(os.environ, {"ORCHESTRATE_ROLE": "build"}), self.assertRaises(SystemExit) as stop:
+            agent_loop.cmd_adopt(argparse.Namespace(worktree=str(self.wt), message=None, paths=[]))
+        self.assertIn("inside a session", str(stop.exception))
+
+    # 2. A sandbox refusing writes under .git
+
+    def test_fix2_refused_writes_and_held_locks_are_named_not_mistaken(self):
+        here = Path("/repo")
+        e = agent_loop.blocked_write("error: cannot open '.git/FETCH_HEAD': Permission denied", here)
+        self.assertEqual((e.path, e.held), ("/repo/.git/FETCH_HEAD", False))
+        e = agent_loop.blocked_write("fatal: cannot lock ref 'HEAD': Unable to create '/repo/.git/refs/heads/main.lock'"
+                                     ": Operation not permitted")
+        self.assertEqual(e.path, "/repo/.git/refs/heads/main.lock")
+        self.assertIn("outside the sandbox", e.reason())
+        e = agent_loop.blocked_write("fatal: Unable to create '/repo/.git/index.lock': File exists.")
+        self.assertTrue(e.held)
+        self.assertIn("doesn't delete lock files", e.reason())
+        self.assertIsNone(agent_loop.blocked_write("git@github.com: Permission denied (publickey).\n"
+                                                   "fatal: Could not read from remote repository."))
+
+    def test_fix2_a_read_only_git_dir_stops_with_the_path_and_the_fix(self):
+        if os.geteuid() == 0:
+            self.skipTest("root ignores directory permissions")
+        (self.wt / ".git/FETCH_HEAD").unlink(missing_ok=True)
+        os.chmod(self.wt / ".git", 0o555)
+        try:
+            code, ready = self.main("ready", "--worktree", str(self.wt))
+            code_land, land = self.main("land", "--worktree", str(self.wt))
+        finally:
+            os.chmod(self.wt / ".git", 0o755)
+        self.assertEqual((code, ready["result"]), (1, "FLOOR"))
+        self.assertEqual(ready["blocked_write"]["path"], str(self.wt.resolve() / ".git/FETCH_HEAD"))
+        self.assertIn("outside the sandbox, or with escalation", ready["reason"])
+        self.assertIn(" ready --worktree ", ready["next"]["command"])
+        self.assertEqual((code_land, land["result"]), (1, "FAILED"))
+        self.assertIn(str(self.wt.resolve() / ".git"), land["blocked_write"]["path"])
+        self.assertIn("outside the sandbox", land["detail"])
+
+    # 3. An owed design review
+
+    def test_fix3_run_does_the_owed_design_review_then_builds_on_design_ok(self):
+        self.write_done([milestone("M1", "open", ["open"])], design_ok=False)
+        self.commit_all()
+        os.environ.update(FAKE_REVIEW="design")
+        result = self.run_loop()
+        self.assertEqual(result["result"], "CLAIMED", result)
+        self.assertEqual([c["role"] for c in self.calls()], ["review", "build"])
+        self.assertEqual(self.read_record()["design"]["verdict"], "ok")
+
+    def test_fix3_any_other_design_verdict_stops_the_run_and_says_what_next(self):
+        self.write_done([milestone("M1", "open", ["open"])], design_ok=False)
+        self.commit_all()
+        os.environ.update(FAKE_REVIEW="design_changes")
+        result = self.run_loop()
+        self.assertEqual(result["result"], "DESIGN_OWED")
+        self.assertEqual(result["design_review"]["verdict"], "DESIGN CHANGES")
+        self.assertIn(" plan --worktree ", result["next"]["command"])
+        self.assertEqual([c["role"] for c in self.calls()], ["review"])
+
+    def test_fix3_no_design_review_opts_out(self):
+        self.write_done([milestone("M1", "open", ["open"])], design_ok=False)
+        self.commit_all()
+        result = self.run_loop(no_design_review=True)
+        self.assertEqual(result["result"], "DESIGN_OWED")
+        self.assertIn(" review --module WATER --milestone design ", result["next"]["command"])
+        self.assertFalse(self.log.exists())
+
+    # 4. The next command
+
+    def test_fix4_waiting_follows_the_need_to_the_command_that_moves_it(self):
+        self.write_done([dict(milestone("M1", "open", ["open"]), needs=["CORE:M1"])])
+        self.commit_all()
+        result = self.run_loop()
+        self.assertEqual(result["result"], "WAITING")
+        self.assertIn(" plan --worktree ", result["next"]["command"])
+        self.assertIn("Plan module CORE", result["next"]["command"])
+        self.write_done([milestone("M1", "open", ["open"])], design_ok=False, module="CORE")
+        self.commit_all()
+        result = self.run_loop()
+        self.assertIn(" review --module CORE --milestone design ", result["next"]["command"])
+        r = self.ready()  # nothing ready: the lead still gets a command
+        self.assertEqual(r["ready"], [])
+        self.assertIn(" review --module CORE --milestone design ", r["next"]["command"])
+
+    def test_fix4_review_blocked_invalid_and_floor_carry_the_next_command(self):
+        self.write_done([milestone("M1", "claimed", ["pass"], inspect="captures"), milestone("M2", "open", ["open"])])
+        self.commit_all()
+        owed = self.run_loop()
+        self.assertEqual(owed["result"], "REVIEW_OWED")
+        self.assertIn(" review --module WATER --milestone M1 --commit ", owed["next"]["command"])
+        self.write_done([milestone("M1", "open", ["open"]), milestone("M2", "open", ["open"])])
+        self.commit_all()
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: no device attached")
+        blocked = self.run_loop()
+        self.assertEqual(blocked["result"], "BLOCKED")
+        self.assertIn(" unblock --module WATER --milestone M1 ", blocked["next"]["command"])
+        self.assertIn("no device attached", blocked["next"]["why"])
+        again = self.run_loop()
+        self.assertEqual(again["result"], "BLOCKED")
+        self.assertIn(" unblock ", again["next"]["command"])
+        agent_loop.CODEX = "/no/such/codex"
+        with contextlib.redirect_stdout(io.StringIO()):
+            agent_loop.cmd_unblock(argparse.Namespace(module="WATER", milestone="M1", worktree=str(self.wt)))
+        floor = self.run_loop()
+        self.assertEqual(floor["result"], "FLOOR")
+        self.assertIn("--host claude", floor["next"]["alternative"])
+        (self.wt / "docs/modules/WATER-DONE.json").write_text("{not json")
+        self.commit_all()
+        invalid = self.run_loop()
+        self.assertEqual(invalid["result"], "INVALID")
+        self.assertIn(" plan --worktree ", invalid["next"]["command"])
+
+    def test_fix4_owner_decisions_are_commands_for_the_owner_never_run(self):
+        self.write_done([milestone("M1", "parked", ["open"], inspect="captures"), milestone("M2", "open", ["open"])])
+        self.commit_all()
+        result = self.run_loop()
+        self.assertEqual(result["result"], "PARKED")
+        self.assertEqual(result["next"]["by"], "owner")
+        self.assertIn(" owner unpark --module WATER --milestone M1 ", result["next"]["command"])
+        self.write_done([milestone("M1", "done", ["pass"], inspect="captures"), milestone("M2", "open", ["open"])],
+                        authorise=False)  # done in the file, never accepted by the loop
+        self.commit_all()
+        result = self.run_loop()
+        self.assertEqual((result["result"], result["next"]["by"]), ("REVIEW_OWED", "owner"))
+        self.assertIn(" owner accept ", result["next"]["command"])
+        self.assertFalse(self.log.exists())
+        self.assertEqual(self.read_done()["milestones"][0]["state"], "done")
+        self.assertNotIn("accepted", self.read_record()["milestones"]["M1"])
+
+    def test_fix4_taken_points_at_other_work(self):
+        prof = agent_loop.profile(self.wt, strict=True)
+        other = self.root / "lead2"
+        self.sh("git", "clone", "-q", str(self.origin), str(other))
+        self.assertTrue(agent_loop.take_claim(other, prof, "WATER", "M1")[0])
+        result = self.run_loop()
+        self.assertEqual(result["result"], "TAKEN")
+        self.assertIn(" ready --worktree ", result["next"]["command"])
+        self.assertIn(" owner release ", result["next"]["owner"])
 
 
 class Landing(unittest.TestCase):

@@ -33,7 +33,9 @@ your operating-system permissions, not its own. On a Mac where the Codex app is 
 the app instead, as threads it lists under the project, with the sandbox the loop sets and the app's permissions.
 Claude sessions run in the loop's own `claude -p`, and with Claude desktop running and the CLI signed in, they're also
 listed in its Code tab. Each result line says which path ran (`path`, with `path_reason` when it's `headless`). If your host sandboxes you without network or without writes to `.git`,
-the builders can't fetch, commit or integrate either, so start the lead where those are allowed. On macOS, a builder
+the builders can't fetch, commit or integrate either, so start the lead where those are allowed. A loop command
+that hits such a sandbox stops with a `blocked_write` naming the path it couldn't write: run that command outside the
+sandbox, or with escalation, and don't delete lock files yourself. On macOS, a builder
 that records the screen or uses the camera needs that permission granted to the app you run in (Terminal, the Codex
 app or Claude), and its first attempt fails until the owner grants it. Say which app you're running in, and which
 path the sessions ran on, in your first report.
@@ -64,7 +66,12 @@ than moving on to the next ready milestone.
 ready, waiting on another module (`needs`), owed review, owed a design review, blocked, parked, taken by another lead
 or invalid, plus the modules with nothing left. `LOOP status` gives the same in a few lines, and `--module` lists
 every milestone of one module with its last verdict. Only each module's next milestone matters, because milestones
-in a module run in order.
+in a module run in order. When nothing is ready, `ready` adds `next` with the command to run.
+
+The loop reads plans at the integrated tip, not in your worktree. If plan files under the profile's plans folder are
+uncommitted or not yet integrated, `ready` and `run` name them under `unlanded_plans` and point `next` at
+`LOOP adopt --worktree <repo>`, which commits only those plan files and integrates them as the loop lands its own
+records. Use it rather than hand-making a baseline commit.
 
 Keep the chosen number of builders running, up to the number of ready milestones. When one stops, start the next
 ready milestone, preferring the module it was just in. When there are fewer ready milestones than builders, give them
@@ -88,6 +95,9 @@ done-when file, have the planner plan it now, so the queue doesn't run dry.
 Start a builder with `LOOP run --module <M> --worktree <path> --host <host>` as a background command. When it stops,
 it prints one line of JSON saying why. A `warnings` field there names a loader gap for that host, such as an
 `AGENTS.md` the Claude CLI won't read, with its fix; tell the owner in your next report rather than stopping.
+Every result that stops short of building carries `next`, the exact command to run next and why. One with
+`by: owner` is a decision only the owner may make, such as `owner accept`: put it in your report for them to type,
+and never run it yourself.
 
 Reviewers and planners also run through the loop, each in a fresh session, because only the loop can check their
 work and record it:
@@ -105,7 +115,7 @@ host in a fresh session, and say so in the report.
 |---|---|
 | `CLAIMED`, `review: false` | The loop has accepted it. Start the builder's next ready milestone. |
 | `CLAIMED`, `review: true`, or `REVIEW_OWED` | Run a review of that milestone at that commit. |
-| `DESIGN_OWED` | Run a design review of the module. |
+| `DESIGN_OWED` | `run` has already run the owed design review (unless you passed `--no-design-review`) and carries on to build on `DESIGN OK`, so this means it said something else: `design_review` holds the result and `next` the follow-up, below. |
 | `WAITING` or `TAKEN` | The milestone needs another module's work, or another lead has it. Give the builder other ready work. |
 | `BLOCKED` | The loop has recorded `state: blocked` and what unblocks it. If you can supply that from the files, do, then run `LOOP unblock`. If something another module owns is missing, or it's a design problem, send it to the planner. Otherwise, put it in the report and move the builder on. |
 | `NEEDS_CONTEXT` | If the answer is in the files, resume the builder with `--message`. Otherwise treat it like `BLOCKED`. |

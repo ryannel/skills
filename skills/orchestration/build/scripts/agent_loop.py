@@ -37,7 +37,7 @@ scripts.
 Subcommands:
 
   run   --module CORE --worktree PATH [--host H] [--model M] [--effort E] [--milestone M2] [--fresh]
-        [--message TEXT] [--owner-rule TEXT]... [--clear-owner-rules] [--budget-hours 4]
+        [--message TEXT] [--owner-rule TEXT]... [--clear-owner-rules] [--budget-hours 4] [--no-design-review]
         Starts (or resumes) a builder session on the module's next milestone and drives it one turn at a time until:
         CLAIMED       the claim holds: the done-when file is valid and only the builder's own fields changed, the
                       milestone's state is `claimed` (or `done` when it needs no review), every item is `pass` with
@@ -50,7 +50,10 @@ Subcommands:
         UNCLAIMED     the agent said DONE (or its goal completed) three times without a claim that holds
         INVALID       the done-when file is malformed, or something outside the builder's fields changed
         REVIEW_OWED   the module's next milestone is claimed and waiting for review
-        DESIGN_OWED   the module's design hasn't passed a design review (or changed since it did)
+        DESIGN_OWED   the module's design hasn't passed a design review (or changed since it did). Unless
+                      --no-design-review, `run` first runs that review itself, as `review --milestone design` would
+                      with the same --host, --model and --effort, and on DESIGN OK goes on to build; any other outcome
+                      stops here with the review's result under `design_review`
         WAITING       the next milestone needs milestones in other modules that aren't accepted yet
         PARKED / FINISHED   the module stops at a parked milestone / has nothing left
         TAKEN         another lead or run holds this module or milestone
@@ -71,6 +74,11 @@ Subcommands:
         on a Codex thread whose goal is active, which gets only the owner rules; `goal` in the result says which, and `constraints_missing` names profile lines that
         weren't there to restate. Claims and reviews record the requested host, model and effort, the CLI's
         version, and under `observed` only what the host's own output showed.
+        Every result that stops short of building (WAITING, DESIGN_OWED, REVIEW_OWED, BLOCKED, INVALID, FLOOR,
+        TAKEN, PARKED) carries `next`: {command, by, why}, the exact command to run next. `by: owner` marks a
+        decision only the owner may make (an `owner` command for them to type); the loop never runs those. When plan
+        files under the profile's plans folder are uncommitted or not integrated, the result names them under
+        `unlanded_plans` and `next` is `adopt`, with what would have come next under `then`.
         Prints one JSON line with the result as the last line of output. Its `warnings` are the launch's loader
         checks for the resolved host and binary (an AGENTS.md that Claude won't read, a skill not installed where
         the host finds skills by name); they never stop a run.
@@ -94,7 +102,14 @@ Subcommands:
         Integrates the worktree's commits under the integrate lock: rebase onto the base, run the profile's Check,
         then push (Integrate: push) or fast-forward the local branch (Integrate: local). Builders use this.
 
-  ready [--worktree PATH]       What each module's next milestone is waiting for, read at the integrated tip.
+  ready [--worktree PATH]       What each module's next milestone is waiting for, read at the integrated tip. When
+        nothing is ready it adds `next`, and it names unlanded plan files (`unlanded_plans`) as `run` does.
+  adopt [--worktree PATH] [--message TEXT] [PLAN FILE]...
+        Commits plan files that are uncommitted, or committed here but not integrated, and integrates them through a
+        clean checkout of the tip, as the loop lands its own records, so nothing else in the worktree goes with them.
+        Refuses files outside the plans folder, acceptance records, invalid done-when files, changes a planner
+        couldn't make to an existing module, files the tip changed since, and any session the loop started.
+        ADOPTED, NOTHING, REFUSED or FAILED.
   status [--module CORE] --worktree PATH   Every milestone with its state, blockers and last verdict.
   next  --module CORE --worktree PATH --milestone M2   The escalation after a failed review (see done-when.md).
   unblock --module CORE --milestone M2 --worktree PATH   Puts a blocked milestone back in the queue.
@@ -115,6 +130,10 @@ Subcommands:
         Runs COMMAND under a named lock shared by every worktree of the repository (not the whole machine).
 
 Per-worktree session state lives in <git dir>/orchestrate/<module>.json, so re-running the same command resumes.
+
+A write under .git that the system or a sandbox refuses (Codex's workspace-write sandbox, for one), or a lock file
+another git process holds, stops any command with one line naming the path and the fix (`blocked_write`): FLOOR, or
+FAILED from `land`, exit 1. The loop doesn't retry it or delete lock files.
 """
 
 from __future__ import annotations
@@ -124,6 +143,7 @@ from datetime import datetime, timezone
 
 import argparse
 import copy
+import errno
 import fcntl
 import glob
 import hashlib
@@ -327,8 +347,55 @@ def codex_supports(flag: str) -> bool:
 
 # ------------------------------------------------------------------------------------------------------------- git
 
+class WriteBlocked(Exception):
+    """A write under the repository that the operating system or a sandbox refused, or a lock file another git
+    process holds. The loop stops on it with a plain explanation, rather than retrying or deleting anything."""
+
+    def __init__(self, path: str | None, error: str, held: bool = False):
+        super().__init__(path, error, held)
+        self.path, self.error, self.held = path, error, held
+
+    def reason(self) -> str:
+        where = self.path or "a file under .git"
+        if self.held:
+            return (f"git couldn't take the lock {where}: another git process holds it, or one that crashed left it "
+                    "behind. The loop doesn't delete lock files; check nothing else is running git here, remove it "
+                    "yourself if it's stale, then run the command again.")
+        return (f"git can't write {where} ({self.error}). This command has to run outside the sandbox, or with "
+                "escalation: a sandbox such as Codex's workspace-write blocks writes under .git. The loop didn't retry "
+                "or delete anything.")
+
+    def fields(self) -> dict:
+        return {"reason": self.reason(), "blocked_write": {"path": self.path, "error": self.error,
+                                                           "lock_held": self.held}}
+
+
+WRITE_REFUSED = re.compile(r"Operation not permitted|Permission denied(?! \()|Read-only file system|"
+                           r"insufficient permission", re.IGNORECASE)  # not ssh's "Permission denied (publickey)"
+LOCK_HELD = re.compile(r"Unable to create '([^']+\.lock)': File exists")
+QUOTED = re.compile(r"'([^']+)'")
+BARE_PATH = re.compile(r"((?:/|\.git/)[^\s:'\"]+)")
+
+
+def blocked_write(text: str, where: Path | None = None) -> WriteBlocked | None:
+    """The refused write or held lock in git's error output, with the path it names, if there is one."""
+    for line in text.splitlines():
+        if m := LOCK_HELD.search(line):
+            return WriteBlocked(m.group(1), "File exists", held=True)
+        if m := WRITE_REFUSED.search(line):
+            paths = [p for p in QUOTED.findall(line) if "/" in p] or BARE_PATH.findall(line)
+            path = paths[-1] if paths else None
+            if path and where is not None and not path.startswith("/"):
+                path = str(where / path)
+            return WriteBlocked(path, m.group(0))
+    return None
+
+
 def git(worktree: Path, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(worktree), *args], capture_output=True, text=True, input=stdin)
+    r = subprocess.run(["git", "-C", str(worktree), *args], capture_output=True, text=True, input=stdin)
+    if r.returncode != 0 and (blocked := blocked_write(r.stderr, worktree)):
+        raise blocked
+    return r
 
 
 def ident(worktree: Path) -> list[str]:
@@ -796,6 +863,144 @@ def next_step(key: str, proj: dict, claims: dict | None = None, me: str = "") ->
     return {**base, "status": "finished"}
 
 
+# ------------------------------------------------------------------------------------- what to do next, and plans
+
+def loop_cmd(*args) -> str:
+    """A command line for this loop, as a person or the lead would type it."""
+    return shlex.join(["python3", str(LOOP), *[str(x) for x in args]])
+
+
+def next_cmd(command: str | None, by: str, why: str, **more) -> dict:
+    """The `next` field: the exact command to run, who runs it (`lead`, or `owner` for decisions only the owner may
+    make, which the loop never runs itself), and why."""
+    return {"command": command, "by": by, "why": why, **more}
+
+
+def plan_task(module: str, problems: list[str]) -> str:
+    return f"Fix {module}'s done-when file: " + "; ".join(problems)[:400]
+
+
+def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, seen: set | None = None) -> dict | None:
+    """What to run after a step that isn't ready, from the same facts `next_step` read. A WAITING step follows its
+    first need to the module that has to move first."""
+    wt, mod, mid, status = str(worktree), step["module"], step.get("milestone"), step["status"]
+    reason = '"<the owner\'s reason>"'
+    if status == "ready":
+        return next_cmd(loop_cmd("run", "--module", mod, "--worktree", wt), "lead", f"{mod} {mid} is ready to build")
+    if status == "design_owed":
+        return next_cmd(loop_cmd("review", "--module", mod, "--milestone", "design", "--worktree", wt), "lead",
+                        f"{mod}'s design hasn't passed a design review, or changed since it did")
+    if status == "review_owed":
+        if step.get("state") == "claimed":
+            return next_cmd(loop_cmd("review", "--module", mod, "--milestone", mid, "--commit",
+                                     step.get("commit") or base_ref(prof), "--worktree", wt), "lead",
+                            f"{mod} {mid} is claimed and waiting for its review")
+        return next_cmd(f"{loop_cmd('owner', 'accept', '--module', mod, '--milestone', mid, '--worktree', wt)} "
+                        f"--reason {reason}", "owner",
+                        f"{mod} {mid} says done in its file, but the loop never accepted it. Decision for the owner: "
+                        "accept it without review, or have a builder set it back to claimed so it can be reviewed")
+    if status == "blocked":
+        return next_cmd(loop_cmd("unblock", "--module", mod, "--milestone", mid, "--worktree", wt), "lead",
+                        f"{mod} {mid} is blocked: {step.get('blocked') or 'see the done-when file'}. Supply what "
+                        "unblocks it first; if another module owns it, or it's a design problem, plan instead",
+                        alternative=loop_cmd("plan", "--worktree", wt, "--task",
+                                             f"Unblock {mod} {mid}: {step.get('blocked', '')}"[:300]))
+    if status == "invalid":
+        problems = step.get("problems") or []
+        if any("aren't the ones last authorised" in p for p in problems):
+            return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", plan_task(mod, problems)), "lead",
+                            f"{mod} {mid}'s definitions changed outside a planner turn. Re-plan them, or the owner "
+                            "takes the edited file as the new scope",
+                            owner=f"{loop_cmd('owner', 'scope', '--module', mod, '--milestone', mid, '--worktree', wt)}"
+                                  f" --reason {reason}")
+        return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", plan_task(mod, problems)), "lead",
+                        f"{mod}'s plan has problems only a planner turn may fix")
+    if status == "waiting":
+        first = (step.get("needs") or [""])[0]
+        other, _, rest = first.partition(":")
+        if rest.endswith("(not planned)"):
+            return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", f"Plan module {other}"), "lead",
+                            f"{mod} {mid} needs {other}, which has no done-when file yet")
+        why = f"{mod} {mid} needs {', '.join(step.get('needs') or [])}, not accepted yet"
+        seen = (seen or set()) | {mod.upper()}
+        if proj and other.upper() in proj and other.upper() not in seen:
+            then = next_for(next_step(other.upper(), proj), worktree, prof, proj, seen)
+            if then:
+                return {**then, "why": f"{why}; {then['why']}"}
+        return next_cmd(loop_cmd("run", "--module", other, "--worktree", wt), "lead", why)
+    if status == "taken":
+        return next_cmd(loop_cmd("ready", "--worktree", wt), "lead",
+                        f"{mod} {mid} is held by {step.get('by')}; give the builder other ready work",
+                        owner=f"{loop_cmd('owner', 'release', '--module', mod, '--milestone', mid, '--worktree', wt)}"
+                              f" --reason {reason}  (only if that lead is gone for good)")
+    if status == "parked":
+        return next_cmd(f"{loop_cmd('owner', 'unpark', '--module', mod, '--milestone', mid, '--worktree', wt)} "
+                        f"--reason {reason}", "owner",
+                        f"{mod} {mid} is parked after its reviews and re-plan ran out. Decision for the owner: unpark "
+                        "it, change its scope (`owner scope`), or leave it")
+    return None
+
+
+NEXT_ORDER = ("review_owed", "design_owed", "blocked", "invalid", "waiting", "taken", "parked")
+
+
+def nothing_ready_next(steps: list[dict], worktree: Path, prof: dict, proj: dict) -> dict:
+    """For `ready` when nothing is: the most useful next command across the modules, or planning when there are
+    none, or nothing when all are finished."""
+    for status in NEXT_ORDER:
+        for step in steps:
+            if step["status"] == status and (out := next_for(step, worktree, prof, proj)):
+                return out
+    if not steps:
+        return next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task", "Plan the project"), "lead",
+                        f"no done-when files at the integrated tip, under {prof['plans']}")
+    return next_cmd(None, "lead", "every module is finished; plan more work with `plan` if the build order "
+                                  "isn't done")
+
+
+def file_at(worktree: Path, ref: str, rel: str) -> bytes | None:
+    r = subprocess.run(["git", "-C", str(worktree), "show", f"{ref}:{rel}"], capture_output=True)
+    return r.stdout if r.returncode == 0 else None
+
+
+def file_here(worktree: Path, rel: str) -> bytes | None:
+    path = worktree / rel
+    return path.read_bytes() if path.is_file() else None
+
+
+def names(r: subprocess.CompletedProcess) -> set[str]:
+    return {n for n in r.stdout.split("\0") if n}
+
+
+def plan_drift(worktree: Path, prof: dict, ref: str) -> dict[str, list[str]]:
+    """Plan files in this worktree that the integrated tip doesn't have: uncommitted (edited, staged or untracked) or
+    committed but not integrated. `run` and `ready` read plans at the tip, so these are invisible to them. Only
+    files whose content here differs from the tip's count, so a worktree that is merely behind reports nothing."""
+    plans = prof["plans"]
+    uncommitted = names(git(worktree, "diff", "-z", "--name-only", "HEAD", "--", plans))
+    uncommitted |= names(git(worktree, "ls-files", "-z", "--others", "--exclude-standard", "--", plans))
+    base = git(worktree, "merge-base", "HEAD", ref).stdout.strip()
+    committed = names(git(worktree, "diff", "-z", "--name-only", base, "HEAD", "--", plans)) if base else set()
+    differs = lambda rel: file_here(worktree, rel) != file_at(worktree, ref, rel)
+    return {"uncommitted": sorted(p for p in uncommitted if differs(p)),
+            "unintegrated": sorted(p for p in committed - uncommitted if differs(p))}
+
+
+def drift_fields(drift: dict, worktree: Path, step_next: dict | None = None) -> dict:
+    """The fields a result carries when plan files haven't landed: the files, and `adopt` as the next command, with
+    what would have been next anyway under `then`."""
+    if not (drift["uncommitted"] or drift["unintegrated"]):
+        return {"next": step_next} if step_next else {}
+    files = drift["uncommitted"] + drift["unintegrated"]
+    note = (f"the loop reads plans at the integrated tip, and these plan files aren't there: {', '.join(files[:10])}"
+            + (" (uncommitted)" if drift["uncommitted"] and not drift["unintegrated"] else
+               " (committed here, not integrated)" if not drift["uncommitted"] else ""))
+    return {"unlanded_plans": {**drift, "note": note},
+            "next": next_cmd(loop_cmd("adopt", "--worktree", str(worktree)), "lead",
+                             f"{note}. `adopt` commits only those plan files and integrates them; then run this "
+                             "again", **({"then": step_next} if step_next else {}))}
+
+
 # -------------------------------------------------------------------------------------------- processes and locks
 
 _STOP = False
@@ -951,9 +1156,11 @@ def land(tree: Path, prof: dict, check: bool = False) -> tuple[bool, str]:
     return False, detail
 
 
-def loop_write(worktree: Path, prof: dict, name: str, change, message: str) -> tuple[bool, str]:
+def loop_write(worktree: Path, prof: dict, name: str, change, message: str,
+               trailer: bool = True) -> tuple[bool, str]:
     """Applies `change(tree)` to a clean checkout of the integrated tip, commits it as the loop, and lands it.
-    `change` returns the paths it wrote, or nothing to skip the commit."""
+    `change` returns the paths it wrote, or nothing to skip the commit. Without `trailer` the commit isn't marked as
+    the loop's own record-keeping (used for files the loop lands on someone's behalf)."""
     detail = ""
     for _ in range(2):
         try:
@@ -964,7 +1171,7 @@ def loop_write(worktree: Path, prof: dict, name: str, change, message: str) -> t
         if not paths:
             return True, head_commit(tree)
         git(tree, "add", "--", *paths)
-        c = git(tree, *ident(tree), "commit", "--quiet", "-m", f"{message}\n\n{TRAILER}")
+        c = git(tree, *ident(tree), "commit", "--quiet", "-m", f"{message}\n\n{TRAILER}" if trailer else message)
         if c.returncode != 0:
             return False, f"commit failed: {(c.stdout + c.stderr).strip()[-300:]}"
         ok, detail = land(tree, prof)
@@ -2291,6 +2498,20 @@ def open_items(milestone: dict | None) -> str:
     return f" Still open: {', '.join(ids)}." if ids else ""
 
 
+def run_again(a: argparse.Namespace, stem: str, worktree: Path, host: str | None = None) -> str:
+    """This `run` command as the lead typed it, optionally on another host, for a result's `next`."""
+    args = ["run", "--module", stem, "--worktree", str(worktree)]
+    for flag, value in (("--host", host or a.host), ("--model", None if host else a.model),
+                        ("--effort", None if host else a.effort)):
+        if value:
+            args += [flag, value]
+    return loop_cmd(*args)
+
+
+def other_host(host: str) -> str:
+    return "claude" if host == "codex" else "codex"
+
+
 def cmd_run(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, strict=True)
@@ -2298,8 +2519,10 @@ def cmd_run(a: argparse.Namespace) -> None:
     preflight(host, worktree, "build")
     stem = module_stem(worktree, prof, a.module)
     key = stem.upper()
+    again = run_again(a, stem, worktree)
     if not run_lock(worktree, key):
-        emit("TAKEN", module=stem, by="another run on this repository")
+        emit("TAKEN", module=stem, by="another run on this repository", next=next_cmd(
+            again, "lead", f"another `run` on this repository holds {stem}; run it again once that one stops"))
     install_stop()
     git_dir = git(worktree, "rev-parse", "--absolute-git-dir").stdout.strip()
     state_dir = Path(git_dir) / "orchestrate"
@@ -2307,35 +2530,66 @@ def cmd_run(a: argparse.Namespace) -> None:
     state_path = state_dir / f"{stem}.json"
 
     sync_worktree(worktree, prof)
-    try:
-        start_tip = tip(worktree, prof)
-    except TipError as e:
-        emit("FLOOR", module=stem, reason=str(e))
-    proj = project(worktree, prof, start_tip)
-    for k, cycle in need_cycles(proj).items():
-        proj[k]["problems"].append(f"its needs form a cycle: {cycle}")
-    sync_claims(worktree, prof)
-    step = next_step(key, proj, claims(worktree), me(worktree))
+
+    def unlanded(then: dict | None) -> dict:
+        """`next` for a run that stops short, or `adopt` when plan files haven't landed (only looked for here, since
+        plans are read at the tip and a run that builds needn't pay for the look)."""
+        return drift_fields(plan_drift(worktree, prof, start_tip), worktree, then)
+
+    # An owed design review runs here first, as `review --milestone design` would, unless the lead opted out; a
+    # DESIGN OK carries on to build in the same run.
+    for attempt in range(2):
+        try:
+            start_tip = tip(worktree, prof)
+        except TipError as e:
+            emit("FLOOR", module=stem, reason=str(e), next=next_cmd(
+                again, "lead", "the integrated tip can't be fetched; fix the network or remote, then run it again"))
+        proj = project(worktree, prof, start_tip)
+        for k, cycle in need_cycles(proj).items():
+            proj[k]["problems"].append(f"its needs form a cycle: {cycle}")
+        sync_claims(worktree, prof)
+        if key not in proj:
+            emit("INVALID", module=stem, problems=[f"{stem} has no done-when file at the integrated tip "
+                                                   f"({base_ref(prof)}), so there's nothing to build yet"],
+                 **unlanded(next_cmd(
+                     loop_cmd("plan", "--worktree", str(worktree), "--task", f"Plan module {stem}"), "lead",
+                     f"{stem} isn't planned at the integrated tip")))
+        step = next_step(key, proj, claims(worktree), me(worktree))
+        if step["status"] != "design_owed" or getattr(a, "no_design_review", False) or attempt:
+            break
+        review = review_once(argparse.Namespace(module=stem, milestone="design", commit=None, worktree=str(worktree),
+                                                host=a.host, model=a.model, effort=a.effort,
+                                                turn_timeout_hours=a.turn_timeout_hours), locked=True)
+        if review.get("verdict") != "DESIGN OK":
+            emit("DESIGN_OWED", module=stem, design_review=review,
+                 **unlanded(design_review_next(review, stem, worktree, prof)))
+        sync_worktree(worktree, prof)
     if a.milestone and step.get("milestone") != a.milestone:
         emit("WAITING", module=stem, milestone=a.milestone,
              reason=f"{a.milestone} isn't the module's next milestone; that is {step.get('milestone')} "
-                    f"({step['status']}), and milestones in a module run in order")
+                    f"({step['status']}), and milestones in a module run in order",
+             next=next_for(step, worktree, prof, proj))
     if step["status"] != "ready":
-        emit(RUN_RESULTS[step["status"]], **step)
+        emit(RUN_RESULTS[step["status"]], **step, **unlanded(next_for(step, worktree, prof, proj)))
     mid = step["milestone"]
     ok, holder = take_claim(worktree, prof, key, mid)
     if not ok:
-        emit("TAKEN", module=stem, milestone=mid, by=holder)
+        emit("TAKEN", module=stem, milestone=mid, by=holder,
+             next=next_for({**step, "status": "taken", "by": holder}, worktree, prof, proj))
 
     done = load_done(worktree, stem, prof)
     if problems := validate(done, key):
-        emit("INVALID", module=stem, problems=problems[:20])
+        emit("INVALID", module=stem, problems=problems[:20], **unlanded(next_cmd(
+            loop_cmd("plan", "--worktree", str(worktree), "--task", plan_task(stem, problems[:5])), "lead",
+            f"this worktree's copy of {stem}'s done-when file is invalid")))
     milestone = find(done, mid)
     authorised_hash = proj[key]["record"]["milestones"][mid]["definitions"]
     if definitions(milestone) != authorised_hash:
         emit("INVALID", module=stem, milestone=mid, problems=[
             f"this worktree's copy of {mid}'s definitions isn't the authorised one at the integrated tip; "
-            f"rebase the worktree onto {base_ref(prof)} and run again"])
+            f"rebase the worktree onto {base_ref(prof)} and run again"], **unlanded(next_cmd(
+                shlex.join(["git", "-C", str(worktree), "rebase", base_ref(prof)]), "lead",
+                f"this worktree is behind or apart from {base_ref(prof)}; rebase it, then: {again}")))
     baseline = copy.deepcopy(done)
 
     pin = [host, model, effort]
@@ -2365,6 +2619,16 @@ def cmd_run(a: argparse.Namespace) -> None:
             and not visible_unavailable("codex"):
         codex_goal_activate(state["thread"])  # `run` again carries on after a pause, as the app's play button would
 
+    def floor_next() -> dict:
+        return next_cmd(again, "lead", f"the {host} host failed or ran out (quota, sign-in or outage); run it again "
+                                       "once it's back, or on the other host", alternative=run_again(
+                                           a, stem, worktree, other_host(host)))
+
+    def planner_next(problems: list[str]) -> dict:
+        return next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task", plan_task(stem, problems[:5])),
+                        "lead", "send the problems to the planner, and don't resume this builder until a planner "
+                                "turn has fixed them")
+
     def record_block(reason: str) -> None:
         def change(tree):
             path = tree / done_rel(prof, stem)
@@ -2379,7 +2643,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     while True:
         status = goal_status(state.get("thread")) if host == "codex" else None
         if status in ("usage_limited", "budget_limited"):
-            finish(state_path, state, "FLOOR", reason=f"goal {status}")
+            finish(state_path, state, "FLOOR", reason=f"goal {status}", next=floor_next())
         if status == "paused" or _STOP:
             finish(state_path, state, "PAUSED")
         first = state.get("thread") is None or not resumable
@@ -2420,7 +2684,8 @@ def cmd_run(a: argparse.Namespace) -> None:
         if _STOP or code == 130:
             finish(state_path, state, "PAUSED", **({} if _STOP else {"reason": err.strip()}))
         if code == 127 or (resumable and state["thread"] is None) or state["failed_turns"] >= 2:
-            finish(state_path, state, "FLOOR", reason=floor_reason(host, code, err), exit_code=code, stderr=err)
+            finish(state_path, state, "FLOOR", reason=floor_reason(host, code, err), exit_code=code, stderr=err,
+                   next=floor_next())
         bad, seen_now = pin_check(host, state.get("thread"), seen, model, effort)
         state["observed"] = still_observed(state.get("observed"), seen_now)
         if bad:
@@ -2429,13 +2694,13 @@ def cmd_run(a: argparse.Namespace) -> None:
         if host == "codex":
             state["goal"] = status or "none"  # whether the builder created its goal; without one, turns restate
         if status in ("usage_limited", "budget_limited"):
-            finish(state_path, state, "FLOOR", reason=f"goal {status}")
+            finish(state_path, state, "FLOOR", reason=f"goal {status}", next=floor_next())
         if status == "paused":
             finish(state_path, state, "PAUSED")
 
         done = load_done(worktree, stem, prof)
         if problems := validate(done, key):
-            finish(state_path, state, "INVALID", problems=problems[:20])
+            finish(state_path, state, "INVALID", problems=problems[:20], next=planner_next(problems))
         try:
             upstream = loop_versions(worktree, done_rel(prof, stem), start_tip, tip(worktree, prof))
         except TipError:
@@ -2443,7 +2708,7 @@ def cmd_run(a: argparse.Namespace) -> None:
         if problems := delta_problems(baseline, done, "build", mid, upstream):
             finish(state_path, state, "INVALID", problems=problems[:20] + [
                 "only the builder's own fields may change during a run; if a planner changed the file, start the "
-                "builder again"])
+                "builder again"], next=planner_next(problems))
         current = find(done, mid)
         moved, state["reflog"] = own_progress(worktree, state["reflog"], prof["plans"])
         now_passing = passing(current)
@@ -2477,7 +2742,9 @@ def cmd_run(a: argparse.Namespace) -> None:
                 ok, detail = loop_write(worktree, prof, key, change,
                                         f"orchestrate: {'accept' if not review else 'claim'} {stem} {mid}")
                 if not ok:
-                    finish(state_path, state, "FLOOR", reason=f"the loop couldn't record the claim: {detail}")
+                    finish(state_path, state, "FLOOR", reason=f"the loop couldn't record the claim: {detail}",
+                           next=next_cmd(again, "lead", "the claim held but couldn't be recorded; run it again, "
+                                                        "and the loop re-checks and records it"))
                 if not review:
                     drop_claim(worktree, prof, key, mid)
                 finish(state_path, state, "CLAIMED", review=review, commit=head, checked=checked)
@@ -2500,6 +2767,8 @@ def cmd_run(a: argparse.Namespace) -> None:
                     if attended and all(i.get("status") == "pass" for i in current["items"] if not i.get("attended")):
                         reason = f"attended items need a person or hardware: {', '.join(attended)}. {reason}"
                     record_block(reason)
+                    finish(state_path, state, word, report=message[-1500:], next=next_for(
+                        {"module": stem, "milestone": mid, "status": "blocked", "blocked": reason}, worktree, prof))
                 finish(state_path, state, word, report=message[-1500:])
         else:
             state["reports"] = 0
@@ -2511,7 +2780,9 @@ def cmd_run(a: argparse.Namespace) -> None:
                 i["id"] for i in current["items"] if i.get("status") != "pass"], report=message[-1500:])
         if status == "blocked":
             record_block(report_line(message) or "the Codex goal is blocked")
-            finish(state_path, state, "BLOCKED", report=message[-1500:])
+            finish(state_path, state, "BLOCKED", report=message[-1500:], next=next_for(
+                {"module": stem, "milestone": mid, "status": "blocked",
+                 "blocked": report_line(message) or "the Codex goal is blocked"}, worktree, prof))
         if time.time() - state["progress_at"] > a.budget_hours * 3600:
             finish(state_path, state, "BUDGET", hours=a.budget_hours)
 
@@ -2558,24 +2829,29 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
 REVIEW_LINE = re.compile(r"^(PASS|FAIL)\s+([A-Za-z0-9_.-]+)\b|^(DESIGN OK|DESIGN CHANGES)\b")
 
 
-def cmd_review(a: argparse.Namespace) -> None:
+def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
+    """Runs one review, milestone or design, and returns its result instead of printing it. `locked` means the
+    caller (a `run` doing an owed design review) already holds the module's run lock."""
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, strict=True)
     host, model, effort = resolve(a, prof, "review")
+    before = list(WARNINGS)
     preflight(host, worktree, "review")
+    if locked:  # keep the build's loader warnings beside the review's
+        WARNINGS[:] = list(dict.fromkeys(before + WARNINGS))
     stem = module_stem(worktree, prof, a.module)
     key, mid, design = stem.upper(), a.milestone, a.milestone == "design"
     info = dict(host=host, model=model, effort=effort, module=stem, milestone=mid)
-    if not run_lock(worktree, key):
-        emit("TAKEN", **info, by="another run on this repository")
+    if not locked and not run_lock(worktree, key):
+        return _result("TAKEN", **info, by="another run on this repository")
     install_stop()
     try:
         ref = tip(worktree, prof)
     except TipError as e:
-        emit("FLOOR", **info, reason=str(e))
+        return _result("FLOOR", **info, reason=str(e))
     proj = project(worktree, prof, ref)
     if key not in proj or proj[key]["problems"]:
-        emit("INVALID", **info, problems=(proj.get(key) or {}).get("problems") or ["not planned at the tip"])
+        return _result("INVALID", **info, problems=(proj.get(key) or {}).get("problems") or ["not planned at the tip"])
     done_path = done_rel(prof, stem)
     review_path = f"{prof['evidence']}/{stem}/" + ("design-review.md" if design else f"{mid}-review.md")
     rec = proj[key]["record"]
@@ -2584,25 +2860,25 @@ def cmd_review(a: argparse.Namespace) -> None:
     else:
         r = git(worktree, "rev-parse", "--verify", "--quiet", f"{a.commit}^{{commit}}")
         if r.returncode != 0:
-            emit("INVALID", **info, problems=[f"commit {a.commit} doesn't exist here"])
+            return _result("INVALID", **info, problems=[f"commit {a.commit} doesn't exist here"])
         start = r.stdout.strip()
         if not is_ancestor(worktree, start, ref):
-            emit("INVALID", **info, problems=[f"{start[:12]} isn't on {base_ref(prof)}, so it isn't integrated"])
+            return _result("INVALID", **info, problems=[f"{start[:12]} isn't on {base_ref(prof)}, so it isn't integrated"])
         try:
             before_doc = json.loads(show(worktree, start, done_path) or "")
             claimed = find(before_doc, mid)
         except (json.JSONDecodeError, SystemExit):
-            emit("INVALID", **info, problems=[f"{mid} can't be read from {done_path} at {start[:12]}"])
+            return _result("INVALID", **info, problems=[f"{mid} can't be read from {done_path} at {start[:12]}"])
         at_tip = next((m for m in proj[key]["doc"]["milestones"] if m["id"] == mid), {})
         if claimed.get("state") != "claimed" or at_tip.get("state") != "claimed":
-            emit("INVALID", **info, problems=[f"{mid} is {claimed.get('state')} at {start[:12]} and "
+            return _result("INVALID", **info, problems=[f"{mid} is {claimed.get('state')} at {start[:12]} and "
                                               f"{at_tip.get('state')} at the tip; only a claimed milestone is reviewed"])
         if definitions(claimed) != (rec["milestones"].get(mid) or {}).get("definitions"):
-            emit("INVALID", **info, problems=[f"{mid}'s definitions at {start[:12]} aren't the authorised ones"])
+            return _result("INVALID", **info, problems=[f"{mid}'s definitions at {start[:12]} aren't the authorised ones"])
     try:
         tree = verify_tree(worktree, stem, start)
     except TipError as e:
-        emit("FLOOR", **info, reason=str(e))
+        return _result("FLOOR", **info, reason=str(e))
     before_review = (tree / review_path).read_text() if (tree / review_path).exists() else None
     template = DESIGN_REVIEW_TEMPLATE if design else REVIEW_TEMPLATE
     prompt = template.format(milestone=mid, module=stem, commit=start, done=done_path,
@@ -2616,7 +2892,7 @@ def cmd_review(a: argparse.Namespace) -> None:
     result = out.pop("result")
     launch = launch_record(host, model, effort, SESSION_PATH.get("path"), out.pop("observed", None))
     if result != "FINISHED":
-        emit(result, **info, **out)
+        return _result(result, **info, **out)
 
     # Check what the reviewer did before anything lands.
     allowed = {review_path} | (set() if design else {done_path})
@@ -2650,7 +2926,7 @@ def cmd_review(a: argparse.Namespace) -> None:
                 if verdict == "FAIL" and reviewed.get("state") != "in_progress":
                     problems.append("the last line says FAIL, but the state isn't back to in_progress")
     if problems:
-        emit("INVALID", **info, landed=False, problems=problems[:20], last_line=out["last_line"],
+        return _result("INVALID", **info, landed=False, problems=problems[:20], last_line=out["last_line"],
              session=out.get("session"))
 
     passed = verdict in ("PASS", "DESIGN OK")
@@ -2697,13 +2973,45 @@ def cmd_review(a: argparse.Namespace) -> None:
 
     ok, landed = loop_write(worktree, prof, key, change, f"orchestrate: review of {stem} {mid}: {verdict}")
     if not ok:
-        emit("INVALID", **info, landed=False, problems=[f"the review was valid but couldn't be integrated: {landed}"])
+        return _result("INVALID", **info, landed=False,
+                       problems=[f"the review was valid but couldn't be integrated: {landed}"])
     if passed and not design:
         drop_claim(worktree, prof, key, mid)
     fails = find(after, mid).get("fails", 0) if after else None
     action = None if passed or design else escalation(fails, find(after, mid).get("replans", 0))
-    emit("REVIEWED", **info, verdict=verdict, commit=start, review=review_path, review_commit=landed, fails=fails,
-         next=action, last_line=out["last_line"], session=out.get("session"))
+    return _result("REVIEWED", **info, verdict=verdict, commit=start, review=review_path, review_commit=landed,
+                   fails=fails, next=action, last_line=out["last_line"], session=out.get("session"))
+
+
+def _result(result: str, **fields) -> dict:
+    return {"result": result, **fields}
+
+
+def design_review_next(out: dict, stem: str, worktree: Path, prof: dict) -> dict:
+    """What follows a design review that didn't say DESIGN OK."""
+    wt = str(worktree)
+    if out.get("verdict") == "DESIGN CHANGES":
+        return next_cmd(loop_cmd("plan", "--worktree", wt, "--task",
+                                 f"Revise {stem}'s design and plan as {out.get('review')} asks"), "lead",
+                        "the design review asked for changes; send them to the planner once, and if a second review "
+                        "still asks for changes, leave the module out and report it")
+    host = out.get("host") or default_host(prof)
+    return next_cmd(loop_cmd("review", "--module", stem, "--milestone", "design", "--worktree", wt, "--host",
+                             other_host(host)), "lead",
+                    f"the design review ended {out.get('result')} without a verdict; run it again, on the other host "
+                    "if it was the host that failed")
+
+
+def cmd_review(a: argparse.Namespace) -> None:
+    out = review_once(a)
+    result = out.pop("result")
+    if result in ("FLOOR", "INVALID", "PIN") and "next" not in out:
+        again = ["review", "--module", out.get("module") or a.module, "--milestone", a.milestone]
+        again += [] if a.milestone == "design" else ["--commit", a.commit]
+        again += ["--worktree", str(Path(a.worktree).resolve()), "--host", other_host(out.get("host") or "codex")]
+        out["next"] = next_cmd(loop_cmd(*again), "lead", "nothing landed; run the review again, on the other host "
+                                                         "if you can")
+    emit(result, **out)
 
 
 def plan_owed(worktree: Path, start: str, message: str) -> str | None:
@@ -2854,9 +3162,15 @@ def cmd_ready(a: argparse.Namespace) -> None:
     held_claims, mine = claims(worktree), me(worktree)
     out = {"tip": ref, "ready": [], "waiting": [], "review_owed": [], "design_owed": [], "blocked": [],
            "parked": [], "taken": [], "finished": [], "invalid": []}
+    steps = []
     for key in sorted(proj):
         step = next_step(key, proj, held_claims, mine)
+        steps.append(dict(step))
         out[step.pop("status")].append(step)
+    drift = plan_drift(worktree, prof, ref)
+    if drift["uncommitted"] or drift["unintegrated"] or not out["ready"]:
+        out.update(drift_fields(drift, worktree, None if out["ready"] else
+                                nothing_ready_next(steps, worktree, prof, proj)))
     print(json.dumps(out, indent=2))
 
 
@@ -2864,6 +3178,10 @@ def cmd_status(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree)
     ref, proj = read_project(worktree, prof)
+    drift = plan_drift(worktree, prof, ref)
+    if drift["uncommitted"] or drift["unintegrated"]:
+        fields = drift_fields(drift, worktree)
+        print(f"{fields['unlanded_plans']['note']}; land them with `{fields['next']['command']}`")
     keys = [a.module.upper()] if a.module else sorted(proj)
     for key in keys:
         if key not in proj:
@@ -2989,6 +3307,131 @@ def cmd_unblock(a: argparse.Namespace) -> None:
     print(json.dumps({"result": "UNBLOCKED" if ok else "FAILED", "detail": detail}))
 
 
+def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[str]) -> list[str]:
+    """Why these plan files can't land as they stand: files outside the plans folder, acceptance records, a
+    done-when file that's invalid or grants what a plan can't, or a file the integrated tip changed since this
+    worktree's copy was made (landing it would undo that change)."""
+    plans = prof["plans"] + "/"
+    problems = [f"{p} isn't under {plans}; adopt lands only plan files, so commit and integrate it another way"
+                for p in paths if not p.startswith(plans)]
+    problems += [f"{p} is an acceptance record, which only the loop writes" for p in paths
+                 if p.startswith(plans) and p.endswith("-ACCEPTED.json")]
+    for p in paths:
+        if not p.startswith(plans) or p.endswith("-ACCEPTED.json"):
+            continue
+        if base and file_at(worktree, ref, p) != file_at(worktree, base, p):
+            problems.append(f"{p} changed at {base_ref(prof)} since this worktree's copy; rebase this worktree onto "
+                            "it first, so landing doesn't undo that change")
+        if p.endswith("-DONE.json") and (here := file_here(worktree, p)) is not None:
+            stem = Path(p).name[:-len("-DONE.json")]
+            try:
+                doc = json.loads(here)
+            except json.JSONDecodeError as e:
+                problems.append(f"{p} isn't valid JSON: {e}")
+                continue
+            if found := validate(doc, stem.upper()):
+                problems += [f"{p}: {x}" for x in found]
+                continue
+            before = file_at(worktree, ref, p)
+            if before is not None:  # an existing module: the file can change only as a planner may change it
+                try:
+                    problems += [f"{p}: {x}" for x in delta_problems(json.loads(before), doc, "plan")]
+                except json.JSONDecodeError:
+                    pass
+    return problems
+
+
+def cmd_adopt(a: argparse.Namespace) -> None:
+    """Lands plan files left uncommitted, or committed but not integrated, so `run` and `ready` can see them."""
+    worktree = Path(a.worktree).resolve()
+    prof = profile(worktree, strict=True)
+    if os.environ.get("ORCHESTRATE_ROLE"):
+        raise SystemExit("error: adopt can't run inside a session the loop started; a planner's files land through "
+                         "`plan`, and a builder's through `land`")
+
+    def done_with(result: str, code: int = 0, **fields) -> None:
+        print(json.dumps({"result": result, **fields}))
+        sys.exit(code)
+
+    try:
+        ref = tip(worktree, prof)
+    except TipError as e:
+        done_with("FAILED", 1, detail=str(e))
+    drift = plan_drift(worktree, prof, ref)
+    unlanded = sorted(set(drift["uncommitted"]) | set(drift["unintegrated"]))
+    if a.paths:
+        paths = []
+        for p in a.paths:
+            full = Path(p) if Path(p).is_absolute() else worktree / p
+            paths.append(os.path.relpath(os.path.abspath(full), worktree))
+        problems = [f"{p} has no change here that the integrated tip lacks" for p in paths
+                    if p not in unlanded and p.startswith(prof["plans"] + "/")]
+    else:
+        paths, problems = unlanded, []
+    if not paths:
+        done_with("NOTHING", detail=f"no plan file under {prof['plans']} differs from {base_ref(prof)}",
+                  next=next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", "see what's ready"))
+    base = git(worktree, "merge-base", "HEAD", ref).stdout.strip()
+    problems += adopt_problems(worktree, prof, ref, base, paths)
+    if problems:
+        done_with("REFUSED", 1, files=paths, problems=problems[:20])
+
+    # The files as they are here, landed through a clean checkout of the tip, as the loop lands its own records,
+    # so nothing else in this worktree (other edits, other commits) goes with them.
+    content = {p: file_here(worktree, p) for p in paths}
+    ahead = not is_ancestor(worktree, "HEAD", ref)
+
+    def put_back() -> None:
+        for p, data in content.items():
+            if data is None:
+                (worktree / p).unlink(missing_ok=True)
+            else:
+                (worktree / p).parent.mkdir(parents=True, exist_ok=True)
+                (worktree / p).write_bytes(data)
+
+    # A worktree that isn't ahead of the tip gets its copies set back to HEAD first, so integration can fast-forward
+    # the base branch even where it's checked out here; they come back from the tip, or are restored on failure.
+    if not ahead:
+        in_head = names(git(worktree, "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", *paths))
+        if in_head:
+            git(worktree, "checkout", "--quiet", "HEAD", "--", *sorted(in_head))
+        for p in set(paths) - in_head:
+            git(worktree, "rm", "-q", "--cached", "--ignore-unmatch", "--", p)
+            (worktree / p).unlink(missing_ok=True)
+
+    def change(tree):
+        for p, data in content.items():
+            if data is None:
+                (tree / p).unlink(missing_ok=True)
+            else:
+                (tree / p).parent.mkdir(parents=True, exist_ok=True)
+                (tree / p).write_bytes(data)
+        return paths
+
+    message = a.message or "Adopt plan files: " + ", ".join(Path(p).name for p in paths)[:200]
+    try:
+        ok, landed = loop_write(worktree, prof, "_adopt", change, message, trailer=False)
+    except BaseException:
+        if not ahead:
+            put_back()
+        raise
+    if not ok:
+        if not ahead:
+            put_back()
+        done_with("FAILED", 1, files=paths, detail=landed)
+    if ahead:
+        here = (f"left as it was: this worktree has commits of its own, so rebase it onto {base_ref(prof)}, where "
+                "the plan commits it shares drop out as already applied")
+    elif git(worktree, "merge", "--ff-only", "--quiet", tip(worktree, prof, fetch=False)).returncode == 0:
+        here = f"fast-forwarded to {base_ref(prof)}"
+    else:
+        put_back()
+        here = (f"behind {base_ref(prof)}, with the adopted files still here as local changes (they match the tip); "
+                "the fast-forward was refused by other local changes")
+    done_with("ADOPTED", files=paths, commit=landed, worktree=here,
+              next=next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", "see what's ready now"))
+
+
 def owner_confirm(action: str, target: str) -> None:
     """Owner commands record decisions only the owner may make, so an agent mustn't be able to run them by itself:
     they're refused inside any session the loop started, and need the owner to type the target at a terminal."""
@@ -3110,6 +3553,8 @@ def main() -> None:
                      "with the module's run state and restated every turn, across --fresh and milestones")
     run.add_argument("--clear-owner-rules", action="store_true", help="drop stored owner rules (when the owner says)")
     run.add_argument("--budget-hours", type=float, default=4.0)
+    run.add_argument("--no-design-review", action="store_true", help="return DESIGN_OWED instead of running the "
+                     "owed design review first")
     host_args(run)
     run.set_defaults(func=cmd_run)
     review = sub.add_parser("review")
@@ -3142,6 +3587,11 @@ def main() -> None:
     for flag in ("--module", "--worktree", "--milestone"):
         unblock.add_argument(flag, required=True)
     unblock.set_defaults(func=cmd_unblock)
+    adopt_p = sub.add_parser("adopt")
+    adopt_p.add_argument("--worktree", default=".")
+    adopt_p.add_argument("--message", help="the commit message (default: names the files)")
+    adopt_p.add_argument("paths", nargs="*", help="plan files to land (default: every unlanded one)")
+    adopt_p.set_defaults(func=cmd_adopt)
     pause = sub.add_parser("pause")
     pause.add_argument("--module")
     pause.add_argument("--worktree", default=".")
@@ -3167,7 +3617,26 @@ def main() -> None:
     args = parser.parse_args()
     if getattr(args, "worktree", None) and args.func is not cmd_quota:
         QUOTA_WORKTREE[:] = [Path(args.worktree).resolve()]
-    args.func(args)
+    try:
+        args.func(args)
+    except WriteBlocked as e:
+        stop_on_write(args, e)
+    except OSError as e:  # the loop's own files under .git: its locks, run state and clean checkouts
+        if e.errno not in (errno.EPERM, errno.EACCES, errno.EROFS):
+            raise
+        stop_on_write(args, WriteBlocked(e.filename, e.strerror or str(e)))
+
+
+def stop_on_write(args: argparse.Namespace, e: WriteBlocked) -> None:
+    """One result line for a write the sandbox refused or a lock someone holds, naming the path and the fix."""
+    again = shlex.join(["python3", str(LOOP), *sys.argv[1:]])
+    if args.func is cmd_land:
+        print(json.dumps({"result": "FAILED", "detail": e.reason(), "blocked_write": e.fields()["blocked_write"]}))
+    else:
+        print(json.dumps({"result": "FLOOR", **e.fields(), "next": next_cmd(
+            again, "lead", "the lock is held; run the command again once it's free" if e.held else
+            "run the same command outside the sandbox, or with escalation")}))
+    sys.exit(1)
 
 
 if __name__ == "__main__":
