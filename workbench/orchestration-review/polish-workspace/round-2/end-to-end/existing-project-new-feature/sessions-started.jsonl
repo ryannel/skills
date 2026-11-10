@@ -1,0 +1,9 @@
+{"thread": "78f5d847-25d5-419b-88cc-b91b142a21b6", "host": "claude", "role": "plan", "title": "plan: for the salon app I want customers to be able to move an app", "at": "2026-11-10T19:12:45Z"}
+{"thread": "01a1c6e1-db4e-7e01-8537-e0ddfc216802", "host": "codex", "role": "review", "title": "review BOOKINGS design", "at": "2026-11-10T19:16:34Z"}
+{"thread": "01a1c6e1-e7c4-7b53-a8e5-98b8796bb592", "host": "codex", "role": "review", "title": "review APPOINTMENT_PAGE design", "at": "2026-11-10T19:16:40Z"}
+{"thread": "cd2de755-4c9c-4ced-b11c-2cb1fcaad697", "host": "claude", "role": "build", "title": "build APPOINTMENT_PAGE M1", "at": "2026-11-10T19:20:01Z"}
+{"thread": "01a1c6e4-35cf-78b3-a6c7-c22bbf7b4c01", "host": "codex", "role": "plan", "title": "plan: Revise BOOKINGS's design and plan as docs/evidence/BOOKINGS/", "at": "2026-11-10T19:21:29Z"}
+{"thread": "a56a0464-749a-4764-9b3f-c5c85cb38635", "host": "claude", "role": "review", "title": "review BOOKINGS design", "at": "2026-11-10T19:23:18Z"}
+{"thread": "01a1c6ea-3037-7c11-990e-bbf5d53f451c", "host": "codex", "role": "build", "title": "build BOOKINGS M1", "at": "2026-11-10T19:29:56Z"}
+{"thread": "fc0a31c7-519d-45f5-9c75-8ebc42173a3a", "host": "claude", "role": "review", "title": "review BOOKINGS M1", "at": "2026-11-10T19:37:35Z"}
+{"thread": "01a1c6f7-69e7-7573-bc43-7b1934e1e91d", "host": "codex", "role": "build", "title": "build BOOKINGS M2", "at": "2026-11-10T19:39:09Z"}

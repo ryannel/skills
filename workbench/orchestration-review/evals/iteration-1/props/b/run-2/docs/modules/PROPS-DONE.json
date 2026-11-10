@@ -1,0 +1,373 @@
+{
+  "module": "PROPS",
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "The owner picks the harbour look from three crate-and-barrel variants built through the real pipeline",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Each variant could pass for props hand-made for one small game, as A Short Hike's are, and the three are distinct ideas a person would choose between, not one idea in three palettes",
+      "items": [
+        {
+          "id": "M1.1",
+          "statement": "Each variant's crate and barrel is a Godot prop scene built from a committed .blend, listed in the variants manifest, and passes every floor rule in the checker",
+          "check": "godot --headless --path . --import && godot --headless --path . --script res://tools/check_props.gd -- --manifest res://assets/props/direction/manifest.json",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.2",
+          "statement": "The checker rejects each broken fixture: over 1,500 triangles, a second material, a second or non-512 texture, UVs outside the prop's regions, trimesh or missing collision, a missing required id",
+          "check": "godot --headless --path . --import && godot --headless --path . --script res://tools/check_props.gd -- --self-test",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.3",
+          "statement": "The checker counts what the game will draw",
+          "ask": "Reading tools/check_props.gd and its fixtures: does it count triangles on every mesh surface in the instanced scene, including nested children and imported sub-scenes, and inspect material overrides as well as mesh materials? Name any path a prop could take to slip past it.",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.4",
+          "statement": "The one shared material shows an opaque, a cut-out and a glowing piece from the one atlas, with clean cut-out edges and glow only where intended",
+          "inspect": "test pieces in the turntable scene, day and night, close up and at 15 m, native and low-resolution views",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.5",
+          "statement": "The three variants differ in kind: shape language and painting approach, not just colour",
+          "inspect": "variant sheet: all three crate-and-barrel pairs side by side, from four angles at 15 m and close up, daylight",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.6",
+          "statement": "Every variant reads as hand-made: deliberate irregularity, chunky facets, painted colour; none reads as asset-store",
+          "inspect": "each variant's crate and barrel as a 3D asset: front, three-quarter, top and underside, at 15 m and close up, day and night, native and low-resolution views",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.7",
+          "statement": "The owner's pick, in the owner's words, and a reference set of five to eight images or links saying which quality each shows, are recorded in docs/anchors/",
+          "ask": "Does docs/anchors/ hold the owner's dated pick (or blend of variants) with their reasons, and a reference set that names a quality per reference, with no assets copied from other games?",
+          "attended": "The owner looks at the variant sheet and picks a variant or a blend, and says what they like about it",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "A lantern on a post swings, glows and creaks on a seamless loop",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "As charming as a lantern in A Short Hike, matching the owner's pick in docs/anchors; it swings like a heavy thing on a hinge, not a metronome",
+      "items": [
+        {
+          "id": "M2.1",
+          "statement": "lantern_post is in the manifest and passes every floor rule, including the seamless-loop and shared-period rules for its creak",
+          "check": "godot --headless --path . --import && godot --headless --path . --script res://tools/check_props.gd -- --require lantern_post",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.2",
+          "statement": "The loop and period checks would catch a clicking seam or a creak that drifts against the swing",
+          "ask": "Reading the audio part of tools/check_props.gd and its fixtures: does it compare the step across the loop seam with the largest step inside the file, confirm looping is on in the import, and compare the swing period with the audio length to within one frame at 60 fps? Is there a fixture that fails each?",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.3",
+          "statement": "The swing eases at its extremes, has no hitch at the loop point, and the lamp and light move together",
+          "inspect": "frame sequence at 30 fps across two full loops, side view and three-quarter, at 15 m and close up",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.4",
+          "statement": "At night the glass glows and light falls warmly on the post and ground; by day it isn't blown out",
+          "inspect": "night and day stills at 15 m and close up, native and low-resolution views",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.5",
+          "statement": "The post, bracket and lantern read as hand-made in the chosen direction",
+          "inspect": "lantern_post as a 3D asset: four sides, top and underside, at 15 m and close up, beside the M1 pick",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.6",
+          "statement": "The creak's source is CC0 or made in this repo, and recorded",
+          "ask": "Does assets/props/CREDITS.md give the creak's origin (generator script in the repo, recording made for it, or a CC0 link), and does that origin hold up?",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.7",
+          "statement": "The creak sounds like an old hinge under a swinging lantern, lands on the swing's turn, has no audible click at the loop, and fades with distance",
+          "inspect": "the owner's listening note in the evidence page",
+          "attended": "The owner runs the showcase and listens near and far for a minute, and notes what they hear",
+          "target": "owner-ears",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M3",
+      "name": "The dock crane stands as the harbour's landmark",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Recognisable from the water at a glance, like A Short Hike's lighthouse and lookout, and as hand-made as the owner's pick in docs/anchors",
+      "items": [
+        {
+          "id": "M3.1",
+          "statement": "dock_crane is in the manifest, passes every floor rule, and has a Jib node pivoting on the mast's vertical axis",
+          "check": "godot --headless --path . --import && godot --headless --path . --script res://tools/check_props.gd -- --require dock_crane",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.2",
+          "statement": "Its silhouette reads as a dock crane from 15 m and from 40 m",
+          "inspect": "the crane at 15 m and 40 m from four sides, day and dusk, native and low-resolution views",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M3.3",
+          "statement": "Up close every part holds together: mast, jib, bracing, pulley, rope and hook, with no gaps, floating parts or mush",
+          "inspect": "close views of each part, including underside of the jib and the base",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M3.4",
+          "statement": "Turning the jib through 180 degrees moves the jib, rope and hook together and leaves nothing behind or clipping the mast",
+          "inspect": "frame sequence of the Jib rotated through 180 degrees, from above and the side",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M4",
+      "name": "The everyday dock clutter, in the chosen direction",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "A Short Hike's level of hand-made charm, matching the owner's pick and the lantern and crane already accepted",
+      "items": [
+        {
+          "id": "M4.1",
+          "statement": "crate, barrel, bollard, rope_coil, sack_pile, fish_basket and signpost are in the manifest and pass every floor rule on the final atlas",
+          "check": "godot --headless --path . --import && godot --headless --path . --script res://tools/check_props.gd -- --require crate,barrel,bollard,rope_coil,sack_pile,fish_basket,signpost",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M4.2",
+          "statement": "Each of the seven reads as hand-made: placed irregularity, chunky facets, painted colour, nothing identical repeated",
+          "inspect": "each prop as a 3D asset: four sides, top and underside, at 15 m and close up, day and night",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.3",
+          "statement": "Each reads by silhouette and two or three colours at 15 m, in both render views",
+          "inspect": "the seven in a row at 15 m, native and low-resolution views, day and night",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.4",
+          "statement": "Crates stack flush on crates and on a barrel lid without floating or sinking",
+          "inspect": "a stack of three crates and a crate on a barrel, side and three-quarter, close up",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.5",
+          "statement": "The signpost's lettering is legible close up and reads as hand-painted",
+          "inspect": "signpost board face-on close up and at 15 m, native and low-resolution views",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M5",
+      "name": "Nets and pots: the net rack, lobster pot and buoy cluster",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Netting that reads as net at a glance, like the fishing gear in A Short Hike, matching the owner's pick and the props already accepted",
+      "items": [
+        {
+          "id": "M5.1",
+          "statement": "net_rack, lobster_pot and buoy_cluster are in the manifest and pass every floor rule",
+          "check": "godot --headless --path . --import && godot --headless --path . --script res://tools/check_props.gd -- --require net_rack,lobster_pot,buoy_cluster",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M5.2",
+          "statement": "The net drapes with believable sag and folds over the rack, and its cut-out reads as mesh without shimmer at 15 m",
+          "inspect": "net_rack from four sides and from below, at 15 m and close up, day and night, native and low-resolution views, plus a 2-second frame sequence with the camera dollying past",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M5.3",
+          "statement": "The lobster pot's frame and netting read through each other, with both faces of the netting visible",
+          "inspect": "lobster_pot from four sides, top and underside, close up and at 15 m",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M5.4",
+          "statement": "The buoys read round and hand-painted, and hang from their rope believably",
+          "inspect": "buoy_cluster from four sides at 15 m and close up, day and night",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M6",
+      "name": "All twelve props together make one hand-made harbour",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "A harbour corner that could be a screenshot from A Short Hike's world without any prop looking borrowed from another set",
+      "items": [
+        {
+          "id": "M6.1",
+          "statement": "All twelve props are in the manifest and pass every floor rule, on one atlas whose regions don't overlap",
+          "check": "godot --headless --path . --import && godot --headless --path . --script res://tools/check_props.gd -- --require crate,barrel,bollard,rope_coil,sack_pile,fish_basket,signpost,lobster_pot,buoy_cluster,net_rack,lantern_post,dock_crane",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M6.2",
+          "statement": "Laid out together in the showcase, the twelve share one palette, facet scale and degree of wonkiness; none stands out as from another set",
+          "inspect": "the showcase harbour from a boat's eye view at 15 m and 40 m and from the dock, day and night, native and low-resolution views",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M6.3",
+          "statement": "Props sit at believable scale against each other and the stand-in dock",
+          "inspect": "the showcase from the dock at eye height (about 1.6 m), with a 1.8 m reference capsule",
+          "target": "godot-desktop",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M6.4",
+          "statement": "The atlas is painted, not photographic, with its regions used as the region map says",
+          "inspect": "props_atlas.png whole and in close crops of each region at full resolution, beside atlas_regions.json drawn over it",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M6.5",
+          "statement": "The prop scenes keep the contract other modules will build on",
+          "ask": "Do every prop scene, the manifest, the shared material and atlas_regions.json match the promises in docs/modules/PROPS.md (origin, axes, scale, collision shapes, Jib node, lantern bus and volume), and does CREDITS.md cover every external or generated asset?",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    }
+  ]
+}

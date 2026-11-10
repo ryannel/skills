@@ -1,0 +1,232 @@
+{
+  "module": "LOGSIFT",
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Several log files, any size, merge into one timestamp-ordered NDJSON stream in flat memory",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Memory as flat as `sort -m` on presorted files, output as strictly one-object-per-line as jq -c, and nothing lost or duplicated",
+      "items": [
+        {
+          "id": "M1.1",
+          "statement": "JSON and timestamp-led text lines parse into the ts, level, msg and fields the design describes; untimestamped lines attach to the previous record; invalid UTF-8 and lines over --max-line are kept, not fatal",
+          "check": "cargo test --test parse",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.2",
+          "statement": "For many randomly generated sets of time-ordered files, batch output is sorted by ts, holds every input record exactly once, breaks ties by command-line then file order, and is byte-identical across two runs",
+          "check": "cargo test --test merge",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.3",
+          "statement": "Every stdout line is one valid JSON object matching the design's output schema, including the _<name> rule for clashing fields, checked against hand-written expected output",
+          "check": "cargo test --test output",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.4",
+          "statement": "Piped into `head -n 1`, logsift exits 0 promptly with nothing on stderr; an unreadable file in batch mode exits 1 with the path named on stderr",
+          "check": "cargo test --test cli",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.5",
+          "statement": "The release binary merges a generated 5 GiB file with a second 500 MiB file, writing every record, with peak RSS under the 100 MiB tripwire; size, wall time, throughput and peak RSS are recorded in the evidence",
+          "check": "cargo test --release --test scale -- --ignored --nocapture",
+          "target": "cli",
+          "lock": "scale",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.6",
+          "statement": "The tests that prove M1 would catch a fake",
+          "ask": "Do the merge and scale tests build their inputs and expected results independently of logsift's own parser and formatter, and would they fail if the binary read a whole file into memory, or dropped or repeated a record?",
+          "target": "cli",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.7",
+          "statement": "No code path holds a whole file or an unbounded number of lines",
+          "ask": "Is there any read_to_end, read_to_string, whole-file mmap, collected line vector or per-file index, or any buffer that can grow past --max-line per source plus the merge's pending records?",
+          "target": "cli",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "Follow mode keeps a live merged stream going through rotation, truncation and quiet files",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "As dependable as GNU `tail -F` through logrotate and newsyslog rotations, across several files at once",
+      "items": [
+        {
+          "id": "M2.1",
+          "statement": "With -f, only records appended after start are written; with -f --from-start, every existing record is written and then new ones follow",
+          "check": "cargo test --test follow",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.2",
+          "statement": "While one followed file stays silent, records from another appear within --lag plus one poll interval; records arriving within --lag of each other come out in ts order; a later, older record is written, not dropped",
+          "check": "cargo test --test follow",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.3",
+          "statement": "Rename-and-recreate rotation, with the writer still writing to the old file after the rename, loses and repeats nothing over 20 rotations under steady writes, and the old file's last lines come before the new file's",
+          "check": "cargo test --test rotation",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.4",
+          "statement": "Copytruncate rotation is detected, noted on stderr, and reading resumes from the start of the truncated file",
+          "check": "cargo test --test rotation",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.5",
+          "statement": "A followed path that is missing at start, or deleted and recreated, is waited for with a note on stderr and then followed, without logsift exiting",
+          "check": "cargo test --test rotation",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.6",
+          "statement": "A line written in two parts across polls is emitted once, whole",
+          "check": "cargo test --test follow",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.7",
+          "statement": "SIGINT while following exits 0 with every record read so far written and flushed",
+          "check": "cargo test --test follow",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.8",
+          "statement": "Driven by a writer the reviewer controls, the followed stream has no gaps, repeats or stalls through both kinds of rotation",
+          "inspect": "a transcript of `logsift -f` on two files while a separate writer emits sequence-numbered lines to both and rotates one of them several times by rename-and-create and several times by copytruncate, with one file left quiet for a stretch",
+          "target": "cli",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.9",
+          "statement": "Rotation handling follows the design's mechanism",
+          "ask": "On every path that switches to a new file, is the old descriptor read to its end first, and does correctness depend on filesystem events anywhere rather than the stat poll? Does the rotation test keep writing to the old descriptor after the rename?",
+          "target": "cli",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M3",
+      "name": "A query like level>=warn AND svc=api filters the stream, and the CLI is finished",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Help and error messages as clear as ripgrep's, query errors as pointed as jq's, and output as pipeable as jq -c",
+      "items": [
+        {
+          "id": "M3.1",
+          "statement": "The parser accepts the design's grammar with NOT binding tighter than AND, AND tighter than OR, parentheses and quoted values, and rejects everything else",
+          "check": "cargo test --test query",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.2",
+          "statement": "Comparisons follow the design: level order, ts as time, numeric when both sides are numbers, ~ as regex, and a missing field fails all but !=",
+          "check": "cargo test --test query",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.3",
+          "statement": "The parser never panics or hangs on arbitrary input",
+          "check": "cargo test --test query_fuzz",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.4",
+          "statement": "`-q 'level>=warn AND svc=api'` on fixture files writes exactly the expected records in batch mode and in follow mode",
+          "check": "cargo test --test cli",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.5",
+          "statement": "A query that doesn't parse exits 2 before any file is opened, echoing the query on stderr with a caret at the error",
+          "check": "cargo test --test cli",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.6",
+          "statement": "Using the CLI cold, a user can learn it from --help and recover from every mistake from the message alone",
+          "inspect": "transcripts of --help, each flag, bad arguments, a bad query, a missing file, an empty file, a file with no timestamps, output piped into head, and Ctrl-C while following, each with its exit code, judged against ripgrep's help and errors",
+          "target": "cli",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M3.7",
+          "statement": "The query tests' expectations come from the design, not from logsift",
+          "ask": "Were the expected matches in the query and cli tests written by hand from the design's semantics, or produced by running logsift and saving its output?",
+          "target": "cli",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+$ git status --short
+?? docs/modules/BRIEF.md
+?? docs/modules/GLOSSARY.md
+
+$ git log --oneline --all
+a55a4e5 Start
+
+$ git diff HEAD
+

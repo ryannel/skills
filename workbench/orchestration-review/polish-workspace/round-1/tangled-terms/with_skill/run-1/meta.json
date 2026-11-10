@@ -1,0 +1,42 @@
+{
+  "case": "tangled-terms",
+  "side": "with_skill",
+  "skill": "domain-language",
+  "session": "735d12c9-5cd5-4354-b289-4b966867625b",
+  "turns": [
+    {
+      "duration_ms": 28167,
+      "num_turns": 4,
+      "total_cost_usd": 0.257236,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 2403
+    },
+    {
+      "duration_ms": 34653,
+      "num_turns": 8,
+      "total_cost_usd": 0.49212700000000004,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 3464
+    },
+    {
+      "duration_ms": 7786,
+      "num_turns": 3,
+      "total_cost_usd": 0.595939,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 629
+    }
+  ],
+  "ended": "the agent finished and asked nothing"
+}

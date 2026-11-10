@@ -1,0 +1,31 @@
+# How it works
+
+The names here are defined in [`GLOSSARY.md`](../GLOSSARY.md).
+
+A bank is a wall of lockers, and a locker is one door in it.
+
+1. The courier puts the parcel in a locker.
+2. Once the door shuts, the parcel is waiting for pickup (stored as `claimed`).
+3. The customer gets a code.
+4. The customer comes with the code and does a pickup. The parcel is then collected.
+5. If nobody collects the parcel within 3 days, it is overdue (stored as `stale`).
+
+## An example
+
+This follows one parcel, P-1, from start to finish. The days are made up for the example.
+
+1. On Monday morning a courier puts parcel P-1 in locker 12, which is one locker in a bank, and shuts the door.
+2. From that moment, P-1 is waiting for pickup.
+3. The customer gets a code.
+4. From here the story ends one of two ways:
+   - The customer comes in time. On Tuesday the customer comes to the bank with their code and does a pickup.
+     P-1 is now collected.
+   - Nobody comes. By Thursday morning 3 days have passed with no pickup. P-1 is now overdue.
+
+## How the names relate
+
+- Bank and locker are places: the wall, and one door in it.
+- Code is the thing the customer holds.
+- Pickup is an event: the customer's visit.
+- Waiting for pickup, collected and overdue are the three statuses a parcel can have. Every parcel in a locker
+  starts as waiting for pickup, and then becomes either collected or overdue.

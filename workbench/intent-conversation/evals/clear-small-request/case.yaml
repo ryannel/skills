@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: clear-small-request
+expected_outcome: |
+  Guard case. Understands a small, fully stated change without interviewing the owner or writing a brief, and builds it.
+context:
+  scaffold_script: place-files.sh

@@ -2257,6 +2257,42 @@
           "check": "Compare with Anthropic's and OpenAI's current prompting pages; when a newer model ships, re-run workbench/skill-creator/evals on it and update the table in SKILL.md with models.md."
         }
       ]
+    },
+    "interview-me": {
+      "path": "skills/orchestration/interview-me",
+      "tier": "stable",
+      "cadence_days": 30,
+      "last_checked": "2026-11-10",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "Registered 2026-11-10. A method skill; its sources are other skill libraries, which change slowly compared with model names.",
+      "watchlist": [
+        {
+          "id": "interview-me-sources",
+          "type": "external-practice",
+          "claim": "The conversation rules rest on obra/superpowers brainstorming v7.0.2 (3 Nov 2026), EveryInc/compound-engineering ce-brainstorm and mattpocock/skills grilling, and name Claude Opus 5.5's over-asking.",
+          "where": "skills/orchestration/interview-me",
+          "check": "Have those libraries changed their tested rules, or published new measurements? Has a newer model changed the over-asking behaviour?"
+        }
+      ]
+    },
+    "domain-language": {
+      "path": "skills/orchestration/domain-language",
+      "tier": "stable",
+      "cadence_days": 30,
+      "last_checked": "2026-11-10",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "Registered 2026-11-10. A method skill; its sources are other skill libraries, which change slowly compared with model names.",
+      "watchlist": [
+        {
+          "id": "domain-language-sources",
+          "type": "external-practice",
+          "claim": "The glossary rules rest on mattpocock/skills domain-modeling (GLOSSARY.md) and EveryInc/compound-engineering CONCEPTS.md as read on 10 Nov 2026.",
+          "where": "skills/orchestration/domain-language",
+          "check": "Have those libraries changed their glossary format or published evidence that a glossary helps agents?"
+        }
+      ]
     }
   },
   "repo_findings": [

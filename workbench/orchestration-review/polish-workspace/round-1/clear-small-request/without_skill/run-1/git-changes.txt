@@ -1,0 +1,41 @@
+$ git status --short
+ M cli.py
+
+$ git log --oneline --all
+9eb3058 Start
+
+$ git diff HEAD
+diff --git a/cli.py b/cli.py
+index f5cac9f..7470805 100644
+--- a/cli.py
++++ b/cli.py
+@@ -1,9 +1,13 @@
+ """tidepool: tide tables from the command line."""
+ import argparse
++import json
+ 
+ COLUMNS = ["station", "high_m", "low_m", "range_m"]
+ 
+-def report(rows):
++def report(rows, as_json=False):
++    if as_json:
++        print(json.dumps([{c: r[c] for c in COLUMNS} for r in rows], indent=2))
++        return
+     print("  ".join(c.ljust(10) for c in COLUMNS))
+     for r in rows:
+         print("  ".join(str(r[c]).ljust(10) for c in COLUMNS))
+@@ -11,10 +15,11 @@ def report(rows):
+ def main():
+     p = argparse.ArgumentParser(prog="tidepool")
+     sub = p.add_subparsers(dest="cmd")
+-    sub.add_parser("report", help="print the tide table")
++    rp = sub.add_parser("report", help="print the tide table")
++    rp.add_argument("--json", action="store_true", help="print as JSON instead of a table")
+     a = p.parse_args()
+     if a.cmd == "report":
+-        report([{"station": "Looe", "high_m": 5.1, "low_m": 0.9, "range_m": 4.2}])
++        report([{"station": "Looe", "high_m": 5.1, "low_m": 0.9, "range_m": 4.2}], as_json=a.json)
+ 
+ if __name__ == "__main__":
+     main()
+

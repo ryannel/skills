@@ -1,0 +1,42 @@
+{
+  "case": "existing-project-new-feature",
+  "side": "without_skill",
+  "skill": "interview-me",
+  "session": "66443cbd-f1b7-4b8a-9f9b-112f7cfa5d32",
+  "turns": [
+    {
+      "duration_ms": 43330,
+      "num_turns": 5,
+      "total_cost_usd": 0.3056415,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 3844
+    },
+    {
+      "duration_ms": 20136,
+      "num_turns": 2,
+      "total_cost_usd": 0.447949,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 1907
+    },
+    {
+      "duration_ms": 7433,
+      "num_turns": 2,
+      "total_cost_usd": 0.5336795,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 407
+    }
+  ],
+  "ended": "the agent finished and asked nothing"
+}

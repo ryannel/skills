@@ -1,0 +1,228 @@
+{
+  "module": "LOGSIFT",
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Several large files merge by timestamp into NDJSON, in memory that does not grow with file size",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Merge output as predictable as `sort -m` over the same files, and every output line accepted by `jq -c .` with no warnings",
+      "items": [
+        {
+          "id": "M1.1",
+          "statement": "JSON, logfmt and raw lines are each recognised per line, in one mixed file; JSON fields keep their types and nesting, logfmt pairs become strings, raw lines become `_raw`; every output line parses as a JSON object and has `_ts` and `_src`, and an input field already named `_ts` or `_src` is kept, not overwritten",
+          "check": "cargo test --test parse",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.2",
+          "statement": "Timestamps are read from ts, time, timestamp, @timestamp and t in RFC 3339, ISO 8601 with a space, with and without fraction and offset, and as epoch seconds, millis, micros and nanos, all normalised to the same UTC instant; levels and every alias in the design normalise to the right rank, case-insensitively; each case is a hand-written expected value, not output captured from the code",
+          "check": "cargo test --test parse timestamps_and_levels",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.3",
+          "statement": "For any set of 1 to 8 files that are each ordered by timestamp, with random sizes, duplicate timestamps and untimestamped continuation lines, the output contains every input line exactly once, is ordered by (timestamp, argument position, line number), and is identical across two separate runs of the binary",
+          "check": "cargo test --test merge",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.4",
+          "statement": "A line out of order inside its own file is emitted where `sort -m` would put it, not moved; a continuation line without a timestamp stays directly after its parent line; lines before a file's first timestamp come out first with `_ts` null; a final line with no trailing newline is still emitted",
+          "check": "cargo test --test merge edge_cases",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.5",
+          "statement": "Merging a generated 5 GiB file with two small files, the release binary's peak RSS is at most the peak RSS of the same run on a 50 MiB version of the fixture plus 16 MiB, and the output line count equals the input line count; the test prints both RSS figures, wall time and throughput, and the builder copies them to the evidence page as the baseline",
+          "check": "cargo test --release --test big_file -- --ignored --nocapture",
+          "lock": "big-file",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.6",
+          "statement": "A 50 MiB line with `--max-line 1MiB` is emitted cut at 1 MiB with `_truncated` true, peak RSS stays within 16 MiB of a run without the long line, and the next line is parsed normally; invalid UTF-8 bytes and CRLF endings give valid JSON output",
+          "check": "cargo test --release --test limits",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.7",
+          "statement": "`logsift <the 5 GiB fixture> | head -n 1` exits within 2 seconds with status 0 and nothing on stderr; a missing file named on the command line exits 1 with a message naming the path",
+          "check": "cargo test --release --test cli batch_exits -- --include-ignored",
+          "lock": "big-file",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.8",
+          "statement": "No code path holds a whole file, or an unbounded number of lines or bytes per file, in memory",
+          "ask": "Trace every read path from a file to stdout. Is there any place that reads to end, collects lines into a growing collection, memory-maps a file, or buffers more than one line plus the `--max-line` cap per file in batch mode? Name each place or say there is none.",
+          "target": "cli",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "Followed files keep streaming in timestamp order through rename-and-recreate rotation and truncation",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "As dependable as `tail -F` through logrotate: no line lost or doubled across a rotation, and one quiet file never stalls the others",
+      "items": [
+        {
+          "id": "M2.1",
+          "statement": "With `-f`, a line appended to any followed file appears on stdout within window + poll + 1 s; with `--start end` lines already in the file are not printed and appended ones are",
+          "check": "cargo test --test follow appended_lines",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.2",
+          "statement": "A writer appends 20,000 numbered lines; part-way through, the file is renamed and a new file is created at the path, and the writer keeps writing to the old handle for 200 ms before switching; every numbered line appears exactly once and each file's lines keep their order",
+          "check": "cargo test --test follow rename_and_recreate",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.3",
+          "statement": "When the path is missing for 2 s between rename and recreate, logsift keeps running, prints one `logsift:` note on stderr, and picks up every line of the new file",
+          "check": "cargo test --test follow missing_gap",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.4",
+          "statement": "Copy-and-truncate rotation: after the file is truncated to zero and written again, every line written after the truncation appears exactly once and no earlier line repeats",
+          "check": "cargo test --test follow truncation",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.5",
+          "statement": "30 rename-and-recreate rotations one second apart, with the default 250 ms poll and lines written continuously, lose and duplicate nothing; a line written in two separate writes is emitted once, whole",
+          "check": "cargo test --test follow repeated_rotation",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.6",
+          "statement": "Two writers stamping lines with the current time and interleaving at random intervals under the window give globally timestamp-ordered output; while one of three followed files stays silent, the other two still emit within window + poll + 1 s",
+          "check": "cargo test --test follow live_merge",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.7",
+          "statement": "A burst of 1,000,000 lines into one followed file while another is idle keeps peak RSS within 64 MiB of the idle baseline, and every line is emitted",
+          "check": "cargo test --release --test follow burst_memory",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.8",
+          "statement": "SIGINT while following flushes every line already read and exits 130 within 1 s",
+          "check": "cargo test --test follow sigint",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.9",
+          "statement": "Apart from a file rotated away before it was ever opened, no ordering of rename, create, write and truncate between two polls loses or doubles a line",
+          "ask": "Walk the follow loop through each case between two polls: rename then create; rename, create and write to both; truncate then write more than the old offset; delete and recreate reusing the inode, smaller and larger than the offset; a partial line at the moment of rotation. For each, is any line lost or emitted twice? Name the case and the line of code, or say none.",
+          "target": "cli",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M3",
+      "name": "A small query language filters the merged stream, with errors as clear as ripgrep's",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Help and error text as clear as ripgrep's; a malformed query points at the exact character the way rustc does",
+      "items": [
+        {
+          "id": "M3.1",
+          "statement": "The grammar in the design parses, including mixed-case keywords, nested parentheses, quoted values with escaped quotes, dotted fields, and NOT binding tighter than AND tighter than OR; each case is compared with a hand-written expected tree",
+          "check": "cargo test --test query grammar",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.2",
+          "statement": "Against a hand-written fixture with hand-written expected matches: `level>=warn` matches warn, error, fatal and their aliases only; numeric comparison applies to JSON numbers and numeric logfmt strings; text ordering comparisons are false; time comparisons on ts work; an absent field makes every comparison false, including `!=`, while `NOT f=v` matches lines without f",
+          "check": "cargo test --test query semantics",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.3",
+          "statement": "Every malformed query exits 2 before any file is opened (proved with a nonexistent file argument still giving the query error), printing the query, a caret at the offending position and what was expected there",
+          "check": "cargo test --test cli query_errors",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.4",
+          "statement": "`-q 'level>=warn AND svc=api'` on three merged files gives exactly the hand-written expected NDJSON in batch mode, and the same lines in follow mode when the same content is appended live",
+          "check": "cargo test --test cli query_end_to_end",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.5",
+          "statement": "Filtering the 5 GiB fixture keeps the M1.5 memory property",
+          "check": "cargo test --release --test big_file filtered -- --ignored --nocapture",
+          "lock": "big-file",
+          "target": "cli",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.6",
+          "statement": "The command line reads as a finished tool: help states the `sort -m` merge contract, the missing-field rule and the supported rotation range; every failure says what went wrong and what to do",
+          "inspect": "a transcript with exit codes of: `--help`; no arguments; an unknown flag; a missing file; three malformed queries (unclosed parenthesis, missing value, unknown operator); a query matching nothing; output piped into `jq -c .` and into `head -n 3`; a follow session through one rotation ended with Ctrl-C",
+          "target": "cli",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    }
+  ]
+}

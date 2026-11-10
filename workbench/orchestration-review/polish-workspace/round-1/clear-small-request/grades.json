@@ -1,0 +1,66 @@
+{
+  "without_skill": [
+    {
+      "check": "01-no-why-question.md",
+      "passed": true,
+      "evidence": "A/transcript.md has one agent turn, a completion report with no question in it. It opens \"`tidepool report --json` now prints the rows as a JSON array of objects keyed by the column names\" and the transcript closes \"Ended: the agent finished and asked nothing.\" Nothing asks why the flag is wanted or what prompted it.",
+      "unclear": false
+    },
+    {
+      "check": "02-at-most-one-question.md",
+      "passed": true,
+      "evidence": "Zero questions. The agent's only message contains no question mark and no request for input; the transcript closes \"Ended: the agent finished and asked nothing.\"",
+      "unclear": false
+    },
+    {
+      "check": "03-nothing-the-repo-answers.md",
+      "passed": true,
+      "evidence": "The agent asked the owner nothing at all, so nothing that cli.py or README.md answers. It took the column names from the code itself: \"keyed by the column names (`station`, `high_m`, `low_m`, `range_m`)\".",
+      "unclear": false
+    },
+    {
+      "check": "04-no-brief.md",
+      "passed": true,
+      "evidence": "A/work holds only README.md and cli.py (find, including hidden files; a case-insensitive search for *brief* under A/ returns nothing). A/git-changes.txt shows `git status --short` as only \" M cli.py\". The transcript has no request to approve a brief: \"Ended: the agent finished and asked nothing.\"",
+      "unclear": false
+    },
+    {
+      "check": "05-flag-built.md",
+      "passed": true,
+      "evidence": "Ran `python3 cli.py report --json` on a copy of A/work: exit 0, stdout is `[{\"station\": \"Looe\", \"high_m\": 5.1, \"low_m\": 0.9, \"range_m\": 4.2}]` (indented), which parses as JSON; the single object's keys are exactly station, high_m, low_m, range_m. cli.py builds it with `json.dumps([{c: r[c] for c in COLUMNS} for r in rows], indent=2)`.",
+      "unclear": false
+    }
+  ],
+  "with_skill": [
+    {
+      "check": "01-no-why-question.md",
+      "passed": true,
+      "evidence": "B/transcript.md has one agent turn, a completion report with no question in it. It opens \"`tidepool report --json` now prints the report as JSON instead of the table; without the flag the table is unchanged.\" and the transcript closes \"Ended: the agent finished and asked nothing.\" Nothing asks why the flag is wanted or what prompted it.",
+      "unclear": false
+    },
+    {
+      "check": "02-at-most-one-question.md",
+      "passed": true,
+      "evidence": "Zero questions. The agent's only message contains no question mark and no request for input; the transcript closes \"Ended: the agent finished and asked nothing.\"",
+      "unclear": false
+    },
+    {
+      "check": "03-nothing-the-repo-answers.md",
+      "passed": true,
+      "evidence": "The agent asked the owner nothing at all, so nothing that cli.py or README.md answers. It took the column names from the code itself: \"keyed by the column names (`station`, `high_m`, `low_m`, `range_m`)\".",
+      "unclear": false
+    },
+    {
+      "check": "04-no-brief.md",
+      "passed": true,
+      "evidence": "B/work holds only README.md and cli.py (find, including hidden files; a case-insensitive search for *brief* under B/ returns nothing). B/git-changes.txt shows `git status --short` as only \" M cli.py\". The transcript has no request to approve a brief: \"Ended: the agent finished and asked nothing.\"",
+      "unclear": false
+    },
+    {
+      "check": "05-flag-built.md",
+      "passed": true,
+      "evidence": "Ran `python3 cli.py report --json` on a copy of B/work: exit 0, stdout is `[{\"station\": \"Looe\", \"high_m\": 5.1, \"low_m\": 0.9, \"range_m\": 4.2}]` (indented), which parses as JSON; the single object's keys are exactly station, high_m, low_m, range_m. It matches byte for byte the output the agent pasted in its report. cli.py builds it with `json.dumps([{c: r[c] for c in COLUMNS} for r in rows], indent=2)`.",
+      "unclear": false
+    }
+  ]
+}

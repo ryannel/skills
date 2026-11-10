@@ -1,0 +1,72 @@
+{
+  "scenario": "s3-ledger-cross",
+  "outcome": "all 3 planned milestones accepted by the loop; product meets the ask (verified by use)",
+  "times_utc_note": "all times UTC (CET-1h)",
+  "milestones": {
+    "CORE:M1":   {"accepted": true, "accepted_by": "review", "builder_host": "claude", "review_host": "codex", "reviews": 1, "failed_reviews": 0, "claim_commit": "e47f581"},
+    "REPORT:M1": {"accepted": true, "accepted_by": "review", "builder_host": "codex",  "review_host": "claude", "reviews": 2, "failed_reviews": 1, "fail_reason": "CJK wide chars overflow 80 cols", "claim_commit": "7e5c8e2"},
+    "REPORT:M2": {"accepted": true, "accepted_by": "review", "builder_host": "claude", "review_host": "codex",  "reviews": 2, "failed_reviews": 1, "fail_reason": "closed stdin traceback; tab in payee misaligns; 30-digit amount 82 cols", "claim_commit": "99362c9"}
+  },
+  "design_reviews": {
+    "CORE":   {"reviews": 2, "verdicts": ["DESIGN CHANGES (1 blocking: Decimal context precision)", "DESIGN OK"], "host": "codex"},
+    "REPORT": {"reviews": 2, "verdicts": ["DESIGN CHANGES (2 blocking: pip install flat layout; non-UTF-8 traceback)", "DESIGN OK"], "host": "claude"}
+  },
+  "wall_clock_seconds": {
+    "planning_initial": 536,
+    "CORE_design_loop (review, re-plan, re-review)": 398,
+    "REPORT_design_loop (review, TAKEN, re-plan INVALID, manual adopt/land, re-review)": 917,
+    "CORE_M1_build": 203,
+    "CORE_M1_review": 152,
+    "REPORT_M1_build": 270,
+    "REPORT_M1_review_fail_fix_rereview": 480,
+    "REPORT_M2_build": 271,
+    "REPORT_M2_review_fail_fix_rereview": 701,
+    "parallel_overlap_note": "CORE and REPORT ran concurrently 01:54-02:10; CORE finished 02:07:33",
+    "total_first_loop_command_to_final_report": 3362
+  },
+  "tokens": {
+    "source": "result lines' usage, cross-checked with `LOOP cost`",
+    "by_phase": {
+      "planning (3 turns incl. 1 INVALID)": {"input": 254309, "cached": 4081811, "output": 115361, "cost_usd_claude_list": 5.17},
+      "CORE design reviews (codex x2)": {"input": 130628, "cached": 392704, "output": 5743},
+      "REPORT design reviews (claude x2)": {"input": 95134, "cached": 1559464, "output": 25863, "cost_usd_claude_list": 1.59},
+      "CORE M1 build (claude)": {"input": 59943, "cached": 915329, "output": 22500, "cost_usd_claude_list": 1.11},
+      "CORE M1 review (codex)": {"input": 65783, "cached": 320512, "output": 5480},
+      "REPORT M1 build (codex, 2 turns)": {"input": 175763, "cached": 2027008, "output": 26508},
+      "REPORT M1 reviews (claude x2)": {"input": 125066, "cached": 1372932, "output": 29858, "cost_usd_claude_list": 1.87},
+      "REPORT M2 build (claude, 2 turns)": {"input": 116733, "cached": 3250659, "output": 40638, "cost_usd_claude_list": 2.40},
+      "REPORT M2 reviews (codex x2)": {"input": 232402, "cached": 2030976, "output": 18616}
+    },
+    "total_per_LOOP_cost": {"turns": 17, "input": "1.3M", "cached": "16.0M", "output": "291k", "cost_usd_claude_list_only": 12.15},
+    "codex_quota": "54% used at start, 55% at end; verdict 'Quota lasts'; no warn",
+    "review_share_note": "milestone reviews + design reviews ~ 0.79M input of 1.3M; review was the larger half of non-planning spend"
+  },
+  "owner_decisions": [
+    {"id": "D1", "when": "01:45Z", "decision": "Gave the planner the owner's verbatim ask plus answers on hosts (Claude+Codex builders, Review host: other), Integrate: local (no remote) and 'any stdlib-fitting Check'", "where_unattended_would_stop": "ready's next asks the lead to include the owner's answers on hosts, integration and checks"},
+    {"id": "D2", "when": "01:54Z", "decision": "Accepted all 8 planner assumptions (journal syntax, amount formats, multi-currency blank inference, -f/LEDGER_FILE, balance/register semantics, display) and later the REPORT revision's (setuptools as build backend, head exit 0, 80-col register)", "where_unattended_would_stop": "planner's 'Decisions for you' list; overturning is on Owner decides"},
+    {"id": "D3", "when": "02:07Z", "decision": "Committed the rejected REPORT revision planner's acceptance/test_cli.py, acceptance/test_install.py and ORCHESTRATE.md edge-list line verbatim (hashes verified against REPORT-DONE.json pins) and landed with `LOOP land` after `adopt` landed only the plan files", "where_unattended_would_stop": "plan returned INVALID with no next (suite bug: concurrent claim changed ACCEPTED records); adopt REFUSED non-plan files: 'commit and integrate it another way'"}
+  ],
+  "owner_commands_needed": [],
+  "lead_choices": [
+    "CORE on claude, REPORT on codex for the parallel phase; REPORT M2 on claude (first-listed host) once both builders idle",
+    "Relayed the CORE revision planner's cross-module note (REPORT has same Decimal rounding risk) into the REPORT revision task"
+  ],
+  "verdict": {
+    "meets_ask": true,
+    "verified_by_me": [
+      "ledgerlite.core.load on a multi-currency journal with blank postings, symbol currency and slash dates: inferred one posting per currency, precision map {USD:2, €:0}",
+      "unbalanced txn refused: `<file>:1: transaction 'Bad' doesn't balance: its postings sum to 1 USD…`, CLI exit 1, empty stdout",
+      "29-digit cancellation journal refused (exactness holds)",
+      "`balance`: tree indented 2 spaces per level by last segment, parents rolled up, multi-currency stacked, separator + zero grand total",
+      "`register assets:bank` (case-insensitive, segment match): out-of-order input sorted by date, running total",
+      "`--json` on both commands parses with json.tool; amounts are strings at journal precision; balance JSON has depth and per-currency totals",
+      "`-f -` stdin, LEDGER_FILE, missing file (one line, exit 1), bad subcommand (exit 2), Latin-1 file (one line 'not valid UTF-8', exit 1), `| head -1` no traceback, unknown account exit 0 empty",
+      "imports in ledgerlite/*.py are stdlib only; core.py and report.py/cli.py are separate modules",
+      "63 tests pass at tip (unittest discover tests + acceptance.*); `pip install --no-build-isolation .` into a python3.11 venv gives a working `ledgerlite` console script"
+    ],
+    "suspected_not_verified": [
+      "80-column fitting for wide/tab/huge inputs: taken from the M2 re-review, not checked by me",
+      "the planner's acceptance tests may encode assumptions (e.g. refusing a blank posting with nothing to balance, unlike hledger) that the real owner would overturn"
+    ]
+  }
+}

@@ -1,0 +1,400 @@
+{
+  "module": "PROPS",
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Pipeline, atlas and the style trio: crate, barrel and bollard, built from source, in budget, and hand-made",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Crate, barrel and bollard as chunky, slightly wonky and softly coloured as the crates and dock furniture in A Short Hike; nothing that would pass for a Kenney or Synty asset-store kit; an atlas that reads as a small hand-picked warm palette, not a texture sheet",
+      "items": [
+        {
+          "id": "M1.1",
+          "statement": "From a clean clone, tools/build_props.sh regenerates the atlas and the crate, barrel and bollard .glb files from their sources, and regenerating twice gives the same geometry (vertex positions within 1e-4 m) and the same atlas pixels",
+          "check": "tools/build_props.sh --verify-reproducible crate barrel bollard",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.2",
+          "statement": "Each of crate, barrel and bollard imports cleanly and has at most 1,500 triangles at LOD 0, every surface uses only prop_opaque, prop_cutout or prop_glow, the only texture any of them samples is the 512 x 512 props_atlas.png, and every UV lies in [0,1]",
+          "check": "tools/check.sh crate barrel bollard",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.3",
+          "statement": "Each prop meets the contract: scene path and root name, +Y up and front to -Z, origin at the ground contact centre, bounding box within 15% of the design's size table, and a StaticBody3D with one to four primitive shapes on layer 1; the check fails if any of these is broken (it has been seen to fail on a deliberately broken copy)",
+          "check": "tools/check.sh --contract crate barrel bollard",
+          "ask": "Does the contract check really test each rule in the design's contract section, and does it fail when one is broken, rather than only reporting values?",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.4",
+          "statement": "Every prop's geometry comes from its Blender script with a fixed seed; nothing in assets/props is hand-edited, and the irregularity is whole-part jitter (planks, staves, leans) rather than per-vertex noise",
+          "ask": "Reading the prop scripts and the build script, is there any mesh, .glb or atlas pixel that does not come from source, and is the irregularity applied to whole parts as the design says?",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.5",
+          "statement": "The atlas is laid out for the whole set: 16 to 24 soft-gradient swatches with gutters of at least 8 px, detail tiles for net weave (with alpha), crate stencil, rope wrap and lantern glass, and labelled reserved regions for every prop in the size table",
+          "inspect": "the atlas whole, then each swatch row and each detail tile cropped at full resolution, beside the layout file's labels",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.6",
+          "statement": "The crate reads as a hand-made slatted crate: chunky chamfered slats of slightly different widths, a little out of line, rope handles, flat top and bottom so crates stack",
+          "inspect": "crate: 8-angle turntable, top and underside at 1.5 m and 10 m, under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.7",
+          "statement": "The barrel reads as a hand-made barrel: visible staves, a belly bulge, chunky iron hoops, smooth shading on the round body only, and a closed lid and base",
+          "inspect": "barrel: 8-angle turntable, top and underside at 1.5 m and 10 m, under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.8",
+          "statement": "The bollard reads as a painted cast-iron mooring bollard: a mushroom head with a lip, paint worn at the top, slightly uneven casting",
+          "inspect": "bollard: 8-angle turntable, top and underside at 1.5 m and 10 m, under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.9",
+          "statement": "Side by side the three look like one hand-made set from one palette, and at 25 m each keeps its silhouette and colour with no swatch bleeding or shimmering",
+          "inspect": "the three props together at 10 m and 25 m under day and dusk, with 25 m crops at full resolution",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.10",
+          "statement": "The owner agrees the art direction is right before the remaining nine props are built in it",
+          "inspect": "the M1 style sheet: the three props together at 1.5 m and 10 m, day and dusk, and the atlas",
+          "attended": "the owner looks at docs/evidence/props/M1/style-sheet.png and says yes, or what to change",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "The lantern swings, glows and creaks in a seamless loop that stays in step with its swing",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "A lantern as warm and simple as the lamps on A Short Hike's docks; a swing as unhurried as a real lantern in a light breeze; a creak as soft and woody as a ship's timbers in a nature recording, never a squeal and never an audible restart",
+      "items": [
+        {
+          "id": "M2.1",
+          "statement": "The lantern meets the budget, atlas, material and contract rules, including the swing_degrees export",
+          "check": "tools/check.sh lantern && tools/check.sh --contract lantern",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.2",
+          "statement": "The creak loop is a 16-bit mono WAV imported with forward looping, exactly N swing periods long (N from 2 to 4, to the sample), peaks no higher than -1 dBFS, and has no seam: the sample step across the loop point is no larger than the largest step inside the loop, and the RMS of the first and last 50 ms differ by under 1.5 dB",
+          "check": "python3 tools/audio/check_loop.py assets/props/lantern/creak_loop.wav",
+          "target": "audio",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.3",
+          "statement": "Over 120 s of running, every extreme of the lantern's swing falls within 30 ms of a creak onset from the synthesis script's onset file, with no drift from the first period to the last",
+          "check": "tools/check.sh --test lantern_sync",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.4",
+          "statement": "The swing angle is computed from the audio player's playback position, the playback position was confirmed to advance in the mode the sync test runs in, and the 3D sound fades out by about 20 m",
+          "ask": "In the lantern script and the sync test, is the swing derived from playback position rather than its own clock, does the test run in a mode where that position really advances, and what are the player's unit size and maximum distance?",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.5",
+          "statement": "The lantern and bracket post read as hand-made and in the set's style, with the underside of the lantern modelled",
+          "inspect": "lantern: 8-angle turntable, top and underside at 1.5 m and 10 m, under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.6",
+          "statement": "At dusk and night the glass glows warmly and lights the post and ground around it softly, without blowing out to white",
+          "inspect": "lantern at 1.5 m and 10 m under dusk and night",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.7",
+          "statement": "The swing looks like a weighted pendulum: easing out at each end, about swing_degrees each way, pivoting at the hook, never snapping at the loop point",
+          "inspect": "a side-on frame sequence at 10 fps across two full periods, including the loop point",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.8",
+          "statement": "The creak has the shape of stick-slip friction: creaks at each end of every swing, consecutive creaks differ, energy sits in a woody low-mid band rather than a high squeal, and nothing marks the loop point",
+          "inspect": "the waveform and spectrogram of two loop repeats joined, with the onset times and loop point marked",
+          "target": "audio",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.9",
+          "statement": "The owner hears a soft wooden creak, not grating, with no audible restart, after a minute of listening",
+          "inspect": "the lantern running in the gallery scene for one minute",
+          "attended": "the owner runs the lantern gallery scene with sound on for a minute and says whether the creak is right",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M3",
+      "name": "The dock crane and the fishing net hold up from every angle within budget",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "A crane as sturdy and simple as the timber structures on A Short Hike's docks; a net that reads as a net at a glance like the nets in Sea of Thieves' harbours, but drawn in this set's flat palette",
+      "items": [
+        {
+          "id": "M3.1",
+          "statement": "dock_crane and fishing_net meet the budget, atlas, material and contract rules; the crane has a Jib node that turns about Y",
+          "check": "tools/check.sh dock_crane fishing_net && tools/check.sh --contract dock_crane fishing_net",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.2",
+          "statement": "The crane reads as a hand-made wooden jib crane: braced post on a base that sits on a dock, a jib with rope running to a hook, chunky joints, with the jib's underside modelled",
+          "inspect": "dock_crane: 8-angle turntable, top and underside at 1.5 m, 10 m and 25 m, under day and dusk, and the jib turned to 0, 90 and 180 degrees",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M3.3",
+          "statement": "The net drapes naturally over its rail with a few floats, its weave reads as net at 1.5 m and 10 m from both sides, and at 25 m it neither vanishes nor shimmers into moire",
+          "inspect": "fishing_net: 8-angle turntable at 1.5 m, 10 m and 25 m under day and dusk, with full-resolution crops of the weave at each distance",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M3.4",
+          "statement": "The net uses prop_cutout with alpha scissor and no back-face culling, and shows no sorting artefacts in front of other props",
+          "inspect": "the net in front of the crane and a crate at 1.5 m and 10 m, from front and back",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M4",
+      "name": "The six small props: lobster pot, rope coil, mooring piling, buoy, fish basket and anchor",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Each as readable and hand-made as the small props in A Short Hike, and indistinguishable in style from the M1 trio",
+      "items": [
+        {
+          "id": "M4.1",
+          "statement": "All six meet the budget, atlas, material and contract rules and regenerate reproducibly from source",
+          "check": "tools/build_props.sh --verify-reproducible lobster_pot rope_coil mooring_piling buoy fish_basket anchor && tools/check.sh lobster_pot rope_coil mooring_piling buoy fish_basket anchor && tools/check.sh --contract lobster_pot rope_coil mooring_piling buoy fish_basket anchor",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M4.2",
+          "statement": "The lobster pot reads as a slatted trap with netting, the netting reusing the net weave tile through prop_cutout",
+          "inspect": "lobster_pot: 8-angle turntable, top and underside at 1.5 m and 10 m, under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.3",
+          "statement": "The rope coil is an uneven coil with a loose end, not a perfect torus stack",
+          "inspect": "rope_coil: 8-angle turntable and top at 1.5 m and 10 m, under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.4",
+          "statement": "The mooring piling reads as weathered timber with a rope wrap and a waterline stain on its lower third",
+          "inspect": "mooring_piling: 8-angle turntable and top at 1.5 m and 10 m, under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.5",
+          "statement": "The buoy reads as a painted float with two colour bands and a rope eye",
+          "inspect": "buoy: 8-angle turntable, top and underside at 1.5 m and 10 m, under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.6",
+          "statement": "The fish basket reads as wicker holding a few distinct fish, not a heap of noise",
+          "inspect": "fish_basket: 8-angle turntable and top at 1.5 m and 10 m, under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.7",
+          "statement": "The anchor reads as an old iron anchor leaning on its stock, with chunky flukes",
+          "inspect": "anchor: 8-angle turntable, top and underside at 1.5 m and 10 m, under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.8",
+          "statement": "The six sit in one style with the M1 trio: same palette, chamfers, chunkiness and kind of irregularity, and none reads at 25 m as a different kit",
+          "inspect": "all nine props built so far together at 10 m and 25 m under day and dusk",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M5",
+      "name": "The full set works as one harbour, documented and with its costs on record",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "A small harbour corner as cohesive and lived-in as A Short Hike's fishing docks, where no prop looks borrowed from another game",
+      "items": [
+        {
+          "id": "M5.1",
+          "statement": "The whole set regenerates reproducibly from a clean clone and every prop passes the budget, atlas, material and contract rules",
+          "check": "tools/build_props.sh --verify-reproducible && tools/check.sh && tools/check.sh --contract",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M5.2",
+          "statement": "res://assets/props/showcase/harbour_showcase.tscn places all twelve as a small harbour corner, and records its draw calls, triangle total and video memory under the day rig to docs/evidence/props/M5/baseline.json as a baseline, not a target",
+          "check": "tools/check.sh --test showcase_baseline",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M5.3",
+          "statement": "In the showcase, the set reads as one hand-made harbour from the boat's distance and from across the water, at day and dusk, with the lantern lit",
+          "inspect": "the showcase from four boat-height views at 10 m and two at 25 m, under day and dusk, plus one mast-height view looking down",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M5.4",
+          "statement": "The final atlas has every region used as laid out, no leftover reserved blocks, and no prop sampling outside its own regions and the shared swatches",
+          "inspect": "the final atlas whole and cropped at full resolution, with each prop's UVs overlaid in turn",
+          "target": "godot-render",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M5.5",
+          "statement": "assets/props/README.md lists every prop with its id, scene path, size, triangle count and placement notes, and the numbers match what the check reports",
+          "ask": "Does every row of assets/props/README.md match the check's output and the design's contract, and could a level builder place the crane, lantern and net correctly from it alone?",
+          "target": "pipeline",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    }
+  ]
+}

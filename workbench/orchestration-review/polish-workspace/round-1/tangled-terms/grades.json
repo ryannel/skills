@@ -1,0 +1,126 @@
+{
+  "without_skill": [
+    {
+      "check": "01-glossary-exists.md",
+      "passed": false,
+      "evidence": "A/work root holds only data/, docs/ and src/. The glossary was written to docs/glossary.md (git-changes.txt: '?? docs/glossary.md'), so there is no GLOSSARY.md at the repository root.",
+      "unclear": false
+    },
+    {
+      "check": "02-owners-words-kept.md",
+      "passed": false,
+      "evidence": "docs/glossary.md has entries 'locker' and 'bank', but the courier step is named 'drop' (line 36), not Drop-off, and there is no Pickup entry: the customer step is 'collected' (line 38) and the only use of the word is 'pickup code' (line 45). Two of the four named entries are missing.",
+      "unclear": false
+    },
+    {
+      "check": "03-owners-words-asked-for.md",
+      "passed": false,
+      "evidence": "docs/glossary.md has an 'overdue' entry (line 39) but the in-locker status is named 'waiting' (line 37), not Waiting for Pickup. The check needs both entries; only one is present. The agent never asked the owner what they call either thing.",
+      "unclear": false
+    },
+    {
+      "check": "04-made-up-names-replaced.md",
+      "passed": true,
+      "evidence": "In docs/glossary.md 'hopper' appears only in the Retired words table (line 60, 'unit, hopper, door ... | locker'); 'claimed' appears only as the stored value for 'waiting' (lines 37, 51) and as a retired word (lines 62-63); 'stale' appears only as the stored value for 'overdue' (lines 39, 52) and as a retired word (line 64). The entries are locker, bank, drop, waiting, collected, overdue and pickup code; none of the three is an entry name.",
+      "unclear": false
+    },
+    {
+      "check": "05-stored-as-recorded.md",
+      "passed": true,
+      "evidence": "docs/glossary.md line 37: '| **waiting** | The parcel is in a locker and the customer has not taken it yet. | `claimed` |' under the column 'Value stored in the code and data'; line 51 repeats it: '`claimed` in the code means **waiting**'.",
+      "unclear": false
+    },
+    {
+      "check": "06-code-not-renamed.md",
+      "passed": true,
+      "evidence": "git-changes.txt lists only ' M docs/overview.md' and '?? docs/glossary.md'. diff -r of files-at-the-start/src and files-at-the-start/data against A/work/src and A/work/data shows no differences.",
+      "unclear": false
+    },
+    {
+      "check": "07-shown-in-steps.md",
+      "passed": false,
+      "evidence": "No chat message walks a parcel through as numbered steps. The second message shows the lifecycle as an arrow diagram ('drop --> waiting --> collected') plus a sentence, and the only numbered list in the transcript is the four questions in the first message. The numbered steps exist only in docs/overview.md, which the agent describes ('I rewrote `docs/overview.md` as three short steps') without showing them to the owner.",
+      "unclear": false
+    },
+    {
+      "check": "08-names-in-chat.md",
+      "passed": true,
+      "evidence": "The first message gives the suggested terms in a table in chat ('**locker**', '**bank**', '**drop**', '**waiting**', '**collected**', '**stale**', '**pickup code**'), and the second gives the revised set in chat ('\"stale\" is now **overdue**', plus both diagrams). The agent mentions the glossary file but never asks the owner to open it.",
+      "unclear": false
+    },
+    {
+      "check": "09-nothing-but-names.md",
+      "passed": true,
+      "evidence": "docs/glossary.md holds term definitions, two diagrams of how the terms relate, a stored-value mapping and a retired-words table. It has no future plans and no account of code logic. The closest line is 'The code and stored data have not been renamed, so two of their state values differ from the docs' (line 49), which I read as the context for the stored names rather than a decision record or a description of how the code works. This was the nearest call of the ten; B's glossary carries an equivalent sentence and was graded the same way.",
+      "unclear": false
+    },
+    {
+      "check": "10-docs-use-the-names.md",
+      "passed": true,
+      "evidence": "Case-insensitive search of A/work/docs/overview.md for hopper, claimed and stale finds nothing. The rewritten page uses locker, waiting, collected and overdue, and the owner approved ('That makes sense now, and \"overdue\" works for me. Looks good.').",
+      "unclear": false
+    }
+  ],
+  "with_skill": [
+    {
+      "check": "01-glossary-exists.md",
+      "passed": true,
+      "evidence": "B/work/GLOSSARY.md exists at the root of the working folder (git-changes.txt: '?? GLOSSARY.md').",
+      "unclear": false
+    },
+    {
+      "check": "02-owners-words-kept.md",
+      "passed": false,
+      "evidence": "GLOSSARY.md has entries **Locker** (line 20), **Bank** (line 26) and **Drop-off** (line 37), but no Pickup entry. The customer taking the parcel is named **Collected** (line 50) and the word 'pickup' appears nowhere in the file. The agent told the owner it 'assumed ... \"Collected\" and \"Drop-off\" are undisputed' instead of asking what the owner calls them.",
+      "unclear": false
+    },
+    {
+      "check": "03-owners-words-asked-for.md",
+      "passed": false,
+      "evidence": "GLOSSARY.md names the two statuses **Awaiting Collection** (line 43) and **Stale** (line 54). There is no Waiting for Pickup entry and no Overdue entry; the agent never asked the owner what they call either thing.",
+      "unclear": false
+    },
+    {
+      "check": "04-made-up-names-replaced.md",
+      "passed": false,
+      "evidence": "'hopper' appears only under Avoid (line 23) and 'claimed' only under Avoid and Stored as (lines 46-48), but **Stale** is the name of an entry (GLOSSARY.md line 54: '**Stale** / The parcel was not collected within 72 hours of drop-off.').",
+      "unclear": false
+    },
+    {
+      "check": "05-stored-as-recorded.md",
+      "passed": true,
+      "evidence": "GLOSSARY.md, entry **Awaiting Collection**, line 48: 'Stored as: `claimed`, in the `state` field of `data/parcels.json` and in `STATES` in `src/parcel.py`'.",
+      "unclear": false
+    },
+    {
+      "check": "06-code-not-renamed.md",
+      "passed": false,
+      "evidence": "git-changes.txt shows ' M src/parcel.py': the docstring was changed from 'Courier drop: put the parcel in the hopper (the locker) and mark it claimed.' to 'Drop-off: put the parcel in the locker and mark it Awaiting Collection (stored as \"claimed\").' No identifier or stored value was renamed and data/parcels.json is identical to the start, but the check says no file under src/ has been changed, and one has.",
+      "unclear": false
+    },
+    {
+      "check": "07-shown-in-steps.md",
+      "passed": true,
+      "evidence": "First agent message, under 'How it would read with those names', gives five numbered steps: '1. The **Courier** scans in at the **Bank** and puts the **Parcel** in a free **Locker**. This is a **Drop-off**.' ... '4. The customer enters the code, the locker opens and they take the parcel. The parcel is now **Collected**.' The bolded names are the ones the glossary ends up with (Courier, Customer, Parcel, Locker, Bank, Drop-off, Awaiting Collection, Collected, Stale); only the code was still 'name to be agreed' at that point.",
+      "unclear": false
+    },
+    {
+      "check": "08-names-in-chat.md",
+      "passed": true,
+      "evidence": "The recommended names are given in chat in the first message ('I recommend **Locker**', '**Bank**', '**Awaiting Collection**'), and the second message lists all ten entries in chat ('Courier, Customer, Parcel, Locker, Bank, Collection Code, Drop-off, Awaiting Collection, Collected and Stale'). The owner is never asked to open a file.",
+      "unclear": false
+    },
+    {
+      "check": "09-nothing-but-names.md",
+      "passed": true,
+      "evidence": "GLOSSARY.md holds a three-sentence note on how to read it and then entries made of a definition plus Not / Avoid / Stored as lines. It has no plans and no account of code logic. The closest lines are 'Code and saved data keep the names they already have' (line 3-4) and the explanation of why 'claimed' is avoided (lines 46-47), which I read as stored-name context and usage guidance rather than a decision record. Same borderline as A's glossary, graded the same way.",
+      "unclear": false
+    },
+    {
+      "check": "10-docs-use-the-names.md",
+      "passed": false,
+      "evidence": "docs/overview.md line 12: '5. A parcel not collected within 72 hours of drop-off becomes Stale, and the bank flags it.' That uses 'stale' as the working name of the status, not to give a stored name. ('hopper' is gone, and the one use of 'claimed', line 8 '(stored as `claimed`)', is a stored name.)",
+      "unclear": false
+    }
+  ]
+}

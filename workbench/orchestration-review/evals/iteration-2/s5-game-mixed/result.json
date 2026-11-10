@@ -1,0 +1,56 @@
+{
+  "scenario": "s5-game-mixed",
+  "outcome": "stopped at M1: BLOCKED on (a) Codex workspace-write sandbox preventing any browser launch for the builder, (b) attended owner direction pick M1.6 needing `owner answer`. M2, M3 never started.",
+  "hosts": {"lead": "claude-code (opus 5.5)", "planner": "codex gpt-6.1-sol high", "builder": "codex gpt-6.1-sol medium x1", "reviewers": "claude claude-opus-5-5 medium", "path": "headless (ORCHESTRATE_HEADLESS=1)"},
+  "milestones": {
+    "M1": {"accepted": false, "state": "blocked", "reviews": 0, "failed_reviews": 0, "items_passed": "1/6 (M1.4)", "builder_commit": "a9339b1"},
+    "M2": {"accepted": false, "state": "open", "reviews": 0, "failed_reviews": 0},
+    "M3": {"accepted": false, "state": "open", "reviews": 0, "failed_reviews": 0}
+  },
+  "design_reviews": [
+    {"round": 1, "verdict": "DESIGN CHANGES", "blocking": 1, "advisory": 8, "host": "claude"},
+    {"round": 2, "verdict": "DESIGN OK", "host": "claude"}
+  ],
+  "wall_clock_minutes": {
+    "setup_reading_docs": 5,
+    "plan": 5.6,
+    "design_review_1": 1.9,
+    "replan": 3.6,
+    "design_review_2": 1.0,
+    "build_M1_until_blocked": 7.4,
+    "lead_unblock_attempt_and_own_verification": 5,
+    "total_02:40_to_03:11": 31
+  },
+  "tokens": {
+    "plan_codex": {"input": 40675, "cached": 384128, "output": 12986},
+    "design_review_1_claude": {"input": 42217, "cached": 270684, "output": 11118, "cost_usd_list": 0.614},
+    "replan_codex": {"input": 56903, "cached": 411136, "output": 8634},
+    "design_review_2_claude": {"input": 28794, "cached": 262159, "output": 5419, "cost_usd_list": 0.391},
+    "build_M1_codex": {"input": 114550, "cached": 2384256, "output": 30752, "turns": 2},
+    "total_from_LOOP_cost": "6 turns, 283k in, 3.7M cached, 69k out; $1.01 list for the Claude part",
+    "codex_quota": "54% used at start, verdict: lasts; too little data to cost open milestones"
+  },
+  "owner_decisions": [
+    {"id": "D1", "time": "02:47", "decision": "Answered the planner's hosts/integration/checks questions: one Codex builder, Claude reviews, Integrate local onto main, no push, checks at planner's judgement.", "would_have_stopped_unattended": true},
+    {"id": "D2", "time": "03:07", "decision": "Change ORCHESTRATE.md `Codex sandbox` to danger-full-access so the builder can launch a browser.", "result": "not applied: refused by the lead's own permission classifier (unsafe agent); left for the real owner", "would_have_stopped_unattended": true},
+    {"id": "STOP", "time": "03:08", "owner_command_needed": "python3 <suite>/build/scripts/agent_loop.py owner answer --module LIGHTHOUSE --milestone M1 --item M1.6 --worktree <repo> --text \"<direction pick>\"", "note": "attended direction pick; not faked"}
+  ],
+  "lead_verdict": {
+    "meets_ask": false,
+    "why": "Only the M1 prototype exists: weighted beam, dwell-to-save with +100 and a SAFE ring, two directions, debug 30-boat stress scene. No 60-second rounds, results or restart (M2).",
+    "verified": [
+      "tools/check_lighthouse.py and node tools/test_lighthouse.mjs pass at tip f433e6d",
+      "headless Chrome via CDP (verify/play.mjs): loads from file URL, no console errors, no extra requests",
+      "beam visibly lags pointer and settles (caps 02-04)",
+      "holding beam on boats: score 0 -> 5 saved / 500 points with +100 SAFE rings",
+      "Keeper's chart direction is visibly different in kind",
+      "debug stress: 30 boats visible; its measure: p95 CPU 0.2 ms, p95 rAF 16.8 ms, min visible 30, DPR 1"
+    ],
+    "suspected_not_verified": [
+      "60fps holds headed at 60 Hz and DPR 2 (headless rAF is not vsync-paced; proxy only)",
+      "initial 5-boat fleet on one diagonal makes a single aim save all five: likely too easy",
+      "feel (weight, satisfaction) is the owner's call"
+    ],
+    "captures": "verify/caps/*.png, verify/caps/measure.json"
+  }
+}

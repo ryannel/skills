@@ -1,0 +1,64 @@
+{
+  "scenario": "s9-icons-chat",
+  "suite": "suite-v5",
+  "hosts": {"plan": "claude (loop planner sessions, claude-opus-5-5 high)", "build": "one claude builder (claude-opus-5-5 medium)", "review": "codex (gpt-6.1-sol medium)", "path": "headless (ORCHESTRATE_HEADLESS=1)", "integrate": "local, master, no remote"},
+  "outcome": "every planned milestone accepted by the loop; product checked by the lead and meets the ask (with the owner's fog->storm change)",
+  "milestones": {
+    "ICONS design": {"reviews": 3, "verdicts": ["DESIGN CHANGES (B1: Codex sandbox blocks Chrome and Inkscape for reviewers)", "DESIGN OK", "DESIGN OK (after the fog->storm re-plan)"]},
+    "ICONS M1": {"accepted": true, "accepted_by": "review", "reviews": 1, "failed_reviews": 0, "owner_stop": "attended M1.4 pick"},
+    "ICONS M2": {"accepted": true, "accepted_by": "review", "reviews": 1, "failed_reviews": 0}
+  },
+  "wall_clock_utc": {
+    "first_plan": "06:30:24-06:35:42 (5.3 min)",
+    "design_review_1_codex": "06:36:29-06:38:40 (2.2 min, DESIGN CHANGES)",
+    "owner_question_on_B1_and_classifier_refusal": "06:38:40-06:40:02 (1.4 min)",
+    "design_revision_plan": "06:40:02-07:12:28 (32.4 min)",
+    "lead_idle_own_wait_bug": "07:12:28-07:24:20 (11.9 min, lead's error, not the suite's)",
+    "design_review_2_plus_M1_build_to_BLOCKED": "07:24:20-07:35:03 (10.7 min; review ~5 min, build ~6 min)",
+    "owner_pick_recorded": "07:35:32",
+    "M1_claim": "07:35:36-07:36:08 (0.5 min)",
+    "M1_review_codex": "07:36:19-07:40:53 (4.6 min, PASS)",
+    "scope_change_plan": "07:41:24-07:42:50 (1.4 min)",
+    "owner_scope_record": "07:43:12",
+    "design_review_3_plus_M2_build": "07:43:26-07:50:54 (7.5 min; review ~1.5 min, build ~6 min)",
+    "M2_review_codex": "07:51:07-07:55:06 (4.0 min, PASS)",
+    "total_first_command_to_M2_accepted": "84.7 min (72.8 min excluding the lead's own 11.9 min idle)",
+    "pick_to_M2_accepted": "19.6 min, including the owner's fog->storm change (comparison run: 17 min)"
+  },
+  "tokens_from_result_lines": {
+    "plan_1_claude": {"input": 75185, "cached": 707979, "output": 30478, "cost_usd": 1.376},
+    "design_review_1_codex": {"input": 90907, "cached": 269312, "output": 3670},
+    "plan_2_revision_claude": {"input": 112347, "cached": 2816506, "output": 40153, "cost_usd": 4.486},
+    "design_review_2_codex": {"input": 101409, "cached": 600576, "output": 4615},
+    "M1_build_claude_running_total_2_turns": {"input": 100444, "cached": 2693001, "output": 36270, "cost_usd": 2.327},
+    "M1_review_codex": {"input": 97961, "cached": 985728, "output": 6943},
+    "plan_3_scope_claude": {"input": 39450, "cached": 463889, "output": 8005, "cost_usd": 0.580},
+    "design_review_3_codex": {"input": 36735, "cached": 216832, "output": 2543},
+    "M2_build_claude": {"input": 74190, "cached": 1296855, "output": 22515, "cost_usd": 1.928},
+    "M2_review_codex": {"input": 97917, "cached": 1270400, "output": 7582},
+    "loop_cost_total": "11 turns, 827k in, 11.3M cached, 163k out; $10.70 list for Claude turns only (planning $6.44, of which the design revision alone $4.49)"
+  },
+  "owner_decisions": [
+    {"when": "07:37 local, after first plan", "asked": "Codex reviewers can't start Chrome in the default sandbox, so they'd judge the builder's screenshots. Turn the sandbox off for them, or keep it?", "answer": "keep the sandbox on, the builder's screenshots are fine.", "recorded": "not recorded by the loop (no owner verb for profile settings); matched the planner's assumption"},
+    {"when": "07:39-07:40 local, design review B1", "asked": "Codex reviewer can't open Chrome or run Inkscape in its sandbox and won't judge builder screenshots: (a) let Codex reviewers run outside the sandbox (danger-full-access) or (b) reviews on Claude?", "answer_first": "go with a, let the codex reviewers run outside the sandbox for this project.", "note": "the session's permission classifier refused passing that answer to the planner (disabling a real sandbox); stand-in owner withdrew it", "answer": "keep the sandbox on. reviewers can ask to run chrome and inkscape outside it when they need to, like the docs say. if that doesn't work, move the reviews to claude.", "recorded": "in the planner's --task and quoted in ICONS-PLAN.md log; not in the loop's owner-decision list"},
+    {"when": "07:35 local, M1.4 attended pick", "answer": "single pass. it's the clearest at 24px and looks most like my notebook. maybe let the lines break a little where they cross, like the lifted pen, but keep it light.", "recorded": "owner answer --item M1.4; listed by report verbatim"},
+    {"when": "07:41 local, after M1 accepted (change of mind)", "answer": "actually drop fog, we don't show it in the app. add a storm icon instead.", "recorded": "sent to planner in --task (planner landed it), then owner scope --milestone M2 with no edit to record the words; listed by report verbatim"},
+    {"when": "07:43 local, planner's storm assumptions", "asked": "Storm will be a cloud with a single lightning bolt, no rain under it. OK?", "answer": "yes, cloud and lightning is right.", "recorded": "not recorded (matches the plan's Assumption lines)"}
+  ],
+  "report_check": "LOOP report lists both loop-recorded owner decisions (M1.4 answer, M2 scope) in the exact words given. The sandbox decision is not in that list (only in the plan log); I added it to the lead's half of the build report.",
+  "lead_verdict": {
+    "meets_ask": true,
+    "verified": [
+      "icons/ holds exactly sun, cloud, rain, storm, wind, high-tide, low-tide, moon (fog gone, storm present) on master 19cf583",
+      "sizes 322-675 bytes (wc -c), all under 1500",
+      "all 8 have viewBox=\"0 0 24 24\", fill=\"none\" stroke=\"currentColor\" on the root, path elements only",
+      "python3 tools/check_icons.py lint / set / preview all print ok on master",
+      "rendered preview.html myself with headless Chrome at device scale 1 and 2 (mycaps/preview-s1.png, preview-s2.png): all eight labelled at 24 and 48 px on a light and a dark panel at once, icons take each panel's text colour, plus an enlarged row",
+      "looked at the 24 px row at scale 2: every icon recognisable; rain vs storm and high vs low tide distinguishable"
+    ],
+    "judgement_not_verified": [
+      "the hand-inked look is clear when enlarged (wobbly single-pass lines, overshoots) but subtle at 24 px, where the icons read close to a clean line set; a picky owner might want more wobble",
+      "the owner's 'maybe let the lines break a little where they cross' shows up only faintly (reviewer cites small breaks at the tide post and storm bolt); I didn't confirm it beyond the enlarged view"
+    ]
+  }
+}

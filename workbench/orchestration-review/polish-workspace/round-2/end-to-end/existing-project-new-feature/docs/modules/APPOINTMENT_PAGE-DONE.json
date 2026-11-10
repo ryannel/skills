@@ -1,0 +1,116 @@
+{
+  "module": "APPOINTMENT_PAGE",
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Three looks for the appointment page, for the owner to choose from",
+      "state": "blocked",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Each option is readable and tappable at 375 px and different in kind from the others, not in colour alone",
+      "items": [
+        {
+          "id": "M1.1",
+          "statement": "Three options, different in kind, for the screen that shows the appointment and offers new times, each with the same sample appointment at 375 px wide",
+          "check": "test -s docs/evidence/APPOINTMENT_PAGE/options.png",
+          "inspect": "each option at 375 px, and enlarged, in docs/evidence/APPOINTMENT_PAGE/options.png, laid side by side as one image",
+          "target": "web-mobile",
+          "status": "pass",
+          "evidence": "docs/evidence/APPOINTMENT_PAGE/options.png (sheet: 375 px and 2x), options.md (inspection), options/*.png at 375 px via options/capture.mjs",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.2",
+          "statement": "The owner has chosen one option, or a mix of them",
+          "ask": "Has the owner's choice of option been recorded with owner answer, and which option, or mix, is it?",
+          "attended": "the owner looks at the options sheet and says which one to build; the lead records it with owner answer",
+          "target": "web-mobile",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ],
+      "blocked": "attended items need a person or hardware: M1.2. M1.2 needs the owner. They look at `docs/evidence/APPOINTMENT_PAGE/options.png` and choose A, B, C or a mix, and the lead records it with `owner answer`. After that, M1.2 can be marked passed and M1 claimed for review."
+    },
+    {
+      "id": "M2",
+      "name": "A customer moves their appointment from the email link on a phone",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "needs": [
+        "BOOKINGS:M2"
+      ],
+      "bar": "In the owner's chosen look, as plain and quick on a phone as moving a booking from a Fresha or Treatwell confirmation email, one decision per screen",
+      "items": [
+        {
+          "id": "M2.1",
+          "statement": "Through the page alone, with no JavaScript, a customer with a private link sees their appointment, chooses a free time with the same stylist, confirms, and sees the new time; choosing another stylist works the same way",
+          "check": "node --test test/appointment-page/journey.test.js",
+          "target": "proxy:web-mobile, over HTTP from node:test with no browser",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.2",
+          "statement": "Inside the cut-off, the page shows the appointment and the salon's phone number and offers no move; an unknown link shows no appointment details; a time taken while choosing changes nothing and shows fresh times",
+          "check": "node --test test/appointment-page/refusals.test.js",
+          "target": "proxy:web-mobile, over HTTP from node:test with no browser",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.3",
+          "statement": "Opening any page never changes anything, and the pages behind the link send no-store, no-referrer and noindex",
+          "check": "node --test test/appointment-page/link-safety.test.js",
+          "target": "proxy:web-mobile, over HTTP from node:test with no browser",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.4",
+          "statement": "The page uses only the BOOKINGS interface, and its tests drive the real thing",
+          "ask": "Does the page read or change appointments only through findByLink, freeTimesByLink and moveByLink, and do the M2 tests run against the real BOOKINGS store rather than a stand-in?",
+          "target": "proxy:web-mobile, over HTTP from node:test with no browser",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.5",
+          "statement": "Every state reads clearly and is easy to tap at phone size, in the chosen look",
+          "inspect": "started with npm run demo from a clean clone, at 375 x 812: the appointment, choosing a time, choosing another stylist, confirming, moved, time just taken, no free times, inside the cut-off, cancelled, unknown link; compared with the chosen option",
+          "target": "web-mobile",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.6",
+          "statement": "The same stylist is what a customer gets unless they deliberately pick another",
+          "inspect": "the choose-a-time screen and the confirm screen at 375 px: whether the current stylist is the default, and whether changing stylist needs a deliberate step and is shown on the confirm screen",
+          "target": "web-mobile",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.7",
+          "statement": "The owner finds it easy enough that customers would use it instead of phoning",
+          "ask": "Has the owner said, in an answer recorded with owner answer, that the page is easy enough for customers to use instead of phoning?",
+          "attended": "the owner opens a demo link on their own phone, moves the appointment, and says whether it is easy enough",
+          "target": "web-mobile",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    }
+  ]
+}

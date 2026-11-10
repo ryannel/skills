@@ -1,0 +1,177 @@
+{
+  "module": "BOOKINGS",
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Appointments are recorded, free times are right, and no stylist can be double-booked",
+      "state": "done",
+      "fails": 0,
+      "replans": 0,
+      "bar": "Free times as exact as a booking service's calendar, including on the day the clocks change",
+      "items": [
+        {
+          "id": "M1.1",
+          "statement": "A stylist's free times match the configured grid minus that stylist's confirmed appointments, strictly after now through the inclusive elapsed-week horizon, with the design's explicit DST gap, repeated-time and closing rules; expected instant lists cover both clock changes and boundary cases, and editing config/salon.json changes the times",
+          "check": "node --test test/bookings/free-times.test.js",
+          "target": "node",
+          "status": "pass",
+          "evidence": "docs/evidence/BOOKINGS/M1-check.json; docs/evidence/BOOKINGS/M1-assessment.md#m11",
+          "verdict": "pass",
+          "review": "docs/evidence/BOOKINGS/M1-review.md"
+        },
+        {
+          "id": "M1.2",
+          "statement": "Simultaneous recording attempts from separate processes leave exactly one confirmed appointment per stylist and start instant and refuse the rest as taken, including equivalent ISO inputs with different offsets or fractional-second formatting",
+          "check": "node --test test/bookings/no-double-booking.test.js",
+          "target": "node",
+          "status": "pass",
+          "evidence": "docs/evidence/BOOKINGS/M1-check.json; docs/evidence/BOOKINGS/M1-assessment.md#m12",
+          "verdict": "pass",
+          "review": "docs/evidence/BOOKINGS/M1-review.md"
+        },
+        {
+          "id": "M1.3",
+          "statement": "Recording issues a token with at least 128 random bits, stores its SHA-256 lookup hash and queues an encrypted confirmation containing time, stylist and working link; persisted booking and pending outbox data expose no usable token, plaintext link or key; the original external key recovers the confirmation after restart and unknown tokens find nothing",
+          "check": "node --test test/bookings/link-and-confirmation.test.js",
+          "target": "node",
+          "status": "pass",
+          "evidence": "docs/evidence/BOOKINGS/M1-check.json; docs/evidence/BOOKINGS/M1-assessment.md#m13-code-question",
+          "ask": "Do the implementation and tests establish that the booking, outbox and database journal or WAL contain only the lookup hash or encrypted payload, with fresh AES-256-GCM nonces and the key held outside the database? Do they verify restart decryption with the original key, initialization failure for a missing or malformed key, and authentication failure with a wrong key or altered ciphertext?",
+          "verdict": "pass",
+          "review": "docs/evidence/BOOKINGS/M1-review.md"
+        },
+        {
+          "id": "M1.4",
+          "statement": "createBooking keeps its signature and returns the same object as before",
+          "check": "node --input-type=module -e \"import {createBooking} from './src/booking.js'; import assert from 'node:assert/strict'; assert.deepEqual(createBooking('Ana','Sam','2026-12-01T10:00:00+01:00'), {customer:'Ana',stylist:'Sam',slot:'2026-12-01T10:00:00+01:00',status:'confirmed'})\"",
+          "target": "node",
+          "status": "pass",
+          "evidence": "docs/evidence/BOOKINGS/M1-check.json; docs/evidence/BOOKINGS/M1-assessment.md#m14",
+          "verdict": "pass",
+          "review": "docs/evidence/BOOKINGS/M1-review.md"
+        },
+        {
+          "id": "M1.5",
+          "statement": "No customer-facing text says reservation",
+          "check": "! grep -rqis reservation src config",
+          "target": "node",
+          "status": "pass",
+          "evidence": "docs/evidence/BOOKINGS/M1-check.json; docs/evidence/BOOKINGS/M1-assessment.md#m15",
+          "verdict": "pass",
+          "review": "docs/evidence/BOOKINGS/M1-review.md"
+        },
+        {
+          "id": "M1.6",
+          "statement": "The store itself refuses a second confirmed appointment for one stylist and slot",
+          "ask": "Does every recording or moving write normalize equivalent starts to integer epoch milliseconds and rely on the store's confirmed-only uniqueness rule in its transaction? Do the M1 tests use a real database file, separate processes for contention and a controlled clock, with independently expected instant lists for DST gaps, repeated times, closing and the elapsed-week horizon?",
+          "target": "node",
+          "status": "pass",
+          "evidence": "docs/evidence/BOOKINGS/M1-check.json; docs/evidence/BOOKINGS/M1-assessment.md#m16-code-question",
+          "verdict": "pass",
+          "review": "docs/evidence/BOOKINGS/M1-review.md"
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "A move by private link follows the owner's rules exactly, and tells the customer and the salon",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "bar": "As dependable as Fresha's self-service rescheduling: a move either happens completely, with its emails, or not at all; emails as clear as Fresha's booking-change emails",
+      "items": [
+        {
+          "id": "M2.1",
+          "statement": "A move is allowed at exactly 24 hours or more before the stored start and refused as inside_cutoff at less, measured in elapsed time, including across a daylight-saving change",
+          "check": "node --test test/bookings/move-cutoff.test.js",
+          "target": "node",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.2",
+          "statement": "A move with no stylist named keeps the stylist; a named stylist is used only if it is in the settings; a start that isn't free is refused as not_free or taken",
+          "check": "node --test test/bookings/move-rules.test.js",
+          "target": "node",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.3",
+          "statement": "After a move the old slot is free at once and the new one is held; simultaneous moves from separate processes into one slot leave exactly one appointment there, including equivalent ISO inputs with different offsets or fractional-second formatting",
+          "check": "node --test test/bookings/move-concurrency.test.js",
+          "target": "node",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.4",
+          "statement": "Each move adds a history entry: moved by the customer, from which start and stylist, to which, and when",
+          "check": "node --test test/bookings/move-history.test.js",
+          "target": "node",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.5",
+          "statement": "Each move queues the customer and salon emails in the same transaction as its appointment and history updates; an injected failure after the appointment update and before both emails are queued leaves all three unchanged after reopening; encrypted emails deliver with the original external key after restart, carrying the required details and the same working customer link",
+          "check": "node --test test/bookings/move-emails.test.js",
+          "target": "node",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.6",
+          "statement": "A refused move changes nothing",
+          "ask": "Can any refused move (unknown link, cancelled, inside the cut-off, taken, not free, unknown stylist) leave a change in the appointment, history or outbox? Do real-file M2 tests cover each refusal and an injected mid-transaction failure, reopen the store to establish rollback, and verify both decrypted email contents and the absence of plaintext tokens, links and keys in persisted pending and sent outbox data?",
+          "target": "node",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.7",
+          "statement": "No path changes the stylist unless the customer named a different one",
+          "ask": "Is there any code path, including a move that is retried or refused, in which an appointment's stylist changes without the customer naming a different stylist?",
+          "target": "node",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.8",
+          "statement": "The three emails read clearly and say appointment",
+          "inspect": "the confirmation, moved and salon-notice emails as the development sender writes them, for a move with the same stylist, a move to another stylist, a second move of one appointment, and long customer and stylist names",
+          "target": "outbox",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.9",
+          "statement": "The public exports fulfill the customer-page contract through recording, lookup, default and explicit-stylist time listing, moving and reusing the same link; lookup returns every documented field, unknown links return nothing, cancelled and inside-cut-off links give their reasons and empty listings, and linkUrl uses the configured public address",
+          "check": "node --test test/bookings/page-interface.test.js",
+          "ask": "Do these tests call the public exports against a real store and verify customer, stylist, start, status, eligibility reason and salon name and phone, nonempty selectable stylists and expected free times for default and explicit selections, updated details after moving through the same token, every documented unmovable state and linkUrl under a configured public address?",
+          "target": "node",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    }
+  ]
+}

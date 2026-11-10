@@ -1,0 +1,66 @@
+{
+  "without_skill": [
+    {
+      "check": "01-glossary-exists.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "A/work/GLOSSARY.md exists at the top of work/ (2841 bytes, starts '# Glossary')."
+    },
+    {
+      "check": "02-short.md",
+      "passed": false,
+      "unclear": false,
+      "evidence": "A/work/GLOSSARY.md has 16 defined entries: Plant, Name, Species, Room, Watering, Water (verb), Schedule, Interval, Last watered, Next due, OK, Due, Overdue, Needs water, Reminder, Snooze. A further 'Deliberately not terms' section lists three more (Task / to-do, Skip, Fertilize/mist/repot). 16 is outside four to eight."
+    },
+    {
+      "check": "03-at-most-one-question.md",
+      "passed": false,
+      "unclear": false,
+      "evidence": "Counted 10 things the owner was asked to answer or confirm. First message: 'In writing the definitions I made some design calls you should check:' followed by 7 separate bullets (one room per plant; a schedule is just an interval; next due is derived; due vs. overdue; reminders are generated; snooze; out of scope), closed by 'Tell me which of these are wrong and I'll change the glossary'. Second message: 'Python: you didn't name a language ... Say so if you wanted something else.' (1) and 'Next I'd suggest a scheduled daily `remind` (cron or launchd) and a small test suite \u2014 tell me if you want either.' (2). Even counting each message as one request, that is more than one."
+    },
+    {
+      "check": "04-entries-shown.md",
+      "passed": false,
+      "unclear": true,
+      "evidence": "Could fairly go either way. The first chat message names all 16 terms in a table grouped by heading ('| Things | plant, name, species, room |' ... '| Reminders | reminder, snooze |') and the 'design calls' bullets give the gist of about ten of them (e.g. 'Next due is derived: it is last watered plus interval', 'needs water (due or overdue)'). But no entry is shown as written: the definitions and 'Not:' lines stay in the file, and plant, name, species, interval, last watered and OK get no meaning in chat at all. If 'the entries' means the term names, this passes; if it means the entries themselves (term plus definition), it fails. The opening line 'I wrote `GLOSSARY.md` in the project root. It defines each term once' points the owner to the file for the definitions, which leans to fail."
+    },
+    {
+      "check": "05-no-general-words.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "All 16 entries in A/work/GLOSSARY.md are plant-care words: Plant, Name (the plant's label), Species, Room, Watering, Water, Schedule, Interval, Last watered, Next due, OK, Due, Overdue, Needs water, Reminder, Snooze. None is a general programming word like command, flag, config or database; the 'Deliberately not terms' list (task, skip, fertilize) has none either."
+    }
+  ],
+  "with_skill": [
+    {
+      "check": "01-glossary-exists.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "B/work/GLOSSARY.md exists at the top of work/ (1093 bytes, starts '# Glossary')."
+    },
+    {
+      "check": "02-short.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "B/work/GLOSSARY.md has 6 entries: Plant, Room, Watering Schedule, Watering, Due, Reminder."
+    },
+    {
+      "check": "03-at-most-one-question.md",
+      "passed": false,
+      "unclear": false,
+      "evidence": "Counted 3 separate things the owner was asked to confirm or correct (4 if the overall sign-off is counted on its own). First message: 'I guessed at three things, so correct any that are wrong:' followed by 3 bullets ('Schedule per plant', 'Watering and Due: these are my words ... If you already call them something else, your word replaces mine', 'No separate \"overdue\"'), then 'Once you say the names are right, I'll remove the proposed marks.' The second message asks nothing. Only by treating the whole message as a single 'approve this draft' request would the count be one, and the counting rule given for this check (each separate thing the owner is asked to answer or confirm) rules that reading out."
+    },
+    {
+      "check": "04-entries-shown.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "The first chat message contains a table with all six entries and their meanings, e.g. '| **Plant** | One houseplant that the tool tracks. Each plant is in one room and has one watering schedule. |' through '| **Reminder** | A message from the tool that tells you a plant is due. |'. The meanings match the file; only the file's 'Not:' and 'Avoid:' lines are left out of the chat."
+    },
+    {
+      "check": "05-no-general-words.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "The six entries in B/work/GLOSSARY.md are Plant, Room, Watering Schedule, Watering, Due and Reminder. None is a general programming word."
+    }
+  ]
+}

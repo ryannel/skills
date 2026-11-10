@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Appointment page: three looks</title>
+<style>
+  body { margin: 0; padding: 36px 40px 48px; font: 18px/1.4 -apple-system, "Helvetica Neue", Arial, sans-serif; color: #222; background: #e9eaee; width: 2440px; box-sizing: border-box; }
+  h1 { margin: 0 0 4px; font-size: 30px; }
+  .intro { margin: 0 0 28px; color: #555; }
+  h2 { font-size: 22px; margin: 34px 0 14px; }
+  .row { display: flex; gap: 48px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { font-weight: 700; margin: 0 0 4px; font-size: 20px; }
+  figcaption span { display: block; font-weight: 400; font-size: 15px; color: #555; width: 375px; margin-top: 2px; min-height: 42px; }
+  .phone { position: relative; width: 375px; outline: 1px solid #b7bac3; background: #fff; }
+  .phone img { display: block; width: 375px; }
+  .fold { position: absolute; left: -12px; right: -12px; top: 812px; border-top: 2px dashed #d0443a; }
+  .zoom { width: 750px; height: 1120px; overflow: hidden; outline: 1px solid #b7bac3; background: #fff; }
+  .zoom img { width: 750px; image-rendering: pixelated; display: block; }
+  .zoom.b img { margin-left: 0; }
+</style>
+</head>
+<body>
+<h1>The appointment page: three looks to choose from</h1>
+<p class="intro">Same sample appointment in each: Jordan, cut &amp; finish with Maya, Thursday 19 November at 10:30. Shown at real phone size (375 px wide), then the top of each enlarged 2×. The red dashed line is the bottom of an iPhone screen (812 px); below it the customer scrolls. You can pick one, or mix parts of them.</p>
+
+<h2>At real size, 375 px wide</h2>
+<div class="row" style="gap:80px">
+  <figure><figcaption>A · Card and day list<span>Appointment on a card; every free day below as its own card with a grid of time buttons. Scroll to see more days.</span></figcaption>
+    <div class="phone"><img src="a-day-list.png"><div class="fold"></div></div></figure>
+  <figure><figcaption>B · Week strip<span>Bold header with the current appointment; pick a day from a week strip, then one of that day's times.</span></figcaption>
+    <div class="phone"><img src="b-week-strip.png"><div class="fold"></div></div></figure>
+  <figure><figcaption>C · Plain letter<span>Reads like a note from the salon; Maya's soonest free times as a simple list, other days and stylists as links.</span></figcaption>
+    <div class="phone"><img src="c-plain-letter.png"><div class="fold"></div></div></figure>
+</div>
+
+<h2>Enlarged 2× (top of each screen)</h2>
+<div class="row">
+  <figure><figcaption>A</figcaption><div class="zoom"><img src="a-day-list.png"></div></figure>
+  <figure><figcaption>B</figcaption><div class="zoom"><img src="b-week-strip.png"></div></figure>
+  <figure><figcaption>C</figcaption><div class="zoom"><img src="c-plain-letter.png"></div></figure>
+</div>
+</body>
+</html>

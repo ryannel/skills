@@ -1,0 +1,123 @@
+{
+ "scenario": "s2-slug-codex",
+ "hosts": "codex for planner, builder, reviewers; lead = Claude Code subagent; all headless (ORCHESTRATE_HEADLESS=1, path: headless)",
+ "suite": "suite-v1/orchestration (agent_loop.py), Codex gpt-6.1-sol, planner effort high, builder/reviewer medium (defaults)",
+ "outcome": "All planned milestones accepted by the loop: SLUGLINE M1 and M2, both on first review. No loop stop other than CLAIMED/REVIEWED.",
+ "milestones": {
+  "design": {
+   "accepted": true,
+   "reviews": 1,
+   "failed": 0,
+   "verdict": "DESIGN OK",
+   "by": "run (automatic design review before M1)"
+  },
+  "M1": {
+   "name": "Whole-word slug generation with collision allocation",
+   "accepted": true,
+   "accepted_by": "review",
+   "reviews": 1,
+   "failed": 0,
+   "builder_turns": 1
+  },
+  "M2": {
+   "name": "CLI for argument and stdin batches",
+   "accepted": true,
+   "accepted_by": "review",
+   "reviews": 1,
+   "failed": 0,
+   "builder_turns": 1
+  }
+ },
+ "wall_clock_seconds": {
+  "plan": 222,
+  "design_review_plus_M1_build_and_claim": 203,
+  "M1_review": 114,
+  "M2_build_and_claim": 219,
+  "M2_review": 139,
+  "lead_gaps_between_commands": "~5 min total",
+  "total_first_command_to_last_acceptance": "01:22:40 -> 01:39:02 CET, about 16.5 min"
+ },
+ "tokens_from_result_usage": {
+  "plan": {
+   "input_uncached": 83520,
+   "cached": 345472,
+   "output": 9350
+  },
+  "design_review": {
+   "input_uncached": 24092,
+   "cached": 162944,
+   "output": 1963
+  },
+  "M1_build": {
+   "input_uncached": 35630,
+   "cached": 316672,
+   "output": 5938
+  },
+  "M1_review": {
+   "input_uncached": 43639,
+   "cached": 302720,
+   "output": 4749
+  },
+  "M2_build": {
+   "input_uncached": 59748,
+   "cached": 383488,
+   "output": 7911
+  },
+  "M2_review": {
+   "input_uncached": 36569,
+   "cached": 384640,
+   "output": 4996
+  },
+  "total": {
+   "input_uncached": 283198,
+   "cached": 1895936,
+   "output": 34907
+  }
+ },
+ "tokens_note": "design_review usage is not in any result line; taken from SLUGLINE-ACCEPTED.json .design.usage. quota readout: each milestone cost 0.01-0.02% of the weekly Codex limit (build+review, 2 turns, 0.1 builder-hours); weekly used stayed at 54%.",
+ "owner_decisions": [
+  {
+   "when": "before planning",
+   "decision": "Passed the owner's ask verbatim as plan --task text, plus 'no remote, Integrate: local, branch main' (the brief's fact). No ORCHESTRATE.md existed; plan-module says ask the owner once, which a headless planner cannot."
+  },
+  {
+   "when": "after PLANNED",
+   "decision": "Accepted the planner's product choices without change (ASCII via NFKD+strip marks, 'x' fallback for empty/overlong, blank stdin line -> x, existing file read-only, exit 2 on errors, Python 3.10+). The planner said no owner decision was needed; a reasonable owner skimming would accept. In hindsight the transliteration range should have been questioned."
+  },
+  {
+   "when": "before run",
+   "decision": "One Codex builder, Codex reviewers on the same host (only one host in this scenario). Quota checked first: 46% left, 'too little data' verdict, no warn."
+  },
+  {
+   "when": "layout",
+   "decision": "Module worktree placed outside the repo (../wt/SLUGLINE) rather than committing a .gitignore for an in-repo folder."
+  },
+  {
+   "when": "end",
+   "decision": "Did not write <evidence>/build-reports/<date>.md into the repo (it would be an untracked file in the project with no loop command to land it); this report and out/ stand in for it."
+  }
+ ],
+ "owner_stops_hit": 0,
+ "product_verdict": {
+  "meets_ask": "Mostly. Every explicit requirement works; one gap in 'transliterate accents'.",
+  "verified_by_running": [
+   "python3 -m unittest discover -> Ran 25 tests, OK",
+   "./slugline 'Café Crème Brûlée' 'Straße der Einheit' 'Hello,   World!!' -> cafe-creme-brulee, strasse-der-einheit, hello-world",
+   "printf 'Héllo Wörld\\nHéllo Wörld\\n\\nNaïve résumé\\n' | python3 -m slugline -> hello-world, hello-world-2, x, naive-resume",
+   "--max-length 20 'The quick brown fox jumps over the lazy dog' -> the-quick-brown-fox; 30 x 'word' at default -> 59 chars, whole words",
+   "--existing file (hello-world, hello-world-2, hello-world-4) with 3x 'Hello World' -> hello-world-3, -5, -6; file unchanged",
+   "--existing /nope -> exit 2 'No such file or directory'; --max-length 0 -> exit 2",
+   "imports: argparse, collections.abc, io, re, sys, unicodedata (+ unittest, subprocess, tempfile in tests): stdlib only"
+  ],
+  "defects": [
+   "Latin letters without a Unicode decomposition are dropped and split words: 'Ørsted Łódź Æsir Đorđe þorn' -> 'rsted-odz-sir-or-e-orn'; 'Ærø Café' -> 'r-cafe'. Planned that way (SLUGLINE.md line 25), so the loop accepted it correctly against the plan; planner, design reviewer and both reviewers missed it as a reading of the ask."
+  ],
+  "debatable": [
+   "a single word longer than the limit becomes 'x' instead of being kept/truncated",
+   "blank stdin line prints 'x' and reserves it"
+  ]
+ },
+ "suspected_not_verified": [
+  "refs/orchestrate/claims/* and .git/orchestrate/verify/_PLAN worktree are left behind after FINISHED; not checked whether that matters"
+ ]
+}

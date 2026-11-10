@@ -1,0 +1,39 @@
+$ git status --short
+ M GLOSSARY.md
+ M src/parcel.py
+
+$ git log --oneline --all
+734fb16 Start
+
+$ git diff HEAD
+diff --git a/GLOSSARY.md b/GLOSSARY.md
+index f60078c..5a0673c 100644
+--- a/GLOSSARY.md
++++ b/GLOSSARY.md
+@@ -18,3 +18,7 @@ A customer taking their parcel out of a locker.
+ A parcel that is in a locker and has not been taken out.
+ Avoid: claimed
+ Stored as: `claimed`, in a parcel's `state`
++
++**Re-drop** (proposed — not yet agreed by the owner)
++A courier putting a parcel into a different locker because the first locker's door is jammed.
++Stored as: `redrop` in `src/parcel.py`
+diff --git a/src/parcel.py b/src/parcel.py
+index 0124081..ee9b199 100644
+--- a/src/parcel.py
++++ b/src/parcel.py
+@@ -3,3 +3,13 @@ STATES = ("claimed", "collected", "stale")
+ def drop(locker_id, parcel):
+     """Drop-off: a courier puts the parcel in a locker. It is then Waiting for Pickup."""
+     return {"locker": locker_id, "parcel": parcel, "state": "claimed"}
++
++
++def redrop(record, new_locker_id):
++    """Re-drop: the first locker's door is jammed, so the courier puts the parcel
++    in a different locker. The parcel is still Waiting for Pickup."""
++    if record["state"] != "claimed":
++        raise ValueError("only a parcel that is Waiting for Pickup can be re-dropped")
++    if new_locker_id == record["locker"]:
++        raise ValueError("a re-drop must go to a different locker")
++    return {**record, "locker": new_locker_id, "jammed_locker": record["locker"]}
+

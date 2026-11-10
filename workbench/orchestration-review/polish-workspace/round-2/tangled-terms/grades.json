@@ -1,0 +1,126 @@
+{
+  "with_skill": [
+    {
+      "check": "01-glossary-exists.md",
+      "passed": true,
+      "evidence": "A/work/GLOSSARY.md exists at the root of the working folder; git-changes.txt lists '?? GLOSSARY.md'.",
+      "unclear": false
+    },
+    {
+      "check": "02-owners-words-kept.md",
+      "passed": false,
+      "evidence": "A/work/GLOSSARY.md has entries Courier, Customer, Parcel, Locker, Bank, Code, Awaiting Pickup, Picked Up, Overdue. Locker and Bank are there, but there is no entry named Drop-off and none named Pickup. 'dropped off' appears only inside the Code and Overdue definitions, and the nearest entry to Pickup is the state 'Picked Up'.",
+      "unclear": false
+    },
+    {
+      "check": "03-owners-words-asked-for.md",
+      "passed": false,
+      "evidence": "A/work/GLOSSARY.md has an entry named Overdue, but the waiting state is named 'Awaiting Pickup', not 'Waiting for Pickup'. The name was the agent's own suggestion, made in the same breath as the question: 'What do you call a parcel that is sitting in a locker and hasn't been picked up yet? If you have no word for it, I'd suggest \"Awaiting Pickup\".' The check needs both entries, so it fails.",
+      "unclear": false
+    },
+    {
+      "check": "04-made-up-names-replaced.md",
+      "passed": true,
+      "evidence": "In A/work/GLOSSARY.md the three words appear only on these lines: 'Avoid: hopper, unit', 'Avoid: claimed', 'Stored as: `claimed`, in the `state` field of a parcel record', 'Avoid: stale, unclaimed', 'Stored as: `stale`, in the `state` field of a parcel record'. None is an entry name.",
+      "unclear": false
+    },
+    {
+      "check": "05-stored-as-recorded.md",
+      "passed": true,
+      "evidence": "A/work/GLOSSARY.md, entry Awaiting Pickup: 'Stored as: `claimed`, in the `state` field of a parcel record (`src/parcel.py`, `data/parcels.json`)'.",
+      "unclear": false
+    },
+    {
+      "check": "06-code-not-renamed.md",
+      "passed": true,
+      "evidence": "git-changes.txt shows only ' M docs/overview.md', '?? AGENTS.md', '?? GLOSSARY.md'. A recursive diff of files-at-the-start/src and files-at-the-start/data against A/work shows both identical; data/parcels.json is the only .json file.",
+      "unclear": false
+    },
+    {
+      "check": "07-shown-in-steps.md",
+      "passed": true,
+      "evidence": "Second agent message in A/transcript.md: 'Here is the flow written with those names: 1. The **Courier** puts a **Parcel** in a **Locker** and shuts the door. ... 4. The Customer scans the Code at the **Bank**, the Locker opens, and the Parcel is **Picked Up**. 5. If the Parcel is not Picked Up within 3 days, it is **Overdue**.' Five numbered steps from drop-off to pickup, using names that became glossary entries (step 2 left a blank for the one name still open).",
+      "unclear": false
+    },
+    {
+      "check": "08-names-in-chat.md",
+      "passed": true,
+      "evidence": "The proposed names are in a table in the second agent message ('| **Locker** | One compartment with one door | hopper, unit | `locker` |' and so on), and the final message lists them again: 'has the nine agreed names: Courier, Customer, Parcel, Locker, Bank, Code, Awaiting Pickup, Picked Up and Overdue'. The agent names the files it wrote but never asks the owner to open one.",
+      "unclear": false
+    },
+    {
+      "check": "09-nothing-but-names.md",
+      "passed": true,
+      "evidence": "A/work/GLOSSARY.md holds a two-sentence introduction and nine entries, each made of a definition plus 'Not:', 'Avoid:' and 'Stored as:' lines. The only mentions of code are the stored names and where they sit ('Stored as: `claimed`, in the `state` field of a parcel record (`src/parcel.py`, `data/parcels.json`)'), which is a stored name, not an account of how the code works. No plans and no decisions.",
+      "unclear": false
+    },
+    {
+      "check": "10-docs-use-the-names.md",
+      "passed": true,
+      "evidence": "A/work/docs/overview.md has no 'hopper'. 'claimed' and 'stale' each appear once, giving a stored name: 'The code stores this state as `claimed`.' and 'The code stores this state as `stale`.' The rewrite was made after the owner said 'The names and steps read right to me.'",
+      "unclear": false
+    }
+  ],
+  "without_skill": [
+    {
+      "check": "01-glossary-exists.md",
+      "passed": false,
+      "evidence": "The glossary was written to B/work/docs/glossary.md (git-changes.txt: '?? docs/glossary.md'). The root of B/work holds only data, docs and src; there is no GLOSSARY.md there.",
+      "unclear": false
+    },
+    {
+      "check": "02-owners-words-kept.md",
+      "passed": false,
+      "evidence": "B/work/docs/glossary.md has entries locker, bank, drop, waiting, collected, overdue and pickup code. Locker and bank are there, but the event is named 'drop', not Drop-off, and there is no Pickup entry (the customer taking the parcel is 'collected'; 'pickup' appears only inside 'pickup code').",
+      "unclear": false
+    },
+    {
+      "check": "03-owners-words-asked-for.md",
+      "passed": false,
+      "evidence": "B/work/docs/glossary.md has an entry 'overdue', but the waiting state is named 'waiting', not 'Waiting for Pickup'. The check needs both. Neither name was asked for: the agent proposed 'waiting' in its first message and chose 'overdue' itself after the owner said 'can we pick a more understandable term?'.",
+      "unclear": false
+    },
+    {
+      "check": "04-made-up-names-replaced.md",
+      "passed": true,
+      "evidence": "In B/work/docs/glossary.md the three words appear only as stored values ('| **waiting** | ... | `claimed` |', '| **overdue** | ... | `stale` |', '`claimed` in the code means **waiting**', '`stale` in the code means **overdue**') and in the 'Retired words' table under 'Do not use these in the docs' ('unit, hopper, door (for the compartment) | locker', 'claimed | waiting', 'unclaimed | ...', 'stale | overdue'). None is a term in the entry tables.",
+      "unclear": false
+    },
+    {
+      "check": "05-stored-as-recorded.md",
+      "passed": true,
+      "evidence": "B/work/docs/glossary.md, 'Stages of a parcel' table, column 'Value stored in the code and data': '| **waiting** | The parcel is in a locker and the customer has not taken it yet. | `claimed` |'.",
+      "unclear": false
+    },
+    {
+      "check": "06-code-not-renamed.md",
+      "passed": true,
+      "evidence": "git-changes.txt shows only ' M docs/overview.md' and '?? docs/glossary.md'. A recursive diff of files-at-the-start/src and files-at-the-start/data against B/work shows both identical. The agent offered a rename in its first message but made none after the owner said 'Please don't rename anything in the code or stored data for now'.",
+      "unclear": false
+    },
+    {
+      "check": "07-shown-in-steps.md",
+      "passed": false,
+      "evidence": "No agent message in B/transcript.md contains numbered steps walking a parcel through. The first message's numbered list is four questions. The second message shows two diagrams ('drop \u2500\u2500> waiting \u2500\u2500> collected') and then says 'I rewrote `docs/overview.md` as three short steps using only these terms', so the numbered steps exist only in the file, which the owner never opens.",
+      "unclear": false
+    },
+    {
+      "check": "08-names-in-chat.md",
+      "passed": true,
+      "evidence": "The first agent message has a table with a 'Suggested term' column (locker, bank, drop, waiting, collected, stale, pickup code), and the second says '\"stale\" is now **overdue**' and repeats every term in the diagrams. The agent says what the glossary file contains ('The glossary has a mapping table so nobody has to guess') but never asks the owner to open it.",
+      "unclear": false
+    },
+    {
+      "check": "09-nothing-but-names.md",
+      "passed": false,
+      "evidence": "Could fairly go either way, so marked failed and unclear. B/work/docs/glossary.md has a section 'Words the code uses differently' that says 'The code and stored data have not been renamed, so two of their state values differ from the docs', and the 'Retired words' section says 'They appear in older text and in one code comment.' Read strictly, these record the outcome of the decision not to rename and the present state of the code, which is what the check rules out. Read loosely, they only explain the stored names that checks 04 and 05 expect a glossary to carry, and nothing in the file is a plan or says how the code works. The rest of the file (two diagrams, three term tables) is names and meanings only. My lean is fail.",
+      "unclear": true
+    },
+    {
+      "check": "10-docs-use-the-names.md",
+      "passed": true,
+      "evidence": "B/work/docs/overview.md contains none of 'hopper', 'claimed' or 'stale' (searched, case-insensitive, no matches). It reads '2. **Waiting.** Once the door shuts, the parcel is waiting ...' and '... it is overdue and the bank flags it.' The rewrite came before the owner agreed 'overdue', but the owner then agreed ('\"overdue\" works for me. Looks good.') and the file was not changed after.",
+      "unclear": false
+    }
+  ]
+}

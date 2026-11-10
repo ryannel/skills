@@ -1,0 +1,40 @@
+$ git status --short
+ M docs/overview.md
+ M src/parcel.py
+?? AGENTS.md
+?? GLOSSARY.md
+
+$ git log --oneline --all
+1614910 Start
+
+$ git diff HEAD
+diff --git a/docs/overview.md b/docs/overview.md
+index 350d38a..68cccaa 100644
+--- a/docs/overview.md
++++ b/docs/overview.md
+@@ -1,3 +1,12 @@
+ # How it works
+ 
+-A courier scans in and the parcel goes in the hopper. Once the door shuts the parcel is claimed. The customer gets a code. Unclaimed parcels go stale after 72h and the bank flags them. A unit is one door; a bank is a wall of units (some docs say cabinet).
++The names used here are defined in [`GLOSSARY.md`](../GLOSSARY.md).
++
++A bank is a wall of lockers. A locker is one compartment with its own door, and holds one parcel.
++
++1. The courier scans in at the bank and puts the parcel in a free locker. This is a drop-off.
++2. When the locker door shuts, the system marks the parcel Awaiting Collection (stored as `claimed`).
++3. The system sends the customer a collection code.
++4. The customer enters the collection code, the locker opens and they take the parcel. The parcel is now
++   Collected.
++5. A parcel not collected within 72 hours of drop-off becomes Stale, and the bank flags it.
+diff --git a/src/parcel.py b/src/parcel.py
+index 304f38d..aa803c6 100644
+--- a/src/parcel.py
++++ b/src/parcel.py
+@@ -1,5 +1,5 @@
+ STATES = ("claimed", "collected", "stale")
+ 
+ def drop(locker_id, parcel):
+-    """Courier drop: put the parcel in the hopper (the locker) and mark it claimed."""
++    """Drop-off: put the parcel in the locker and mark it Awaiting Collection (stored as "claimed")."""
+     return {"locker": locker_id, "parcel": parcel, "state": "claimed"}
+

@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: new-name-mid-task
+expected_outcome: |
+  Builds a small feature in a project that has a glossary while the owner is away. Keeps to the glossary's names, and if it brings in a word for a new thing, records it as proposed and reports it.
+context:
+  scaffold_script: place-files.sh

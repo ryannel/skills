@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: small-tool
+expected_outcome: |
+  Writes a short glossary for a small tool, shows it in the chat, and builds nothing else. It was written as a guard case, and the first run without the skill failed it: sixteen entries and a whole tool nobody asked for.

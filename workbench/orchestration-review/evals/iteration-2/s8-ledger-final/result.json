@@ -1,0 +1,313 @@
+{
+ "scenario": "s8-ledger-final",
+ "suite": "suite-v4",
+ "lead": "Claude Code agent (Opus 5.5), all loop commands with ORCHESTRATE_HEADLESS=1",
+ "outcome": "all 3 planned milestones accepted by the loop; product verified by hand",
+ "milestones": {
+  "CORE M1": {
+   "accepted": true,
+   "accepted_by": "review",
+   "builder_host": "claude",
+   "review_host": "codex",
+   "reviews": 1,
+   "failed_reviews": 0,
+   "design_reviews": 2,
+   "design_changes": 1
+  },
+  "REPORT M1": {
+   "accepted": true,
+   "accepted_by": "review",
+   "builder_host": "codex",
+   "review_host": "claude",
+   "reviews": 2,
+   "failed_reviews": 1,
+   "design_reviews": 2,
+   "design_changes": 1,
+   "fail_reason": "builder tests did not pin file order within a date (mutants survived)"
+  },
+  "REPORT M2": {
+   "accepted": true,
+   "accepted_by": "review",
+   "builder_host": "codex",
+   "review_host": "claude",
+   "reviews": 2,
+   "failed_reviews": 1,
+   "fail_reason": "BrokenPipeError traceback when piping register into head"
+  }
+ },
+ "wall_clock": {
+  "total": "04:35:54-05:28:51 CET, 53 min",
+  "planning_initial": "04:35:54-04:45:26, 9.5 min (1 turn)",
+  "design_reviews_round1": "04:46:05-04:48:13, ~2 min (both in parallel, both DESIGN CHANGES)",
+  "core_design_revision_planner": "04:47:51-05:01:09, 13.3 min (both modules idle behind it)",
+  "report_design_revision_planner": "05:01:25-05:04:15, 2.8 min (had to wait for the CORE planner)",
+  "core_redesign_review_plus_M1_build": "05:01:25-05:05:46, 4.4 min",
+  "core_M1_review": "05:06:02-05:09:04, 3 min",
+  "report_redesign_review_plus_M1_build": "05:04:37-05:10:11, 5.6 min",
+  "report_M1_review_fail_fix_review": "05:10:25-05:18:12, 7.8 min",
+  "report_M2_build": "05:18:27-05:21:00, 2.5 min",
+  "report_M2_review_fail_fix_review": "05:21:13-05:28:51, 7.6 min",
+  "final_report_and_adopt": "~05:29-05:33",
+  "builders_overlapping": "about 4 min of actual parallel building (05:04:37-05:05:46 build; reviews overlapped longer)"
+ },
+ "tokens": {
+  "from_cost_command": {
+   "planning": "3 turns, 226k in, 2.9M cached, 95k out, $5.42 list (claude)",
+   "CORE design": "2 review turns, 73k in, 353k cached, 6k out (codex)",
+   "CORE M1": "build 1 turn 50k/652k/16k $0.84 (claude); review 1 turn 82k/314k/7k (codex)",
+   "REPORT design": "2 review turns 98k/599k/16k $1.23 (claude)",
+   "REPORT M1": "build 2 turns 114k/1.9M/22k (codex); review 2 turns 114k/1.3M/25k $1.67 (claude)",
+   "REPORT M2": "build 2 turns 116k/1.3M/16k (codex); review 2 turns 112k/1.3M/25k $1.67 (claude)",
+   "total": "17 turns, 986k in, 10.6M cached, 228k out, $10.82 list for Claude turns only"
+  },
+  "per_result_line_usage": [
+   {
+    "tag": "04-plan",
+    "result": "PLANNED",
+    "host": "claude",
+    "usage": {
+     "input": 98920,
+     "cached": 1255881,
+     "output": 56149,
+     "cost_usd": 2.169096,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "06-run-core:design_review",
+    "result": "DESIGN CHANGES",
+    "host": "codex",
+    "usage": {
+     "input": 39698,
+     "cached": 145024,
+     "output": 2721,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "07-run-report:design_review",
+    "result": "DESIGN CHANGES",
+    "host": "claude",
+    "usage": {
+     "input": 52779,
+     "cached": 306221,
+     "output": 10759,
+     "cost_usd": 0.698576,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "08-plan-core-rev",
+    "result": "PLANNED",
+    "host": "claude",
+    "usage": {
+     "input": 68179,
+     "cached": 884851,
+     "output": 22289,
+     "cost_usd": 2.306288,
+     "turns": 2
+    }
+   },
+   {
+    "tag": "10-plan-report-rev",
+    "result": "PLANNED",
+    "host": "claude",
+    "usage": {
+     "input": 59157,
+     "cached": 740672,
+     "output": 16108,
+     "cost_usd": 0.943406,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "11-run-core",
+    "result": "CLAIMED",
+    "host": "claude",
+    "usage": {
+     "input": 49777,
+     "cached": 651837,
+     "output": 15503,
+     "cost_usd": 0.838531,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "11-run-core:design_review",
+    "result": "DESIGN OK",
+    "host": "codex",
+    "usage": {
+     "input": 33587,
+     "cached": 207872,
+     "output": 3076,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "13-review-core-m1",
+    "result": "REVIEWED",
+    "host": "codex",
+    "usage": {
+     "input": 82371,
+     "cached": 314496,
+     "output": 6924,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "12-run-report",
+    "result": "CLAIMED",
+    "host": "codex",
+    "usage": {
+     "input": 42315,
+     "cached": 548480,
+     "output": 8877,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "12-run-report:design_review",
+    "result": "DESIGN OK",
+    "host": "claude",
+    "usage": {
+     "input": 45484,
+     "cached": 292299,
+     "output": 5234,
+     "cost_usd": 0.526948,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "15-review-report-m1",
+    "result": "REVIEWED",
+    "host": "claude",
+    "usage": {
+     "input": 65274,
+     "cached": 703656,
+     "output": 15629,
+     "cost_usd": 0.975383,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "16-run-report-fix",
+    "result": "CLAIMED",
+    "host": "codex",
+    "usage": {
+     "input": 113725,
+     "cached": 1884544,
+     "output": 22297,
+     "turns": 2
+    }
+   },
+   {
+    "tag": "17-review-report-m1-2",
+    "result": "REVIEWED",
+    "host": "claude",
+    "usage": {
+     "input": 48488,
+     "cached": 553272,
+     "output": 9705,
+     "cost_usd": 0.692546,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "18-run-report-m2",
+    "result": "CLAIMED",
+    "host": "codex",
+    "usage": {
+     "input": 48637,
+     "cached": 405504,
+     "output": 5629,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "20-review-report-m2",
+    "result": "REVIEWED",
+    "host": "claude",
+    "usage": {
+     "input": 61577,
+     "cached": 785824,
+     "output": 14728,
+     "cost_usd": 0.944205,
+     "turns": 1
+    }
+   },
+   {
+    "tag": "21-run-report-m2-fix",
+    "result": "CLAIMED",
+    "host": "codex",
+    "usage": {
+     "input": 116432,
+     "cached": 1335680,
+     "output": 16250,
+     "turns": 2
+    }
+   },
+   {
+    "tag": "22-review-report-m2-2",
+    "result": "REVIEWED",
+    "host": "claude",
+    "usage": {
+     "input": 50762,
+     "cached": 552342,
+     "output": 10416,
+     "cost_usd": 0.724772,
+     "turns": 1
+    }
+   }
+  ],
+  "note": "usage on resumed claims is the session's running total, not the turn; Codex lines carry no cost_usd"
+ },
+ "codex_quota": "45% left at start and end; forecast never warned; <0.1% per milestone",
+ "owner_decisions": [
+  {
+   "when": "04:35",
+   "decision": "planner host: let the loop default to claude (host it runs inside); passed the owner's words verbatim as --task"
+  },
+  {
+   "when": "04:46",
+   "decision": "builder hosts: kept the planner's assignment CORE=claude, REPORT=codex (owner said one on each, not which)"
+  },
+  {
+   "when": "04:47 and 05:01",
+   "decision": "accepted both DESIGN CHANGES and sent them to the planner as next said (by: planner), serially"
+  },
+  {
+   "when": "05:04",
+   "decision": "ignored the REPORT planner's next (design review --host codex, same vendor as the Codex builder) and used run --host codex so the design review went to claude, per the owner's 'each review on the other one'"
+  },
+  {
+   "when": "05:18",
+   "decision": "kept REPORT M2 on the Codex builder (module continuity) although the Claude builder was idle"
+  },
+  {
+   "when": "05:29",
+   "decision": "accepted all planner assumptions for this run (no grand total, '4.20 $' display, € vs EUR distinct, *!( payees refused); listed in the build report for the real owner"
+  },
+  {
+   "note": "no owner command (owner accept/answer/scope/unpark/rereview) was ever needed; no relay used"
+  }
+ ],
+ "verdict": {
+  "meets_ask": true,
+  "verified_by_me": [
+   "python3 -m unittest discover -s tests on main: OK (37 tests at 1deb64b; OK on final main)",
+   "python3 -m unittest discover -s docs/acceptance on main: OK",
+   "own journal out/manual/my.journal: balance tree-indented per account with per-currency lines; blank amount inferred as two postings (EUR and €) on line 10; register Expenses running total multi-currency; --json for both commands valid JSON with decimal strings",
+   "unbalanced journal -> 'file:1: transaction does not balance: off by 1 USD', exit 1; mixed USD/EUR -> 'off by 10 USD, -10 EUR', exit 1; two blank amounts -> refused naming lines 3,4",
+   "0.1+0.2-0.3 USD balances exactly (Decimal)",
+   "-f - reads stdin; register with no account / no args -> argparse message, exit 2; register of an account with no postings -> empty, exit 0",
+   "library: core.load raises UnbalancedError with file:line; returned Transaction/Posting/Amount objects with Decimal and inferred flags",
+   "imports in ledgerlite/*.py are stdlib only (argparse, dataclasses, datetime, decimal, json, os, re, sys, __future__)",
+   "3,000-txn register piped to head: no traceback after the M2 fix (one 'ledgerlite: stdout: broken pipe' line, exit 1)",
+   "core and report are separate modules (ledgerlite/core.py, ledgerlite/report.py, ledgerlite/cli.py)"
+  ],
+  "suspected_not_verified": [
+   "`pip install -e .` and the `ledgerlite` console script were not tried (no [build-system] table; acceptance test only checks the entry point imports)",
+   "display-width misalignment with wide/combining characters (reviewer advisory; not tried)"
+  ]
+ }
+}

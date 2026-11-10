@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option B: Dark header and week strip</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.4 "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif; color: #231f1c; background: #fff; }
+  .top { background: #2b2420; color: #f7efe6; padding: 18px 20px 22px; }
+  .brand { font-size: 13px; letter-spacing: .18em; text-transform: uppercase; opacity: .75; margin: 0 0 14px; }
+  .now { display: flex; gap: 14px; align-items: center; }
+  .date { background: #c9805a; color: #fff; border-radius: 10px; width: 64px; text-align: center; padding: 6px 0 8px; flex: none; }
+  .date b { display: block; font-size: 26px; line-height: 1.1; }
+  .date small { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+  .now p { margin: 0; }
+  .now .t { font-size: 20px; font-weight: 600; }
+  .now .s { opacity: .8; font-size: 15px; }
+  h1 { font-size: 20px; margin: 22px 20px 12px; }
+  .stylist { margin: 0 20px 16px; display: flex; align-items: center; justify-content: space-between; border: 1px solid #e6ddd5; border-radius: 12px; padding: 10px 14px; }
+  .stylist span { color: #7a6e66; font-size: 14px; display: block; }
+  .stylist a { color: #a2542f; font-weight: 600; text-decoration: none; min-height: 44px; line-height: 44px; }
+  .week { display: flex; gap: 6px; padding: 0 20px; overflow-x: auto; }
+  .week a { flex: 1 0 44px; text-decoration: none; color: #231f1c; text-align: center; border-radius: 12px; padding: 8px 0; border: 1px solid #e6ddd5; min-height: 64px; }
+  .week a small { display: block; font-size: 12px; color: #7a6e66; text-transform: uppercase; }
+  .week a b { font-size: 19px; }
+  .week a.on { background: #2b2420; color: #fff; border-color: #2b2420; }
+  .week a.on small { color: #e4d6c9; }
+  .week a.none { color: #c2b8b0; border-style: dashed; }
+  .week a.none b { font-weight: 400; }
+  h2 { font-size: 16px; margin: 20px 20px 10px; }
+  .slots { padding: 0 20px; display: grid; gap: 10px; }
+  .slots button { min-height: 52px; text-align: left; padding: 0 18px; font: inherit; font-size: 18px; font-weight: 600; background: #fff; color: #231f1c; border: 1.5px solid #2b2420; border-radius: 26px; display: flex; justify-content: space-between; align-items: center; }
+  .slots button span { font-size: 14px; font-weight: 400; color: #7a6e66; }
+  .foot { margin: 24px 20px 30px; font-size: 14px; color: #7a6e66; }
+  .foot a { color: #a2542f; }
+</style>
+</head>
+<body>
+<div class="top">
+  <p class="brand">Studio Nine</p>
+  <div class="now">
+    <div class="date"><small>Thu</small><b>19</b><small>Nov</small></div>
+    <div><p class="t">10:30 · Cut &amp; finish</p><p class="s">with Maya · 45 min</p></div>
+  </div>
+</div>
+
+<h1>Pick a new time</h1>
+<div class="stylist"><div><span>Stylist</span><b>Maya</b> (your stylist)</div><a href="#">Change</a></div>
+
+<nav class="week" aria-label="Days">
+  <a href="#" class="on"><small>Fri</small><b>20</b></a>
+  <a href="#"><small>Sat</small><b>21</b></a>
+  <a href="#" class="none"><small>Sun</small><b>–</b></a>
+  <a href="#"><small>Mon</small><b>23</b></a>
+  <a href="#"><small>Tue</small><b>24</b></a>
+  <a href="#"><small>Wed</small><b>25</b></a>
+</nav>
+
+<h2>Friday 20 November</h2>
+<form class="slots" method="get" action="#confirm">
+  <button>09:00 <span>Morning</span></button>
+  <button>11:15 <span>Morning</span></button>
+  <button>14:30 <span>Afternoon</span></button>
+</form>
+
+<p class="foot">Nothing suitable? Call <a href="#">020 7946 0321</a>.</p>
+</body>
+</html>

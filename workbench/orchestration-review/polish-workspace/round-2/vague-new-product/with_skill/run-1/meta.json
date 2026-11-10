@@ -1,0 +1,53 @@
+{
+  "case": "vague-new-product",
+  "side": "with_skill",
+  "skill": "interview-me",
+  "session": "dfcd83f7-2149-4143-95fb-10a9da17ffa4",
+  "turns": [
+    {
+      "duration_ms": 5863,
+      "num_turns": 3,
+      "total_cost_usd": 0.182623,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 345
+    },
+    {
+      "duration_ms": 13150,
+      "num_turns": 2,
+      "total_cost_usd": 0.290511,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 1272
+    },
+    {
+      "duration_ms": 11195,
+      "num_turns": 2,
+      "total_cost_usd": 0.40446350000000003,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 1190
+    },
+    {
+      "duration_ms": 42514,
+      "num_turns": 3,
+      "total_cost_usd": 0.6186435,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 4495
+    }
+  ],
+  "ended": "the owner approved; the approval was not passed to the agent"
+}

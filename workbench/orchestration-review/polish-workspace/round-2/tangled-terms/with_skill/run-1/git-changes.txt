@@ -1,0 +1,29 @@
+$ git status --short
+ M docs/overview.md
+?? AGENTS.md
+?? GLOSSARY.md
+
+$ git log --oneline --all
+839ff24 Start
+
+$ git diff HEAD
+diff --git a/docs/overview.md b/docs/overview.md
+index 350d38a..f8c21a2 100644
+--- a/docs/overview.md
++++ b/docs/overview.md
+@@ -1,3 +1,13 @@
+ # How it works
+ 
+-A courier scans in and the parcel goes in the hopper. Once the door shuts the parcel is claimed. The customer gets a code. Unclaimed parcels go stale after 72h and the bank flags them. A unit is one door; a bank is a wall of units (some docs say cabinet).
++The names used here are defined in [`GLOSSARY.md`](../GLOSSARY.md).
++
++1. A Courier scans in, puts a Parcel in a Locker and shuts the door.
++2. Once the door shuts, the Parcel is Awaiting Pickup. The code stores this state as `claimed`.
++3. The Customer gets a Code.
++4. The Customer scans the Code at the Bank and takes the Parcel. The Parcel is now Picked Up, which the code
++   stores as `collected`.
++5. A Parcel that is not Picked Up within 3 days (72 hours) is Overdue, and the Bank flags it. The code stores
++   this state as `stale`.
++
++A Locker is one compartment with one door. A Bank is a wall of Lockers.
+

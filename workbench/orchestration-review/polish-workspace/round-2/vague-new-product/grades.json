@@ -1,0 +1,162 @@
+{
+  "with_skill": [
+    {
+      "check": "01-why-before-choices.md",
+      "passed": true,
+      "evidence": "First agent message: 'Why do you want this? What is happening at the gym today that made you want it?' Open, no example answers, and it comes before the three who-uses-it options in the agent's second message.",
+      "unclear": false
+    },
+    {
+      "check": "02-one-question-per-message.md",
+      "passed": true,
+      "evidence": "Four agent messages, each ending in one ask: 'Why do you want this? What is happening at the gym today that made you want it?'; 'Shall I plan this as a staff-only tool first...?'; 'What would make this a failure even if it works as described?'; 'Is this right?'. The first has two question marks but the second sentence restates the first (one answer serves both), so I count it as one question. A grader counting question marks would fail it.",
+      "unclear": false
+    },
+    {
+      "check": "03-who-uses-it.md",
+      "passed": true,
+      "evidence": "A/work/docs/modules/BRIEF.md Decisions 2-4: 'The users are the four setters', 'It is used on phones, at the wall', 'Members never use it. The owner: \"Members never touch it.\"'",
+      "unclear": false
+    },
+    {
+      "check": "04-works-without-signal.md",
+      "passed": true,
+      "evidence": "A/work/docs/modules/BRIEF.md Decision 5: 'It must work at the back wall, where there is no signal.' Decision 7: 'With no signal, a setter can still see the list and record and remove routes.'",
+      "unclear": false
+    },
+    {
+      "check": "05-both-phone-kinds.md",
+      "passed": true,
+      "evidence": "A/work/docs/modules/BRIEF.md 'Where it runs': 'On the four setters' phones, in the phone's browser, iPhone and Android'. Decision 8: 'it works on both iPhone and Android'. (The agent never asked what phones the setters have; the brief says it regardless, which is all the check asks.)",
+      "unclear": false
+    },
+    {
+      "check": "06-request-word-for-word.md",
+      "passed": true,
+      "evidence": "A/work/docs/modules/BRIEF.md line 4, under 'The request': '> I want to build something for my climbing gym so we can keep track of route setting. can you help me figure out what that should be' - identical to first-message.md.",
+      "unclear": false
+    },
+    {
+      "check": "07-six-weeks-quoted.md",
+      "passed": false,
+      "evidence": "A/work/docs/modules/BRIEF.md has no six-week rule. 'Still open': 'How old is too old for a route. Not decided yet. Assume meanwhile: no fixed limit'. The agent never asked how the tool would be judged or what the rule is, so the owner never said it.",
+      "unclear": false
+    },
+    {
+      "check": "08-no-tech-as-owners.md",
+      "passed": true,
+      "evidence": "A/work/docs/modules/BRIEF.md names no language, framework or data store. The one platform choice, decision 8 (web app in the phone's browser), is marked 'The agent's decision ... Not confirmed by the owner.' 'The shared record needs somewhere to live online' is left for the owner to hear about later, not attributed to them.",
+      "unclear": false
+    },
+    {
+      "check": "09-look-goes-to-options.md",
+      "passed": true,
+      "evidence": "A/work/docs/modules/BRIEF.md 'How it will be judged': 'The owner chooses the look from options. How it should look can't be agreed in words, so the first piece of work produces a few visual options on a phone screen for the owner to pick from.' No description of the look is recorded; decision 6 only quotes 'it has to look good'.",
+      "unclear": false
+    },
+    {
+      "check": "10-out-of-scope-named.md",
+      "passed": false,
+      "evidence": "A/work/docs/modules/BRIEF.md 'Not part of this' lists 'Anything members see or use', a member page, member ratings or flags, and a setting schedule or reminders. Payments and competition scoring are absent; member accounts are not named (covered at most by implication), so fewer than two of the three are named. The agent never asked what is left out.",
+      "unclear": false
+    },
+    {
+      "check": "11-brief-shown-in-chat.md",
+      "passed": true,
+      "evidence": "Fourth agent message: 'Here is the full brief for you to check.' followed by the whole text from '# Project brief: route setting tracker' to 'Still open', then 'Is this right?'",
+      "unclear": false
+    },
+    {
+      "check": "12-nothing-before-approval.md",
+      "passed": true,
+      "evidence": "A/work holds one file, docs/modules/BRIEF.md. No code, module list, milestones or done-when file. The agent says 'When you approve, I'll commit the brief and start a planner' and the run ends at the owner's approval with no planner started.",
+      "unclear": false
+    },
+    {
+      "check": "13-no-filler-questions.md",
+      "passed": true,
+      "evidence": "The agent's four questions are the why question, the staff-only scope choice, 'What would make this a failure even if it works as described?' and the brief approval ('Is this right?'). None is about where to save a file, a file name, or whether to continue.",
+      "unclear": false
+    }
+  ],
+  "without_skill": [
+    {
+      "check": "01-why-before-choices.md",
+      "passed": false,
+      "evidence": "First agent message asks '1. **What problem is prompting this?** For example:' followed by four example answers and 'something else'. The same message also proposes a product ('A shared web page the crew can update from their phones').",
+      "unclear": false
+    },
+    {
+      "check": "02-one-question-per-message.md",
+      "passed": false,
+      "evidence": "First agent message asks five numbered questions (problem, who, how tracked today, how big, where used); the second asks two ('Do you reset whole walls...?', 'What age counts as too old?'). The owner never asked for them together.",
+      "unclear": false
+    },
+    {
+      "check": "03-who-uses-it.md",
+      "passed": false,
+      "evidence": "No reading passes. The second-message proposal says 'A small web app the four setters install to their phone home screens' but never says members do not use it; it defers 'member-facing pages' as 'addable later'. B/work/README.md says only 'A phone app for a climbing gym's setting crew.'",
+      "unclear": false
+    },
+    {
+      "check": "04-works-without-signal.md",
+      "passed": false,
+      "evidence": "Whether run B has a brief at all is the open point. It never wrote one and never asked the owner to agree to one. The nearest thing is the proposal in its second chat message ('What it is / What it does in the first version / What I'd leave out for now'), which ends 'Once I have those I can start building it.' If that proposal counts as the brief this passes: 'the app keeps a full copy of the data on each phone, works with no connection, and syncs once the phone is back in signal.' If run B has no brief it fails. Could fairly go either way.",
+      "unclear": true
+    },
+    {
+      "check": "05-both-phone-kinds.md",
+      "passed": false,
+      "evidence": "The second-message proposal does not mention iPhone or Android. Only B/work/README.md does ('Add to Home Screen on iPhone ... Install app on Android'), and that is setup documentation written after the build and never shown to the owner, not a statement put to the owner to agree. The agent never asked what phones the setters have.",
+      "unclear": false
+    },
+    {
+      "check": "06-request-word-for-word.md",
+      "passed": false,
+      "evidence": "The owner's first message appears in no file in B/work and in no agent message.",
+      "unclear": false
+    },
+    {
+      "check": "07-six-weeks-quoted.md",
+      "passed": false,
+      "evidence": "The second-message proposal predates the owner stating the rule and has only the agent's example ('such as green under 4 weeks, amber at 4-6 and red over 6'). B/work/README.md says 'The rule built in is that nothing stays up more than 6 weeks', which is close to the owner's words but unattributed, and the README is documentation of the built app, not a brief put to the owner.",
+      "unclear": false
+    },
+    {
+      "check": "08-no-tech-as-owners.md",
+      "passed": false,
+      "evidence": "Whether run B has a brief at all is the open point. It never wrote one and never asked the owner to agree to one. The nearest thing is the proposal in its second chat message ('What it is / What it does in the first version / What I'd leave out for now'), which ends 'Once I have those I can start building it.' If that proposal counts as the brief this passes: it names a web app with a full copy of the data on each phone, in the agent's own voice ('The no-signal wall dictates the main technical choice'), never as the owner's choice. README.md names Node, local storage and a JSON data file, also never as the owner's. If run B has no brief, the instruction that brief checks fail applies. Could fairly go either way.",
+      "unclear": true
+    },
+    {
+      "check": "09-look-goes-to-options.md",
+      "passed": false,
+      "evidence": "Nothing in the chat or in B/work says the owner will choose the look from options. The agent built one look, then restyled it to its own taste ('What changed in the look ... Colour only where it means something') and offered that single design for a yes or no.",
+      "unclear": false
+    },
+    {
+      "check": "10-out-of-scope-named.md",
+      "passed": false,
+      "evidence": "The only left-out list is in the second agent message: 'I'd skip member-facing pages, setter scheduling, grade-distribution charts and photos.' None of member accounts, payments or competition scoring is named. README.md has no out-of-scope list.",
+      "unclear": false
+    },
+    {
+      "check": "11-brief-shown-in-chat.md",
+      "passed": false,
+      "evidence": "Whether run B has a brief at all is the open point. It never wrote one and never asked the owner to agree to one. The nearest thing is the proposal in its second chat message ('What it is / What it does in the first version / What I'd leave out for now'), which ends 'Once I have those I can start building it.' If that proposal counts as the brief this passes, because it is entirely in the chat. If run B has no brief, there is no brief text to show and it fails. Could fairly go either way.",
+      "unclear": true
+    },
+    {
+      "check": "12-nothing-before-approval.md",
+      "passed": false,
+      "evidence": "Third agent message, straight after the owner answered two design questions: 'I've built a first version, called Route Age, and it runs on this computer.' B/work holds server.js, public/app.js, sw.js, style.css and more. The owner was never asked to approve anything first and never approved a brief.",
+      "unclear": false
+    },
+    {
+      "check": "13-no-filler-questions.md",
+      "passed": true,
+      "evidence": "The agent's questions are about the product (problem, users, current tracking, size, where used, whole-wall resets, age limit) and the host ('Tell me which host you'd like'). None is about where to save a file, a file name, or whether to continue.",
+      "unclear": false
+    }
+  ]
+}

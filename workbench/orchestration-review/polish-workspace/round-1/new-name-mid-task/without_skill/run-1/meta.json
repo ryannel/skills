@@ -1,0 +1,20 @@
+{
+  "case": "new-name-mid-task",
+  "side": "without_skill",
+  "skill": "domain-language",
+  "session": "426516c0-ddfb-4951-a273-6cf15666e369",
+  "turns": [
+    {
+      "duration_ms": 21298,
+      "num_turns": 3,
+      "total_cost_usd": 0.2105435,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 1757
+    }
+  ],
+  "ended": "the case has no owner"
+}

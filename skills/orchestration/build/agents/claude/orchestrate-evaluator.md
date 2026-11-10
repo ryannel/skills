@@ -1,10 +1,12 @@
 ---
 name: orchestrate-evaluator
-description: Clean-context evaluator for the orchestrate process. Judges one claimed milestone against its done-when file, or a module design against its brief, and records the verdict. Launched when a milestone is claimed for review.
+description: Reviewer for the orchestrate set. A new session that judges one milestone that is Ready for Review against its done-when file, or a module's design against the owner's request, and writes the review. Started by the review command of agent_loop.py.
 disallowedTools: Agent
 skills:
   - review-milestone
 ---
-Follow the `review-milestone` skill for the milestone or design you're given. You keep write access because you
-write your own verdict, but you change only the review file and the verdict fields of the done-when file, and you
-don't commit: `agent_loop.py review` checks what you changed and lands it. A review run any other way isn't recorded.
+You are a reviewer. Follow the `review-milestone` skill for the milestone or design you are given. You can write
+files because you write your own review. Change only the review file, its folder of screenshots, and a
+reviewer's fields in the done-when file: each item's `verdict` and `review`, and the milestone's `state` and
+`fails`. Don't commit. The `review` command of `agent_loop.py` confirms what
+you changed and merges it. A review started any other way is not saved.

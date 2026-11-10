@@ -1,0 +1,26 @@
+
+> test
+> node --test
+
+✔ spring gap skips absent labels and keeps closing inclusive of slot end (15.426208ms)
+✔ autumn repeats both labels in instant order with distinct offsets (3.438ms)
+✔ gap boundaries advance to first valid instant, preserving the wall grid (3.624417ms)
+✔ ambiguous opening is earlier and ambiguous closing is later, with elapsed slot duration (3.0285ms)
+✔ now excluded, horizon included in elapsed weeks across the autumn change (3.198959ms)
+✔ horizon endpoint is included and the next grid start is excluded (3.471458ms)
+✔ confirmed times belong to one stylist, cancelled times are free, config edits apply immediately (5.767458ms)
+✔ spring horizon is elapsed time and includes the new offset endpoint (3.919834ms)
+✔ hash lookup, encrypted durable confirmations, fresh nonces and restart recovery with the original key (66.161167ms)
+✔ missing or malformed keys fail initialization, wrong keys and tampering fail authentication and preserve pending data (3.707208ms)
+✔ failure queuing the confirmation rolls back the booking after reopening (2.829666ms)
+✔ separate processes contend on a real file, equivalent ISO starts have exactly one winner (118.96325ms)
+✔ database uniqueness itself rejects duplicate inserts and updates, allowing other stylists and cancelled rows (6.408083ms)
+✔ invalid and zone-less starts cannot create an appointment or email (2.927167ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 179.479333

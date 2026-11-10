@@ -28,6 +28,8 @@ Each kind of agent has a skill that tells it how to do its job:
 
 | Skill | Who reads it | Default model and effort | What it covers |
 |---|---|---|---|
+| [`interview-me`](interview-me/) | the lead | the lead's | Talking with you to find out what you want and why, and writing the project brief |
+| [`domain-language`](domain-language/) | the lead, or any agent asked to sort out the project's names | that agent's | Agreeing one name for each thing in the project, and keeping the glossary |
 | [`plan-module`](plan-module/) | the planner | Opus 5.5, high | Splitting a project into modules, and writing each module's design, milestones and done-when file |
 | [`build-milestone`](build-milestone/) | a builder | Codex `gpt-6.1-sol` or Opus 5.5, medium | Building one milestone, proving it, and merging it |
 | [`review-milestone`](review-milestone/) | a reviewer | Opus 5.5, medium | Judging a design, or a milestone that is Ready for Review |
@@ -37,25 +39,42 @@ Each kind of agent has a skill that tells it how to do its job:
 
 The example is a small money-tracking tool. It reads a file of transactions and prints account balances.
 
-### Planning
+### Saying what you want
 
 1. You tell the lead what you want.
 
-2. The lead runs the `plan` command and passes it your words. The command starts a planner and waits for it to
-   finish.
+2. The lead reads the repository first, so that it doesn't ask you for anything it could look up. Then it asks
+   you about the things only you can decide, one question at a time. It asks why you want this before it offers
+   choices. When there are choices, it lays them out and says which it recommends. It does not ask about things
+   that would not change what gets built.
 
-3. The planner splits the project into modules. A **module** is a part of the project that one builder can work on
+3. As names for things come up, the lead settles each one with you and writes it into the **glossary**, a file
+   that holds the agreed name for each thing in the project. Here, you call the lines of the file "transactions"
+   and the lead had been saying "entries", so the glossary says Transaction, and lists "entry" as a name to
+   avoid.
+
+4. The lead writes the **project brief**. It holds your request word for word, the reason, what is left out, how
+   you will judge the result, and a numbered list of decisions. Each decision says whether it was yours or the
+   lead's. The lead shows you the brief in the chat, and you approve it or correct it. The lead starts no planner
+   before that, unless you say to skip this conversation.
+
+### Planning
+
+5. The lead runs the `plan` command and passes it your words and the brief. The command starts a planner and
+   waits for it to finish. A planner can't ask you anything, which is why the brief comes first.
+
+6. The planner splits the project into modules. A **module** is a part of the project that one builder can work on
    without touching the other parts. Here there are two: `core` reads the transaction file and adds up the accounts,
    and `report` prints the balances.
 
-4. The planner writes two files for the whole project:
+7. The planner writes two files for the whole project:
    - The **project settings**, in a file called `ORCHESTRATE.md`. It holds facts about the project, such as the
      command that runs the tests and whether agents may push. Every agent reads it first, so the skills need to
      know nothing about your project in advance.
    - The **module list**. It names each module and says what each one provides to the others. Here, `core` provides
      a function that returns the balances, and `report` calls it.
 
-5. The planner writes three files for each module:
+8. The planner writes three files for each module:
    - A **design**. It says what the module must do for the people who use it.
    - A list of **milestones**. A milestone is a piece of the module small enough for one builder to finish in one
      session. `core` has one. `report` has two: "print balances from made-up numbers", then "print balances from a
@@ -63,7 +82,7 @@ The example is a small money-tracking tool. It reads a file of transactions and 
    - A **done-when file**. For each milestone, it lists the things that must be true before the milestone is Done.
      Each of those things is an **item**. "A file with an unbalanced transaction is refused" is an item.
 
-6. For each item, the planner writes how it will be proved. There are three ways:
+9. For each item, the planner writes how it will be proved. There are three ways:
    - An **Automated Check** is a shell command that passes or fails.
    - A **Reviewer Inspection** means a reviewer runs the product and looks at it.
    - A **Reviewer Question** is a question a reviewer answers by reading the code.
@@ -71,30 +90,30 @@ The example is a small money-tracking tool. It reads a file of transactions and 
    The planner also writes down when a milestone **depends on** a milestone in another module. Here, the second
    `report` milestone depends on the `core` milestone, because it needs the real balances.
 
-7. The `plan` command finishes. It confirms the planner wrote only plan files. It merges them into the main branch
-   of your repository. Then it prints one line that says what happened and which command to run next. Every command
-   below ends the same way.
+10. The `plan` command finishes. It confirms the planner changed no record of finished work. It merges the plan
+    into the main branch of your repository. Then it prints one line that says what happened and which command to
+    run next. The `run` and `review` commands below end the same way.
 
 ### Reviewing the designs
 
-8. The lead runs the `review` command on each module's design. Each run starts a new reviewer. The reviewer reads
-   your request and that module's design, and writes a review. The command saves the review in the repository and
-   sets the design's status to **Design Approved** or **Design Changes Requested**.
+11. The lead runs the `review` command on each module's design. Each run starts a new reviewer. The reviewer reads
+    your request and that module's design, and writes a review. The command saves the review in the repository and
+    sets the design's status to **Design Approved** or **Design Changes Requested**.
 
-9. If the status is Design Changes Requested, the lead runs `plan` again and passes it the review. A planner fixes
-   the design, and the lead runs `review` on it again. No builder starts on a module until its design is Design
-   Approved. If the lead runs `run` on a module whose design has had no review, the `run` command runs that review
-   first.
+12. If the status is Design Changes Requested, the lead runs `plan` again and passes it the review. A planner fixes
+    the design, and the lead runs `review` on it again. No builder starts on a module until its design is Design
+    Approved. If the lead runs `run` on a module whose design has had no review, the `run` command runs that review
+    first.
 
 ### Building
 
-10. The lead makes one **worktree** for each module. A worktree is a second working copy of the repository, so two
+13. The lead makes one **worktree** for each module. A worktree is a second working copy of the repository, so two
     builders can work at once without overwriting each other's files.
 
-11. The lead runs the `run` command once for each module. Each run starts a builder on that module's first
+14. The lead runs the `run` command once for each module. Each run starts a builder on that module's first
     milestone, which becomes **In Progress**. Here, two builders start: one on `core`, one on `report`.
 
-12. Each builder builds its milestone. It writes the code and runs the Automated Checks. In the done-when file, it
+15. Each builder builds its milestone. It writes the code and runs the Automated Checks. In the done-when file, it
     marks each item as passed and notes where the **evidence** is saved. Evidence is saved proof, such as a
     screenshot or a test log. The builder merges its work into the main branch. Last, it sets the milestone to
     **Ready for Review**, which means "the builder says this is finished, and nobody has verified it".
@@ -102,24 +121,24 @@ The example is a small money-tracking tool. It reads a file of transactions and 
     If a builder stops before that, the `run` command sends it a message to continue. This repeats until the builder
     sets Ready for Review or reports that it can't go on.
 
-13. The `run` command tests the builder's work. It makes a clean copy of the main branch, and runs the project's
+16. The `run` command tests the builder's work. It makes a clean copy of the main branch, and runs the project's
     test command and every Automated Check there. If one fails, the command sends the builder the failure, and the
     builder continues working.
 
-14. The `run` command finishes. A milestone needs a reviewer if any of its items is a Reviewer Inspection or a
+17. The `run` command finishes. A milestone needs a reviewer if any of its items is a Reviewer Inspection or a
     Reviewer Question, or if it is the module's last milestone. If it needs no reviewer, the command sets it to
     **Done** in a record file. Otherwise it stays Ready for Review.
 
 ### Reviewing a milestone
 
-15. The lead runs the `review` command on the milestone. The command starts a new reviewer. The reviewer runs the
+18. The lead runs the `review` command on the milestone. The command starts a new reviewer. The reviewer runs the
     tool, tries it on its own files, and reads the changed code. It writes a review that gives each item a Pass, a
     Fail or a Could Not Judge.
 
-16. The `review` command finishes. It confirms the reviewer changed no code, and saves the review. If every item
+19. The `review` command finishes. It confirms the reviewer changed no code, and saves the review. If every item
     got a Pass, it sets the milestone to Done.
 
-17. If the review failed, the milestone goes back to In Progress, and the lead runs the command the script printed.
+20. If the review failed, the milestone goes back to In Progress, and the lead runs the command the script printed.
     Which command that is depends on how many reviews the milestone has failed:
 
     | Failed reviews | What the lead runs | What happens |
@@ -131,22 +150,22 @@ The example is a small money-tracking tool. It reads a file of transactions and 
 
 ### The next milestone
 
-18. The lead runs `run` again for the module. The command starts the builder on the module's next milestone.
+21. The lead runs `run` again for the module. The command starts the builder on the module's next milestone.
 
     A milestone that depends on another module does not start early. If the lead runs `run` for `report` before the
     `core` milestone is Done, the command prints that the milestone is **Waiting on Dependency** and starts nothing.
 
-19. Steps 11 to 18 repeat until every milestone in every module is Done.
+22. Steps 14 to 21 repeat until every milestone in every module is Done.
 
 ### When it needs you
 
-20. Some items need a person. Suppose `report` has the item "the owner confirms the layout is readable". The
+23. Some items need a person. Suppose `report` has the item "the owner confirms the layout is readable". The
     planner marked that item as needing human feedback when it wrote it. The builder does everything else, then
     stops and reports it. The `run` command sets the milestone to **Needs Human Feedback** and prints the question.
 
-21. The lead asks you in the chat, and shows you the output. You answer.
+24. The lead asks you in the chat, and shows you the output. You answer.
 
-22. The lead runs the `owner answer` command with your words. The command saves them in the record file. The lead
+25. The lead runs the `owner answer` command with your words. The command saves them in the record file. The lead
     runs `run` again, and the builder reads your answer and continues.
 
 A milestone can also stop because something it needs is missing, such as a login the builder doesn't have. That
@@ -154,7 +173,7 @@ milestone is **Blocked**, and the command prints what would unblock it.
 
 ### The report
 
-23. The lead runs the `report` command. It prints what is Done, what each review said, what waits for you, every
+26. The lead runs the `report` command. It prints what is Done, what each review said, what waits for you, every
     decision saved in your name, and what the build cost. The lead sends you that, with its own notes.
 
 ## Milestone statuses
@@ -198,6 +217,63 @@ saying so. Most of the design follows from that.
 Each choice below says what it rests on. Some choices rest on measurements. Some rest on one company's report of
 what worked for them. Some are our own practice, kept because it fixed a problem we saw. Most published advice in
 this area is of the second kind, and the text says so where it matters.
+
+### The lead finds out what you want before anyone plans
+
+A planner is a new session that can't ask you anything. Whatever is unclear in your request, it settles with a
+guess, and the guess is then built and reviewed as if you had asked for it. Our own test runs showed both ways
+this goes wrong: a plan that read "accents" too narrowly, and a plan that added an 80-column limit nobody wanted.
+So the lead talks to you first, and writes down what you said as the project brief.
+
+How that conversation runs is taken from other skill libraries. We read fourteen. Three of them have measured
+how their own conversation skill behaves, and the rules here lean on those.
+
+- Superpowers rebuilt its `brainstorming` skill in October 2026. One version always opened with a question, and
+  a user on Claude Opus 5.5 reported it asking why they wanted a fix they had just asked for. The next version
+  added the rule used here: ask only when the answer would change what gets built and nothing already answers
+  it. With that rule and three others, filler questions fell from 41 to 23 in test conversations graded blind.
+  ([release notes](https://github.com/obra/superpowers/blob/main/RELEASE-NOTES.md))
+- On the way there, a draft that dropped the opening question and offered choices first got a pick and lost the
+  reason: graders rated the conversation good in one run of nine. In the released version the reason came out
+  before any approach in 33 of 33 conversations. So the lead asks why first, as an open question.
+- In one of its test scenarios, the agent skipped the written design without asking in 24 of 24 runs. After a
+  rule to write it, that was 3 of 24. So the lead starts no planner until you have approved the brief.
+- Compound Engineering tested the message that plays your request back to you. A word limit did not change the
+  length of what Claude wrote. A rule about what belongs in the message worked: only what would change the build
+  if it were wrong.
+  ([write-up](https://github.com/EveryInc/compound-engineering-plugin/blob/main/docs/solutions/skill-design/confirmations-filter-by-salience-not-length-caps.md))
+- Matt Pocock's skills report, without measurement, that precise answers are softened by each later document.
+  That is why the brief quotes your words and numbers its decisions.
+  ([mattpocock/skills](https://github.com/mattpocock/skills))
+
+These are the maintainers' own numbers. Every one of them grades the conversation. None measures whether what
+was built afterwards was closer to what the person wanted, and we have not measured that either.
+
+Some parts of the brief come from our own needs and from no library: how the result will be judged and which
+judgements only you can make, how you want to work with the agents, your request kept word for word, and the
+difference between "I don't know", "I don't mind" and "you decide".
+
+### Each thing has one name, kept in a glossary
+
+Each agent starts new and knows only the files. A name that isn't written down is invented again by the next
+agent, slightly differently. This set went through that itself: by 10 November 2026 its files said "claimed",
+"the loop", "the ladder" and "parked", and its owner could not tell what they meant. The names in this README are
+the result of going through them one by one, and the rules in `domain-language` are what that taught us: the
+owner's word wins, the explicit and familiar name beats the short one, and a name stored in a file stays while
+the prose uses the clearer one.
+
+The rest comes from two libraries that keep a glossary, and their evidence is about the file going wrong:
+
+- Matt Pocock's most-reported problem is the glossary turning into a second plan, rewritten after every answer.
+  Hence the rule that it holds names and nothing else.
+- Compound Engineering measured one project's glossary over 25 commits: 380 lines added and 11 removed. Hence
+  the rule to remove and merge entries.
+- Matt Pocock's notes warn that an entry an agent wrote and nobody checked is read as fact by every later
+  session. Hence the line that marks an entry the owner hasn't agreed.
+
+Nobody has measured whether agents keep to a glossary, or do better work with one. Matt Pocock's own notes doubt
+that it helps the agent, and say the gain may be for the people. We keep it because the owner could not follow
+the build without it.
 
 ### What "done" means is written before building, and the builder can't change it
 
@@ -376,6 +452,9 @@ Nothing published supports these. Each is here because it fixed something we saw
   command line.
 - Builders and reviewers run at medium effort, and planners at high. Raise it where a run has been seen to fall
   short.
+- The project settings name one model for each host. A line such as `Claude planner model: claude-fable-5-2`
+  gives one kind of agent on that host a different model, so you can plan with a larger model and build with the
+  usual one. Say "plan with Fable" to the lead, and the lead adds the line.
 - You set the pace by choosing how many builders run. The script forecasts the usage limit, and never slows down
   on its own.
 
@@ -389,11 +468,12 @@ Nine test runs on small made-up projects are described under [Known limits](#how
 are where most of the wording in the skills was corrected.
 
 The research behind this section, an assessment of these skills against it, and the records of every test run are
-in the skills repository, under `workbench/orchestration-review/`.
+in the skills repository, under `workbench/orchestration-review/`. The surveys of other skill libraries are under
+`workbench/intent-conversation/` and `workbench/domain-language/`.
 
 ## Installing
 
-The four skills link to each other's files, so install them together.
+The six skills link to each other's files, so install them together.
 
 For an interactive install, run `npx @ryannel/orchestrate` and choose the hosts and where to install. Claude Code
 can install for one project or for all of them. Codex installs for all of them.
@@ -413,9 +493,10 @@ has written it.
 You do all of this by talking to the lead. You never need a terminal. The smallest project is one module in an
 empty repository with one commit.
 
-1. Say what you want and ask for a plan, or run `/plan-module`. Say which hosts you build with, whether agents may
-   push, and how the project is tested. A planner takes the safest reading of anything you leave out, and lists
-   what it assumed.
+1. Say what you want, or run `/interview-me`. The lead asks you what it can't look up, including which hosts
+   you build with and whether agents may push, and shows you the project brief to approve. To skip the
+   conversation, say "just plan it", or run `/plan-module`. A planner then takes the safest reading of anything
+   you left out, and lists what it assumed.
 2. The lead has a reviewer read each design. Until a design is Design Approved, the plan can be revised freely.
    After that, a milestone's items change only when a planner rewrites them or when you change the scope. This
    stops anyone from quietly making a requirement easier to meet.
@@ -423,7 +504,8 @@ empty repository with one commit.
    builders and one Codex". The lead keeps builders and reviewers going, and tells you when a milestone is Done or
    needs you.
 
-You can also work in one chat with no lead. Run `/plan-module`, then `/build-milestone`, in either host. You can
+You can also work in one chat with no lead. Run `/interview-me`, `/plan-module`, then `/build-milestone`, in
+either host. You can
 switch hosts partway, because everything the next agent needs is in the files.
 
 Some decisions are yours: choosing between options, judging an item no agent can, accepting a milestone that
@@ -631,6 +713,17 @@ runs), and a browser game (one run).
 Seven runs ended with every milestone Done and a product that did what was asked. One produced a tool that dropped
 the letter `Ø`, which the planning skill now guards against. The game stopped at its first milestone, for reasons
 that have been fixed but not run again.
+
+The `interview-me` and `domain-language` skills were added after all of these runs. Each was tested on three
+requests, with a second agent playing the owner from a page of facts that the agent under test could not see.
+Each request was also run with no skill, and a grader that did not know which run was which marked both against
+checks written beforehand. With the skill, the agent asked why before it offered choices, kept the owner's words
+apart from its own decisions, and planned nothing before the owner approved. Without it, one agent built a whole
+app after two replies, and another wrote a brief without asking a single question. The first round also showed
+two gaps in the skills, which were fixed and run again. One of those conversations went on, by accident, to plan
+and build its project with the rest of the set. No conversation has been run with a real person, and each
+request was run once or twice, so the differences are a first reading. The record is in
+`workbench/orchestration-review/polish-workspace/results.md` in the repository.
 
 Those runs were short. The longest took 97 minutes. Each was run once, no person graded a review, and in each one
 the lead also played the owner. Only the last run had the lead save an owner's decisions the way it does now.

@@ -1,0 +1,124 @@
+{
+  "scenario": "s1-slug-claude",
+  "hosts": "planning in this chat (Claude); loop: one Claude builder, Claude reviewers and planner; all headless (ORCHESTRATE_HEADLESS=1); claude-opus-5-5, medium (planner high), defaults",
+  "outcome": "both milestones accepted by the loop; module SLUGLINE finished",
+  "milestones": {
+    "M1": {
+      "accepted": true,
+      "accepted_by": "checks (no review needed)",
+      "reviews": 0,
+      "failed_reviews": 0,
+      "commit": "cefd05f"
+    },
+    "M2": {
+      "accepted": true,
+      "accepted_by": "review (PASS first time)",
+      "reviews": 1,
+      "failed_reviews": 0,
+      "commit": "d1f3f53"
+    },
+    "design": {
+      "reviews": 2,
+      "verdicts": [
+        "DESIGN CHANGES (1 blocking: suffix exhaustion undefined)",
+        "DESIGN OK"
+      ]
+    }
+  },
+  "wall_clock": {
+    "total": "01:20 -> 01:45 (~25 min)",
+    "orientation_and_plan_in_chat": "01:20-01:26 (~6 min, incl. writing a reference implementation to validate checks)",
+    "design_review_1": "01:26:28-01:28:47 (2m19s)",
+    "replan_in_chat_and_adopt": "01:28:47-01:29:38 (~1 min)",
+    "stuck_on_authorisation (INVALID after adopt, owner scope needs a TTY)": "01:29:51-01:31:16 (~1.5 min)",
+    "planner_session_to_reauthorise": "01:31:16-01:33:26 (2m10s)",
+    "design_review_2_inside_run": "01:33:52-01:35:30 (~1.6 min)",
+    "M1_build_incl_pause_and_resume": "01:35:30-01:37:29 (~2 min)",
+    "M2_build_incl_pause_and_resume": "01:37:43-01:40:49 (~3 min)",
+    "M2_review": "01:41:08-01:44:31 (3m23s)"
+  },
+  "usage": {
+    "per_session": {
+      "design_review_1": {
+        "input": 49181,
+        "cached": 239166,
+        "output": 12491,
+        "cost_usd": 0.691037
+      },
+      "planner_reauthorise": {
+        "input": 43537,
+        "cached": 402059,
+        "output": 11190,
+        "cost_usd": 0.652404
+      },
+      "design_review_2_inside_run": {
+        "input": 27841,
+        "cached": 333132,
+        "output": 7960,
+        "cost_usd": 0.448474,
+        "source": "SLUGLINE-ACCEPTED.json design.usage (the run result line doesn't report it)"
+      },
+      "M1_claim": {
+        "input": 3107,
+        "cached": 95964,
+        "output": 1069,
+        "cost_usd": 0.568517,
+        "note": "resume turn only; the paused first turn that wrote M1 is not reported anywhere"
+      },
+      "M2_claim": {
+        "input": 17195,
+        "cached": 564567,
+        "output": 10137,
+        "cost_usd": 0.77688,
+        "note": "resume turn only; the paused first turn is not reported"
+      },
+      "M2_review": {
+        "input": 49606,
+        "cached": 563642,
+        "output": 11036,
+        "cost_usd": 0.730176
+      }
+    },
+    "total": {
+      "input": 190467,
+      "cached": 2198530,
+      "output": 53883,
+      "cost_usd": 3.867488
+    },
+    "note": "cost_usd is Claude's list-price estimate from the result lines, not plan charges; paused turns are missing, so the build total is understated"
+  },
+  "owner_decisions": [
+    "Planning: a single word longer than max length is hard-cut (only way to avoid an empty slug)",
+    "Planning: the -N suffix counts toward max length",
+    "Planning: non-Latin scripts are dropped, not romanised; German umlauts become the bare vowel",
+    "Planning: the existing-slugs file is read-only; slugs printed in one run are also deduplicated against each other",
+    "Planning: CLI is `python3 -m slugline` (no installed `slugline` command) - in hindsight a miss against 'cli called slugline'",
+    "Planning: Integrate local, one Claude builder, Check = unittest discover",
+    "After design review 1: unique_slug raises ValueError when no suffix fits; CLI reports such titles on stderr and exits 1; titles with no slug get no output line (alignment only on exit 0); empty stdin exits 0; UTF-8 regardless of locale",
+    "After design review 1: take the edited done-when file as scope via `owner scope` (attempted; needs a real TTY, could not be typed by this agent; fell back to the lead path `LOOP plan`)",
+    "After the planner turn: confirmed the B1 public-API addition it flagged under 'Owner decides'",
+    "Ran the second run, pause and resume as an owner would (pause during M1 and during M2)",
+    "Did not promote the M2 reviewer's advisories (BOM in --existing file, quadratic many-duplicates, missing graded-examples file)"
+  ],
+  "owner_command_stops": "One: `owner scope` would have needed the human at a terminal; worked around via the by:lead planner path.",
+  "verdict": {
+    "meets_ask": "Yes, with one caveat: invocation is `python3 -m slugline`, not a `slugline` command.",
+    "verified_by_me": [
+      "python3 -m slugline --help: clear options, exit statuses and examples",
+      "'Crème Brûlée' 'Straße über Æsir' 'Ça va? Œuvres complètes de Łukasz' -> creme-brulee, strasse-uber-aesir, ca-va-oeuvres-completes-de-lukasz",
+      "stdin with blank/whitespace lines and a duplicate -> hello-world, hello-world-2, zurich-strasse",
+      "--existing with hello-world, hello-world-2 -> hello-world-3, hello-world-4, fresh; file unchanged",
+      "default max length: a 74-char title -> 56-char slug ending on a whole word; with collisions at the limit -> ...-keeps-on-2 / -3 (58 chars)",
+      "--max-length 12 'internationalization rocks' -> internationa (documented hard cut); --max-length 2 a a -> a, stderr message, exit 1",
+      "Good '!!!' 'Привет' -> good, two stderr messages, exit 1; --max-length x / -3 and missing --existing file -> exit 2, stderr only",
+      "empty stdin -> no output, exit 0; LC_ALL=C PYTHONIOENCODING=ascii with 'Crème' -> creme; CRLF input handled",
+      "python3 -m unittest discover -s tests -> 34 tests OK; library only imports stdlib (checked by pinned check)"
+    ],
+    "suspected_not_verified": [
+      "the M2 reviewer's quadratic-time advisory for many identical titles in one run (not timed by me)"
+    ],
+    "verified_defects": [
+      "an --existing file beginning with a UTF-8 BOM misses its first slug (advisory, edge case)"
+    ]
+  }
+}

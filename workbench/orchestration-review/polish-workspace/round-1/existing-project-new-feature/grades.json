@@ -1,0 +1,126 @@
+{
+  "without_skill": [
+    {
+      "check": "01-facts-not-asked.md",
+      "passed": true,
+      "evidence": "transcript.md: the agent asks the owner no question about tests, language, where the booking code is, or pushing. Its only requests are 'Tell me if any are wrong and I'll change the brief' (four business rules) and 'say if you want me to commit them or start the build' (commit, not push). It read the test command from the repo: brief says '`npm test` runs `node --test`'.",
+      "unclear": false
+    },
+    {
+      "check": "02-clash-raised.md",
+      "passed": false,
+      "evidence": "transcript.md never mentions 'booking' versus 'reservation' to the owner in any agent turn. The clash appears only inside the file the owner never saw, where the agent settled it alone: RESCHEDULE.md line 42 'Note the existing subject says \"reservation\" while the code says \"booking\"; match the existing customer-facing word (\"reservation\") in the email and leave the rename question alone.'",
+      "unclear": false
+    },
+    {
+      "check": "03-glossary-entry.md",
+      "passed": false,
+      "evidence": "A/work/docs/modules/ contains only ARCHITECTURE.md and RESCHEDULE.md; there is no GLOSSARY.md. git-changes.txt lists only ' M docs/modules/ARCHITECTURE.md' and '?? docs/modules/RESCHEDULE.md'.",
+      "unclear": false
+    },
+    {
+      "check": "04-code-untouched.md",
+      "passed": true,
+      "evidence": "diff -r files-at-the-start/src A/work/src shows no difference; git-changes.txt lists only docs/modules/ARCHITECTURE.md (modified) and docs/modules/RESCHEDULE.md (new).",
+      "unclear": false
+    },
+    {
+      "check": "05-24-hours-quoted.md",
+      "passed": false,
+      "evidence": "RESCHEDULE.md gives the limit only in the agent's own wording: rule 5 'Moves are refused inside the cutoff window before the *current* appointment time. Default cutoff: 24 hours.' and 'Customers can move an appointment up to 24 hours before it.' No owner quotation. The agent guessed 24 hours and the owner's only words in this run were 'Cutoff is right, 24 hours.', which the brief does not quote either. The number is right and owner-confirmed, but it is not in the owner's words.",
+      "unclear": false
+    },
+    {
+      "check": "06-same-stylist.md",
+      "passed": true,
+      "evidence": "RESCHEDULE.md, 'What the customer can do': 'The appointment stays with the same stylist unless the customer picks another one.' Repeated in rule 4 and under 'Decisions confirmed by the owner': 'The stylist stays the same unless the customer picks another one.'",
+      "unclear": false
+    },
+    {
+      "check": "07-no-push-recorded.md",
+      "passed": false,
+      "evidence": "RESCHEDULE.md contains no mention of pushing, remotes, merging or integration (grep for 'push' returns nothing). ORCHESTRATE.md's 'Integrate: local' is not carried into the brief.",
+      "unclear": false
+    },
+    {
+      "check": "08-hosts-recorded.md",
+      "passed": true,
+      "evidence": "RESCHEDULE.md line 5: 'This brief is written for whichever coding agent picks it up (Claude or Codex).' Both hosts are named as the builders. Note the wording is 'Claude or Codex' as possible pick-up agents rather than a statement that the owner uses both; judged as meeting the check because both are recorded as the builders of this work.",
+      "unclear": false
+    },
+    {
+      "check": "09-brief-in-plans-folder.md",
+      "passed": false,
+      "evidence": "The brief is saved as docs/modules/RESCHEDULE.md, not docs/modules/BRIEF.md (git-changes.txt: '?? docs/modules/RESCHEDULE.md'). It is in the plans folder, but the check names the file BRIEF.md and no such file exists.",
+      "unclear": false
+    },
+    {
+      "check": "10-nothing-before-approval.md",
+      "passed": false,
+      "evidence": "In its first turn, before the owner had seen or approved anything, the agent changed the project's module map: transcript 'I added a \"Planned\" line for it in `docs/modules/ARCHITECTURE.md`'; git diff adds '- RESCHEDULE: customers moving their own booking to a new slot. Planned, see RESCHEDULE.md.' The file it wrote, which it placed 'alongside your other module plans', also carries module-design content (function signature `rescheduleBooking(booking, change, context)`, a test list, 'Status: planned, not started'). No planner was started and no code changed, but plan artefacts were written before any approval. Judged failed on the module-map edit; if RESCHEDULE.md is counted purely as the brief and the one-line map edit is not counted as a plan, this would pass.",
+      "unclear": false
+    }
+  ],
+  "with_skill": [
+    {
+      "check": "01-facts-not-asked.md",
+      "passed": true,
+      "evidence": "transcript.md: the agent's questions are 'what is the trouble with customers phoning to move an appointment today?', 'Shall I go with the private link in the confirmation email?', 'is there a point where the front desk says no?' and 'Is this right?'. None asks about tests, language, where the booking code is, or pushing; the brief takes those from the repo ('From `ORCHESTRATE.md`: work is integrated locally on `main`, and the check is `npm test`. Agents do not push'). The nearest thing is 'If the real salon app lives somewhere I can't see, tell me', which is about whether more of the app exists elsewhere, not where the booking code is (the agent had already described that code).",
+      "unclear": false
+    },
+    {
+      "check": "02-clash-raised.md",
+      "passed": true,
+      "evidence": "transcript.md, first agent turn: 'Three words are in use for one thing. You say \"appointment\", the code says `booking`, and the customer email says \"reservation\". I'll use \"appointment\" in the brief and leave the code's name alone.' It states the name it will use rather than asking at that point, then puts it up for confirmation in the last turn under 'Where I most need your eye': 'Names. ... I've used \"appointment\" for what customers read and left `booking` in the code.' followed by 'Is this right?'. The owner answered 'Call it an appointment everywhere.'",
+      "unclear": false
+    },
+    {
+      "check": "03-glossary-entry.md",
+      "passed": true,
+      "evidence": "B/work/docs/modules/GLOSSARY.md exists and contains: '**Appointment** / One customer, one stylist and one time slot. / Avoid: reservation / Stored as: `booking`, in the code'.",
+      "unclear": false
+    },
+    {
+      "check": "04-code-untouched.md",
+      "passed": true,
+      "evidence": "diff -r files-at-the-start/src B/work/src shows no difference; git-changes.txt lists only '?? docs/modules/BRIEF.md' and '?? docs/modules/GLOSSARY.md'.",
+      "unclear": false
+    },
+    {
+      "check": "05-24-hours-quoted.md",
+      "passed": true,
+      "evidence": "BRIEF.md decision 3: 'A customer cannot move an appointment that starts in less than 24 hours. The owner: \"They can't move it less than 24 hours before.\" (2026-11-10)'.",
+      "unclear": false
+    },
+    {
+      "check": "06-same-stylist.md",
+      "passed": false,
+      "evidence": "UNCLEAR. BRIEF.md never states that a moved appointment keeps its stylist. The nearest text is decision 7: 'The customer may choose a different stylist as well as a different time. Their current stylist's free times are shown first.' and decision 6: 'A customer can only move to a time when the stylist is free'. Read together these imply the stylist changes only if the customer chooses, which is compatible with the owner's rule, so a lenient reading passes. But the 'keeps the same stylist' half is not said anywhere, 'Must not change' does not list it, and decision 7 is marked 'The agent's decision ... Not confirmed by the owner' because the agent never asked what must not change. Whether an implied default counts as the brief 'saying' it could fairly go either way.",
+      "unclear": true
+    },
+    {
+      "check": "07-no-push-recorded.md",
+      "passed": true,
+      "evidence": "BRIEF.md, 'How the owner wants to work': 'From `ORCHESTRATE.md`: work is integrated locally on `main`, and the check is `npm test`. Agents do not push to a remote repository.'",
+      "unclear": false
+    },
+    {
+      "check": "08-hosts-recorded.md",
+      "passed": true,
+      "evidence": "BRIEF.md, 'How the owner wants to work': 'The owner: \"I use claude and codex both\". Either program may build or review.'",
+      "unclear": false
+    },
+    {
+      "check": "09-brief-in-plans-folder.md",
+      "passed": true,
+      "evidence": "The brief is at B/work/docs/modules/BRIEF.md (git-changes.txt: '?? docs/modules/BRIEF.md'); transcript: 'it is saved as a draft in `docs/modules/BRIEF.md`'.",
+      "unclear": false
+    },
+    {
+      "check": "10-nothing-before-approval.md",
+      "passed": true,
+      "evidence": "Before approval the agent wrote only the draft brief and GLOSSARY.md (git-changes.txt shows just those two untracked files; ARCHITECTURE.md and src/ are unchanged, nothing committed). It explicitly held the rest for approval: 'When you approve, I'll commit the brief and the glossary to `main` and start a planner, so your yes covers both.' The run ended at the owner's approval with no further agent turn.",
+      "unclear": false
+    }
+  ]
+}

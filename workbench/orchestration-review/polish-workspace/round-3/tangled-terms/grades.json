@@ -1,0 +1,126 @@
+{
+  "with_skill": [
+    {
+      "check": "01-glossary-exists.md",
+      "passed": true,
+      "evidence": "A/work/GLOSSARY.md exists at the root of the working folder; git-changes.txt lists '?? GLOSSARY.md'.",
+      "unclear": false
+    },
+    {
+      "check": "02-owners-words-kept.md",
+      "passed": false,
+      "evidence": "A/work/GLOSSARY.md has entries Bank, Code, Collected, Locker, Overdue, Pickup, Waiting for Pickup. Locker, Bank and Pickup are there, but there is no Drop-off entry and no entry at all for the courier putting a parcel in. The agent never asked what the owner calls that act, and the owner never said 'drop-off' in the transcript.",
+      "unclear": false
+    },
+    {
+      "check": "03-owners-words-asked-for.md",
+      "passed": true,
+      "evidence": "A/work/GLOSSARY.md has an entry '**Waiting for Pickup**' and an entry '**Overdue**'.",
+      "unclear": false
+    },
+    {
+      "check": "04-made-up-names-replaced.md",
+      "passed": true,
+      "evidence": "In A/work/GLOSSARY.md the three words appear only on 'Avoid:' and 'Stored as:' lines: 'Avoid: hopper, unit'; 'Avoid: stale' and 'Stored as: `stale`, ...'; 'Avoid: claimed, unclaimed' and 'Stored as: `claimed`, ...'. No entry is named hopper, claimed or stale.",
+      "unclear": false
+    },
+    {
+      "check": "05-stored-as-recorded.md",
+      "passed": true,
+      "evidence": "The Waiting for Pickup entry in A/work/GLOSSARY.md says 'Stored as: `claimed`, in the `state` field of `data/parcels.json` and in `STATES` in `src/parcel.py`'.",
+      "unclear": false
+    },
+    {
+      "check": "06-code-not-renamed.md",
+      "passed": true,
+      "evidence": "git-changes.txt shows only ' M docs/overview.md', '?? AGENTS.md', '?? GLOSSARY.md'. A/work/src/parcel.py and A/work/data/parcels.json are byte-identical to files-at-the-start (diff -r reports no difference).",
+      "unclear": false
+    },
+    {
+      "check": "07-shown-in-steps.md",
+      "passed": true,
+      "evidence": "Fourth agent message, 'The story of parcel P-1': '1. On Monday morning a courier puts parcel P-1 in **locker** 12 and shuts the door. 2. From that moment, P-1 is **waiting for pickup**. ... On Tuesday the customer comes to the **bank** with their **code** and does a **pickup**. P-1 is now **collected**.' The second agent message also gives the flow as steps 1 to 5. The steps cover the courier's deposit through the pickup, though the word 'drop-off' itself is not used because the glossary has no such name.",
+      "unclear": false
+    },
+    {
+      "check": "08-names-in-chat.md",
+      "passed": true,
+      "evidence": "Names are given in the chat itself: '- **Locker**: one door in a bank, and the space behind it. It replaces \"hopper\" and \"unit\".' and later a seven-row table 'The seven agreed names' with Name, Meaning, Replaces, Stored as. The agent mentions GLOSSARY.md and docs/overview.md as places it wrote to but never asks the owner to open a file.",
+      "unclear": false
+    },
+    {
+      "check": "09-nothing-but-names.md",
+      "passed": true,
+      "evidence": "A/work/GLOSSARY.md is a three-sentence key followed by seven entries, each holding only a meaning plus 'Not:', 'Avoid:' and 'Stored as:' lines. No plan, no record of a decision, no account of what the code does. The nearest things are the key's clause 'the name the code and data use, which stays as it is' and the 'Stored as' lines naming where the value lives ('in the `state` field of `data/parcels.json` and in `STATES` in `src/parcel.py`'); I read these as explaining the label and locating a stored name, not as a decision or a description of how the code works.",
+      "unclear": false
+    },
+    {
+      "check": "10-docs-use-the-names.md",
+      "passed": true,
+      "evidence": "A/work/docs/overview.md contains no 'hopper'. 'claimed' and 'stale' each appear once, only as stored names: '2. Once the door shuts, the parcel is waiting for pickup (stored as `claimed`).' and '5. If nobody collects the parcel within 3 days, it is overdue (stored as `stale`).'",
+      "unclear": false
+    }
+  ],
+  "without_skill": [
+    {
+      "check": "01-glossary-exists.md",
+      "passed": false,
+      "evidence": "There is no GLOSSARY.md at the root of B/work. The glossary was written to B/work/docs/glossary.md; git-changes.txt lists '?? docs/glossary.md'.",
+      "unclear": false
+    },
+    {
+      "check": "02-owners-words-kept.md",
+      "passed": false,
+      "evidence": "B/work/docs/glossary.md has entries locker, bank, drop, waiting, collected, overdue, pickup code. Locker and bank are there, but the courier's act is named 'drop', not Drop-off, and there is no Pickup entry (only 'pickup code', which is the code the customer gets, not the customer taking the parcel).",
+      "unclear": false
+    },
+    {
+      "check": "03-owners-words-asked-for.md",
+      "passed": false,
+      "evidence": "B/work/docs/glossary.md has an 'overdue' entry but no Waiting for Pickup entry; that status is named '**waiting**'. The check needs both.",
+      "unclear": false
+    },
+    {
+      "check": "04-made-up-names-replaced.md",
+      "passed": true,
+      "evidence": "Judged against B/work/docs/glossary.md, which is the glossary this run wrote. 'hopper' appears only in the 'Retired words' table ('unit, hopper, door (for the compartment) | locker'). 'claimed' and 'stale' appear only in the 'Value stored in the code and data' column, in 'Words the code uses differently' ('`claimed` in the code means **waiting**', '`stale` in the code means **overdue**') and in the Retired words table. None of the three is an entry name.",
+      "unclear": false
+    },
+    {
+      "check": "05-stored-as-recorded.md",
+      "passed": true,
+      "evidence": "B/work/docs/glossary.md, 'Stages of a parcel' table, column 'Value stored in the code and data': '| **waiting** | The parcel is in a locker and the customer has not taken it yet. | `claimed` |'. Also '`claimed` in the code means **waiting**.'",
+      "unclear": false
+    },
+    {
+      "check": "06-code-not-renamed.md",
+      "passed": true,
+      "evidence": "git-changes.txt shows only ' M docs/overview.md' and '?? docs/glossary.md'. B/work/src/parcel.py and B/work/data/parcels.json are byte-identical to files-at-the-start (diff -r reports no difference).",
+      "unclear": false
+    },
+    {
+      "check": "07-shown-in-steps.md",
+      "passed": false,
+      "evidence": "No agent message contains numbered steps of a parcel's journey. The second agent message shows the flow as two code-block diagrams ('drop \u2500\u2500> waiting \u2500\u2500> collected (the customer took it)') and one sentence. The only numbered steps are in the file, which the chat merely reports: 'I rewrote `docs/overview.md` as three short steps using only these terms'.",
+      "unclear": false
+    },
+    {
+      "check": "08-names-in-chat.md",
+      "passed": true,
+      "evidence": "The first agent message puts the proposed names in a chat table with a 'Suggested term' column (locker, bank, drop, waiting, collected, stale, pickup code), and the second says in chat '\"stale\" is now **overdue**' and shows the terms in diagrams. It refers to the glossary file ('The glossary has a mapping table so nobody has to guess') but does not ask the owner to open it, and the mapping it mentions is also stated in chat ('The docs say \"waiting\" and \"overdue\", while the code and data still store `claimed` and `stale`').",
+      "unclear": false
+    },
+    {
+      "check": "09-nothing-but-names.md",
+      "passed": false,
+      "evidence": "Could fairly go either way. B/work/docs/glossary.md is mostly names, meanings and stored values, with no plan and no account of what the code does step by step. But it also carries status notes that go beyond naming: 'The code and stored data have not been renamed, so two of their state values differ from the docs' (which records the outcome of the owner's decision not to rename) and 'They appear in older text and in one code comment' (a note on the state of the repository). Whether those count as 'decisions' or 'descriptions of how the code works' depends on how strictly the check is read, so it is marked failed and unclear.",
+      "unclear": true
+    },
+    {
+      "check": "10-docs-use-the-names.md",
+      "passed": true,
+      "evidence": "B/work/docs/overview.md contains none of 'hopper', 'claimed' or 'stale' (grep finds no match). It reads '1. **Drop.** A courier scans in and puts the parcel in a locker. 2. **Waiting.** ... 3. **Collected or overdue.** ...'. The owner agreed after seeing the names: 'That makes sense now, and \"overdue\" works for me. Looks good.'",
+      "unclear": false
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+ "scenario": "s6-icons-taste-v2 (second lead, suite-v3)",
+ "outcome": "finished: ICONS M1 and M2 both accepted by Codex review on the first review; build report adopted; ready says every module finished",
+ "hosts": {
+  "builder": "claude (claude-opus-5-5, medium), 1 builder",
+  "reviewer": "codex (gpt-6.1-sol, medium)",
+  "path": "headless (ORCHESTRATE_HEADLESS=1)"
+ },
+ "suite_upgrade": "v2 records, profile and done-when read by v3 with no migration; none needed",
+ "milestones": {
+  "design": {
+   "accepted": "DESIGN OK (by the first lead, suite-v2)",
+   "reviews": 2,
+   "failed": 1
+  },
+  "M1": {
+   "accepted": true,
+   "reviews": 1,
+   "failed": 0,
+   "by": "review PASS 2026-11-10T02:35:08Z",
+   "note": "unblocked by a lead relay of the owner's chat answer; builder drew directions/fineliner-loose/ and CHOSEN.md; the pass rests on a relayed answer, as the reviewer says"
+  },
+  "M2": {
+   "accepted": true,
+   "reviews": 1,
+   "failed": 0,
+   "by": "review PASS 2026-11-10T02:47:37Z",
+   "advisory": "tools/__pycache__/*.pyc committed"
+  }
+ },
+ "wall_clock_s": {
+  "relay": 1,
+  "run_M1_resume": 89,
+  "review_M1": 167,
+  "run_M2": 439,
+  "review_M2": 283,
+  "report_adopt_cleanup": "about 1 min",
+  "total_loop_this_lead": 979,
+  "owner_answer_to_accepted": "02:30:24Z to 02:47:37Z, 17 min"
+ },
+ "tokens": {
+  "source": "result lines' usage; note the M1 build line is cumulative over the resumed session (includes the first lead's BLOCKED turn), cross-checked with LOOP cost",
+  "M1_build_claude_session_total": {
+   "input": 87524,
+   "cached": 1999898,
+   "output": 31786,
+   "cost_usd_list": 1.736,
+   "turns": 2
+  },
+  "M1_build_claude_this_lead_only_estimate": {
+   "input": 18533,
+   "cached": 799766,
+   "output": 8980,
+   "cost_usd_list": 0.488,
+   "turns": 1
+  },
+  "M1_review_codex": {
+   "input": 72425,
+   "cached": 734080,
+   "output": 5444,
+   "turns": 1
+  },
+  "M2_build_claude": {
+   "input": 99023,
+   "cached": 2235911,
+   "output": 33037,
+   "cost_usd_list": 2.337,
+   "turns": 1
+  },
+  "M2_review_codex": {
+   "input": 95077,
+   "cached": 1147904,
+   "output": 9202,
+   "turns": 1
+  },
+  "project_total_LOOP_cost": {
+   "input": 567000,
+   "cached": 8000000,
+   "output": 138000,
+   "cost_usd_list_claude_only": 6.45,
+   "turns": 9,
+   "note": "rounded, from report/cost"
+  }
+ },
+ "owner_decisions": [
+  "M1.5: owner's own chat words relayed verbatim with LOOP relay (marked relayed); owner still to confirm or overturn with `owner answer` at a terminal. No decision made by the lead on the owner's behalf."
+ ],
+ "stops": [],
+ "owner_actions_outstanding": [
+  "agent_loop.py owner answer --module ICONS --milestone M1 --item M1.5 --worktree <repo> --text '<same words to confirm, or new ones>'"
+ ],
+ "verdict": {
+  "meets_ask": "mostly",
+  "summary": "Every hard requirement is met and verified: 8 SVGs (sun, cloud, rain, wind, fog, high-tide, low-tide, moon), 24 grid, stroke only with root stroke=currentColor, round caps, no fill, 611-929 bytes each; preview.html shows all eight at true 24 and 48 px on a light and a dark panel, from file://, no network. All eight are nameable at 24 px. The owner's two notes are honoured: crests are uneven, the eight rays differ in length and angle. On the look: at 48 px it reads as pen-drawn (slow bends, open ends, overshoots, no symmetry); at 24 px it reads as a tidy outline set with a slight wobble. It's clearly not the geometric icon-pack look, but it's a gentle hand, not a scratchy field-notebook sketch. Low tide differs from high tide mainly by the chevron direction; its water is only slightly lower.",
+  "what_i_ran": [
+   "python3 -I tools/check_icons.py; ... icons --require sun,cloud,rain,wind,fog,high-tide,low-tide,moon; ... icons --preview preview.html (all OK)",
+   "Headless Chrome screenshots of preview.html at device scale 1 and 2 (out2/look/preview-ds1.png, preview-ds2.png) and an enlarged 24 px crop (preview-24-ds1-x3.png)",
+   "My own sheet of icons/ and directions/fineliner-loose at 160/48/24 on light and dark (out2/look/m2-set.png), and fineliner vs fineliner-loose (m1-blend.png)",
+   "python3 -I tools/gen_directions.py and tools/gen_icons.py then git status: only the committed .pyc changed, so the generators reproduce every SVG and preview.html byte for byte",
+   "Chrome --dump-dom with logging: no page console errors"
+  ],
+  "verified_vs_suspected": "Verified: checks, sizes, rendering, reproduction, the pyc advisory, the report timestamp bug. Suspected: that result-line usage is cumulative per resumed session (inferred from turn counts and LOOP cost)."
+ }
+}

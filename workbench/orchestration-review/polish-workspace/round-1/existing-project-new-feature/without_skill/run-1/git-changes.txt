@@ -1,0 +1,18 @@
+$ git status --short
+ M docs/modules/ARCHITECTURE.md
+?? docs/modules/RESCHEDULE.md
+
+$ git log --oneline --all
+a55a4e5 Start
+
+$ git diff HEAD
+diff --git a/docs/modules/ARCHITECTURE.md b/docs/modules/ARCHITECTURE.md
+index 2af4d7e..09600ce 100644
+--- a/docs/modules/ARCHITECTURE.md
++++ b/docs/modules/ARCHITECTURE.md
+@@ -1,3 +1,4 @@
+ # Modules
+ 
+ - BOOKINGS: creating and cancelling bookings. Done.
++- RESCHEDULE: customers moving their own booking to a new slot. Planned, see RESCHEDULE.md.
+

@@ -1,0 +1,138 @@
+{
+ "scenario": "s7-slug-cross",
+ "suite": "suite-v3",
+ "hosts": {
+  "build": "claude (claude-opus-5-5, medium)",
+  "review": "codex (gpt-6.1-sol, medium)",
+  "planner": "claude (high)"
+ },
+ "path": "headless (ORCHESTRATE_HEADLESS=1)",
+ "outcome": "finished: both milestones accepted by the loop",
+ "milestones": {
+  "design": {
+   "reviews": 2,
+   "failed": 1,
+   "verdicts": [
+    "DESIGN CHANGES (1 blocking: Unicode punctuation lost word boundaries)",
+    "DESIGN OK"
+   ]
+  },
+  "M1": {
+   "accepted": true,
+   "accepted_by": "review",
+   "reviews": 1,
+   "failed": 0,
+   "commit": "7716e77"
+  },
+  "M2": {
+   "accepted": true,
+   "accepted_by": "review",
+   "reviews": 2,
+   "failed": 1,
+   "commit": "e42f2c8",
+   "fail_reason": "multi-line argparse error for an unknown option containing a newline, against the plan's one-stderr-line rule"
+  }
+ },
+ "wall_clock_utc": {
+  "total": "02:29:39 -> 03:05:22 (35m43s)",
+  "plan_project": "02:29:39-02:35:43 (6m04s)",
+  "design_review_1": "02:36:12-02:38:36 (2m24s, inside run)",
+  "plan_revision": "02:39:10-02:46:18 (7m08s)",
+  "design_review_2_plus_M1_build": "02:46:40-02:51:00 (4m20s)",
+  "M1_review": "02:51:11-02:53:53 (2m42s)",
+  "M2_build": "02:54:04-02:57:51 (3m47s)",
+  "M2_review_fail": "02:58:02-03:00:45 (2m43s)",
+  "M2_fix_same_session": "03:01:08-03:03:01 (1m53s)",
+  "M2_review_pass": "03:03:12-03:05:22 (2m10s)"
+ },
+ "tokens_from_result_lines": {
+  "note": "Resumed-session result lines carry cumulative session usage; run-M2-fix1 (turns 2) includes run-M2's turn. Totals below use the ledger (LOOP cost), which agrees with that reading.",
+  "plan_project": {
+   "input": 71955,
+   "cached": 805161,
+   "output": 33993,
+   "cost_usd": 1.42
+  },
+  "plan_revision": {
+   "input": 88708,
+   "cached": 1123830,
+   "output": 39800,
+   "cost_usd": 1.73
+  },
+  "design_review_1": {
+   "input": 38547,
+   "cached": 180480,
+   "output": 4197
+  },
+  "design_review_2": {
+   "input": 30909,
+   "cached": 212992,
+   "output": 3577
+  },
+  "M1_build": {
+   "input": 44439,
+   "cached": 558569,
+   "output": 11977,
+   "cost_usd": 0.71
+  },
+  "M1_review": {
+   "input": 58257,
+   "cached": 340224,
+   "output": 5440
+  },
+  "M2_build_session_total_2_turns": {
+   "input": 75100,
+   "cached": 2136520,
+   "output": 25132,
+   "cost_usd": 1.53
+  },
+  "M2_review_1": {
+   "input": 55740,
+   "cached": 382208,
+   "output": 5189
+  },
+  "M2_review_2": {
+   "input": 64607,
+   "cached": 404992,
+   "output": 4115
+  },
+  "ledger_total": "10 turns, 528k in, 6.1M cached, 133k out; $5.38 list on Claude (planning $3.15, building $2.24); Codex reviews ~297k in / 22.5k out, no $ figure",
+  "codex_quota": "55% used, 'quota lasts', unchanged through the run"
+ },
+ "owner_decisions": [
+  {
+   "id": "D1",
+   "when": "02:29Z",
+   "what": "Planner task: owner's words verbatim plus a marked lead line 'no remote; integrate locally, never push'."
+  },
+  {
+   "id": "D2",
+   "when": "02:36Z",
+   "what": "Accepted planner's 7 assumptions (ä->a, non-Latin dropped, apostrophes removed, limit includes suffix, existing file read-only and in-run dupes count, blank lines skipped / empty slug -> empty line + exit 1, Python>=3.9 and flag names)."
+  },
+  {
+   "id": "D3",
+   "when": "02:47Z",
+   "what": "Accepted planner revision's 4 questions with defaults, including NOT widening the table past U+017F (so ə, ɛ, ɔ, ƒ are dropped)."
+  }
+ ],
+ "owner_commands_needed": [],
+ "lead_verdict": {
+  "meets_ask": true,
+  "summary": "Yes. Tiny stdlib-only lib + CLI; transliterates incl. non-decomposing letters (Ørsted->orsted, Straße->strasse, Æ/Œ/Þ/Ł/Đ/Ĳ); lowercase, hyphens; default 60 limit at word boundaries; -2/-3 against an existing-slugs file (read-only) and within a run; args or stdin one per line; unittest suite (50 tests) passes on 3.15 and 3.9; two milestones.",
+  "gaps": [
+   "Azərbaycan -> azrbaycan: Latin letters past U+017F that don't decompose are dropped (planner surfaced it as an owner question; lead took the narrow default).",
+   "A first word longer than the limit is clipped mid-word (documented assumption; unavoidable)."
+  ],
+  "ran": [
+   "python3 -m slugline with 10 accented titles",
+   "printf dupes | python3 -m slugline",
+   "--existing file with orsted/orsted-2, file compared after",
+   "default and --max-length 10 limits",
+   "python3 -m slugline $'--bad\\nopt' 2>&1 | wc -l",
+   "python3 -m unittest discover -s tests; /usr/bin/python3 ditto",
+   "grep imports",
+   "pip install into scratch venv, slugline console script"
+  ]
+ }
+}

@@ -1,0 +1,6 @@
+Reviewer probe (script: probe-off-grid.mjs in this folder). Node v24.16.0, commit bf25938, clock 2026-12-01T07:00Z, shipped config (Mon-Fri 09:00-17:00, 30-min grid).
+2026-12-01T10:15:00+01:00 -> recorded
+2026-12-01T22:00:00+01:00 -> recorded
+2020-01-01T10:00:00+01:00 -> recorded
+2026-12-06T10:00:00+01:00 -> recorded
+free around 10:15: [ '2026-12-01T10:00:00+01:00', '2026-12-01T10:30:00+01:00' ]

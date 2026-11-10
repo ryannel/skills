@@ -1,0 +1,9 @@
+BOOKINGS M1 in /private/tmp/claude-501/-Users-ryannel--claude-spares-spare-9ZHcrE/101c62dd-273c-4dbb-b8ea-4ac2a6b47ab8/scratchpad/convo2/existing-project-new-feature/with_skill/work/.worktrees/bookings: 6 pass
+  M1.1  pass  node --test test/bookings/free-times.test.js
+  M1.2  pass  node --test test/bookings/no-double-booking.test.js
+  M1.3  pass  node --test test/bookings/link-and-confirmation.test.js
+  M1.4  pass  node --input-type=module -e "import {createBooking} from './src/booking.js'; import assert...
+  M1.5  pass  ! grep -rqis reservation src config
+  M1.6  no check (ask)
+  Check  pass  npm test
+Everything, with each check's full output tail, as JSON: add --json.

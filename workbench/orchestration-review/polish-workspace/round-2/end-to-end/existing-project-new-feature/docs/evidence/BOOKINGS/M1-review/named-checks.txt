@@ -1,0 +1,30 @@
+$ node --test test/bookings/free-times.test.js
+✔ spring gap skips absent labels and keeps closing inclusive of slot end (15.052709ms)
+✔ autumn repeats both labels in instant order with distinct offsets (2.942958ms)
+✔ gap boundaries advance to first valid instant, preserving the wall grid (3.051709ms)
+✔ ambiguous opening is earlier and ambiguous closing is later, with elapsed slot duration (2.410584ms)
+✔ now excluded, horizon included in elapsed weeks across the autumn change (3.713542ms)
+✔ horizon endpoint is included and the next grid start is excluded (2.501208ms)
+✔ confirmed times belong to one stylist, cancelled times are free, config edits apply immediately (4.415583ms)
+✔ spring horizon is elapsed time and includes the new offset endpoint (2.374083ms)
+ℹ pass 8
+ℹ fail 0
+exit 0
+$ node --test test/bookings/no-double-booking.test.js
+✔ separate processes contend on a real file, equivalent ISO starts have exactly one winner (138.827208ms)
+✔ database uniqueness itself rejects duplicate inserts and updates, allowing other stylists and cancelled rows (7.359375ms)
+✔ invalid and zone-less starts cannot create an appointment or email (3.929583ms)
+ℹ pass 3
+ℹ fail 0
+exit 0
+$ node --test test/bookings/link-and-confirmation.test.js
+✔ hash lookup, encrypted durable confirmations, fresh nonces and restart recovery with the original key (57.443167ms)
+✔ missing or malformed keys fail initialization, wrong keys and tampering fail authentication and preserve pending data (2.990833ms)
+✔ failure queuing the confirmation rolls back the booking after reopening (2.520375ms)
+ℹ pass 3
+ℹ fail 0
+exit 0
+$ M1.4 constructor check
+exit 0
+$ ! grep -rqis reservation src config
+exit 0

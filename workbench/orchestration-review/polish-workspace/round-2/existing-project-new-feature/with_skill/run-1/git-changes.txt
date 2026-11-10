@@ -1,0 +1,7 @@
+$ git diff --stat <start> 32b9b33   (the commit that merged the brief)
+ docs/modules/BRIEF.md    | 49 ++++++++++++++++++++++++++++++++++++++++++++++++
+ docs/modules/GLOSSARY.md |  7 +++++++
+ 2 files changed, 56 insertions(+)
+
+
+(No file under src/ changed.)

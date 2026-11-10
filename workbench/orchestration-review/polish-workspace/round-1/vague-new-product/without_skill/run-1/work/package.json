@@ -1,0 +1,12 @@
+{
+  "name": "route-age",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline-first route age tracker for a climbing gym's setting crew",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "with_skill": [
+    {
+      "check": "01-glossary-exists.md",
+      "passed": true,
+      "evidence": "A/work/GLOSSARY.md exists at the top of work/ (1243 bytes), beside AGENTS.md.",
+      "unclear": false
+    },
+    {
+      "check": "02-short.md",
+      "passed": true,
+      "evidence": "A/work/GLOSSARY.md has six entries: Plant, Room, Watering Schedule, Watering, Due, Reminder.",
+      "unclear": false
+    },
+    {
+      "check": "03-at-most-one-question.md",
+      "passed": false,
+      "evidence": "Could fairly go either way. The transcript holds exactly one interrogative sentence in the whole run: \"**Watering and Due**: are those the words you'd use? If so I'll remove the proposed marks.\" Read literally that is one question and the check passes. But the agent introduces it with \"Three things for you to confirm or change:\" and numbers three separate prompts, the other two being \"Say so if you want a separate status.\" and \"If you meant one schedule for the whole home, that entry changes.\" The owner answered all three in turn (\"those words work. Keep overdue folded into due, and one schedule per plant is right.\"). Counting each item the owner was asked to confirm gives three, and the check fails. The second agent message asks nothing.",
+      "unclear": true
+    },
+    {
+      "check": "04-entries-shown.md",
+      "passed": true,
+      "evidence": "The first agent message lists all six entries with their definitions in chat, e.g. \"- **Plant**: one houseplant the tool tracks. It lives in one room and has its own watering schedule.\" through \"- **Due**: the status of a plant whose watering schedule says it needs water today or earlier.\"",
+      "unclear": false
+    },
+    {
+      "check": "05-no-general-words.md",
+      "passed": true,
+      "evidence": "The six entries in A/work/GLOSSARY.md are Plant, Room, Watering Schedule, Watering, Due and Reminder. All are words about plants and watering; none is a general programming word.",
+      "unclear": false
+    }
+  ],
+  "without_skill": [
+    {
+      "check": "01-glossary-exists.md",
+      "passed": true,
+      "evidence": "B/work/GLOSSARY.md exists at the top of work/ (2841 bytes), beside plants.py.",
+      "unclear": false
+    },
+    {
+      "check": "02-short.md",
+      "passed": false,
+      "evidence": "B/work/GLOSSARY.md has sixteen entries: Plant, Name, Species, Room, Watering, Water (verb), Schedule, Interval, Last watered, Next due, OK, Due, Overdue, Needs water, Reminder, Snooze. It also has a \"Deliberately not terms\" section with three more items. Sixteen is twice the upper limit of eight.",
+      "unclear": false
+    },
+    {
+      "check": "03-at-most-one-question.md",
+      "passed": true,
+      "evidence": "The transcript contains no interrogative sentence from the agent at all. The first message makes one blanket request over its seven listed design calls: \"Tell me which of these are wrong and I'll change the glossary before we write any code against it.\" The second message only offers (\"Say so if you wanted something else.\", \"tell me if you want either\"). Counted as questions, that is zero; counting the blanket request, one. Note: a reading that counted every item the owner is asked to check would count seven here, but no single prompt is attached to each item as in run A.",
+      "unclear": false
+    },
+    {
+      "check": "04-entries-shown.md",
+      "passed": false,
+      "evidence": "The chat never shows the entries, only the term names in a table: \"| Things | plant, name, species, room |\" ... \"| Reminders | reminder, snooze |\", with the pointer \"I wrote `GLOSSARY.md` in the project root. It defines each term once\". The definitions stay in the file, which the owner cannot open. Seven \"design calls\" paraphrase parts of some definitions (room, schedule, next due, due vs. overdue, reminder, snooze), and three terms carry a short gloss in brackets, but plant, name, species, interval, last watered and OK are named with no definition shown. Judged as failed because an entry is a term with its definition; a lenient reader who accepts the list of term names as \"the entries\" would pass it.",
+      "unclear": false
+    },
+    {
+      "check": "05-no-general-words.md",
+      "passed": true,
+      "evidence": "The sixteen entries in B/work/GLOSSARY.md (Plant, Name, Species, Room, Watering, Water, Schedule, Interval, Last watered, Next due, OK, Due, Overdue, Needs water, Reminder, Snooze) are all defined in terms of plants and watering. The broadest are Name (\"The label you give a plant\") and OK (\"Next due is in the future\"), which are everyday words given a plant meaning, not programming words like command, flag, config or database.",
+      "unclear": false
+    }
+  ]
+}

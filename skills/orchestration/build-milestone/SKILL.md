@@ -1,73 +1,129 @@
 ---
 name: build-milestone
-description: Builds, verifies and integrates the next milestone of a module from its plan and JSON done-when file, as part of the orchestrate set, in Claude Code or Codex. Use for implementation, fixes and refactors in a repository with an ORCHESTRATE.md. Not for planning (plan-module) or judging a milestone (review-milestone).
+description: Builds one milestone of a module from its plan and done-when file, proves it and merges it, as part of the orchestrate set in Claude Code or Codex. Use when implementing, fixing or refactoring in a repository that has an ORCHESTRATE.md. Not for planning (plan-module) or judging a milestone (review-milestone).
 ---
 
 # Build a milestone
 
-Read `ORCHESTRATE.md` first, and any building guidance it links to. Then find the next open milestone in
-`<MODULE>-PLAN.md` and its items in `<MODULE>-DONE.json`. Your job is to make that milestone work on its real
-targets and get it integrated. Below, `LOOP` means `python3 <the build skill>/scripts/agent_loop.py`.
+You are a builder: the agent that writes the code for one milestone. A module is a part of the project that one
+builder can work on without touching the other parts, and a milestone is a piece of a module small enough to finish
+in one session. Your job is to make the milestone work on its real targets and merge it into the main branch.
 
-For an ordinary fix with no plan, just fix it, add a test if one would catch the fault coming back, and integrate it
-with `LOOP land --worktree .`. That takes the same lock as every builder and runs the profile's Check, so a quick fix
-can't race a builder's integration or skip the gate.
+Three other kinds of agent appear below. A planner wrote the plan you build from. A reviewer is a new agent that
+judges your finished milestone. The lead is the agent the owner chats with, and when there is one, it started
+you. A host is the program an agent runs in, such as Claude Code or Codex.
 
-## Done when
+Read `ORCHESTRATE.md` first. It holds the project settings: where the plans are kept, the command that runs the
+tests, the targets the product runs on, and the project's rules. Read the building guidance it links to as well.
+If the plans folder has a `GLOSSARY.md`, read it. It holds the agreed name for each thing in the project. Use
+those names for anything new you write, in text a user sees and in your report. Where the code already has its
+own word for a thing, keep to the code's word in the code.
+Then find the module's next milestone in `<MODULE>-PLAN.md`, and that milestone's items in `<MODULE>-DONE.json`,
+which is called the done-when file. An item is one thing that must be true before the milestone is Done.
 
-1. Every item for the milestone is `pass`, with evidence from its target. [The done-when file](../plan-module/references/done-when.md#who-changes-what-and-when)
-   says which fields are yours: items' `status` and `evidence`, and the milestone's `state`. Everything else in that
-   file belongs to the planner or the reviewer. If an item is wrong, or can't be met, don't edit it: say so in your
-   report, because the loop rejects a claim whose definitions changed. [Proofs](../plan-module/references/proofs.md)
-   explains how each kind of item is proved. An item marked `attended` needs a person or hardware you may not have:
-   do every other item first, then end with `BLOCKED` naming the attended ones, so the owner can do them together.
-2. The work is committed and integrated with `LOOP land --worktree .`. It rebases onto the profile's branch, runs
-   the `Check`, and pushes or fast-forwards that branch the way the profile's `Integrate` line says, all under one
-   lock so parallel builders don't race each other. Under `/build`, the loop then reruns the `Check` and every item's
-   `check` in a clean checkout of the integrated tip before it believes you.
-3. The milestone's `state` says what happens next: `claimed` if it needs review, or `done` if it doesn't. It needs
-   review if any item has `inspect` or `ask`, or if it's the module's last milestone.
-4. The plan's status lines and log are current. Keep what you verified separate from what you think is probably true.
-5. Your last line is `DONE`, `BLOCKED: <what you tried, the evidence, what would unblock it>`, or
-   `NEEDS_CONTEXT: <what's missing>`.
+A command below that starts `agent_loop.py` belongs to the script that starts agents, runs the tests and keeps the
+project's records. Run it as `python3 <the build skill's folder>/scripts/agent_loop.py`.
 
-## Review and what follows it
+For an ordinary fix that has no plan, fix it, add a test if a test would catch the fault coming back, and merge it
+with `agent_loop.py land --worktree .`. That command takes the same lock as every builder and runs the project's
+test command, so a quick fix can't collide with a builder's merge or skip the tests.
 
-Before you claim, check the `inspect` and `ask` items yourself, the same way the reviewer will.
+## What finished looks like
 
-In a single chat, you're also the lead, so start a fresh reviewer with `LOOP review --module <M> --milestone <id>
---commit <sha> --worktree .`, ideally with `--host` set to another host. Tell it nothing else, so it forms its own
-view. Only a review run through the loop is recorded; a reviewer you launch some other way can't move the milestone
-on, and the owner would have to accept it by hand. If you can't start one, end with `DONE` and say the review is
-owed. Under `/build`, the lead runs review.
+1. Every item of the milestone is marked as passed, with evidence from the item's target. Evidence is saved proof,
+   such as a test log or a screenshot. In the done-when file you change three fields and no others: an item's
+   `status` (`open` or `pass`), an item's `evidence` (where the proof is saved), and the milestone's `state`.
+   Everything else in that file belongs to the planner or the reviewer, as
+   [who changes what](../plan-module/references/done-when.md#who-changes-what-and-when) sets out. If an item is
+   wrong, or can't be met, leave it as written and say so in your report. The script rejects a builder's work when
+   any of the planner's fields has changed: an item's statement, its proof, its target, or the milestone's
+   quality bar. [Proofs](../plan-module/references/proofs.md) explains how each kind of item is
+   proved.
+2. The work is committed and merged with `agent_loop.py land --worktree .`. The command rebases your branch onto
+   the main branch, runs the project's test command (the `Check:` line in the project settings), and then pushes or
+   fast-forwards the main branch as the `Integrate:` line says. It does all of that under one lock, so two builders
+   can't merge at the same moment. It prints `LANDED` or `FAILED`.
+3. The milestone's `state` says what happens next. Set it to `claimed`, which means Ready for Review, when the
+   milestone needs a reviewer. Set it to `done` when it doesn't. A milestone needs a reviewer if any of its items
+   has an `inspect` or `ask` field, or if it is the module's last milestone.
+4. The plan's status lines and its log are up to date. Keep what you verified apart from what you think is probably
+   true.
+5. Your last line is `DONE`, or `BLOCKED: <what you tried, the evidence, and what would unblock it>`, or
+   `NEEDS_CONTEXT: <what is missing>`.
 
-When a review fails, `LOOP next` says what the number of failed reviews calls for: fix the findings in this session,
-hand over to a fresh one, or send the milestone to `/plan-module`. Follow it, because the count is the record of
-what's already been tried ([the ladder](../plan-module/references/done-when.md#when-a-review-fails)).
+An item with an `attended` field needs human feedback, or hardware you may not have. Do every other item first.
+Then end with `BLOCKED` and name those items, so the owner can settle them in one sitting.
 
-## How to work
+When a lead is running the build, the script does not take your word for any of this. After you finish, its `run`
+command makes a clean copy of the main branch and runs the project's test command and every item's `check` there.
 
-If the change touches behaviour, check that the affected part of the product runs before you change it. If someone
-left it broken, you want to know now, not after you've built on top of it.
+## Before you set Ready for Review
 
-When the right approach isn't settled and it matters, find out how it's done before experimenting. Shipped products
-and published work have solved most problems, and current practice usually beats whatever old code happens to be
-lying around.
+Run `agent_loop.py check --module <M> --milestone <id> --worktree .`. It runs the milestone's `check` commands and
+the project's test command the way the script will, and writes nothing.
 
-If a behaviour still won't come after three different approaches, each built and run, stop tuning. The mechanism may simply be unable to
-produce it. Build a minimal reproduction to find out. If it can't, report `BLOCKED` with what you found.
+Then judge each `inspect` and `ask` item yourself, the way a reviewer will.
+[How to inspect](../plan-module/references/proofs.md#how-to-inspect) says how, and it applies to the exact build on
+its real target. For an item judged by taste, get the fresh opinions described under
+[subjective work](../plan-module/references/proofs.md#subjective-work) first, and keep the best round.
 
-Look at the output yourself. For each `inspect` item, follow [how to inspect](../plan-module/references/proofs.md#how-to-inspect),
-using the exact build on its real target.
+## The review
 
-When you use a stand-in, such as a Mac standing in for an iPhone, label the result `proxy`. If a run needs a resource
-listed under the profile's `Exclusive resources`, wrap it in `LOOP lock <name> -- <command>`.
+When a lead is running the build, the lead starts the reviewer.
 
-If the work needs a contract or the design to change, don't change it yourself. Write a proposal in the plan log and
-carry on with whatever doesn't depend on it. If it needs something another module owns that isn't there yet, don't
-build it here: end with `BLOCKED` and name it, so the planner can give it to the module that owns it.
+In a single chat with no lead, you start it:
+`agent_loop.py review --module <M> --milestone <id> --commit <sha> --worktree .`, with `--host` set to the other
+host if the owner uses two. Tell the reviewer nothing else, so that it forms its own view. Only a review started
+by that command is saved. A reviewer you start any other way can't set the milestone to Done, and the owner would
+have to accept the milestone by hand. If you can't start a review, end with `DONE` and say that the milestone still
+needs one.
 
-To run unattended, or to keep going past this milestone, use `/build`. This skill covers one milestone.
+When a review fails, `agent_loop.py next --module <M> --milestone <id> --worktree .` prints what to do. It depends
+on how many reviews the milestone has failed: fix what the reviewer found in this session, hand over to a new
+session, or send the milestone back to a planner. Do what it prints. The count is the record of what has already
+been tried, and [the escalation steps](../plan-module/references/done-when.md#when-a-review-fails) explain each one.
 
-You can research, run anything locally, change this module's code, and integrate verified work as the profile allows,
-without asking. Don't force-push. Anything on the profile's "Owner decides" list goes to the owner.
+## Facts that save a session
+
+If the change touches behaviour, run the affected part of the product before you change it. If someone left it
+broken, you want to know before you build on it.
+
+When the right approach isn't settled and it matters, find out how shipped products and published work do it
+before you experiment. Old code in the repository shows what was tried. It isn't a template.
+
+On Codex, a browser, or any program that needs more than the `workspace-write` sandbox allows, won't start inside
+the sandbox. Ask to run that one command outside it before you end with `BLOCKED`. Each request is granted or
+refused separately. In one test run a builder ended Blocked on four items and had never asked.
+
+If a behaviour still won't come after three different approaches, each one built and run, stop tuning. The
+mechanism may be unable to produce it. Build the smallest reproduction that would show whether it can. If it
+can't, end with `BLOCKED` and what you found.
+
+When you prove an item on something other than its target, such as a Mac standing in for an iPhone, label the
+result `proxy`.
+
+If a run needs something listed under `Exclusive resources` in the project settings, wrap it:
+`agent_loop.py lock <name> -- <command>`.
+
+When you need a name for something new, and the glossary has no entry for it, add one in the same commit, with
+the line `Proposed: by <the kind of agent you are>, <date>. Not yet agreed by the owner.`
+Name it in your report, and carry on. If your merge then fails because another builder added an entry to the
+same file, keep both entries.
+
+## What you may change
+
+You may research, run anything locally, change this module's code, and merge verified work as the project settings
+allow. None of that needs approval.
+
+- Don't force-push.
+- Don't change the design, or an interface, which is what one module provides to the others. Write a proposal in
+  the plan's log, and carry on with the work that doesn't depend on it.
+- Don't build something another module owns. If it is missing, end with `BLOCKED` and name it, so a planner can
+  add it to the module that owns it. Built here, two modules would own the same thing.
+- Anything on the `Owner decides` list in the project settings goes to the owner.
+
+This skill covers one milestone. To keep going past it, or to run with no one watching, the owner uses `/build`.
+
+The script's own messages still use some older words. "The loop" is the script. "The profile" is the project
+settings. "Integrate" means merge. "Claimed" means Ready for Review. A "blocking" finding is a Must Fix, and an
+"advisory" one is a Suggestion.

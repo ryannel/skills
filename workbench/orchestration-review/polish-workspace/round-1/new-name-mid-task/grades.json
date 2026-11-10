@@ -1,0 +1,78 @@
+{
+  "with_skill": [
+    {
+      "check": "01-avoided-names-not-used.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "A/work/src/parcel.py: a case-insensitive search for unit, cabinet and hopper finds nothing. The added function, parameters, field and messages are `move_to_another_locker`, `dropped`, `new_locker_id`, `moved_from`, 'only a parcel that is Waiting for Pickup can be moved to another locker' and 'the new locker must be a different locker'; every one says 'locker'."
+    },
+    {
+      "check": "02-code-word-kept.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "A/work/src/parcel.py: the only place the new code refers to a drop-off uses the existing word: 'Takes the record that drop() returned', and the parameter is named `dropped`. `drop` itself is unchanged. No other word (deposit, place, store and so on) is introduced for a drop-off; 'move' names the new, different action."
+    },
+    {
+      "check": "03-new-word-has-entry.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "A/work/GLOSSARY.md has a new entry '**Move to Another Locker**' for the new action, and its 'Stored as:' line records both new code names: '`move_to_another_locker` in `src/parcel.py`. The first locker is kept in the record's `moved_from`.' The run coined no name for a jammed door; 'jammed' appears only as the request's own adjective in prose ('the door of the first locker is jammed'), not as an identifier or term. Note: `moved_from` is recorded inside the Move entry, not as an entry of its own, which matches how the glossary already records stored names."
+    },
+    {
+      "check": "04-new-entry-marked.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "A/work/GLOSSARY.md line 26, the last line of the only added entry: 'Proposed: by Claude, 10 November 2026. Not yet agreed by the owner.'"
+    },
+    {
+      "check": "05-named-in-report.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "Report, under the heading 'A new name needs your agreement': 'The glossary had no name for this, so I added **Move to Another Locker**, marked as proposed.' The entry is named and the heading says the owner's agreement is still needed."
+    },
+    {
+      "check": "06-old-entries-untouched.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "A/git-changes.txt shows only added lines in GLOSSARY.md, after line 20. The first 20 lines of A/work/GLOSSARY.md are identical to files-at-the-start/GLOSSARY.md, so Locker, Bank, Drop-off, Pickup and Waiting for Pickup are unchanged."
+    }
+  ],
+  "without_skill": [
+    {
+      "check": "01-avoided-names-not-used.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "B/work/src/parcel.py: a case-insensitive search for unit, cabinet and hopper finds nothing. The added names and messages are `redrop`, `record`, `new_locker_id`, `jammed_locker`, 'only a parcel that is Waiting for Pickup can be re-dropped' and 'a re-drop must go to a different locker'; every one says 'locker'."
+    },
+    {
+      "check": "02-code-word-kept.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "B/work/src/parcel.py: the new function is `redrop`, built on the existing word `drop`, and `drop` itself is unchanged. The new code adds no other word (deposit, place, store and so on) for a drop-off."
+    },
+    {
+      "check": "03-new-word-has-entry.md",
+      "passed": false,
+      "unclear": true,
+      "evidence": "Could fairly go either way; I lean failed. B/work/GLOSSARY.md has an entry '**Re-drop**' for the new action, with 'Stored as: `redrop` in `src/parcel.py`'. But the new code also stores a new field, `jammed_locker` (parcel.py: '\"jammed_locker\": record[\"locker\"]'), which names the locker whose door jammed, and GLOSSARY.md does not mention it anywhere. The check's own example of a word needing an entry is 'a word for a jammed door'. It is unclear because the check does not say whether a stored field name built from the request's own word ('jammed') plus an agreed word ('locker') counts as 'a word for a new thing'. If only the name of the new action counts, B passes; if stored names count, B fails."
+    },
+    {
+      "check": "04-new-entry-marked.md",
+      "passed": false,
+      "unclear": false,
+      "evidence": "B/work/GLOSSARY.md: no line starts with 'Proposed:'. The added entry is marked only in its heading: '**Re-drop** (proposed \u2014 not yet agreed by the owner)'. That does say the owner has not agreed it, but the check requires a line that starts 'Proposed:', and there is none."
+    },
+    {
+      "check": "05-named-in-report.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "Report, under 'Decisions for you': 'The glossary had no word for this, so I called it \"Re-drop\" and added it to `GLOSSARY.md`, marked \"proposed \u2014 not yet agreed by the owner\".'"
+    },
+    {
+      "check": "06-old-entries-untouched.md",
+      "passed": true,
+      "unclear": false,
+      "evidence": "B/git-changes.txt shows only added lines in GLOSSARY.md, after line 20. The first 20 lines of B/work/GLOSSARY.md are identical to files-at-the-start/GLOSSARY.md, so Locker, Bank, Drop-off, Pickup and Waiting for Pickup are unchanged."
+    }
+  ]
+}

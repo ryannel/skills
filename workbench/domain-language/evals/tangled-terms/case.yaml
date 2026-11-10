@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: tangled-terms
+expected_outcome: |
+  Finds the clashing and made-up names in a small project, agrees clearer ones with the owner, and writes a glossary without renaming anything stored in code or data.
+context:
+  scaffold_script: place-files.sh

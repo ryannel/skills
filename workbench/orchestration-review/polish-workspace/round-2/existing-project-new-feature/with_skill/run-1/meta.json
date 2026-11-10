@@ -1,0 +1,10 @@
+{
+  "case": "existing-project-new-feature",
+  "side": "with_skill",
+  "skill": "interview-me",
+  "session": "4610d8b4-7319-45ae-839f-a80eab09bcb3",
+  "models": [
+    "claude-fable-5-2"
+  ],
+  "ended": "reconstructed from the session file; see end-to-end"
+}

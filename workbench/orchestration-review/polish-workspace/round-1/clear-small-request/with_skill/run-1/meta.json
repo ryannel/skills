@@ -1,0 +1,20 @@
+{
+  "case": "clear-small-request",
+  "side": "with_skill",
+  "skill": "interview-me",
+  "session": "f35df8f3-5b28-4c83-a087-5652188f5769",
+  "turns": [
+    {
+      "duration_ms": 16095,
+      "num_turns": 9,
+      "total_cost_usd": 0.28454850000000004,
+      "is_error": false,
+      "subtype": "success",
+      "models": [
+        "claude-fable-5-2"
+      ],
+      "output_tokens": 1667
+    }
+  ],
+  "ended": "the agent finished and asked nothing"
+}

@@ -44,17 +44,20 @@ npx skills add ryannel/skills --skill generative-media-atlas
 
 ## Orchestration
 
-A process for building software with AI agents in Claude Code and Codex: web apps, native apps, CLI tools, libraries,
-engines. It follows the planner, generator, evaluator and oracle pattern from Anthropic's long-running harness work.
-A project describes itself once in an `ORCHESTRATE.md` profile (check command, targets, plans location, what goes to
-the owner), and the skills stay generic.
+A process for building software with AI agents in Claude Code and Codex: web apps, native apps, command-line tools,
+libraries, engines, and work judged by taste. You talk to one agent, the lead. It finds out what you want, then starts
+planners, builders and reviewers, and comes back to you when a decision is yours. A project describes itself once in
+an `ORCHESTRATE.md` file of project settings, so the skills know nothing about your project in advance. The
+[domain README](./skills/orchestration/README.md) walks through a whole project and gives the reasons for the design.
 
 | Skill | What it does |
 |---|---|
-| [`plan-module`](./skills/orchestration/plan-module/) | Sets a project up with its profile, plans the module map, then each module's design, milestones and JSON done-when file |
-| [`build-milestone`](./skills/orchestration/build-milestone/) | Build, verify and integrate the next milestone, in Claude Code or Codex |
-| [`review-milestone`](./skills/orchestration/review-milestone/) | A clean-context verdict on a milestone or design, with packaged ways to prove work (tests, inspection lists, reviews) |
-| [`build`](./skills/orchestration/build/) | Builds the planned project unattended with N builders on Codex, Claude Code or another host, via `agent_loop.py`, which accepts a claim only after running the checks itself |
+| [`interview-me`](./skills/orchestration/interview-me/) | Talks with you to find out what you want built and why, and writes the project brief that planning starts from |
+| [`domain-language`](./skills/orchestration/domain-language/) | Agrees one name for each thing in the project with you, and keeps the glossary that plans, code and chat follow |
+| [`plan-module`](./skills/orchestration/plan-module/) | Splits a project into modules, and writes each module's design, milestones and done-when file, and the project settings |
+| [`build-milestone`](./skills/orchestration/build-milestone/) | Builds one milestone, proves it and merges it, in Claude Code or Codex |
+| [`review-milestone`](./skills/orchestration/review-milestone/) | A new session judges a milestone that is Ready for Review, or a design, by using the product and reading the changed code |
+| [`build`](./skills/orchestration/build/) | The lead's skill: runs the whole build with a chosen number of builders through `agent_loop.py`, which sets a milestone to Done only after running the checks itself |
 
 Install the orchestration plugin and evaluator from an interactive terminal with Node.js, Git and Python 3:
 

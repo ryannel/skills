@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option A: Card and day list</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1d2330; background: #f2f3f6; }
+  header { background: #fff; padding: 14px 20px; border-bottom: 1px solid #e3e5ea; font-weight: 600; }
+  main { padding: 16px; }
+  .card { background: #fff; border-radius: 14px; padding: 18px; box-shadow: 0 1px 3px rgba(20,30,50,.08); }
+  .label { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #6a7182; margin: 0 0 6px; }
+  .when { font-size: 22px; font-weight: 700; margin: 0; }
+  .who { margin: 4px 0 0; color: #3b4252; }
+  h2 { font-size: 18px; margin: 24px 4px 4px; }
+  .hint { margin: 0 4px 12px; color: #4a5162; font-size: 15px; }
+  .day { background: #fff; border-radius: 14px; padding: 14px 16px 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(20,30,50,.08); }
+  .day h3 { font-size: 16px; margin: 0 0 10px; }
+  .times { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .times button { min-height: 48px; font-family: inherit; font-size: 16px; font-weight: 600; color: #1f4fd1; background: #eef3ff; border: 1px solid #c9d7fb; border-radius: 10px; }
+  .more { display: block; text-align: center; min-height: 48px; line-height: 48px; color: #1f4fd1; font-weight: 600; text-decoration: none; }
+  .other { display: block; margin: 8px 0 0; padding: 14px 16px; background: #fff; border-radius: 14px; color: #1d2330; text-decoration: none; box-shadow: 0 1px 3px rgba(20,30,50,.08); }
+  .other span { color: #6a7182; font-size: 14px; display: block; }
+  footer { padding: 8px 20px 28px; color: #6a7182; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>Studio Nine</header>
+<main>
+  <section class="card">
+    <p class="label">Your appointment</p>
+    <p class="when">Thursday 19 November, 10:30</p>
+    <p class="who">Cut &amp; finish with Maya · 45 min</p>
+  </section>
+
+  <h2>Move to another time</h2>
+  <p class="hint">Free times with Maya. Tap one to check it before anything changes.</p>
+
+  <form class="day" method="get" action="#confirm">
+    <h3>Friday 20 November</h3>
+    <div class="times"><button>09:00</button><button>11:15</button><button>14:30</button></div>
+  </form>
+  <form class="day" method="get" action="#confirm">
+    <h3>Saturday 21 November</h3>
+    <div class="times"><button>10:00</button><button>10:45</button><button>13:00</button><button>15:15</button><button>16:00</button></div>
+  </form>
+  <form class="day" method="get" action="#confirm">
+    <h3>Monday 23 November</h3>
+    <div class="times"><button>09:45</button><button>12:00</button></div>
+  </form>
+  <a class="more" href="#">Later days</a>
+
+  <a class="other" href="#">Choose a different stylist<span>You'll stay with Maya unless you do</span></a>
+</main>
+<footer>Can't find a time? Call us on 020 7946 0321.</footer>
+</body>
+</html>

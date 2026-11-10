@@ -1,0 +1,429 @@
+{
+  "module": "PROPS",
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Three lantern directions, built on the real pipeline, for the owner to pick from",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "needs": [],
+      "bar": "Each variant could sit on A Short Hike's docks without looking imported, and none looks like a clean commercial low-poly kit (the negative anchor in docs/anchors/references.md)",
+      "items": [
+        {
+          "id": "M1.1",
+          "statement": "The project imports headless on Godot 4.4 with no errors or warnings from project files",
+          "check": "tools/check.sh import",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.2",
+          "statement": "Each of the three lantern variants is at most 1,500 triangles",
+          "check": "tools/check.sh budget lantern_v1 lantern_v2 lantern_v3",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.3",
+          "statement": "Each variant uses only the shared materials and the one 512x512 atlas, with every UV triangle inside a region of atlas.json",
+          "check": "tools/check.sh atlas lantern_v1 lantern_v2 lantern_v3",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.4",
+          "statement": "atlas.json reserves non-overlapping regions for all twelve props, the palette and the detail tiles, and records the set texel density",
+          "check": "tools/check.sh atlas",
+          "ask": "Is every prop in the design's table given atlas space, enough for its parts?",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.5",
+          "statement": "The budget and atlas checks would catch a real failure",
+          "ask": "Do the budget and atlas checks count every surface of every MeshInstance3D, nested and multi-surface, and would they fail a 1,501-triangle mesh, a second texture, or a UV outside its region?",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.6",
+          "statement": "tools/capture.sh renders a prop's turntable, distances, day/dusk and pixelated views from the preview scene",
+          "check": "tools/capture.sh lantern_v1 all",
+          "target": "preview",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M1.7",
+          "statement": "The three variants differ in kind (shape language, shading and texture treatment), not in colour alone",
+          "inspect": "the three variants side by side, as turntable contact sheets at near and mid distance",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.8",
+          "statement": "Each variant holds together from every side: bracket, post, cage, glass and hook, including the underside",
+          "inspect": "each variant's parts from four angles plus the underside, day and dusk, full resolution and pixelated",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.9",
+          "statement": "docs/anchors/references.md holds the reference set, with sources, including A Short Hike and a negative anchor",
+          "ask": "Does the set show the hand-made qualities the design names, and is every image from an official press kit or replaced by a link?",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M1.10",
+          "statement": "The owner has picked a direction, recorded in docs/anchors/DIRECTION.md in their words, with the date",
+          "attended": "The owner looks at the three variants' contact sheets and picks one, or a named mix",
+          "ask": "Does DIRECTION.md record a pick the owner made, rather than one the builder chose?",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "The lantern sways, glows and creaks",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "needs": [],
+      "bar": "The owner's pick in docs/anchors/DIRECTION.md, finished; a sway as unhurried as the hanging lights in A Short Hike, and a creak that sits under the scene",
+      "items": [
+        {
+          "id": "M2.1",
+          "statement": "The lantern passes the budget, atlas and scene checks",
+          "check": "tools/check.sh budget lantern && tools/check.sh atlas lantern && tools/check.sh scene lantern",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.2",
+          "statement": "The creak loops through its import setting, is a whole number of sway periods long, has no click at the wrap, and peaks at or below -1 dBFS",
+          "check": "tools/check.sh audio lantern",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.3",
+          "statement": "Each creak starts within 100 ms of a swing extreme, measured from a Movie Maker capture's frames and WAV",
+          "check": "tools/check.sh audio lantern",
+          "target": "preview",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.4",
+          "statement": "The audio checks would catch a real failure",
+          "ask": "Would the audio suite fail a loop with a jump at the wrap, a loop one frame short of the sway period, and creaks a quarter period off the extremes?",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.5",
+          "statement": "Two lanterns in one scene start at different phases, with each one's creak still on its own swing",
+          "check": "tools/check.sh scene lantern",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M2.6",
+          "statement": "The sway eases like a pendulum at the extremes, the cage, glass and glow move as one, and nothing pops at the loop",
+          "inspect": "a frame sequence over two sway periods, side-on and front-on, including the wrap",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.7",
+          "statement": "At dusk the lantern casts a warm pool of light on the ground around it; lit = false turns off glow, light and creak together",
+          "inspect": "the lantern lit and unlit, at dusk and in daylight, near and mid distance",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.8",
+          "statement": "The finished lantern matches the owner's pick in shape language, palette and texture treatment",
+          "inspect": "the lantern beside the picked variant from M1, four angles plus underside, full resolution and pixelated",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.9",
+          "statement": "The creak's source and licence (CC0 or self-made) and every edit are in docs/CREDITS.md",
+          "ask": "Does the credit name a source and licence that permits use in a commercial game, for every file in the loop?",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M2.10",
+          "statement": "The owner has listened and accepts the creak: it reads as a lantern, the loop isn't noticeable within 30 seconds, and it isn't irritating",
+          "attended": "The owner plays the preview scene with sound, moving the camera towards and away from two lanterns, and records a verdict in docs/evidence",
+          "ask": "Is there a recorded owner verdict on this version of the sound, and does it accept it?",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M3",
+      "name": "Rope and iron: the dock crane, bollard, rope coil and anchor",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "needs": [],
+      "bar": "Of a piece with the M2 lantern and the owner's pick; working objects someone made by hand, like the harbour pieces in A Short Hike",
+      "items": [
+        {
+          "id": "M3.1",
+          "statement": "All four props pass the budget, atlas and scene checks",
+          "check": "tools/check.sh budget dock_crane bollard rope_coil anchor && tools/check.sh atlas dock_crane bollard rope_coil anchor && tools/check.sh scene dock_crane bollard rope_coil anchor",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M3.2",
+          "statement": "The crane reads as a working hand-cranked crane: the rope runs from the winch over the jib tip to the hook",
+          "inspect": "the crane's post, jib, winch and handle, rope and hook, from four angles plus underside, near and mid",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M3.3",
+          "statement": "The crane's silhouette survives the budget: nothing it needs to read at a distance was dropped",
+          "inspect": "the crane at far distance and in the pixelated view, beside the 1.7 m figure",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M3.4",
+          "statement": "The rope coil reads as one spiralled rope, not stacked rings, and the bollard's rope loop sits on it believably",
+          "inspect": "rope_coil from above and at a low angle, and bollard from four angles, near and mid",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M3.5",
+          "statement": "The anchor and its chain read clearly from every side, including where it rests",
+          "inspect": "anchor from four angles plus underside, near and mid",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M3.6",
+          "statement": "The four props and the lantern look like one family: same palette, edge treatment, irregularity and texel density",
+          "inspect": "all five side by side at mid distance, day and dusk, full resolution and pixelated",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M4",
+      "name": "Nets and wicker: the net rack, lobster pot, buoys and fish basket",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "needs": [],
+      "bar": "Of a piece with the props before it; nets and wicker as soft and handmade as the fabric and foliage in A Short Hike",
+      "items": [
+        {
+          "id": "M4.1",
+          "statement": "All four props pass the budget, atlas and scene checks, and the set still uses at most three materials",
+          "check": "tools/check.sh budget net_rack lobster_pot buoys fish_basket && tools/check.sh atlas net_rack lobster_pot buoys fish_basket && tools/check.sh scene net_rack lobster_pot buoys fish_basket",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M4.2",
+          "statement": "The net reads as netting up close and as a soft draped mass from afar, from both sides",
+          "inspect": "net_rack from front, back and side, near, mid and far, full resolution and pixelated",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.3",
+          "statement": "The netting doesn't shimmer or crawl as the camera moves at mid distance",
+          "inspect": "a frame sequence of a slow camera dolly past net_rack and lobster_pot at mid distance",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.4",
+          "statement": "The lobster pot is see-through between its slats and netting, and the fish basket reads as wicker with fish in it",
+          "inspect": "lobster_pot and fish_basket from four angles plus top, near and mid",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.5",
+          "statement": "The buoys read as cork and glass floats tied on one rope, distinct from each other",
+          "inspect": "buoys from four angles, near and mid, day and dusk",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M4.6",
+          "statement": "These four sit in the same family as the props before them",
+          "inspect": "all nine props so far side by side at mid distance, day and dusk, full resolution and pixelated",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    },
+    {
+      "id": "M5",
+      "name": "Crates and barrel, and the whole set as one harbour",
+      "state": "open",
+      "fails": 0,
+      "replans": 0,
+      "needs": [],
+      "bar": "A harbour corner that could be a screenshot from A Short Hike, and plainly not the negative anchor's store kit",
+      "items": [
+        {
+          "id": "M5.1",
+          "statement": "crate, crate_long and barrel pass the budget, atlas and scene checks",
+          "check": "tools/check.sh budget crate crate_long barrel && tools/check.sh atlas crate crate_long barrel && tools/check.sh scene crate crate_long barrel",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M5.2",
+          "statement": "The manifest lists exactly the twelve props, and every one passes every suite",
+          "check": "tools/check.sh",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": ""
+        },
+        {
+          "id": "M5.3",
+          "statement": "Crates and the barrel each have their own designed imperfections; no two crates look like copies of one model",
+          "inspect": "crate, crate_long and barrel from four angles plus underside, near and mid",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M5.4",
+          "statement": "crate and crate_long stack on each other with no gap, overlap or flicker",
+          "inspect": "each stacking combination, close up at the joint, from two angles",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M5.5",
+          "statement": "In a harbour vignette with all twelve, the set reads as one hand-made family and nothing looks bought",
+          "inspect": "the vignette at day and dusk, near, mid and far, full resolution and pixelated, beside the anchors",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M5.6",
+          "statement": "No two props share a silhouette at thumbnail size",
+          "inspect": "all twelve as black silhouettes at far distance in one frame",
+          "target": "preview",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        },
+        {
+          "id": "M5.7",
+          "statement": "The contract in docs/modules/PROPS.md matches what was built",
+          "ask": "Do every scene's path, root, collision, origin and front, the lantern's exports, and the stack height match the contract, and does the manifest record each prop's triangles and footprint?",
+          "target": "godot-headless",
+          "status": "open",
+          "evidence": "",
+          "verdict": "",
+          "review": ""
+        }
+      ]
+    }
+  ]
+}

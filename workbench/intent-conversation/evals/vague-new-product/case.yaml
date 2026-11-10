@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: vague-new-product
+expected_outcome: |
+  Draws out why the owner wants the product, who uses it and where, writes a project brief that keeps the owner's words apart from the agent's decisions, and gets it approved before any planning or building.

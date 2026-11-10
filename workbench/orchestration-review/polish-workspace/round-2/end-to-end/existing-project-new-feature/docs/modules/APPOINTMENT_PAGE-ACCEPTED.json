@@ -1,0 +1,53 @@
+{
+  "module": "APPOINTMENT_PAGE",
+  "design": {
+    "verdict": "ok",
+    "review": "docs/evidence/APPOINTMENT_PAGE/design-review.md",
+    "commit": "bb1ebc7cdf7a7683b86739a1ace056465a124628",
+    "hash": "a225d671479c1e9e81e9cf8fe000fc7940cd091175724a0ca3899da6544f601d",
+    "by": "review",
+    "host": "codex",
+    "model": "gpt-6.1-sol",
+    "effort": "medium",
+    "observed": {
+      "model": "gpt-6.1-sol",
+      "effort": "medium"
+    },
+    "cli": "codex-cli 0.167.0-alpha.3.2",
+    "path": "visible",
+    "usage": {
+      "incomplete_turns": 1
+    },
+    "at": "2026-11-10T19:16:40Z"
+  },
+  "milestones": {
+    "M1": {
+      "definitions": "4f7717dc73a6c758fb23799e5e8a0fd5fc6b5d1364c8bcf0c208016b45cc9158",
+      "reviews": [],
+      "authorised": {
+        "by": "plan",
+        "task": "for the salon app I want customers to be able to move an appointment themselves instead of phoning us. brief is fine to ",
+        "at": "2026-11-10T19:12:45Z"
+      }
+    },
+    "M2": {
+      "definitions": "1233293151f1f82779af12e3f779cf4604e5b10e4368a9b2c1d9e71488fe1d9c",
+      "reviews": [],
+      "authorised": {
+        "by": "plan",
+        "task": "for the salon app I want customers to be able to move an appointment themselves instead of phoning us. brief is fine to ",
+        "at": "2026-11-10T19:12:45Z"
+      }
+    }
+  },
+  "briefs": [
+    {
+      "task": "for the salon app I want customers to be able to move an appointment themselves instead of phoning us. brief is fine to write up, I use claude and codex both. The project brief is docs/modules/BRIEF.md.",
+      "at": "2026-11-10T19:12:45Z"
+    }
+  ],
+  "planner": {
+    "host": "claude",
+    "at": "2026-11-10T19:12:45Z"
+  }
+}

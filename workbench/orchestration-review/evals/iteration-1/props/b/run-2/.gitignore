@@ -1,0 +1,5 @@
+# Godot import cache
+.godot/
+
+# Bulky capture sequences; contact sheets are committed instead (see ORCHESTRATE.md, Large captures)
+docs/evidence/captures/

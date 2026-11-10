@@ -1,0 +1,131 @@
+{
+  "module": "BOOKINGS",
+  "design": {
+    "verdict": "ok",
+    "review": "docs/evidence/BOOKINGS/design-review.md",
+    "commit": "277fe2c93179ac2e33e6a7d5abea5b008cb966a6",
+    "hash": "57328f86b34c27b26566f674f477cae3bdefbfc6848eb65bad6ac9b6205e391a",
+    "by": "review",
+    "host": "claude",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "observed": {
+      "model": "claude-opus-5-5"
+    },
+    "cli": "2.1.319 (Claude Code)",
+    "path": "visible",
+    "usage": {
+      "input": 61546,
+      "cached": 371768,
+      "output": 9351,
+      "cost_usd": 0.753662,
+      "turns": 1
+    },
+    "at": "2026-11-10T19:23:18Z"
+  },
+  "milestones": {
+    "M1": {
+      "definitions": "da225d2aa5f0ce1a971968acc02ba1338fa5a6191b230788c31352e7c9802da7",
+      "reviews": [
+        {
+          "verdict": "pass",
+          "commit": "bf259388a1730eb2703afa8cf93bc76bcd186d67",
+          "review": "docs/evidence/BOOKINGS/M1-review.md",
+          "host": "claude",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "observed": {
+            "model": "claude-opus-5-5"
+          },
+          "cli": "2.1.319 (Claude Code)",
+          "path": "visible",
+          "usage": {
+            "input": 88553,
+            "cached": 1368789,
+            "output": 27182,
+            "cost_usd": 1.525654,
+            "turns": 1
+          },
+          "at": "2026-11-10T19:37:35Z"
+        }
+      ],
+      "authorised": {
+        "by": "plan",
+        "task": "Revise BOOKINGS's design and plan as docs/evidence/BOOKINGS/design-review.md asks",
+        "at": "2026-11-10T19:21:29Z"
+      },
+      "claim": {
+        "commit": "bf259388a1730eb2703afa8cf93bc76bcd186d67",
+        "checked": "bf259388a1730eb2703afa8cf93bc76bcd186d67",
+        "at": "2026-11-10T19:29:57Z",
+        "host": "codex",
+        "model": "gpt-6.1-sol",
+        "effort": "medium",
+        "observed": {
+          "model": "gpt-6.1-sol",
+          "effort": "medium"
+        },
+        "cli": "codex-cli 0.167.0-alpha.3.2",
+        "path": "visible",
+        "usage": {
+          "incomplete_turns": 1
+        },
+        "session_usage": {
+          "incomplete_turns": 1
+        }
+      },
+      "accepted": {
+        "by": "review",
+        "commit": "bf259388a1730eb2703afa8cf93bc76bcd186d67",
+        "review": "docs/evidence/BOOKINGS/M1-review.md",
+        "checked": "bf259388a1730eb2703afa8cf93bc76bcd186d67",
+        "at": "2026-11-10T19:37:35Z"
+      }
+    },
+    "M2": {
+      "definitions": "611098c92b2d0fc10e56244fd7963b743d77e4ea9bbdd9d537e196c74d77190c",
+      "reviews": [],
+      "authorised": {
+        "by": "plan",
+        "task": "Revise BOOKINGS's design and plan as docs/evidence/BOOKINGS/design-review.md asks",
+        "at": "2026-11-10T19:21:29Z"
+      }
+    }
+  },
+  "briefs": [
+    {
+      "task": "for the salon app I want customers to be able to move an appointment themselves instead of phoning us. brief is fine to write up, I use claude and codex both. The project brief is docs/modules/BRIEF.md.",
+      "at": "2026-11-10T19:12:45Z"
+    },
+    {
+      "task": "Revise BOOKINGS's design and plan as docs/evidence/BOOKINGS/design-review.md asks",
+      "at": "2026-11-10T19:21:29Z"
+    }
+  ],
+  "planner": {
+    "host": "codex",
+    "at": "2026-11-10T19:21:29Z"
+  },
+  "design_history": [
+    {
+      "verdict": "changes",
+      "review": "docs/evidence/BOOKINGS/design-review-1.md",
+      "commit": "bb1ebc7cdf7a7683b86739a1ace056465a124628",
+      "hash": "38cce560e0edbdba80527bf314afada8b59b5f19406fac0baff1f4bbe266d63b",
+      "by": "review",
+      "host": "codex",
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "observed": {
+        "model": "gpt-6.1-sol",
+        "effort": "medium"
+      },
+      "cli": "codex-cli 0.167.0-alpha.3.2",
+      "path": "visible",
+      "usage": {
+        "incomplete_turns": 1
+      },
+      "at": "2026-11-10T19:16:34Z"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+7809528 Start
+32b9b33 Adopt plan files: BRIEF.md, GLOSSARY.md
+072420e Plan: for the salon app I want customers to be able to move an app
+5655f0e orchestrate: authorise the plan
+bb1ebc7 Adopt plan file: BRIEF.md
+e81abd8 orchestrate: review of BOOKINGS design: DESIGN CHANGES
+e5aa658 orchestrate: review of APPOINTMENT_PAGE design: DESIGN OK
+d7bf9e0 APPOINTMENT_PAGE M1: three look options and side-by-side sheet
+2e37b27 orchestrate: APPOINTMENT_PAGE M1 blocked
+4af78b0 Plan: Revise BOOKINGS's design and plan as docs/evidence/BOOKINGS/
+277fe2c orchestrate: authorise the plan
+f570e63 orchestrate: review of BOOKINGS design: DESIGN OK
+bf25938 Build BOOKINGS M1 store, free times and encrypted confirmations
+54411d3 orchestrate: claim BOOKINGS M1
+80d26fb orchestrate: review of BOOKINGS M1: PASS
