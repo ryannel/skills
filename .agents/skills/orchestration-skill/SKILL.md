@@ -45,6 +45,11 @@ write, and the script.
 
 Links stay inside the domain (`../sibling/…`), because an install flattens the domain folder.
 
+The prompts the script sends, such as the build, plan and review templates in `agent_loop.py`, are prompts like
+any other, and follow `prompting-agents` too. The skills name `prompting-agents` wherever an agent writes for
+another agent: the plan files, the brief, a `--message`, a review. Name it as a skill, not as a link, because it
+lives in another domain, and `install.py` installs it whenever it installs orchestrate.
+
 Scripts are standard-library Python, with tests in `tests/orchestration/`, which are not shipped with the
 skill. Run `python3 -m unittest discover tests/orchestration` before a commit. It takes about seven minutes. A
 script that starts agents goes through the host adapters in `agent_loop.py`, so that every host is handled in one
@@ -57,5 +62,5 @@ the files' names, so keep the names.
 Add a line only for a failure that has been seen, and say what happened. Record what was left out on purpose
 in the domain README.
 
-Check the result with `python3 skills/skill-creator/scripts/check_skill.py <skill-folder>`,
+Check the result with `python3 skills/agent-writing/skill-creator/scripts/check_skill.py <skill-folder>`,
 `claude plugin validate .` and `npx skills add ./ --list`.

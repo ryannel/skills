@@ -99,6 +99,9 @@ brief.
 Save the brief as a draft from the first answer on, and add to it as you go. A conversation that runs for days
 can lose its early messages, and the brief has to quote them.
 
+The brief is a prompt: a planner will act on it without having heard the conversation. Keep the owner's words as
+they said them, and write your own parts the way the `prompting-agents` skill describes, if it is installed.
+
 ### What the brief must cover by the end
 
 This is a map of what to find out. Most of it you will find or decide without a question.

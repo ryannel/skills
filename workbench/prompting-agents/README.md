@@ -7,7 +7,7 @@ This is a summary of what Anthropic and OpenAI say, in November 2026, about two 
 
 It covers four models: Claude Opus 5.5 and Claude Fable 5.2 from Anthropic, and GPT-6 Astra and GPT-6.1 Sol from
 OpenAI. It is the basis of the `prompting-agents` skill, which is published in
-[skills/prompting-agents](../../skills/prompting-agents/).
+[skills/agent-writing/prompting-agents](../../skills/agent-writing/prompting-agents/).
 
 The skill had one round of tests on its first version: three tasks, each run once with the skill and once
 without. The test cases are in [evals](evals/) and the results are in

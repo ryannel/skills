@@ -28,7 +28,7 @@ class Home:
         self.env = mock.patch.dict(os.environ, {"HOME": tmp, "CLAUDE_CONFIG_DIR": str(self.claude),
                                                 "CODEX_HOME": str(self.codex)})
         for name in ("prompting-agents", "build"):
-            src = ROOT / ("skills/prompting-agents" if name == "prompting-agents" else "skills/orchestration/build")
+            src = ROOT / ("skills/agent-writing/prompting-agents" if name == "prompting-agents" else "skills/orchestration/build")
             dest = self.claude / "skills" / name
             dest.mkdir(parents=True)
             (dest / "SKILL.md").write_bytes((src / "SKILL.md").read_bytes())
@@ -209,6 +209,25 @@ class InteractiveOrchestration(unittest.TestCase):
             for agent in agents.iterdir():
                 self.assertFalse(agent.is_symlink())
                 self.assertIn("Managed by the ryannel/skills", agent.read_text())
+
+
+
+class Required(unittest.TestCase):
+    def test_orchestrate_and_skill_creator_bring_prompting_agents(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(install.with_required(["orchestrate"]), ["orchestrate", "prompting-agents"])
+            self.assertEqual(install.with_required(["skill-creator"]), ["skill-creator", "prompting-agents"])
+        self.assertIn("needs prompting-agents", out.getvalue())
+
+    def test_orchestrate_doesnt_bring_skill_creator(self):
+        with redirect_stdout(io.StringIO()):
+            self.assertNotIn("skill-creator", install.with_required(["orchestrate"]))
+
+    def test_nothing_is_added_twice(self):
+        self.assertEqual(install.with_required(["prompting-agents", "orchestrate", "skill-creator"]),
+                         ["prompting-agents", "orchestrate", "skill-creator"])
+
 
 
 if __name__ == "__main__":

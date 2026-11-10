@@ -14,8 +14,10 @@ plugin. If that marketplace is already registered from another source, it says s
 reinstalling the plugins it had.
 
 Codex: the same marketplace with the Codex CLI (the copy inside the Codex app when `codex` isn't on PATH), which
-reads `.claude-plugin/marketplace.json`. With prompting-agents, one line goes into the
-global AGENTS.md.
+reads `.claude-plugin/marketplace.json`. With prompting-agents, one line goes into the global AGENTS.md.
+
+skill-creator and orchestrate both need prompting-agents, so installing either installs it too. Claude Code does this
+itself from the `dependencies` in marketplace.json; Codex doesn't read that field, so this script adds it.
 
 prompting-agents replaced instructing-agents. Installing it uninstalls the old plugin, treats a standalone copy
 of the old skill as an earlier install, and rewrites the old AGENTS.md line.
@@ -48,11 +50,16 @@ HERE = Path(__file__).resolve().parent
 MARKETPLACE = "ryannel-skills"
 ENTRIES = {e["name"]: e for e in json.loads((HERE / ".claude-plugin/marketplace.json").read_text())["plugins"]}
 DEFAULT_PLUGINS = ["prompting-agents", "orchestrate", "skill-creator"]
-RETIRED = {"prompting-agents": "instructing-agents"}  # a plugin, and the earlier plugin and skill it replaced
+# A plugin, and the earlier plugins it replaced. Their skills either live on inside it or were retired.
+RETIRED_PLUGINS = {"prompting-agents": ["instructing-agents"]}
+RETIRED_SKILLS = {"prompting-agents": ["instructing-agents"]}  # skills that no current plugin holds
+# A plugin, and the plugins it needs installed beside it. Orchestrate's agents write prompts for each other all day,
+# and its skills tell them to use prompting-agents. skill-creator takes its writing guidance from it.
+REQUIRES = {e["name"]: e.get("dependencies", []) for e in ENTRIES.values()}  # Codex ignores `dependencies`
 CODEX_APP_CLI = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
 CLAUDE_READS_AGENTS_MD = (2, 1, 277)
 AGENTS_LINE = "Apply the `prompting-agents` skill before you hand a prompt to another agent."
-OLD_AGENTS_LINE = AGENTS_LINE.replace("prompting-agents", RETIRED["prompting-agents"])
+OLD_AGENTS_LINE = AGENTS_LINE.replace("prompting-agents", "instructing-agents")
 OLD_HOOKS = ("instructing-agents-gate.py", "handoff_nudge.py")  # hand-installed copies of the retired handoff hook
 failures: list[str] = []
 
@@ -103,7 +110,18 @@ def codex_binary() -> str | None:
 def skill_names(plugins: list[str]) -> list[str]:
     """The skills these plugins hold, and the retired skills they replaced."""
     return ([Path(p).name for plugin in plugins for p in ENTRIES[plugin].get("skills", [])]
-            + [RETIRED[plugin] for plugin in plugins if plugin in RETIRED])
+            + [old for plugin in plugins for old in RETIRED_SKILLS.get(plugin, [])])
+
+
+def with_required(plugins: list[str]) -> list[str]:
+    """The plugins asked for, with any plugin they need added after them, each once."""
+    out = list(plugins)
+    for p in plugins:
+        for needed in REQUIRES.get(p, []):
+            if needed not in out:
+                print(f"{p} needs {needed}, so it is installed too")
+                out.append(needed)
+    return out
 
 
 def agents_md_text(text: str) -> tuple[str, str]:
@@ -270,8 +288,9 @@ def setup_claude(plugins: list[str], scope: str, repo: Path | None, source: str)
               f" removing it uninstalls its plugins, so they're reinstalled below.")
         run([claude, "plugin", "marketplace", "remove", MARKETPLACE])
         registered = None
-        reinstall = [p["id"].split("@")[0] for p in had
-                     if p.get("scope") == "user" and p["id"].split("@")[0] in ENTRIES]
+        replaced_by = {old: new for new, olds in RETIRED_PLUGINS.items() for old in olds}
+        reinstall = list(dict.fromkeys(replaced_by.get(n, n) for n in (p["id"].split("@")[0] for p in had
+                                       if p.get("scope") == "user") if replaced_by.get(n, n) in ENTRIES))
         for p in had:
             if p.get("scope") != "user":
                 print(f"!! {p['id']} was installed at {p.get('scope')} scope {p.get('projectPath', '')}; reinstall it"
@@ -283,7 +302,7 @@ def setup_claude(plugins: list[str], scope: str, repo: Path | None, source: str)
         run([claude, "plugin", "marketplace", "update", MARKETPLACE], check=False)
     for p in [x for x in reinstall if not (x in plugins and scope == "user")]:
         run([claude, "plugin", "install", "--scope", "user", f"{p}@{MARKETPLACE}"])
-    for old in [f"{RETIRED[p]}@{MARKETPLACE}" for p in plugins if p in RETIRED]:
+    for old in [f"{o}@{MARKETPLACE}" for p in plugins for o in RETIRED_PLUGINS.get(p, [])]:
         if any(x["id"] == old and x.get("scope") == scope
                for x in quiet_json([claude, "plugin", "list", "--json"], cwd=cwd) or []):
             run([claude, "plugin", "uninstall", "--scope", scope, old], cwd=cwd, check=False)
@@ -364,8 +383,8 @@ def setup_codex(plugins: list[str], source: str) -> None:
         run([codex, "plugin", "marketplace", "add", source])
     for p in plugins:
         # A local marketplace is copied at install time, so re-adding picks up changes.
-        if p in RETIRED:
-            run([codex, "plugin", "remove", f"{RETIRED[p]}@{MARKETPLACE}"], check=False)
+        for old in RETIRED_PLUGINS.get(p, []):
+            run([codex, "plugin", "remove", f"{old}@{MARKETPLACE}"], check=False)
         run([codex, "plugin", "remove", f"{p}@{MARKETPLACE}"], check=False)
         run([codex, "plugin", "add", f"{p}@{MARKETPLACE}"])
     if "prompting-agents" in plugins:
@@ -520,7 +539,7 @@ def parse_scripted_args() -> argparse.Namespace:
 
 
 def install(a: argparse.Namespace) -> None:
-    plugins = [p.strip() for p in a.plugins.split(",") if p.strip()]
+    plugins = with_required([p.strip() for p in a.plugins.split(",") if p.strip()])
     unknown = [p for p in plugins if p not in ENTRIES]
     if unknown:
         sys.exit(f"unknown plugin(s) {', '.join(unknown)}; choose from {', '.join(ENTRIES)}")

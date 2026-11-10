@@ -85,6 +85,9 @@ your summary or your opinion, the agent tends to agree with it, and its work is 
   later milestones, until you pass `--clear-owner-rules` because the owner said so.
 - One-off text, such as what a reviewer found, goes in `--message`.
 
+Whatever you write yourself for another agent, such as a `--message` or a task for a planner, is a prompt. Write
+it the way the `prompting-agents` skill describes, if it is installed.
+
 ## Where sessions run
 
 A session the script starts in the background runs inside your process. It gets your sandbox and your

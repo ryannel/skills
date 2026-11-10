@@ -2216,7 +2216,7 @@
       ]
     },
     "prompting-agents": {
-      "path": "skills/prompting-agents",
+      "path": "skills/agent-writing/prompting-agents",
       "tier": "active",
       "cadence_days": 7,
       "last_checked": "2026-11-10",
@@ -2228,13 +2228,13 @@
           "id": "prompting-agents-models",
           "type": "model-names",
           "claim": "Per-model behaviour and the prompt change for each symptom, for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol; and host facts about instruction files (the 200-line and 32 KiB limits, how nested instruction files load).",
-          "where": "skills/prompting-agents/references/models/*.md (one file per model, GPT-6 Astra and Sol share one) and instruction-files.md; the model list in SKILL.md",
+          "where": "skills/agent-writing/prompting-agents/references/models/*.md (one file per model, GPT-6 Astra and Sol share one) and instruction-files.md; the model list in SKILL.md",
           "check": "Re-read the vendor pages listed in workbench/prompting-agents/README.md (Anthropic's prompting pages for the current Fable and Opus models, OpenAI's Using GPT-6 guide and Astra blog post, the Claude Code memory page, OpenAI's AGENTS.md page). If a newer top model has shipped, add a file for it under references/models/, drop the oldest, and update the list in SKILL.md. Update the checked date at the top of each file you re-checked."
         }
       ]
     },
     "skill-creator": {
-      "path": "skills/skill-creator",
+      "path": "skills/agent-writing/skill-creator",
       "tier": "active",
       "cadence_days": 14,
       "last_checked": "2026-11-10",
@@ -2246,14 +2246,14 @@
           "id": "skill-creator-harness",
           "type": "tool-behaviour",
           "claim": "Skill locations, description limits, frontmatter fields and the claude plugin eval case layout (schema_version 1.1) are as described.",
-          "where": "skills/skill-creator",
+          "where": "skills/agent-writing/skill-creator",
           "check": "Compare with the current Claude Code skills and plugin eval docs, Codex skills docs, agentskills.io and both vendors' skill-creators; update references/structure.md and references/testing.md together."
         },
         {
           "id": "skill-creator-models",
           "type": "model-behaviour",
           "claim": "Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol are the current models, and each behaves with a skill as references/models.md says.",
-          "where": "skills/skill-creator/references/models.md",
+          "where": "skills/agent-writing/skill-creator/references/models.md",
           "check": "Compare with Anthropic's and OpenAI's current prompting pages; when a newer model ships, re-run workbench/skill-creator/evals on it and update the table in SKILL.md with models.md."
         }
       ]

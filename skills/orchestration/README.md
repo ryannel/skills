@@ -428,7 +428,7 @@ your words. Both follow the same rules.
    reading to a helper has not read the work.
 
 The fuller write-up of these rules is the
-[`prompting-agents`](https://github.com/ryannel/skills/tree/main/skills/prompting-agents) skill in the same
+[`prompting-agents`](https://github.com/ryannel/skills/tree/main/skills/agent-writing/prompting-agents) skill in the same
 repository. Its sources are listed in
 [workbench/prompting-agents](https://github.com/ryannel/skills/tree/main/workbench/prompting-agents).
 

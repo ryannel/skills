@@ -26,7 +26,7 @@ It doesn't cover writing or testing skills, which is the job of [skill-creator](
 
 The guidance comes from what Anthropic and OpenAI published about prompting their current models, read on 10
 November 2026. The research summary, with a note on every page read, is in
-[workbench/prompting-agents](../../workbench/prompting-agents/README.md). The main sources are these:
+[workbench/prompting-agents](../../../workbench/prompting-agents/README.md). The main sources are these:
 
 - **Anthropic:** [Prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices),
   the model pages for [Claude Fable 5.2](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-2)

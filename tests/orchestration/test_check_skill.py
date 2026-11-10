@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skills/skill-creator/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skills/agent-writing/skill-creator/scripts"))
 import check_skill  # noqa: E402
 
 

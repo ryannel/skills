@@ -66,6 +66,9 @@
         "intent",
         "glossary"
       ],
+      "dependencies": [
+        "prompting-agents"
+      ],
       "skills": [
         "./skills/orchestration/interview-me",
         "./skills/orchestration/domain-language",
@@ -81,7 +84,7 @@
     },
     {
       "name": "skill-creator",
-      "description": "Creates, rewrites and tests agent skills for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol, in Claude Code, Codex and other hosts. Keeps the method of Anthropic's skill-creator, and teaches what a skill for the current models carries, leaves out and how to word it. Includes a check script.",
+      "description": "Creates, rewrites and tests agent skills for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol, in Claude Code, Codex and other hosts. Keeps the method of Anthropic's skill-creator, takes its writing and per-model guidance from prompting-agents, which it installs with it, and includes a check script.",
       "source": "./",
       "strict": false,
       "version": "2.0.0",
@@ -94,8 +97,11 @@
         "prompting",
         "agents"
       ],
+      "dependencies": [
+        "prompting-agents"
+      ],
       "skills": [
-        "./skills/skill-creator"
+        "./skills/agent-writing/skill-creator"
       ]
     },
     {
@@ -103,7 +109,7 @@
       "description": "Helps you write text that another AI agent will act on: briefs for subagents and sessions, goals for long unattended runs, review requests, steers, system prompts, and CLAUDE.md and AGENTS.md files. Built from Anthropic's and OpenAI's prompting guidance for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol, with one reference file per model.",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "development",
       "keywords": [
         "agents",
@@ -113,11 +119,10 @@
         "claude-code",
         "goals",
         "system-prompts",
-        "skills",
         "agents-md"
       ],
       "skills": [
-        "./skills/prompting-agents"
+        "./skills/agent-writing/prompting-agents"
       ]
     }
   ]

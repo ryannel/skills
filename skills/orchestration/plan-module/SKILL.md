@@ -53,6 +53,9 @@ For each module you write three files, in the plans folder the project settings 
 If a module already has a plan in another shape, such as a checklist in prose, convert it. Keep its log, turn
 each milestone's "done when" list into items, and give every item a proof.
 
+These three files are prompts. A builder and a reviewer will act on them with nothing else to go on, and they
+can't ask you what you meant. Write them the way the `prompting-agents` skill describes, if it is installed.
+
 ## The whole project
 
 If the project has more than one module, plan the project before any module. Write the **module list**,

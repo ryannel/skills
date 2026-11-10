@@ -64,7 +64,8 @@ path, you don't know that it works, so give it Could Not Judge (`cant_tell`).
    milestone, read the whole module. Look for the signs of work that only looks finished: hard-coded return values,
    canned data, feature flags that default to on, branches that run only under test, tests that were weakened or
    deleted, silenced warnings, and output files that were committed instead of computed.
-3. Each finding lets someone reproduce it and locate it: what you did, what happened, what should have happened,
+3. Each finding lets someone reproduce it and locate it, because a builder who never saw your session will act on
+   it. Write it the way the `prompting-agents` skill describes, if it is installed: what you did, what happened, what should have happened,
    and where (a file and line, the steps, or a screenshot). Put the worst first. Mark each one Must Fix or
    Suggestion, and say whether you verified it or only suspect it. Include problems outside the items, and items
    too weak to catch a fake.

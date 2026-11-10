@@ -91,31 +91,27 @@ the orchestration plugin from the GitHub marketplace.
 
 </details>
 
-## Prompting agents
+## Agent writing
 
-[`prompting-agents`](./skills/prompting-agents/) is a standalone skill for any text another agent will act on: a
-brief for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt,
-or an AGENTS.md or CLAUDE.md file. Writing skills is left to `skill-creator`. It says what such a text must carry (the purpose, what done
-looks like and the check, the boundaries, what the reader can't see, what comes back), what to leave out, and how
-to write it plainly. It is built from Anthropic's and OpenAI's guidance for Claude Opus 5.5, Claude Fable 5.2,
-GPT-6 Astra and GPT-6.1 Sol; the research behind it is in
+The `skills/agent-writing/` folder holds two skills for writing what other AI agents act on. Each is its own
+plugin. skill-creator and orchestrate both depend on prompting-agents, so installing either brings it with them;
+orchestrate doesn't bring skill-creator.
+
+[`prompting-agents`](./skills/agent-writing/prompting-agents/) is for any text another agent will act on: a brief
+for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt, or an
+AGENTS.md or CLAUDE.md file. It says what such a text must carry, what to leave out, and how to write it plainly,
+with one reference file per model. It is built from Anthropic's and OpenAI's guidance for Claude Opus 5.5, Claude
+Fable 5.2, GPT-6 Astra and GPT-6.1 Sol; the research behind it is in
 [workbench/prompting-agents](./workbench/prompting-agents/README.md). It replaced `instructing-agents` on
-10 November 2026.
+10 November 2026, and relies on its description to trigger, with no hook.
 
-Install it with `python3 install.py --plugins prompting-agents` (see [Setting up for Claude Code and
-Codex](#setting-up-for-claude-code-and-codex)). It relies on its description to trigger, with no hook.
+[`skill-creator`](./skills/agent-writing/skill-creator/) creates, rewrites and tests skills. It keeps the method of
+Anthropic's skill-creator (write from a real task, test with and without the skill in fresh contexts, show the
+person, fix the cause). Its one script, `check_skill.py`, finds the mistakes that make a skill fail without an
+error. The research behind it is in [workbench/skill-creator](./workbench/skill-creator/README.md).
 
-## Skill creator
-
-[`skill-creator`](./skills/skill-creator/) is a standalone skill for creating, rewriting and testing skills for
-Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol. It keeps the method of Anthropic's skill-creator
-(write from a real task, test with and without the skill in fresh contexts, show the person, fix the cause) and
-teaches the writing the current models need: what a skill carries, what it leaves out, and how to word it. Its
-one script, `check_skill.py`, finds the mistakes that make a skill fail without an error. The research behind it
-is in [workbench/skill-creator](./workbench/skill-creator/README.md).
-
-Install it with `python3 install.py --plugins skill-creator` (see [Setting up for Claude Code and
-Codex](#setting-up-for-claude-code-and-codex)).
+Install them with `python3 install.py --plugins prompting-agents,skill-creator` (see [Setting up for Claude Code
+and Codex](#setting-up-for-claude-code-and-codex)).
 
 ## Install
 
@@ -180,7 +176,7 @@ inside the Codex app):
 |---|---|---|
 | How | adds this repo as the `ryannel-skills` marketplace, then `claude plugin install` for each plugin | the same marketplace through `codex plugin marketplace add` and `codex plugin add`; Codex reads `.claude-plugin/marketplace.json` itself. Without `codex` on PATH it uses the CLI inside `/Applications/ChatGPT.app` |
 | Skills | each plugin's skills, as `plugin:skill` | each plugin's skills, listed as `plugin:skill`, where the app loads them (`$CODEX_HOME/plugins/cache`) |
-| prompting-agents | the skill only; its description is what makes it trigger | the skill, plus one line in `$CODEX_HOME/AGENTS.md` saying to apply it before a handoff |
+| prompting-agents | the skill only; its description is what makes it trigger. Installing skill-creator or orchestrate installs it too, through the `dependencies` in `marketplace.json` | the skill, plus one line in `$CODEX_HOME/AGENTS.md` saying to apply it before a handoff. Codex ignores `dependencies`, so `install.py` adds it when you install skill-creator or orchestrate |
 | orchestrate | the planner and evaluator agents, linked into `~/.claude/agents` from the installed plugin, because neither Claude Code version loads the `agents` a marketplace entry lists (`claude plugin details` shows `Agents (0)`) | the evaluator agent, linked into `$CODEX_HOME/agents` from the plugin cache by `install_agents.sh --global --codex-only` |
 | `--repo` | says whether Claude will read the repo's AGENTS.md, judged from the CLI version and any `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the repo or above it; when it won't and the repo has no `CLAUDE.md`, writes one holding `@AGENTS.md`. With orchestrate it checks `ORCHESTRATE.md`, and a failed check fails the run. `--scope project` declares the plugins in the repo's `.claude/settings.json` instead of user settings (use `--source ryannel/skills` so the entry works on other machines) | nothing; Codex reads AGENTS.md |
 

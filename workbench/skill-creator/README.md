@@ -3,7 +3,7 @@
 This is a summary of what Anthropic, OpenAI and the Agent Skills project say, in November 2026, about building a
 skill for one of four models: Claude Opus 5.5 and Claude Fable 5.2 from Anthropic, and GPT-6 Astra and GPT-6.1
 Sol from OpenAI. It is the basis of the `skill-creator` skill, published in
-[skills/skill-creator](../../skills/skill-creator/).
+[skills/agent-writing/skill-creator](../../skills/agent-writing/skill-creator/).
 
 It builds on the earlier research into prompting the same four models, in
 [workbench/prompting-agents](../prompting-agents/README.md). That research covers how to write any text a model

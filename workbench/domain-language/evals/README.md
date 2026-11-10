@@ -20,4 +20,4 @@ A check with `focus: trace` is graded against the whole of `transcript.md`. A ch
 graded against the files left in the working folder. `claude plugin eval` sends one prompt and plays no owner,
 so it can run only the cases that have no `owner.md`.
 
-Write the checks' results down as [testing](../../../skills/skill-creator/references/testing.md) describes.
+Write the checks' results down as [testing](../../../skills/agent-writing/skill-creator/references/testing.md) describes.
