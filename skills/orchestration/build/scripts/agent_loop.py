@@ -2642,9 +2642,11 @@ def cmd_run(a: argparse.Namespace) -> None:
     timeout_s = a.turn_timeout_hours * 3600
     resumable = host in ("codex", "claude")
 
-    if host == "codex" and state.get("thread") and goal_status(state["thread"]) == "paused" \
+    # `run` again carries on, as the app's play button would: after a pause, and after a block the lead has cleared
+    # (the milestone is runnable again, so a goal left `blocked` would only end every resumed turn as BLOCKED).
+    if host == "codex" and state.get("thread") and goal_status(state["thread"]) in ("paused", "blocked") \
             and not visible_unavailable("codex"):
-        codex_goal_activate(state["thread"])  # `run` again carries on after a pause, as the app's play button would
+        codex_goal_activate(state["thread"])
 
     def floor_next() -> dict:
         return next_cmd(again, "lead", f"the {host} host failed or ran out (quota, sign-in or outage); run it again "

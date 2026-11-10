@@ -1479,6 +1479,17 @@ class VisibleCodex(Repo):
             self.run_loop()
         self.assertEqual(app.activated, [t])
 
+    def test_decision_8_run_after_unblock_reactivates_a_blocked_goal(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
+        with FakeCodexApp(self).installed() as app:
+            self.run_loop()
+            t = self.state()["thread"]
+            with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
+                conn.execute("create table thread_goals (thread_id text, status text)")
+                conn.execute("insert into thread_goals values (?, 'blocked')", (t,))
+            self.run_loop()
+        self.assertEqual(app.activated, [t])
+
     def test_decision_8_a_review_runs_in_its_own_visible_thread_in_the_verify_tree(self):
         self.write_done([milestone("M1", "open", ["open"], inspect="frames"), milestone("M2", "open", ["open"])])
         self.commit_all()
