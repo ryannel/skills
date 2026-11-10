@@ -1,5 +1,9 @@
 # Ways to prove an item
 
+An item is one thing that must be true before a milestone is Done. This file is about how to prove one: which
+kind of proof to choose when planning, how a builder or a reviewer inspects work, and how work judged by taste is
+handled.
+
 Contents:
 - [The three ways](#the-three-ways)
 - [Kinds to start from](#kinds-to-start-from)
@@ -11,12 +15,12 @@ Contents:
 Every item in a done-when file says how it will be proved. There are three ways, and an item may use more than
 one:
 
-- An **Automated Check** is a shell command, in the item's `check` field. If it exits with 0, it passed. The
-  builder runs it, and the script runs it again before it accepts the builder's word.
-- A **Reviewer Inspection**, in the `inspect` field, says what to look at. A reviewer runs the product, takes
+- An Automated Check is a shell command in the item's `check` field. It passes if it exits with 0. The builder
+  runs it, and the script runs it again before it accepts the builder's word.
+- A Reviewer Inspection, in the `inspect` field, says what to look at. A reviewer runs the product, takes
   screenshots or recordings, and judges what it sees against the item and the milestone's quality bar.
-- A **Reviewer Question**, in the `ask` field, is a question a reviewer answers by reading code, an interface or
-  a design.
+- A Reviewer Question, in the `ask` field, is a question a reviewer answers by reading code, an interface or a
+  design.
 
 An item passes only when every proof it names passes.
 [The done-when file](done-when.md#module-donejson) says which milestones need a reviewer.
@@ -51,7 +55,8 @@ same shape.
 
 ## How to inspect
 
-Before you look at anything, write down what you are going to look at.
+This applies to a builder checking its own work before Ready for Review, and to a reviewer. Before you look at
+anything, write down what you are going to look at.
 
 Agents that skipped this looked at whatever caught their eye, decided it looked fine, and missed the broken
 parts. So break the thing into pieces first. For a boat, the pieces might be the bow, the stern, where the mast
@@ -85,10 +90,10 @@ those as `check` items as usual. The taste itself needs four more things.
 
 People disagree about taste, so no reviewer can settle it for the owner. When the look is the product, and a
 wrong one means redoing most of the work (an asset set, a game's art style, a brand), plan a first milestone
-that makes a few **options** for one representative piece, different in kind. Give it an `attended` item where
+that makes a few options for one representative piece, different in kind. Give it an `attended` item where
 the owner picks one. Choosing early costs the owner one sitting. Rejecting finished work costs the build. The
 owner answers the lead in chat, and the lead saves their words with the `owner answer` command, so the builder
-and every later reviewer can compare the work with the **chosen option**.
+and every later reviewer can compare the work with the option the owner chose.
 
 Have the builder lay the options out side by side for the owner, at the size they will be used and also
 enlarged, because a difference in line or texture can be a few pixels at real size. Have it save that as one
@@ -97,7 +102,7 @@ repository.
 
 Hold the options to the minimum requirements, and to being different in kind, and to nothing more. They exist so
 the owner can turn some down. The full quality bar starts with the chosen option, from the next milestone on. A
-quality bar that says "each option" must meet the look fails the milestone on the very options the owner
+quality bar that says "each option" must meet the look would fail the milestone on the very options the owner
 rejected.
 
 When taste is one quality of a small build, such as how a little game feels, skip the options. Build it, and put
@@ -106,7 +111,7 @@ is finished.
 
 ### Reviewers compare with references
 
-A **reference** is something concrete that the quality bar points at: the chosen option, a small set of reference
+A reference is something concrete that the quality bar points at: the chosen option, a small set of reference
 images, or the best version so far. The `Anchors:` line in the project settings says where they are kept. Compare
 the qualities the item names, side by side with the reference. Don't try to match one image, because an agent
 told to match a target copies its accidents too, such as its lighting or its crop. A set of references shows the
@@ -114,8 +119,8 @@ quality without fixing the accidents.
 
 ### The builder gets a fresh opinion before a review
 
-A builder working on an item judged by taste gets an opinion from an agent that has seen none of the work, when the host can
-start one: a subagent given only the item, the quality bar, the references and new screenshots. The builder
+A builder working on an item judged by taste gets an opinion from an agent that has seen none of the work,
+when the host can start one: a subagent given only the item, the quality bar, the references and new screenshots. The builder
 fixes what it finds, and goes round again while it keeps finding things that matter. Two or three rounds is
 usual. Every round costs a fresh look at all the screenshots, so stop at the first round that finds nothing you
 would change.

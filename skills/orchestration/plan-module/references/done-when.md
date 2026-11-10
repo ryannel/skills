@@ -1,5 +1,10 @@
 # The plan file and the done-when file
 
+Each module has two files that every agent working on it reads. The plan file says where the module stands. The
+done-when file says what must be true before each milestone is Done, and how each thing will be proved. A planner
+writes both. Builders, reviewers and the script then change only their own parts of them, in a fixed order, which
+this file sets out.
+
 Contents:
 - [`<MODULE>-PLAN.md`](#module-planmd)
 - [`<MODULE>-DONE.json`](#module-donejson)
@@ -11,10 +16,10 @@ Contents:
 
 ## `<MODULE>-PLAN.md`
 
-This is the plan file: a module's milestones, a few status lines and a log. Rewrite it in place, so that it always
-describes the present. People and agents read the status lines first, so keep them short. The `Reviews:` line
-holds only the latest review. Earlier ones go in the log, because a status line that keeps growing stops being
-read.
+The plan file holds a module's milestones, a few status lines at the top, and a log. Whoever updates it rewrites
+it in place, so it always describes the present. People and agents read the status lines first, so keep them
+short. The `Reviews:` line holds only the latest review, and earlier ones go in the log, because a status line
+that keeps growing stops being read.
 
 ```markdown
 # <Module> plan
@@ -34,9 +39,9 @@ Blocked: none
 
 ## `<MODULE>-DONE.json`
 
-This is the done-when file. For each milestone it lists the items: the things that must be true before the
-milestone is Done. It is JSON because a script reads it, and because an agent is less likely to rewrite a whole
-JSON file than a page of prose.
+The done-when file lists, for each milestone, its items: the things that must be true before the milestone is
+Done. It is JSON because the script reads it, and because an agent is less likely to rewrite a whole JSON file
+than a page of prose.
 
 ```json
 {
@@ -78,49 +83,48 @@ JSON file than a page of prose.
 The planner writes the fields that say what a milestone asks for:
 
 - `statement` says what must be true, in words a reviewer can judge.
-- `check`, `inspect` and `ask` say how the item is proved. `check` is an Automated Check, `inspect` is a Reviewer
-  Inspection, and `ask` is a Reviewer Question. An item uses at least one, and may use more.
+- `check`, `inspect` and `ask` say how the item is proved: `check` is an Automated Check, `inspect` a Reviewer
+  Inspection, and `ask` a Reviewer Question. An item uses at least one of them, and may use more.
   [Proofs](proofs.md) describes each.
-- `target` is one of the targets in the project settings, or `proxy:<what it stands in for>` when the proof runs
-  on a stand-in.
-- `lock` is optional. It names a resource that only one run may use at a time, such as `gpu`, which the item's
-  `check` needs. The script takes that lock when it runs the check.
-- `attended` is optional. It marks an item that needs human feedback, and says what a person or a piece of
-  hardware has to do, such as "plug in the iPhone and approve the prompt". A builder does every other item first
-  and reports these together, so the owner can settle them in one sitting.
-- `bar` is the quality bar: how good the milestone has to be, in words. It is the quality bar from the project
-  settings, made specific to this milestone, and it is what a Reviewer Inspection is judged against. Name real
-  examples in it, or the project's [references](proofs.md#subjective-work) for subjective work.
-- `needs` is optional. It lists the milestones in other modules that this milestone depends on, written
-  `"AUTH:M1"`. Each must be Done before this one starts. Milestones inside one module already run in order, so
-  listing an earlier milestone of the same module adds nothing. The script reports an error for a later milestone
-  of the same module, for the milestone itself, for a milestone that is Too Many Failed Reviews, and for a cycle
-  across modules, because none of those can ever be met.
+- `target` is one of the targets in the project settings, meaning a device or platform the product runs on. When
+  the proof runs on a stand-in, it is `proxy:<what it stands in for>`.
+- `lock` is optional. It names an exclusive resource that the item's `check` needs, such as `gpu`, and the script
+  takes that lock when it runs the check.
+- `attended` is optional. It marks an item that needs human feedback, and says what a person or a piece of hardware
+  has to do, such as "plug in the iPhone and approve the prompt". A builder does every other item first and
+  reports these together, so the owner can settle them in one sitting.
+- `bar` is the milestone's quality bar: how good it has to be, in words. It takes the quality bar in the project
+  settings and makes it specific to this milestone, and it is what a Reviewer Inspection is judged against. Name
+  real examples in it, or the project's [references](proofs.md#subjective-work) for subjective work.
+- `needs` is optional. It lists the milestones in other modules that this one depends on, written `"AUTH:M1"`, and
+  each must be Done before this one starts. Milestones inside one module already run in order, so listing an
+  earlier one from the same module adds nothing. The script reports an error for a later milestone of the same
+  module, for the milestone itself, for a milestone that is Too Many Failed Reviews, and for a cycle across
+  modules, because none of those can ever be met.
 
-Those fields are fixed once approved. Only a planner that the `plan` command started, or the owner's `scope`
-command, changes them. A builder who could edit them could pass anything.
+Once approved, those fields are fixed. Only a planner that the `plan` command started, or the owner through the
+`scope` command, changes them, because a builder who could edit them could pass anything.
 
 The other fields record what happened:
 
-- `status` is what the builder says about one item, `open` or `pass`. `evidence` says where the builder's proof
-  is saved.
+- `status` is what the builder says about one item, `open` or `pass`, and `evidence` says where the builder's
+  proof is saved.
 - `verdict` is the reviewer's result for one item: `pass`, `fail`, or `cant_tell` for Could Not Judge. `review`
   links to the review file.
-- `state` is the milestone's status. It takes one of six values: `open`, `in_progress`, `claimed`, `done`,
-  `blocked` or `parked`. The next section says what each means. A Blocked milestone also has a `blocked` field
-  that says what would unblock it.
-- `fails` counts the reviews the milestone has failed since a planner last rewrote it. `replans` counts those
+- `state` is the milestone's status, one of `open`, `in_progress`, `claimed`, `done`, `blocked` or `parked`. The
+  next section says what each means. A Blocked milestone also has a `blocked` field saying what would unblock it.
+- `fails` counts the reviews the milestone has failed since a planner last rewrote it, and `replans` counts those
   rewrites.
 
 A milestone needs a reviewer if any of its items has `inspect` or `ask`, or if it is the module's last milestone.
-The review of the last milestone reads the whole module, which is how work proved only by Automated Checks still
-gets read by a reviewer. Any other milestone is Done when its Automated Checks pass.
+The review of the last milestone reads the whole module, so work proved only by Automated Checks still gets read
+by a reviewer once. Any other milestone is Done when its Automated Checks pass.
 
 ## Statuses and their stored names
 
-The files and the script's output use shorter names than the ones people use. The second column is the value
-stored in the `state` field, which is the only thing to write there. The third is the word the `ready` and
-`status` commands print for a milestone in that status.
+The files and the script's output use shorter names than people do. The `In state` column is the value stored in
+the `state` field, and the only thing to write there. The last column is the word the `ready` and `status`
+commands print for a milestone in that status.
 
 | Status | Means | In `state` | Printed as |
 |---|---|---|---|
@@ -134,16 +138,16 @@ stored in the `state` field, which is the only thing to write there. The third i
 | Too Many Failed Reviews | It failed four more reviews after the rewrite, and waits for the owner. | `parked` | `parked` |
 | Done | Every check and review has passed. | `done` | `finished`, for a module whose milestones are all Done |
 
-The commands also print `invalid`, for a module whose done-when file is malformed or has been changed by an
-agent that may not change it.
+The commands also print `invalid` for a module whose done-when file is malformed, or has been changed by an agent
+that may not change it.
 
 A design has three statuses of its own. Design Ready for Review and Design Changes Requested are both printed as
-`design_owed`. A reviewer's last line sets the status: `DESIGN OK` sets Design Approved, and `DESIGN CHANGES`
+`design_owed`. The reviewer's last line sets the status: `DESIGN OK` sets Design Approved, and `DESIGN CHANGES`
 sets Design Changes Requested.
 
 ## The record file
 
-Beside each done-when file the script keeps `<MODULE>-ACCEPTED.json`, the record file. Only the script writes it,
+Beside each done-when file, the script keeps `<MODULE>-ACCEPTED.json`, the record file. Only the script writes it,
 in commits marked `Orchestrate-Loop: yes`. It is committed, so every worktree, every copy of the repository and
 every lead reads the same one. For each milestone it holds:
 
@@ -156,12 +160,12 @@ every lead reads the same one. For each milestone it holds:
 
 It also holds the module's design review, against the design as it was then.
 
-A milestone is Done only when the record file says so, under the key `accepted`, for the items as they are now.
-A `done` in the done-when file is not enough, and that is what makes the done-when file safe for agents to edit.
+A milestone is Done only when the record file says so, under the key `accepted`, for the items as they are now. A
+`done` in the done-when file is not enough, and that is what makes the done-when file safe for agents to edit.
 
-In a repository that has never had a record file, each module is taken as it stands the first time the script
-reads it, so work built before the project used these skills counts as Done. After that first time, a module
-with no record file is new: nothing in it is Done, and its design needs a review.
+In a repository that has never had a record file, the script takes each module as it stands the first time it
+reads it, so work built before the project used these skills counts as Done. After that, a module with no record
+file is new: nothing in it is Done, and its design needs a review.
 
 ## Who changes what, and when
 
@@ -186,15 +190,15 @@ Only one kind of agent changes each field at any time, and the hand-overs happen
 | `state` to `done` with no review, back to `claimed` for a new review, or from `parked` to `open` | Owner | `owner accept`, `owner rereview` or `owner unpark`. |
 
 Reviewers and planners don't commit their own changes to these files. The script compares what they changed with
-this table. Then it commits and merges the changes, or rejects all of them.
+this table, and then either commits and merges all of the changes or rejects all of them.
 
 `cant_tell` counts as a fail, because a milestone nobody could check is not Done. The review says what evidence
 would settle the item, and the builder's next attempt has to produce it.
 
 ## When a review fails
 
-These are the escalation steps. They are written down only here. The `next` command, and the `next` field in a
-review's result, apply them.
+These are the escalation steps, and they are written down only here. The `next` command, and the `next` field in
+a review's result, apply them.
 
 | Failed reviews (`fails`) | What happens |
 |---|---|
@@ -208,22 +212,23 @@ on something already ruled out.
 
 ## What makes a good item
 
-A good item is something you would refuse to call the milestone Done without. Its proof would catch a convincing
-fake, and it depends only on this module. Keep an inspected item small, with one quality in each, so that a failure
-points at something specific. A milestone may have many items, as long as it delivers one outcome.
+This section is for the planner. A good item is something you would refuse to call the milestone Done without.
+Its proof would catch a convincing fake, and it depends only on this module. Keep an inspected item small, with
+one quality in each, so a failure points at something specific. A milestone may have many items, as long as it
+delivers one outcome.
 
 Keep each item short: one thing that must be true, and the proof that would show it. Say what will be observed,
 and leave it to the builder to arrange the observation. An item that scripts its own procedure breaks the first
-time the builder learns something the plan didn't know. Each break costs a rewrite and another design review. On
-one engine project the items grew to a median of 135 words, and its milestones were rewritten up to four times
-each before any review had failed. In the rewrites we read, a proof couldn't run as written.
+time the builder learns something the plan didn't know, and each break costs a rewrite and another design review.
+On one engine project the items grew to a median of 135 words, and its milestones were rewritten up to four times
+each before any review had failed. In the rewrites we read from that project, the proof couldn't run as written.
 
 Choose each proof on purpose, because `inspect` and `ask` are what bring in a reviewer.
 
-- Use `ask` for something only reading can settle. Ask one question that has a real answer, within the range the
-  design names. "Would any violation fail this lint?" has no last answer, so each review finds one more corner
-  and the milestone never finishes.
-- If the builder will write the test that a `check` runs, add an `ask` that has the reviewer read that test. A
-  test written by the agent it grades proves little.
+- Use `ask` for something only reading can settle. Ask one question with a real answer, within the range the
+  design names. "Would any violation fail this lint?" has no last answer, so each review finds one more corner and
+  the milestone never finishes.
+- If the builder will write the test that a `check` runs, add an `ask` that has the reviewer read that test,
+  because a test written by the agent it grades proves little.
 - A milestone the builder can do comfortably, proved by checks the builder didn't write, can be Done on those
   checks alone.

@@ -1,14 +1,14 @@
 # The project settings: `ORCHESTRATE.md`
 
-Every agent in the orchestrate set reads this file first. It holds everything that is particular to this project,
-which is what lets the skills stay general. Keep it to about a page, and link to longer documents instead of
-copying them in.
+Every agent in the orchestrate set reads this file first. It holds everything particular to one project, which is
+what lets the skills stay general. Keep it to about a page, and link to longer documents rather than copying them
+in.
 
-The script, `agent_loop.py`, reads the lines marked *(script)*. Keep each of those in the shape
-`- **Label:** value`, with nothing else on the line except an optional `*( )*` note, because the script takes the
-rest of the line as the value. Run `agent_loop.py profile` to confirm the script can read them. `Integrate` and
-`Check` are required. The script refuses to run without them, because a guess at either one would push without
-permission or merge untested work.
+The script, `agent_loop.py`, reads the lines marked *(script)*. It takes everything after the label as the value,
+so keep each of those lines in the shape `- **Label:** value`, with nothing else on the line but an optional
+`*( )*` note. Run `agent_loop.py profile` to confirm the script can read them. `Integrate` and `Check` are required,
+and the script refuses to run without them, because a guess at either could push without permission or merge
+untested work.
 
 Contents:
 - [The file](#the-file)
@@ -67,30 +67,35 @@ needs, where secrets come from, and how two worktrees avoid sharing a port or a 
 
 ## Lines that need care
 
-`Integrate: push` is standing permission to push verified work to the main branch. Set it only if the owner has
-given that permission. If the project's `AGENTS.md` or `CLAUDE.md` says not to push without authorisation, say in
-the note that this line is that authorisation, so that an agent reading both knows which one wins. Without the
-owner's permission use `local`, and the owner merges.
+`Integrate: push` is standing permission to push verified work to the main branch, so set it only if the owner has
+given that permission. Without it, use `local`, and the owner merges. If the project's `AGENTS.md` or `CLAUDE.md`
+says not to push without authorisation, say in this line's note that the line is that authorisation, so an agent
+that reads both knows which one wins.
 
-`Review host` says where a review runs when the lead names no host. `same` means the builder's host. `other`
-means the other of `codex` and `claude`: a milestone's review goes to the host that didn't build it, and a
-design review to the host that didn't write the plan, when the `plan` command started the planner. A host name means that host. Write `other` when the owner
-builds with both hosts, because a reviewer from another company shares fewer of the builder's blind spots.
+`Review host` says where a review runs when the lead names no host:
 
-The plans folder may hold two files that are not plans. `BRIEF.md` is the project brief: what the owner wants
-and why, approved by the owner before planning. `GLOSSARY.md` holds the agreed name for each thing in the
-project. Every agent looks for them there by name, so they need no line of their own in this file. They are kept
-in the plans folder because the `adopt` command merges files from it, which lets the lead put a changed brief or
-glossary on the main branch without making a commit by hand.
+- `same` means the builder's host.
+- `other` means the other of `codex` and `claude`. A milestone's review goes to the host that didn't build it, and
+  a design review goes to the host that didn't write the plan, when the `plan` command started the planner.
+- A host name means that host.
+
+Write `other` when the owner builds with both hosts, because a reviewer from another company shares fewer of the
+builder's blind spots.
+
+The plans folder may hold two files that are not plans. `BRIEF.md` is the project brief: what the owner wants and
+why, approved by the owner before planning. `GLOSSARY.md` holds the agreed name for each thing in the project.
+Every agent looks for them there by name, so they need no line in this file. They are kept in the plans folder
+because the `adopt` command merges files from it, which lets the lead put a changed brief or glossary on the main
+branch without making a commit by hand.
 
 ## A model or an effort for one kind of agent
 
-There are four kinds of agent: planner, builder, reviewer and design reviewer. A design reviewer is the reviewer
-that reads a module's design before anything is built. Every kind uses the same model and effort unless a line
-says otherwise: the host's `model` line, and the `Effort` line, with planners at high.
+There are four kinds of agent here: planner, builder, reviewer and design reviewer. A design reviewer is the
+reviewer that reads a module's design before anything is built. Unless a line says otherwise, every kind uses the
+host's `model` line and the `Effort` line, except that planners run at high.
 
-To give one kind of agent something different, add a line for it. A model belongs to one host, because Claude
-Code can't run a GPT model and Codex can't run a Claude one. So a line that names a model names the host first:
+To give one kind of agent something different, add a line for it. A model belongs to one host, because Claude Code
+can't run a GPT model and Codex can't run a Claude one. So a line that names a model names the host first:
 
 | Line | What it sets |
 |---|---|
@@ -99,15 +104,26 @@ Code can't run a GPT model and Codex can't run a Claude one. So a line that name
 | `Codex design reviewer: high` | The effort of design reviewers on Codex. Their model stays the host's |
 | `Reviewer: high` | The effort of reviewers on every host. A line with no host can't name a model |
 
-A line for one host never reaches another. If the settings say `Claude planner: claude-fable-5-2` and a planner
-is started on Codex, it gets Codex's own model. So a project that is built on two hosts, or moves to a new one,
-needs no line removed. Give each host its own line if you want the stronger model on both.
+A line for one host never reaches another. If the settings say `Claude planner: claude-fable-5-2` and a planner is
+started on Codex, it gets Codex's own model. So a project built on two hosts, or moving to a new one, needs no line
+removed. To get the stronger model on both hosts, give each its own line.
 
-For each launch the script takes the first of these that is set. For the model: `--model` on the command, the
-line for that kind of agent on that host, the host's `model` line, then the built-in default (Claude Code and
-Codex have one, and any other host needs its `model` line if its command takes a model). For the effort: `--effort` on the command, the line
-for that kind on that host, the line for that kind on every host, then high for a planner and the `Effort` line
-for the rest. A design reviewer with no line of its own uses the reviewer's.
+For each launch, the script takes the first of these that is set. For the model:
 
-Add these lines only when the owner asked for them, because a larger model or a higher effort spends the
-owner's quota faster. Use an effort the host accepts.
+1. `--model` on the command;
+2. the line for that kind of agent on that host;
+3. the host's `model` line;
+4. the built-in default. Claude Code and Codex have one; any other host needs its `model` line if its command
+   takes a model.
+
+For the effort:
+
+1. `--effort` on the command;
+2. the line for that kind of agent on that host;
+3. the line for that kind of agent on every host;
+4. high for a planner, and the `Effort` line for the rest.
+
+A design reviewer with no line of its own uses the reviewer's.
+
+Add these lines only when the owner asked for them, because a larger model or a higher effort spends the owner's
+quota faster. Use an effort the host accepts.

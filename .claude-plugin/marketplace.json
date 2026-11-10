@@ -51,7 +51,7 @@
       "description": "Build software with AI agents in Claude Code, Codex or another host. The lead talks with you to find out what you want and agrees the project's terms, a planner writes milestones with done-when files, builders prove them, and new reviewers judge them. /build keeps a chosen number of builders busy and accepts no work it can't verify.",
       "source": "./",
       "strict": false,
-      "version": "1.6.1",
+      "version": "1.6.2",
       "category": "development",
       "keywords": [
         "agents",
