@@ -5,126 +5,138 @@ description: Builds one milestone of a module from its plan and done-when file, 
 
 # Build a milestone
 
-You are a builder: the agent that writes the code for one milestone. A module is a part of the project that one
-builder can work on without touching the other parts, and a milestone is a piece of a module small enough to finish
-in one session. Your job is to make the milestone work on its real targets and merge it into the main branch.
+Your job is to make one milestone work where the product will actually run, such as a phone or a browser, save
+proof that it does, and merge it. The proof matters as much as the code, because the next agent to look at
+the work has seen none of it and goes only by what you saved.
 
-Three other kinds of agent appear below. A planner wrote the plan you build from. A reviewer is a new agent that
-judges your finished milestone. The lead is the agent the owner chats with, and when there is one, it started
-you. A host is the program an agent runs in, such as Claude Code or Codex.
+The work comes from a plan. A planner, another agent, split the project into modules, which are parts one builder
+can work on without touching the others, and split each module into milestones, which are pieces small enough to
+finish in one session. You are the builder: the agent that writes the code.
 
-Read `ORCHESTRATE.md` first. It holds the project settings: where the plans are kept, the command that runs the
-tests, the targets the product runs on, and the project's rules. Read the building guidance it links to as well.
-If the plans folder has a `GLOSSARY.md`, read it. It holds the agreed name for each thing in the project. Use
-those names for anything new you write, in text a user sees and in your report. Where the code already has its
-own word for a thing, keep to the code's word in the code.
-Then find the module's next milestone in `<MODULE>-PLAN.md`, and that milestone's items in `<MODULE>-DONE.json`,
-which is called the done-when file. An item is one thing that must be true before the milestone is Done.
+## Where things are
 
-A command below that starts `agent_loop.py` belongs to the script that starts agents, runs the tests and keeps the
-project's records. Run it as `python3 <the build skill's folder>/scripts/agent_loop.py`.
+The project settings are in `ORCHESTRATE.md`. They say where the plans are kept, which command runs the tests,
+and what the project's rules are. They also list the devices and platforms the product runs on, and the files
+call each of these a target. The settings link to the project's building guidance, and you read both before you
+start.
 
-For an ordinary fix that has no plan, fix it, add a test if a test would catch the fault coming back, and merge it
-with `agent_loop.py land --worktree .`. That command takes the same lock as every builder and runs the project's
-test command, so a quick fix can't collide with a builder's merge or skip the tests.
+If the plans folder has a `GLOSSARY.md`, read it as well. It holds the agreed name for each thing in the project.
+Use those names in anything new you write and in your report, but keep to the code's own word inside existing
+code.
+
+Your milestone is the next one in `<MODULE>-PLAN.md`. That file also has a few status lines at the top, saying where
+the module stands, and a log below them.
+
+What the milestone has to achieve is in `<MODULE>-DONE.json`, the done-when file. It lists items, and each item is
+one thing that must be true before the milestone is Done. Each item says how it will be proved, in one or more of
+three ways:
+
+- an Automated Check, in the item's `check` field: a command that passes if it exits with 0;
+- a Reviewer Inspection, in the `inspect` field: something a reviewer looks at in the running product;
+- a Reviewer Question, in the `ask` field: something a reviewer answers by reading the code or a design.
+
+A reviewer is a new agent that judges your finished milestone. [Proofs](../plan-module/references/proofs.md)
+explains each way of proving an item.
+
+The commands below that start with `agent_loop.py` belong to the script that starts agents, runs the tests and
+keeps the project's records. Run them as `python3 <the build skill's folder>/scripts/agent_loop.py`.
 
 ## What finished looks like
 
-1. Every item of the milestone is marked as passed, with evidence from the item's target. Evidence is saved proof,
-   such as a test log or a screenshot. In the done-when file you change three fields and no others: an item's
-   `status` (`open` or `pass`), an item's `evidence` (where the proof is saved), and the milestone's `state`.
-   Everything else in that file belongs to the planner or the reviewer, as
-   [who changes what](../plan-module/references/done-when.md#who-changes-what-and-when) sets out. If an item is
-   wrong, or can't be met, leave it as written and say so in your report. The script rejects a builder's work when
-   any of the planner's fields has changed: an item's statement, its proof, its target, or the milestone's
-   quality bar. [Proofs](../plan-module/references/proofs.md) explains how each kind of item is
-   proved.
-2. The work is committed and merged with `agent_loop.py land --worktree .`. The command rebases your branch onto
-   the main branch, runs the project's test command (the `Check:` line in the project settings), and then pushes or
-   fast-forwards the main branch as the `Integrate:` line says. It does all of that under one lock, so two builders
-   can't merge at the same moment. It prints `LANDED` or `FAILED`.
-3. The milestone's `state` says what happens next. Set it to `claimed`, which means Ready for Review, when the
-   milestone needs a reviewer. Set it to `done` when it doesn't. A milestone needs a reviewer if any of its items
-   has an `inspect` or `ask` field, or if it is the module's last milestone.
-4. The plan's status lines and its log are up to date. Keep what you verified apart from what you think is probably
-   true.
+1. Every item is marked as passed, with evidence from the item's target. Evidence is saved proof, such as a test
+   log or a screenshot.
+2. The work is merged with `agent_loop.py land --worktree .`, which prints `LANDED`.
+3. The milestone's `state` says what happens next. A milestone needs a reviewer if any of its items has an
+   `inspect` or `ask` field, or if it is the module's last milestone. If it does, set `state` to `claimed`, the
+   stored name for Ready for Review. If not, set it to `done`.
+4. The status lines and the log in the plan file say what you did, with what you verified kept apart from what you
+   think is probably true.
 5. Your last line is `DONE`, or `BLOCKED: <what you tried, the evidence, and what would unblock it>`, or
-   `NEEDS_CONTEXT: <what is missing>`.
+   `NEEDS_CONTEXT: <what is missing>`. The script and the lead read this line to decide what happens next, so keep
+   to these three forms.
 
-An item with an `attended` field needs human feedback, or hardware you may not have. Do every other item first.
-Then end with `BLOCKED` and name those items, so the owner can settle them in one sitting.
+You change only three fields in the done-when file: an item's `status` (`open` or `pass`), an item's `evidence`
+(where the proof is saved), and the milestone's `state`. The planner and the reviewer own the rest, as
+[who changes what](../plan-module/references/done-when.md#who-changes-what-and-when) sets out, and the script
+rejects your work if any of the planner's fields has changed. So if an item is wrong or can't be met, leave it as
+written and say so in your report.
 
-When a lead is running the build, the script does not take your word for any of this. After you finish, its `run`
-command makes a clean copy of the main branch and runs the project's test command and every item's `check` there.
+`pass` means the proof came from the item's target. If you could only prove an item on a stand-in, such as a Mac
+standing in for an iPhone, leave it `open` and say so in your report. Whether a stand-in is good enough is the
+planner's decision, and the planner records it by writing `proxy:` in the item's `target`.
+
+An item with an `attended` field needs a person's feedback, or hardware you may not have. Do every other item
+first. Then end with `BLOCKED` and name those items, so the owner can settle them in one sitting.
+
+## Merging
+
+`agent_loop.py land --worktree .` rebases your branch onto the main branch, runs the project's test command (the
+`Check:` line in the project settings), and then pushes or fast-forwards the main branch as the `Integrate:` line
+says. It does all of this under one lock, so two builders can't merge at once. It prints `LANDED` or `FAILED`.
+
+An ordinary fix that has no plan is merged the same way. Make the fix, add a test if one would catch the fault
+coming back, and run `land`. Then a quick fix can't collide with a builder's merge or skip the tests.
 
 ## Before you set Ready for Review
 
 Run `agent_loop.py check --module <M> --milestone <id> --worktree .`. It runs the milestone's `check` commands and
-the project's test command the way the script will, and writes nothing.
+the project's test command the way the script will, and changes nothing.
 
-Then judge each `inspect` and `ask` item yourself, the way a reviewer will.
-[How to inspect](../plan-module/references/proofs.md#how-to-inspect) says how, and it applies to the exact build on
-its real target. For an item judged by taste, get the fresh opinions described under
-[subjective work](../plan-module/references/proofs.md#subjective-work) first, and keep the best round.
+Then judge each `inspect` and `ask` item yourself, the way a reviewer will, on the exact build and the real target.
+[How to inspect](../plan-module/references/proofs.md#how-to-inspect) says how. For an item judged by taste, first
+get the fresh opinions described under [subjective work](../plan-module/references/proofs.md#subjective-work), and
+keep the best round.
 
 ## The review
 
-When a lead is running the build, the lead starts the reviewer.
+The lead is the agent the owner chats with. When a lead is running the build, it started you, and it starts the
+reviewer too. It also doesn't take your word for anything: after you finish, the script's `run` command makes a
+clean copy of the main branch and runs the test command and every item's `check` there.
 
-In a single chat with no lead, you start it:
-`agent_loop.py review --module <M> --milestone <id> --commit <sha> --worktree .`, with `--host` set to the other
-host if the owner uses two. Tell the reviewer nothing else, so that it forms its own view. Only a review started
-by that command is saved. A reviewer you start any other way can't set the milestone to Done, and the owner would
-have to accept the milestone by hand. If you can't start a review, end with `DONE` and say that the milestone still
-needs one.
+In a single chat with no lead, you start the reviewer, with
+`agent_loop.py review --module <M> --milestone <id> --commit <sha> --worktree .`. If the owner uses both Claude Code
+and Codex, add `--host` with the one you are not running in. Pass the command nothing else, so the reviewer forms
+its own view. Only a review started by that command is saved, and only a saved review can set the milestone to
+Done. Without one, the owner has to accept the milestone by hand. If you can't start a review, end with `DONE` and
+say the milestone still needs one.
 
-When a review fails, `agent_loop.py next --module <M> --milestone <id> --worktree .` prints what to do. It depends
-on how many reviews the milestone has failed, and how many of those repeated an earlier finding: fix what the
-reviewer found in this session, hand over to a new session, or send the milestone back to a planner. Do what it
-prints. The counts are the record of what has already been tried, and
-[the escalation steps](../plan-module/references/done-when.md#when-a-review-fails) explain each one.
+When a review fails, run `agent_loop.py next --module <M> --milestone <id> --worktree .` and do what it prints.
+Depending on how many reviews the milestone has failed, and how many of those repeated an earlier finding, it
+tells you to fix what the reviewer found in this session, to hand over to a new session, or to send the milestone
+back to a planner. [The escalation steps](../plan-module/references/done-when.md#when-a-review-fails) explain
+each one.
 
-The milestone's `findings` in the done-when file lists the blocking findings, and marks with `repeat` each one an
-earlier round raised. Repeats are what send a milestone back to a planner, so make sure those stay fixed.
+The milestone's `findings`, in the done-when file, lists each Must Fix and marks with `repeat` each one
+an earlier round raised. Repeats are what send a milestone back to a planner, so make sure those stay fixed.
 
-## Facts that save a session
+## When a behaviour won't come
 
-If the change touches behaviour, run the affected part of the product before you change it. If someone left it
-broken, you want to know before you build on it.
+Agents that can't get a behaviour right tend to keep adjusting the same approach. After three different
+approaches, each built and run, stop adjusting. Most behaviours a milestone needs have been built before, so find
+out how shipped products and published work do it. If the mechanism you have may be unable to produce the
+behaviour at all, build the smallest reproduction that would show whether it can. If it can't, end with `BLOCKED`
+and what you found.
 
-When the right approach isn't settled and it matters, find out how shipped products and published work do it
-before you experiment. Old code in the repository shows what was tried. It isn't a template.
+On Codex, a browser, or any other program that needs more than the `workspace-write` sandbox allows, won't start
+inside the sandbox. Ask to run that command outside it before you end with `BLOCKED`. Each request is granted or
+refused on its own. In one test run a builder ended Blocked on four items without ever asking.
 
-On Codex, a browser, or any program that needs more than the `workspace-write` sandbox allows, won't start inside
-the sandbox. Ask to run that one command outside it before you end with `BLOCKED`. Each request is granted or
-refused separately. In one test run a builder ended Blocked on four items and had never asked.
+If a run needs something listed under `Exclusive resources` in the project settings, such as a simulator, wrap it
+in `agent_loop.py lock <name> -- <command>`, so two builders don't use it at once.
 
-If a behaviour still won't come after three different approaches, each one built and run, stop tuning. The
-mechanism may be unable to produce it. Build the smallest reproduction that would show whether it can. If it
-can't, end with `BLOCKED` and what you found.
-
-When you prove an item on something other than its target, such as a Mac standing in for an iPhone, label the
-result `proxy`.
-
-If a run needs something listed under `Exclusive resources` in the project settings, wrap it:
-`agent_loop.py lock <name> -- <command>`.
-
-When you need a name for something new, and the glossary has no entry for it, add one in the same commit, with
-the line `Proposed: by <the kind of agent you are>, <date>. Not yet agreed by the owner.`
-Name it in your report, and carry on. If your merge then fails because another builder added an entry to the
-same file, keep both entries.
-
-## What you may change
-
-You may research, run anything locally, change this module's code, and merge verified work as the project settings
-allow. None of that needs approval.
+## Limits
 
 - Don't force-push.
 - Don't change the design, or an interface, which is what one module provides to the others. Write a proposal in
   the plan's log, and carry on with the work that doesn't depend on it.
-- Don't build something another module owns. If it is missing, end with `BLOCKED` and name it, so a planner can
-  add it to the module that owns it. Built here, two modules would own the same thing.
-- Anything on the `Owner decides` list in the project settings goes to the owner.
+- Don't build something another module owns. If it is missing, end with `BLOCKED` and name it, so a planner can add
+  it to the module that owns it. If you built it here, two modules would own the same thing.
+- If the work needs a decision on the `Owner decides` list in the project settings, end with `BLOCKED` and name the
+  decision.
+
+When you need a name for something new and the glossary has none, add an entry in the same commit, with the line
+`Proposed: by builder, <date>. Not yet agreed by the owner.` Mention it in your report and carry on. If your merge
+then fails because another builder added an entry to the same file, keep both.
 
 This skill covers one milestone. To keep going past it, or to run with no one watching, the owner uses `/build`.
 

@@ -17,12 +17,12 @@ Write plain prose, the way Randall Munroe explains things, without the jokes: sh
 examples, the obvious said out loud, and the reason before or with the rule. Use a list for a real list, and not
 in place of sentences. Avoid bold-led bullets, chains of semicolons, and clauses packed together to save words.
 
-Use the set's terms. The domain [README](../../../skills/orchestration/README.md) defines them: lead, planner,
-builder, reviewer, the script, module, milestone, item, done-when file, project settings, the milestone statuses,
-and the three ways to prove an item. Use the explicit, familiar name even when it is longer, and define a term in
-each skill before its first use, because each skill is read alone. The files and the script's output keep their
-stored names (`claimed`, `attended`, `needs`, `parked`), because existing records use them. Give the stored name
-once, where the reader will meet it.
+Use the set's names. The [glossary](../../../skills/orchestration/GLOSSARY.md) holds the agreed name for each
+thing in the set, the names to avoid, and the stored name where it differs. Read it before you write, and add an
+entry, marked as proposed, for any new thing you have to name. The glossary isn't installed, so define each name
+in each skill before its first use, because each skill is read alone. The files and the script's output keep
+their stored names (`claimed`, `attended`, `needs`, `parked`), because existing records use them. Give the stored
+name once, where the reader will meet it.
 [The done-when reference](../../../skills/orchestration/plan-module/references/done-when.md#statuses-and-their-stored-names)
 holds the full table that matches the two. The script's messages to agents still use the older words, so each
 skill ends with a line that says what they mean.

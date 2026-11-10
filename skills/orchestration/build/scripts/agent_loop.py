@@ -370,7 +370,7 @@ the loop lands nothing then. To dry-run a milestone's checks, run `python3 {loop
 FINDINGS_TEMPLATE = """The reviewer failed {milestone}: see {evidence}/{module}/{milestone}-review.md. The loop has \
 set the items that didn't pass back to open, so each needs fresh evidence. Every blocking finding counts, including \
 cant_tell items (they need evidence the reviewer could reach) and blocking defects outside the items; advisory ones \
-are your call. The milestone's `findings` in the done-when file lists the blocking ones, and marks with `repeat` any an \
+are your call. The milestone's `findings` in the done-when file lists each Must Fix, and marks with `repeat` any an \
 earlier round raised: those are what escalate the milestone, so make sure they stay fixed. Add them to the plan as work items, fix them, re-verify the affected items, integrate, set the state back to claimed, and end with DONE, BLOCKED \
 or NEEDS_CONTEXT."""
 
@@ -884,7 +884,7 @@ def validate(done, module: str = "") -> list[str]:
 
 
 def findings_problems(m: dict, mid: str, items: list) -> list[str]:
-    """What's wrong with a milestone's `findings`: the reviewer's list of the blocking findings of its last review,
+    """What's wrong with a milestone's `findings`: the reviewer's list of the Must Fix findings of its last review,
     each with a short `name` kept the same from round to round, the `item` it fails (none for a defect outside the
     items), and `different` saying how a new failure of an item that failed before isn't the same defect."""
     found = m.get("findings", [])
@@ -1465,7 +1465,7 @@ def replan_task(module: str, mid: str, fails: int, prof: dict, worktree: Path | 
     history = round_history(worktree, prof, module, mid)
     rounds = f" What failed in each round: {' | '.join(history)}." if history else ""
     return (f"Re-plan {module} {mid}: {fails} of its failed reviews repeated a finding an earlier round had raised, "
-            f"so the plan is wrong (plan-module, \"When a milestone fails review four times\"). {where}.{rounds} Find "
+            f"so the plan is wrong (plan-module, \"When a milestone keeps failing on the same finding\"). {where}.{rounds} Find "
             f"what keeps failing and change the definitions of {mid} so it can be met; the loop resets its counts, "
             "counts the re-plan and opens it when your plan lands")
 
@@ -4733,7 +4733,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                     named = {f.get("item") for f in found if isinstance(f, dict)}
                     unnamed = [i["id"] for i in reviewed["items"] if i.get("verdict") != "pass" and i["id"] not in named]
                     if not found:
-                        problems.append("the last line says FAIL, but findings is empty; list each blocking finding "
+                        problems.append("the last line says FAIL, but findings is empty; list each Must Fix "
                                         "with a short name")
                     elif unnamed:
                         problems.append(f"findings names no finding for {', '.join(unnamed)}, which didn't pass")
