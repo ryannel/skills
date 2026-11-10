@@ -1,0 +1,78 @@
+# Tests every push and pull request. On main, publishes @ryannel/orchestrate to npm when package.json carries a
+# version npm doesn't have yet. The package's version follows the orchestrate plugin's in marketplace.json.
+#
+# Publishing needs one of these, set up once on npmjs.com:
+#   - a trusted publisher for @ryannel/orchestrate naming this repository and ci.yml (no secret needed), or
+#   - an automation token saved as the repository secret NPM_TOKEN.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: git config --global user.name ci && git config --global user.email ci@example.invalid
+      - name: The package's version matches the orchestrate plugin's
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          pkg = json.load(open("package.json"))["version"]
+          plugin = next(p["version"] for p in json.load(open(".claude-plugin/marketplace.json"))["plugins"]
+                        if p["name"] == "orchestrate")
+          if pkg != plugin:
+              sys.exit(f"package.json is {pkg} but the orchestrate plugin is {plugin}; set them the same")
+          PY
+      - name: Skill checks
+        run: |
+          for d in skills/orchestration/*/ skills/agent-writing/*/; do
+            [ -f "$d/SKILL.md" ] || continue
+            python3 skills/agent-writing/skill-creator/scripts/check_skill.py "$d"
+          done
+      - name: Installer tests
+        run: python3 -m unittest discover tests/install
+      - name: Orchestration tests
+        run: python3 -m unittest discover tests/orchestration
+      - name: The package packs
+        run: npm pack --dry-run
+
+  publish:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm install -g npm@latest
+      - name: Publish if this version is new
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already on npm"
+          else
+            npm publish --provenance --access public
+          fi

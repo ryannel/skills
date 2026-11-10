@@ -1,7 +1,7 @@
 {
   "name": "@ryannel/orchestrate",
-  "version": "1.0.0",
-  "description": "Install the ryannel/skills orchestration plugin and its agents",
+  "version": "1.6.3",
+  "description": "Install the orchestrate plugin from github.com/ryannel/skills, with prompting-agents, for Claude Code and Codex",
   "bin": {
     "ryannel-orchestrate": "bin/orchestrate.cjs"
   },
@@ -19,5 +19,8 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
