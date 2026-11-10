@@ -10,6 +10,13 @@ rest of the line as the value. Run `agent_loop.py profile` to confirm the script
 `Check` are required. The script refuses to run without them, because a guess at either one would push without
 permission or merge untested work.
 
+Contents:
+- [The file](#the-file)
+- [Lines that need care](#lines-that-need-care)
+- [A model or an effort for one kind of agent](#a-model-or-an-effort-for-one-kind-of-agent)
+
+## The file
+
 ```markdown
 # Project settings: <project>
 
@@ -28,7 +35,8 @@ permission or merge untested work.
 - **Review host:** same  *(script: optional; see below)*
 - **Codex model:** gpt-6.1-sol  *(script: any `<host> model:` line sets that host's model)*
 - **Claude model:** claude-opus-5-5  *(script)*
-- **Claude planner model:** claude-fable-5-2  *(script: optional; see below)*
+- **Claude planner:** <model> <effort>  *(script: optional, and only when the owner asked; a model, an effort or both for one kind of agent on one host; see the last section)*
+- **Reviewer:** <effort>  *(script: optional, and only when the owner asked; an effort for one kind of agent on every host)*
 - **Effort:** medium  *(script: optional; for builders and reviewers, default medium; planners run at high unless `--effort` says otherwise)*
 - **Claude permissions:** auto  *(script: the permission mode for Claude sessions in the background: auto, acceptEdits, dontAsk or bypassPermissions)*
 - **Codex sandbox:** workspace-write  *(script: or danger-full-access, which only the owner chooses; a browser won't start inside workspace-write)*
@@ -69,14 +77,37 @@ means the other of `codex` and `claude`: a milestone's review goes to the host t
 design review to the host that didn't write the plan, when the `plan` command started the planner. A host name means that host. Write `other` when the owner
 builds with both hosts, because a reviewer from another company shares fewer of the builder's blind spots.
 
-A `<host> model` line sets the model for every agent the script starts on that host. To give one kind of agent
-a different model, add a line that names the host and the kind: `Claude planner model`, `Claude builder model`,
-`Claude reviewer model`, and the same three for `Codex` or any other host. The model has to be one that host can
-run. Add such a line only when the owner asked for it, because a larger model spends the owner's quota faster.
-A `--model` on a command still wins over both lines.
-
 The plans folder may hold two files that are not plans. `BRIEF.md` is the project brief: what the owner wants
 and why, approved by the owner before planning. `GLOSSARY.md` holds the agreed name for each thing in the
 project. Every agent looks for them there by name, so they need no line of their own in this file. They are kept
 in the plans folder because the `adopt` command merges files from it, which lets the lead put a changed brief or
 glossary on the main branch without making a commit by hand.
+
+## A model or an effort for one kind of agent
+
+There are four kinds of agent: planner, builder, reviewer and design reviewer. A design reviewer is the reviewer
+that reads a module's design before anything is built. Every kind uses the same model and effort unless a line
+says otherwise: the host's `model` line, and the `Effort` line, with planners at high.
+
+To give one kind of agent something different, add a line for it. A model belongs to one host, because Claude
+Code can't run a GPT model and Codex can't run a Claude one. So a line that names a model names the host first:
+
+| Line | What it sets |
+|---|---|
+| `Claude planner: claude-fable-5-2 high` | The model and effort of planners that run on Claude Code |
+| `Codex planner: gpt-6-astra` | The model of planners that run on Codex. Their effort stays as it was |
+| `Codex design reviewer: high` | The effort of design reviewers on Codex. Their model stays the host's |
+| `Reviewer: high` | The effort of reviewers on every host. A line with no host can't name a model |
+
+A line for one host never reaches another. If the settings say `Claude planner: claude-fable-5-2` and a planner
+is started on Codex, it gets Codex's own model. So a project that is built on two hosts, or moves to a new one,
+needs no line removed. Give each host its own line if you want the stronger model on both.
+
+For each launch the script takes the first of these that is set. For the model: `--model` on the command, the
+line for that kind of agent on that host, the host's `model` line, then the built-in default (Claude Code and
+Codex have one, and any other host needs its `model` line if its command takes a model). For the effort: `--effort` on the command, the line
+for that kind on that host, the line for that kind on every host, then high for a planner and the `Effort` line
+for the rest. A design reviewer with no line of its own uses the reviewer's.
+
+Add these lines only when the owner asked for them, because a larger model or a higher effort spends the
+owner's quota faster. Use an effort the host accepts.

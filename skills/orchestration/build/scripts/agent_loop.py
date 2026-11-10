@@ -300,7 +300,10 @@ import codex_quota  # noqa: E402  (beside this file)
 
 DEFAULT_MODELS = {"codex": "gpt-6.1-sol", "claude": "claude-opus-5-5"}
 DEFAULT_MODEL = DEFAULT_MODELS["codex"]
-ROLE_KINDS = {"plan": "planner", "build": "builder", "review": "reviewer"}  # a launch's role -> the profile's word
+# The profile's word for each kind of agent -> the role a launch resolves. A profile line names a kind, with or
+# without a host in front: "- **Claude planner:** claude-fable-5-2 high" or "- **Reviewer:** high".
+ROLE_KINDS = {"planner": "plan", "builder": "build", "reviewer": "review", "design reviewer": "design"}
+ROLE_FALLBACK = {"design": "review"}  # a design review with no line of its own uses the reviewer's
 DEFAULT_EFFORT = "medium"  # the house position for code; planners default to high
 EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 CODEX = os.environ.get("ORCHESTRATE_CODEX") or shutil.which("codex") or \
@@ -394,6 +397,51 @@ def profile_value(text: str, label: str) -> str | None:
     return raw.replace("`", "").strip()
 
 
+def role_lines(text: str, hosts: set, problems: list) -> dict:
+    """The profile's lines for one kind of agent: `{role: {"effort": ..., "hosts": {host: {"model": ..., "effort":
+    ...}}}}`. A line with a host in front ("Claude planner") may give a model, an effort or both, and applies on that
+    host only, so one company's model name is never sent to another's program. A line with no host ("Planner") gives
+    an effort for that kind of agent on every host."""
+    out: dict = {}
+    for m in re.finditer(r"^\s*[-*]\s*\*\*(?:([\w.-]+) )??(design reviewer|planner|builder|reviewer):\*\*[ \t]*(.*)$",
+                         text, re.IGNORECASE | re.MULTILINE):
+        host, kind = (m.group(1) or "").lower(), m.group(2).lower()
+        label = f"{m.group(1) + ' ' if host else ''}{m.group(2)}"
+        raw = re.sub(r"\*\(.*?\)\*", "", m.group(3)).replace("`", "").replace(",", " ").strip()
+        if not raw or PLACEHOLDER.search(raw):
+            continue
+        efforts = [t for t in raw.split() if t.lower() in EFFORTS]
+        models = [t for t in raw.split() if t.lower() not in EFFORTS]
+        if len(efforts) > 1 or len(models) > 1:
+            problems.append(f"{label}: {raw!r} (want one model, one effort, or both)")
+        elif host and host not in hosts:
+            problems.append(f"{label}: {host!r} isn't a host this profile can start (codex, claude, or one with a "
+                            f"'Host {host}:' line)")
+        elif models and not host:
+            problems.append(f"{label}: {raw!r} (a model belongs to one host, so name the host: "
+                            f"'<Host> {kind}: {models[0]}'. With no host the line takes an effort only)")
+        else:
+            entry = out.setdefault(ROLE_KINDS[kind], {"effort": None, "hosts": {}})
+            effort = efforts[0].lower() if efforts else None
+            if host:
+                entry["hosts"][host] = {"model": models[0] if models else None, "effort": effort}
+            else:
+                entry["effort"] = effort
+    return out
+
+
+def role_setting(prof: dict, role: str, host: str) -> tuple[str | None, str | None]:
+    """The model and effort the profile's lines give this kind of agent on this host; None where they give none."""
+    model = effort = None
+    while role:
+        entry = prof.get("roles", {}).get(role) or {}
+        here = entry.get("hosts", {}).get(host) or {}
+        model = model or here.get("model")
+        effort = effort or here.get("effort") or entry.get("effort")
+        role = ROLE_FALLBACK.get(role)
+    return model, effort
+
+
 def profile(worktree: Path, strict: bool = False, missing_ok: bool = False) -> dict:
     """Reads the loop's settings from ORCHESTRATE.md (`- **Label:** value` lines). `Integrate` and `Check` must be
     there, because silently pushing, or integrating with no gate, isn't something to default into. A missing
@@ -425,16 +473,6 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False) -> d
         value = re.sub(r"\*\(.*?\)\*", "", m.group(2)).replace("`", "").strip().split()
         if value and not PLACEHOLDER.search(value[0]):
             out["models"][m.group(1).lower()] = value[0]
-    out["role_models"] = {}  # host -> {planner | builder | reviewer: model}, each overriding that host's model
-    for m in re.finditer(r"^\s*[-*]\s*\*\*([\w.-]+) (\w+) model:\*\*[ \t]*(.*)$", text,
-                         re.IGNORECASE | re.MULTILINE):
-        host, kind = m.group(1).lower(), m.group(2).lower()
-        value = re.sub(r"\*\(.*?\)\*", "", m.group(3)).replace("`", "").strip().split()
-        if kind not in ROLE_KINDS.values():
-            problems.append(f"{m.group(1)} {m.group(2)} model: want '<host> planner model', '<host> builder model' "
-                            "or '<host> reviewer model'")
-        elif value and not PLACEHOLDER.search(value[0]):
-            out["role_models"].setdefault(host, {})[kind] = value[0]
     out["hosts"] = {}
     for m in re.finditer(r"^\s*[-*]\s*\*\*Host ([\w.-]+):\*\*[ \t]*(.*)$", text, re.IGNORECASE | re.MULTILINE):
         name, command = m.group(1).lower(), re.sub(r"\*\(.*?\)\*", "", m.group(2)).replace("`", "").strip()
@@ -442,6 +480,7 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False) -> d
             problems.append(f"host {name}: {command!r} (needs a {{prompt}} placeholder, and codex and claude are built in)")
         else:
             out["hosts"][name] = command
+    out["roles"] = role_lines(text, {"codex", "claude", *out["hosts"]}, problems)
     gen = re.search(r"\*\*Codex generator:\*\*[ \t]*(.*)$", text, re.MULTILINE)  # older profiles
     if gen:
         m = re.match(r"`?([\w.\-]+)`?[ ,]+`?(\w+)`?", re.sub(r"\*\(.*?\)\*", "", gen.group(1)).strip())
@@ -3179,15 +3218,16 @@ def finish(state_path: Path, state: dict, result: str, **extra) -> None:
 
 
 def resolve(a: argparse.Namespace, prof: dict, role: str) -> tuple[str, str, str]:
-    """The host, model and effort for this launch: what the lead passed, else the profile, else the defaults. For
-    the model, the profile's line for this kind of agent on this host (`Claude planner model`) comes before the
-    host's own line (`Claude model`)."""
+    """The host, model and effort for this launch. Each is the first of these that is set: what the lead passed; the
+    profile's line for this kind of agent on this host; for the effort, its line for this kind of agent on any host;
+    the profile's line for the host (`Codex model`) or for every agent (`Effort`); the built-in default. A planner's
+    default effort is high. `role` is plan, build, review or design."""
     host = (a.host or default_host(prof)).lower()
-    model = (a.model or prof.get("role_models", {}).get(host, {}).get(ROLE_KINDS[role])
-             or prof["models"].get(host) or "")
+    line_model, line_effort = role_setting(prof, role, host)
+    model = a.model or line_model or prof["models"].get(host) or ""
     if not model and host in prof.get("hosts", {}) and "{model}" in prof["hosts"][host]:
         raise SystemExit(f"error: host {host} needs --model, or a '- **{host} model:** <model>' line in the profile")
-    effort = a.effort or ("high" if role == "plan" else prof["effort"])
+    effort = a.effort or line_effort or ("high" if role == "plan" else prof["effort"])
     if effort not in EFFORTS:
         raise SystemExit(f"error: effort {effort!r} isn't one of {sorted(EFFORTS)}")
     LAUNCH_HOSTS.add(host)
@@ -4011,9 +4051,14 @@ def cmd_run(a: argparse.Namespace) -> None:
         if step["status"] != "design_owed" or getattr(a, "no_design_review", False) or attempt:
             break
         reviewer = design_review_host(prof, proj[key]["record"], host, getattr(a, "review_host", None))
+        # `--model` and `--effort` on `run` are the builder's. The design review takes them only where the profile
+        # has no line for a design reviewer (or a reviewer) on that host.
+        set_model, set_effort = role_setting(prof, "design", reviewer)
         review = review_once(argparse.Namespace(module=stem, milestone="design", commit=None, worktree=str(worktree),
-                                                host=reviewer, model=a.model if reviewer == host else None,
-                                                effort=a.effort, turn_timeout_hours=a.turn_timeout_hours), locked=True)
+                                                host=reviewer,
+                                                model=None if set_model or reviewer != host else a.model,
+                                                effort=None if set_effort else a.effort,
+                                                turn_timeout_hours=a.turn_timeout_hours), locked=True)
         # the build row starts its own count; the design review's turns and tokens are under `design_review`
         loop_note(role="build", milestone=None, turns=0, usage={}, turn_started_at=None)
         if review.get("counted") is False:  # it judged a plan that changed while it ran
@@ -4351,7 +4396,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
             claim = ((rec.get("milestones") or {}).get(a.milestone) or {}).get("claim") or {}
             reviewer = review_host(prof, claim.get("host") or builder)
         a = argparse.Namespace(**{**vars(a), "host": reviewer})
-    host, model, effort = resolve(a, prof, "review")
+    host, model, effort = resolve(a, prof, "design" if a.milestone == "design" else "review")
     before = list(WARNINGS)
     preflight(host, worktree, "review")
     if locked:  # keep the build's loader warnings beside the review's
@@ -6008,8 +6053,8 @@ def main() -> None:
 
     def host_args(p):
         p.add_argument("--host", help="codex, claude, or a host named in the profile (default: see above)")
-        p.add_argument("--model", help="default: the profile's model for this kind of agent on the host, "
-                                       "else its model for the host")
+        p.add_argument("--model", help="default: the profile's line for this kind of agent on the host "
+                                       "(e.g. 'Claude planner'), else its model for the host")
         p.add_argument("--effort", help="default: medium (high for planners), or the profile's Effort")
         p.add_argument("--turn-timeout-hours", type=float, default=2.0)
 

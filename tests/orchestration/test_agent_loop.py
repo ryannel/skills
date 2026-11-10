@@ -335,28 +335,45 @@ class Profiles(unittest.TestCase):
             self.assertEqual(args, ["gemini", "-p", "do it now", "-m", "g-2"])
             self.assertEqual(env["ORCHESTRATE_ROLE"], "build")
 
-    def test_profile_sets_a_model_for_one_kind_of_agent_on_one_host(self):
+    def test_profile_sets_model_and_effort_for_one_kind_of_agent(self):
+        base = "- **Integrate:** local\n- **Check:** none\n"
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "ORCHESTRATE.md").write_text(
-                "- **Integrate:** local\n- **Check:** none\n- **Claude model:** claude-opus-5-5\n"
-                "- **Claude planner model:** `claude-fable-5-2`  *(script)*\n- **Codex reviewer model:** gpt-6-astra\n"
-                "- **Claude builder model:** <model>\n")
+                base + "- **Claude model:** claude-opus-5-5\n- **Effort:** low\n"
+                "- **Claude planner:** `claude-fable-5-2` xhigh  *(script)*\n- **Codex planner:** gpt-6-astra\n"
+                "- **Codex reviewer:** high\n- **Claude design reviewer:** claude-fable-5-2\n"
+                "- **Builder:** medium\n- **Claude builder:** <model>\n"
+                "- **Host gemini:** gemini -p {prompt} -m {model}\n- **Gemini model:** g-3\n"
+                "- **Gemini reviewer:** g-3-ultra, max\n")
             p = agent_loop.profile(Path(tmp), strict=True)
-            self.assertEqual(p["role_models"], {"claude": {"planner": "claude-fable-5-2"},
-                                                "codex": {"reviewer": "gpt-6-astra"}})
-            self.assertEqual(p["models"]["claude"], "claude-opus-5-5")  # the host's own line is untouched
+        json.dumps(p)  # the `profile` command prints the settings as JSON
 
-            def model(role, host, named=None):
-                return agent_loop.resolve(argparse.Namespace(host=host, model=named, effort=None), p, role)[1]
-            self.assertEqual([model("plan", "claude"), model("build", "claude"), model("review", "claude")],
-                             ["claude-fable-5-2", "claude-opus-5-5", "claude-opus-5-5"])
-            self.assertEqual([model("plan", "codex"), model("review", "codex")], ["gpt-6.1-sol", "gpt-6-astra"])
-            self.assertEqual(model("plan", "claude", "claude-haiku-5-5"), "claude-haiku-5-5")  # --model still wins
-            json.dumps(p)  # the `profile` command prints the settings as JSON
-            Path(tmp, "ORCHESTRATE.md").write_text(
-                "- **Integrate:** local\n- **Check:** none\n- **Claude planer model:** claude-fable-5-2\n")
-            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
-                agent_loop.profile(Path(tmp), strict=True)
+        def launch(role, host, **flags):
+            ns = argparse.Namespace(**{"host": host, "model": None, "effort": None, **flags})
+            return agent_loop.resolve(ns, p, role)[1:]
+        # a line with a host gives that host's model, effort or both; a planner's effort is high unless a line says
+        self.assertEqual(launch("plan", "claude"), ("claude-fable-5-2", "xhigh"))
+        self.assertEqual(launch("plan", "codex"), ("gpt-6-astra", "high"))
+        self.assertEqual(launch("plan", "gemini"), ("g-3", "high"), "another host's model never crosses over")
+        # a line with no host gives an effort on every host
+        self.assertEqual(launch("build", "claude"), ("claude-opus-5-5", "medium"))
+        self.assertEqual(launch("build", "codex"), ("gpt-6.1-sol", "medium"))
+        # an effort alone keeps the host's model
+        self.assertEqual(launch("review", "codex"), ("gpt-6.1-sol", "high"))
+        self.assertEqual(launch("review", "claude"), ("claude-opus-5-5", "low"))
+        self.assertEqual(launch("review", "gemini"), ("g-3-ultra", "max"))
+        # a design review uses its own line, then the reviewer's
+        self.assertEqual(launch("design", "claude"), ("claude-fable-5-2", "low"))
+        self.assertEqual(launch("design", "codex"), ("gpt-6.1-sol", "high"))
+        # what the lead passes still wins
+        self.assertEqual(launch("plan", "claude", model="claude-haiku-5-5", effort="low"), ("claude-haiku-5-5", "low"))
+        for bad in ("- **Planner:** claude-fable-5-2\n",          # a model with no host
+                    "- **Antigravity planner:** gemini-3 high\n",  # a host this profile can't start
+                    "- **Claude planner:** a b\n", "- **Reviewer:** high max\n"):
+            with tempfile.TemporaryDirectory() as tmp:
+                Path(tmp, "ORCHESTRATE.md").write_text(base + bad)
+                with self.assertRaises(SystemExit, msg=bad), contextlib.redirect_stderr(io.StringIO()):
+                    agent_loop.profile(Path(tmp), strict=True)
 
     def test_fable_10_default_host_follows_the_profile_then_the_running_host(self):
         prof = {"default_host": ""}
@@ -1668,7 +1685,12 @@ class VisibleCodex(Repo):
 
     def test_decision_8_pause_stops_the_turn_running_in_the_app(self):
         with FakeCodexApp(self, behaviour="hang").installed() as app:
-            threading.Timer(0.5, lambda: setattr(agent_loop, "_STOP", True)).start()
+            def stop_once_a_turn_is_running():  # a fixed delay raced the loop's start-up on a busy machine
+                deadline = time.time() + 30
+                while time.time() < deadline and not any(t.get("running") for t in app.threads.values()):
+                    time.sleep(0.01)
+                agent_loop._STOP = True
+            threading.Thread(target=stop_once_a_turn_is_running, daemon=True).start()
             result = self.run_loop()
         self.assertEqual(result["result"], "PAUSED")
         self.assertEqual(len(app.interrupts), 1)

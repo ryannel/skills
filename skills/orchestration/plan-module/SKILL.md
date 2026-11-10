@@ -26,7 +26,8 @@ Two files in the plans folder tell you what the owner wants. Read them if they e
   `Assumption:` line that says so. Under "Still open", something not yet decided is yours to settle with an
   `Assumption:` line, and something marked "the planner chooses" is yours to settle without one. Take the
   `Builders:`, `Integrate:` and `Owner decides` lines of the project settings from "How the owner wants to
-  work", and a model line for a kind of agent if the owner named one there.
+  work". If the owner named a model or an effort for one kind of agent there, write the line for it, as
+  [the settings reference](references/profile.md#a-model-or-an-effort-for-one-kind-of-agent) describes.
 - `GLOSSARY.md` holds the agreed name for each thing in the project. Use those names in the design, the items
   and the interfaces. When you need a name for something new, add an entry there, with the line
   `Proposed: by <the kind of agent you are>, <date>. Not yet agreed by the owner.`

@@ -206,8 +206,8 @@ example of the quality wanted>
 ## Where it runs
 
 ## How the owner wants to work
-<the programs to build with, such as Claude Code or Codex; a model the owner named for planning, building or
-reviewing; whether agents may push; what the owner wants to decide themselves>
+<the programs to build with, such as Claude Code or Codex; a model or effort the owner named for planning,
+building or reviewing; whether agents may push; what the owner wants to decide themselves>
 
 ## Still open
 <each one marked: not decided yet, with what to assume meanwhile; or the planner chooses>

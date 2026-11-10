@@ -121,17 +121,29 @@ settings (every agent finds the file by its path instead), and the fresh reading
 |---|---|
 | `check_skill.py` on the six skills and the spec | `ok` for all seven |
 | `claude plugin validate .` | Passed. It prints two notes about install lines in the root README, which were there before this work |
-| `python3 -m unittest discover -s tests/orchestration` | 273 tests. Every test that reads a skill passes. One test fails on some runs and passes on others: `test_decision_8_pause_stops_the_turn_running_in_the_app`. It sets a stop flag half a second after the run starts and expects a turn to be running by then, so it depends on how busy the machine is. It tests the script's `pause` command, which this work did not change |
+| `python3 -m unittest discover -s tests/orchestration` | 273 tests, all passing. One had failed on some runs: `test_decision_8_pause_stops_the_turn_running_in_the_app` set a stop flag half a second after the run started and expected a turn to be running by then. It now waits until the turn is running |
 
 ## Test runs
 
 After the reviews, both new skills were run on their test cases, and three lines were added to them because of
 what the runs showed. [results.md](results.md) is the record.
 
-## A setting added afterwards
+## Settings added afterwards
 
-The owner asked whether a planner could run on a different model from the builders. The project settings took
-one model for each host. They now also take a line for one kind of agent on one host, such as
-`Claude planner model: claude-fable-5-2`, which the script's `resolve` function reads before the host's own
-line. A `--model` on the command still wins. The change is in `agent_loop.py`, `profile.md`, the lead's skill and
-the README, with a test (`test_profile_sets_a_model_for_one_kind_of_agent_on_one_host`).
+The owner asked whether a planner could run on a different model from the builders, and then asked for model
+and effort for each kind of agent, with defaults that still work on a host that has no Claude models.
+
+The project settings took one model for each host and one effort. They now also take a line for one kind of
+agent (planner, builder, reviewer, design reviewer). With a host in front, the line gives a model, an effort or
+both, and applies on that host only: `Claude planner: claude-fable-5-2 high`. With no host, it gives an effort
+for that kind on every host: `Reviewer: high`. A model with no host is refused, because a model belongs to one
+host. A flag on the command still wins, and a host with no line keeps its own model. `profile.md` has the order
+the script looks them up in.
+
+A first version, a `Claude planner model` line that carried a model only, was pushed in 1.6.0 and replaced in
+1.6.1. Another session had drafted a third form in the `skill-factory` checkout (`Planner: claude
+claude-fable-5-2 high`, one host for each kind). It was not used, because a line that fixes one host can't say
+what a planner on any other host should run.
+
+The change is in `agent_loop.py` (`role_lines`, `role_setting`, `resolve`), `profile.md`, the lead's skill and
+the README, with a test (`test_profile_sets_model_and_effort_for_one_kind_of_agent`).

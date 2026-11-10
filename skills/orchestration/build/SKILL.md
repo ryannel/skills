@@ -121,11 +121,14 @@ in your first report. Don't stop to ask.
 
 Pass `--model` or `--effort` only when the owner asked for something other than the default. The script already
 uses the model from the project settings, with medium effort for builders and reviewers and high for planners.
-`--model` covers one command. When the owner wants one kind of agent on another model from now on, such as
-"plan with Fable", the project settings take a line for it, for example `Claude planner model: claude-fable-5-2`.
-On a project that is already planned, add the line yourself and commit it, because the owner asked for the
-change. On a new project, put the owner's words in the planner's task, and pass `--model` on that first `plan`
-command, because the settings don't exist yet.
+`--model` and `--effort` cover one command. When the owner wants one kind of agent set differently from now
+on, such as "plan with Fable" or "review at high effort", the project settings take a line for it:
+`Claude planner: claude-fable-5-2 high`, or `Reviewer: high`. A line that names a model names the host it runs
+on, and applies on that host only, so a planner started on Codex still gets a Codex model.
+[The settings reference](../plan-module/references/profile.md#a-model-or-an-effort-for-one-kind-of-agent) has the forms. On a project
+that is already planned, add the line yourself and commit it, because the owner asked for the change. On a new
+project, put the owner's words in the planner's task, and pass the flags on that first `plan` command, because
+the settings don't exist yet.
 Medium is the owner's choice. Raise it only where a run has been seen to fall short. Without `--host`, the script
 uses the `Default host:` line, or else the host it is running inside.
 

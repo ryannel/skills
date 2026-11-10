@@ -452,11 +452,11 @@ Nothing published supports these. Each is here because it fixed something we saw
   command line.
 - Builders and reviewers run at medium effort, and planners at high. Raise it where a run has been seen to fall
   short.
-- The project settings name one model for each host. A line such as `Claude planner model: claude-fable-5-2`
-  gives one kind of agent on that host a different model, so you can plan with a larger model and build with the
-  usual one. Say "plan with Fable" to the lead, and the lead adds the line.
-- You set the pace by choosing how many builders run. The script forecasts the usage limit, and never slows down
-  on its own.
+- The project settings name one model for each host and one effort. A line can set either for one kind of
+  agent: `Claude planner: claude-fable-5-2 high` plans with a larger model on Claude Code, and `Reviewer: high`
+  raises every reviewer's effort. A line that names a model names its host and applies there only, so the same
+  settings still work when a planner runs on Codex or on another company's agent. Say "plan with Fable" to the
+  lead, and the lead adds the line.
 
 ### What our own runs showed
 
