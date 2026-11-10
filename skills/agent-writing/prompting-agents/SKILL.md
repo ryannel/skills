@@ -11,10 +11,10 @@ can't ask what you meant. Everything it knows about the task is what you wrote, 
 in the files. This skill calls that agent the reader, and anything you write for it a prompt: a brief, a goal, a
 system prompt, an instruction file.
 
-That gives a prompt two ways to fail. You can tell the reader how to do work it already knows how to do, which
-limits it to what you thought of. Or you can leave out something it needed and had no way to find. Almost
-everything below is one of those two mistakes, so before you send a prompt, read it once as if you had seen
-nothing else.
+That gives a prompt two ways to fail. You can set out steps the reader could have planned itself. The reader will
+see the task close up as it works, so its plan would fit better than yours. Or you can leave out something it
+needed and had no way to find. Almost everything below is one of those two mistakes, so before you send a prompt,
+read it once as if you had seen nothing else.
 
 ## What the reader needs from you
 

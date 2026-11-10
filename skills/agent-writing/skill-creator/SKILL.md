@@ -6,213 +6,185 @@ license: Apache-2.0. Adapted from Anthropic's skill-creator; see LICENSE.txt.
 
 # Skill creator
 
-A skill is a folder of instructions that an agent loads when a task calls for it. Use this skill to make one,
+A skill is a folder of instructions that an agent loads when a task calls for it. Most of the time the agent
+doesn't see the folder at all. At the start of a session it gets each installed skill's name and a sentence or
+two of description, and it opens the rest only when a task seems to match. Use this skill to make a skill,
 improve one or test one.
 
-Three parties appear below. You are the agent reading this. The person is whoever asked for the skill. The reader
-is the agent that will load the finished skill, in a session you will never see. A host is the program that runs
-the reader and gives it skills, such as Claude Code or Codex.
+This skill calls the agent that loads the finished skill the reader. The reader is a capable model, such as
+Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra or GPT-6.1 Sol, and on most tasks it plans as well as you do. But
+it loads the skill in a session you will never see, so it can't ask what you meant. That gives a skill three ways
+to fail:
 
-The reader is a capable model, such as Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra or GPT-6.1 Sol. On most
-tasks it plans at least as well as you do. But it knows only what the skill says and what it can find in the
-files it opens, and it can't ask what you meant. So a skill fails in three ways:
+- The reader never loads it, because the description doesn't match what people ask for.
+- It sets out steps the reader could have planned itself. You wrote them in advance, but the reader can see the
+  actual task, so its plan would fit better.
+- It leaves out a fact the reader needed and had no way to guess.
 
-- The reader never loads it, because its description doesn't match what people ask for.
-- It tells the reader how to do work the reader would have done well alone. That holds the reader to the steps
-  you thought of.
-- It leaves out a fact the reader needed and could not have guessed.
+The body of a skill is a prompt, so the `prompting-agents` skill, which is installed with this one, covers how to
+write it: what to put in, what to leave out, the writing style, and the habits of each model. Read its
+`SKILL.md` before you write or rewrite a body. This skill covers what is particular to skills: deciding what one
+is for, the description, the folder, and testing.
 
-## What a finished skill is
+The person is whoever asked for the skill. Many people who want one are not programmers, so use their words, and
+explain a term such as "test case" or "frontmatter" the first time you need it.
+
+## What finished means
 
 A skill is finished when three things are true:
 
-1. The reader loads it for the requests it is meant for, and not for their neighbours.
+1. The reader loads it for the requests it is meant for, and not for neighbouring ones.
 2. The reader's result is better with the skill than without it, in the person's judgement.
 3. `python3 scripts/check_skill.py <skill-folder>`, run from this skill's folder, prints `ok`.
 
-How much evidence the first two need is the person's decision. Start where the person is. Someone who brings a
-draft wants it tested, not an interview. A one-line fix to an existing skill needs the edit and the check script.
-Someone who says "just write it" gets a draft to react to.
+How much evidence the first two need is the person's decision, so start where they are. Someone who brings a
+draft wants it tested, not an interview. A one-line fix needs the edit and the check script. Someone who says
+"just write it" gets a draft to react to.
 
-When you change an existing skill, keep its name. For more than a small fix, first copy its folder twice into a
-workspace folder that no host scans for skills. One copy stays untouched, as the old version to compare against.
-Edit the other, and put it in place of the installed skill when the person is satisfied. An installed skill is
-live in every session on the machine, so an edit made in place reaches other sessions half-finished. When you
-hand the skill back, list each thing you removed and why, so the person can restore a line you were wrong about.
+## Decide what the skill is for
 
-Many people who want a skill are not programmers. Use the words the person uses, and explain a term such as
-"test case" or "frontmatter" the first time you need it.
+First check that a skill is the right place. A skill suits a procedure or a body of knowledge that some tasks
+need. A fact that every session in a repository needs belongs in `CLAUDE.md` or `AGENTS.md`. A rule that must
+hold every time belongs in a hook, a test or a permission rule, because the host applies those whatever the
+reader decides. A skill can carry a hook, as [structure](references/structure.md#rules-that-must-hold-every-time)
+explains.
 
-## Decide what the skill is
+Give the skill one job. If the job is too narrow, several skills load for one task and may disagree. If it is too
+broad, no description can say when to use it.
 
-**Check that a skill is the right place for it.** An instruction works best close to the moment it applies.
+Write it from a real task. The best source is a task the person did with an agent. If this conversation holds
+one, take from it the steps that worked, the file formats, the context the person had to supply, and above all
+the corrections the person made, because each one is something an agent got wrong without help. The next best
+source is the project's own material: runbooks, review comments, the commits that fixed mistakes. A skill
+written from general knowledge ends up saying "handle errors appropriately", which the reader does anyway.
 
-| The instruction | Where it goes |
-|---|---|
-| Applies to one task | The prompt for that task |
-| A fact needed in every session in a repository | The instruction file (`CLAUDE.md`, `AGENTS.md`) |
-| A procedure or body of knowledge needed for some tasks | A skill |
-| Must hold every time, with no exceptions | A hook, a test or a permission rule. The host applies these whatever the reader decides. A skill can carry one, as [structure](references/structure.md#rules-that-must-hold-every-time) explains |
+Ask the person only for what matters and what you can't find yourself. If you can't tell what the reader would
+get wrong, find out. With the person's approval, run one realistic request in a fresh subagent that has no skill,
+and read what it did. The gaps in that run are what the skill is for. If there are none, tell the person the
+skill may not be needed.
 
-**Give the skill one job.** If the job is too narrow, several skills load for one task and may disagree. If it is
-too broad, no description can say when to use it.
-
-**Write it from a real task.** The best source is a task the person did with an agent. If this conversation holds
-one, take from it the steps that worked, the corrections the person made, the file formats, and the context the
-person had to supply. The corrections are worth most, because each is something an agent got wrong without help.
-The next best source is the project's own material: runbooks, review comments, the commits that fixed mistakes.
-A skill written from general knowledge says "handle errors appropriately", which the reader does anyway.
-
-Ask the person only for what matters and what you can't find or infer. If you can't tell what the reader would
-get wrong without help, find out: with the person's go-ahead, run one realistic request in a fresh subagent with
-no skill, and read what it did. The gaps in that run are what the skill is for. If there are none, tell the
-person the skill may not be needed.
-
-Write down only what your source supports. A guess written into a skill becomes the reader's rule, so put a
+Write down only what your source supports. A guess written into a skill becomes the reader's rule, so put each
 guess to the person as a question.
 
 ## Write the description
 
-At the start of a session the reader sees the name and description of every installed skill, and nothing else of
-them. It reads the body only after it has decided the task matches. So the description alone decides whether the
-skill is used, and everything about when to use the skill goes there.
+The description is the only part of the skill the reader sees before it decides whether to load it. So the
+description alone decides whether the skill is used, and everything about when to use the skill goes there, not
+in the body.
 
 Write one sentence on what the skill does, then one that starts "Use when".
 
 - Put the main use first. A host with many skills installed cuts descriptions short, and the start survives.
-- Describe what the person is trying to do, in the words a person would type.
+- Describe what the person is trying to do, in the words they would type. Someone who wants a dashboard may say
+  "chart" or "KPI page" and never say "dashboard".
 - Be precise. "Use when adding or changing a migration" is right. "Use when working with databases, queries,
   models or persistence" loads the skill for every task that touches data.
-- Say where the skill stops only if a neighbouring request would otherwise be sent to it: "Not for one-off
+- Say where the skill stops only when a neighbouring request would otherwise be sent to it: "Not for one-off
   queries (`sql-helper`)."
-- Don't overstate it. Older advice said to make descriptions pushy, because agents used to skip skills. Current
-  models respond more strongly to what they read, and an overstated description loads the skill where it doesn't
-  help. Widen a description only after a test shows the skill was missed.
+- Don't oversell it. Older advice made descriptions pushy, because agents used to skip skills. Current models
+  take what they read more literally, and an overstated description loads the skill where it doesn't help.
+  Widen a description only after a test shows the skill was missed.
+
+[Writing](references/writing.md#the-description) has examples.
 
 ## Write the body
 
-Read [writing](references/writing.md) before you write or rewrite a body. It shows each point below at work.
+The body carries what `prompting-agents` says any prompt needs: the purpose, what finished looks like and how to
+check it, the boundaries, and the facts the reader couldn't guess. A few things are particular to a skill.
 
-**What the body carries**
+The facts the reader couldn't guess belong in `SKILL.md`, not in a reference, because the reader won't know the
+moment to go and look one up. They are what make a skill worth loading: a table that marks deleted rows instead
+of removing them, or an endpoint that reports healthy while the database is down.
 
-- The purpose, in a sentence or two. The reader uses it to decide the cases you didn't think of.
-- What finished looks like, and a check the reader can run: a test that passes, a file that validates, a
-  screenshot beside the design. A reader with no check stops when the work looks finished.
-- Each boundary, stated once. A boundary is something the reader must not do, or must get a go-ahead for. Name
-  the exact action, put the exception inside the rule ("get a go-ahead before you run a migration"), and give the
-  reason in one clause. Then say what the reader may do without asking, and name only actions the person or the
-  project has cleared. Take boundaries from the project's rules and the person's words, not from caution. A skill
-  supports the task the person asked for. It doesn't widen the task or grant permission the person hasn't given.
-- The facts the reader couldn't guess: a table that marks deleted rows instead of removing them, an endpoint that
-  reports healthy while the database is down. These are worth more than anything else in a skill.
-- The format of the output, when the format matters. Mark a template as exact only when a program reads the
-  output.
-- Each other file in the folder, with when to read it or run it.
+Match how strict each part is to how fragile that part of the work is. Where several approaches would do, give
+the aim and the reason. Where there is a preferred pattern, give a template or one example. Where the work breaks
+if it is done differently, give the exact command. [Writing](references/writing.md) shows the three levels, and a
+whole body before and after.
 
-**What the body leaves out**
+Put the most important instructions first. After a long conversation is compacted, Claude Code keeps only the
+start of each skill that was loaded.
 
-- Steps the reader would work out. Step-by-step skills helped earlier models. Keep numbered steps for work where
-  the order is the point, such as a migration, and an exact command for a step that breaks if done differently.
-- What the reader already knows, such as what a PDF is or how to write a loop.
-- Emphasis and pressure: capitals, "IMPORTANT", "be thorough", "think hard". Current models follow a plain line,
-  and emphasis makes them apply a rule too widely.
-- Reminders to do what the reader does anyway. "Always run the tests" makes GPT-6 Astra and Claude Opus 5 test
-  more than a change needs. Say what check this kind of change needs.
-- A menu. "Use `pdfplumber`. For scanned pages, use OCR instead" gives a default. A list of four libraries makes
-  the reader choose with nothing to go on.
-- The same point made again, in other words or with a second example.
-- A "when to use this skill" section, and the story of how the skill was made.
+Write instructions that hold for the whole task. The reader reads the skill once, at the start, so "update
+`CHANGELOG.md`" gets done once, while "update `CHANGELOG.md` with every change you make" holds.
 
-**How to word it**
+Name each other file in the folder, and say when to read or run it. The reader opens a reference only when
+`SKILL.md` sends it there. Keep `SKILL.md` under 500 lines. A skill with one job and little detail needs no other
+files. [Structure](references/structure.md) covers the folder, the frontmatter, references, scripts, and what each
+host does differently.
 
-Write the way Randall Munroe writes in "What If?", without the jokes: for a clever reader who is new to the
-subject.
+Leave out a "when to use this skill" section, because by the time the reader sees the body it has already decided.
+Leave out the story of how the skill was made, too.
 
-1. Say the main thing first. In a long conversation Claude Code keeps only the start of a loaded skill.
-2. Name who does each thing. "Run the tests before you merge" makes it the reader's job. "The tests are run
-   before merging" doesn't say whose job it is.
-3. Explain a term before you use it, then keep using that word.
-4. Use ordinary words. A technical word is fine when it is the name of the thing.
-5. Tell things in the order they happen.
-6. Be concrete. A path, a command, a number or one example carries more than a description of them.
-7. Write whole sentences. A skill stays small because of what you leave out, not because words were dropped
-   until the sentences turned into labels.
-8. Say what to do. "Write in paragraphs" works better than "don't use bullet points".
-9. Write instructions that hold for the whole task. The reader reads the skill once, so "update `CHANGELOG.md`"
-   is done once, and "update `CHANGELOG.md` with every change you make" holds.
-
-Keep `SKILL.md` under 500 lines. A skill with one job and little detail needs no other files. When it needs
-them, [structure](references/structure.md) covers the folder, the frontmatter, references, scripts, and what
-each host does differently.
-
-Keep a new draft out of any folder a host scans for skills until testing is done. Claude Code and Codex pick a
-skill up as soon as it is in such a folder, so the draft would leak into the runs meant to go without it.
-
-When the draft exists, read it once as the reader, knowing nothing else. For each line ask whether the reader
-would get something wrong without it. If not, cut the line.
+When the draft exists, read it once as the reader would, knowing nothing else. For each line, ask whether the
+reader would get something wrong without it. If not, cut the line.
 
 ## Test it
 
-[Testing](references/testing.md) has the file formats, the ways a comparison leaks, grading, and what to do on a
-host with no subagents. The outline:
+Keep a new draft out of every folder a host scans for skills until testing is done. Claude Code and Codex pick a
+skill up as soon as it lands in one, so the draft would leak into the runs that are meant to go without it. When
+you are changing an installed skill, copy its folder twice into a workspace outside those folders. One copy stays
+untouched, as the version to compare against, and you edit the other. An installed skill is live in every session
+on the machine, so an edit made in place reaches those sessions half-finished.
 
-1. Write two or three requests as a person would type them, with the file names and loose phrasing real requests
-   have. Show them to the person.
+The test itself goes like this. [Testing](references/testing.md) has the file formats, the ways a comparison
+leaks, grading, and what to do on a host with no subagents.
+
+1. Write two or three requests the way a person would type them, with the file names and loose phrasing that real
+   requests have. Show them to the person.
 2. Before any run, write down what a good result must contain, as checks: statements that are plainly true or
-   false. A check written after you have seen the outputs drifts towards the output you already prefer. For
-   results only a person can judge, such as writing or design, write no checks and show the person the results.
-3. Run each request twice in the same turn, each in a fresh subagent: once with the skill, and once without it.
-   When you are improving a skill, the second run uses the untouched old copy. Fresh subagents matter because
+   false. A check written after you have seen the outputs drifts towards the output you already prefer. For a
+   result only a person can judge, such as writing or design, write no checks and show the person the results.
+3. Run each request twice in the same turn, each time in a fresh subagent: once with the skill, and once without
+   it, or with the untouched old copy when you are improving a skill. The subagents have to be fresh, because
    anything left over from this conversation hides gaps in the skill.
-4. Read the transcript of the run without the skill, to see that it really went without. An agent can load any
+4. Read the transcript of each run without the skill, to make sure it really went without. An agent can load any
    installed skill by itself.
 5. Show the person every result before you change anything.
 
-One run of each side shows whether the skill works at all. To choose between two versions, run each side two or
-three times, because the same request gives different results from run to run.
+One run of each shows whether the skill works at all. To choose between two versions, run each two or three
+times, because the same request gives different results from run to run.
 
 ## Revise it
 
-- Fix the cause, not the test case. The skill will run on requests you will never see.
-- Look first for a line to remove. If every run wasted time on something, find the line that sent it there. An
-  agent that asks too often, or tests too much, has usually read a caution or a reminder that isn't needed.
-- When you add a correction, keep it narrow and give its reason. One failure is not a rule for every task.
-- If every run wrote the same helper script, put the script in `scripts/` so the next run doesn't have to.
+Fix the cause, not the test case. The skill will run on requests you will never see.
 
-Then run the same requests again. Stop when the person is satisfied or the changes stop helping.
+Look first for a line to remove. If every run wasted time on the same thing, find the line that sent it there. An
+agent that asks too often or tests too much has usually read a caution or a reminder it didn't need.
+
+When you add a correction, keep it narrow and give its reason. One failure is not a rule for every task.
+
+If every run wrote the same helper script, put the script in `scripts/`, so the next run doesn't have to.
+
+Then run the same requests again. Stop when the person is satisfied, or when the changes stop helping.
 
 ## Check it and hand it over
 
-Run `python3 scripts/check_skill.py <skill-folder>`. It checks the frontmatter, the name and description limits,
-every link between the skill's files, and contents lists on long references. These are the mistakes that fail
-without an error: a skill whose frontmatter doesn't parse still loads in Claude Code, with no description, so the
-reader never picks it. The script also prints notes, which are advice and don't fail the check.
+Run `python3 scripts/check_skill.py <skill-folder>`. It checks the frontmatter, the limits on the name and the
+description, every link between the skill's files, and the contents lists on long references. These mistakes fail
+without an error: a skill whose frontmatter doesn't parse still loads in Claude Code, but with no description, so
+the reader never picks it. The script also prints notes, which are advice and don't fail the check.
 
-Then put the skill where the person wants it, without its `evals/` folder.
-[Structure](references/structure.md#where-skills-live) lists the folders each host reads.
+Then put the skill where the person wants it, without its `evals/` folder, and under its old name if it replaces
+one. [Structure](references/structure.md#where-skills-live) lists the folders each host reads. If you changed an
+existing skill, list each thing you removed and why, so the person can put back a line you were wrong about.
 
 If the person counts on the skill loading without being named, test the description once the skill is
 installed. [Testing](references/testing.md#does-the-description-load-the-skill) says how, and what it costs.
 
 ## Which model will read it
 
-A skill in a repository is read by every model that works there. Write for the most capable one.
+A skill in a repository is read by every model that works there, so write for the most capable one, and read
+that model's file in `prompting-agents` for the habits to write against. One difference matters for skills in
+particular. On OpenAI's models, a skill's text arrives as something the user said, not as a system prompt, so
+where the person's request and the skill disagree, expect the request to win.
 
-| Model | In a skill, watch for |
-|---|---|
-| Claude Opus 5.5 | No statement of what finished means. In unattended runs it may end on a progress report |
-| Claude Fable 5.2 | Cautions. It follows every one it finds, so each needless caution costs approvals and retries |
-| GPT-6 Astra | Two lines that disagree, or strong "ask first" wording. It stops to ask where you wanted it to continue |
-| GPT-6.1 Sol | Indirect cases. It misses some that Astra finds, and a narrow line naming the pattern helps |
+When a new model comes out, run the skill's test cases on it without the skill. Where they pass, the model has
+caught up with what the skill taught, and that part of the skill can go. Then reread the rest for lines that were
+written to push an older model, as `prompting-agents` describes, and run the cases with the old version and the
+new before you show the person both.
 
-[Models](references/models.md) lists what to change in a skill for each symptom, and how to move a skill to a
-newer model. Read it when a skill misbehaves on one model, or when the model changes.
+## Approvals
 
-## What you may do without asking
-
-Reading the person's files, researching, writing a draft, editing a skill's working copy and running the check
-script need no approval.
-
-Get the person's go-ahead before you start test runs, and say how many, because each run spends their quota or
+Get the person's approval before you start test runs, and say how many, because each run spends their quota or
 money. Get it also before you replace an installed skill, install a skill where other people's agents will load
 it, or publish one.

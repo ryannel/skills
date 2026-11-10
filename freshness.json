@@ -2240,7 +2240,7 @@
       "last_checked": "2026-11-10",
       "last_drift_found": null,
       "quiet_streak": 0,
-      "why_tier": "Registered 2026-11-08, rewritten 2026-11-10. Describes host behaviour (skill listing limits, frontmatter fields, install locations, claude plugin eval's case format) that moves with Claude Code and Codex releases, and what four named models do with a skill.",
+      "why_tier": "Registered 2026-11-08, rewritten 2026-11-10. Describes host behaviour (skill listing limits, frontmatter fields, install locations, claude plugin eval's case format) that moves with Claude Code and Codex releases, and which models are current.",
       "watchlist": [
         {
           "id": "skill-creator-harness",
@@ -2252,9 +2252,9 @@
         {
           "id": "skill-creator-models",
           "type": "model-behaviour",
-          "claim": "Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol are the current models, and each behaves with a skill as references/models.md says.",
-          "where": "skills/agent-writing/skill-creator/references/models.md",
-          "check": "Compare with Anthropic's and OpenAI's current prompting pages; when a newer model ships, re-run workbench/skill-creator/evals on it and update the table in SKILL.md with models.md."
+          "claim": "SKILL.md names Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol as the current models, and says OpenAI's models take a skill's text as something the user said. Per-model habits live in prompting-agents.",
+          "where": "skills/agent-writing/skill-creator/SKILL.md",
+          "check": "When a newer model ships, update the model names here with prompting-agents, and re-run workbench/skill-creator/evals on it. Check OpenAI's skills docs for how skill text is passed to the model."
         }
       ]
     },
