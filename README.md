@@ -88,15 +88,18 @@ the orchestration plugin from the GitHub marketplace.
 
 </details>
 
-## Instructing agents
+## Prompting agents
 
-[`instructing-agents`](./skills/instructing-agents/) is a standalone skill for the text one agent hands another:
-an Agent or Task prompt, a `codex exec` or `claude -p` prompt, a goal, a steer, a review request, or AGENTS.md and
-CLAUDE.md. It works in Claude Code, Codex and any other host, and pairs well with the orchestration skills. It carries
-what the receiving agent can't find out for itself (purpose, done, boundaries, where things are) and leaves out the
-method and the list of things to look at.
+[`prompting-agents`](./skills/prompting-agents/) is a standalone skill for any text another agent will act on: a
+brief for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt,
+AGENTS.md and CLAUDE.md, and the wording of a skill. It says what such a text must carry (the purpose, what done
+looks like and the check, the boundaries, what the reader can't see, what comes back), what to leave out, and how
+to write it plainly. It is built from Anthropic's and OpenAI's guidance for Claude Opus 5.5, Claude Fable 5.2,
+GPT-6 Astra and GPT-6.1 Sol; the research behind it is in
+[workbench/prompting-agents](./workbench/prompting-agents/README.md). It replaced `instructing-agents` on
+10 November 2026.
 
-Install it with `python3 install.py --plugins instructing-agents` (see [Setting up for Claude Code and
+Install it with `python3 install.py --plugins prompting-agents` (see [Setting up for Claude Code and
 Codex](#setting-up-for-claude-code-and-codex)). It relies on its description to trigger, with no hook.
 
 ## Skill creator
@@ -145,19 +148,19 @@ As a Claude Code plugin instead:
 /plugin install generative-media-skills@ryannel-skills
 ```
 
-These routes are for the generative-media skills. `instructing-agents`, `orchestrate` and `skill-creator` install
+These routes are for the generative-media skills. `prompting-agents`, `orchestrate` and `skill-creator` install
 through `install.py`, below.
 
 ## Setting up for Claude Code and Codex
 
-For `instructing-agents`, `orchestrate` and `skill-creator`, one command from a clone of this repo sets up both hosts
+For `prompting-agents`, `orchestrate` and `skill-creator`, one command from a clone of this repo sets up both hosts
 without editing settings by hand:
 
 ```bash
 python3 install.py                       # all three plugins, both hosts, user scope
 python3 install.py --replace-standalone  # the same, replacing an earlier npx-skills or hand install (see below)
 python3 install.py --repo ~/code/app     # and set that repo up too
-python3 install.py --plugins instructing-agents --host codex
+python3 install.py --plugins prompting-agents --host codex
 ```
 
 Run it from the checkout you mean to keep, such as the main clone rather than a temporary worktree: it registers
@@ -172,7 +175,7 @@ inside the Codex app):
 |---|---|---|
 | How | adds this repo as the `ryannel-skills` marketplace, then `claude plugin install` for each plugin | the same marketplace through `codex plugin marketplace add` and `codex plugin add`; Codex reads `.claude-plugin/marketplace.json` itself. Without `codex` on PATH it uses the CLI inside `/Applications/ChatGPT.app` |
 | Skills | each plugin's skills, as `plugin:skill` | each plugin's skills, listed as `plugin:skill`, where the app loads them (`$CODEX_HOME/plugins/cache`) |
-| instructing-agents | the skill only; its description is what makes it trigger | the skill, plus one line in `$CODEX_HOME/AGENTS.md` saying to apply it before a handoff |
+| prompting-agents | the skill only; its description is what makes it trigger | the skill, plus one line in `$CODEX_HOME/AGENTS.md` saying to apply it before a handoff |
 | orchestrate | the planner and evaluator agents, linked into `~/.claude/agents` from the installed plugin, because neither Claude Code version loads the `agents` a marketplace entry lists (`claude plugin details` shows `Agents (0)`) | the evaluator agent, linked into `$CODEX_HOME/agents` from the plugin cache by `install_agents.sh --global --codex-only` |
 | `--repo` | says whether Claude will read the repo's AGENTS.md, judged from the CLI version and any `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the repo or above it; when it won't and the repo has no `CLAUDE.md`, writes one holding `@AGENTS.md`. With orchestrate it checks `ORCHESTRATE.md`, and a failed check fails the run. `--scope project` declares the plugins in the repo's `.claude/settings.json` instead of user settings (use `--source ryannel/skills` so the entry works on other machines) | nothing; Codex reads AGENTS.md |
 
@@ -182,6 +185,10 @@ or `~/.codex/skills`) would load next to the plugins, giving two descriptions pe
 listing each one. `--replace-standalone` moves those copies to `~/.ryannel-skills-backup/<time>/`, removes the links
 into them, and drops only the old hook's entry from `settings.json`, keeping a copy of the file there. A skill with
 the same name that doesn't match any committed version of these skills is left alone.
+
+**The retired `instructing-agents`.** `prompting-agents` replaced it. Installing `prompting-agents` uninstalls the
+`instructing-agents` plugin, treats a standalone copy of the old skill as an earlier install, and rewrites the old
+line in Codex's `AGENTS.md`.
 
 **Updates.** On Claude Code 2.1.317 a plugin from a marketplace added by local path loads in place, so edits to the
 checkout take effect at the next session start. Claude Code 2.1.239 copies it into its cache and re-copies only when
@@ -197,6 +204,6 @@ What stays manual:
 - **ORCHESTRATE.md.** `/plan-module` writes it, since its values are the project's.
 
 **No hook, for now.** An earlier version shipped a PreToolUse hook that refused the first handoff in each context
-with a one-line nudge to apply instructing-agents. It was removed on 9 November 2026 to test whether the description
+with a one-line nudge to apply the skill, then called instructing-agents. It was removed on 9 November 2026 to test whether the description
 alone triggers the skill, including late in a long session and after compaction. It's in git history if the trial
 says it's needed.

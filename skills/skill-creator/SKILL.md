@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Creates, rewrites and tests agent skills for Claude Code, Codex and other agents, in plain explanatory prose. Use when someone wants to make a skill, turn a workflow into one, improve, trim or fix one that triggers badly, or test one on realistic tasks. Not for one-off goals, briefs or AGENTS.md files (instructing-agents).
+description: Creates, rewrites and tests agent skills for Claude Code, Codex and other agents, in plain explanatory prose. Use when someone wants to make a skill, turn a workflow into one, improve, trim or fix one that triggers badly, or test one on realistic tasks. Not for one-off goals, briefs or AGENTS.md files (prompting-agents).
 license: Apache-2.0. Adapted from Anthropic's skill-creator; see LICENSE.txt.
 ---
 

@@ -23,8 +23,8 @@ npx skills add ryannel/skills --skill <skill-name>
 
 Standalone skills that belong to no domain sit directly under `skills/`, such as
 [`skill-creator/`](skill-creator/), which creates and tests skills of any kind, and
-[`instructing-agents/`](instructing-agents/), which writes the prompts, goals, steers and briefs one agent hands
-another.
+[`prompting-agents/`](prompting-agents/), which writes the prompts, goals, steers, briefs and instruction files
+one agent hands another.
 
 ## Adding a new domain
 

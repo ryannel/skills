@@ -2,9 +2,9 @@
 """Sets this repo's skills up for Claude Code and Codex, with no settings edited by hand.
 
 Usage:
-  python3 install.py                          # instructing-agents, orchestrate and skill-creator, both hosts, user scope
+  python3 install.py                          # prompting-agents, orchestrate and skill-creator, both hosts, user scope
   python3 install.py --replace-standalone     # the same, first moving aside earlier standalone copies and hook
-  python3 install.py --plugins instructing-agents --host codex
+  python3 install.py --plugins prompting-agents --host codex
   python3 install.py --repo ~/code/app        # also set up that repo (see below)
   python3 install.py --repo ~/code/app --scope project --source ryannel/skills
                                               # Claude plugins declared in the repo's .claude/settings.json
@@ -14,8 +14,11 @@ plugin. If that marketplace is already registered from another source, it says s
 reinstalling the plugins it had.
 
 Codex: the same marketplace with the Codex CLI (the copy inside the Codex app when `codex` isn't on PATH), which
-reads `.claude-plugin/marketplace.json`. With instructing-agents, one line goes into the
+reads `.claude-plugin/marketplace.json`. With prompting-agents, one line goes into the
 global AGENTS.md.
+
+prompting-agents replaced instructing-agents. Installing it uninstalls the old plugin, treats a standalone copy
+of the old skill as an earlier install, and rewrites the old AGENTS.md line.
 
 Earlier standalone installs: copies of these skills in ~/.claude/skills, ~/.agents/skills or ~/.codex/skills, and an
 older hand-installed handoff hook in settings.json, would load next to the plugins. The installer finds them first and
@@ -44,10 +47,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 MARKETPLACE = "ryannel-skills"
 ENTRIES = {e["name"]: e for e in json.loads((HERE / ".claude-plugin/marketplace.json").read_text())["plugins"]}
-DEFAULT_PLUGINS = ["instructing-agents", "orchestrate", "skill-creator"]
+DEFAULT_PLUGINS = ["prompting-agents", "orchestrate", "skill-creator"]
+RETIRED = {"prompting-agents": "instructing-agents"}  # a plugin, and the earlier plugin and skill it replaced
 CODEX_APP_CLI = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
 CLAUDE_READS_AGENTS_MD = (2, 1, 277)
-AGENTS_LINE = "Apply the `instructing-agents` skill before you hand a prompt to another agent."
+AGENTS_LINE = "Apply the `prompting-agents` skill before you hand a prompt to another agent."
+OLD_AGENTS_LINE = AGENTS_LINE.replace("prompting-agents", RETIRED["prompting-agents"])
 OLD_HOOKS = ("instructing-agents-gate.py", "handoff_nudge.py")  # hand-installed copies of the retired handoff hook
 failures: list[str] = []
 
@@ -96,7 +101,19 @@ def codex_binary() -> str | None:
 
 
 def skill_names(plugins: list[str]) -> list[str]:
-    return [Path(p).name for plugin in plugins for p in ENTRIES[plugin].get("skills", [])]
+    """The skills these plugins hold, and the retired skills they replaced."""
+    return ([Path(p).name for plugin in plugins for p in ENTRIES[plugin].get("skills", [])]
+            + [RETIRED[plugin] for plugin in plugins if plugin in RETIRED])
+
+
+def agents_md_text(text: str) -> tuple[str, str]:
+    """The global AGENTS.md with the prompting-agents line in it, and what was done."""
+    if OLD_AGENTS_LINE in text:
+        return text.replace(OLD_AGENTS_LINE, AGENTS_LINE), "replaced the instructing-agents line in"
+    if "prompting-agents" in text:
+        return text, "already names prompting-agents; left as is:"
+    sep = "" if not text or text.endswith("\n\n") else ("\n" if text.endswith("\n") else "\n\n")
+    return text + sep + AGENTS_LINE + "\n", "added the prompting-agents line to"
 
 
 # ---- earlier standalone installs ------------------------------------------------------------------------------
@@ -234,8 +251,6 @@ def stale_copy(plugin: str, install_path: Path) -> bool:
     """Whether a cached copy of the plugin differs from this checkout in any file its entry uses."""
     entry = ENTRIES[plugin]
     paths = entry.get("skills", []) + entry.get("agents", [])
-    if "hooks" in entry:
-        paths.append("./skills/instructing-agents/hooks")
     return any(tree_differs(HERE / p, install_path / p) if (HERE / p).is_dir()
                else not (install_path / p).exists() or (HERE / p).read_bytes() != (install_path / p).read_bytes()
                for p in paths)
@@ -255,7 +270,8 @@ def setup_claude(plugins: list[str], scope: str, repo: Path | None, source: str)
               f" removing it uninstalls its plugins, so they're reinstalled below.")
         run([claude, "plugin", "marketplace", "remove", MARKETPLACE])
         registered = None
-        reinstall = [p["id"].split("@")[0] for p in had if p.get("scope") == "user"]
+        reinstall = [p["id"].split("@")[0] for p in had
+                     if p.get("scope") == "user" and p["id"].split("@")[0] in ENTRIES]
         for p in had:
             if p.get("scope") != "user":
                 print(f"!! {p['id']} was installed at {p.get('scope')} scope {p.get('projectPath', '')}; reinstall it"
@@ -267,6 +283,10 @@ def setup_claude(plugins: list[str], scope: str, repo: Path | None, source: str)
         run([claude, "plugin", "marketplace", "update", MARKETPLACE], check=False)
     for p in [x for x in reinstall if not (x in plugins and scope == "user")]:
         run([claude, "plugin", "install", "--scope", "user", f"{p}@{MARKETPLACE}"])
+    for old in [f"{RETIRED[p]}@{MARKETPLACE}" for p in plugins if p in RETIRED]:
+        if any(x["id"] == old and x.get("scope") == scope
+               for x in quiet_json([claude, "plugin", "list", "--json"], cwd=cwd) or []):
+            run([claude, "plugin", "uninstall", "--scope", scope, old], cwd=cwd, check=False)
     for p in plugins:
         r = run([claude, "plugin", "install", "--scope", scope, f"{p}@{MARKETPLACE}"], cwd=cwd)
         if "already installed" not in r.stdout + r.stderr:
@@ -344,17 +364,18 @@ def setup_codex(plugins: list[str], source: str) -> None:
         run([codex, "plugin", "marketplace", "add", source])
     for p in plugins:
         # A local marketplace is copied at install time, so re-adding picks up changes.
+        if p in RETIRED:
+            run([codex, "plugin", "remove", f"{RETIRED[p]}@{MARKETPLACE}"], check=False)
         run([codex, "plugin", "remove", f"{p}@{MARKETPLACE}"], check=False)
         run([codex, "plugin", "add", f"{p}@{MARKETPLACE}"])
-    if "instructing-agents" in plugins:
+    if "prompting-agents" in plugins:
         agents_md = codex_home() / "AGENTS.md"
         text = agents_md.read_text() if agents_md.exists() else ""
-        if "instructing-agents" in text:
-            print(f"  {agents_md} already names instructing-agents; left as is")
-        else:
-            sep = "" if not text or text.endswith("\n\n") else ("\n" if text.endswith("\n") else "\n\n")
-            agents_md.write_text(text + sep + AGENTS_LINE + "\n")
-            print(f"  added the instructing-agents line to {agents_md}")
+        new, did = agents_md_text(text)
+        if new != text:
+            agents_md.parent.mkdir(parents=True, exist_ok=True)
+            agents_md.write_text(new)
+        print(f"  {did} {agents_md}")
     if "orchestrate" in plugins:
         # The Codex evaluator agent isn't a plugin component. Link it from the plugin's installed copy so it keeps
         # working if this checkout moves. Copy the definition if there is no plugin cache.

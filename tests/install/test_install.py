@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -26,8 +27,8 @@ class Home:
         self.claude, self.codex = self.home / ".claude", self.home / ".codex"
         self.env = mock.patch.dict(os.environ, {"HOME": tmp, "CLAUDE_CONFIG_DIR": str(self.claude),
                                                 "CODEX_HOME": str(self.codex)})
-        for name in ("instructing-agents", "build"):
-            src = ROOT / ("skills/instructing-agents" if name == "instructing-agents" else "skills/orchestration/build")
+        for name in ("prompting-agents", "build"):
+            src = ROOT / ("skills/prompting-agents" if name == "prompting-agents" else "skills/orchestration/build")
             dest = self.claude / "skills" / name
             dest.mkdir(parents=True)
             (dest / "SKILL.md").write_bytes((src / "SKILL.md").read_bytes())
@@ -58,7 +59,7 @@ def quietly(fn, *args):
 
 
 class Migration(unittest.TestCase):
-    plugins = ["instructing-agents", "orchestrate", "skill-creator"]
+    plugins = ["prompting-agents", "orchestrate", "skill-creator"]
 
     def test_without_the_flag_it_lists_everything_and_changes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -69,7 +70,7 @@ class Migration(unittest.TestCase):
                     install.migrate(self.plugins, ["claude", "codex"], False)
             self.assertIn("--replace-standalone", str(stop.exception))
             text = out.getvalue()
-            for expected in ("skills/instructing-agents", "skills/build", "orchestrate-evaluator.md",
+            for expected in ("skills/prompting-agents", "skills/build", "orchestrate-evaluator.md",
                              "instructing-agents-gate.py", "doesn't match this repo's; left alone"):
                 self.assertIn(expected, text)
             self.assertTrue((h.claude / "skills/build/SKILL.md").exists())
@@ -101,6 +102,27 @@ class Migration(unittest.TestCase):
                   'python3 "${CLAUDE_PLUGIN_ROOT}/skills/instructing-agents/hooks/handoff_nudge.py"'}]}]}}
         self.assertEqual(install.old_hook_entries(plugin), [])
 
+    def test_a_standalone_copy_of_the_retired_skill_is_found(self):
+        git = lambda *a: subprocess.run(["git", "-C", str(ROOT), *a], text=True, capture_output=True).stdout
+        last = git("log", "-1", "--format=%H", "--diff-filter=AM", "--", "skills/instructing-agents/SKILL.md").strip()
+        if not last:
+            self.skipTest("this checkout has no history for the retired skill")
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp, ".claude/skills/instructing-agents")
+            old.mkdir(parents=True)
+            (old / "SKILL.md").write_text(git("show", f"{last}:skills/instructing-agents/SKILL.md"))
+            with mock.patch.dict(os.environ, {"HOME": tmp, "CLAUDE_CONFIG_DIR": f"{tmp}/.claude",
+                                              "CODEX_HOME": f"{tmp}/.codex"}):
+                copies, _, others = install.find_standalone(["prompting-agents"], ["claude"])
+            self.assertEqual((copies, others), ([old], []))
+
+    def test_the_agents_md_line(self):
+        new, old = install.AGENTS_LINE, install.OLD_AGENTS_LINE
+        self.assertEqual(install.agents_md_text("")[0], new + "\n")
+        self.assertEqual(install.agents_md_text("# mine\n")[0], "# mine\n\n" + new + "\n")
+        self.assertEqual(install.agents_md_text("# mine\n\n" + old + "\n")[0], "# mine\n\n" + new + "\n")
+        self.assertEqual(install.agents_md_text(new + "\n")[0], new + "\n")
+
 
 class Source(unittest.TestCase):
     def test_local_paths_compare_resolved(self):
@@ -124,7 +146,7 @@ class Repo(unittest.TestCase):
         with mock.patch.object(install, "version", return_value=cli), \
                 mock.patch.object(install.shutil, "which", return_value="claude"), \
                 mock.patch.dict(os.environ, {"HOME": tmp, "CLAUDE_CONFIG_DIR": f"{tmp}/.claude"}):
-            return repo, quietly(install.setup_repo, repo, ["instructing-agents"])
+            return repo, quietly(install.setup_repo, repo, ["prompting-agents"])
 
     def test_new_cli_with_nothing_in_the_way_reads_agents_md(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -158,7 +180,7 @@ class Repo(unittest.TestCase):
             with mock.patch.object(install, "version", return_value=(2, 1, 317)), \
                     mock.patch.object(install.shutil, "which", return_value="claude"), \
                     mock.patch.dict(os.environ, {"HOME": tmp, "CLAUDE_CONFIG_DIR": f"{tmp}/.claude"}):
-                self.assertIn("Claude reads AGENTS.md here", quietly(install.setup_repo, repo, ["instructing-agents"]))
+                self.assertIn("Claude reads AGENTS.md here", quietly(install.setup_repo, repo, ["prompting-agents"]))
 
 
 class InteractiveOrchestration(unittest.TestCase):

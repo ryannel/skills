@@ -80,7 +80,7 @@
       "description": "Creates, rewrites and tests agent skills for Claude Code, Codex and other agents, in plain explanatory prose. Follows Anthropic's skill-creator process, with isolated baselines, repeated runs, trigger tests and a structural check script.",
       "source": "./",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "category": "development",
       "keywords": [
         "skills",
@@ -95,11 +95,11 @@
       ]
     },
     {
-      "name": "instructing-agents",
-      "description": "Writes and checks the text one agent hands another: Agent or Task prompts, codex exec and claude -p prompts, goals, steers, review requests and AGENTS.md or CLAUDE.md, for Claude Code and Codex. Carries what the agent can't find out itself (purpose, done, boundaries, where things are) and leaves out the method and what to look at.",
+      "name": "prompting-agents",
+      "description": "Writes and repairs the text another AI agent will act on: subagent and session briefs, goals for long unattended runs, review requests, steers, system prompts, CLAUDE.md and AGENTS.md, and the wording of skills. Built from Anthropic's and OpenAI's prompting guidance for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol, in plain explanatory prose.",
       "source": "./",
       "strict": false,
-      "version": "2.2.0",
+      "version": "1.0.0",
       "category": "development",
       "keywords": [
         "agents",
@@ -108,11 +108,12 @@
         "codex",
         "claude-code",
         "goals",
-        "code-review",
+        "system-prompts",
+        "skills",
         "agents-md"
       ],
       "skills": [
-        "./skills/instructing-agents"
+        "./skills/prompting-agents"
       ]
     }
   ]

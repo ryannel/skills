@@ -351,9 +351,10 @@ your words. Both follow the same rules.
 8. Reviewers and planners are started with the ability to start other agents turned off. A reviewer that hands its
    reading to a helper has not read the work.
 
-The fuller write-up of these rules, with every source, is the
-[`instructing-agents`](https://github.com/ryannel/skills/tree/main/skills/instructing-agents) skill in the same
-repository.
+The fuller write-up of these rules is the
+[`prompting-agents`](https://github.com/ryannel/skills/tree/main/skills/prompting-agents) skill in the same
+repository. Its sources are listed in
+[workbench/prompting-agents](https://github.com/ryannel/skills/tree/main/workbench/prompting-agents).
 
 ### Our own practice
 

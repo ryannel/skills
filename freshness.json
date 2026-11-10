@@ -2215,21 +2215,21 @@
         }
       ]
     },
-    "instructing-agents": {
-      "path": "skills/instructing-agents",
+    "prompting-agents": {
+      "path": "skills/prompting-agents",
       "tier": "active",
       "cadence_days": 7,
-      "last_checked": "2026-11-09",
+      "last_checked": "2026-11-10",
       "last_drift_found": null,
       "quiet_streak": 0,
-      "why_tier": "Registered 2026-11-08. Names current models (Opus 5.5, gpt-6.1-sol) and Codex CLI flags and local files, which move with each release.",
+      "why_tier": "Registered 2026-11-10, replacing instructing-agents. Names four current models (Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra, GPT-6.1 Sol) and gives per-model prompting advice from vendor pages that change with each release.",
       "watchlist": [
         {
-          "id": "instructing-agents-models",
+          "id": "prompting-agents-models",
           "type": "model-names",
-          "claim": "Model behaviour and host facts for claude-opus-5-5 and gpt-6.1-sol: effort defaults, what a Codex or Claude Code subagent inherits, what the Codex system prompt and /goal templates already say, and why runs stop.",
-          "where": "skills/instructing-agents",
-          "check": "Re-read GitHub models.json and diff both ~/.codex/models_cache*.json (CLI and desktop templates differ), the goal templates, the spawn_agent schema in the bundled Codex CLI, the Opus 5.5 prompting guide and the Claude Code subagent, memory and skills docs (note version gates). Update references/hosts-and-models.md and sources.md with dates; the Codex templates can change on the server with no model release."
+          "claim": "Per-model behaviour and the prompt change for each symptom, for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol; and host facts about skills and instruction files (the 5,000-token keep after compaction, the 1,024-character description limit, portable frontmatter fields, the 200-line and 32 KiB instruction-file limits, how nested instruction files load).",
+          "where": "skills/prompting-agents/references/models.md, skills.md and instruction-files.md; the model table in SKILL.md",
+          "check": "Re-read the vendor pages listed in workbench/prompting-agents/README.md (Anthropic's prompting pages for the current Fable and Opus models, OpenAI's Using GPT-6 guide and Astra blog post, the Claude Code skills and memory pages, OpenAI's Build skills and AGENTS.md pages). If a newer top model has shipped, add it and drop the oldest. Update references/models.md with the new date."
         }
       ]
     },

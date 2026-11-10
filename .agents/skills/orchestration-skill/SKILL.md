@@ -12,7 +12,7 @@ metadata:
 - **Generic, configured by the profile.** Nothing project-specific: paths, commands, targets, owner rules and domain
   standards come from the project's `ORCHESTRATE.md` ([template](../../../skills/orchestration/plan-module/references/profile.md)).
   If a skill needs a new setting, add it to the template, and to `agent_loop.py`'s `profile()` if the loop reads it.
-- **Written to `instructing-agents`.** Outcome, done-when, constraints and pointers; reasons with rules; no emphasis or
+- **Written to `prompting-agents`.** Outcome, done-when, constraints and pointers; reasons with rules; no emphasis or
   pressure lines; descriptions that say when to use and when not, and don't overlap a sibling's.
 - **Model and effort named** in each skill's first line and each agent file, so nothing inherits a default.
 - **One writer per done-when field,** as listed in `plan-module/references/done-when.md`. A change to who writes what
