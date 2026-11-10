@@ -1,164 +1,189 @@
 # Writing a skill
 
-Contents:
-- [The folder](#the-folder)
-- [The description](#the-description)
-- [The body](#the-body)
-- [The voice](#the-voice)
-- [Frontmatter options](#frontmatter-options)
-- [Where skills live](#where-skills-live)
+A skill's description and body are prompts: text an agent will act on with no chance to ask what you meant. This
+file shows each writing point from `SKILL.md` at work.
 
-## The folder
-
-A skill is a folder with a `SKILL.md` in it. `SKILL.md` starts with frontmatter holding a `name` and a `description`,
-and then the instructions. The folder can also hold `references/` for longer material the agent reads when it needs
-it, `scripts/` for code it runs, and `assets/` for files it uses in its output. Claude Code, Codex and many other
-agents read the same format, from the agentskills.io standard.
-
-The name is lowercase with hyphens, at most 64 characters, and matches the folder. The description is at most 1,024
-characters. Anthropic also reserves the words "claude" and "anthropic" in names, so leave them out if the skill might
-be used there.
-
-A skill that links to files in a sibling skill only works when both are installed together. Either keep the skill
-self-contained, or say in the description that it comes as part of a set.
+Contents: [The description](#the-description) · [What the body carries](#what-the-body-carries) ·
+[How strict to be](#how-strict-to-be) · [What the body leaves out](#what-the-body-leaves-out) ·
+[The wording](#the-wording) · [Before and after](#before-and-after)
 
 ## The description
 
-Until an agent decides to load a skill, the name and description are all it sees. So the description is the trigger.
-If it's vague, the skill fires at the wrong times or never fires at all.
+The description has one job: to let the reader decide, from one or two sentences, whether this task needs the
+skill.
 
-Say what the skill does, then when to use it, in the third person. Name the phrasings a user might actually type. A
-user who wants a dashboard might say "chart", "metrics" or "KPI page" without ever saying "dashboard". If a
-neighbouring skill could fire instead, end with a "Not for…" line that names it. That's all a description needs.
+> Too vague: "Helps with PDFs."
+>
+> Too wide: "Use for anything involving documents, files, forms, reports, text extraction or data."
+>
+> Right: "Extracts text and tables from PDF files, fills PDF forms and merges PDFs. Use when the task reads or
+> changes a PDF file."
 
-Be specific rather than loud. "Use when adding or changing a database migration, or reviewing its rollout" beats "Use
-for anything involving databases". Anthropic's own skill-creator suggests making descriptions "a little pushy",
-because Claude used to under-trigger skills. OpenAI's guidance for GPT-6 Astra warns the other way: broad
-descriptions load skills that don't help. Specific wins both ways, so start specific and widen only if testing shows
-the skill misses.
+A person who wants a dashboard may say "chart", "metrics" or "KPI page" and never say "dashboard". Name what the
+person is trying to do in the words a person uses for it. Leave the skill's inner workings out of the
+description.
 
-Put the trigger words near the front, and keep the description to two or three sentences. When too many skills are
-installed, harnesses shorten or drop descriptions to fit, and the end of a long description is the first thing to go.
+The reader usually loads a skill only for a task it couldn't do well alone. A one-step request such as "read this
+PDF" may not load even a perfectly matched skill, and that is not a fault in the description.
 
-## The body
+The limit is 1,024 characters, and most good descriptions are well under half of it. `scripts/check_skill.py`
+checks the limit and the characters that break a description.
 
-Write only what the agent doesn't already know. Every paragraph costs attention on every run, so every paragraph has
-to earn its place. A good test for a line is to ask what mistake the agent would make without it. If you can't name
-one, cut it.
+## What the body carries
 
-There are two kinds of line that pass that test. One is a correction: a mistake someone has actually watched an agent
-make. Add those only after seeing the mistake, keep each one narrow, and say why it's there. Most bloat comes from
-fixing mistakes nobody has seen. The other kind is a contract: an input the skill needs, a file format a program
-reads, or a state another agent depends on. Write those from the start, and write them exactly, because the agent
-can't guess them.
+**The purpose** goes in the first lines.
 
-Say what finished looks like and how to prove it, what the agent may and may not touch, and where to find things.
-Leave the method to the agent wherever many methods would work. Match the freedom to how fragile the work is. Open
-work gets a goal and a few rules of thumb. Work with a preferred pattern gets a template. Fragile work where the order
-matters, like a migration, gets numbered steps or a script.
+> "This skill reviews a database migration before it is merged. The aim is that no migration locks a large table
+> during business hours."
 
-Keep `SKILL.md` short, and treat it as a map. If the skill covers several workflows, give each its own reference and
-say when to read it: "Read aws.md when deploying to AWS." Keep references one level deep, and give any reference over
-about 100 lines a contents list. Keep the most important instructions near the top, because some harnesses only
-re-attach the start of a skill after compacting the conversation.
+With that, a reader that meets a case the skill didn't name (a migration that rebuilds an index) can still decide
+what to do.
 
-Use examples instead of adjectives. One short input and output pair shows a style better than a paragraph describing
-it.
+**What finished looks like, and the check.**
 
-Put repeatable work in scripts. If every run would write the same helper, write it once and bundle it. Say whether
-the agent should run it or read it.
+> "The review is finished when you have run `make migrate-dry-run` against the staging copy and reported its
+> lock time for each table. Give the command's output, not a summary of it."
 
-Keep each rule in one place and point to it from elsewhere. Use one word for each idea throughout.
+If finishing includes running the result and fixing what fails, say so. Some models return after a first
+version.
 
-Anything that truly must never happen belongs in a hook, a permission rule, a sandbox or a script that checks it.
-Prose is advice, and agents weigh it against everything else. When the skill depends on such a hook or script, ship
-it inside the skill's package together with its setup step, so installing the skill installs the mechanism. A hook
-someone added to their own settings by hand doesn't travel to the next machine or repo. In a Claude Code plugin, that
-means a `hooks/hooks.json` at the plugin's root that calls a bundled script through `${CLAUDE_PLUGIN_ROOT}`, and
-installing the plugin installs the hook. When several marketplace entries share one folder as their source, a root
-`hooks/hooks.json` would load with every one of them, so put the hook inline in that plugin's marketplace entry as
-an object; the file-path form is refused there at load time even though `claude plugin validate` passes it (Claude
-Code 2.1.239, checked 9 November 2026). Where a host can't install it from the package, bundle a setup script and
-say what it does, and what stays manual.
+**The boundaries.** A boundary is something the reader must not do, or must get a go-ahead for.
 
-Facts about a host, like a folder it reads, a flag, a limit or a minimum version, change between releases. Write
-each with the date you checked it and the host version you checked it on, so a reader can tell when it has gone
-stale and what to re-check.
+> Weak: "NEVER touch production. Be very careful with the database. Do not run migrations. (Approved migrations
+> are fine.)"
+>
+> Better: "Get the person's go-ahead before you run a migration against any database other than the staging
+> copy, because the others hold customer data. Reading schemas, writing migration files and running
+> `make migrate-dry-run` need no approval; the dry run changes nothing."
 
-## The voice
+The better version states the rule once. It names the exact action. The exception is inside the rule, where the
+reader can't miss it. The reason lets the reader place a database the rule didn't name. And it says what needs no
+approval, so the reader doesn't stop to ask about every command.
 
-Write the way Randall Munroe explains things in "What If?": plain words, short sentences, concrete examples. Leave
-out the jokes, because agents can take them literally and they cost attention.
+A skill supports the task the person asked for. Don't write one that widens the task, changes settings the task
+didn't mention, or tells the reader to disregard other instructions. Guidance that conflicts with what the
+person asked can make the reader stop and ask which to follow.
 
-Give the reason with the rule. Anthropic's prompting guide shows that Claude generalises from the explanation:
-"Don't use ellipses, because a text-to-speech engine reads this aloud" lets the agent handle cases you never listed,
-and "NEVER use ellipses" doesn't. OpenAI's Astra guidance makes the matching point from the other side: define
-completion and where to stop, and stop prescribing steps. Both come to the same thing. The agent should know what you're
-after and why.
+**The facts the reader couldn't guess.** These are what make a skill worth loading.
 
-Say the obvious out loud only when agents have been seen to skip it, and attach what happened. "Agents that skipped
-the list looked at whatever caught their eye and missed the broken parts" earns its place. An obvious line with no
-story is just a line the agent already knew.
+> "The `orders` table marks a deleted row by setting `deleted_at`. It does not remove the row, so every count
+> needs `WHERE deleted_at IS NULL`."
+>
+> "The `/health` endpoint answers 200 while the database is down. Use `/health/db`."
 
-Skip the shouting. Capital letters and words like MUST make current models apply a rule too widely. The exception is
-an exact format a program will read, where strict wording is right.
+Keep them in `SKILL.md`, not in a reference, because the reader won't know the moment to go and look one up.
+Each correction the person had to make while doing the task is a candidate.
 
-Use full sentences for explanation. Where precision matters more than flow, use the structure that holds it exactly.
-That means a table for who changes which field and when, an exact list of allowed values, or numbered steps where the
-order matters. Plain prose and exact contracts sit side by side. What doesn't work is the packed style in between:
-bold phrases at the start of every bullet, chains of semicolons, and clauses squeezed together to save words. It
-looks efficient, but it's hard to read, it hides the reasons, and it isn't precise either.
+**The format of the output.** A template is more reliable than a description of a format. Say whether it is
+exact.
 
-Here's the difference. This is the packed style:
+> "A program reads this file, so keep these four headings exactly as written."
+>
+> "A sensible default for the report is: summary, findings, open questions. Change it if the findings call for
+> something else."
 
-> **Verify on target.** Capture from exact build; cover edge conditions; label proxies; no claims without evidence.
+**The other files.** Name each one and say when to read it or run it.
 
-And this is the plain one:
+> "Read `references/api-errors.md` if the API returns a status other than 200."
 
-> Look at the output yourself, using the exact build on its real target. Passing tests tell you the code does what the
-> tests say. They don't tell you it looks right. If you used a stand-in, like a Mac standing in for an iPhone, say so.
+"See the references folder" tells the reader nothing about when.
 
-The plain version is longer, but each sentence does one job, and the agent knows why.
+## How strict to be
 
-Define the few words the skill depends on, such as "done", "blocked" or "fail", the first time you use them. Then use
-them the same way everywhere.
+Match each part of the skill to how fragile that part of the work is.
 
-## Frontmatter options
+| The work | What to write | Example |
+|---|---|---|
+| Several approaches would do | What to aim for, and why | "Keep each chart readable in grey-scale, because the report is printed" |
+| There is a preferred pattern | A template or one worked example, marked as a default | An example commit message, with "follow this shape" |
+| It breaks if done differently, or the order is the point | The exact command or numbered steps, and a line saying not to change them | "Run `python3 scripts/migrate.py --verify --backup`. Don't add flags" |
 
-Claude Code reads a few extra fields. Other hosts ignore them, and Anthropic's API may refuse a skill that has them.
-- `disable-model-invocation: true` makes the skill run only when the user asks for it. Use it for skills with side
-  effects, like deploying.
-- `user-invocable: false` hides the skill from the user's menu, for skills only the agent uses.
-- `when_to_use` adds trigger guidance alongside the description.
-- `model` and `effort` switch the model and effort while the skill is active, for the rest of that turn. Use them
-  when the skill needs a particular model, rather than writing "run as…" in the body, which the running model can't
-  act on.
-- `context: fork` runs the skill in a subagent. That subagent can't see the conversation, so the skill has to make
-  sense on its own.
+Both vendors use the same picture. An open field needs only a direction. A narrow bridge with a drop on each
+side needs exact instructions.
 
-Claude Code ignores fields it doesn't recognise, and doesn't warn you. Codex reads extra settings from
-`agents/openai.yaml` in the skill folder, including a display name and `policy.allow_implicit_invocation`. Set that
-to false for the same effect as `disable-model-invocation`.
+## What the body leaves out
 
-## Where skills live
+**The recipe.** A skill written as a fixed sequence of steps holds a current model to the steps its author
+thought of. Give the outcome and the facts, and keep fixed steps for the third row of the table above.
 
-These facts change between releases. They were checked on 8 November 2026. The host versions weren't recorded then,
-so add them at the next check.
+**What the reader knows.** Before keeping an explanation, ask whether a capable engineer new to this project
+would need it. That engineer knows what a migration is. They don't know your staging copy is refreshed at 02:00.
 
-Claude Code looks in `.claude/skills/` in a project and `~/.claude/skills/` for the user. It watches those folders,
-so an added or edited skill shows up in the running session. A new top-level skills folder needs `/reload-skills`.
-Codex and many other agents look in `.agents/skills/` and `~/.agents/skills/`, and Codex picks up changes
-automatically, with a restart as the fallback.
+**Emphasis.** If you find yourself writing "ALWAYS" or "NEVER" in capitals, give the reason instead. "Never use
+ellipses" works less well than "the text is read aloud by a speech engine that can't pronounce ellipses". With
+the reason, the reader also handles the cases you didn't list. If a plainly worded rule is still missed, more
+emphasis won't fix it. The rule belongs in a hook, as the table in `SKILL.md` says.
 
-To share one copy between them, keep the real folder in `~/.claude/skills/` and symlink it into `~/.agents/skills/`.
-Codex documents that it follows symlinks. On one machine in November 2026, Claude Code didn't list a symlinked skill,
-and the cause wasn't found, so the real folder lives on the Claude side.
+**Reminders.** "Always run the tests", "double-check your work", "keep going until done", "use subagents for
+speed". GPT-6 Astra and Claude Opus 5 test and check unprompted, and do too much of both when told to. Say what
+check this kind of change needs, and when a subagent is worth its cost.
 
-`npx skills add <owner/repo> --skill <name> -g` installs a published skill for every agent at once.
+**A rule made from one case.** One failure, one example or one person's preference is not a rule for every task.
+Write the narrow correction: "For tables over a million rows, …".
 
-A plugin carries skills together with hooks and agents, which a plain skill folder can't. Both Claude Code and Codex
-install plugins from a marketplace (`.claude-plugin/marketplace.json`) and list their skills as `plugin:skill`.
-Checked 9 November 2026: Claude Code 2.1.317 loads a plugin from a marketplace added by local path in place, while
-2.1.239 copies it into its cache and re-copies only when the plugin's `version` changes; Codex 0.167 copies on each
-install. Neither Claude Code version showed the `agents` a marketplace entry lists (`claude plugin details`:
-`Agents (0)`). A skill installed both ways loads twice, so remove the standalone copy.
+**Model and effort.** "Use the most capable model" or "think at high effort" in a body does nothing, because the
+reader can't change what it is. Where a host has a setting for this, it is a frontmatter field.
+
+**Facts that will expire, undated.** "The new API" is wrong within a year. Give the version or the date.
+
+## The wording
+
+**Name who does each thing.** A skill is read by an agent that has to work out which actions are its own.
+
+> Unclear: "The build is verified and results are reported."
+>
+> Clear: "Run `make build`. Tell the person which targets failed."
+
+**A script is not an agent.** An agent runs a command, and the command does something. "Tell the build script to
+skip the cache" sends the reader looking for something to talk to. Write "run `build.sh --no-cache`".
+
+**One word for one thing.** If the skill says "module" in one sentence and "component" in the next, the reader
+has to decide whether those are two things. Define the few words the skill depends on, such as "finished" or
+"blocked", where they first appear. Use a thing's existing name; don't coin a label for it.
+
+**Whole sentences.** The packed style looks efficient and is hard to act on:
+
+> "**Verify on target.** Capture from exact build; cover edge conditions; label proxies; no unevidenced claims."
+
+The plain version is longer, and each sentence does one job:
+
+> "Look at the output yourself, on the exact build and on the device it is for. Passing tests show the code does
+> what the tests say. They don't show that it looks right. If you used a stand-in, such as a Mac standing in for
+> an iPhone, say so."
+
+Be efficient by covering each point once. Don't say a thing three ways, or back one point with several examples
+that show the same thing.
+
+**Exact things in exact forms.** Whole sentences are for explanation. A list of allowed values, a table of who
+changes which field, or steps where the order matters should keep the form that holds them exactly.
+
+## Before and after
+
+A skill body written for an earlier model:
+
+> "## When to use this skill
+> Use this skill whenever the user mentions reports!
+>
+> ## Instructions
+> IMPORTANT: You MUST follow these steps EXACTLY.
+> 1. First, carefully read the user's request.
+> 2. Think hard about what data is needed.
+> 3. Query the database. Be careful!
+> 4. Write the report. Make sure it is high quality and comprehensive.
+> 5. ALWAYS double-check your work before finishing."
+
+The same skill for a current one:
+
+> "This skill writes the weekly sales report that the regional managers read on Monday.
+>
+> The figures come from the `sales_weekly` view, which is rebuilt every Sunday at 23:00 UTC. If its
+> `refreshed_at` is more than a day old, tell the person and stop, because the report would repeat last week's
+> numbers. Returns are stored as negative rows in the same view, so a region's total is the plain sum.
+>
+> The report is finished when each region's total matches `python3 scripts/check_totals.py`, which prints one
+> line for each region. Use `assets/report-template.md`. The managers compare weeks side by side, so keep its
+> headings in the same order."
+
+The second version has no steps, because the reader knows how to query a view and write a report. Every sentence
+in it is something the reader could not have known. The "when to use" line has moved to the description, where it
+is read in time to matter.

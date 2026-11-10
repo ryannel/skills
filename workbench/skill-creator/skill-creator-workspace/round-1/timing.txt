@@ -1,0 +1,6 @@
+workflow-to-skill new_skill run-1: 93036 tokens, 126.5 s, 13 tool uses
+modernise-old-skill old_skill run-1: 96707 tokens, 224.3 s, 16 tool uses
+modernise-old-skill new_skill run-1: 112426 tokens, 257.0 s, 23 tool uses
+workflow-to-skill old_skill run-1: 100383 tokens, 259.7 s, 18 tool uses
+rule-that-needs-a-hook old_skill run-1: 217812 tokens, 814.6 s, 32 tool uses
+rule-that-needs-a-hook new_skill run-1: 197384 tokens, 978.8 s, 27 tool uses

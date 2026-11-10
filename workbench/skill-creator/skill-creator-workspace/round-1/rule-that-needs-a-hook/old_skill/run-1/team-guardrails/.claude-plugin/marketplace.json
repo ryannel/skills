@@ -1,0 +1,14 @@
+{
+  "name": "team-guardrails",
+  "description": "Rules this team wants Claude Code to keep, enforced by hooks instead of by reminders.",
+  "owner": {
+    "name": "Your team"
+  },
+  "plugins": [
+    {
+      "name": "commit-guard",
+      "source": "./plugins/commit-guard",
+      "description": "Blocks Claude Code's git commits on main, and commits whose files aren't Prettier-formatted."
+    }
+  ]
+}

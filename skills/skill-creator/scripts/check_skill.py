@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
-"""Checks a skill folder for the mistakes that make a skill silently fail to load or fire.
+"""Checks a skill folder for the mistakes that make a skill fail to load or be chosen without any error.
 
 Usage: python3 check_skill.py <skill-folder> [<skill-folder> ...]
 
-It checks that SKILL.md opens with frontmatter on line 1, that the frontmatter is valid YAML with a valid name and a
-description within the limits, that every relative Markdown link resolves (anchors included), and that any reference
-over 100 lines has a contents list near the top. It prints one line per problem and exits 1 if there were any.
+Problems (exit code 1 if there are any):
+  - SKILL.md is missing, or its frontmatter doesn't start on line 1
+  - the frontmatter isn't valid YAML
+  - the name breaks the naming rule or differs from the folder's name
+  - the description is missing, over 1,024 characters, or contains < or >
+  - SKILL.md is over 500 lines
+  - a relative Markdown link points at a file or heading that isn't there
+  - a reference over 100 lines has no contents list near the top
+
+Files under evals/ and assets/ are not checked: they are test material and output templates, not instructions.
+
+Notes (printed, exit code unaffected):
+  - a name containing "anthropic" or "claude", which Anthropic's products refuse
+  - a frontmatter field outside the six that work on every host
+  - a "when to use" heading in the body, which is read only after the skill was chosen
+  - words written in capitals for emphasis
+
+It prints one line per finding, then "ok" or a count of problems.
 
 The YAML check uses PyYAML when it's installed. Without it, a stricter scan catches the usual mistakes (an unquoted
 value containing ": ", an unterminated quote, a duplicate key, a line that isn't `key: value`), but it isn't a full
@@ -22,6 +37,11 @@ NAME = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 RESERVED = ("anthropic", "claude")
 LINK = re.compile(r"\[[^\]]*\]\(<?([^)\s>]+)>?\)")
 KEY = re.compile(r"^([A-Za-z_][\w-]*):(?:\s+(.*))?$")
+PORTABLE = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
+SHOUTED = re.compile(r"\b(IMPORTANT|CRITICAL|MUST|NEVER|ALWAYS)\b")
+CODE = re.compile(r"`[^`]*`")
+QUOTED = re.compile(r'"[^"]*"|`[^`]*`')
+WHEN_TO_USE = re.compile(r"^#{1,6}\s+when (to|not to) use\b", re.I)
 
 
 def scan_yaml(block: str) -> tuple[dict, list[str]]:
@@ -96,10 +116,16 @@ def anchors(md: Path) -> set[str]:
 
 
 def check(folder: Path) -> list[str]:
-    problems = []
+    """The problems for one skill folder."""
+    return findings(folder)[0]
+
+
+def findings(folder: Path) -> tuple[list[str], list[str]]:
+    """The problems and the notes for one skill folder."""
+    problems, notes = [], []
     skill = folder / "SKILL.md"
     if not skill.exists():
-        return [f"{folder}: no SKILL.md"]
+        return [f"{folder}: no SKILL.md"], []
     text = skill.read_text()
     fields, yaml_problems = frontmatter(text)
     problems += [f"{skill}: {p}" for p in yaml_problems]
@@ -110,17 +136,25 @@ def check(folder: Path) -> list[str]:
     if not NAME.match(name) or len(name) > 64:
         problems.append(f"{skill}: name {name!r} must be lowercase words joined by hyphens, at most 64 characters")
     if any(word in name for word in RESERVED):
-        problems.append(f"{skill}: name {name!r} contains a reserved word ({', '.join(RESERVED)})")
+        notes.append(f"{skill}: name {name!r} contains a word Anthropic's products refuse ({', '.join(RESERVED)})")
     if name != folder.name:
         problems.append(f"{skill}: name {name!r} doesn't match the folder name {folder.name!r}")
     if not description:
-        problems.append(f"{skill}: no description, so the skill can never be chosen automatically")
+        problems.append(f"{skill}: no description, so the reader has nothing to match a task against")
     elif len(description) > 1024:
         problems.append(f"{skill}: description is {len(description)} characters; the limit is 1,024")
+    if "<" in description or ">" in description:
+        problems.append(f"{skill}: description contains < or >, which Claude Code shows as &lt; and &gt;; use [ ]")
+    extra = sorted(set(fields) - PORTABLE)
+    if extra:
+        notes.append(f"{skill}: {', '.join(extra)} is not one of the six fields every host accepts "
+                     f"({', '.join(sorted(PORTABLE))}); an upload to claude.ai or the Skills API refuses it")
     if len(text.splitlines()) > 500:
         problems.append(f"{skill}: body is over 500 lines; move detail into references")
 
     for md in folder.rglob("*.md"):
+        if md.relative_to(folder).parts[0] in ("evals", "assets"):
+            continue
         body = md.read_text()
         in_code = False
         for line in body.splitlines():
@@ -128,7 +162,7 @@ def check(folder: Path) -> list[str]:
                 in_code = not in_code
             if in_code:
                 continue
-            for target in LINK.findall(line):
+            for target in LINK.findall(CODE.sub("", line)):
                 if re.match(r"^[a-z]+:", target):
                     continue
                 path, _, anchor = target.partition("#")
@@ -140,15 +174,35 @@ def check(folder: Path) -> list[str]:
         lines = body.splitlines()
         if md != skill and len(lines) > 100 and not any("contents" in l.lower() for l in lines[:15]):
             problems.append(f"{md}: {len(lines)} lines with no contents list near the top")
-    return problems
+        in_code, shouted = False, 0
+        for line in lines:
+            if line.lstrip().startswith("```"):
+                in_code = not in_code
+            if in_code or line.lstrip().startswith(">"):
+                continue
+            shouted += len(SHOUTED.findall(QUOTED.sub("", line)))
+            if md == skill and WHEN_TO_USE.match(line):
+                notes.append(f"{md}: \"{line.strip('# ')}\" is read only after the skill was chosen; "
+                             "put it in the description")
+        if shouted:
+            notes.append(f"{md}: {shouted} word(s) in capitals for emphasis; current models over-apply such rules")
+    return problems, notes
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        raise SystemExit(__doc__)
-    problems = [p for arg in sys.argv[1:] for p in check(Path(arg).resolve())]
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        sys.exit(0 if args else 2)
+    problems, notes = [], []
+    for arg in args:
+        found, noted = findings(Path(arg).resolve())
+        problems += found
+        notes += noted
     for p in problems:
         print(p)
+    for n in notes:
+        print(f"note: {n}")
     print(f"{len(problems)} problem(s)" if problems else "ok")
     sys.exit(1 if problems else 0)
 

@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: workflow-to-skill
+expected_outcome: |
+  Writes a skill folder for releasing the tidepool package. The skill carries the corrections from the notes and loads on Claude Code and Codex.
+context:
+  scaffold_script: place-files.sh

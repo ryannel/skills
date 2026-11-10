@@ -1,243 +1,284 @@
 # Testing a skill
 
-Contents:
-- [Test cases](#test-cases)
-- [Keeping the runs apart](#keeping-the-runs-apart)
-- [Running them](#running-them)
-- [Grading](#grading)
-  - [When another agent acts on the output](#when-another-agent-acts-on-the-output)
-- [The results record](#the-results-record)
-- [Does the description trigger?](#does-the-description-trigger)
-- [Running the cases with claude plugin eval](#running-the-cases-with-claude-plugin-eval)
+A test answers two separate questions. When the reader loads the skill, is its result better than without the
+skill? And does the reader load the skill when it should? Seeing a skill load shows only that the reader found
+it.
+
+One word is used throughout. A **check** is a statement about a result that is plainly true or false, such as
+"the summary states total revenue of 693.5". In the test files a check is called a grader.
+
+Contents: [Test cases](#test-cases) · [Writing the checks](#writing-the-checks) ·
+[Keeping the two runs apart](#keeping-the-two-runs-apart) · [Running](#running) ·
+[Without subagents](#without-subagents) · [Grading and reading the results](#grading-and-reading-the-results) ·
+[When another agent acts on the output](#when-another-agent-acts-on-the-output) ·
+[The results record](#the-results-record) · [Does the description load the skill?](#does-the-description-load-the-skill) ·
+[Running the cases from a terminal](#running-the-cases-from-a-terminal)
 
 ## Test cases
 
-Each test case is a folder under `evals/` in the skill. The layout is the one `claude plugin eval` reads, so the same
-cases can be run headless later. You don't need the CLI to use them, though. They're plain files you write and read
-yourself.
+A test case is a realistic request, any files it needs, and a description of a good result. Write the request
+the way a person would type it:
+
+> Too clean: "Add a profit margin column to the spreadsheet."
+>
+> Realistic: "ok so my boss sent me q4-sales.csv and wants a profit margin column. revenue is C, costs are D i
+> think. save it as q4-sales-margin.csv"
+
+Make one of the cases awkward: bad input, an unusual request, or a place where the skill could be read two ways.
+
+Keep each case as a folder under `evals/` in the skill. Claude Code's `claude plugin eval` command reads this
+layout, so the same cases can later be run from a terminal. They are plain files, and you can use them with no
+tool at all.
 
 ```
 my-skill/evals/flags-negative-quantity/
-├── prompt.md      settings, then the prompt exactly as a user would type it
-├── case.yaml      the case name, what a good result looks like, and any context
-├── graders/       one checkable statement per file
-└── fixtures/      input files, if the test needs any
+├── prompt.md         settings, then the request exactly as a person would type it
+├── case.yaml         the case name, a description of a good result, and how input files are placed
+├── graders/          one check in each file
+├── files/            input files, if the case needs any
+└── place-files.sh    copies files/ into the run's folder; needed only when there are input files
 ```
 
-The folder name says what's being tested, in lowercase with hyphens. Avoid `results` and `mocks`, which the CLI
-uses for its own folders.
-
-`prompt.md` starts with a settings block, then the prompt:
+`prompt.md`. The settings are read only by the command. An unknown key there stops the case loading.
 
 ```markdown
 ---
-tags: [my-skill]
 max_turns: 20
 timeout_seconds: 600
-allowed_tools: [Read, Glob, Grep, Skill]
+allowed_tools: [Read, Glob, Grep, Skill, Write, Edit, Bash]
 ---
 
-ok so my boss sent me Q4 sales final v2.xlsx and wants a profit margin column. revenue is C, costs are D i think
+ok so my boss sent me q4-sales.csv and wants a profit margin column. revenue is C, costs are D i think. save it
+as q4-sales-margin.csv
 ```
 
-The settings block ends at the first `---`, so keep free text out of it. An unknown key there stops the case loading.
-`allowed_tools` takes only read-only tools; a run that needs to write or run commands gets them from `--allow-tools`
-on the command line, and listing `Write` or `Bash` here does nothing.
-
-`case.yaml` holds the schema version (in quotes, or it's read as a number), the name, and what success looks like.
-Input files go in a fixtures folder that the run can read, listed under `context.add_dirs`:
+`case.yaml`. The schema version is in quotes, or it is read as a number and the case doesn't load.
 
 ```yaml
 schema_version: "1.1"
 name: flags-negative-quantity
 expected_outcome: |
-  Adds a margin column computed as (C-D)/C and flags the two rows with negative quantities.
+  Writes q4-sales-margin.csv with a margin column computed as (C-D)/C, and tells the person about the two rows
+  with negative quantities.
 context:
-  add_dirs: [fixtures]
+  scaffold_script: place-files.sh
 ```
 
-Each run starts in an empty folder. If the files have to be in the working folder itself, use
-`context.scaffold_script: place-files.sh` instead, with a Bash script in the case folder that copies them in.
+`place-files.sh`:
 
-Each grader is a file like `graders/01-adds-margin-column.md`, numbered to keep the order. Grade the thing the skill
-made, not the agent's account of it. This grader reads the produced file:
+```bash
+#!/usr/bin/env bash
+set -eu
+cp -R "$(dirname "$0")/files/." .
+```
+
+A file in `graders/`, numbered to keep the order, such as `01-margin-formula.md`:
 
 ```markdown
 ---
 type: llm
 focus: { source: file, path: q4-sales-margin.csv }
-weight: 1
 ---
 
-The margin column equals (revenue - cost) / revenue on every row
+PASS if the margin column equals (revenue - cost) / revenue on every row.
+FAIL if any row differs, or the column is missing.
 ```
 
-`focus: trace` shows a judge only the first and last twelve messages, so a confident final message can pass while the
-file is wrong. Use it for questions about how the agent worked, not what it made. Other grader types are `regex`,
-`file_exists`, `tool_used` and `tool_order`. A regex over a file's contents is the most reliable way to check an exact
-value.
+A case with no grader doesn't load. For a case that only a person can judge, add one grader whose body is "The
+result matches this description:" followed by the expected outcome, and don't count it in any score.
 
-A case with no graders won't load. Until you've written real ones, use a single placeholder whose body is "The result
-matches this description: <the expected outcome>", and treat the case as unscored. Don't count it in any result.
+A skill made with Anthropic's skill-creator may also have an older `evals/evals.json`. Its tests still count, so
+run them as well. Don't edit, convert or delete that file unless the person asks.
 
-## Keeping the runs apart
+The `evals/` folder is for the skill's author. Leave it out of the copy you install, upload or hand to a test
+run.
 
-The comparison only means something if the only difference between the two runs is the skill. Four things leak:
+## Writing the checks
 
-1. An installed copy of the skill. A subagent can invoke any skill it can see through the Skill tool, even one it
-   wasn't given. Keep the draft outside the skill folders until testing is done. For a skill that's already installed,
-   turn it off for the baseline: in Claude Code, set `"skillOverrides": {"<name>": "off"}` in
-   `.claude/settings.local.json` for that run (written 8 November 2026; host version not recorded). Plugin skills are
-   managed through `/plugin` instead. In Codex, disable the skill in its skills settings.
-2. This conversation. Use fresh subagents that start empty, not forks that inherit the conversation; in Claude Code a
-   fork carries your history, and an ordinary subagent doesn't.
-3. A shared working folder. Give each run its own folder and its own copy of the inputs, so one run can't read or
-   overwrite the other's output.
-4. A different model or effort. A skill's own `model` or `effort` frontmatter can switch the with-skill run onto
-   something else, so record the model and effort each run actually used, from its transcript or result, not what
-   you asked for. Then say whether you're testing the instructions alone or the whole skill including its model
-   choice.
+Write the checks before any run, as `SKILL.md` says. A good check is about the result, and two people would
+agree on whether it holds. "The summary is good" is not one. Neither is a check that matches the skill's own
+wording or headings, because a result can be right in other words.
 
-Afterwards, read the baseline's transcript for any sign it loaded the skill or read its files. If it did, the
-baseline isn't one, so fix the isolation and run it again.
+Checks usually fall into four groups. Keep the list short, to what must hold.
 
-If the skill is meant for several models, such as Claude and a Codex model, run the cases on each, because a skill
-that works on one can misfire on another.
+| Group | Example |
+|---|---|
+| Outcome | The build passes. The file opens. The total is 693.5 |
+| Process, only where a step is itself the requirement | The backup ran before the migration |
+| Conventions the person asked for | Components are in `src/components/`, one per file |
+| Cost | The run did not repeat the same command five times |
 
-## Running them
+If the first results show a check is missing, add it, and grade it on both sides of every case.
 
-For each case, launch both runs in the same turn, so they finish together. Give the with-skill run the skill's path
-and the prompt. Give the baseline the same prompt, with no skill if this is a new skill, or a snapshot of the old
-version if you're improving one. Take the snapshot before you edit.
+## Keeping the two runs apart
 
-Save each run's outputs in a workspace folder next to the skill, such as
-`my-skill-workspace/iteration-1/<case>/with_skill/run-1/`. Keep the same folder names in later iterations, so it's
-easy to compare one round with the next.
+The comparison means something only if the skill is the one difference between the two runs. Five things leak.
 
-One run of each arm is a smoke test. It tells you whether the skill works at all. To decide between two versions, run
-each arm two or three times, because the same prompt gives different results from run to run. A difference smaller
-than that spread isn't a difference.
+1. **An installed copy of the skill.** An agent can load any skill its host can see, whichever run it is in. A
+   draft kept outside the skills folders can't leak this way. When you are improving an installed skill, turn
+   the installed copy off for both runs, and hand each run its own copy by path. In Claude Code, set
+   `"skillOverrides": {"<name>": "off"}` in `.claude/settings.local.json`. That setting doesn't reach a plugin's
+   skill, which is turned off through `/plugin`. If you can't turn it off, say so in the results record.
+2. **The checks.** Hand the run a copy of the skill's folder without `evals/`. Otherwise only the run with the
+   skill can read what it is graded on.
+3. **This conversation.** Use subagents that start empty. In Claude Code an ordinary subagent starts empty and a
+   fork carries your history. Codex's `spawn_agent` carries your history unless you pass `fork_turns="none"`.
+4. **A shared folder.** Give each run its own working folder and its own copy of the input files.
+5. **A different model or effort.** A skill's own `model` or `effort` setting can move the run with the skill
+   onto something else. Record what each run actually used.
 
-If the harness reports time and tokens when a run finishes, note them then, because they may not be stored anywhere
-else. They tell you whether the skill costs more than it helps. If they aren't available, write "unavailable" rather
-than guessing.
+Afterwards, read the transcript of each run without the skill. If it loaded the skill or opened its files, fix
+the leak and run it again.
 
-## Grading
+## Running
 
-Grade each checkable statement as passed or failed, with the evidence: the line in the output, or the step in the
-transcript. Write a script for anything a script can check, like a number, a file's existence or a format. It's
-faster, it doesn't drift, and you can reuse it next round.
+Keep everything a test produces in a workspace folder that no host scans for skills, so outside
+`.claude/skills`, `.agents/skills` and `~/.codex/skills`:
 
-Good statements are about the result, not the process. They're specific enough that two people would agree. "The
-summary states total revenue of 693.5" is a good one. "The summary is good" isn't.
+```
+my-skill-workspace/
+├── old/my-skill/                          the untouched copy, when you are improving a skill
+├── round-1/<case>/with_skill/run-1/       what the run with the skill produced
+└── round-1/<case>/without_skill/run-1/    what the other run produced
+```
 
-When you compare an old version with a new one, grade blind. Rename the outputs A and B, and only match them back to
-versions after grading, because a grader that knows which output is new leans toward it.
+Keep the same case names in later rounds, so that one round can be compared with the next.
 
-Then look for patterns the pass rate hides. A statement that passes with and without the skill doesn't measure what
-the skill adds. Keep it if it guards something that mustn't break, and mark it that way. Otherwise, swap it for one
-that tells the two apart. A case whose result swings from run to run may be flaky. If the skill wins on quality but
-doubles the time, say so.
+For each case, start both runs in the same turn. Give the run with the skill the path of its copy and the
+request. Give the other run the same request and nothing else, or the path of the old copy when you are improving
+a skill. Don't give either run the intended answer or what you expect to find.
 
-Show the person every result before you change anything. Their judgement of the outputs matters more than your
-grades, especially for writing, design or advice.
+When you compare versions over several runs, a difference smaller than the spread between identical runs is not
+a difference.
 
-### When another agent acts on the output
+If the host reports time and tokens when a run ends, write them down then, because they may not be kept anywhere
+else. A skill that improves the result and triples the tokens is a different trade from one that is better and
+cheaper.
 
-Some skills make something another agent then acts on: a brief, a goal, a plan, a handoff, a prompt. For those, the
-output isn't the result. What the receiving agent does with it is. Grading the brief itself tends to reward briefs
-that look the way the skill says briefs should look, which proves nothing. So the results need at least one
-receiver-side run: hand each output to a fresh agent with the same inputs and launch settings, let it do the work,
-and grade what it did.
+Run the cases on each model the person uses, in that model's own host. If you can't run one, tell the person the
+skill is untested there.
 
-Take the grading statements from the task, not from the skill's rules. Ask whether the receiver kept to the scope,
-respected the boundaries, actually finished, backed its claims with real evidence, and handled what it couldn't do,
-rather than whether the brief used the skill's recommended shape. The exception is a contract, like an exact format a
-program reads, which the statements should restate. Write the statements before you look at any output, and don't
-change them afterwards, because statements written after seeing the results drift towards whichever output you
-already prefer.
+## Without subagents
+
+Some hosts, such as a claude.ai chat, have no subagents. There, do each request yourself, one at a time,
+following the skill as written. Skip the run without the skill. Tell the person this test is weaker, because you
+wrote the skill and already know what it means. Show each result in the conversation and ask what they think.
+
+## Grading and reading the results
+
+Mark each check passed or failed, with the evidence: the line in the output, or the step in the transcript.
+Write a script for anything a script can check, such as a number, a file's existence or a format.
+
+To compare an old version with a new one, have the grading done blind. Copy the two outputs to folders named A
+and B, and give them to a fresh subagent with the checks and no word on which is which. An agent that knows
+which output is new leans towards it, and you know.
+
+Then read what the pass rate hides:
+
+| What you see | What it means |
+|---|---|
+| A check passes with and without the skill | The reader didn't need the skill for that. Drop the check, or keep it marked as a guard against breakage |
+| A check fails on both sides | Suspect the check or the case first |
+| A check passes only with the skill | Find the line in the skill that did it. That line is the skill's value |
+| Every case passes without the skill | The model may have outgrown the skill. Tell the person |
+| Results swing between identical runs | The case is fragile, or a line in the skill can be read two ways |
+| One run took far longer or used far more tokens | Read its transcript for the line that sent it astray |
+
+Read the transcripts as well as the outputs. Wasted steps usually have one of three causes: a line too vague to
+act on, a line that didn't apply to this task and was followed anyway, or a list of options with no default.
+
+Show the person the results one case at a time: the request, then the two outputs side by side, then your
+grades. Ask what they think of each. Their judgement of the outputs counts for more than your grades.
+
+## When another agent acts on the output
+
+Some skills produce something a second agent then acts on: a brief, a plan, a handoff. For those, the output is
+not the result. What the second agent does with it is. Grading the brief itself rewards briefs that look the way
+the skill says briefs should look, which proves nothing.
+
+So hand each output to a fresh agent with the same input files, let it do the work, and grade that work. Take
+the checks from the task: did it keep to the scope, respect the boundaries, finish, and back its claims with
+evidence?
 
 ## The results record
 
-Keep a short `results.md` in each iteration folder. Write down the revision of the skill under test and of the
-baseline, the model and effort, the cases and how many runs each, every grade with its evidence, the time and tokens
-(or "unavailable"), and what the person said. Without it, you can't tell next round whether a change helped or the
-dice just rolled differently.
+Keep a short `results.md` in each round's folder, so that next round you can tell whether a change helped or the
+results merely varied. Write down:
 
-It also needs these fields, filled in even when the answer is "not done", because a record that leaves them out looks
-complete when it isn't:
-- Leakage checked: whether you read each baseline's and each trigger trial's transcript for leaks, and what you
-  found.
-- Trigger trials: for each, the context state (fresh, long, or after compaction), whether it fired, and its cost
-  in tokens.
-- Receiver-side run: for a skill whose output another agent acts on, whether one was done, and its grades.
+- the version of the skill and of what it was compared with;
+- the model and effort each run used;
+- the cases, and how many runs of each;
+- each grade with its evidence;
+- time and tokens, or "not available";
+- whether you read each without-skill transcript for leaks, and what you found;
+- what the person said.
 
-## Does the description trigger?
+## Does the description load the skill?
 
-Write about twenty prompts, around half that should fire the skill and half that shouldn't. Make them realistic, with
-file names, context, typos and casual phrasing. The useful ones that shouldn't fire are near misses: requests that
-share words with the skill but need something else. "Write a fibonacci function" tells you nothing about a PDF skill.
-"Extract the table from this scanned invoice into a spreadsheet" might.
+This test needs the skill installed, beside the person's other skills, because it has to win against them. A
+project's own skills folder is enough.
 
-Keep the prompts substantial. Agents only reach for a skill when the task is more than they'd handle alone, so a
-one-line request may not fire even a perfect description.
+Write about twenty requests. Half should load the skill and half should not. Include four kinds:
 
-Show the list to the person before using it, because bad test prompts produce a bad description. Set aside about a
-third of the prompts and don't look at them while you tune.
+- the skill named outright;
+- the skill's exact situation, without its name;
+- the same situation inside a longer, messier request;
+- near misses, which share words with the skill and need something else. "Write a fibonacci function" tells
+  you nothing about a PDF skill. "Extract the table from this scanned invoice into a spreadsheet" might.
 
-Test in real sessions where the skill is installed alongside the person's usual skills. Give each one a prompt that
-doesn't mention the skill, and see whether it loads it. Run each prompt three times, because whether a skill fires
-varies from run to run, and count how often it fired. Don't ask a model which skill it would pick from a list. That
-tells the model it's being tested on skill choice, and it picks far more eagerly than it does in real work.
+Keep the requests substantial, because a reader reaches for a skill only when the task is more than it would do
+alone. Show the list to the person before using it. Set 40% of it aside, and don't look at that part while you
+tune.
 
-A fresh session is the easy case. A skill whose moment comes late in long work, like a handoff after hours of
-building, has to fire when the context is full of other things, and possibly after compaction. For a skill like that,
-add one or two trials in a long session and one or two after compaction. That's enough. These are a check on the
-case that matters, not a suite. Compaction happens near the host's auto-compact window, which on one machine on
-9 November 2026 was 500,000 tokens for Opus 5.5 (`autoCompactWindow` in `~/.claude/settings.json`). You can't fake
-that state cheaply, so resume a real long session the person has already paid for (`claude --resume`, then `/compact`,
-then the task) and record what each trial cost. Afterwards check what actually survived: Claude Code may re-attach a
-skill's start after compacting, so an agent that doesn't call the skill again may still have it.
+Each trial is a new session given one request. Run each request three times, because whether a skill loads
+varies from run to run.
 
-Check each trigger trial for leaks before you count it. A prompt that names the skill, a session that already loaded
-it, or a hook that forces it all make it fire for reasons that have nothing to do with the description. A hook-forced
-load tests the hook, which is worth testing too, but separately.
+- In Claude Code, `claude -p "<request>" --output-format stream-json --verbose` prints the session's events.
+  The skill loaded if the events hold a `Skill` tool call that names it.
+- In Codex, `codex exec --json "<request>"` prints the events of the run. Look there for the skill being read.
+- On another host, start each session by hand and look at whether the skill loaded.
 
-Tune the description on the prompts you kept, then judge the final version on the ones you set aside. If it does much
-worse on those, it has been fitted to the test, so make it more general rather than adding the missed phrasings.
+A request that should load the skill passes when it loads in at least two of the three runs. A near miss passes
+when it loads in at most one.
 
-A `tool_used` grader under `claude plugin eval`, described below, runs real sessions and checks whether the Skill
-tool was actually called. But its sessions load only the plugin under test, so it tells you whether the description
-fires on its own, not whether it wins against the person's other skills. Do both: the eval for the bulk of the
-prompts, and a few real sessions with the neighbouring skills installed.
+Twenty requests three times is sixty sessions, so say that number when you ask for the go-ahead. Six requests
+run once each cost a tenth as much and will catch a description that is badly wrong.
 
-## Running the cases with claude plugin eval
+Don't ask a model which skill it would pick from a list. That tells it the test is about choosing skills, and it
+picks far more readily than in real work.
 
-`claude plugin eval` runs the same cases headless, three times per arm by default, with and without the skill, and
-reports the difference. It needs Claude Code 2.1.269 or later (checked 8 November 2026), and it evaluates plugins,
-so the skill folder needs a `.claude-plugin/plugin.json` manifest. With that in place, Claude Code treats the folder
-as a plugin called `<name>@skills-dir`. Don't add one to a folder that a marketplace entry with `strict: false` uses
-as its source: the entry's component fields then conflict with it, and the plugin fails to load. Pass `--scaffold`
-if any case uses a scaffold script, and `--allow-tools` for the tools the runs need.
+Tune the description on the requests you kept. Fix the kind of request that was missed; don't paste in the
+missed phrases. Then judge the final version on the part you set aside. If it does much worse there, it has been
+fitted to the test, so make it more general.
 
-For trigger tests, a case per prompt with this grader passes when the skill was invoked:
+A skill whose moment comes late in long work, such as a handoff after hours of building, has to load when the
+conversation is full of other things. For such a skill, add one or two trials in a long session.
 
-```markdown
----
-type: tool_used
-tool: Skill
-input_match: '"skill"\s*:\s*"(?:[\w-]+:)?my-skill"'
-arm: both
----
+## Running the cases from a terminal
+
+Both commands below start real model runs on the person's plan or API account.
+
+**Claude Code: `claude plugin eval`** (2.1.269 or later). Run it from the skill's folder:
+
+```bash
+claude plugin eval . --scaffold --allow-tools Write Edit Bash
 ```
 
-For a near miss, set `min: 0` and `max: 0` so the case passes only when the skill wasn't used. In a with-and-without
-run, a positive trigger case always shows a difference, because the arm without the plugin can't call it. Report it
-as a trigger rate, not as evidence that the skill improves the work.
+It runs each case three times with the skill and three times without, in empty folders with none of the
+person's settings, memory or other skills loaded, and reports the difference. So its run without the skill can't
+leak, and it can't show whether the skill wins against the person's other skills. Points that are easy to miss:
 
-Eval runs also load none of your settings, `CLAUDE.md` files, memory or other skills, so the CLI gives you a clean
-baseline for free. The subagent route is the one that can leak.
+- Claude Code 2.1.319 accepts a plain skill folder with no plugin manifest (checked 10 November 2026).
+- `allowed_tools` in `prompt.md` only lists what a case wants. Tools that write or run commands are granted on
+  the command line, as above. `--scaffold` is what lets each case's `place-files.sh` run.
+- A check that the skill loaded is a grader with `type: tool_used`, `tool: Skill` and an `input_match` on the
+  skill's name. For a near miss, add `min: 0`, `max: 0` and `arm: both`.
+- An `llm` grader shown the transcript (`focus: trace`) sees only its first twelve and last twelve messages. To
+  grade what was made, point the grader at the file, or use a `regex` grader on the file for an exact value.
+- `--ablation none` skips the runs without the skill and halves the cost. `--max-cost-usd` sets a ceiling.
+- `claude plugin validate <folder>` checks frontmatter without running anything. On 2.1.319 it accepts a
+  skills folder such as `.claude/skills`, or a plugin. It refuses a single skill folder with no plugin manifest.
 
-These are real model runs. Signed in with a Claude plan, they draw on the plan's limits. With an API key, they bill
-the API. Either way, offer to run them rather than starting them yourself. `claude plugin validate <skills-folder>`
-checks the frontmatter without running anything.
+**Codex: `codex exec --json "<request>"`** runs one request and prints each event of the run as a line of JSON.
+A script can read those lines to check that a command ran and how it exited. Add `--output-schema <file>` to a
+second, read-only run to have a model grade the result against a rubric and answer in a fixed JSON shape.

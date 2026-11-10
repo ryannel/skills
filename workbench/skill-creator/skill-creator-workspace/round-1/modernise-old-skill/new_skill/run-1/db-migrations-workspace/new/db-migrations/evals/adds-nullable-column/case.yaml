@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: adds-nullable-column
+expected_outcome: |
+  Writes one new migration file in db/migrations/ that adds a nullable text column gift_note to orders, with
+  the lock timeout set before the ALTER TABLE. Runs make migrate-check and gives the person the lock time it
+  reported for each table. Does not run the 25-minute full test suite for this additive change, and does not
+  stop to ask for approval before writing the file or running the check.

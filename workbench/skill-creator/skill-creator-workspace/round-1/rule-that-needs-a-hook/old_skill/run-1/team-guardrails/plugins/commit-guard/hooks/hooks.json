@@ -1,0 +1,18 @@
+{
+  "description": "Checks every git commit Claude runs: not on main, and Prettier-formatted files only.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/scripts/commit-guard.mjs",
+            "timeout": 120,
+            "statusMessage": "Checking the commit"
+          }
+        ]
+      }
+    ]
+  }
+}

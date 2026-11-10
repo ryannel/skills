@@ -104,10 +104,12 @@ Codex](#setting-up-for-claude-code-and-codex)). It relies on its description to 
 
 ## Skill creator
 
-[`skill-creator`](./skills/skill-creator/) is a standalone skill for creating, rewriting and testing skills. It
-follows Anthropic's skill-creator process (interview, draft, test with and without the skill, review, improve, check
-the description triggers), and writes in plain, explanatory prose. Its one script, `check_skill.py`, checks a skill's
-structure locally.
+[`skill-creator`](./skills/skill-creator/) is a standalone skill for creating, rewriting and testing skills for
+Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol. It keeps the method of Anthropic's skill-creator
+(write from a real task, test with and without the skill in fresh contexts, show the person, fix the cause) and
+teaches the writing the current models need: what a skill carries, what it leaves out, and how to word it. Its
+one script, `check_skill.py`, finds the mistakes that make a skill fail without an error. The research behind it
+is in [workbench/skill-creator](./workbench/skill-creator/README.md).
 
 Install it with `python3 install.py --plugins skill-creator` (see [Setting up for Claude Code and
 Codex](#setting-up-for-claude-code-and-codex)).

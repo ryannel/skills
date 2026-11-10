@@ -77,10 +77,10 @@
     },
     {
       "name": "skill-creator",
-      "description": "Creates, rewrites and tests agent skills for Claude Code, Codex and other agents, in plain explanatory prose. Follows Anthropic's skill-creator process, with isolated baselines, repeated runs, trigger tests and a structural check script.",
+      "description": "Creates, rewrites and tests agent skills for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol, in Claude Code, Codex and other hosts. Keeps the method of Anthropic's skill-creator, and teaches what a skill for the current models carries, leaves out and how to word it. Includes a check script.",
       "source": "./",
       "strict": false,
-      "version": "1.1.1",
+      "version": "2.0.0",
       "category": "development",
       "keywords": [
         "skills",

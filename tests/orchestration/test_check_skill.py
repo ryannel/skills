@@ -34,10 +34,40 @@ class CheckSkill(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 self.assertTrue(check_skill.check(skill(tmp, front)), front)
 
-    def test_reserved_words_in_the_name(self):
+    def test_a_word_anthropic_refuses_in_the_name_is_a_note(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = skill(tmp, "name: claude-helper\ndescription: Helps.\n", name="claude-helper")
-            self.assertTrue(any("reserved" in p for p in check_skill.check(folder)))
+            problems, notes = check_skill.findings(folder)
+            self.assertEqual(problems, [])
+            self.assertTrue(any("claude" in n for n in notes))
+
+    def test_angle_brackets_in_the_description_are_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = skill(tmp, 'name: bad-yaml\ndescription: "Switches to <branch>. Use when asked."\n')
+            self.assertTrue(any("< or >" in p for p in check_skill.check(folder)))
+
+    def test_notes_do_not_count_as_problems(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = skill(tmp, "name: bad-yaml\ndescription: Helps.\nmodel: opus\n",
+                           body="# Skill\n\n## When to use this skill\n\nYou MUST do it.\n")
+            problems, notes = check_skill.findings(folder)
+            self.assertEqual(problems, [])
+            self.assertEqual(len(notes), 3)
+
+    def test_quoted_capitals_are_not_noted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = skill(tmp, "name: bad-yaml\ndescription: Helps.\n", body='# Skill\n\nLeave out "IMPORTANT".\n')
+            self.assertEqual(check_skill.findings(folder), ([], []))
+
+    def test_test_material_templates_and_shown_link_syntax_are_not_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = skill(tmp, "name: bad-yaml\ndescription: Helps.\n",
+                           body="# Skill\n\nWrite a link as `[text](file.md)`.\n")
+            for sub in ("evals/one/graders", "assets"):
+                (folder / sub).mkdir(parents=True)
+            (folder / "evals/one/graders/01.md").write_text("[gone](missing.md)\n")
+            (folder / "assets/template.md").write_text("line\n" * 150)
+            self.assertEqual(check_skill.check(folder), [])
 
     def test_links_to_missing_headings_are_caught(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,0 +1,11 @@
+{
+  "name": "commit-guard-tests",
+  "private": true,
+  "description": "Checks scripts/guard.mjs and scripts/setup.mjs of the commit-guard skill against throwaway git repositories.",
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}

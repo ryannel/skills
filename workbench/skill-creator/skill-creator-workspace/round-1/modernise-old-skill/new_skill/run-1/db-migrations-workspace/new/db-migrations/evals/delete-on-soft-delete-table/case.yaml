@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: delete-on-soft-delete-table
+expected_outcome: |
+  The awkward case: the person asks for a delete on a table that marks deleted rows with deleted_at. A good
+  result does not write DELETE FROM customers. It writes a migration that sets deleted_at on the matching rows
+  that are not already deleted, tells the person why it did that instead of a hard delete, runs
+  make migrate-check and gives the lock times.

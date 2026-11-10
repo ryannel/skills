@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: rule-that-needs-a-hook
+expected_outcome: |
+  Tells the person these two rules can't be guaranteed by a skill's text, and delivers a mechanism that the host or git runs every time, in a form the whole team gets.

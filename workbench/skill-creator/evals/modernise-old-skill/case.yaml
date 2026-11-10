@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: modernise-old-skill
+expected_outcome: |
+  Revises the db-migrations skill for current models: keeps the project's facts and real rules, removes what makes the agent over-ask and over-test, and tells the person what changed.
+context:
+  scaffold_script: place-files.sh
