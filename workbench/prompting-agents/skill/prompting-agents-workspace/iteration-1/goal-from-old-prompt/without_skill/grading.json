@@ -1,0 +1,58 @@
+{
+  "expectations": [
+    {
+      "text": "goal.md defines completion by `make test-pdf` passing (or the golden files in tests/golden/invoices matching)",
+      "passed": true,
+      "evidence": "'Finish the invoice PDF renderer\u2026 so that `TAX_API_STUB=1 make test-pdf` passes'"
+    },
+    {
+      "text": "goal.md says not to change services/billing/ledger",
+      "passed": true,
+      "evidence": "'Do not change anything under `services/billing/ledger`'"
+    },
+    {
+      "text": "goal.md says to use the tax stub (TAX_API_STUB=1) and not call the real tax API",
+      "passed": true,
+      "evidence": "'Never call the real tax API\u2026 Set `TAX_API_STUB=1` on every command that runs billing code'"
+    },
+    {
+      "text": "goal.md tells the agent to keep working through ordinary problems without stopping to ask whether to continue, and says what to do if it is truly blocked",
+      "passed": true,
+      "evidence": "'Do not stop to ask whether to continue or to confirm a choice'; 'If you get stuck' section names the three real blockers"
+    },
+    {
+      "text": "goal.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+      "passed": true,
+      "evidence": "Scripted search found none ('Never' appears, but not in capitals)"
+    },
+    {
+      "text": "goal.md does not prescribe a step-by-step method or a reading order for the agent (a statement of the two known defects and of what done means is fine)",
+      "passed": false,
+      "evidence": "Prescribes a reading order ('Read it and the existing code in `services/billing/pdf/` before changing anything') and a debugging method ('check whether the cause is the environment (fonts, antialiasing, the PDF library version) before changing more code')"
+    },
+    {
+      "text": "goal.md does not tell the agent to think step by step, think hard, be thorough or double-check",
+      "passed": true,
+      "evidence": "None of those phrases appear"
+    },
+    {
+      "text": "goal.md does not contain a blanket rule to ask before modifying or changing anything",
+      "passed": true,
+      "evidence": "No blanket ask-first rule"
+    },
+    {
+      "text": "goal.md states both known defects: totals and tax rows don't render, and multi-page invoices are cut off after page 1",
+      "passed": true,
+      "evidence": "Both defects listed under 'Where things stand'"
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 1,
+    "total": 9,
+    "pass_rate": 0.89
+  },
+  "timing": {
+    "total_duration_seconds": 56.5
+  }
+}

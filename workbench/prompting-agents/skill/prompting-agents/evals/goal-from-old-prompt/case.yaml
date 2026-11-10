@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: goal-from-old-prompt
+expected_outcome: |
+  goal.md is a goal for an unattended GPT-6 Astra run. It says what the work is for, defines done by `make test-pdf` passing against the golden files, names services/billing/ledger as off limits with the reason, says to use the tax stub, and tells the agent to work through ordinary obstacles instead of stopping to ask. It is written fresh in plain prose: it does not carry over the old prompt's capitals, its step list, its "read everything first" order or its blanket "never change anything without asking" rule.
+context:
+  scaffold_script: place-files.sh

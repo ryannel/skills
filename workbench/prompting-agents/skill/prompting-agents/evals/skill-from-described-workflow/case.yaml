@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: skill-from-described-workflow
+expected_outcome: |
+  release-notes/SKILL.md is a skill both Claude Code and Codex can load. Its frontmatter is valid YAML with only portable fields. Its description says what the skill does and when to use it, without broad triggers such as any mention of git or changelogs. The body leads with what matters, carries the two facts an agent would get wrong (the merge bot puts labels on the linked issue; the version comes from scripts/next-version.sh), states the changelog format, and has no "when to use" section, no capitals for emphasis and no extra README.

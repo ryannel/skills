@@ -1,0 +1,17 @@
+{
+  "eval_name": "skill-from-described-workflow",
+  "prompt": "can you turn our release notes process into a skill? every friday someone runs `git log --merges v<last>..HEAD`, groups the PRs by label (feat / fix / chore, chore gets left out), and writes notes in CHANGELOG.md under a new `## vX.Y.Z (date)` heading. it has to be user-facing language, not PR titles. breaking changes go first under a **Breaking** line, and anything touching api/public/ needs a line in docs/migration.md too.\n\ngotcha that bites every new person: PRs merged by the merge bot have the label on the linked issue, not on the PR. you get it with `gh pr view N --json closingIssuesReferences`. and the version number comes from `scripts/next-version.sh`, don't guess it.\n\npeople on the team use both claude code and codex so it needs to work in both. put it in a folder called release-notes/",
+  "assertions": [
+    "release-notes/SKILL.md exists and starts with YAML frontmatter that has `name` and `description`",
+    "The frontmatter of release-notes/SKILL.md uses only these fields: name, description, license, compatibility, metadata, allowed-tools",
+    "The description says what the skill does and when to use it, and is under 1,024 characters",
+    "The description does not tell the agent to use the skill for any mention of git, commits, changelogs or versions in general",
+    "The body says that PRs merged by the merge bot carry the label on the linked issue and gives `gh pr view N --json closingIssuesReferences`",
+    "The body says to get the version from `scripts/next-version.sh`",
+    "The body says that a change touching api/public/ needs a line in docs/migration.md",
+    "The body has no section whose heading is about when to use the skill",
+    "release-notes/SKILL.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+    "The release-notes/ folder contains no README, changelog or installation guide of its own",
+    "The body gives the heading format `## vX.Y.Z (date)` and says breaking changes go first under a Breaking line"
+  ]
+}

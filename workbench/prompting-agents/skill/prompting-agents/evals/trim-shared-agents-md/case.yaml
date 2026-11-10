@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: trim-shared-agents-md
+expected_outcome: |
+  A shorter AGENTS.md written for capable models. It keeps the facts an agent can't find (the check commands, INTEGRATION_DB_URL, the release-calendar owner), says which document is for what instead of requiring all of them before every edit, drops the directory layout, replaces the blanket ask-first rules with named actions that need a go-ahead and named actions that don't, says when the e2e suite is needed, and turns the generated-code rule into what to do. The reply recommends enforcing the src/gen/ rule with a hook or permission rule, because wording alone was already ignored.
+context:
+  scaffold_script: place-files.sh

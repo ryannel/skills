@@ -1,0 +1,68 @@
+{
+  "expectations": [
+    {
+      "text": "The new AGENTS.md has fewer lines than the original (the original has 60 lines)",
+      "passed": true,
+      "evidence": "55 lines against 60 (553 words against 322: it is longer by words)"
+    },
+    {
+      "text": "The new AGENTS.md still says integration tests need INTEGRATION_DB_URL",
+      "passed": true,
+      "evidence": "Testing table: 'Need `INTEGRATION_DB_URL`, which is not in the repo'"
+    },
+    {
+      "text": "The new AGENTS.md gives the commands `make check` and `make e2e`",
+      "passed": true,
+      "evidence": "Both commands are in the Testing table"
+    },
+    {
+      "text": "The new AGENTS.md does not require reading the three docs before every change; it says which document is for what",
+      "passed": true,
+      "evidence": "'Read these when the task touches their subject'"
+    },
+    {
+      "text": "The new AGENTS.md no longer lists the directory layout",
+      "passed": false,
+      "evidence": "Keeps a 'Layout' section with eight directory lines, and the dependency list in the first line"
+    },
+    {
+      "text": "The new AGENTS.md says the agent may run `make check` (the unit tests and linter) without asking",
+      "passed": true,
+      "evidence": "'run `make check` and `make codegen` whenever you need to\u2026 Don't stop to ask permission for these'"
+    },
+    {
+      "text": "The new AGENTS.md says when the e2e suite is needed instead of requiring it after every change",
+      "passed": true,
+      "evidence": "'Only when the person asks for it, or when you changed files in `tests/e2e/`'"
+    },
+    {
+      "text": "The new AGENTS.md says src/gen/ is produced by `make codegen` from api/schema.yaml and to change the schema instead",
+      "passed": true,
+      "evidence": "'To change the client, edit `api/schema.yaml`, run `make codegen`'"
+    },
+    {
+      "text": "The reply recommends a hook, permission rule or other enforced check for src/gen/, not only rewording",
+      "passed": true,
+      "evidence": "reply.md: a CI step that runs `make codegen` and fails on a diff, plus a deny rule in `.claude/settings.json`"
+    },
+    {
+      "text": "The new AGENTS.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+      "passed": true,
+      "evidence": "Scripted search found none"
+    },
+    {
+      "text": "The new AGENTS.md names the specific actions that need a go-ahead (deploys, and changes to migrations/) instead of a blanket ask-first rule",
+      "passed": true,
+      "evidence": "'Limits' names deploys and `migrations/`; a separate list gives three general cases for asking"
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 1,
+    "total": 11,
+    "pass_rate": 0.91
+  },
+  "timing": {
+    "total_duration_seconds": 88.4
+  }
+}

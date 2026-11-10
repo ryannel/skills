@@ -1,0 +1,68 @@
+{
+  "expectations": [
+    {
+      "text": "release-notes/SKILL.md exists and starts with YAML frontmatter that has `name` and `description`",
+      "passed": true,
+      "evidence": "Frontmatter has `name: release-notes` and `description`"
+    },
+    {
+      "text": "The frontmatter of release-notes/SKILL.md uses only these fields: name, description, license, compatibility, metadata, allowed-tools",
+      "passed": true,
+      "evidence": "Scripted check: the only fields are name and description"
+    },
+    {
+      "text": "The description says what the skill does and when to use it, and is under 1,024 characters",
+      "passed": true,
+      "evidence": "338 characters; says what it writes and 'Use when asked to write or draft the release notes or the changelog entry for a release'"
+    },
+    {
+      "text": "The description does not tell the agent to use the skill for any mention of git, commits, changelogs or versions in general",
+      "passed": true,
+      "evidence": "Triggers are limited to writing release notes or a release's changelog entry"
+    },
+    {
+      "text": "The body says that PRs merged by the merge bot carry the label on the linked issue and gives `gh pr view N --json closingIssuesReferences`",
+      "passed": true,
+      "evidence": "Second paragraph of the body, and the commands under 'Which PRs go in'"
+    },
+    {
+      "text": "The body says to get the version from `scripts/next-version.sh`",
+      "passed": true,
+      "evidence": "'The version number comes from `scripts/next-version.sh`. Run the script and use the version it prints'"
+    },
+    {
+      "text": "The body says that a change touching api/public/ needs a line in docs/migration.md",
+      "passed": true,
+      "evidence": "Section 'Changes under api/public/'"
+    },
+    {
+      "text": "The body has no section whose heading is about when to use the skill",
+      "passed": true,
+      "evidence": "No such heading"
+    },
+    {
+      "text": "release-notes/SKILL.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+      "passed": true,
+      "evidence": "Scripted search found none"
+    },
+    {
+      "text": "The release-notes/ folder contains no README, changelog or installation guide of its own",
+      "passed": true,
+      "evidence": "The folder holds only SKILL.md"
+    },
+    {
+      "text": "The body gives the heading format `## vX.Y.Z (date)` and says breaking changes go first under a Breaking line",
+      "passed": true,
+      "evidence": "'The heading is `## vX.Y.Z (date)`'; 'the entry starts with a `**Breaking**` line'"
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "pass_rate": 1.0
+  },
+  "timing": {
+    "total_duration_seconds": 133.0
+  }
+}

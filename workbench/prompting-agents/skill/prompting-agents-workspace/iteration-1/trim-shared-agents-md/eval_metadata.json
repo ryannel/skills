@@ -1,0 +1,17 @@
+{
+  "eval_name": "trim-shared-agents-md",
+  "prompt": "our AGENTS.md is a mess and I think it's making things worse. the team uses both claude code (fable 5.2) and codex (astra) on this repo, CLAUDE.md just imports AGENTS.md. two complaints this week: agents keep stopping to ask permission before running the unit tests, and they run the whole e2e suite (25 min) for one-line changes. also last week one of them hand-edited a file in src/gen/ again even though the file says not to.\n\ncan you fix it? write the new version to AGENTS.md and tell me what else I should do, if anything.\n\nInput files: AGENTS.md",
+  "assertions": [
+    "The new AGENTS.md has fewer lines than the original (the original has 60 lines)",
+    "The new AGENTS.md still says integration tests need INTEGRATION_DB_URL",
+    "The new AGENTS.md gives the commands `make check` and `make e2e`",
+    "The new AGENTS.md does not require reading the three docs before every change; it says which document is for what",
+    "The new AGENTS.md no longer lists the directory layout",
+    "The new AGENTS.md says the agent may run `make check` (the unit tests and linter) without asking",
+    "The new AGENTS.md says when the e2e suite is needed instead of requiring it after every change",
+    "The new AGENTS.md says src/gen/ is produced by `make codegen` from api/schema.yaml and to change the schema instead",
+    "The reply recommends a hook, permission rule or other enforced check for src/gen/, not only rewording",
+    "The new AGENTS.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+    "The new AGENTS.md names the specific actions that need a go-ahead (deploys, and changes to migrations/) instead of a blanket ask-first rule"
+  ]
+}

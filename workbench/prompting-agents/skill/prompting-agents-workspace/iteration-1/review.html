@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --border: #e8e6dc;
+      --text: #141413;
+      --text-muted: #b0aea5;
+      --accent: #d97757;
+      --accent-hover: #c4613f;
+      --green: #788c5d;
+      --green-bg: #eef2e8;
+      --red: #c44;
+      --red-bg: #fceaea;
+      --header-bg: #141413;
+      --header-text: #faf9f5;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .header .instructions {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .header .progress {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      text-align: right;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .section-header {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .section-body {
+      padding: 1rem;
+    }
+
+    /* ---- Config badge ---- */
+    .config-badge {
+      display: inline-block;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.75rem;
+      vertical-align: middle;
+    }
+    .config-badge.config-primary {
+      background: rgba(33, 150, 243, 0.12);
+      color: #1976d2;
+    }
+    .config-badge.config-baseline {
+      background: rgba(255, 193, 7, 0.15);
+      color: #f57f17;
+    }
+
+    /* ---- Prompt ---- */
+    .prompt-text {
+      white-space: pre-wrap;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* ---- Outputs ---- */
+    .output-file {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .output-file + .output-file {
+      margin-top: 1rem;
+    }
+    .output-file-header {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .output-file-header .dl-btn {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+    .output-file-header .dl-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    .output-file-content {
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .output-file-content pre {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    .output-file-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .output-file-content iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .output-file-content table {
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+    .output-file-content table td,
+    .output-file-content table th {
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+    .output-file-content table th {
+      background: var(--bg);
+      font-weight: 600;
+    }
+    .output-file-content .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .output-file-content .download-link:hover {
+      background: var(--border);
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ---- Feedback ---- */
+    .prev-feedback {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .prev-feedback-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .feedback-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--text);
+    }
+    .feedback-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .feedback-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      min-height: 1.1em;
+    }
+
+    /* ---- Grades (collapsible) ---- */
+    .grades-toggle {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .grades-toggle:hover {
+      color: var(--accent);
+    }
+    .grades-toggle .arrow {
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+      font-size: 0.75rem;
+    }
+    .grades-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+    .grades-content {
+      display: none;
+      margin-top: 0.75rem;
+    }
+    .grades-content.open {
+      display: block;
+    }
+    .grades-summary {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .grade-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .grade-pass { background: var(--green-bg); color: var(--green); }
+    .grade-fail { background: var(--red-bg); color: var(--red); }
+    .assertion-list {
+      list-style: none;
+    }
+    .assertion-item {
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .assertion-item:last-child { border-bottom: none; }
+    .assertion-status {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .assertion-status.pass { color: var(--green); }
+    .assertion-status.fail { color: var(--red); }
+    .assertion-evidence {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      padding-left: 1.5rem;
+    }
+
+    /* ---- View tabs ---- */
+    .view-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .view-tab {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    /* ---- Benchmark view ---- */
+    .benchmark-view {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .benchmark-table {
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 0.625rem 0.75rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      font-family: 'Poppins', sans-serif;
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .benchmark-table tr:hover { background: var(--bg); }
+    .benchmark-table tr.benchmark-row-with { background: rgba(33, 150, 243, 0.06); }
+    .benchmark-table tr.benchmark-row-without { background: rgba(255, 193, 7, 0.06); }
+    .benchmark-table tr.benchmark-row-with:hover { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-without:hover { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-table tr.benchmark-row-avg { font-weight: 600; border-top: 2px solid var(--border); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-with { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-without { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-delta-positive { color: var(--green); font-weight: 600; }
+    .benchmark-delta-negative { color: var(--red); font-weight: 600; }
+    .benchmark-notes {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .benchmark-notes h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .benchmark-notes ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+    .benchmark-notes li {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: 0.375rem;
+    }
+    .benchmark-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 3rem;
+    }
+
+    /* ---- Navigation ---- */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .done-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .done-btn:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .done-btn.ready {
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+    }
+    .done-btn.ready:hover {
+      background: var(--accent-hover);
+    }
+    /* ---- Done overlay ---- */
+    .done-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .done-overlay.visible {
+      display: flex;
+    }
+    .done-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+    }
+    .done-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .done-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .done-card .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .done-card button {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .done-card button:hover {
+      background: var(--bg);
+    }
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="height:100vh; display:flex; flex-direction:column;">
+    <div class="header">
+      <div>
+        <h1>Eval Review: <span id="skill-name"></span></h1>
+        <div class="instructions">Review each output and leave feedback below. Navigate with arrow keys or buttons. When done, copy feedback and paste into Claude Code.</div>
+      </div>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <!-- View tabs (only shown when benchmark data exists) -->
+    <div class="view-tabs" id="view-tabs" style="display:none;">
+      <button class="view-tab active" onclick="switchView('outputs')">Outputs</button>
+      <button class="view-tab" onclick="switchView('benchmark')">Benchmark</button>
+    </div>
+
+    <!-- Outputs panel (qualitative review) -->
+    <div class="view-panel active" id="panel-outputs">
+    <div class="main">
+      <!-- Prompt -->
+      <div class="section">
+        <div class="section-header">Prompt <span class="config-badge" id="config-badge" style="display:none;"></span></div>
+        <div class="section-body">
+          <div class="prompt-text" id="prompt-text"></div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div class="section">
+        <div class="section-header">Output</div>
+        <div class="section-body" id="outputs-body">
+          <div class="empty-state">No output files found</div>
+        </div>
+      </div>
+
+      <!-- Previous Output (collapsible) -->
+      <div class="section" id="prev-outputs-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="togglePrevOutputs()">
+            <span class="arrow" id="prev-outputs-arrow">&#9654;</span>
+            Previous Output
+          </div>
+        </div>
+        <div class="grades-content" id="prev-outputs-content"></div>
+      </div>
+
+      <!-- Grades (collapsible) -->
+      <div class="section" id="grades-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="toggleGrades()">
+            <span class="arrow" id="grades-arrow">&#9654;</span>
+            Formal Grades
+          </div>
+        </div>
+        <div class="grades-content" id="grades-content"></div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="section">
+        <div class="section-header">Your Feedback</div>
+        <div class="section-body">
+          <textarea
+            class="feedback-textarea"
+            id="feedback"
+            placeholder="What do you think of this output? Any issues, suggestions, or things that look great?"
+          ></textarea>
+          <div class="feedback-status" id="feedback-status"></div>
+          <div class="prev-feedback" id="prev-feedback" style="display:none;">
+            <div class="prev-feedback-label">Previous feedback</div>
+            <div id="prev-feedback-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav" id="outputs-nav">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)">&#8592; Previous</button>
+      <button class="done-btn" id="done-btn" onclick="showDoneDialog()">Submit All Reviews</button>
+      <button class="nav-btn" id="next-btn" onclick="navigate(1)">Next &#8594;</button>
+    </div>
+    </div><!-- end panel-outputs -->
+
+    <!-- Benchmark panel (quantitative stats) -->
+    <div class="view-panel" id="panel-benchmark">
+      <div class="benchmark-view" id="benchmark-content">
+        <div class="benchmark-empty">No benchmark data available. Run a benchmark to see quantitative results here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done overlay -->
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-card">
+      <h2>Review Complete</h2>
+      <p>Your feedback has been saved. Go back to your Claude Code session and tell Claude you're done reviewing.</p>
+      <div class="btn-row">
+        <button onclick="closeDoneDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Embedded data (injected by generate_review.py) ----
+    const EMBEDDED_DATA = {"skill_name": "prompting-agents", "runs": [{"id": "goal-from-old-prompt-with_skill", "prompt": "ok I want to kick off a codex session overnight on gpt-6 astra to finish the invoice pdf export. here's the prompt I used last month for the csv export (old-prompt.md), can you update it for this?\n\ncontext: the pdf renderer is in services/billing/pdf/. it's half done, line items render but the totals + tax rows don't, and multi-page invoices get cut off after page 1. the design is docs/invoice-pdf.md. golden files are tests/golden/invoices/*.pdf and `make test-pdf` compares against them (pixel diff). don't let it touch services/billing/ledger, Dana's team is mid-migration there. it can't hit the real tax API (costs money per call), there's a stub, TAX_API_STUB=1. last time the agent stopped after about an hour and asked me if it should continue, and I was asleep.\n\nwrite the new one to goal.md\n\nInput files: old-prompt.md", "eval_id": null, "outputs": [{"name": "goal.md", "type": "text", "content": "Goal: the invoice PDF export in `services/billing/pdf/` is finished as `docs/invoice-pdf.md` describes it, and\n`TAX_API_STUB=1 make test-pdf` passes against the golden files as they are now.\n\nI am starting this run before I go to sleep, and I will read the result in the morning. Nobody will answer a\nquestion during the run, so a question to me stops the work until then. Where the design leaves a choice open,\ntake the option that fits `docs/invoice-pdf.md` best, write the choice and your reason in the notes file described\nbelow, and carry on. Do all the work you are allowed to do before you stop, so that what I review in the morning\nis a finished branch.\n\n## Where the work stands\n\nThe renderer is half built. Line items render. I know of two gaps:\n\n- The totals rows and the tax rows don't render.\n- An invoice longer than one page is cut off after page 1.\n\nThere may be other gaps between the code and the design. Closing them is part of this work.\n\n## What done means\n\n`make test-pdf` renders invoices and compares each one, pixel by pixel, with the golden files in\n`tests/golden/invoices/*.pdf`. The golden files define correct output. You are done when all of these are true:\n\n- The totals rows and the tax rows render as the design describes.\n- A multi-page invoice renders every one of its pages.\n- `TAX_API_STUB=1 make test-pdf` exits 0, with the golden files and the settings of the comparison unchanged.\n\nA version that fails the comparison is not finished. Run the check, look at what differs, fix it, and repeat until\nthe check passes.\n\nWhere a golden file and the design disagree, match the golden file and record the difference in the notes file.\nIf no golden file covers a multi-page invoice, or none covers an invoice with tax, then a passing `make test-pdf`\ndoesn't show that those two gaps are closed. In that case show it another way, and say in the notes file which\ncase has no golden file.\n\n## What to leave alone\n\nDon't edit anything under `services/billing/ledger`. Dana's team is partway through a migration there, and a\nchange from outside would collide with theirs. You may read it. If finishing the export seems to need a change\nthere, write the change you would make and the reason in the notes file, and finish everything that doesn't\ndepend on it.\n\nDon't call the real tax API, because it charges for each call. Setting `TAX_API_STUB=1` makes the code use a stub\nin its place, so set it on every command that could reach tax code. If the stub doesn't return something an\ninvoice needs, record that in the notes file and leave the stub switched on.\n\nCommit your work to a new local branch named `invoice-pdf-export`. Don't push the branch or open a pull request.\nMy review of that branch in the morning is the approval step.\n\nThese need no approval: reading any file, editing code and tests in `services/billing/pdf/`, running\n`make test-pdf` and other local commands with `TAX_API_STUB=1` set, and committing to the branch. If the export\nneeds a change outside `services/billing/pdf/` that is not in the ledger folder, make it and list it in the notes\nfile with the reason.\n\n## When something gets in the way\n\nThere are two kinds of obstacle. An error, a failing test, a command that times out or a pixel difference you\ncan't yet explain is an ordinary one, and it is yours to work through. Something protected on purpose (the ledger\nfolder, the real tax API, the golden files, access you were not given) is to be left alone and recorded.\n\nA part of the work is blocked when it can only be finished by crossing one of those lines: for example, the fix\nneeds an edit under `services/billing/ledger`, or the stub lacks data that only the real tax API has. When one\npart is blocked, record it in the notes file with what would unblock it, and carry on with the rest.\n\n## The notes file\n\nKeep `notes/invoice-pdf-export.md` up to date as you work. Create it if it doesn't exist. It holds what is\nfinished, what you are working on, each choice you made with its reason, and anything blocked. The run may\noutlast your context, and this file is what you read to pick the work up again.\n\n## What I want back\n\nWhen the work is done, or everything left is blocked, write one final message. Put first whether\n`TAX_API_STUB=1 make test-pdf` passes, with the command and the end of its output. After that say what you\nchanged, what is blocked, and which choices you want me to look at. Keep what you confirmed by running something\napart from what you only suspect.\n"}, {"name": "old-prompt.md", "type": "text", "content": "# TASK: CSV EXPORT\n\nYou are an expert senior software engineer. Think step by step.\n\nCRITICAL: You MUST follow these steps IN ORDER:\n\n1. First, read ALL of the documentation in docs/ before doing anything else.\n2. Then read every file in services/billing/ to understand the architecture.\n3. Then write a detailed plan and list every file you will change.\n4. Implement the CSV export in services/billing/csv/.\n5. ALWAYS run the full test suite (`make test-all`) after EVERY change.\n6. Double-check your work. Then check it again. Be thorough!!\n\nIMPORTANT RULES:\n- NEVER modify anything without asking first.\n- NEVER touch services/billing/ledger.\n- ALWAYS ask before running any command that could have side effects.\n- Do NOT be lazy. Keep going until the task is 100% complete.\n- If you are unsure about ANYTHING, stop and ask.\n\nWhen finished, write a report with these sections: Summary, Files Changed, Tests Run, Risks, Recommendations, Next Steps, Open Questions.\n"}, {"name": "reply.md", "type": "text", "content": "The new goal is in `goal.md`. I wrote it fresh instead of editing the CSV prompt, and I have not started the Codex session.\n\n**Why it stopped last time.** The old prompt told it to: \"NEVER modify anything without asking first\", \"ALWAYS ask before running any command that could have side effects\" and \"If you are unsure about ANYTHING, stop and ask\". GPT-6 Astra takes that wording at full strength, and it already leans towards asking. The new goal says nobody will answer until morning, names what needs no approval, and makes your morning review of the branch the only approval step.\n\n**What I kept from the old prompt.** Only the rule about `services/billing/ledger`, now with the reason (Dana's team is mid-migration).\n\n**What I dropped.**\n- The numbered steps, the \"read all of docs/\" order and the \"expert engineer\" line. The model plans this better itself.\n- The capitals and \"don't be lazy\".\n- `make test-all` after every change. The check is now `make test-pdf`.\n- The seven-section report. It now asks for the test result first, then changes, blocked items and choices to review.\n\n**What I added from your context.** The two known gaps, the design doc, the golden files as the definition of done, the tax stub, and a notes file so the run survives losing its context.\n\n**Decisions I made for you. Change any that are wrong.**\n- It may read the ledger folder but not edit it.\n- It commits to a local branch `invoice-pdf-export` and does not push or open a pull request.\n- It keeps progress in `notes/invoice-pdf-export.md`.\n- It may make a needed change outside `services/billing/pdf/` (never in the ledger folder) and must list it in the notes.\n- Where a golden file and `docs/invoice-pdf.md` disagree, it matches the golden file and records the difference.\n- It may not edit the golden files or loosen the pixel comparison.\n\n**Three things to check before you go to bed.**\n1. Do the golden files include a multi-page invoice and one with tax? If not, a passing `make test-pdf` doesn't prove those two fixes. The goal tells it to say so, but adding the golden files first is better.\n2. The tax API rule is only words in a prompt. If it has to hold every time, export `TAX_API_STUB=1` in the shell that starts Codex, or leave the real API key out of that environment.\n3. Check that Codex's approval mode lets it edit files and run `make test-pdf` without prompting, and that the repo's `AGENTS.md` and any skills it can reach have no \"ask first\" lines. Either one will stall it the same way, whatever the goal says.\n\n**Starting it.** Pick GPT-6 Astra and the effort level in Codex when you start the session, not in the goal text. Use the effort level you used for the CSV run. Then give it the contents of `goal.md` with `/goal`.\n"}], "grading": {"expectations": [{"text": "goal.md defines completion by `make test-pdf` passing (or the golden files in tests/golden/invoices matching)", "passed": true, "evidence": "Goal line and 'What done means': `TAX_API_STUB=1 make test-pdf` exits 0 with the golden files unchanged"}, {"text": "goal.md says not to change services/billing/ledger", "passed": true, "evidence": "'Don't edit anything under `services/billing/ledger`. Dana's team is partway through a migration there'"}, {"text": "goal.md says to use the tax stub (TAX_API_STUB=1) and not call the real tax API", "passed": true, "evidence": "'Don't call the real tax API, because it charges for each call. Setting `TAX_API_STUB=1`\u2026'"}, {"text": "goal.md tells the agent to keep working through ordinary problems without stopping to ask whether to continue, and says what to do if it is truly blocked", "passed": true, "evidence": "Says nobody will answer during the run; separates ordinary obstacles (work through) from protected ones (record); defines blocked and says to carry on with the rest"}, {"text": "goal.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search for the five words in capitals found none"}, {"text": "goal.md does not prescribe a step-by-step method or a reading order for the agent (a statement of the two known defects and of what done means is fine)", "passed": true, "evidence": "No reading order or method. Sections are the state of the work, done, boundaries, obstacles, the notes file and what comes back"}, {"text": "goal.md does not tell the agent to think step by step, think hard, be thorough or double-check", "passed": true, "evidence": "None of those phrases appear"}, {"text": "goal.md does not contain a blanket rule to ask before modifying or changing anything", "passed": true, "evidence": "Lists what needs no approval instead; no blanket ask-first rule"}, {"text": "goal.md states both known defects: totals and tax rows don't render, and multi-page invoices are cut off after page 1", "passed": true, "evidence": "'The totals rows and the tax rows don't render' and 'An invoice longer than one page is cut off after page 1'"}], "summary": {"passed": 9, "failed": 0, "total": 9, "pass_rate": 1.0}, "timing": {"total_duration_seconds": 109.1}}}, {"id": "goal-from-old-prompt-without_skill", "prompt": "ok I want to kick off a codex session overnight on gpt-6 astra to finish the invoice pdf export. here's the prompt I used last month for the csv export (old-prompt.md), can you update it for this?\n\ncontext: the pdf renderer is in services/billing/pdf/. it's half done, line items render but the totals + tax rows don't, and multi-page invoices get cut off after page 1. the design is docs/invoice-pdf.md. golden files are tests/golden/invoices/*.pdf and `make test-pdf` compares against them (pixel diff). don't let it touch services/billing/ledger, Dana's team is mid-migration there. it can't hit the real tax API (costs money per call), there's a stub, TAX_API_STUB=1. last time the agent stopped after about an hour and asked me if it should continue, and I was asleep.\n\nwrite the new one to goal.md\n\nInput files: old-prompt.md", "eval_id": null, "outputs": [{"name": "goal.md", "type": "text", "content": "# Goal: finish the invoice PDF export\n\nFinish the invoice PDF renderer in `services/billing/pdf/` so that `TAX_API_STUB=1 make test-pdf` passes.\n\nYou are running overnight and unattended. Nobody will read a question until morning, so a question costs the whole night. Do not stop to ask whether to continue or to confirm a choice. When something is unclear, pick the option that best fits the design doc and the golden files, write down what you chose and why, and keep going.\n\n## Where things stand\n\nThe renderer is half built. Line items render correctly. Two things are broken:\n\n- The totals rows and the tax rows do not render.\n- Invoices longer than one page are cut off after page 1.\n\nThe design is in `docs/invoice-pdf.md`. Read it and the existing code in `services/billing/pdf/` before changing anything, because the remaining work should follow the patterns the working line-item code already uses.\n\n## What done means\n\n- `TAX_API_STUB=1 make test-pdf` passes. This target renders invoices and compares them pixel by pixel against the golden files in `tests/golden/invoices/*.pdf`.\n- `TAX_API_STUB=1 make test-all` still passes, run once at the end, so you know nothing else in the repository broke.\n- Your work is committed locally. Do not push, open a pull request or deploy.\n\nGetting totals working is not a stopping point, and neither is getting pagination working. Carry on until all of it is done or you have hit one of the blockers described below.\n\n## Limits\n\n**Do not change anything under `services/billing/ledger`.** Another team is partway through a migration there and any edit will collide with their work. You may read it to see what data the renderer receives. If the only correct fix seems to need a ledger change, do not make it. Describe the change you would have wanted in your report and do the best you can from the PDF side.\n\n**Never call the real tax API.** It charges money per call. Set `TAX_API_STUB=1` on every command that runs billing code, including one-off scripts and single tests, not only the two make targets. If something seems to need the real API, treat that as a blocker.\n\n**The golden files define correct output.** Do not edit, regenerate, replace or delete anything in `tests/golden/invoices/`, and do not loosen the diff tolerance, skip tests or change how the comparison works. If a golden file seems to disagree with the design doc, match the golden file and note the disagreement in your report.\n\nKeep your changes inside `services/billing/pdf/` and its tests where you can. A small change elsewhere in `services/billing/` (outside the ledger) is fine if the fix needs it. List any such change in your report.\n\n## If you get stuck\n\n- If one part is blocked, finish the other parts first. Come back to the blocked part afterwards with a different approach.\n- If a pixel diff still fails after the layout looks right, check whether the cause is the environment (fonts, antialiasing, the PDF library version) before changing more code. If it is, say so in the report with the evidence. Do not tune the code to chase it.\n- Stop early only when everything left needs a ledger change, the real tax API, or a change to the golden files or the comparison. Then commit what works and write the report.\n\n## Report\n\nFinish with a short report in your final message that I can read in a few minutes:\n\n- Whether `make test-pdf` and `make test-all` pass. Give the failing cases if not.\n- What you changed, in a few lines.\n- The decisions you made where you would otherwise have asked me.\n- Anything you left undone or worked around, and why.\n"}, {"name": "old-prompt.md", "type": "text", "content": "# TASK: CSV EXPORT\n\nYou are an expert senior software engineer. Think step by step.\n\nCRITICAL: You MUST follow these steps IN ORDER:\n\n1. First, read ALL of the documentation in docs/ before doing anything else.\n2. Then read every file in services/billing/ to understand the architecture.\n3. Then write a detailed plan and list every file you will change.\n4. Implement the CSV export in services/billing/csv/.\n5. ALWAYS run the full test suite (`make test-all`) after EVERY change.\n6. Double-check your work. Then check it again. Be thorough!!\n\nIMPORTANT RULES:\n- NEVER modify anything without asking first.\n- NEVER touch services/billing/ledger.\n- ALWAYS ask before running any command that could have side effects.\n- Do NOT be lazy. Keep going until the task is 100% complete.\n- If you are unsure about ANYTHING, stop and ask.\n\nWhen finished, write a report with these sections: Summary, Files Changed, Tests Run, Risks, Recommendations, Next Steps, Open Questions.\n"}, {"name": "reply.md", "type": "text", "content": "I wrote the new prompt to `goal.md`. It is a rewrite, not an edit, because the old prompt's own rules are the likely cause of the agent stopping after an hour.\n\n**Check the Codex approval setting before you go to bed.** The prompt cannot stop Codex from pausing on a permission prompt. If the session asks for approval before running commands, it will stall at the first `make test-pdf` whatever the goal says.\n\n## What I changed from the old prompt\n\n- **Asking:** the old prompt said \"NEVER modify anything without asking first\" and \"if you are unsure about ANYTHING, stop and ask\". The new one says nobody is awake, so it should decide, record the decision and carry on.\n- **Finish line:** done is now `TAX_API_STUB=1 make test-pdf` passing, `make test-all` passing once at the end, and work committed locally.\n- **Current state:** it says line items work, totals and tax rows don't render, and multi-page invoices are cut off after page 1.\n- **Golden files:** it may not edit or regenerate them, loosen the pixel diff or skip tests. Otherwise the easiest way to make a pixel-diff test pass is to change the test.\n- **Ledger:** no changes under `services/billing/ledger`, with the reason. If a fix seems to need one, it describes the change in the report instead of making it.\n- **Tax API:** `TAX_API_STUB=1` on every command that runs billing code, with the reason (cost per call).\n- **Dropped:** the persona line, the capitals, \"read all of docs/ and every file in services/billing/\", `make test-all` after every change, and the seven-section report. The report is now four short items, including the decisions it made without you.\n\n## Assumptions to check\n\n- **No push:** I told it to commit locally and not push or open a pull request. Change that line if you want a branch pushed.\n- **Reading the ledger:** I allowed it to read `services/billing/ledger` but not change it. Tighten that if \"don't touch\" meant don't read either.\n- **Golden files win:** if a golden file disagrees with `docs/invoice-pdf.md`, it matches the golden file and notes it.\n- **`make test-all` with the stub:** I assumed this target is safe to run with `TAX_API_STUB=1`. If it reaches the real tax API some other way, remove that line.\n"}], "grading": {"expectations": [{"text": "goal.md defines completion by `make test-pdf` passing (or the golden files in tests/golden/invoices matching)", "passed": true, "evidence": "'Finish the invoice PDF renderer\u2026 so that `TAX_API_STUB=1 make test-pdf` passes'"}, {"text": "goal.md says not to change services/billing/ledger", "passed": true, "evidence": "'Do not change anything under `services/billing/ledger`'"}, {"text": "goal.md says to use the tax stub (TAX_API_STUB=1) and not call the real tax API", "passed": true, "evidence": "'Never call the real tax API\u2026 Set `TAX_API_STUB=1` on every command that runs billing code'"}, {"text": "goal.md tells the agent to keep working through ordinary problems without stopping to ask whether to continue, and says what to do if it is truly blocked", "passed": true, "evidence": "'Do not stop to ask whether to continue or to confirm a choice'; 'If you get stuck' section names the three real blockers"}, {"text": "goal.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search found none ('Never' appears, but not in capitals)"}, {"text": "goal.md does not prescribe a step-by-step method or a reading order for the agent (a statement of the two known defects and of what done means is fine)", "passed": false, "evidence": "Prescribes a reading order ('Read it and the existing code in `services/billing/pdf/` before changing anything') and a debugging method ('check whether the cause is the environment (fonts, antialiasing, the PDF library version) before changing more code')"}, {"text": "goal.md does not tell the agent to think step by step, think hard, be thorough or double-check", "passed": true, "evidence": "None of those phrases appear"}, {"text": "goal.md does not contain a blanket rule to ask before modifying or changing anything", "passed": true, "evidence": "No blanket ask-first rule"}, {"text": "goal.md states both known defects: totals and tax rows don't render, and multi-page invoices are cut off after page 1", "passed": true, "evidence": "Both defects listed under 'Where things stand'"}], "summary": {"passed": 8, "failed": 1, "total": 9, "pass_rate": 0.89}, "timing": {"total_duration_seconds": 56.5}}}, {"id": "skill-from-described-workflow-with_skill", "prompt": "can you turn our release notes process into a skill? every friday someone runs `git log --merges v\u003clast>..HEAD`, groups the PRs by label (feat / fix / chore, chore gets left out), and writes notes in CHANGELOG.md under a new `## vX.Y.Z (date)` heading. it has to be user-facing language, not PR titles. breaking changes go first under a **Breaking** line, and anything touching api/public/ needs a line in docs/migration.md too.\n\ngotcha that bites every new person: PRs merged by the merge bot have the label on the linked issue, not on the PR. you get it with `gh pr view N --json closingIssuesReferences`. and the version number comes from `scripts/next-version.sh`, don't guess it.\n\npeople on the team use both claude code and codex so it needs to work in both. put it in a folder called release-notes/", "eval_id": null, "outputs": [{"name": "release-notes/SKILL.md", "type": "text", "content": "---\nname: release-notes\ndescription: Writes the release notes for this repository. Turns the pull requests merged since the last release tag into a user-facing entry in CHANGELOG.md, and adds lines to docs/migration.md for changes under api/public/. Use when asked to write or draft the release notes or the changelog entry for a release, including the weekly Friday release.\n---\n\n# Release notes\n\nThe release notes are a new entry in `CHANGELOG.md` that tells the people who use the product what changed since\nthe last release. You write the entry from the pull requests (PRs) merged since the last release tag.\n\nTwo facts catch out most people the first time they do this:\n\n- **A PR merged by the merge bot has its label on the linked issue, not on the PR.** The PR itself looks\n  unlabelled. Look up the issue before you decide what kind of change the PR is. The commands are under\n  [Which PRs go in](#which-prs-go-in).\n- **The version number comes from `scripts/next-version.sh`.** Run the script and use the version it prints. If\n  the script fails, stop and tell the person what it printed. Don't work the version out yourself from the last\n  tag or from the size of the changes.\n\n## Which PRs go in\n\nRun `git log --merges v\u003clast>..HEAD`, where `v\u003clast>` is the most recent release tag. Each merge commit in the\noutput is one PR, and those PRs are the whole input for this release.\n\nEvery PR has a type label, which is one of `feat`, `fix` or `chore`. PRs labelled `feat` or `fix` go into the\nrelease notes. PRs labelled `chore` are left out.\n\nWhen a PR carries none of the three type labels, it was most likely merged by the merge bot, and the type label\nis on the issue the PR closes. Find that issue with `gh pr view \u003cN> --json closingIssuesReferences`, then read\nits labels with `gh issue view \u003cissue> --json labels`. If neither the PR nor its linked issues carry a type\nlabel, don't choose one from the PR title. Leave the PR out of the entry and name it in your report, so the\nperson can place it.\n\nThe labels and linked issues come from GitHub, so you need `gh` signed in and able to reach the network. If `gh`\nfails, stop and tell the person what failed. An entry written from the merge commit titles alone has no labels\nbehind it.\n\n## The entry in CHANGELOG.md\n\nAdd a new section above the previous release's section. The heading is `## vX.Y.Z (date)`, with the version\nfrom `scripts/next-version.sh` and today's date.\n\nIf any change is breaking, the entry starts with a `**Breaking**` line, and the breaking changes go under it\nbefore anything else. A change is breaking when someone has to change what they do, or what their code does, to\nkeep things working after they upgrade. List a breaking change once, under `**Breaking**`, and say what the\nperson has to do.\n\nAfter that come the `feat` notes and then the `fix` notes.\n\n```markdown\n## vX.Y.Z (date)\n\n**Breaking**\n- \u003cwhat changed, and what the person has to do about it>\n\n\u003cthe feat notes, then the fix notes>\n```\n\nFor everything this template leaves open, copy the entries already in the file: the date format, the headings\nover the `feat` and `fix` groups, the bullet style, and whether a note carries its PR number.\n\n## Write for the people who use the product\n\nEach note says what a person using the product will notice. A PR title says what the developer did to the code,\nso a PR title is not a note. Read the PR description, and the diff when the description doesn't say, to find out\nwhat changed for the user.\n\nFor example, a PR titled \"fix: null check in ExportJob retry path\" becomes \"Exports no longer fail when a retry\nruns after a network timeout.\"\n\n## Changes under api/public/\n\nEvery PR in the range that changes a file under `api/public/` also needs a line in `docs/migration.md`. The line\ntells someone who calls the public API what they have to change. Follow the way that file is already organised\nand worded.\n\nThis rule goes by the files a PR changes, not by its type label, so check the `chore` PRs as well.\n`gh pr view \u003cN> --json files` lists the files. If one of these PRs changes nothing a caller would notice, name\nit in your report and let the person decide whether it needs a line.\n\n## When you are finished\n\nThe job is finished when every PR in the range is accounted for. Each one is in the entry, or was left out as\n`chore`, or is named in your report as having no type label.\n\nThe job ends with `CHANGELOG.md` and `docs/migration.md` edited in the working tree. Reading the git history,\nreading PRs and issues with `gh`, running `scripts/next-version.sh` and editing those two files need no\ngo-ahead. Committing, tagging and publishing the release are separate steps, so do them only when the person\nasks.\n\nThen tell the person:\n\n- the version, and the tag range the entry covers;\n- any PR you could not place because it had no type label;\n- which PRs changed `api/public/`, and the lines you added to `docs/migration.md` for them;\n- any note where you were unsure what the user would notice.\n"}, {"name": "reply.md", "type": "text", "content": "The skill is written: `release-notes/SKILL.md`, one file. It has not been run against your repository yet, so treat it as a first draft until it has done one real Friday.\n\n**What it tells the agent**\n\n- The two things that bite new people come first: a PR merged by the merge bot has its label on the linked issue (`gh pr view N --json closingIssuesReferences`, then the issue's labels), and the version comes from `scripts/next-version.sh`, never from a guess.\n- The PRs come from `git log --merges v\u003clast>..HEAD`. `feat` and `fix` go in, `chore` is left out.\n- The entry goes in `CHANGELOG.md` under `## vX.Y.Z (date)`, with breaking changes first under a `**Breaking**` line.\n- Notes are written for users, not copied from PR titles.\n- Any PR that touches `api/public/` also gets a line in `docs/migration.md`.\n- It finishes by accounting for every PR in the range and reporting any it could not place.\n\n**Using it in both Claude Code and Codex**\n\nThe frontmatter is only `name` and `description`, which is the set both hosts accept. Codex looks for project skills in `.agents/skills/`, and Claude Code looks in `.claude/skills/`. Put the folder at `.agents/skills/release-notes/` and symlink `.claude/skills/release-notes` to it, so there is one copy to maintain. People call it with `/release-notes` in Claude Code and `$release-notes` in Codex, or just ask for the release notes.\n\nCodex often runs with network access turned off, and `gh` needs the network. The skill tells the agent to stop and say so if `gh` fails, instead of writing notes from the merge commit titles.\n\n**Things I assumed, which you should check**\n\n1. `scripts/next-version.sh` takes no arguments, prints the version, and changes nothing. If it needs an argument or it tags or commits, tell me and I'll change that line.\n2. You didn't say how a breaking change is marked. The skill has the agent judge it: a change is breaking when a user has to change something to keep working after upgrading. If you have a label for it, that is more reliable and I'll use it.\n3. I had no sample entry, so the skill tells the agent to copy the date format, the headings over the feat and fix groups, and the bullet style from the entries already in `CHANGELOG.md`. Paste one in if you'd like the format fixed in the skill.\n4. A breaking change is listed once, under `**Breaking**`, and not again under feat or fix.\n5. The `api/public/` rule goes by the files a PR changed, so it also covers `chore` PRs. If one of those changes nothing a caller would notice, the agent reports it and leaves the decision to you.\n6. The skill stops at the two edited files. It commits, tags or publishes only when asked.\n\n**Testing it**\n\nThe quickest test is last Friday's release. Check out the commit before those notes were written, ask for the release notes in a fresh session, and compare the result with what your teammate wrote. Do it once in Claude Code and once in Codex. Pick a week that had a bot-merged PR and an `api/public/` change, since those are the two cases the skill exists for. If the agent ends up writing the same label-lookup helper on every run, that helper should become a script in the skill folder.\n"}], "grading": {"expectations": [{"text": "release-notes/SKILL.md exists and starts with YAML frontmatter that has `name` and `description`", "passed": true, "evidence": "Frontmatter has `name: release-notes` and `description`"}, {"text": "The frontmatter of release-notes/SKILL.md uses only these fields: name, description, license, compatibility, metadata, allowed-tools", "passed": true, "evidence": "Scripted check: the only fields are name and description"}, {"text": "The description says what the skill does and when to use it, and is under 1,024 characters", "passed": true, "evidence": "338 characters; says what it writes and 'Use when asked to write or draft the release notes or the changelog entry for a release'"}, {"text": "The description does not tell the agent to use the skill for any mention of git, commits, changelogs or versions in general", "passed": true, "evidence": "Triggers are limited to writing release notes or a release's changelog entry"}, {"text": "The body says that PRs merged by the merge bot carry the label on the linked issue and gives `gh pr view N --json closingIssuesReferences`", "passed": true, "evidence": "Second paragraph of the body, and the commands under 'Which PRs go in'"}, {"text": "The body says to get the version from `scripts/next-version.sh`", "passed": true, "evidence": "'The version number comes from `scripts/next-version.sh`. Run the script and use the version it prints'"}, {"text": "The body says that a change touching api/public/ needs a line in docs/migration.md", "passed": true, "evidence": "Section 'Changes under api/public/'"}, {"text": "The body has no section whose heading is about when to use the skill", "passed": true, "evidence": "No such heading"}, {"text": "release-notes/SKILL.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search found none"}, {"text": "The release-notes/ folder contains no README, changelog or installation guide of its own", "passed": true, "evidence": "The folder holds only SKILL.md"}, {"text": "The body gives the heading format `## vX.Y.Z (date)` and says breaking changes go first under a Breaking line", "passed": true, "evidence": "'The heading is `## vX.Y.Z (date)`'; 'the entry starts with a `**Breaking**` line'"}], "summary": {"passed": 11, "failed": 0, "total": 11, "pass_rate": 1.0}, "timing": {"total_duration_seconds": 133.0}}}, {"id": "skill-from-described-workflow-without_skill", "prompt": "can you turn our release notes process into a skill? every friday someone runs `git log --merges v\u003clast>..HEAD`, groups the PRs by label (feat / fix / chore, chore gets left out), and writes notes in CHANGELOG.md under a new `## vX.Y.Z (date)` heading. it has to be user-facing language, not PR titles. breaking changes go first under a **Breaking** line, and anything touching api/public/ needs a line in docs/migration.md too.\n\ngotcha that bites every new person: PRs merged by the merge bot have the label on the linked issue, not on the PR. you get it with `gh pr view N --json closingIssuesReferences`. and the version number comes from `scripts/next-version.sh`, don't guess it.\n\npeople on the team use both claude code and codex so it needs to work in both. put it in a folder called release-notes/", "eval_id": null, "outputs": [{"name": "release-notes/SKILL.md", "type": "text", "content": "---\nname: release-notes\ndescription: Writes the release notes for a new version of this repository. Collects the pull requests merged since the last version tag, groups them by their feat / fix / chore label, adds a user-facing entry to CHANGELOG.md, and adds lines to docs/migration.md for changes under api/public/. Use when asked to write or draft release notes, update the changelog for a release, or do the Friday release notes.\n---\n\n# Release notes\n\nEvery release gets an entry in `CHANGELOG.md`, written for the people who use the product, and a line in `docs/migration.md` for every change under `api/public/`. This is the weekly procedure for producing both.\n\nRun everything from the repository root. The work ends with those two files edited and left uncommitted, plus a short report. Do not commit, tag or push unless the person asks, because they review the wording before it goes out.\n\nThe procedure needs `git` and an authenticated `gh`. If `gh` fails, stop and say so. Labels cannot be recovered from pull request titles, so there is no fallback worth using.\n\n## 1. Find the range, the version and the date\n\n**Last version.** Run `git fetch --tags`, then `git describe --tags --abbrev=0 --match 'v*'` to get the most recent version tag. Check that it matches the top `## v\u2026` heading in `CHANGELOG.md`. If they disagree, stop and ask: either a release was tagged without notes or notes were written without a tag, and the range is uncertain either way.\n\n**New version.** Run `scripts/next-version.sh` and use exactly what it prints. Do not work the number out from the changes yourself, even when it seems obvious. The script is the only source for it, and a plausible guess is how a wrong version gets published. If the script fails or wants arguments, read it to see how it is meant to be called. If you still have no version, stop and report what happened.\n\n**Date.** Run `date +%F` for today's date, and write it in whatever format the existing headings use.\n\n## 2. List the merged pull requests\n\n```bash\ngit log --merges v\u003clast>..HEAD --format='%H %s'\n```\n\nEach merge commit is one pull request, and its number is in the subject (`Merge pull request #482 from \u2026`). If a subject carries no number, find the pull request from the commit:\n\n```bash\ngh pr list --state merged --search \u003csha> --json number,title\n```\n\nIf nothing was merged in the range, say so and stop. Do not write an empty entry.\n\n## 3. Find each pull request's label\n\n```bash\ngh pr view \u003cN> --json number,title,body,labels,closingIssuesReferences\n```\n\nThe label that matters is one of `feat`, `fix` or `chore`.\n\n**Pull requests merged by the merge bot have no such label.** For those, the label is on the linked issue. So whenever a pull request has none of the three labels, take the issue numbers from `closingIssuesReferences` and read the label there:\n\n```bash\ngh issue view \u003cM> --json number,title,body,labels\n```\n\nNever treat an unlabelled pull request as a chore, and never skip it. That is how real features go missing from the notes, and it is the mistake every new person makes.\n\nIf neither the pull request nor its linked issues carry a label, or the labels conflict, place the change by what its description and diff show it does. Then name it in the final report as placed by judgement, so the person can correct it and fix the label.\n\n## 4. Decide what goes in\n\n- **`feat` and `fix`** go in the changelog.\n- **`chore`** is left out of the changelog. It is still checked in step 6.\n- **Breaking changes** go first, whatever their label. A change is breaking when someone who upgrades has to change something to keep working: an API field, endpoint, option, flag or config key that was removed or renamed, a default that changed, or validation that got stricter. Signs to look for are a breaking label on the pull request or issue, `!` or `BREAKING CHANGE` in the title or body, and removals or renames under `api/public/`. When you cannot tell whether users must act, ask the person. Do not decide quietly in either direction.\n\n## 5. Write the changelog entry\n\nAdd a new section at the top of `CHANGELOG.md`, above the previous version's heading and below any title or introduction the file has.\n\n```markdown\n## v2.8.0 (2026-11-13)\n\n**Breaking**\n- Exports no longer accept `format=xml`. Request `format=json` or `format=csv` instead.\n\n\u003cfeatures, then fixes>\n```\n\n- The heading is `## vX.Y.Z (date)`.\n- Breaking changes come first, under a `**Breaking**` line. Each one says what to do about it as well as what changed. A breaking change appears only there, not again under features or fixes.\n- Features follow, then fixes. Use the same group headings and bullet style as the previous entries in the file. On any detail of layout, such as whether lines carry pull request numbers, the existing entries win over the sketch above.\n- Leave out any group that is empty, including `**Breaking**`.\n\n**Write for users, not from pull request titles.** A title describes what a developer did to the code. A note describes what changed for the person using the product. Read the pull request body and the linked issue to find that effect, then say what the user can now do or what no longer goes wrong.\n\n| Pull request title | Release note |\n| --- | --- |\n| `fix: null check in ExportJob.run` | Exports no longer fail for projects that have no members. |\n| `feat: add bulk endpoint + UI for tag ops` | You can now add or remove a tag on many items at once. |\n\n- Use the names users see in the product and its documentation, not class, function or table names.\n- Write one line per change a user would notice. Several pull requests that build one feature become one line.\n- If a `feat` or `fix` has no effect a user could notice, leave it out and list it in the report.\n\n## 6. Add migration notes for `api/public/`\n\nCheck every merged pull request in the range, chores included. First see whether anything under the path changed at all:\n\n```bash\ngit diff --name-only v\u003clast>..HEAD -- api/public/\n```\n\nIf that prints nothing, no migration lines are needed. Otherwise find which pull requests are responsible, one merge commit at a time:\n\n```bash\ngit diff --name-only \u003cmerge-sha>^1 \u003cmerge-sha> -- api/public/\n```\n\nEach pull request that touches `api/public/` gets a line in `docs/migration.md` under the new version, following the layout the file already uses. The line tells someone calling the API what changed and what they need to do, naming the old form and the new one.\n\nThis rule goes by path, not by judgement. A pull request that touches `api/public/` gets a line even when it is labelled `chore` or looks harmless, because callers depend on those files and the migration document is where they look. For a change that needs no action, the line says what changed and that no action is needed.\n\nA `chore` that touches `api/public/` still stays out of `CHANGELOG.md`. The exception is a chore that turns out to be breaking: it is mislabelled, so put it under `**Breaking**` and say so in the report.\n\n## 7. Check and report\n\nBefore finishing, confirm that:\n\n- the version in the heading is the one `scripts/next-version.sh` printed;\n- every `feat` and `fix` pull request in the range is either covered by a line or on your left-out list;\n- `**Breaking**` comes first, and each of its lines says what to do;\n- every pull request that touches `api/public/` has a line in `docs/migration.md`.\n\nThen tell the person:\n\n- the version, and the range it covers;\n- how many pull requests went into each group, and how many chores were left out;\n- any pull request you placed by judgement because it had no usable label;\n- any `feat` or `fix` you left out, and why;\n- any open question, such as a change that might be breaking;\n- that both files are edited and nothing is committed.\n"}, {"name": "reply.md", "type": "text", "content": "The skill is written: one file, `release-notes/SKILL.md`. I have not run it, because I had no access to your repository, so treat the first Friday as its test.\n\nIt follows your process in order:\n\n1. Find the last version tag, run `scripts/next-version.sh` for the new one, and take today's date.\n2. List merges with `git log --merges v\u003clast>..HEAD`.\n3. Read each pull request's label, falling back to the linked issue when the pull request has none.\n4. Write the `## vX.Y.Z (date)` entry in user-facing language, with `**Breaking**` first and chores left out.\n5. Add a line to `docs/migration.md` for every pull request that touches `api/public/`.\n6. Report what it did and leave both files uncommitted.\n\n## Installing it for both tools\n\nClaude Code and Codex read the same `SKILL.md` format but look in different folders. Keep one copy and link it from the other, from the repository root:\n\n```bash\nmkdir -p .agents/skills .claude/skills\nmv release-notes .agents/skills/\nln -s ../../.agents/skills/release-notes .claude/skills/release-notes\n```\n\nCodex reads `.agents/skills/` and Claude Code reads `.claude/skills/`. The frontmatter uses only `name` and `description`, and the body uses only shell commands, so nothing in it is specific to one tool. Run it with `/release-notes` in Claude Code or `$release-notes` in Codex, or just ask for the release notes.\n\n## Where I filled a gap\n\nYou didn't cover these, so I chose something. Each is a line or two to change.\n\n- **What counts as breaking.** I used: a breaking label, `!` or `BREAKING CHANGE` in the title or body, or a removal or rename under `api/public/`. When unsure, the agent asks. If you have a specific label for this, tell me and I'll name it.\n- **Chores that touch `api/public/`.** I read \"anything touching\" literally. They get a migration line but stay out of the changelog.\n- **No label on the pull request or its issue.** The agent places the change by what it does and flags it in the report.\n- **`scripts/next-version.sh`.** I assumed it runs with no arguments and prints the version. If it does anything else, such as creating the tag, tell me.\n- **Layout details.** For the group headings for features and fixes, the date format, and whether lines carry pull request numbers, the agent copies the previous entries in `CHANGELOG.md` and `docs/migration.md`.\n- **Committing.** It never commits, tags or pushes. Say if you want it to open a pull request with the notes.\n\nOne thing your description didn't mention that I added: the agent checks that the latest tag matches the top heading in `CHANGELOG.md`, and stops if they disagree.\n"}], "grading": {"expectations": [{"text": "release-notes/SKILL.md exists and starts with YAML frontmatter that has `name` and `description`", "passed": true, "evidence": "Frontmatter has `name: release-notes` and `description`"}, {"text": "The frontmatter of release-notes/SKILL.md uses only these fields: name, description, license, compatibility, metadata, allowed-tools", "passed": true, "evidence": "Scripted check: the only fields are name and description"}, {"text": "The description says what the skill does and when to use it, and is under 1,024 characters", "passed": true, "evidence": "396 characters; 'Use when asked to write or draft release notes, update the changelog for a release, or do the Friday release notes'"}, {"text": "The description does not tell the agent to use the skill for any mention of git, commits, changelogs or versions in general", "passed": true, "evidence": "Triggers are limited to release notes and a release's changelog"}, {"text": "The body says that PRs merged by the merge bot carry the label on the linked issue and gives `gh pr view N --json closingIssuesReferences`", "passed": true, "evidence": "Step 3, with `gh pr view \u003cN> --json \u2026closingIssuesReferences`"}, {"text": "The body says to get the version from `scripts/next-version.sh`", "passed": true, "evidence": "Step 1: 'Run `scripts/next-version.sh` and use exactly what it prints'"}, {"text": "The body says that a change touching api/public/ needs a line in docs/migration.md", "passed": true, "evidence": "Step 6"}, {"text": "The body has no section whose heading is about when to use the skill", "passed": true, "evidence": "No such heading"}, {"text": "release-notes/SKILL.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search found none ('Never' and 'BREAKING CHANGE' are not on the list)"}, {"text": "The release-notes/ folder contains no README, changelog or installation guide of its own", "passed": true, "evidence": "The folder holds only SKILL.md"}, {"text": "The body gives the heading format `## vX.Y.Z (date)` and says breaking changes go first under a Breaking line", "passed": true, "evidence": "Step 5 gives the heading format and the `**Breaking**` line"}], "summary": {"passed": 11, "failed": 0, "total": 11, "pass_rate": 1.0}, "timing": {"total_duration_seconds": 108.6}}}, {"id": "trim-shared-agents-md-with_skill", "prompt": "our AGENTS.md is a mess and I think it's making things worse. the team uses both claude code (fable 5.2) and codex (astra) on this repo, CLAUDE.md just imports AGENTS.md. two complaints this week: agents keep stopping to ask permission before running the unit tests, and they run the whole e2e suite (25 min) for one-line changes. also last week one of them hand-edited a file in src/gen/ again even though the file says not to.\n\ncan you fix it? write the new version to AGENTS.md and tell me what else I should do, if anything.\n\nInput files: AGENTS.md", "eval_id": null, "outputs": [{"name": "AGENTS.md", "type": "text", "content": "# Parcel tracking service\n\n## Checking a change\n\n- `make check` runs the linter and the unit tests. It takes about 40 seconds, uses an in-memory database and\n  never touches the network. Run it, fix what your change broke and run it again, all without asking. A change\n  is ready when it passes.\n- `make e2e` runs the Playwright suite. It takes about 25 minutes and needs the staging stack, so it is not part\n  of checking an ordinary change. Run it when your change alters a flow that a test in `tests/e2e/` covers, or\n  when the person asks. Otherwise say in your summary that you left it out.\n- The integration tests need `INTEGRATION_DB_URL`. The value is not in the repository; the team shares it in\n  #parcel-dev. If it isn't set, skip those tests and say so in your summary.\n\n## Generated code\n\n`make codegen` writes `src/gen/` from `api/schema.yaml`, and the next run overwrites any hand edit there. To\nchange something in `src/gen/`, edit `api/schema.yaml` and run `make codegen`. If the schema is right and the\noutput is still wrong, tell the person and leave the output as it is.\n\n## What involves a person\n\nReading files, editing hand-written code and running `make check` or `make codegen` need no approval.\n\n- Leave deploys to Priya, who owns the release calendar. When the work needs one, finish the change and tell the\n  person it is ready for her.\n- A change in `migrations/` needs a second human reviewer before it merges, because a migration can't be rolled\n  back once it is applied to production. Write the migration when the task calls for one, and say in your\n  summary that it needs the second review.\n\n## Conventions\n\nA handler validates its input with zod before it touches the database.\n\n## Documents\n\n- `docs/architecture.md`: how the parts of the service fit together.\n- `docs/database.md`: read it before you change the schema or the database access code.\n- `docs/deploy.md`: how a release happens.\n"}, {"name": "reply.md", "type": "text", "content": "I rewrote `AGENTS.md`. The old file was causing the first two complaints directly, and the third one can't be fixed by an instruction file at all, so there is one thing for you to add outside it.\n\n## What was causing each complaint\n\n**Asking before the unit tests.** The old file told agents to ask first in five separate lines (\"NEVER make changes without asking\", \"ALWAYS ask for confirmation before running commands\", \"Ask before doing anything\", and so on). Fable 5.2 and Astra both take that wording at full strength. The new file drops all of those lines and says plainly that reading files, editing hand-written code and running `make check` need no approval, with the reason: it takes 40 seconds, uses an in-memory database and has no network access.\n\n**Running the whole e2e suite for a one-line change.** The old file said \"ALWAYS run `make check` AND `make e2e` after EVERY change, no exceptions\", and three more lines told them to run the tests. The agents were doing what they were told. The new file says `make check` is the check for an ordinary change, and that `make e2e` is for a change that alters a flow a test in `tests/e2e/` covers, or when the person asks.\n\n**Hand-editing `src/gen/`.** The old rule was already as loud as a rule can be, and it was still missed. Louder wording won't help. The new file says what to do instead (edit `api/schema.yaml`, run `make codegen`), which helps, but an instruction file is something the model tries to follow, and nothing forces it to. See the first item below.\n\n## What else you should do\n\n1. **Enforce the `src/gen/` rule outside the model.** Add a CI step that runs `make codegen` and then fails if `git diff --exit-code src/gen/` reports a difference. That catches a hand edit from Claude Code, from Codex and from a person. If you also want to stop the edit before it happens in Claude Code, add a permission deny rule to the checked-in `.claude/settings.json`, something like `\"deny\": [\"Edit(/src/gen/**)\"]`. Check the exact syntax against the current Claude Code documentation. It won't block `make codegen`, which writes through the shell.\n\n2. **Find out which kind of \"asking\" you were seeing.** If the agent asked in its reply (\"shall I run the tests?\"), the new file fixes it. If it was the tool's own approval prompt for a shell command, no instruction file can change that. In that case allow `make check` in the tool settings: in Claude Code, `\"allow\": [\"Bash(make check)\"]` in `.claude/settings.json`, and the matching approval setting in Codex.\n\n3. **Confirm four things I had to guess or leave out.**\n   - The rule for when to run `make e2e` is my wording. If CI already runs the suite on every pull request, change the line to say agents leave it to CI.\n   - I described the three documents in `docs/` from their file names. Correct the descriptions if they are off.\n   - The old file never gave the command that runs the integration tests. Add it to that line.\n   - The old file said to ask before everything, so I couldn't tell which approvals were real. I kept the two that had a reason: deploys go through Priya, and a change in `migrations/` needs a second reviewer. If something else needs a go-ahead (pushing, or anything that writes to the staging stack), add it as one line that names the exact action and the reason.\n\n4. **Look for the same old cautions elsewhere.** Nested `AGENTS.md` or `CLAUDE.md` files, each person's `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`, and any skills or saved notes the agents load. One leftover \"always ask first\" will bring the behaviour back. `CLAUDE.md` can stay as a one-line import of `AGENTS.md`.\n\n5. **Test it.** Give Claude Code and Codex each a one-line change with the new file in place. Each should run `make check` without asking and leave `make e2e` alone.\n\n## What I removed\n\nThe directory layout and the dependency list (the agent reads the repository), \"read all three docs before any change\" (now a pointer to which document is for what), the 2-space indentation line (the agent matches the surrounding code; put it back if your formatter doesn't enforce it), and the general lines such as \"be thorough\", \"follow best practices\" and \"think step by step\". The file went from 60 lines to 38. The word count is about the same, because each remaining rule now carries its reason.\n"}], "grading": {"expectations": [{"text": "The new AGENTS.md has fewer lines than the original (the original has 60 lines)", "passed": true, "evidence": "38 lines against 60 (330 words against 322: fewer lines, about the same words)"}, {"text": "The new AGENTS.md still says integration tests need INTEGRATION_DB_URL", "passed": true, "evidence": "'The integration tests need `INTEGRATION_DB_URL`. The value is not in the repository'"}, {"text": "The new AGENTS.md gives the commands `make check` and `make e2e`", "passed": true, "evidence": "Both commands are given under 'Checking a change'"}, {"text": "The new AGENTS.md does not require reading the three docs before every change; it says which document is for what", "passed": true, "evidence": "'Documents' section says what each of the three is for; no read-before-every-change rule"}, {"text": "The new AGENTS.md no longer lists the directory layout", "passed": true, "evidence": "No layout section"}, {"text": "The new AGENTS.md says the agent may run `make check` (the unit tests and linter) without asking", "passed": true, "evidence": "'Run it, fix what your change broke and run it again, all without asking'"}, {"text": "The new AGENTS.md says when the e2e suite is needed instead of requiring it after every change", "passed": true, "evidence": "'Run it when your change alters a flow that a test in `tests/e2e/` covers, or when the person asks'"}, {"text": "The new AGENTS.md says src/gen/ is produced by `make codegen` from api/schema.yaml and to change the schema instead", "passed": true, "evidence": "'To change something in `src/gen/`, edit `api/schema.yaml` and run `make codegen`'"}, {"text": "The reply recommends a hook, permission rule or other enforced check for src/gen/, not only rewording", "passed": true, "evidence": "reply.md item 1: a CI step that runs `make codegen` and fails on a diff in `src/gen/`, plus a Claude Code deny rule"}, {"text": "The new AGENTS.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search found none"}, {"text": "The new AGENTS.md names the specific actions that need a go-ahead (deploys, and changes to migrations/) instead of a blanket ask-first rule", "passed": true, "evidence": "'What involves a person' names deploys (Priya) and changes in `migrations/` (second reviewer)"}], "summary": {"passed": 11, "failed": 0, "total": 11, "pass_rate": 1.0}, "timing": {"total_duration_seconds": 133.8}}}, {"id": "trim-shared-agents-md-without_skill", "prompt": "our AGENTS.md is a mess and I think it's making things worse. the team uses both claude code (fable 5.2) and codex (astra) on this repo, CLAUDE.md just imports AGENTS.md. two complaints this week: agents keep stopping to ask permission before running the unit tests, and they run the whole e2e suite (25 min) for one-line changes. also last week one of them hand-edited a file in src/gen/ again even though the file says not to.\n\ncan you fix it? write the new version to AGENTS.md and tell me what else I should do, if anything.\n\nInput files: AGENTS.md", "eval_id": null, "outputs": [{"name": "AGENTS.md", "type": "text", "content": "# AGENTS.md\n\nThis is the Parcel tracking service, a TypeScript monorepo (Express, zod, Kysely, pino; Vitest and Playwright for tests).\n\n## What you can do without asking\n\nRead anything, edit files in the working tree, and run `make check` and `make codegen` whenever you need to. Do the task, then report what you changed. Don't stop to ask permission for these.\n\nStop and ask first only when:\n\n- the action reaches outside the local checkout (the staging stack, a shared database, anything in production);\n- the action is destructive or hard to undo (deleting data, rewriting git history);\n- the request is ambiguous in a way that changes what you would build.\n\n## Testing\n\n| Command | What it is | When to run it |\n| --- | --- | --- |\n| `make check` | Lint and unit tests. About 40 seconds, no network, in-memory database. | After every change, without asking. Fix failures before you report the work as done. |\n| `make e2e` | The full Playwright suite. About 25 minutes, and it needs the staging stack. | Only when the person asks for it, or when you changed files in `tests/e2e/`. Otherwise do not run it. |\n| Integration tests | Need `INTEGRATION_DB_URL`, which is not in the repo. | Only if the variable is already set. If it is not, skip them. Don't search for the value or make one up; people get it from #parcel-dev. |\n\nWhen you changed files in `tests/e2e/`, prefer running only the spec files you touched over the whole suite.\n\nIn your final message, say which of these you ran and which you skipped, so the person knows what is still unverified.\n\n## Limits\n\n- **Don't hand-edit `src/gen/`.** It is the generated API client. `make codegen` rebuilds it from `api/schema.yaml`, so a hand edit is overwritten on the next run and leaves the client out of step with the schema in the meantime. To change the client, edit `api/schema.yaml`, run `make codegen`, and include the regenerated files in your change. If the generated output looks wrong, report it as a schema or generator problem; don't patch the output.\n- **Don't deploy.** Deploys go through Priya, who owns the release calendar. If a task seems to need a deploy, stop and say so.\n- **Flag any change to `migrations/`.** A migration can't be rolled back once it has been applied to production, so each one needs a second human reviewer. Write the migration if the task calls for one, and say at the top of your summary and in the PR description that it needs that second review.\n\n## Conventions\n\n- Handlers validate input with zod before touching the database.\n- Use 2-space indentation.\n\n## Layout\n\n- `src/api/handlers/` holds the HTTP handlers, one file per route.\n- `src/core/` holds business logic.\n- `src/db/` holds database access.\n- `src/jobs/` holds background jobs.\n- `src/gen/` holds the generated API client (see Limits).\n- `api/schema.yaml` is the source for `src/gen/`.\n- `migrations/` holds SQL migrations (see Limits).\n- `tests/unit/` and `tests/e2e/` hold the tests.\n\n## Docs\n\nRead these when the task touches their subject. You don't need them for small, local changes.\n\n- `docs/architecture.md`: before a change that crosses module boundaries.\n- `docs/database.md`: before changing `src/db/` or `migrations/`.\n- `docs/deploy.md`: background only, since agents don't deploy.\n"}, {"name": "reply.md", "type": "text", "content": "I rewrote AGENTS.md. Two of your three complaints were the agents doing what the old file told them to, and the new file fixes those. The third (`src/gen/`) needs enforcement outside the file, which I could not add because I only had AGENTS.md.\n\n## What was causing each complaint\n\n- **Asking before unit tests:** the old file said \"ask before doing anything\" five different ways, including \"ALWAYS ask for confirmation before running commands\". The new file says `make check` runs after every change without asking, and lists the three cases where stopping to ask is right.\n- **Full e2e for one-line changes:** the old file said \"ALWAYS run `make check` AND `make e2e` after EVERY change, no exceptions\". The new file limits `make e2e` to when someone asks for it or when the change is in `tests/e2e/`.\n- **Hand-editing `src/gen/`:** the old rule was already the loudest line in the file and it still got broken. It gave no reason and no other way to change the client. The new file explains why and gives the route: edit `api/schema.yaml`, run `make codegen`. That should help, but an instruction alone won't make it stop for good.\n\n## What else to do\n\n1. **Block `src/gen/` edits mechanically.** Add a CI step that runs `make codegen` and fails if the result differs from what is committed. That catches Claude Code, Codex and people. For Claude Code you can also add a deny rule (below), though it only stops the edit tools, not a shell command that writes the file.\n2. **Allowlist `make check` in the tools.** Some of the \"asking permission\" may be the tool's own approval prompt, which AGENTS.md can't change. For Claude Code, commit this as `.claude/settings.json`:\n\n   ```json\n   {\n     \"permissions\": {\n       \"allow\": [\"Bash(make check)\", \"Bash(make codegen)\"],\n       \"deny\": [\"Edit(/src/gen/**)\"]\n     }\n   }\n   ```\n\n   Check the rule syntax against the current Claude Code docs before committing; I wrote it from memory. For Codex, check each person's approval policy and sandbox mode. I am less sure of its config details, so I have not given a snippet.\n3. **Check for other instruction files.** A personal `~/.claude/CLAUDE.md`, a `~/.codex/AGENTS.md` or a nested AGENTS.md that repeats \"ask first\" or \"run all tests\" will keep the old behaviour alive.\n4. **Try it once in each tool.** Give Claude Code and Codex the same one-line change and confirm each runs `make check` unprompted and skips e2e.\n\nCLAUDE.md importing AGENTS.md is fine as it is.\n\n## Guesses in the new file to confirm\n\n- **e2e policy:** I assumed something else (CI, or a person before merge) runs the full suite. If nothing does, tell me and I will widen the rule.\n- **Running single e2e specs:** the file tells agents to prefer the spec files they touched, but I don't know your command for that. Add it, or delete that line.\n- **Integration tests:** the old file never said how to run them. The new one says to skip them when `INTEGRATION_DB_URL` is unset. Add the command if agents should run them.\n- **When to stop and ask:** I replaced \"anything risky\" with three cases: reaching outside the local checkout, destructive or hard-to-undo actions, and real ambiguity. Adjust to your team's line.\n- **Docs pointers:** the old file required reading all three docs before any change. I made that conditional and guessed each doc's subject from its filename.\n\n## What I removed\n\n- The lines with no concrete action: \"be thorough\", \"don't be lazy\", \"think step by step\", \"follow best practices\", \"don't break things\", \"keep code clean\", \"write good commit messages\". If you have a commit message convention, give it to me and I will add it.\n- The capitals and exclamation marks.\n- Layout entries that only restated the folder name.\n"}], "grading": {"expectations": [{"text": "The new AGENTS.md has fewer lines than the original (the original has 60 lines)", "passed": true, "evidence": "55 lines against 60 (553 words against 322: it is longer by words)"}, {"text": "The new AGENTS.md still says integration tests need INTEGRATION_DB_URL", "passed": true, "evidence": "Testing table: 'Need `INTEGRATION_DB_URL`, which is not in the repo'"}, {"text": "The new AGENTS.md gives the commands `make check` and `make e2e`", "passed": true, "evidence": "Both commands are in the Testing table"}, {"text": "The new AGENTS.md does not require reading the three docs before every change; it says which document is for what", "passed": true, "evidence": "'Read these when the task touches their subject'"}, {"text": "The new AGENTS.md no longer lists the directory layout", "passed": false, "evidence": "Keeps a 'Layout' section with eight directory lines, and the dependency list in the first line"}, {"text": "The new AGENTS.md says the agent may run `make check` (the unit tests and linter) without asking", "passed": true, "evidence": "'run `make check` and `make codegen` whenever you need to\u2026 Don't stop to ask permission for these'"}, {"text": "The new AGENTS.md says when the e2e suite is needed instead of requiring it after every change", "passed": true, "evidence": "'Only when the person asks for it, or when you changed files in `tests/e2e/`'"}, {"text": "The new AGENTS.md says src/gen/ is produced by `make codegen` from api/schema.yaml and to change the schema instead", "passed": true, "evidence": "'To change the client, edit `api/schema.yaml`, run `make codegen`'"}, {"text": "The reply recommends a hook, permission rule or other enforced check for src/gen/, not only rewording", "passed": true, "evidence": "reply.md: a CI step that runs `make codegen` and fails on a diff, plus a deny rule in `.claude/settings.json`"}, {"text": "The new AGENTS.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search found none"}, {"text": "The new AGENTS.md names the specific actions that need a go-ahead (deploys, and changes to migrations/) instead of a blanket ask-first rule", "passed": true, "evidence": "'Limits' names deploys and `migrations/`; a separate list gives three general cases for asking"}], "summary": {"passed": 10, "failed": 1, "total": 11, "pass_rate": 0.91}, "timing": {"total_duration_seconds": 88.4}}}], "previous_feedback": {}, "previous_outputs": {}, "benchmark": {"metadata": {"skill_name": "prompting-agents", "skill_path": "\u003cpath/to/skill>", "executor_model": "\u003cmodel-name>", "analyzer_model": "\u003cmodel-name>", "timestamp": "2026-11-10T13:09:37Z", "evals_run": ["goal-from-old-prompt", "skill-from-described-workflow", "trim-shared-agents-md"], "runs_per_configuration": 1}, "runs": [{"eval_id": "goal-from-old-prompt", "eval_name": "goal-from-old-prompt", "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 9, "failed": 0, "total": 9, "time_seconds": 109.1, "tokens": 83369, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "goal.md defines completion by `make test-pdf` passing (or the golden files in tests/golden/invoices matching)", "passed": true, "evidence": "Goal line and 'What done means': `TAX_API_STUB=1 make test-pdf` exits 0 with the golden files unchanged"}, {"text": "goal.md says not to change services/billing/ledger", "passed": true, "evidence": "'Don't edit anything under `services/billing/ledger`. Dana's team is partway through a migration there'"}, {"text": "goal.md says to use the tax stub (TAX_API_STUB=1) and not call the real tax API", "passed": true, "evidence": "'Don't call the real tax API, because it charges for each call. Setting `TAX_API_STUB=1`\u2026'"}, {"text": "goal.md tells the agent to keep working through ordinary problems without stopping to ask whether to continue, and says what to do if it is truly blocked", "passed": true, "evidence": "Says nobody will answer during the run; separates ordinary obstacles (work through) from protected ones (record); defines blocked and says to carry on with the rest"}, {"text": "goal.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search for the five words in capitals found none"}, {"text": "goal.md does not prescribe a step-by-step method or a reading order for the agent (a statement of the two known defects and of what done means is fine)", "passed": true, "evidence": "No reading order or method. Sections are the state of the work, done, boundaries, obstacles, the notes file and what comes back"}, {"text": "goal.md does not tell the agent to think step by step, think hard, be thorough or double-check", "passed": true, "evidence": "None of those phrases appear"}, {"text": "goal.md does not contain a blanket rule to ask before modifying or changing anything", "passed": true, "evidence": "Lists what needs no approval instead; no blanket ask-first rule"}, {"text": "goal.md states both known defects: totals and tax rows don't render, and multi-page invoices are cut off after page 1", "passed": true, "evidence": "'The totals rows and the tax rows don't render' and 'An invoice longer than one page is cut off after page 1'"}], "notes": []}, {"eval_id": "skill-from-described-workflow", "eval_name": "skill-from-described-workflow", "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 11, "failed": 0, "total": 11, "time_seconds": 133.0, "tokens": 81715, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "release-notes/SKILL.md exists and starts with YAML frontmatter that has `name` and `description`", "passed": true, "evidence": "Frontmatter has `name: release-notes` and `description`"}, {"text": "The frontmatter of release-notes/SKILL.md uses only these fields: name, description, license, compatibility, metadata, allowed-tools", "passed": true, "evidence": "Scripted check: the only fields are name and description"}, {"text": "The description says what the skill does and when to use it, and is under 1,024 characters", "passed": true, "evidence": "338 characters; says what it writes and 'Use when asked to write or draft the release notes or the changelog entry for a release'"}, {"text": "The description does not tell the agent to use the skill for any mention of git, commits, changelogs or versions in general", "passed": true, "evidence": "Triggers are limited to writing release notes or a release's changelog entry"}, {"text": "The body says that PRs merged by the merge bot carry the label on the linked issue and gives `gh pr view N --json closingIssuesReferences`", "passed": true, "evidence": "Second paragraph of the body, and the commands under 'Which PRs go in'"}, {"text": "The body says to get the version from `scripts/next-version.sh`", "passed": true, "evidence": "'The version number comes from `scripts/next-version.sh`. Run the script and use the version it prints'"}, {"text": "The body says that a change touching api/public/ needs a line in docs/migration.md", "passed": true, "evidence": "Section 'Changes under api/public/'"}, {"text": "The body has no section whose heading is about when to use the skill", "passed": true, "evidence": "No such heading"}, {"text": "release-notes/SKILL.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search found none"}, {"text": "The release-notes/ folder contains no README, changelog or installation guide of its own", "passed": true, "evidence": "The folder holds only SKILL.md"}, {"text": "The body gives the heading format `## vX.Y.Z (date)` and says breaking changes go first under a Breaking line", "passed": true, "evidence": "'The heading is `## vX.Y.Z (date)`'; 'the entry starts with a `**Breaking**` line'"}], "notes": []}, {"eval_id": "trim-shared-agents-md", "eval_name": "trim-shared-agents-md", "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 11, "failed": 0, "total": 11, "time_seconds": 133.8, "tokens": 86886, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "The new AGENTS.md has fewer lines than the original (the original has 60 lines)", "passed": true, "evidence": "38 lines against 60 (330 words against 322: fewer lines, about the same words)"}, {"text": "The new AGENTS.md still says integration tests need INTEGRATION_DB_URL", "passed": true, "evidence": "'The integration tests need `INTEGRATION_DB_URL`. The value is not in the repository'"}, {"text": "The new AGENTS.md gives the commands `make check` and `make e2e`", "passed": true, "evidence": "Both commands are given under 'Checking a change'"}, {"text": "The new AGENTS.md does not require reading the three docs before every change; it says which document is for what", "passed": true, "evidence": "'Documents' section says what each of the three is for; no read-before-every-change rule"}, {"text": "The new AGENTS.md no longer lists the directory layout", "passed": true, "evidence": "No layout section"}, {"text": "The new AGENTS.md says the agent may run `make check` (the unit tests and linter) without asking", "passed": true, "evidence": "'Run it, fix what your change broke and run it again, all without asking'"}, {"text": "The new AGENTS.md says when the e2e suite is needed instead of requiring it after every change", "passed": true, "evidence": "'Run it when your change alters a flow that a test in `tests/e2e/` covers, or when the person asks'"}, {"text": "The new AGENTS.md says src/gen/ is produced by `make codegen` from api/schema.yaml and to change the schema instead", "passed": true, "evidence": "'To change something in `src/gen/`, edit `api/schema.yaml` and run `make codegen`'"}, {"text": "The reply recommends a hook, permission rule or other enforced check for src/gen/, not only rewording", "passed": true, "evidence": "reply.md item 1: a CI step that runs `make codegen` and fails on a diff in `src/gen/`, plus a Claude Code deny rule"}, {"text": "The new AGENTS.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search found none"}, {"text": "The new AGENTS.md names the specific actions that need a go-ahead (deploys, and changes to migrations/) instead of a blanket ask-first rule", "passed": true, "evidence": "'What involves a person' names deploys (Priya) and changes in `migrations/` (second reviewer)"}], "notes": []}, {"eval_id": "goal-from-old-prompt", "eval_name": "goal-from-old-prompt", "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.89, "passed": 8, "failed": 1, "total": 9, "time_seconds": 56.5, "tokens": 64281, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "goal.md defines completion by `make test-pdf` passing (or the golden files in tests/golden/invoices matching)", "passed": true, "evidence": "'Finish the invoice PDF renderer\u2026 so that `TAX_API_STUB=1 make test-pdf` passes'"}, {"text": "goal.md says not to change services/billing/ledger", "passed": true, "evidence": "'Do not change anything under `services/billing/ledger`'"}, {"text": "goal.md says to use the tax stub (TAX_API_STUB=1) and not call the real tax API", "passed": true, "evidence": "'Never call the real tax API\u2026 Set `TAX_API_STUB=1` on every command that runs billing code'"}, {"text": "goal.md tells the agent to keep working through ordinary problems without stopping to ask whether to continue, and says what to do if it is truly blocked", "passed": true, "evidence": "'Do not stop to ask whether to continue or to confirm a choice'; 'If you get stuck' section names the three real blockers"}, {"text": "goal.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search found none ('Never' appears, but not in capitals)"}, {"text": "goal.md does not prescribe a step-by-step method or a reading order for the agent (a statement of the two known defects and of what done means is fine)", "passed": false, "evidence": "Prescribes a reading order ('Read it and the existing code in `services/billing/pdf/` before changing anything') and a debugging method ('check whether the cause is the environment (fonts, antialiasing, the PDF library version) before changing more code')"}, {"text": "goal.md does not tell the agent to think step by step, think hard, be thorough or double-check", "passed": true, "evidence": "None of those phrases appear"}, {"text": "goal.md does not contain a blanket rule to ask before modifying or changing anything", "passed": true, "evidence": "No blanket ask-first rule"}, {"text": "goal.md states both known defects: totals and tax rows don't render, and multi-page invoices are cut off after page 1", "passed": true, "evidence": "Both defects listed under 'Where things stand'"}], "notes": []}, {"eval_id": "skill-from-described-workflow", "eval_name": "skill-from-described-workflow", "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 11, "failed": 0, "total": 11, "time_seconds": 108.6, "tokens": 63944, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "release-notes/SKILL.md exists and starts with YAML frontmatter that has `name` and `description`", "passed": true, "evidence": "Frontmatter has `name: release-notes` and `description`"}, {"text": "The frontmatter of release-notes/SKILL.md uses only these fields: name, description, license, compatibility, metadata, allowed-tools", "passed": true, "evidence": "Scripted check: the only fields are name and description"}, {"text": "The description says what the skill does and when to use it, and is under 1,024 characters", "passed": true, "evidence": "396 characters; 'Use when asked to write or draft release notes, update the changelog for a release, or do the Friday release notes'"}, {"text": "The description does not tell the agent to use the skill for any mention of git, commits, changelogs or versions in general", "passed": true, "evidence": "Triggers are limited to release notes and a release's changelog"}, {"text": "The body says that PRs merged by the merge bot carry the label on the linked issue and gives `gh pr view N --json closingIssuesReferences`", "passed": true, "evidence": "Step 3, with `gh pr view \u003cN> --json \u2026closingIssuesReferences`"}, {"text": "The body says to get the version from `scripts/next-version.sh`", "passed": true, "evidence": "Step 1: 'Run `scripts/next-version.sh` and use exactly what it prints'"}, {"text": "The body says that a change touching api/public/ needs a line in docs/migration.md", "passed": true, "evidence": "Step 6"}, {"text": "The body has no section whose heading is about when to use the skill", "passed": true, "evidence": "No such heading"}, {"text": "release-notes/SKILL.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search found none ('Never' and 'BREAKING CHANGE' are not on the list)"}, {"text": "The release-notes/ folder contains no README, changelog or installation guide of its own", "passed": true, "evidence": "The folder holds only SKILL.md"}, {"text": "The body gives the heading format `## vX.Y.Z (date)` and says breaking changes go first under a Breaking line", "passed": true, "evidence": "Step 5 gives the heading format and the `**Breaking**` line"}], "notes": []}, {"eval_id": "trim-shared-agents-md", "eval_name": "trim-shared-agents-md", "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.91, "passed": 10, "failed": 1, "total": 11, "time_seconds": 88.4, "tokens": 68431, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "The new AGENTS.md has fewer lines than the original (the original has 60 lines)", "passed": true, "evidence": "55 lines against 60 (553 words against 322: it is longer by words)"}, {"text": "The new AGENTS.md still says integration tests need INTEGRATION_DB_URL", "passed": true, "evidence": "Testing table: 'Need `INTEGRATION_DB_URL`, which is not in the repo'"}, {"text": "The new AGENTS.md gives the commands `make check` and `make e2e`", "passed": true, "evidence": "Both commands are in the Testing table"}, {"text": "The new AGENTS.md does not require reading the three docs before every change; it says which document is for what", "passed": true, "evidence": "'Read these when the task touches their subject'"}, {"text": "The new AGENTS.md no longer lists the directory layout", "passed": false, "evidence": "Keeps a 'Layout' section with eight directory lines, and the dependency list in the first line"}, {"text": "The new AGENTS.md says the agent may run `make check` (the unit tests and linter) without asking", "passed": true, "evidence": "'run `make check` and `make codegen` whenever you need to\u2026 Don't stop to ask permission for these'"}, {"text": "The new AGENTS.md says when the e2e suite is needed instead of requiring it after every change", "passed": true, "evidence": "'Only when the person asks for it, or when you changed files in `tests/e2e/`'"}, {"text": "The new AGENTS.md says src/gen/ is produced by `make codegen` from api/schema.yaml and to change the schema instead", "passed": true, "evidence": "'To change the client, edit `api/schema.yaml`, run `make codegen`'"}, {"text": "The reply recommends a hook, permission rule or other enforced check for src/gen/, not only rewording", "passed": true, "evidence": "reply.md: a CI step that runs `make codegen` and fails on a diff, plus a deny rule in `.claude/settings.json`"}, {"text": "The new AGENTS.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS", "passed": true, "evidence": "Scripted search found none"}, {"text": "The new AGENTS.md names the specific actions that need a go-ahead (deploys, and changes to migrations/) instead of a blanket ask-first rule", "passed": true, "evidence": "'Limits' names deploys and `migrations/`; a separate list gives three general cases for asking"}], "notes": []}], "run_summary": {"with_skill": {"pass_rate": {"mean": 1.0, "stddev": 0.0, "min": 1.0, "max": 1.0}, "time_seconds": {"mean": 125.3, "stddev": 14.0353, "min": 109.1, "max": 133.8}, "tokens": {"mean": 83990.0, "stddev": 2640.841, "min": 81715, "max": 86886}}, "without_skill": {"pass_rate": {"mean": 0.9333, "stddev": 0.0586, "min": 0.89, "max": 1.0}, "time_seconds": {"mean": 84.5, "stddev": 26.268, "min": 56.5, "max": 108.6}, "tokens": {"mean": 65552.0, "stddev": 2498.9744, "min": 63944, "max": 68431}}, "delta": {"pass_rate": "+0.07", "time_seconds": "+40.8", "tokens": "+18438"}}, "notes": ["29 of the 31 assertions pass with and without the skill, so they show a floor both reach, not the difference. The model without the skill already drops capitals, defines done by the check and keeps the boundaries.", "The two assertions that differ: without the skill, the goal tells the agent what to read first and how to debug a pixel difference, and the trimmed AGENTS.md keeps the directory layout and dependency list.", "The larger differences are ones a person has to judge. Release-notes skill: without the skill it is a seven-step procedure of 1,348 words; with the skill it opens with the two facts people get wrong and is 891 words. AGENTS.md: 553 words without, 330 with. Goal: 615 words without, 798 with (the skill adds the split between ordinary and protected obstacles, a notes file, and a list of what needs no approval).", "Cost: runs with the skill used about 28% more tokens (84,000 against 65,600 on average) and took about 49% longer (125 seconds against 84).", "One run per configuration. This is a smoke test; differences this small need two or three runs each to trust.", "Two runs with the skill listed the skill folder and saw the grader file names under evals/. Neither opened a grader. Next round, tell runs not to list evals/.", "Gaps the runs reported in the skill: 'write whole sentences' pulls against 'keep the instruction file short'; the 2-space indentation line is given as a good example and also fits 'a line the reader would have followed anyway'; no guidance on git actions (branch, push) in a goal; no guidance for a rule whose real condition the writer doesn't know."]}};
+
+    // ---- State ----
+    let feedbackMap = {};  // run_id -> feedback text
+    let currentIndex = 0;
+    let visitedRuns = new Set();
+
+    // ---- Init ----
+    async function init() {
+      // Load saved feedback from server — but only if this isn't a fresh
+      // iteration (indicated by previous_feedback being present). When
+      // previous feedback exists, the feedback.json on disk is stale from
+      // the prior iteration and should not pre-fill the textareas.
+      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
+        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
+      if (!hasPrevious) {
+        try {
+          const resp = await fetch("/api/feedback");
+          const data = await resp.json();
+          if (data.reviews) {
+            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          }
+        } catch { /* first run, no feedback yet */ }
+      }
+
+      document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+      showRun(0);
+
+      // Wire up feedback auto-save
+      const textarea = document.getElementById("feedback");
+      let saveTimeout = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimeout);
+        document.getElementById("feedback-status").textContent = "";
+        saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
+      });
+    }
+
+    // ---- Navigation ----
+    function navigate(delta) {
+      const newIndex = currentIndex + delta;
+      if (newIndex >= 0 && newIndex < EMBEDDED_DATA.runs.length) {
+        saveCurrentFeedback();
+        showRun(newIndex);
+      }
+    }
+
+    function updateNavButtons() {
+      document.getElementById("prev-btn").disabled = currentIndex === 0;
+      document.getElementById("next-btn").disabled =
+        currentIndex === EMBEDDED_DATA.runs.length - 1;
+    }
+
+    // ---- Show a run ----
+    function showRun(index) {
+      currentIndex = index;
+      const run = EMBEDDED_DATA.runs[index];
+
+      // Progress
+      document.getElementById("progress").textContent =
+        `${index + 1} of ${EMBEDDED_DATA.runs.length}`;
+
+      // Prompt
+      document.getElementById("prompt-text").textContent = run.prompt;
+
+      // Config badge
+      const badge = document.getElementById("config-badge");
+      const configMatch = run.id.match(/(with_skill|without_skill|new_skill|old_skill)/);
+      if (configMatch) {
+        const config = configMatch[1];
+        const isBaseline = config === "without_skill" || config === "old_skill";
+        badge.textContent = config.replace(/_/g, " ");
+        badge.className = "config-badge " + (isBaseline ? "config-baseline" : "config-primary");
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      // Outputs
+      renderOutputs(run);
+
+      // Previous outputs
+      renderPrevOutputs(run);
+
+      // Grades
+      renderGrades(run);
+
+      // Previous feedback
+      const prevFb = (EMBEDDED_DATA.previous_feedback || {})[run.id];
+      const prevEl = document.getElementById("prev-feedback");
+      if (prevFb) {
+        document.getElementById("prev-feedback-text").textContent = prevFb;
+        prevEl.style.display = "block";
+      } else {
+        prevEl.style.display = "none";
+      }
+
+      // Feedback
+      document.getElementById("feedback").value = feedbackMap[run.id] || "";
+      document.getElementById("feedback-status").textContent = "";
+
+      updateNavButtons();
+
+      // Track visited runs and promote done button when all visited
+      visitedRuns.add(index);
+      const doneBtn = document.getElementById("done-btn");
+      if (visitedRuns.size >= EMBEDDED_DATA.runs.length) {
+        doneBtn.classList.add("ready");
+      }
+
+      // Scroll main content to top
+      document.querySelector(".main").scrollTop = 0;
+    }
+
+    // ---- Render outputs ----
+    function renderOutputs(run) {
+      const container = document.getElementById("outputs-body");
+      container.innerHTML = "";
+
+      const outputs = run.outputs || [];
+      if (outputs.length === 0) {
+        container.innerHTML = '<div class="empty-state">No output files</div>';
+        return;
+      }
+
+      for (const file of outputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        // Always show file header with download link
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          content.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          content.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          content.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(content, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          content.appendChild(a);
+        } else if (file.type === "error") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          pre.style.color = "var(--red)";
+          content.appendChild(pre);
+        }
+
+        fileDiv.appendChild(content);
+        container.appendChild(fileDiv);
+      }
+    }
+
+    // ---- XLSX rendering via SheetJS ----
+    function renderXlsx(container, b64Data) {
+      try {
+        const raw = Uint8Array.from(atob(b64Data), c => c.charCodeAt(0));
+        const wb = XLSX.read(raw, { type: "array" });
+
+        for (let i = 0; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const ws = wb.Sheets[sheetName];
+
+          if (wb.SheetNames.length > 1) {
+            const sheetLabel = document.createElement("div");
+            sheetLabel.style.cssText =
+              "font-weight:600; font-size:0.8rem; color:#b0aea5; margin-top:0.5rem; margin-bottom:0.25rem;";
+            sheetLabel.textContent = "Sheet: " + sheetName;
+            container.appendChild(sheetLabel);
+          }
+
+          const htmlStr = XLSX.utils.sheet_to_html(ws, { editable: false });
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = htmlStr;
+          container.appendChild(wrapper);
+        }
+      } catch (err) {
+        container.textContent = "Error rendering spreadsheet: " + err.message;
+      }
+    }
+
+    // ---- Grades ----
+    function renderGrades(run) {
+      const section = document.getElementById("grades-section");
+      const content = document.getElementById("grades-content");
+
+      if (!run.grading) {
+        section.style.display = "none";
+        return;
+      }
+
+      const grading = run.grading;
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("grades-arrow").classList.remove("open");
+
+      const summary = grading.summary || {};
+      const expectations = grading.expectations || [];
+
+      let html = '<div style="padding: 1rem;">';
+
+      // Summary line
+      const passRate = summary.pass_rate != null
+        ? Math.round(summary.pass_rate * 100) + "%"
+        : "?";
+      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+      html += '<div class="grades-summary">';
+      html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
+      html += '<span>' + escapeHtml(summary.passed || 0) + ' passed, ' + escapeHtml(summary.failed || 0) + ' failed of ' + escapeHtml(summary.total || 0) + '</span>';
+      html += '</div>';
+
+      // Assertions list
+      html += '<ul class="assertion-list">';
+      for (const exp of expectations) {
+        const statusClass = exp.passed ? "pass" : "fail";
+        const statusIcon = exp.passed ? "\u2713" : "\u2717";
+        html += '<li class="assertion-item">';
+        html += '<span class="assertion-status ' + statusClass + '">' + statusIcon + '</span>';
+        html += '<span>' + escapeHtml(exp.text) + '</span>';
+        if (exp.evidence) {
+          html += '<div class="assertion-evidence">' + escapeHtml(exp.evidence) + '</div>';
+        }
+        html += '</li>';
+      }
+      html += '</ul>';
+
+      html += '</div>';
+      content.innerHTML = html;
+    }
+
+    function toggleGrades() {
+      const content = document.getElementById("grades-content");
+      const arrow = document.getElementById("grades-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Previous outputs (collapsible) ----
+    function renderPrevOutputs(run) {
+      const section = document.getElementById("prev-outputs-section");
+      const content = document.getElementById("prev-outputs-content");
+      const prevOutputs = (EMBEDDED_DATA.previous_outputs || {})[run.id];
+
+      if (!prevOutputs || prevOutputs.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("prev-outputs-arrow").classList.remove("open");
+
+      // Render the files into the content area
+      content.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "1rem";
+
+      for (const file of prevOutputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const fc = document.createElement("div");
+        fc.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          fc.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          fc.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          fc.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(fc, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          fc.appendChild(a);
+        }
+
+        fileDiv.appendChild(fc);
+        wrapper.appendChild(fileDiv);
+      }
+
+      content.appendChild(wrapper);
+    }
+
+    function togglePrevOutputs() {
+      const content = document.getElementById("prev-outputs-content");
+      const arrow = document.getElementById("prev-outputs-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Feedback (saved to server -> feedback.json) ----
+    function saveCurrentFeedback() {
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // Build reviews array from map
+      const reviews = [];
+      for (const [run_id, feedback] of Object.entries(feedbackMap)) {
+        if (feedback.trim()) {
+          reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
+        }
+      }
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews, status: "in_progress" }),
+      }).then(() => {
+        document.getElementById("feedback-status").textContent = "Saved";
+      }).catch(() => {
+        // Static mode or server unavailable — no-op on auto-save,
+        // feedback will be downloaded on final submit
+        document.getElementById("feedback-status").textContent = "Will download on submit";
+      });
+    }
+
+    // ---- Done ----
+    function showDoneDialog() {
+      // Save current textarea to feedbackMap (but don't POST yet)
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // POST once with status: complete — include ALL runs so the model
+      // can distinguish "no feedback" (looks good) from "not reviewed"
+      const reviews = [];
+      const ts = new Date().toISOString();
+      for (const r of EMBEDDED_DATA.runs) {
+        reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
+      }
+      const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).then(() => {
+        document.getElementById("done-overlay").classList.add("visible");
+      }).catch(() => {
+        // Server not available (static mode) — download as file
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "feedback.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById("done-overlay").classList.add("visible");
+      });
+    }
+
+    function closeDoneDialog() {
+      // Reset status back to in_progress
+      saveCurrentFeedback();
+      document.getElementById("done-overlay").classList.remove("visible");
+    }
+
+    // ---- Toast ----
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    // ---- Keyboard nav ----
+    document.addEventListener("keydown", (e) => {
+      // Don't capture when typing in textarea
+      if (e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      }
+    });
+
+    // ---- Util ----
+    function getDownloadUri(file) {
+      if (file.data_uri) return file.data_uri;
+      if (file.data_b64) return "data:application/octet-stream;base64," + file.data_b64;
+      if (file.type === "text") return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+      return "#";
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML.replace(/"/g, "&quot;");
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
+      document.querySelector(`[onclick="switchView('${view}')"]`).classList.add("active");
+      document.getElementById("panel-" + view).classList.add("active");
+    }
+
+    // ---- Benchmark rendering ----
+    function renderBenchmark() {
+      const data = EMBEDDED_DATA.benchmark;
+      if (!data) return;
+
+      // Show the tabs
+      document.getElementById("view-tabs").style.display = "flex";
+
+      const container = document.getElementById("benchmark-content");
+      const summary = data.run_summary || {};
+      const metadata = data.metadata || {};
+      const notes = data.notes || [];
+
+      let html = "";
+
+      // Header
+      html += "<h2 style='font-family: Poppins, sans-serif; margin-bottom: 0.5rem;'>Benchmark Results</h2>";
+      html += "<p style='color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem;'>";
+      if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
+      if (metadata.timestamp) html += escapeHtml(metadata.timestamp) + " &mdash; ";
+      if (metadata.evals_run) html += "Evals: " + escapeHtml(metadata.evals_run.join(", ")) + " &mdash; ";
+      html += escapeHtml(metadata.runs_per_configuration || "?") + (metadata.runs_per_configuration === 1 ? " run" : " runs") + " per configuration";
+      html += "</p>";
+
+      // Summary table
+      html += '<table class="benchmark-table">';
+
+      function fmtStat(stat, pct) {
+        if (!stat) return "—";
+        const suffix = pct ? "%" : "";
+        const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
+        const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
+        return m + suffix + " ± " + s + suffix;
+      }
+
+      function deltaClass(val) {
+        if (!val) return "";
+        const n = parseFloat(val);
+        if (n > 0) return "benchmark-delta-positive";
+        if (n < 0) return "benchmark-delta-negative";
+        return "";
+      }
+
+      // Discover config names dynamically (everything except "delta")
+      const configs = Object.keys(summary).filter(k => k !== "delta");
+      const configA = configs[0] || "config_a";
+      const configB = configs[1] || "config_b";
+      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const a = summary[configA] || {};
+      const b = summary[configB] || {};
+      const delta = summary.delta || {};
+      // With a single configuration there is nothing to compare: only its column is shown
+      const compare = cells => configs.length >= 2 ? cells : "";
+
+      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th>" + compare("<th>" + escapeHtml(labelB) + "</th><th>Delta</th>") + "</tr></thead>";
+      html += "<tbody>";
+
+      html += "<tr><td><strong>Pass Rate</strong></td>";
+      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
+      html += compare("<td>" + fmtStat(b.pass_rate, true) + "</td>");
+      html += compare('<td class="' + deltaClass(delta.pass_rate) + '">' + escapeHtml(delta.pass_rate || "—") + "</td>") + "</tr>";
+
+      // Time (only show row if data exists)
+      if (a.time_seconds || b.time_seconds) {
+        html += "<tr><td><strong>Time (s)</strong></td>";
+        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
+        html += compare("<td>" + fmtStat(b.time_seconds, false) + "</td>");
+        html += compare('<td class="' + deltaClass(delta.time_seconds) + '">' + escapeHtml(delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td>") + "</tr>";
+      }
+
+      // Tokens (only show row if data exists)
+      if (a.tokens || b.tokens) {
+        html += "<tr><td><strong>Tokens</strong></td>";
+        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
+        html += compare("<td>" + fmtStat(b.tokens, false) + "</td>");
+        html += compare('<td class="' + deltaClass(delta.tokens) + '">' + escapeHtml(delta.tokens || "—") + "</td>") + "</tr>";
+      }
+
+      html += "</tbody></table>";
+
+      // Per-eval breakdown (if runs data available)
+      const runs = data.runs || [];
+      if (runs.length > 0) {
+        // Numeric ids first, then ids that are names
+        const rank = id => typeof id === "number" ? 0 : 1;
+        const evalIds = [...new Set(runs.map(r => r.eval_id))].sort((a, b) =>
+          rank(a) - rank(b) || (rank(a) ? String(a).localeCompare(String(b)) : a - b));
+
+        html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
+
+        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasErrors = runs.some(r => r.result && r.result.errors > 0);
+
+        for (const evalId of evalIds) {
+          const evalRuns = runs.filter(r => r.eval_id === evalId);
+          const evalName = evalRuns[0] && evalRuns[0].eval_name ? evalRuns[0].eval_name : "Eval " + evalId;
+
+          html += "<h4 style='font-family: Poppins, sans-serif; margin: 1rem 0 0.5rem; color: var(--text);'>" + escapeHtml(evalName) + "</h4>";
+          html += '<table class="benchmark-table">';
+          html += "<thead><tr><th>Config</th><th>Run</th><th>Pass Rate</th>";
+          if (hasTime) html += "<th>Time (s)</th>";
+          if (hasErrors) html += "<th>Crashes During Execution</th>";
+          html += "</tr></thead>";
+          html += "<tbody>";
+
+          // Group by config and render with average rows
+          const configGroups = [...new Set(evalRuns.map(r => r.configuration))];
+          for (let ci = 0; ci < configGroups.length; ci++) {
+            const config = configGroups[ci];
+            const configRuns = evalRuns.filter(r => r.configuration === config);
+            if (configRuns.length === 0) continue;
+
+            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const configLabel = escapeHtml(config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()));
+
+            for (const run of configRuns) {
+              const r = run.result || {};
+              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              html += '<tr class="' + rowClass + '">';
+              html += "<td>" + configLabel + "</td>";
+              html += "<td>" + escapeHtml(run.run_number) + "</td>";
+              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + escapeHtml(r.passed || 0) + "/" + escapeHtml(r.total || 0) + ")</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
+              if (hasErrors) html += "<td>" + escapeHtml(r.errors || 0) + "</td>";
+              html += "</tr>";
+            }
+
+            // Average row
+            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
+            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
+            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            html += '<tr class="benchmark-row-avg ' + rowClass + '">';
+            html += "<td>" + configLabel + "</td>";
+            html += "<td>Avg</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            if (hasTime) {
+              const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+            }
+            if (hasErrors) html += "<td></td>";
+            html += "</tr>";
+          }
+          html += "</tbody></table>";
+
+          // Per-assertion detail for this eval
+          const runsWithExpectations = {};
+          for (const config of configGroups) {
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+          }
+          const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
+          if (hasAnyExpectations) {
+            // Collect all unique assertion texts across all configs
+            const allAssertions = [];
+            const seen = new Set();
+            for (const config of configGroups) {
+              for (const run of runsWithExpectations[config]) {
+                for (const exp of (run.expectations || [])) {
+                  if (!seen.has(exp.text)) {
+                    seen.add(exp.text);
+                    allAssertions.push(exp.text);
+                  }
+                }
+              }
+            }
+
+            html += '<table class="benchmark-table" style="margin-top: 0.5rem;">';
+            html += "<thead><tr><th>Assertion</th>";
+            for (const config of configGroups) {
+              const label = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              html += "<th>" + escapeHtml(label) + "</th>";
+            }
+            html += "</tr></thead><tbody>";
+
+            for (const assertionText of allAssertions) {
+              html += "<tr><td>" + escapeHtml(assertionText) + "</td>";
+
+              for (const config of configGroups) {
+                html += "<td>";
+                for (const run of runsWithExpectations[config]) {
+                  const exp = (run.expectations || []).find(e => e.text === assertionText);
+                  if (exp) {
+                    const cls = exp.passed ? "benchmark-delta-positive" : "benchmark-delta-negative";
+                    const icon = exp.passed ? "\u2713" : "\u2717";
+                    html += '<span class="' + cls + '" title="Run ' + escapeHtml(run.run_number) + ': ' + escapeHtml(exp.evidence || "") + '">' + icon + "</span> ";
+                  } else {
+                    html += "— ";
+                  }
+                }
+                html += "</td>";
+              }
+              html += "</tr>";
+            }
+            html += "</tbody></table>";
+          }
+        }
+      }
+
+      // Notes
+      if (notes.length > 0) {
+        html += '<div class="benchmark-notes">';
+        html += "<h3>Analysis Notes</h3>";
+        html += "<ul>";
+        for (const note of notes) {
+          html += "<li>" + escapeHtml(note) + "</li>";
+        }
+        html += "</ul></div>";
+      }
+
+      container.innerHTML = html;
+    }
+
+    // ---- Start ----
+    init();
+    renderBenchmark();
+  </script>
+</body>
+</html>

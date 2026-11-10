@@ -1,0 +1,15 @@
+{
+  "eval_name": "goal-from-old-prompt",
+  "prompt": "ok I want to kick off a codex session overnight on gpt-6 astra to finish the invoice pdf export. here's the prompt I used last month for the csv export (old-prompt.md), can you update it for this?\n\ncontext: the pdf renderer is in services/billing/pdf/. it's half done, line items render but the totals + tax rows don't, and multi-page invoices get cut off after page 1. the design is docs/invoice-pdf.md. golden files are tests/golden/invoices/*.pdf and `make test-pdf` compares against them (pixel diff). don't let it touch services/billing/ledger, Dana's team is mid-migration there. it can't hit the real tax API (costs money per call), there's a stub, TAX_API_STUB=1. last time the agent stopped after about an hour and asked me if it should continue, and I was asleep.\n\nwrite the new one to goal.md\n\nInput files: old-prompt.md",
+  "assertions": [
+    "goal.md defines completion by `make test-pdf` passing (or the golden files in tests/golden/invoices matching)",
+    "goal.md says not to change services/billing/ledger",
+    "goal.md says to use the tax stub (TAX_API_STUB=1) and not call the real tax API",
+    "goal.md tells the agent to keep working through ordinary problems without stopping to ask whether to continue, and says what to do if it is truly blocked",
+    "goal.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+    "goal.md does not prescribe a step-by-step method or a reading order for the agent (a statement of the two known defects and of what done means is fine)",
+    "goal.md does not tell the agent to think step by step, think hard, be thorough or double-check",
+    "goal.md does not contain a blanket rule to ask before modifying or changing anything",
+    "goal.md states both known defects: totals and tax rows don't render, and multi-page invoices are cut off after page 1"
+  ]
+}

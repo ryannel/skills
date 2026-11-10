@@ -1,0 +1,497 @@
+{
+  "metadata": {
+    "skill_name": "prompting-agents",
+    "skill_path": "<path/to/skill>",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-11-10T13:09:37Z",
+    "evals_run": [
+      "goal-from-old-prompt",
+      "skill-from-described-workflow",
+      "trim-shared-agents-md"
+    ],
+    "runs_per_configuration": 1
+  },
+  "runs": [
+    {
+      "eval_id": "goal-from-old-prompt",
+      "eval_name": "goal-from-old-prompt",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 9,
+        "failed": 0,
+        "total": 9,
+        "time_seconds": 109.1,
+        "tokens": 83369,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "goal.md defines completion by `make test-pdf` passing (or the golden files in tests/golden/invoices matching)",
+          "passed": true,
+          "evidence": "Goal line and 'What done means': `TAX_API_STUB=1 make test-pdf` exits 0 with the golden files unchanged"
+        },
+        {
+          "text": "goal.md says not to change services/billing/ledger",
+          "passed": true,
+          "evidence": "'Don't edit anything under `services/billing/ledger`. Dana's team is partway through a migration there'"
+        },
+        {
+          "text": "goal.md says to use the tax stub (TAX_API_STUB=1) and not call the real tax API",
+          "passed": true,
+          "evidence": "'Don't call the real tax API, because it charges for each call. Setting `TAX_API_STUB=1`\u2026'"
+        },
+        {
+          "text": "goal.md tells the agent to keep working through ordinary problems without stopping to ask whether to continue, and says what to do if it is truly blocked",
+          "passed": true,
+          "evidence": "Says nobody will answer during the run; separates ordinary obstacles (work through) from protected ones (record); defines blocked and says to carry on with the rest"
+        },
+        {
+          "text": "goal.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+          "passed": true,
+          "evidence": "Scripted search for the five words in capitals found none"
+        },
+        {
+          "text": "goal.md does not prescribe a step-by-step method or a reading order for the agent (a statement of the two known defects and of what done means is fine)",
+          "passed": true,
+          "evidence": "No reading order or method. Sections are the state of the work, done, boundaries, obstacles, the notes file and what comes back"
+        },
+        {
+          "text": "goal.md does not tell the agent to think step by step, think hard, be thorough or double-check",
+          "passed": true,
+          "evidence": "None of those phrases appear"
+        },
+        {
+          "text": "goal.md does not contain a blanket rule to ask before modifying or changing anything",
+          "passed": true,
+          "evidence": "Lists what needs no approval instead; no blanket ask-first rule"
+        },
+        {
+          "text": "goal.md states both known defects: totals and tax rows don't render, and multi-page invoices are cut off after page 1",
+          "passed": true,
+          "evidence": "'The totals rows and the tax rows don't render' and 'An invoice longer than one page is cut off after page 1'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": "skill-from-described-workflow",
+      "eval_name": "skill-from-described-workflow",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 11,
+        "failed": 0,
+        "total": 11,
+        "time_seconds": 133.0,
+        "tokens": 81715,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "release-notes/SKILL.md exists and starts with YAML frontmatter that has `name` and `description`",
+          "passed": true,
+          "evidence": "Frontmatter has `name: release-notes` and `description`"
+        },
+        {
+          "text": "The frontmatter of release-notes/SKILL.md uses only these fields: name, description, license, compatibility, metadata, allowed-tools",
+          "passed": true,
+          "evidence": "Scripted check: the only fields are name and description"
+        },
+        {
+          "text": "The description says what the skill does and when to use it, and is under 1,024 characters",
+          "passed": true,
+          "evidence": "338 characters; says what it writes and 'Use when asked to write or draft the release notes or the changelog entry for a release'"
+        },
+        {
+          "text": "The description does not tell the agent to use the skill for any mention of git, commits, changelogs or versions in general",
+          "passed": true,
+          "evidence": "Triggers are limited to writing release notes or a release's changelog entry"
+        },
+        {
+          "text": "The body says that PRs merged by the merge bot carry the label on the linked issue and gives `gh pr view N --json closingIssuesReferences`",
+          "passed": true,
+          "evidence": "Second paragraph of the body, and the commands under 'Which PRs go in'"
+        },
+        {
+          "text": "The body says to get the version from `scripts/next-version.sh`",
+          "passed": true,
+          "evidence": "'The version number comes from `scripts/next-version.sh`. Run the script and use the version it prints'"
+        },
+        {
+          "text": "The body says that a change touching api/public/ needs a line in docs/migration.md",
+          "passed": true,
+          "evidence": "Section 'Changes under api/public/'"
+        },
+        {
+          "text": "The body has no section whose heading is about when to use the skill",
+          "passed": true,
+          "evidence": "No such heading"
+        },
+        {
+          "text": "release-notes/SKILL.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+          "passed": true,
+          "evidence": "Scripted search found none"
+        },
+        {
+          "text": "The release-notes/ folder contains no README, changelog or installation guide of its own",
+          "passed": true,
+          "evidence": "The folder holds only SKILL.md"
+        },
+        {
+          "text": "The body gives the heading format `## vX.Y.Z (date)` and says breaking changes go first under a Breaking line",
+          "passed": true,
+          "evidence": "'The heading is `## vX.Y.Z (date)`'; 'the entry starts with a `**Breaking**` line'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": "trim-shared-agents-md",
+      "eval_name": "trim-shared-agents-md",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 11,
+        "failed": 0,
+        "total": 11,
+        "time_seconds": 133.8,
+        "tokens": 86886,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The new AGENTS.md has fewer lines than the original (the original has 60 lines)",
+          "passed": true,
+          "evidence": "38 lines against 60 (330 words against 322: fewer lines, about the same words)"
+        },
+        {
+          "text": "The new AGENTS.md still says integration tests need INTEGRATION_DB_URL",
+          "passed": true,
+          "evidence": "'The integration tests need `INTEGRATION_DB_URL`. The value is not in the repository'"
+        },
+        {
+          "text": "The new AGENTS.md gives the commands `make check` and `make e2e`",
+          "passed": true,
+          "evidence": "Both commands are given under 'Checking a change'"
+        },
+        {
+          "text": "The new AGENTS.md does not require reading the three docs before every change; it says which document is for what",
+          "passed": true,
+          "evidence": "'Documents' section says what each of the three is for; no read-before-every-change rule"
+        },
+        {
+          "text": "The new AGENTS.md no longer lists the directory layout",
+          "passed": true,
+          "evidence": "No layout section"
+        },
+        {
+          "text": "The new AGENTS.md says the agent may run `make check` (the unit tests and linter) without asking",
+          "passed": true,
+          "evidence": "'Run it, fix what your change broke and run it again, all without asking'"
+        },
+        {
+          "text": "The new AGENTS.md says when the e2e suite is needed instead of requiring it after every change",
+          "passed": true,
+          "evidence": "'Run it when your change alters a flow that a test in `tests/e2e/` covers, or when the person asks'"
+        },
+        {
+          "text": "The new AGENTS.md says src/gen/ is produced by `make codegen` from api/schema.yaml and to change the schema instead",
+          "passed": true,
+          "evidence": "'To change something in `src/gen/`, edit `api/schema.yaml` and run `make codegen`'"
+        },
+        {
+          "text": "The reply recommends a hook, permission rule or other enforced check for src/gen/, not only rewording",
+          "passed": true,
+          "evidence": "reply.md item 1: a CI step that runs `make codegen` and fails on a diff in `src/gen/`, plus a Claude Code deny rule"
+        },
+        {
+          "text": "The new AGENTS.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+          "passed": true,
+          "evidence": "Scripted search found none"
+        },
+        {
+          "text": "The new AGENTS.md names the specific actions that need a go-ahead (deploys, and changes to migrations/) instead of a blanket ask-first rule",
+          "passed": true,
+          "evidence": "'What involves a person' names deploys (Priya) and changes in `migrations/` (second reviewer)"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": "goal-from-old-prompt",
+      "eval_name": "goal-from-old-prompt",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.89,
+        "passed": 8,
+        "failed": 1,
+        "total": 9,
+        "time_seconds": 56.5,
+        "tokens": 64281,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "goal.md defines completion by `make test-pdf` passing (or the golden files in tests/golden/invoices matching)",
+          "passed": true,
+          "evidence": "'Finish the invoice PDF renderer\u2026 so that `TAX_API_STUB=1 make test-pdf` passes'"
+        },
+        {
+          "text": "goal.md says not to change services/billing/ledger",
+          "passed": true,
+          "evidence": "'Do not change anything under `services/billing/ledger`'"
+        },
+        {
+          "text": "goal.md says to use the tax stub (TAX_API_STUB=1) and not call the real tax API",
+          "passed": true,
+          "evidence": "'Never call the real tax API\u2026 Set `TAX_API_STUB=1` on every command that runs billing code'"
+        },
+        {
+          "text": "goal.md tells the agent to keep working through ordinary problems without stopping to ask whether to continue, and says what to do if it is truly blocked",
+          "passed": true,
+          "evidence": "'Do not stop to ask whether to continue or to confirm a choice'; 'If you get stuck' section names the three real blockers"
+        },
+        {
+          "text": "goal.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+          "passed": true,
+          "evidence": "Scripted search found none ('Never' appears, but not in capitals)"
+        },
+        {
+          "text": "goal.md does not prescribe a step-by-step method or a reading order for the agent (a statement of the two known defects and of what done means is fine)",
+          "passed": false,
+          "evidence": "Prescribes a reading order ('Read it and the existing code in `services/billing/pdf/` before changing anything') and a debugging method ('check whether the cause is the environment (fonts, antialiasing, the PDF library version) before changing more code')"
+        },
+        {
+          "text": "goal.md does not tell the agent to think step by step, think hard, be thorough or double-check",
+          "passed": true,
+          "evidence": "None of those phrases appear"
+        },
+        {
+          "text": "goal.md does not contain a blanket rule to ask before modifying or changing anything",
+          "passed": true,
+          "evidence": "No blanket ask-first rule"
+        },
+        {
+          "text": "goal.md states both known defects: totals and tax rows don't render, and multi-page invoices are cut off after page 1",
+          "passed": true,
+          "evidence": "Both defects listed under 'Where things stand'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": "skill-from-described-workflow",
+      "eval_name": "skill-from-described-workflow",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 11,
+        "failed": 0,
+        "total": 11,
+        "time_seconds": 108.6,
+        "tokens": 63944,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "release-notes/SKILL.md exists and starts with YAML frontmatter that has `name` and `description`",
+          "passed": true,
+          "evidence": "Frontmatter has `name: release-notes` and `description`"
+        },
+        {
+          "text": "The frontmatter of release-notes/SKILL.md uses only these fields: name, description, license, compatibility, metadata, allowed-tools",
+          "passed": true,
+          "evidence": "Scripted check: the only fields are name and description"
+        },
+        {
+          "text": "The description says what the skill does and when to use it, and is under 1,024 characters",
+          "passed": true,
+          "evidence": "396 characters; 'Use when asked to write or draft release notes, update the changelog for a release, or do the Friday release notes'"
+        },
+        {
+          "text": "The description does not tell the agent to use the skill for any mention of git, commits, changelogs or versions in general",
+          "passed": true,
+          "evidence": "Triggers are limited to release notes and a release's changelog"
+        },
+        {
+          "text": "The body says that PRs merged by the merge bot carry the label on the linked issue and gives `gh pr view N --json closingIssuesReferences`",
+          "passed": true,
+          "evidence": "Step 3, with `gh pr view <N> --json \u2026closingIssuesReferences`"
+        },
+        {
+          "text": "The body says to get the version from `scripts/next-version.sh`",
+          "passed": true,
+          "evidence": "Step 1: 'Run `scripts/next-version.sh` and use exactly what it prints'"
+        },
+        {
+          "text": "The body says that a change touching api/public/ needs a line in docs/migration.md",
+          "passed": true,
+          "evidence": "Step 6"
+        },
+        {
+          "text": "The body has no section whose heading is about when to use the skill",
+          "passed": true,
+          "evidence": "No such heading"
+        },
+        {
+          "text": "release-notes/SKILL.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+          "passed": true,
+          "evidence": "Scripted search found none ('Never' and 'BREAKING CHANGE' are not on the list)"
+        },
+        {
+          "text": "The release-notes/ folder contains no README, changelog or installation guide of its own",
+          "passed": true,
+          "evidence": "The folder holds only SKILL.md"
+        },
+        {
+          "text": "The body gives the heading format `## vX.Y.Z (date)` and says breaking changes go first under a Breaking line",
+          "passed": true,
+          "evidence": "Step 5 gives the heading format and the `**Breaking**` line"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": "trim-shared-agents-md",
+      "eval_name": "trim-shared-agents-md",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.91,
+        "passed": 10,
+        "failed": 1,
+        "total": 11,
+        "time_seconds": 88.4,
+        "tokens": 68431,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The new AGENTS.md has fewer lines than the original (the original has 60 lines)",
+          "passed": true,
+          "evidence": "55 lines against 60 (553 words against 322: it is longer by words)"
+        },
+        {
+          "text": "The new AGENTS.md still says integration tests need INTEGRATION_DB_URL",
+          "passed": true,
+          "evidence": "Testing table: 'Need `INTEGRATION_DB_URL`, which is not in the repo'"
+        },
+        {
+          "text": "The new AGENTS.md gives the commands `make check` and `make e2e`",
+          "passed": true,
+          "evidence": "Both commands are in the Testing table"
+        },
+        {
+          "text": "The new AGENTS.md does not require reading the three docs before every change; it says which document is for what",
+          "passed": true,
+          "evidence": "'Read these when the task touches their subject'"
+        },
+        {
+          "text": "The new AGENTS.md no longer lists the directory layout",
+          "passed": false,
+          "evidence": "Keeps a 'Layout' section with eight directory lines, and the dependency list in the first line"
+        },
+        {
+          "text": "The new AGENTS.md says the agent may run `make check` (the unit tests and linter) without asking",
+          "passed": true,
+          "evidence": "'run `make check` and `make codegen` whenever you need to\u2026 Don't stop to ask permission for these'"
+        },
+        {
+          "text": "The new AGENTS.md says when the e2e suite is needed instead of requiring it after every change",
+          "passed": true,
+          "evidence": "'Only when the person asks for it, or when you changed files in `tests/e2e/`'"
+        },
+        {
+          "text": "The new AGENTS.md says src/gen/ is produced by `make codegen` from api/schema.yaml and to change the schema instead",
+          "passed": true,
+          "evidence": "'To change the client, edit `api/schema.yaml`, run `make codegen`'"
+        },
+        {
+          "text": "The reply recommends a hook, permission rule or other enforced check for src/gen/, not only rewording",
+          "passed": true,
+          "evidence": "reply.md: a CI step that runs `make codegen` and fails on a diff, plus a deny rule in `.claude/settings.json`"
+        },
+        {
+          "text": "The new AGENTS.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+          "passed": true,
+          "evidence": "Scripted search found none"
+        },
+        {
+          "text": "The new AGENTS.md names the specific actions that need a go-ahead (deploys, and changes to migrations/) instead of a blanket ask-first rule",
+          "passed": true,
+          "evidence": "'Limits' names deploys and `migrations/`; a separate list gives three general cases for asking"
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 125.3,
+        "stddev": 14.0353,
+        "min": 109.1,
+        "max": 133.8
+      },
+      "tokens": {
+        "mean": 83990.0,
+        "stddev": 2640.841,
+        "min": 81715,
+        "max": 86886
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.9333,
+        "stddev": 0.0586,
+        "min": 0.89,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 84.5,
+        "stddev": 26.268,
+        "min": 56.5,
+        "max": 108.6
+      },
+      "tokens": {
+        "mean": 65552.0,
+        "stddev": 2498.9744,
+        "min": 63944,
+        "max": 68431
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.07",
+      "time_seconds": "+40.8",
+      "tokens": "+18438"
+    }
+  },
+  "notes": [
+    "29 of the 31 assertions pass with and without the skill, so they show a floor both reach, not the difference. The model without the skill already drops capitals, defines done by the check and keeps the boundaries.",
+    "The two assertions that differ: without the skill, the goal tells the agent what to read first and how to debug a pixel difference, and the trimmed AGENTS.md keeps the directory layout and dependency list.",
+    "The larger differences are ones a person has to judge. Release-notes skill: without the skill it is a seven-step procedure of 1,348 words; with the skill it opens with the two facts people get wrong and is 891 words. AGENTS.md: 553 words without, 330 with. Goal: 615 words without, 798 with (the skill adds the split between ordinary and protected obstacles, a notes file, and a list of what needs no approval).",
+    "Cost: runs with the skill used about 28% more tokens (84,000 against 65,600 on average) and took about 49% longer (125 seconds against 84).",
+    "One run per configuration. This is a smoke test; differences this small need two or three runs each to trust.",
+    "Two runs with the skill listed the skill folder and saw the grader file names under evals/. Neither opened a grader. Next round, tell runs not to list evals/.",
+    "Gaps the runs reported in the skill: 'write whole sentences' pulls against 'keep the instruction file short'; the 2-space indentation line is given as a good example and also fits 'a line the reader would have followed anyway'; no guidance on git actions (branch, push) in a goal; no guidance for a rule whose real condition the writer doesn't know."
+  ]
+}

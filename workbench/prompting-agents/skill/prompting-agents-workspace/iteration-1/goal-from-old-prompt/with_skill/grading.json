@@ -1,0 +1,58 @@
+{
+  "expectations": [
+    {
+      "text": "goal.md defines completion by `make test-pdf` passing (or the golden files in tests/golden/invoices matching)",
+      "passed": true,
+      "evidence": "Goal line and 'What done means': `TAX_API_STUB=1 make test-pdf` exits 0 with the golden files unchanged"
+    },
+    {
+      "text": "goal.md says not to change services/billing/ledger",
+      "passed": true,
+      "evidence": "'Don't edit anything under `services/billing/ledger`. Dana's team is partway through a migration there'"
+    },
+    {
+      "text": "goal.md says to use the tax stub (TAX_API_STUB=1) and not call the real tax API",
+      "passed": true,
+      "evidence": "'Don't call the real tax API, because it charges for each call. Setting `TAX_API_STUB=1`\u2026'"
+    },
+    {
+      "text": "goal.md tells the agent to keep working through ordinary problems without stopping to ask whether to continue, and says what to do if it is truly blocked",
+      "passed": true,
+      "evidence": "Says nobody will answer during the run; separates ordinary obstacles (work through) from protected ones (record); defines blocked and says to carry on with the rest"
+    },
+    {
+      "text": "goal.md contains none of these words in capitals: CRITICAL, IMPORTANT, MUST, NEVER, ALWAYS",
+      "passed": true,
+      "evidence": "Scripted search for the five words in capitals found none"
+    },
+    {
+      "text": "goal.md does not prescribe a step-by-step method or a reading order for the agent (a statement of the two known defects and of what done means is fine)",
+      "passed": true,
+      "evidence": "No reading order or method. Sections are the state of the work, done, boundaries, obstacles, the notes file and what comes back"
+    },
+    {
+      "text": "goal.md does not tell the agent to think step by step, think hard, be thorough or double-check",
+      "passed": true,
+      "evidence": "None of those phrases appear"
+    },
+    {
+      "text": "goal.md does not contain a blanket rule to ask before modifying or changing anything",
+      "passed": true,
+      "evidence": "Lists what needs no approval instead; no blanket ask-first rule"
+    },
+    {
+      "text": "goal.md states both known defects: totals and tax rows don't render, and multi-page invoices are cut off after page 1",
+      "passed": true,
+      "evidence": "'The totals rows and the tax rows don't render' and 'An invoice longer than one page is cut off after page 1'"
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "total": 9,
+    "pass_rate": 1.0
+  },
+  "timing": {
+    "total_duration_seconds": 109.1
+  }
+}
