@@ -335,6 +335,21 @@ class Profiles(unittest.TestCase):
             self.assertEqual(args, ["gemini", "-p", "do it now", "-m", "g-2"])
             self.assertEqual(env["ORCHESTRATE_ROLE"], "build")
 
+    def test_planner_host_sends_planners_to_that_host_unless_the_lead_names_one(self):
+        base = "- **Integrate:** local\n- **Check:** none\n- **Default host:** codex\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "ORCHESTRATE.md").write_text(
+                base + "- **Planner host:** claude\n- **Claude planner:** claude-fable-5-2 high\n")
+            p = agent_loop.profile(Path(tmp), strict=True)
+        ns = lambda host=None: argparse.Namespace(host=host, model=None, effort=None)
+        self.assertEqual(agent_loop.resolve(ns(), p, "plan"), ("claude", "claude-fable-5-2", "high"))
+        self.assertEqual(agent_loop.resolve(ns(), p, "build")[0], "codex", "only planners move")
+        self.assertEqual(agent_loop.resolve(ns("codex"), p, "plan"), ("codex", "gpt-6.1-sol", "high"))
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "ORCHESTRATE.md").write_text(base + "- **Planner host:** other\n")
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                agent_loop.profile(Path(tmp), strict=True)
+
     def test_profile_sets_model_and_effort_for_one_kind_of_agent(self):
         base = "- **Integrate:** local\n- **Check:** none\n"
         with tempfile.TemporaryDirectory() as tmp:

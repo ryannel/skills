@@ -377,11 +377,11 @@ class TipError(Exception):
 PROFILE_FIELDS = {"plans": "docs/modules", "evidence": "docs/evidence", "check": None, "branch": "main",
                   "remote": "origin", "integrate": None, "codex sandbox": "workspace-write", "writable roots": "",
                   "graded examples": "", "effort": "", "claude permissions": "auto", "default host": "",
-                  "review host": ""}
+                  "review host": "", "planner host": ""}
 REQUIRED = {"check": "the command that must pass before integrating, or `none`",
             "integrate": "push (standing permission to push) or local"}
 ONE_WORD = {"branch", "remote", "integrate", "codex sandbox", "effort", "claude permissions", "default host",
-            "review host"}
+            "review host", "planner host"}
 ALLOWED = {"codex sandbox": {"workspace-write", "danger-full-access"}, "integrate": {"push", "local"},
            "effort": EFFORTS, "claude permissions": {"auto", "acceptEdits", "bypassPermissions", "dontAsk"}}
 PLACEHOLDER = re.compile(r"<[A-Za-z][^<>]*>")  # "<where review files go>", not "cmd < input"
@@ -498,6 +498,10 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False) -> d
         problems.append(f"review host: {out['review_host']!r} (want same, other, codex, claude or a host this profile "
                         "names)")
         out["review_host"] = ""
+    out["planner_host"] = out.pop("planner host").lower()
+    if out["planner_host"] not in ("", "codex", "claude", *out["hosts"]):
+        problems.append(f"planner host: {out['planner_host']!r} (want codex, claude or a host this profile names)")
+        out["planner_host"] = ""
     out["roots"] = [r.strip() for r in out.pop("writable roots").split(",") if r.strip()]
     out["graded_examples"] = out.pop("graded examples") or f"{out['evidence']}/graded-examples.md"
     # Prose rules the loop restates on resumed turns; None when the line is missing or still a placeholder.
@@ -3221,8 +3225,9 @@ def resolve(a: argparse.Namespace, prof: dict, role: str) -> tuple[str, str, str
     """The host, model and effort for this launch. Each is the first of these that is set: what the lead passed; the
     profile's line for this kind of agent on this host; for the effort, its line for this kind of agent on any host;
     the profile's line for the host (`Codex model`) or for every agent (`Effort`); the built-in default. A planner's
-    default effort is high. `role` is plan, build, review or design."""
-    host = (a.host or default_host(prof)).lower()
+    default effort is high. `role` is plan, build, review or design. A planner with no --host runs on the profile's
+    `Planner host`, if it names one."""
+    host = (a.host or (prof.get("planner_host") if role == "plan" else None) or default_host(prof)).lower()
     line_model, line_effort = role_setting(prof, role, host)
     model = a.model or line_model or prof["models"].get(host) or ""
     if not model and host in prof.get("hosts", {}) and "{model}" in prof["hosts"][host]:
