@@ -33,6 +33,7 @@ Contents:
 - **Builders:** usually one Codex builder  *(how many builders, on which hosts, when the owner doesn't say)*
 - **Default host:** codex  *(script: optional; the host used when the lead names none; otherwise the host the script runs inside)*
 - **Review host:** same  *(script: optional; see below)*
+- **Planner host:** claude  *(script: optional; the host planners run on when the lead names none; otherwise the `Default host`)*
 - **Codex model:** gpt-6.1-sol  *(script: any `<host> model:` line sets that host's model)*
 - **Claude model:** claude-opus-5-5  *(script)*
 - **Claude planner:** <model> <effort>  *(script: optional, and only when the owner asked; a model, an effort or both for one kind of agent on one host; see the last section)*
@@ -75,7 +76,9 @@ owner's permission use `local`, and the owner merges.
 `Review host` says where a review runs when the lead names no host. `same` means the builder's host. `other`
 means the other of `codex` and `claude`: a milestone's review goes to the host that didn't build it, and a
 design review to the host that didn't write the plan, when the `plan` command started the planner. A host name means that host. Write `other` when the owner
-builds with both hosts, because a reviewer from another company shares fewer of the builder's blind spots.
+builds with both hosts, because a reviewer from another company shares fewer of the builder's blind spots. `Planner host` sends
+planners to one host, such as Claude Code for a Claude planner model while builders stay on Codex. With `Review host: other`,
+their design reviews then go to the other host.
 
 The plans folder may hold two files that are not plans. `BRIEF.md` is the project brief: what the owner wants
 and why, approved by the owner before planning. `GLOSSARY.md` holds the agreed name for each thing in the
