@@ -2227,9 +2227,9 @@
         {
           "id": "prompting-agents-models",
           "type": "model-names",
-          "claim": "Per-model behaviour and the prompt change for each symptom, for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol; and host facts about skills and instruction files (the 5,000-token keep after compaction, the 1,024-character description limit, portable frontmatter fields, the 200-line and 32 KiB instruction-file limits, how nested instruction files load).",
-          "where": "skills/prompting-agents/references/models.md, skills.md and instruction-files.md; the model table in SKILL.md",
-          "check": "Re-read the vendor pages listed in workbench/prompting-agents/README.md (Anthropic's prompting pages for the current Fable and Opus models, OpenAI's Using GPT-6 guide and Astra blog post, the Claude Code skills and memory pages, OpenAI's Build skills and AGENTS.md pages). If a newer top model has shipped, add it and drop the oldest. Update references/models.md with the new date."
+          "claim": "Per-model behaviour and the prompt change for each symptom, for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol; and host facts about instruction files (the 200-line and 32 KiB limits, how nested instruction files load).",
+          "where": "skills/prompting-agents/references/models/*.md (one file per model, GPT-6 Astra and Sol share one) and instruction-files.md; the model list in SKILL.md",
+          "check": "Re-read the vendor pages listed in workbench/prompting-agents/README.md (Anthropic's prompting pages for the current Fable and Opus models, OpenAI's Using GPT-6 guide and Astra blog post, the Claude Code memory page, OpenAI's AGENTS.md page). If a newer top model has shipped, add a file for it under references/models/, drop the oldest, and update the list in SKILL.md. Update the checked date at the top of each file you re-checked."
         }
       ]
     },

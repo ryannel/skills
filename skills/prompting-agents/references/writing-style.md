@@ -1,49 +1,45 @@
-# Writing style: the rules at work
+# Writing style
 
-The main file lists the writing rules. This file shows them at work, and adds two rules that matter in longer
-text.
+The style to copy is Randall Munroe's in "What If?": start from what the reader knows, take one step at a time,
+and use the exact detail when you have it. Leave out the jokes, meaning the asides, the playful examples and the
+clever last line. A prompt should end on its last useful fact.
 
-## Examples for the rules
+## The habits at work
 
-**Name who does each thing.**
+**Put the main thing first.** A prompt that opens with "I've been looking at the sync code, and there's some
+history here you should know about" makes the reader hold every detail until it finds out what they are for.
+Open with the task instead: "Find out why `sync` retries forever when the server returns a 429." The history
+can follow, and now the reader knows what to look for in it.
 
-| Unclear | Clear |
-|---|---|
-| "Each module is split into milestones." | "The planner splits each module into milestones." |
-| "The branch should be rebased before review." | "Rebase the branch before you ask for review." |
-| "Approval is required for deploys." | "Ask Priya before you deploy. She owns the release calendar." |
+**Use ordinary words.** While you work, you invent short names for things: "the fallback path", "phase two",
+"the big refactor". The reader wasn't there when you named them. Write the plain description instead, such as
+"the code that runs when the cache is empty".
 
-**Explain a term before you use it, then keep the word.** A reader can't ask what "the ledger" is. Say it once:
-"The ledger is the file `state/ledger.json`, which lists every job and its status." After that, always call it
-the ledger. If the next paragraph says "the state file", the reader has to work out whether that is a second file.
+**Define a term once, then keep to that word.** The reader can't ask what "the ledger" is, so say it once: "The
+ledger is the file `state/ledger.json`, which lists every job and its status." After that, always call it the
+ledger. If a later paragraph says "the state file", the reader has to work out whether that is a second file.
 
-**Don't make up a label.** While you work you invent short names: "the fallback path", "phase two", "the big
-refactor". The reader was not there. Write the plain description: "the code that runs when the cache is empty".
+**Explain a new fact next to the ordinary case.** "`/export` streams CSV" is easy to miss on its own. "Most
+endpoints in this service return JSON, but `/export` streams CSV, so don't parse its body as JSON" tells the
+reader exactly where its usual assumption breaks.
 
-**Tell things in the order they happen, and name who does each step.**
-
-1. The lead runs `plan`.
-2. The planner writes the design to `docs/design.md`.
-3. The reviewer reads the design and records a verdict in `review.json`.
+**Make it clear whose job each action is, and in what order.** "The branch should be rebased before review"
+doesn't say who rebases it. "Rebase the branch before you ask for review" does. When the job belongs to someone
+else, name them and say why: "Ask Priya before you deploy. She owns the release calendar." When several steps
+happen in sequence, tell them in that sequence: "Run the migration on the staging copy, check that the row counts
+match, then open the pull request."
 
 **Be concrete.** "The test suite is slow" gives the reader nothing to act on. "The suite takes 11 minutes, and
-the 63 resolver tests take 9 of them" tells the reader where to look.
+the 63 resolver tests take 9 of them" tells it where to look.
 
-**Write whole sentences.** "Auth: review. Spec: `docs/auth.md`. No style." is short, and the reader must guess
-how the three parts connect.
+**Write whole sentences.** "Auth: review. Spec: `docs/auth.md`. No style." is short, but the reader has to guess
+how the three parts connect. "Review the auth change against `docs/auth.md`, and leave style alone" is only a few
+words longer, and leaves nothing to guess.
 
-**A script is not an agent.** Write "run `make check`". Don't write "ask the checker to verify".
+In longer text, one more habit matters: give one example, then go back to the plain statement. Three similar
+examples make the reader copy whatever the three happen to share.
 
-## Two more rules for longer text
-
-**Compare with the ordinary case.** A new fact is easiest to take in next to the one the reader already knows:
-"Normally a subagent starts with your instruction files. The `Explore` agent starts without them, so put
-everything it needs in the brief."
-
-**Use one example, then return to the plain statement.** Three similar examples make the reader copy whatever
-the three happen to share.
-
-## Before and after
+## Two prompts, before and after
 
 A brief for a subagent:
 
@@ -57,8 +53,9 @@ A brief for a subagent:
 > is outside those folders, stop and tell me what you found. Say which parts you confirmed by running something
 > and which you only suspect."
 
-The capitals and the reading order went. The facts the subagent could not have found came in: how often the
-tests fail, where the evidence is, how far the subagent may go, and what counts as fixed.
+The second version drops the capitals and the reading order, because the subagent can plan its own
+investigation. What it adds are the facts the subagent had no way to find: how often the tests fail, where the
+evidence is, how far it may go, and what counts as fixed.
 
 A line in an instruction file:
 
@@ -67,9 +64,5 @@ A line in an instruction file:
 > After: "`src/gen/` is written by `make codegen` from `api/schema.yaml`. To change it, edit the schema and run
 > `make codegen`."
 
-The line now says what to do, and the reason is in it.
-
-## Without the jokes
-
-Keep the clear order, the named actors, the plain words and the concrete numbers. Leave out asides, playful
-examples and a clever last line. End on the last useful fact.
+The first version only forbids, so a reader that needs a change in `src/gen/` is stuck. The second says why the
+files shouldn't be edited by hand and what to do instead.

@@ -100,7 +100,7 @@
     },
     {
       "name": "prompting-agents",
-      "description": "Writes and repairs the text another AI agent will act on: subagent and session briefs, goals for long unattended runs, review requests, steers, system prompts, CLAUDE.md and AGENTS.md, and the wording of skills. Built from Anthropic's and OpenAI's prompting guidance for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol, in plain explanatory prose.",
+      "description": "Helps you write text that another AI agent will act on: briefs for subagents and sessions, goals for long unattended runs, review requests, steers, system prompts, and CLAUDE.md and AGENTS.md files. Built from Anthropic's and OpenAI's prompting guidance for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol, with one reference file per model.",
       "source": "./",
       "strict": false,
       "version": "1.0.0",

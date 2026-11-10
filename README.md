@@ -95,7 +95,7 @@ the orchestration plugin from the GitHub marketplace.
 
 [`prompting-agents`](./skills/prompting-agents/) is a standalone skill for any text another agent will act on: a
 brief for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt,
-AGENTS.md and CLAUDE.md, and the wording of a skill. It says what such a text must carry (the purpose, what done
+or an AGENTS.md or CLAUDE.md file. Writing skills is left to `skill-creator`. It says what such a text must carry (the purpose, what done
 looks like and the check, the boundaries, what the reader can't see, what comes back), what to leave out, and how
 to write it plainly. It is built from Anthropic's and OpenAI's guidance for Claude Opus 5.5, Claude Fable 5.2,
 GPT-6 Astra and GPT-6.1 Sol; the research behind it is in

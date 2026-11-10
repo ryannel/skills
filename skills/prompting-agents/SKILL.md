@@ -1,97 +1,101 @@
 ---
 name: prompting-agents
-description: Writes and repairs text that another AI agent will act on, for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol. Use when about to write or send a brief for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt, a CLAUDE.md or AGENTS.md, or a skill. Also use when moving instructions to a newer model, or when an agent stopped early, asked for approval it didn't need, tested or delegated too much, or ignored an instruction. Not for the process of creating and testing a skill (skill-creator).
+description: Helps you write text that another AI agent will act on, such as a brief for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt, or a CLAUDE.md or AGENTS.md. Use before you write or send one, when you move instructions to a newer model, or when an agent stopped early, asked for approval it didn't need or ignored an instruction. Covers Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol. Not for writing or testing a skill (skill-creator).
 ---
 
 # Prompting agents
 
-A prompt, in this skill, is any text another agent will act on. The agent that reads it is called the reader.
+When you hand work to another agent, you're handing it to someone who is probably as good at the job as you are,
+but who just walked into the room. It hasn't seen your conversation, doesn't know what you tried yesterday, and
+can't ask what you meant. Everything it knows about the task is what you wrote, plus whatever it happens to find
+in the files. This skill calls that agent the reader, and anything you write for it a prompt: a brief, a goal, a
+system prompt, an instruction file.
 
-The reader is a capable model. On most tasks it plans at least as well as you do. But it knows only what you
-write down and what it can find in the files it opens. So a prompt goes wrong in two ways: it tells the reader
-how to do the work, or it leaves out a fact the reader needed and could not have found.
+That gives a prompt two ways to fail. You can tell the reader how to do work it already knows how to do, which
+limits it to what you thought of. Or you can leave out something it needed and had no way to find. Almost
+everything below is one of those two mistakes, so before you send a prompt, read it once as if you had seen
+nothing else.
 
-Before you send a prompt, read it once as an agent that has seen nothing else, and check it against the three
-sections that follow.
+## What the reader needs from you
 
-## What a prompt carries
+Start with what the work is for. A sentence is enough. When the reader meets a case you didn't anticipate, the
+purpose is what it decides with.
 
-**The purpose.** Say in a sentence or two what the work is for. The reader uses the purpose to decide the cases
-you did not think of.
+Then say what done looks like, and how anyone will know: a test that passes, a build that succeeds, a verdict
+written to a file, a screenshot next to the design. Without a check, the reader stops when the work looks
+finished, which is not the same thing. If done includes running the result and fixing what breaks, say so,
+because some models hand back their first version otherwise. Ask for the evidence, meaning the command and its
+output, rather than the sentence "all tests pass".
 
-**What done looks like, and the check.** Say what must be true at the end and what will show it: a test that
-passes, a build that succeeds, a file with a verdict in it, a screenshot beside the design. A reader with no
-check stops when the work looks finished. If finishing includes running the result and fixing what fails, say so,
-because some models return after a first version. Ask for the evidence (the command and its output), not the
-words "all tests pass".
+Next come the boundaries: the things the reader must not do, or must get approval for. Take them from the
+project's rules and from what the person told you, not from your own caution. Name the exact action. "Don't
+push to `main`" is clear, while "be careful with git" makes the reader hesitate over every git command. Put any
+exception inside the rule itself: write "get approval before you run a migration", not "never run a migration"
+with a separate line saying approved ones are fine. Give the reason in a clause, so the reader can apply the rule
+to cases you didn't list. If a boundary sits close to ordinary work, say where it stops: "Get approval before you
+touch the production database. The test database is throwaway, so use it freely." Don't list the ordinary work
+itself; the reader already assumes that.
 
-**The boundaries.** A boundary is something the reader must not do, or must get a go-ahead for. Take boundaries
-from the project's own rules and from what the person told you. Don't add one out of caution.
+The part most often missing is whatever lives only in your head: decisions made in conversation, approaches
+already tried and ruled out, which source is the authoritative one, how to reproduce the bug, which of two
+reasonable designs the person prefers. Where you have the thing itself, such as a path, a log or a screenshot,
+hand it over rather than describing it. Mark quoted logs and web text as quotes, so the reader doesn't take them
+for instructions. And check your claims before you pass them on, because once a guess is in a prompt, it becomes
+the reader's requirement.
 
-- State each one once. A repeated boundary makes current models ask for approvals they don't need.
-- Name the exact action. "Don't push to `main`" works. "Be careful with git" makes the reader hesitate over
-  every git command.
-- Put the exception inside the rule. "Get a go-ahead before you run a migration" works. "Never run a migration",
-  with a separate line saying approved ones are fine, mostly doesn't.
-- Give the reason in one clause, so the reader can apply the rule to a case you didn't name.
-- Then say what the reader may do without asking. For example: "Reading files, editing code inside `src/billing`
-  and running the local tests need no approval. The tests use throwaway fixtures."
+Finally, say where the result should go. Specify a format only when a program or another agent will read it.
+Otherwise ask for the main finding first, with what was verified kept apart from what is suspected.
 
-**What the reader can't see.** Decisions made in conversation. What was already tried and ruled out. Which
-source or version is the authoritative one. Steps that reproduce the bug. The person's preference between two
-reasonable approaches. If you have the thing itself (a file path, an error log, a screenshot), hand it over
-instead of describing it. Mark quoted logs and web text as quoted, so the reader doesn't take them for
-instructions. Check any claim before you pass it on, because a prompt turns your guess into the reader's
-requirement.
+## What to leave out
 
-**What comes back.** Say where the result goes. Give an exact format only when a program or the next agent
-depends on it. Otherwise ask for two things: the main finding first, and what was verified kept apart from what
-is suspected.
+Most of what makes a prompt long also makes it worse, and the reason is the same each time: the reader treats
+everything you wrote as something it is meant to act on.
 
-A list that is the task stays in, whatever its shape: the browsers that must work, the cases the person named,
-the steps that reproduce a bug.
+Invented steps are the clearest case. A reading order, a technique or a set of report sections limits the
+reader to your plan. Give steps only when the order is the task, as in a data migration. A list that *is* the
+task, such as the browsers that must work or the cases the person named, is different and stays.
 
-## What a prompt leaves out
+Emphasis and repetition backfire in the same way. Capitals, "IMPORTANT", "be thorough", or a caution stated
+three times don't make a rule stronger. They make the reader apply it too widely, until it is asking for
+approval on things that don't need it.
 
-- **Steps you made up.** Also reading orders, techniques and report sections. They limit the reader to what you
-  thought of. Give steps only when the order is the task, as in a data migration.
-- **Emphasis and pressure.** Capitals, "IMPORTANT", "be thorough", "think hard", "don't be lazy". Current models
-  follow a plain line, and emphasis makes them apply a rule too widely. How hard a model thinks is a setting
-  outside the prompt, and words in the prompt can't raise it.
-- **Reminders to do what the reader does anyway.** "Run the tests", "check your work" and "keep going" now cause
-  extra testing and over-work. A check that is part of done is different; keep that.
-- **Your conclusion,** when you ask for a review or an investigation. A reader handed your answer tends to come
-  back agreeing with it.
-- **The same point made again.** A second wording of a rule, or a second and third example of the same thing,
-  costs the reader attention and tells it nothing new.
-- **The story so far,** unless the reader will use it.
+"Think hard" is different: it does nothing, because how hard a model reasons is a setting outside the prompt.
+"Answer without deliberating" does nothing either, for the same reason.
 
-When you have an older prompt to hand, don't edit it into shape. Start from the purpose, done, boundaries and
-context. Then take from the old prompt only the facts that are still true. Editing keeps its lists and its
-emphasis along with its facts.
+Reminders to do what the reader does anyway, such as "run the tests", "check your work" and "keep going", were
+useful on older models. On current ones they cause too much testing and work nobody asked for. A check that
+defines done is different, and it stays.
+
+When you ask for a review or an investigation, leave out your own conclusion. A reader handed the answer tends to
+come back agreeing with it.
+
+When you have an old prompt to update, don't fix it line by line. Start again from the purpose, what done
+looks like, the boundaries and the missing context, and copy across only the facts that are still true.
+Editing keeps the old emphasis and lists along with the facts.
 
 ## How to write it
 
-Write the way Randall Munroe writes in "What If?", without the jokes: for a clever reader who is new to the
-subject. A prompt needs this more than most writing, because its reader can't ask what you meant.
+Write for a reader who is clever but new to the subject, and who can't interrupt to ask what you meant. The style
+to copy is Randall Munroe's in "What If?", without the jokes. He explains hard things in plain words, starts
+from something the reader already knows, and moves one step at a time, so nothing has to be taken on faith.
 
-1. **Say the main thing first.** The first lines of a prompt are the lines least likely to be lost.
-2. **Name who does each thing.** "Run the tests before you merge" tells the reader it is the reader's job. "The
-   tests are run before merging" doesn't say whose job it is.
-3. **Explain a term before you use it, then keep using that word.** If you call it a "module" in one sentence and
-   a "component" in the next, the reader has to decide whether those are two things. Don't make up a label for
-   something that already has a name.
-4. **Use ordinary words.** A technical word is fine when it is the name of the thing.
-5. **Tell things in the order they happen.** Use numbered steps only when the order matters, and name who does
-   each step.
-6. **Be concrete.** A file path, a number, a command or one example carries more than a description of them.
-7. **Write whole sentences.** A prompt stays small because of what you leave out. Don't shrink it by dropping
-   words until the sentences turn into labels the reader has to decode.
-8. **Say what to do.** "Write in paragraphs" works better than "don't use bullet points".
-9. **A script is not an agent.** An agent runs a command, and the command does something. Don't write "tell the
-   build script to", because the reader may go looking for something to talk to.
+In a prompt, that comes down to a few habits:
 
-Before and after:
+- Put the main thing first.
+- Use ordinary words. Keep a technical term only when it is the name of the thing.
+- Define a term once, then keep to that word. A reader who sees "module" and then "component" has to wonder
+  whether they are two things.
+- Explain a new fact next to the ordinary case it differs from: "Normally a subagent starts with your
+  instruction files. The `Explore` agent starts without them, so put everything it needs in the brief."
+- Make it clear whose job each action is. "The tests are run before merging" could mean the reader runs them or
+  that CI already does, while "run the tests before you merge" leaves no doubt.
+- Prefer a path, a number or one example over a description of them.
+- Write whole sentences. A prompt stays short through what you leave out, not by squeezing what's left into
+  labels.
+
+[Writing style](references/writing-style.md) shows each habit at work in longer examples.
+
+Here is the difference on a small review request:
 
 > Before: "CRITICAL: Auth must be thoroughly reviewed!! Check everything carefully and make sure nothing is
 > broken. Be comprehensive."
@@ -103,7 +107,8 @@ Before and after:
 
 ## Where an instruction belongs
 
-An instruction works best close to the moment it applies.
+An instruction works best close to the moment it applies, so where you put it matters as much as how you word
+it.
 
 | The instruction | Put it in |
 |---|---|
@@ -111,36 +116,38 @@ An instruction works best close to the moment it applies.
 | A fact needed in every session in this repository | The instruction file (`CLAUDE.md`, `AGENTS.md`) |
 | A procedure needed for some tasks | A skill |
 | Must hold through a long unattended run | The goal for that run, or a notes file the reader keeps re-reading |
-| Must hold every time, with no exceptions | A hook, a test or a permission rule. The program that runs the model applies these whatever the model decides |
+| Must hold every time, with no exceptions | A hook, a test or a permission rule, which the program running the model enforces whatever the model decides |
 
-If you keep strengthening the wording of a line and the reader still misses it, the line is in the wrong place.
-Move it down the table.
+If you keep strengthening a line and the reader keeps missing it, the wording isn't the problem. The line is in
+the wrong place. Move it further down the table, where less depends on the reader remembering it.
 
-## Which model is reading
+## Write for the model that will read it
 
-The four current models respond differently to the same prompt.
+The four current models respond differently to the same prompt: one stops too early where another pushes too
+hard. Each has habits you can predict, so before you write, find out which model will run the prompt and read
+its file:
 
-| Model | Watch for |
-|---|---|
-| Claude Opus 5.5 | In unattended runs, a turn that ends on a progress report with work left |
-| Claude Fable 5.2 | Following every caution it finds, including stale ones in notes and instruction files |
-| GPT-6 Astra | Stopping to ask, or returning after a first version, where you wanted it to continue |
-| GPT-6.1 Sol | Missing indirect cases that Astra finds |
+- Claude Opus 5.5: [claude-opus-5-5.md](references/models/claude-opus-5-5.md)
+- Claude Fable 5.2: [claude-fable-5-2.md](references/models/claude-fable-5-2.md)
+- GPT-6 Astra and GPT-6.1 Sol: [gpt-6.md](references/models/gpt-6.md)
 
-When an agent did the wrong thing, look for the instruction that caused it before you add a new one. An agent
-that stops to ask too often has usually read an old caution, a rule stated three times, or two files that
-disagree. Removing that line fixes more than adding "don't ask" does.
+If the model is newer than these, read its vendor's prompting guide instead. These files go out of date faster
+than anything else in this skill.
 
-[Models](references/models.md) lists what to change in the prompt for each symptom, with the date it was checked.
-Read it when an agent misbehaved, or when you move instructions to a newer model.
+If an agent still goes wrong, look for the line that caused it before you add a new one. Deleting a stale
+caution usually fixes more than adding "don't ask".
+
+When you move to a new model, re-read everything that carries over: system prompts, skills, instruction files,
+saved notes, and text the host adds to messages. Lines written to push an older model now push too hard, so
+check each one against "What to leave out" above. In Claude Code, `/doctor prompt-audit` does this reading for
+you and also reports files that contradict each other. In Codex, ask the model to audit your skills and
+`AGENTS.md` against OpenAI's migration guide.
 
 ## More
 
 - [Kinds of prompt](references/kinds.md): what a subagent brief, a goal for a long run, a review request, a
-  steer and a system prompt each add, with an example of each. Read it when you write one of these.
-- [Instruction files](references/instruction-files.md): `CLAUDE.md` and `AGENTS.md`. Read it before you write
-  or trim one.
-- [Skills](references/skills.md): how a skill is loaded, and what goes in the description and the body. Read it
-  before you write or revise a skill. Testing a skill is the job of a skill-creator skill, not this one.
-- [Writing style](references/writing-style.md): each writing rule at work. Read it before you write anything
-  long, such as a skill or an instruction file.
+  steer and a system prompt each add. Read the section for the kind you are writing.
+- [Instruction files](references/instruction-files.md): read before you write or trim a `CLAUDE.md` or
+  `AGENTS.md`.
+- [Writing style](references/writing-style.md): each writing habit at work. Read it before you write anything
+  long.
