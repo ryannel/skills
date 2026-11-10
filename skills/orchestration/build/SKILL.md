@@ -263,7 +263,7 @@ builder other work while you wait.
 |---|---|---|
 | `CLAIMED`, `review: false` | The milestone is Done. It needed no reviewer, and the script's own run of the checks passed. | Start the builder's next milestone. |
 | `CLAIMED`, `review: true`, or `REVIEW_OWED` | The milestone is Ready for Review. | Run the `review` in `next`, at that commit, on the review host. |
-| `REPLAN_OWED` | The milestone is Awaiting Replan: it has failed four reviews, so the script won't start a builder on it. | Run the `plan` command in `next`. It sends the milestone and its reviews to a planner. Once that plan is merged, `run` builds the rewritten milestone. |
+| `REPLAN_OWED` | The milestone is Awaiting Replan (four failed reviews repeated a finding) or Awaiting Diagnosis (six failed reviews, mostly on new findings), so the script won't start a builder on it. `ladder` says which. | Run the `plan` command in `next`. It sends the milestone and its reviews to a planner. Once that plan is merged, `run` builds the rewritten milestone. A diagnosing planner may instead keep the plan, and `plan` prints `KEPT`: see below. |
 | `DESIGN_OWED` | `run` already ran the design review (unless you passed `--no-design-review`), and its result was not `DESIGN OK`. | `design_review` holds the result, and `next` the follow-up, as described under [After a review](#after-a-review). |
 | `WAITING` | The milestone is Waiting on Dependency. | Give the builder other work. |
 | `TAKEN` | Another lead has the milestone In Progress, or another `run` in this repository is working on the module. `by` says who. For a `run` in this repository, `holder` gives its process and worktree, and since when. | Give the builder other work. |
@@ -299,15 +299,21 @@ is saved, so run it again, on the other host if you can.
 
 After a `PASS`, `next` is the module's next milestone, or a `why` that says the module is finished.
 
-After a `FAIL`, the result's `ladder` field names the escalation step that the number of failed reviews calls
-for, and `next` is the command for it:
+After a `FAIL`, the result's `ladder` field names the escalation step that the counts call for, and `next` is the
+command for it. `rounds` counts the failed reviews, `fails` those that repeated an earlier finding, and
+`repeated` names the findings that did:
 
 | `ladder` | You do |
 |---|---|
 | `same-session` | Resume the builder with `--message` and what the reviewer found. |
 | `fresh-session` | Start a new builder session with `--fresh --message`. |
 | `replan` | Run the `plan` command. Its task names the milestone and its reviews. Until a planner has changed the milestone, `ready`, `status` and `run` say `replan_owed`, and `run` won't start a builder on it. |
-| `park` | The script has set the milestone to Too Many Failed Reviews. Report it. `next` is the owner's `unpark`. |
+| `diagnose` | Run the `plan` command. The planner reads every round and either changes the milestone, as for `replan`, or keeps the plan and names who has to act. |
+| `park` | The script has set the milestone to Too Many Failed Reviews. `next` asks the owner, with what failed in each round: accept it as it is, change its scope, or unpark it for another try. Bring that question to the chat. |
+
+When a diagnosing planner keeps the plan, `plan` prints `KEPT`, with `who` and `next`. For `builder` or
+`reviewer`, `next` starts a new builder session, and the script tells the next reviewer of a `reviewer` judgement.
+For `owner`, the milestone is parked, and `next` is the question for the owner.
 
 Follow the step it names. The count is the record of what has already been tried, and a lead that overrules it
 runs the same failing attempt again.
@@ -332,7 +338,13 @@ If a builder breaks the main branch, the first builder to notice fixes it.
 ## The owner's decisions
 
 The owner follows the build by talking to you and never uses a terminal, so every command is yours to run,
-including the ones that save their decisions. In your first report, tell them what they can ask for.
+including the ones that save their decisions. Never give the owner a command to type. In your first report, tell
+them what they can ask for.
+
+The script refuses an `owner` command in only two cases: inside a session the loop started, and while a run,
+review or planner holds the module. Neither makes it the owner's job. In the second, run it again once that
+session has stopped. A note or summary that says the owner must type these commands at a terminal is from an
+older version of this set.
 
 They can watch a session that runs in the app, in the Codex app or in Claude's Code tab, and type into a Codex
 thread to steer it. If they press Stop on a Codex thread, or open a Claude session to work in it, that builder is

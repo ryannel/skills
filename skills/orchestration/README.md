@@ -186,8 +186,9 @@ milestone is **Blocked**, and the command prints what would unblock it.
 | Ready for Review | The builder has finished, and no review has run yet. | |
 | Needs Human Feedback | It stopped on something only a person can decide. | the question |
 | Blocked | It stopped because something it needs is missing. | what would unblock it |
-| Awaiting Replan | It failed four reviews, so a planner has to rewrite it. | |
-| Too Many Failed Reviews | It failed four more reviews after the rewrite, and waits for you. | |
+| Awaiting Replan | Four failed reviews repeated an earlier finding, so a planner has to rewrite it. | |
+| Awaiting Diagnosis | Six reviews failed, mostly on new findings, so a planner has to find out why. | |
+| Too Many Failed Reviews | It reached either of those again after the rewrite or diagnosis, and waits for you. | what failed in each round |
 | Done | Every check and review has passed. | |
 
 A module's design has three statuses of its own: Design Ready for Review, Design Changes Requested and Design

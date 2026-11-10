@@ -1,6 +1,6 @@
 ---
 name: orchestrate-planner
-description: Planner for the orchestrate set. Plans a project or a module, rewrites a milestone that has failed four reviews, or settles a proposed change to an interface between modules. Started by the plan command of agent_loop.py.
+description: Planner for the orchestrate set. Plans a project or a module, rewrites or diagnoses a milestone that keeps failing review, or settles a proposed change to an interface between modules. Started by the plan command of agent_loop.py.
 tools: Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch, Skill
 skills:
   - plan-module

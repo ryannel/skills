@@ -109,8 +109,14 @@ The other fields record what happened:
 - `state` is the milestone's status. It takes one of six values: `open`, `in_progress`, `claimed`, `done`,
   `blocked` or `parked`. The next section says what each means. A Blocked milestone also has a `blocked` field
   that says what would unblock it.
-- `fails` counts the reviews the milestone has failed since a planner last rewrote it. `replans` counts those
-  rewrites.
+- `findings` is the reviewer's list of the blocking findings of the last review, empty or absent after a pass.
+  Each finding has a short `name`, the `item` it fails (left out for a defect outside the items), and, when an item
+  that failed before fails again for another reason, `different`, saying how it isn't the same defect. The script
+  adds `repeat: true` to each finding an earlier round raised: one with the same name, or one on an item that
+  failed before, unless `different` says otherwise.
+- The script keeps four counts. `rounds` counts every failed review, and `fails` the failed reviews with at least
+  one repeated finding, both since the counts last started again. `replans` counts the planner's rewrites, and
+  `diagnoses` the planner's diagnoses (see [When a review fails](#when-a-review-fails)).
 
 A milestone needs a reviewer if any of its items has `inspect` or `ask`, or if it is the module's last milestone.
 The review of the last milestone reads the whole module, which is how work proved only by Automated Checks still
@@ -130,8 +136,9 @@ stored in the `state` field, which is the only thing to write there. The third i
 | Ready for Review | The builder has finished, and no review has run yet. | `claimed` | `review_owed` |
 | Needs Human Feedback | It stopped on something only a person can decide. | `blocked`, on an item marked `attended` | `blocked` |
 | Blocked | It stopped because something it needs is missing. | `blocked` | `blocked` |
-| Awaiting Replan | It failed four reviews, so a planner has to rewrite it. | `in_progress`, with `fails` at 4 | `replan_owed` |
-| Too Many Failed Reviews | It failed four more reviews after the rewrite, and waits for the owner. | `parked` | `parked` |
+| Awaiting Replan | Four failed reviews repeated an earlier finding, so a planner has to rewrite it. | `in_progress`, with `fails` at 4 | `replan_owed` |
+| Awaiting Diagnosis | Six reviews failed, mostly on findings no earlier round raised, so a planner has to find out why. | `in_progress`, with `rounds` at 6 | `replan_owed` |
+| Too Many Failed Reviews | It reached either of those again, after the rewrite or the diagnosis, and waits for the owner. | `parked` | `parked` |
 | Done | Every check and review has passed. | `done` | `finished`, for a module whose milestones are all Done |
 
 The commands also print `invalid`, for a module whose done-when file is malformed or has been changed by an
@@ -177,13 +184,16 @@ Only one kind of agent changes each field at any time, and the hand-overs happen
 | `state` from `blocked` to `open` | Lead, with the `unblock` command | Whatever blocked it is resolved. |
 | An item's `verdict` and `review` | Reviewer | Reviewing a milestone that is Ready for Review. Every item gets a result. |
 | `state` from `claimed` to `done` | Reviewer | Every result is `pass`, and no Must Fix lies outside the items. |
-| `state` from `claimed` to `in_progress`, and 1 more in `fails` | Reviewer | Any result is `fail` or `cant_tell`, or a Must Fix lies outside the items. A Suggestion never does this. |
+| `state` from `claimed` to `in_progress`, and `findings` | Reviewer | Any result is `fail` or `cant_tell`, or a Must Fix lies outside the items. Every Must Fix is a finding, and every item that didn't pass is named by one. A Suggestion never is. |
+| `findings` emptied | Script | The review passes. |
+| 1 more in `rounds`, 1 more in `fails` if a finding repeated, and `repeat` on each finding | Script | After a failed review. A count a reviewer or planner writes is put back. |
 | `status` back to `open` and `evidence` cleared, on the items that didn't pass | Script | After a failed review, so the next attempt is proved again. |
 | `state` to `parked` | Script | After a failed review, when the escalation steps below reach Too Many Failed Reviews. |
 | The planner's fields | Planner | A rewrite of a milestone that is Awaiting Replan, a revision after a design review, or a change the owner asked for. Milestones split off from a rewritten one start with its `replans` count. The script saves the new items as the approved ones and clears the old proof. |
-| `fails` back to 0, 1 more in `replans`, `state` to `open` | Script | A planner's plan, or the owner's `scope`, has changed the items of a milestone that was Awaiting Replan. Done once, whatever the planner wrote in those fields. |
-| The planner's fields, without counting as a rewrite | Owner | `owner scope`, when the owner changes what is wanted. On a milestone that is Awaiting Replan, the new scope is the rewrite. |
-| `state` to `done` with no review, back to `claimed` for a new review, or from `parked` to `open` | Owner | `owner accept`, `owner rereview` or `owner unpark`. |
+| `fails` and `rounds` back to 0, 1 more in `replans`, `state` to `open` | Script | A planner's plan, or the owner's `scope`, has changed the items of a milestone that was Awaiting Replan or Awaiting Diagnosis. After a diagnosis it also adds 1 to `diagnoses`. Done once, whatever the planner wrote in those fields. |
+| `fails` and `rounds` back to 0, 1 more in `diagnoses`, and `state` to `parked` if the owner has to decide | Script | A diagnosing planner kept the plan and ended with `KEEP`. |
+| The planner's fields, without counting as a rewrite | Owner | `owner scope`, when the owner changes what is wanted. On a milestone that is Awaiting Replan, the new scope is the rewrite. The script sets `fails`, `rounds` and `diagnoses` back to 0, and a Too Many Failed Reviews milestone back to `open`. |
+| `state` to `done` with no review, back to `claimed` for a new review, or from `parked` to `open` | Owner | `owner accept`, `owner rereview` or `owner unpark`. An unpark sets `fails`, `rounds` and `diagnoses` back to 0. |
 
 Reviewers and planners don't commit their own changes to these files. The script compares what they changed with
 this table. Then it commits and merges the changes, or rejects all of them.
@@ -196,12 +206,27 @@ would settle the item, and the builder's next attempt has to produce it.
 These are the escalation steps. They are written down only here. The `next` command, and the `next` field in a
 review's result, apply them.
 
-| Failed reviews (`fails`) | What happens |
+The steps follow two counts. `fails` counts the failed reviews that repeated a finding an earlier round raised,
+which means fixes aren't holding. `rounds` counts every failed review, which catches a milestone whose fixes hold
+but whose reviews keep finding something new. The first row that applies is the step.
+
+| Counts | What happens |
 |---|---|
-| 1 or 2 | The same builder fixes what the reviewer found, in the same session. |
-| 3 | A new builder session starts, with only the files and the review. |
-| 4 | The milestone is Awaiting Replan, and a planner rewrites it, because the plan may be the problem. |
-| 4 more, after the rewrite | The script sets it to Too Many Failed Reviews, and it waits for the owner. |
+| `fails` at 4 | The milestone is Awaiting Replan, and a planner rewrites it, because the plan may be the problem. If it has been rewritten before, the script sets it to Too Many Failed Reviews, and it waits for the owner. |
+| `rounds` at 6 | The milestone is Awaiting Diagnosis. A planner reads every round and decides why it keeps failing. If it has been diagnosed before, the script sets it to Too Many Failed Reviews. |
+| `fails` at 3, or `rounds` at 3 | A new builder session starts, with only the files and the review. |
+| Any other failed review | The same builder fixes what the reviewer found, in the same session. |
+
+A diagnosing planner either rewrites the milestone, which the script settles like a re-plan, or keeps the plan and
+says who has to act. A builder who keeps breaking something gets a new session with the planner's reasons. A
+reviewer whose findings go beyond the items is overruled: the next reviewer is told to judge the items as written.
+A decision only the owner can make parks the milestone, with the diagnosis.
+
+The counts start again from 0 after a rewrite, a diagnosis, `owner scope` or `owner unpark`. Rounds before that
+no longer count as earlier rounds, so a finding they raised isn't a repeat.
+
+When the script parks a milestone, its message to the owner lists what failed in each round, and offers three
+answers as equals: accept the milestone as it is, change its scope, or unpark it for another try.
 
 Each step exists because the one before it has already been tried. Repeating a step would spend the next attempt
 on something already ruled out.

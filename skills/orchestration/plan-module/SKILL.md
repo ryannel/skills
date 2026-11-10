@@ -1,6 +1,6 @@
 ---
 name: plan-module
-description: Plans work for AI agents to build, whether software, a game or a set of assets, as part of the orchestrate set. Splits a project into modules, writes each module's design, milestones and done-when file, and writes the ORCHESTRATE.md project settings. Use when starting or re-planning a project or a module, when an interface between modules has to change, or after a milestone has failed four reviews. Not for building (build-milestone) or judging (review-milestone).
+description: Plans work for AI agents to build, whether software, a game or a set of assets, as part of the orchestrate set. Splits a project into modules, writes each module's design, milestones and done-when file, and writes the ORCHESTRATE.md project settings. Use when starting or re-planning a project or a module, when an interface between modules has to change, or after a milestone has failed review repeatedly. Not for building (build-milestone) or judging (review-milestone).
 ---
 
 # Plan
@@ -195,7 +195,8 @@ line), or an item's `check`, so it is caught for nothing from then on.
 
 ## When a milestone fails review four times
 
-The milestone is Awaiting Replan (the script prints `replan_owed`), and something about the plan is wrong. Read the reviews, which your task
+The milestone is Awaiting Replan (the script prints `replan_owed`): four of its failed reviews repeated a finding
+an earlier round had raised, so something about the plan is wrong. Read the reviews, which your task
 names. Each round's review is kept beside the latest, as `<id>-review-1.md` and so on. Decide which of these
 happened, and write why in the log:
 
@@ -203,14 +204,32 @@ happened, and write why in the log:
 - It depended on something outside this module. Change what it covers.
 - It used a mechanism that can't work. Redesign it.
 
-Then change the items. When your plan is merged, the script sets that milestone's `fails` to 0, adds 1 to
-`replans` and sets its `state` to `open`, which is Not Started, once, whatever you wrote in those fields. It saves the new items as the
-approved ones and clears the old proof, because that proved something else.
+Then change the items. When your plan is merged, the script sets that milestone's `fails` and `rounds` to 0, adds
+1 to `replans` and sets its `state` to `open`, which is Not Started, once, whatever you wrote in those fields. It
+saves the new items as the approved ones and clears the old proof, because that proved something else.
 
-Milestones you split off must start with the same `replans` count as the one they came from. Set that yourself,
-because the script can't tell which new milestone came from which. With the count carried over, a second run of
+Milestones you split off must start with the same `replans` and `diagnoses` counts as the one they came from. Set
+those yourself, because the script can't tell which new milestone came from which. With the count carried over, a second run of
 four failures ends at Too Many Failed Reviews (`parked`), where the milestone waits for the owner, and not at
 another rewrite.
+
+## When reviews keep finding something new
+
+The milestone is Awaiting Diagnosis (also printed `replan_owed`): it has failed six reviews, mostly on findings no
+earlier round had raised. Each finding was fixed, so the builder isn't stuck, but the milestone is getting no
+closer to passing. Your task lists what failed in each round, and the reviews are kept as for a re-plan. Decide why, and say
+so in your report:
+
+- The items are too broad, or can't be met as written. Change them, and end with `PLANNED` as usual. The script
+  settles it like a re-plan, and also counts the diagnosis.
+- The plan is right. Change no file, and make your last line
+  `KEEP <MODULE> <milestone>: builder|reviewer|owner: <why>`, naming who has to act. `builder` is for a builder
+  who keeps breaking something, and starts a new builder session with your reasons. `reviewer` is for findings
+  that go beyond the items, and the next reviewer is told to judge the items as written. `owner` is for a decision
+  only the owner can make, and parks the milestone with your diagnosis.
+
+The script starts the milestone's counts again either way. A second run to six rounds after a diagnosis parks it.
+Leave the other counts and `findings` alone: the script puts back any change a plan makes to them.
 
 Don't edit a `-ACCEPTED.json` record file. Only the script writes those, and it rejects a plan that touches one.
 

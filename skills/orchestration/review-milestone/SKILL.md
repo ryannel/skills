@@ -74,9 +74,11 @@ path, you don't know that it works, so give it Could Not Judge (`cant_tell`).
    - Screenshots and recordings go in the folder `<evidence>/<MODULE>/<milestone>-review/`. Link them from the
      review, and don't embed them.
    - In the done-when file, set each item's `verdict`, and point its `review` field at the review file. If every
-     result is `pass` and no Must Fix lies outside the items, set the milestone's `state` to `done`. Otherwise set
-     `state` back to `in_progress` and add 1 to `fails`. Leave every other field alone, including the builder's
-     `status`: the script resets it on the items that didn't pass.
+     result is `pass` and no Must Fix lies outside the items, set the milestone's `state` to `done`. The script clears
+     `findings`. Otherwise set `state` back to `in_progress`, and list every Must Fix in the milestone's
+     `findings`, one entry each: a short `name`, and the `item` it fails, left out for one outside the items.
+     Every item that didn't pass needs a finding. Leave every other field alone, including the builder's `status`
+     and the counts: the script resets the status on the items that didn't pass, and counts the round.
      [Who changes what](../plan-module/references/done-when.md#who-changes-what-and-when) has the whole table.
 5. Your last line is `PASS <milestone>`, or
    `FAIL <milestone>: <n> fail, <n> cant_tell, <n> outside the items`. Count Must Fix findings only.
@@ -94,9 +96,18 @@ rejects the whole review and saves none of it.
 Start from the earlier review, and say whether each Must Fix in it is now fixed. Then judge the items again as
 they are written.
 
+Your task lists the earlier rounds that still count, with their findings. The script counts a finding as a repeat
+when its name matches one from an earlier round, or when it fails an item that failed before. Four rounds with a
+repeat send the milestone back to a planner, so name findings truthfully:
+
+- A Must Fix that is still there, or is back, keeps its earlier `name` exactly.
+- A new defect gets a new name.
+- When an item that failed before fails again for a different reason, add `different`, saying how it isn't the
+  same defect. Without it the failure counts as a repeat.
+
 Hold an open-ended item, such as a lint that must catch "any violation", to the range the design names and the
 inputs the product really has. A hole that only an input nothing produces can reach is a Suggestion. Without this
-rule each review finds one more corner, and a sound milestone fails four reviews and goes back to a planner.
+rule each review finds one more corner, and a sound milestone fails round after round and goes back to a planner.
 
 ## Things that fool a builder's own checks
 

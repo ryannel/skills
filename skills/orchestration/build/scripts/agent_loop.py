@@ -53,8 +53,9 @@ Subcommands:
         UNCLAIMED     the agent said DONE (or its goal completed) three times without a claim that holds
         INVALID       the done-when file is malformed, or something outside the builder's fields changed
         REVIEW_OWED   the module's next milestone is claimed and waiting for review
-        REPLAN_OWED   the module's next milestone failed review four times; `next` is the planner's re-plan, and no
-                      builder starts on it until the planner has changed its definitions
+        REPLAN_OWED   the module's next milestone failed review four times on a repeated finding (`ladder`
+                      replan), or six times in all (`ladder` diagnose); `next` is the planner's task, and no builder
+                      starts on it until the planner has changed its definitions or, for a diagnosis, kept them
         DESIGN_OWED   the module's design hasn't passed a design review (or changed since it did). Unless
                       --no-design-review, `run` first runs that review itself, as `review --milestone design` would
                       with the same --effort, on the review host (--review-host, else the profile's `Review host`,
@@ -121,10 +122,14 @@ Subcommands:
         FLOOR, PIN or PAUSED. With no --host, a review goes to the profile's `Review host` (`other` means the host
         that built the claim swapped, or for a design review the host of the planner turn that wrote the plan
         swapped, else the profile's default host swapped). REVIEWED's `next` is the
-        {command, by, why}. After a failed milestone review `ladder` (and `next.ladder`) is the escalation word
-        (same-session, fresh-session, replan, park) and `next` the command it calls for: `run --message` with the
-        findings, `run --fresh --message`, `plan` with a re-plan task naming the reviews (by: planner), or `owner
-        unpark` (by: owner) for a milestone the loop parked. After a pass it is the
+        {command, by, why}. After a failed milestone review `rounds` counts its failed reviews since the last
+        re-plan, diagnosis or owner decision, `fails` those with a finding that repeated an earlier round's
+        (`repeated` names them), and `ladder` (and `next.ladder`) is the escalation word (same-session,
+        fresh-session, replan, diagnose, park) with `next` the command it calls for: `run --message` with the
+        findings, `run --fresh --message`, `plan` with a re-plan or diagnosis task naming the reviews (by:
+        planner), or `owner unpark` (by: owner, with each round under `history`) for a milestone the loop parked.
+        A diagnosing planner ends with `PLANNED` (a re-plan) or `KEEP <MODULE> <milestone>: builder|reviewer|owner:
+        <why>`, which `plan` records as KEPT, starting the counts again; a second diagnosis parks. After a pass it is the
         next ready milestone or "finished", the planner's revision with `findings` after DESIGN CHANGES.
         A second design review keeps the first as design-review-N.md, and its prompt names the done-when items
         added, removed or redefined since the first.
@@ -140,8 +145,8 @@ Subcommands:
         `assumptions` counts, per module, the `Assumption:` lines in its plan log. The whole task is kept in the plan
         commit's body and in each module's acceptance record under `briefs` (the authorisation stamps name only its
         first line), which design reviews are pointed at. For each
-        milestone that was owed a re-plan and whose definitions the plan changed, the loop sets fails 0, adds 1 to
-        replans and opens it, in its own commit, whatever the planner wrote there (`replanned` lists them). In a
+        milestone that was owed a re-plan or diagnosis and whose definitions the plan changed, the loop sets fails
+        and rounds 0, adds 1 to replans (and to diagnoses, for a diagnosis) and opens it, in its own commit, whatever the planner wrote there (`replanned` lists them). In a
         repository with no commits (or origin with no main branch), FLOOR before any planner turn, with `next`
         giving the first commit and push. One planner runs per repository at a time: another gets TAKEN, naming the
         holder, with `next` to run it again once that one stops. A clean worktree behind the tip is fast-forwarded
@@ -204,8 +209,8 @@ Subcommands:
         blocked or waiting, open attended items, and cost (as `cost` reads it). --write puts it in
         <evidence>/build-reports/<date>.md for `adopt`, with its links relative to that file.
   next  --module CORE --worktree PATH --milestone M2   The escalation after a failed review (see done-when.md):
-        read at the integrated tip, where the review landed. `action` is the ladder's word, `message` what to send (the builder's findings, or for `replan` the planner's
-        task), and `next` the command.
+        read at the integrated tip, where the review landed. `action` is the ladder's word, `message` what to send (the builder's findings, or for `replan` and
+        `diagnose` the planner's task), and `next` the command.
   unblock --module CORE --milestone M2 --worktree PATH   Puts a blocked milestone back in the queue.
   pause [--module CORE] --worktree PATH   Stops running loops in this repository, and their agents, cleanly.
   owner accept|rereview|unpark|scope|release|answer --module CORE --milestone M2|design [--item M2.3]
@@ -221,7 +226,7 @@ Subcommands:
         against it. `release` drops a claim whose lead is gone. `scope` takes the done-when file as edited in the
         worktree (refused, saying nothing changed, when it matches the tip), leaves the worktree clean on the tip where it can, and says under `worktree` what to do where it
         can't. A `scope` that changes a milestone owed a re-plan is the re-plan: fails 0, one more replans, state
-        open, listed under `replanned` with `replanned_why`.
+        open, listed under `replanned` with `replanned_why`. `unpark` sets fails, rounds and diagnoses to 0.
   quota [--worktree PATH] [--budget 120] [--json]
         A short readout leading with the verdict, saying whose use each figure counts; --json gives everything.
         The weekly Codex limit, read from Codex's local rollouts by codex_quota.py beside this file: burn per active
@@ -345,7 +350,7 @@ blocked (you tried it and it failed) or missing context, end with `BLOCKED: ...`
 REVIEW_TEMPLATE = """Use the review-milestone skill ({skill}) to review milestone \
 {milestone} of module {module}. This folder is a clean checkout of commit {commit}, made for you by the loop; build \
 and run the product from it. The done-when file is {done}. Write the review to {review}, and set the verdict fields, \
-state and fails as the skill says. Put captures and other evidence files in {captures}/ and link them from the \
+state and findings as the skill says; the loop sets the counts. Put captures and other evidence files in {captures}/ and link them from the \
 review, rather than embedding them in it. Don't commit, push or change anything else: the loop checks what you \
 changed, then integrates the review itself. {answers}Don't launch other agents. End with the skill's last line."""
 
@@ -359,12 +364,14 @@ PLAN_TEMPLATE = """Use the plan-module skill ({skill}) for this task: {task}
 You can't launch other agents. The loop commits and integrates the files you leave, and records the new \
 definitions; never edit a *-ACCEPTED.json file, and don't commit, merge, pull or land. Say what changed and any decision the owner must make. Your last line \
 is `PLANNED: <every file you wrote or changed, comma-separated>` once those files are written, or `BLOCKED: ...` or \
-`NEEDS_CONTEXT: ...` (including when nothing should change); the loop lands nothing then. To dry-run a milestone's checks, run `python3 {loop} check --module <M> --milestone <id> --worktree .`. The loop finds the host CLIs (codex, claude) itself, so one missing from your PATH isn't a problem to report."""
+`NEEDS_CONTEXT: ...` (including when nothing should change, except for a diagnosis, which ends with its `KEEP` line); \
+the loop lands nothing then. To dry-run a milestone's checks, run `python3 {loop} check --module <M> --milestone <id> --worktree .`. The loop finds the host CLIs (codex, claude) itself, so one missing from your PATH isn't a problem to report."""
 
 FINDINGS_TEMPLATE = """The reviewer failed {milestone}: see {evidence}/{module}/{milestone}-review.md. The loop has \
 set the items that didn't pass back to open, so each needs fresh evidence. Every blocking finding counts, including \
 cant_tell items (they need evidence the reviewer could reach) and blocking defects outside the items; advisory ones \
-are your call. Add them to the plan as work items, fix them, re-verify the affected items, integrate, set the state back to claimed, and end with DONE, BLOCKED \
+are your call. The milestone's `findings` in the done-when file lists the blocking ones, and marks with `repeat` any an \
+earlier round raised: those are what escalate the milestone, so make sure they stay fixed. Add them to the plan as work items, fix them, re-verify the affected items, integrate, set the state back to claimed, and end with DONE, BLOCKED \
 or NEEDS_CONTEXT."""
 
 
@@ -833,13 +840,14 @@ def validate(done, module: str = "") -> list[str]:
             problems.append(f"{mid}: state {m.get('state')!r} isn't one of {sorted(STATES)}")
         if m.get("state") == "blocked" and not m.get("blocked"):
             problems.append(f"{mid}: blocked, but \"blocked\" doesn't say what unblocks it")
-        for counter in ("fails", "replans"):
+        for counter in ("fails", "replans", "rounds", "diagnoses"):
             if not is_count(m.get(counter, 0)):
                 problems.append(f"{mid}: {counter} {m.get(counter)!r} isn't a whole number of 0 or more")
         items = m.get("items")
         if not isinstance(items, list) or not items:
             problems.append(f"{mid}: no items")
             items = []
+        problems += findings_problems(m, mid, items)
         for item in items:
             if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item.get("id"):
                 problems.append(f"{mid}: an item has no string id")
@@ -872,6 +880,29 @@ def validate(done, module: str = "") -> list[str]:
             elif order.index(target) >= index:
                 problems.append(f"{mid}: needs {target}, which comes at or after it, so it can never start "
                                 "(milestones in a module run in order)")
+    return problems
+
+
+def findings_problems(m: dict, mid: str, items: list) -> list[str]:
+    """What's wrong with a milestone's `findings`: the reviewer's list of the blocking findings of its last review,
+    each with a short `name` kept the same from round to round, the `item` it fails (none for a defect outside the
+    items), and `different` saying how a new failure of an item that failed before isn't the same defect."""
+    found = m.get("findings", [])
+    if not isinstance(found, list):
+        return [f"{mid}: findings should be a list"]
+    ids = {i.get("id") for i in items if isinstance(i, dict)}
+    problems, names = [], set()
+    for f in found:
+        if not isinstance(f, dict) or not isinstance(f.get("name"), str) or not f["name"].strip():
+            problems.append(f"{mid}: each finding needs a short name")
+            continue
+        if f["name"] in names:
+            problems.append(f"{mid}: two findings are named {f['name']!r}")
+        names.add(f["name"])
+        if "item" in f and f["item"] not in ids:
+            problems.append(f"{mid}: finding {f['name']!r} names item {f['item']!r}, which isn't one of {mid}'s")
+        if "different" in f and not isinstance(f["different"], str):
+            problems.append(f"{mid}: finding {f['name']!r}: different should be text")
     return problems
 
 
@@ -955,14 +986,38 @@ def passing(milestone: dict) -> int:
     return sum(1 for item in milestone["items"] if item.get("status") == "pass")
 
 
-def escalation(fails: int, replans: int = 0) -> str:
-    if fails <= 0:
+# A failed review moves a milestone up the ladder only when one of its findings repeats an earlier round's, so a
+# builder that fixes each finding and is shown a new one isn't treated as stuck. `rounds` counts every failed review,
+# repeated or not; at ROUNDS_TO_DIAGNOSE a planner is asked what keeps failing, since reviews that keep finding new
+# things can mean the checks are too broad.
+FRESH_AFTER_ROUNDS = 3
+ROUNDS_TO_DIAGNOSE = 6
+
+
+def escalation(fails: int, replans: int = 0, rounds: int = 0, diagnoses: int = 0) -> str:
+    """The ladder's word for a milestone's counts: `fails` is failed reviews with a repeated finding, `rounds` every
+    failed review, both since the last re-plan, diagnosis or owner decision."""
+    if fails >= 4:
+        return "replan" if replans == 0 else "park"
+    if rounds >= ROUNDS_TO_DIAGNOSE:
+        return "diagnose" if diagnoses == 0 else "park"
+    if fails <= 0 and rounds <= 0:
         return "none"
-    if fails <= 2:
-        return "same-session"
-    if fails == 3:
+    if fails == 3 or rounds == FRESH_AFTER_ROUNDS:
         return "fresh-session"
-    return "replan" if replans == 0 else "park"
+    return "same-session"
+
+
+def ladder(m: dict) -> str:
+    """`escalation` for a milestone of a done-when file."""
+    return escalation(*(int(m.get(k, 0) or 0) for k in ("fails", "replans", "rounds", "diagnoses")))
+
+
+def repeats(findings: list, earlier_names: set, earlier_items: set) -> list[str]:
+    """The names of this round's findings that repeat an earlier round's: the same name, or a failure of an item
+    that failed before, unless the reviewer said under `different` how it isn't the same defect."""
+    return [f["name"] for f in findings if f["name"] in earlier_names
+            or (f.get("item") in earlier_items and not f.get("different"))]
 
 
 def reset_proof(milestone: dict, only_failed: bool = False) -> None:
@@ -980,7 +1035,8 @@ def reset_proof(milestone: dict, only_failed: bool = False) -> None:
 # ------------------------------------------------------------------------------------------------ deltas by role
 
 BUILDER_FIELDS = {"state"}, {"status", "evidence"}
-REVIEWER_FIELDS = {"state", "fails"}, {"verdict", "review"}
+# `fails` is listed so that a reviewer following an older skill isn't refused for it; the loop sets the counts.
+REVIEWER_FIELDS = {"state", "fails", "findings"}, {"verdict", "review"}
 
 
 def delta_problems(before: dict | None, after: dict, role: str, mid: str | None = None,
@@ -1037,10 +1093,6 @@ def delta_problems(before: dict | None, after: dict, role: str, mid: str | None 
         if role == "review":
             if b.get("state") != "claimed":
                 problems.append(f"{mid}: was {b.get('state')}, not claimed, so there was nothing to review")
-            elif a.get("state") == "done" and a.get("fails", 0) != b.get("fails", 0):
-                problems.append(f"{mid}: a pass doesn't change fails")
-            elif a.get("state") == "in_progress" and a.get("fails", 0) != b.get("fails", 0) + 1:
-                problems.append(f"{mid}: a fail adds exactly 1 to fails")
             elif a.get("state") not in ("done", "in_progress"):
                 problems.append(f"{mid}: a review sets state done (pass) or in_progress (fail), not {a.get('state')}")
     return problems
@@ -1209,9 +1261,10 @@ def next_step(key: str, proj: dict, claims: dict | None = None, me: str = "") ->
                     **({"attended": held} if (held := open_attended(m)) else {})}
         if not design_ok(rec, e["design"]):
             return {**base, "status": "design_owed"}
-        if escalation(int(m.get("fails", 0)), int(m.get("replans", 0))) == "replan":
-            # four failed reviews: the plan is wrong, and another build round would only repeat them
-            return {**out, "status": "replan_owed", "fails": int(m.get("fails", 0))}
+        if (word := ladder(m)) in ("replan", "diagnose"):
+            # repeated failures, or many new ones: another build round would only repeat them until a planner looks
+            return {**out, "status": "replan_owed", "ladder": word, "fails": int(m.get("fails", 0) or 0),
+                    "rounds": int(m.get("rounds", 0) or 0)}
         if m.get("state") == "claimed" or (m.get("state") == "done" and needs_review(m, doc)):
             claim = (rec["milestones"].get(m["id"]) or {}).get("claim") or {}
             return {**out, "status": "review_owed", "commit": claim.get("commit")}
@@ -1330,6 +1383,21 @@ def plan_task(module: str, problems: list[str]) -> str:
     return f"Fix {module}'s done-when file: " + "; ".join(problems)[:400]
 
 
+def counted_since(e: dict) -> str:
+    """When a milestone's review counts last started from 0: its definitions' authorisation (a plan, a re-plan or
+    `owner scope`), or a later diagnosis or `owner unpark`."""
+    return max((e.get("authorised") or {}).get("at") or "", e.get("counted_from") or "")
+
+
+def counted_rounds(e: dict, after: int | None = None) -> list[dict]:
+    """The review rounds a milestone's counts cover, oldest first: those after the last diagnosis or `owner unpark`
+    (by position, since both can land in the same second as a round) and not older than its definitions. `after`
+    takes the rounds from that position instead."""
+    auth = (e.get("authorised") or {}).get("at") or ""
+    start = e.get("counted_after", 0) if after is None else after
+    return [r for r in (e.get("reviews") or [])[start:] if (r.get("at") or "") >= auth]
+
+
 def review_rounds(worktree: Path, prof: dict, module: str, mid: str) -> tuple[list[str], bool]:
     """(the review files of every round against the milestone's current definitions, oldest first; whether some of
     those rounds were overwritten before rounds were kept), read from the record at the last-fetched tip."""
@@ -1338,9 +1406,54 @@ def review_rounds(worktree: Path, prof: dict, module: str, mid: str) -> tuple[li
     except (json.JSONDecodeError, SystemExit):
         rec = {}
     e = (rec.get("milestones") or {}).get(mid) or {}
-    since = (e.get("authorised") or {}).get("at") or ""
-    rounds = [r for r in e.get("reviews") or [] if (r.get("at") or "") >= since]
+    rounds = counted_rounds(e)
     return [r["review"] for r in rounds if r.get("review")], any(r.get("review_in_history") for r in rounds)
+
+
+def round_history(worktree: Path | None, prof: dict, module: str, mid: str, after: int | None = None) -> list[str]:
+    """One line per failed review the milestone's counts cover (or every one after position `after`), oldest first: what
+    failed, and which findings repeated an earlier round. Read from the record at the last-fetched tip, for a
+    planner and for the owner."""
+    if worktree is None:
+        return []
+    try:
+        rec = json.loads(show(worktree, base_ref(prof), record_rel(prof, module)) or "{}")
+    except (json.JSONDecodeError, SystemExit):
+        return []
+    return history_lines((rec.get("milestones") or {}).get(mid) or {}, after)
+
+
+def review_notes(mid: str, prof: dict, stem: str, answers: list | None, history: list[str], judged: list) -> str:
+    """What a milestone reviewer is told beyond the template: the owner's answers, the earlier rounds that still
+    count (so a finding still there keeps its name), and a planner's judgement that earlier findings overreached."""
+    notes = ""
+    if answers:
+        notes += (f"The owner's answers for {mid} are in {record_rel(prof, stem)} under milestones.{mid}.owner_answers "
+                  "(for " + ", ".join(dict.fromkeys(x.get('item') or mid for x in answers)) +
+                  "). Check any claim about what the owner chose against them. ")
+    if history:
+        notes += (f"Earlier failed rounds of {mid} that still count, with their findings: " + " | ".join(history) +
+                  ". A finding still there keeps its name; an item that failed before and fails for a new reason "
+                  "needs `different`. ")
+    if judged:
+        notes += (f"A planner read the earlier reviews of {mid} and judged that their findings went beyond its items: "
+                  f"{judged[-1].get('why', '')}. Judge the items as written. ")
+    return notes
+
+
+def history_lines(e: dict, after: int | None = None) -> list[str]:
+    """`round_history` for a milestone's record entry."""
+    lines = []
+    for n, r in enumerate(r for r in counted_rounds(e, after) if r.get("verdict") == "fail"):
+        found = r.get("findings")
+        if found is None:
+            failed = [i for i, v in (r.get("items") or {}).items() if v != "pass"]
+            what = f"items {', '.join(failed)} didn't pass" if failed else "no findings recorded"
+        else:
+            what = "; ".join(f["name"] + (f" ({f['item']})" if f.get("item") else " (outside the items)")
+                             + (", repeated" if f.get("repeat") else ", new") for f in found)
+        lines.append(f"round {n + 1} ({(r.get('at') or '')[:10]}): {what}")
+    return lines
 
 
 def replan_task(module: str, mid: str, fails: int, prof: dict, worktree: Path | None = None) -> str:
@@ -1349,9 +1462,29 @@ def replan_task(module: str, mid: str, fails: int, prof: dict, worktree: Path | 
     files, lost = review_rounds(worktree, prof, module, mid) if worktree else ([], True)
     where = (f"Its reviews, one per round: {', '.join(files)}" if files else f"The latest review is {latest}") + \
         (f" (earlier rounds are only in git history: git log -p -- {latest})" if lost or not files else "")
-    return (f"Re-plan {module} {mid}: it has failed review {fails} times, so the plan is wrong (plan-module, \"When a "
-            f"milestone fails review four times\"). {where}. Find what keeps failing and change the definitions of "
-            f"{mid} so it can be met; the loop resets its fails, counts the re-plan and opens it when your plan lands")
+    history = round_history(worktree, prof, module, mid)
+    rounds = f" What failed in each round: {' | '.join(history)}." if history else ""
+    return (f"Re-plan {module} {mid}: {fails} of its failed reviews repeated a finding an earlier round had raised, "
+            f"so the plan is wrong (plan-module, \"When a milestone fails review four times\"). {where}.{rounds} Find "
+            f"what keeps failing and change the definitions of {mid} so it can be met; the loop resets its counts, "
+            "counts the re-plan and opens it when your plan lands")
+
+
+def diagnose_task(module: str, mid: str, rounds: int, prof: dict, worktree: Path | None = None) -> str:
+    """The planner's task when a milestone has failed review ROUNDS_TO_DIAGNOSE times, each time on something new."""
+    latest = f"{prof['evidence']}/{module}/{mid}-review.md"
+    files, lost = review_rounds(worktree, prof, module, mid) if worktree else ([], True)
+    where = (f"Its reviews, one per round: {', '.join(files)}" if files else f"The latest review is {latest}") + \
+        (f" (earlier rounds are only in git history: git log -p -- {latest})" if lost or not files else "")
+    history = round_history(worktree, prof, module, mid)
+    rounds_text = f" What failed in each round: {' | '.join(history)}." if history else ""
+    return (f"Diagnose {module} {mid}: it has failed review {rounds} times, mostly on findings no earlier round had "
+            f"raised (plan-module, \"When reviews keep finding something new\"). {where}.{rounds_text} Decide why. If "
+            f"the items are too broad or can't be met, change the definitions of {mid} and end with PLANNED as usual. "
+            f"If the plan is right, change no file (your reasons go in the line itself) and end with "
+            f"`KEEP {module} {mid}: builder: <why>`, "
+            "`... reviewer: <why>` or `... owner: <why>`, naming who has to act: a builder who keeps breaking "
+            "something, a reviewer whose findings go beyond the items, or the owner, for a decision only they can make")
 
 
 def keep_round(tree: Path, current: Path) -> tuple[str, list[str]]:
@@ -1392,39 +1525,94 @@ def settle_replans(before: dict | None, after: dict, stem: str) -> list[str]:
     out = []
     for m in after.get("milestones") or []:
         was = old.get(m.get("id"))
-        if not was or escalation(int(was.get("fails", 0)), int(was.get("replans", 0))) != "replan":
+        word = ladder(was) if was else "none"
+        if word not in ("replan", "diagnose"):
             continue
         if definitions(was) == definitions(m):
             continue  # nothing re-planned yet: still owed
-        m.update(fails=0, replans=int(was.get("replans", 0)) + 1, state="open")
+        m.update(fails=0, rounds=0, replans=int(was.get("replans", 0)) + 1, state="open",
+                 diagnoses=int(was.get("diagnoses", 0) or 0) + (1 if word == "diagnose" else 0))
         m.pop("blocked", None)
+        m.pop("findings", None)
         out.append(f"{stem} {m['id']}")
     return out
 
 
-def ladder_next(word: str, module: str, mid: str, fails: int, worktree: Path, prof: dict) -> dict:
-    """`next` after a failed milestone review: the ladder's word under `ladder`, with the command it calls for."""
+COUNTS = ("fails", "rounds", "replans", "diagnoses")
+
+
+def keep_counts(before: dict | None, after: dict, settled: list[str], stem: str) -> None:
+    """Puts back what a planner changed in the loop's counts: on each milestone the plan didn't settle, the counts,
+    `findings` and a parked state as they were. A milestone split off a new one keeps the `replans` and `diagnoses`
+    it was given, and starts with no failed rounds."""
+    old = {m.get("id"): m for m in (before or {}).get("milestones") or [] if isinstance(m, dict)}
+    for m in after.get("milestones") or []:
+        if f"{stem} {m.get('id')}" in settled:
+            continue
+        was = old.get(m.get("id"))
+        if was is None:
+            m.update(fails=0, rounds=0)
+            m.pop("findings", None)
+            continue
+        for k in COUNTS + ("findings",):
+            if k in was:
+                m[k] = was[k]
+            else:
+                m.pop(k, None)
+        if was.get("state") == "parked" or m.get("state") == "parked":
+            m["state"] = was.get("state")
+
+
+def ladder_next(word: str, module: str, mid: str, counts: dict, worktree: Path, prof: dict) -> dict:
+    """`next` after a failed milestone review: the ladder's word under `ladder`, with the command it calls for.
+    `counts` holds the milestone's fails, rounds and replans as the review left them."""
     wt = str(worktree)
+    fails, rounds = int(counts.get("fails", 0) or 0), int(counts.get("rounds", 0) or 0)
     findings = FINDINGS_TEMPLATE.format(milestone=mid, module=module, evidence=prof["evidence"])
+    tally = (f"{module} {mid} has failed review {plural(rounds, 'time')}, "
+             f"{plural(fails, 'time')} on a finding an earlier round had raised")
     if word == "same-session":
         return next_cmd(loop_cmd("run", "--module", module, "--worktree", wt, "--message", findings), "lead",
-                        f"{module} {mid} failed review {fails} time(s): resume the builder with the findings",
-                        ladder=word)
+                        f"{tally}: resume the builder with the findings", ladder=word)
     if word == "fresh-session":
         return next_cmd(loop_cmd("run", "--module", module, "--worktree", wt, "--fresh", "--message", findings),
-                        "lead", f"{module} {mid} failed review {fails} times: start the builder again in a new "
-                                "session with the findings", ladder=word)
+                        "lead", f"{tally}: start the builder again in a new session with the findings", ladder=word)
     if word == "replan":
         return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", replan_task(module, mid, fails, prof, worktree)),
-                        "planner", f"{module} {mid} failed review {fails} times, so the ladder calls for a re-plan; "
-                                   "`run` won't start a builder on it until the planner has changed its definitions",
+                        "planner", f"{tally}, so the ladder calls for a re-plan; `run` won't start a builder on it "
+                                   "until the planner has changed its definitions",
                         ladder=word, findings=f"{prof['evidence']}/{module}/{mid}-review.md")
+    if word == "diagnose":
+        return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", diagnose_task(module, mid, rounds, prof, worktree)),
+                        "planner", f"{tally}, so a planner decides why before any more building: it changes the "
+                                   "definitions, or keeps them and names who has to act; `run` won't start a builder "
+                                   "on it until then", ladder=word,
+                        findings=f"{prof['evidence']}/{module}/{mid}-review.md")
+    return park_next(module, mid, wt, worktree, prof, f"{tally}, and the ladder has run out")
+
+
+def park_next(module: str, mid: str, wt: str, worktree: Path | None, prof: dict, how: str | None = None,
+              after: int | None = None) -> dict:
+    """The owner's decision on a parked milestone, with each round's failures so they can answer in one word. With
+    no `how`, the reason and rounds the loop recorded when it parked it."""
+    if how is None:
+        parked = {}
+        if worktree is not None:
+            try:
+                rec = json.loads(show(worktree, base_ref(prof), record_rel(prof, module)) or "{}")
+                parked = ((rec.get("milestones") or {}).get(mid) or {}).get("parked") or {}
+            except (json.JSONDecodeError, SystemExit):
+                pass
+        how = parked.get("why") or "it ran out of review rounds"
+        after = parked.get("after", after)
+    history = round_history(worktree, prof, module, mid, after)
     return owner_next("unpark", module, mid, wt,
-                      f"{module} {mid} failed review {fails} times after a re-plan and is parked. Unpark it for "
-                      "another try, change its scope, accept it as it is, or leave it parked?",
-                      f"{module} {mid} failed review {fails} times after a re-plan, so the loop parked it. Report "
-                      "it; the decision is the owner's (`owner scope` or `owner accept` instead, if that's what they "
-                      "choose)", ladder=word)
+                      f"{module} {mid} is parked: {how}. Accept it as it is, change its scope, unpark it for another "
+                      "try, or leave it parked?",
+                      f"{how}, so the loop parked it. Report it with what failed in each round and your "
+                      "recommendation; the decision is the owner's (`owner accept` or `owner scope` instead of "
+                      "unpark, if that's what they choose). Later milestones of the module wait until it is decided",
+                      ladder="park", **({"history": history} if history else {}))
 
 
 def open_attended(milestone: dict) -> list[str]:
@@ -1499,7 +1687,7 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
                         f"{mod} {mid} is ready to build. Run it in the module's worktree; `run` fast-forwards a clean "
                         f"worktree that's behind {base_ref(prof)} itself, so there's no need to merge first")
     if status == "replan_owed":
-        return ladder_next("replan", mod, mid, step.get("fails", 4), worktree, prof)
+        return ladder_next(step.get("ladder", "replan"), mod, mid, step, worktree, prof)
     if status == "design_owed":
         record = ((proj or {}).get(mod.upper()) or {}).get("record")
         # with `Review host: other` and a known planner, the host decided as everywhere else (a review host the
@@ -1571,11 +1759,7 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
                         "gone for good, `owner` under it releases the claim, once the owner says so in chat",
                         owner=owner_cmd("release", mod, mid, wt))
     if status == "parked":
-        return owner_next("unpark", mod, mid, wt,
-                          f"{mod} {mid} is parked after its reviews and a re-plan ran out. Unpark it for another try, "
-                          "change its scope, or leave it parked?",
-                          f"{mod} {mid} is parked after its reviews and re-plan ran out (`owner scope` instead, if "
-                          "that's what the owner chooses)")
+        return park_next(mod, mid, wt, worktree, prof)
     return None
 
 
@@ -2653,7 +2837,7 @@ def milestone_costs(worktree: Path, reading: dict, fit: dict, own: dict) -> tupl
             done = state == "done" or accepted(m, e["record"])
             g = by_ms.get((key, m["id"]))
             row = {"module": e["stem"], "milestone": m["id"], "state": state,
-                   "rounds": (m.get("fails") or 0) + 1}
+                   "rounds": (m["rounds"] if "rounds" in m else m.get("fails") or 0) + 1}
             if g:
                 row.update(pct=codex_quota.cost(g["tokens"], fit), turns=g["turns"], builder_hours=round(g["hours"], 1))
                 history.append(row)
@@ -4381,6 +4565,8 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
 
 
 REVIEW_LINE = re.compile(r"^(PASS|FAIL)\s+([A-Za-z0-9_.-]+)\b|^(DESIGN OK|DESIGN CHANGES)\b")
+KEEP_LINE = re.compile(r"^KEEP\s+([A-Za-z0-9_.-]+)\s+([A-Za-z0-9_.-]+)\s*:\s*(builder|reviewer|owner)\b\s*:?\s*(.*)$",
+                       re.IGNORECASE)
 
 
 def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
@@ -4456,6 +4642,9 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     template = DESIGN_REVIEW_TEMPLATE if design else REVIEW_TEMPLATE
     captures = review_path[:-len(".md")]
     answers = (rec["milestones"].get(mid) or {}).get("owner_answers") if not design else None
+    e_ = rec["milestones"].get(mid) or {}
+    judged = [d for d in e_.get("diagnoses") or [] if d.get("who") == "reviewer"
+              and (d.get("at") or "") >= counted_since(e_)]  # only a judgement on the rounds the counts still cover
     changed = design_changes(worktree, rec, done_path, proj[key]["doc"]) if design else ""
     briefs = (f"The tasks planners were given for this module, whole and verbatim, are in {record_rel(prof, stem)} "
               "under `briefs`, oldest first; they include the loop's own re-plan and retry tasks, so read them for the "
@@ -4464,11 +4653,8 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     prompt = template.format(milestone=mid, module=stem, commit=start, done=done_path, captures=captures, changed=changed,
                              briefs=briefs,
                              review=review_path, skill=skill_note("review-milestone", host),
-                             answers=(f"The owner's answers for {mid} are in {record_rel(prof, stem)} under "
-                                      f"milestones.{mid}.owner_answers (for " + ", ".join(
-                                          dict.fromkeys(x.get('item') or mid for x in answers)) +
-                                      "). Check any claim about what the owner chose against them. ")
-                             if answers else "")
+                             answers=review_notes(mid, prof, stem, answers, [] if design else history_lines(e_),
+                                                  judged))
     wanted = ("DESIGN OK", "DESIGN CHANGES") if design else ("PASS", "FAIL")
     try:  # the tip as the turn starts, to check what reaches it while the reviewer works
         launch_tip = tip(worktree, prof)
@@ -4542,6 +4728,15 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                     problems.append("the last line says PASS, but not every verdict is pass with state done")
                 if verdict == "FAIL" and reviewed.get("state") != "in_progress":
                     problems.append("the last line says FAIL, but the state isn't back to in_progress")
+                found = reviewed.get("findings") or []
+                if verdict == "FAIL":
+                    named = {f.get("item") for f in found if isinstance(f, dict)}
+                    unnamed = [i["id"] for i in reviewed["items"] if i.get("verdict") != "pass" and i["id"] not in named]
+                    if not found:
+                        problems.append("the last line says FAIL, but findings is empty; list each blocking finding "
+                                        "with a short name")
+                    elif unnamed:
+                        problems.append(f"findings names no finding for {', '.join(unnamed)}, which didn't pass")
     if problems:
         return _result("INVALID", **info, landed=False, problems=problems[:20], last_line=out["last_line"],
              session=out.get("session"))
@@ -4549,6 +4744,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     passed = verdict in ("PASS", "DESIGN OK")
 
     stale: dict = {}
+    counts: dict = {}  # the milestone's counts as the loop left them, read back from `change`
 
     def change(t):
         write = [review_path]
@@ -4599,17 +4795,40 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                                            "at": now()}
         else:
             reviewed, target = find(after, mid), find(doc, mid)
-            target.update(state=reviewed["state"], fails=reviewed.get("fails", 0))
+            e = entry(record, mid)
+            # what failed in the rounds the counts cover; a round recorded before rounds kept their items falls
+            # back to the verdicts the previous review left in the file
+            earlier = [r for r in counted_rounds(e) if r.get("verdict") == "fail"]
+            names = {f["name"] for r in earlier for f in r.get("findings") or []}
+            items = {i for r in earlier for i, v in (r.get("items") or {}).items() if v != "pass"}
+            # a milestone counted before rounds kept their items: its last review's verdicts are still in the file.
+            # Not after a reset (rounds 0), when the rounds those verdicts came from no longer count
+            counted = claimed["rounds"] if "rounds" in claimed else claimed.get("fails", 0)
+            if int(counted or 0) > 0 and not any("items" in r for r in earlier):
+                items |= {i["id"] for i in claimed["items"] if (i.get("verdict") or "pass") != "pass"}
+            found = [] if passed else [dict(f) for f in reviewed.get("findings") or []]  # a pass clears the last round's
+            again = repeats(found, names, items) if not passed else []
+            for f in found:
+                f["repeat"] = f["name"] in again
+            target.update(state=reviewed["state"], findings=found)
+            if not found:
+                target.pop("findings", None)
             by_id = {i["id"]: i for i in reviewed["items"]}
             for i in target["items"]:
                 i["verdict"], i["review"] = by_id[i["id"]].get("verdict", ""), by_id[i["id"]].get("review", "")
             if not passed:
+                target["rounds"] = int(target.get("rounds", 0) or 0) + 1
+                target["fails"] = int(target.get("fails", 0) or 0) + (1 if again else 0)
                 reset_proof(target, only_failed=True)
-                if escalation(target.get("fails", 0), target.get("replans", 0)) == "park":
+                if ladder(target) == "park":
                     target["state"] = "parked"  # the ladder has run out; only the owner unparks it
+                    e["parked"] = {"why": "it ran out of review rounds" if int(target.get("fails", 0) or 0) < 4 else
+                                   "its failed reviews kept repeating the same findings after a re-plan",
+                                   "after": e.get("counted_after", 0), "at": now()}
+            counts.update({k: int(target.get(k, 0) or 0) for k in ("fails", "replans", "rounds", "diagnoses")},
+                          repeated=again, state=target["state"])
             write_json(t / done_path, doc)
             write.append(done_path)
-            e = entry(record, mid)
             if kept:  # the earlier round's file moved; its record entry follows it
                 rounds = [r for r in e.get("reviews") or [] if r.get("review") == review_path]
                 if rounds:
@@ -4617,7 +4836,9 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                 for r in rounds[:-1]:  # overwritten before rounds were kept: only git history has them
                     r["review_in_history"] = r.pop("review")
             e.setdefault("reviews", []).append({"verdict": "pass" if passed else "fail", "commit": start,
-                                                "review": review_path, **launch, "at": now()})
+                                                "review": review_path,
+                                                "items": {i["id"]: i.get("verdict", "") for i in reviewed["items"]},
+                                                **({"findings": found} if found else {}), **launch, "at": now()})
             if passed:
                 e["accepted"] = {"by": "review", "commit": start, "review": review_path,
                                  "checked": (e.get("claim") or {}).get("checked"), "at": now()}
@@ -4630,9 +4851,8 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                        problems=[f"the review was valid but couldn't be integrated: {landed}"])
     if passed and not design:
         drop_claim(worktree, prof, key, mid)
-    fails = find(after, mid).get("fails", 0) if after else None
+    fails = counts.get("fails") if counts else None
     # On a FAIL, `next` is the command the escalation ladder calls for, with its word under `ladder`.
-    ladder = None
     if design and stale:
         why = (f"the plan changed while this design review ran ({', '.join(stale['moved'])}), so its verdict doesn't "
                "count for the plan at the tip: the review is kept and listed, and the design review is still owed")
@@ -4642,14 +4862,16 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                        next=next_cmd(loop_cmd("review", "--module", stem, "--milestone", "design", "--worktree",
                                               str(worktree), "--host", host), "lead", why))
     if not passed and not design:
-        ladder = escalation(fails, find(after, mid).get("replans", 0))
-        action = ladder_next(ladder, stem, mid, fails, worktree, prof)
+        word = escalation(*(counts.get(k, 0) for k in ("fails", "replans", "rounds", "diagnoses")))
+        action = ladder_next(word, stem, mid, counts, worktree, prof)
     elif not passed:
         action = design_review_next({"verdict": verdict, "review": review_path}, stem, worktree, prof)
     else:
         action = after_pass(worktree, prof, key)
     return _result("REVIEWED", **info, verdict=verdict, commit=start, review=review_path, review_commit=landed,
-                   fails=fails, **({"ladder": ladder} if ladder else {}), next=action, last_line=out["last_line"],
+                   fails=fails, **({"rounds": counts["rounds"], "repeated": counts["repeated"], "ladder": word}
+                                   if not passed and not design else {}),
+                   next=action, last_line=out["last_line"],
                    session=out.get("session"),
                    **({"usage": out["usage"]} if out.get("usage") else {}))
 
@@ -4708,11 +4930,11 @@ def plan_owed(worktree: Path, start: str, message: str) -> str | None:
     for the nudge. A progress report isn't a result."""
     line = report_line(message)
     word, _, rest = line.partition(":")
-    if report_word(message) in ("BLOCKED", "NEEDS_CONTEXT"):
+    if report_word(message) in ("BLOCKED", "NEEDS_CONTEXT") or KEEP_LINE.match(line):
         return None
     if word.strip("`* ") != "PLANNED":
         return "Your last line wasn't `PLANNED: <files>`. Finish the plan's files, then end with that line, or with " \
-               "BLOCKED or NEEDS_CONTEXT."
+               "BLOCKED or NEEDS_CONTEXT, or, for a diagnosis that keeps the plan, the `KEEP` line your task gives."
     plans = profile(worktree, missing_ok=True)["plans"]
     named = [n.strip("`*'\" ") for n in re.split(r"[,\s]+", rest) if n.strip("`*'\" ")]
     changed = changed_paths(worktree, start)
@@ -4725,6 +4947,69 @@ def plan_owed(worktree: Path, start: str, message: str) -> str | None:
         gaps.insert(0, "no changed files are named")
     return None if not gaps else "The plan isn't complete: " + "; ".join(gaps) + \
         ". Finish it, then end with `PLANNED: <files>`."
+
+
+def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str, info: dict, out: dict) -> None:
+    """A planner asked to diagnose a milestone kept its plan and named who has to act. The loop records that,
+    starts the milestone's counts again, and says what follows; a second diagnosis on it parks it instead."""
+    module, mid, who, why = keep.group(1), keep.group(2), keep.group(3).lower(), keep.group(4).strip()
+    if changed := changed_paths(worktree, start):
+        emit("INVALID", **info, **out, landed=False, problems=[
+            f"the last line keeps the plan, but the turn changed {', '.join(changed[:5])}; end with PLANNED to land a "
+            "changed plan, or leave every file as it was"])
+    try:
+        stem = module_stem(worktree, prof, module)
+        doc = json.loads(show(worktree, tip(worktree, prof), done_rel(prof, stem)) or "")
+        m = find(doc, mid)
+    except (TipError, SystemExit, json.JSONDecodeError, KeyError) as e:
+        emit("INVALID", **info, **out, landed=False, problems=[f"KEEP names {module} {mid}, which can't be read: {e}"])
+    if ladder(m) != "diagnose":
+        emit("INVALID", **info, **out, landed=False, problems=[
+            f"KEEP is the answer to a diagnosis, and {stem} {mid} isn't owed one (its ladder is {ladder(m)})"])
+    try:  # the rounds the planner diagnosed, which the owner sees if it's theirs to decide
+        diagnosed = ((json.loads(show(worktree, tip(worktree, prof), record_rel(prof, stem)) or "{}")
+                      .get("milestones") or {}).get(mid) or {}).get("counted_after", 0)
+    except (TipError, SystemExit, json.JSONDecodeError):
+        diagnosed = None
+    at = now()
+
+    def change(t):
+        doc = json.loads((t / done_rel(prof, stem)).read_text())
+        target = find(doc, mid)
+        target.update(fails=0, rounds=0, diagnoses=int(target.get("diagnoses", 0) or 0) + 1)
+        record = record_in(t, prof, stem, doc)
+        e = entry(record, mid)
+        if who == "owner":
+            target["state"] = "parked"
+            e["parked"] = {"why": f"a planner read every round, kept the plan, and found it needs your decision: "
+                                  f"{why}", "after": e.get("counted_after", 0), "at": at}
+        e.setdefault("diagnoses", []).append({"who": who, "why": why, "host": host, "at": at})
+        e["counted_from"], e["counted_after"] = at, len(e.get("reviews") or [])
+        write_json(t / done_rel(prof, stem), doc)
+        write_json(t / record_rel(prof, stem), record)
+        return [done_rel(prof, stem), record_rel(prof, stem)]
+
+    ok, landed = loop_write(worktree, prof, "_plan", change, f"orchestrate: diagnosis of {stem} {mid}: {who}")
+    if not ok:
+        emit("INVALID", **info, **out, landed=False, problems=[f"couldn't record the diagnosis: {landed}"])
+    wt = str(worktree)
+    findings = FINDINGS_TEMPLATE.format(milestone=mid, module=stem, evidence=prof["evidence"])
+    if who == "builder":
+        then = next_cmd(loop_cmd("run", "--module", stem, "--worktree", wt, "--fresh", "--message",
+                                 f"{findings}\n\nA planner read every round and kept the plan: {why}"), "lead",
+                        f"the planner kept {stem} {mid}'s plan and found the building at fault; start the builder "
+                        "again in a new session with its reasons")
+    elif who == "reviewer":
+        then = next_cmd(loop_cmd("run", "--module", stem, "--worktree", wt, "--fresh", "--message",
+                                 f"A planner read every review of {mid} and judged that the findings went beyond its "
+                                 f"items: {why}\n\nDo what the items ask, prove them and claim the milestone again; "
+                                 "the next reviewer is told of this judgement."), "lead",
+                        f"the planner kept {stem} {mid}'s plan and found the reviews went beyond its items; start the "
+                        "builder again in a new session to prove the items and claim it")
+    else:
+        then = park_next(stem, mid, wt, worktree, prof, f"a planner read every round, kept the plan, and found it "
+                                                         f"needs your decision: {why}", after=diagnosed)
+    emit("KEPT", **info, **out, landed=True, commit=landed, module=stem, milestone=mid, who=who, why=why, next=then)
 
 
 def done_docs_at(worktree: Path, plans: str, ref: str) -> dict:
@@ -4802,6 +5087,8 @@ def cmd_plan(a: argparse.Namespace) -> None:
         prof = profile(worktree, strict=True)
     except SystemExit as e:
         emit("PLANNED", **info, **out, landed=False, problems=[str(e)])
+    if keep := KEEP_LINE.match(report_line(out.get("report", ""))):
+        keep_plan(worktree, prof, start, keep, host, info, out)
 
     # What a turn wrote is what it left uncommitted; that is all the loop commits and lands. Its HEAD may have moved
     # along the tip (a `land` elsewhere fast-forwards the checkout holding the base branch), never off it.
@@ -4890,7 +5177,10 @@ def cmd_plan(a: argparse.Namespace) -> None:
                 prior = json.loads(show(worktree, prior_ref, done_rel(prof, stem)) or "") if prior_ref else None
             except json.JSONDecodeError:
                 prior = None
-            replanned.extend(settle_replans(prior or before.get(Path(done_rel(prof, stem)).name), doc, stem))
+            was = prior or before.get(Path(done_rel(prof, stem)).name)
+            settled = settle_replans(was, doc, stem)
+            keep_counts(was, doc, settled, stem)
+            replanned.extend(settled)
             # the stamp names the task; the whole of it is kept once, under `briefs`
             authorise_doc(doc, record, {"by": "plan", "task": a.task.splitlines()[0][:120], "at": now()})
             # every planner task, whole, where design reviewers and later planners are pointed to read the ask
@@ -5024,7 +5314,8 @@ def cmd_status(a: argparse.Namespace) -> None:
         for problem in e["problems"] or step.get("problems", []):
             print(f"  invalid: {problem}")
         if step["status"] == "replan_owed":
-            print(f"  {step['milestone']} failed review {step['fails']} times; re-plan it before any more building:\n"
+            print(f"  {step['milestone']} failed review {plural(step.get('rounds', 0), 'time')}, "
+                  f"{step['fails']} on a repeated finding; a planner looks at it before any more building:\n"
                   f"    {next_for(step, worktree, prof, proj)['command']}")
         if e["problems"]:
             continue
@@ -5046,7 +5337,7 @@ def cmd_status(a: argparse.Namespace) -> None:
             reviews = (e["record"]["milestones"].get(m["id"]) or {}).get("reviews") or []
             if reviews:
                 flags.append(f"last review {reviews[-1]['verdict']} {reviews[-1].get('at', '')}".strip())
-            print(f"  {m['id']}\t{state}\tfails={m.get('fails', 0)}\t{passing(m)}/{len(m['items'])} pass"
+            print(f"  {m['id']}\t{state}\tfails={m.get('fails', 0)} rounds={m.get('rounds', 0)}\t{passing(m)}/{len(m['items'])} pass"
                   f"\t{m.get('name', '')}" + ("\t" + "; ".join(flags) if flags else ""))
 
 
@@ -5059,15 +5350,17 @@ def cmd_next(a: argparse.Namespace) -> None:
     except (TipError, json.JSONDecodeError, SystemExit):
         doc = load_done(worktree, stem, prof)
     milestone = find(doc, a.milestone)
-    fails, replans = int(milestone.get("fails", 0)), int(milestone.get("replans", 0))
-    action = escalation(fails, replans)
-    if action in ("replan", "park"):  # what goes to the planner, or to the owner, rather than the builder's findings
-        then = ladder_next(action, stem, milestone["id"], fails, worktree, prof)
-        message = replan_task(stem, milestone["id"], fails, prof, worktree) if action == "replan" else then["why"]
+    counts = {k: int(milestone.get(k, 0) or 0) for k in ("fails", "replans", "rounds", "diagnoses")}
+    action = "park" if milestone.get("state") == "parked" else ladder(milestone)
+    if action in ("replan", "diagnose", "park"):  # for the planner or the owner, rather than the builder's findings
+        then = ladder_next(action, stem, milestone["id"], counts, worktree, prof)
+        message = (replan_task(stem, milestone["id"], counts["fails"], prof, worktree) if action == "replan" else
+                   diagnose_task(stem, milestone["id"], counts["rounds"], prof, worktree) if action == "diagnose" else
+                   then["why"])
     else:
         message = FINDINGS_TEMPLATE.format(milestone=milestone["id"], module=stem, evidence=prof["evidence"])
-        then = ladder_next(action, stem, milestone["id"], fails, worktree, prof) if action != "none" else None
-    print(json.dumps({"milestone": milestone["id"], "fails": fails, "replans": replans,
+        then = ladder_next(action, stem, milestone["id"], counts, worktree, prof) if action != "none" else None
+    print(json.dumps({"milestone": milestone["id"], **counts,
                       "action": action, "message": message, **({"next": fit_next(then)} if then else {})}))
 
 
@@ -5456,8 +5749,10 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
                                        f", overwritten before rounds were kept (git log -p -- {v['review_in_history']})"
                                        if v.get("review_in_history") else ""))
             if m.get("state") == "parked":
-                waiting.append(f"- {stem} {m['id']}: parked after {m.get('fails', 0)} failed reviews; the owner "
-                               f"unparks it (`owner unpark`) or re-scopes it")
+                why = ((rec.get("milestones") or {}).get(m["id"]) or {}).get("parked", {}).get("why") or \
+                    "it ran out of review rounds"
+                waiting.append(f"- {stem} {m['id']}: parked, because {why}; the owner accepts it (`owner accept`), "
+                               "re-scopes it (`owner scope`) or unparks it (`owner unpark`)")
             elif m.get("state") == "blocked":
                 waiting.append(f"- {stem} {m['id']}: blocked: {m.get('blocked', '')}")
             if not accepted(m, rec):
@@ -5910,7 +6205,9 @@ def owner_guard(worktree: Path, stem: str, verb: str) -> None:
     for name, what in ((stem.upper(), f"a run, review or design review holds {stem}"), ("_plan", "a planner is running")):
         if (pid := run_holder(folder, name)) is not None:
             raise SystemExit(f"error: owner {verb} is refused while {what} (pid {pid}), so no session the loop started "
-                             "can record a decision in the owner's name; run it once that has stopped")
+                             "can record a decision in the owner's name. Nothing more is needed from the owner: you "
+                             "have their words, so run this same command again once that has stopped (`loops` shows "
+                             "when)")
 
 
 def cmd_owner(a: argparse.Namespace) -> None:
@@ -5979,17 +6276,21 @@ def cmd_owner(a: argparse.Namespace) -> None:
                     continue
                 m = copy.deepcopy(m)
                 reset_proof(m)
-                m["state"] = "open" if was is None or was.get("state") in ("in_progress", "claimed", "done") \
+                m["state"] = "open" if was is None or was.get("state") in ("in_progress", "claimed", "done", "parked") \
                     else was.get("state")
                 if was is not None:
-                    m["fails"], m["replans"] = was.get("fails", 0), was.get("replans", 0)
+                    for k in ("fails", "replans", "rounds", "diagnoses", "findings"):
+                        if k in was:
+                            m[k] = was[k]
                     if settle_replans({"milestones": [was]}, {"milestones": [m]}, stem):
                         # the definitions its reviews failed are gone, so this scope is the re-plan
                         if m["id"] not in out.setdefault("replanned", []):
                             out["replanned"].append(m["id"])
+                    m.update(fails=0, rounds=0, diagnoses=0)  # the owner's new scope starts the counts again
+                    m.pop("findings", None)
                 e = record["milestones"].get(m["id"]) or {}
                 record["milestones"][m["id"]] = {"definitions": definitions(m), "reviews": e.get("reviews", []),
-                                                 "authorised": stamp,
+                                                 "authorised": stamp, "counted_after": len(e.get("reviews") or []),
                                                  **({"owner_answers": e["owner_answers"]} if e.get("owner_answers")
                                                     else {})}
                 merged.append(m)
@@ -6025,7 +6326,9 @@ def cmd_owner(a: argparse.Namespace) -> None:
             elif verb == "unpark":
                 if m.get("state") != "parked":
                     raise SystemExit(f"error: {mid} is {m.get('state')}, not parked")
-                m.update(state="open", fails=0)
+                m.update(state="open", fails=0, rounds=0, diagnoses=0)
+                e["counted_from"], e["counted_after"] = stamp["at"], len(e.get("reviews") or [])  # counts start again
+                e.pop("parked", None)
             write_json(path, doc)
             written.append(done_rel(prof, stem))
             if verb == "rereview":

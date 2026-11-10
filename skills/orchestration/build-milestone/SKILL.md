@@ -79,9 +79,13 @@ have to accept the milestone by hand. If you can't start a review, end with `DON
 needs one.
 
 When a review fails, `agent_loop.py next --module <M> --milestone <id> --worktree .` prints what to do. It depends
-on how many reviews the milestone has failed: fix what the reviewer found in this session, hand over to a new
-session, or send the milestone back to a planner. Do what it prints. The count is the record of what has already
-been tried, and [the escalation steps](../plan-module/references/done-when.md#when-a-review-fails) explain each one.
+on how many reviews the milestone has failed, and how many of those repeated an earlier finding: fix what the
+reviewer found in this session, hand over to a new session, or send the milestone back to a planner. Do what it
+prints. The counts are the record of what has already been tried, and
+[the escalation steps](../plan-module/references/done-when.md#when-a-review-fails) explain each one.
+
+The milestone's `findings` in the done-when file lists the blocking findings, and marks with `repeat` each one an
+earlier round raised. Repeats are what send a milestone back to a planner, so make sure those stay fixed.
 
 ## Facts that save a session
 
