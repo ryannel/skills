@@ -1,0 +1,5 @@
+The script can't accept the work as Ready for Review yet: `./dev check` exited 1: error: tile_cache.rs:88: index out of bounds
+
+The script ran these in its own clean checkout of the main branch, /repo/.git/orchestrate/verify/APPLE-TILE, without your shell's environment, so a difference between there and your worktree can be the cause.
+
+Fix the cause and end with DONE. If an item can't be met as written, leave it as it is and say so.

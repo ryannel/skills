@@ -1,0 +1,1 @@
+Your turn ending is read as your work ending, so wait for any command you run in the background to finish before you reply.

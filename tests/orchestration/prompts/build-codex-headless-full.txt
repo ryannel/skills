@@ -1,0 +1,24 @@
+Call your create_goal tool with the paragraph that starts "The goal:" as the objective, word for word. The rest of this message is for this turn only.
+
+Build milestone M2 of module APPLE-TILE, using the build-milestone skill (/skills/orchestration/build-milestone/SKILL.md).
+
+The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has status pass, with evidence from the item's target; M2's state is ready_for_review (or done, when no item has inspect or ask and it isn't the module's last milestone); and the work is merged.
+
+Human Feedback on M2, recorded by the script in docs/plans/APPLE-TILE/ACCEPTED.json under milestones.M2.human_feedback, oldest first. These are the owner's own words. Use their words as given, and cite that record rather than restating them as your own, because the reviewer checks your work against it.
+- 2026-11-10T08:37:00Z, on M2.2: asked "Is the resize smooth enough to ship?"; the owner said "Looks good to me, but the corners flicker once."
+
+An earlier session on M2 stopped short and left a handoff at docs/evidence/APPLE-TILE/M2-handoff.md. Read it before you start. Where it disagrees with the done-when file or the plan, those win, because a planner may have changed them since. Rewrite the handoff if you stop short too.
+
+For this session:
+- Work only in this worktree. The lead starts the review, so don't start a reviewer.
+- The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`. Merge with its `merge --worktree .` command.
+- This session runs in the background, so approval prompts, such as a Computer Use or a permission dialog, can't appear in it.
+- This project's exclusive resources are: gpu: timing runs and captures. Wrap any command that uses one in the script's `lock <name> -- <command>`. The lock waits its turn: another builder holding it is normal, so do other work while you wait, and treat it as a block only if the holder seems stuck, naming the process that holds it.
+- M2.2 (does the tile animation read as smooth) needs human feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the owner to look at, then end with `BLOCKED needs_human_feedback: <the question for the owner>`.
+- M2.3 (an iPhone connected over USB) needs hardware: someone has to connect a device, and nobody can in this session. Do every other item, then end with `BLOCKED needs_hardware: <what is needed>`. Don't ask anyone to confirm anything.
+- Owner: never modify Broadsides.
+
+From the lead:
+The owner said at 08:37 they would be away until noon. The lock on gpu is held by the APPLE-PRESENTATION builder's capture; that is normal.
+
+To finish: when the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to docs/evidence/APPLE-TILE/M2-handoff.md and commit it with your work, then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, where the reason is needs_human_feedback, needs_access, needs_hardware or needs_dependency, or, when you're missing a fact, with `NEEDS_CONTEXT: <the fact you need>`.

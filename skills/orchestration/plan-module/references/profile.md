@@ -6,7 +6,7 @@ in.
 
 The script, `agent_loop.py`, reads the lines marked *(script)*. It takes everything after the label as the value,
 so keep each of those lines in the shape `- **Label:** value`, with nothing else on the line but an optional
-`*( )*` note. Run `agent_loop.py profile` to confirm the script can read them. `Integrate` and `Check` are required,
+`*( )*` note. Run `agent_loop.py settings` to confirm the script can read them. `Merge` and `Test command` are required,
 and the script refuses to run without them, because a guess at either could push without permission or merge
 untested work.
 
@@ -26,8 +26,8 @@ Contents:
 - **Plans:** docs/plans  *(script: leave it out for the standard place; an older project may name another folder)*
 - **Evidence:** docs/evidence  *(script: review files and saved proof)*
 - **Graded examples:** docs/evidence/graded-examples.md  *(past reviews the owner agreed with or overturned)*
-- **Check:** npm run check  *(script: required; the project's test command, which must pass before a merge, or `none`)*
-- **Integrate:** local  *(script: required; `push` rebases onto Remote/Branch and pushes without force; `local` fast-forwards the local Branch only)*
+- **Test command:** npm run check  *(script: required; the project's test command, which must pass before a merge, or `none`)*
+- **Merge:** local  *(script: required; `push` rebases onto Remote/Branch and pushes without force; `local` fast-forwards the local Branch only)*
 - **Branch:** main  *(script: the main branch)*
 - **Remote:** origin  *(script)*
 - **Builders:** usually one Codex builder  *(how many builders, on which hosts, when the owner doesn't say)*
@@ -68,7 +68,7 @@ needs, where secrets come from, and how two worktrees avoid sharing a port or a 
 
 ## Lines that need care
 
-`Integrate: push` is standing permission to push verified work to the main branch, so set it only if the owner has
+`Merge: push` is standing permission to push verified work to the main branch, so set it only if the owner has
 given that permission. Without it, use `local`, and the owner merges. If the project's `AGENTS.md` or `CLAUDE.md`
 says not to push without authorisation, say in this line's note that the line is that authorisation, so an agent
 that reads both knows which one wins.

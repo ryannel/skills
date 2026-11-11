@@ -1,6 +1,6 @@
 {
   "name": "@ryannel/orchestrate",
-  "version": "1.7.1",
+  "version": "2.0.0",
   "description": "Install the orchestrate plugin from github.com/ryannel/skills, with prompting-agents, for Claude Code and Codex",
   "bin": {
     "ryannel-orchestrate": "bin/orchestrate.cjs"

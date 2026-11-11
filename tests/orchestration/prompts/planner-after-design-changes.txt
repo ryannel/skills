@@ -1,0 +1,1 @@
+python3 /skills/orchestration/build/scripts/agent_loop.py plan --worktree /repo --task 'The design review of APPLE-TILE at docs/evidence/APPLE-TILE/design-review.md asked for changes. Resolve its 2 Must Fix findings in the design and the plan. Its Suggestions are yours to take or leave; say which you took and why.'

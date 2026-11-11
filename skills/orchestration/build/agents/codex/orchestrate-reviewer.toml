@@ -1,6 +1,6 @@
-# The Codex copy of orchestrate-evaluator, so that a Codex chat can start a reviewer in a new session. This file
+# The Codex copy of orchestrate-reviewer, so that a Codex chat can start a reviewer in a new session. This file
 # names the model and effort because Codex reads them from here.
-name = "orchestrate-evaluator"
+name = "orchestrate-reviewer"
 description = "Reviewer for the orchestrate set: a new session that judges one milestone that is Ready for Review against its done-when file, or a design against the owner's request, and writes the review."
 model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"

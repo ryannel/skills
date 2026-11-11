@@ -1,0 +1,12 @@
+Review the design of module APPLE-TILE, using the "Reviewing a design" section of the review-milestone skill (/skills/orchestration/review-milestone/SKILL.md).
+
+The goal: a review at docs/evidence/APPLE-TILE/design-review.md that says whether the design does what the owner asked for.
+
+Since the last design review (docs/evidence/APPLE-TILE/design-review.md), M2.2 changed.
+
+Rules:
+- This folder is a clean checkout of the main branch's tip.
+- Put any captures in docs/evidence/APPLE-TILE/design-review/, and change nothing else. The script merges them.
+- Don't start other agents.
+
+To finish, end with the skill's last line.

@@ -115,28 +115,33 @@ The example is a small money-tracking tool. It reads a file of transactions and 
     |---|---|---|
     | 1 or 2 | `run`, with the review | The same builder fixes what the reviewer found. |
     | 3 | `run`, with a new builder | A builder with no memory of the first attempts starts from the files and the review. |
-    | 4 with a repeated finding | `plan` | The milestone is Awaiting Replan, and a planner rewrites it, because the plan may be the problem. |
-    | 6, mostly on new findings | `plan` | The milestone is Awaiting Diagnosis. A planner reads every review and either rewrites it or names who has to act: the builder, the reviewer or you. |
-    | either again, after that | nothing | The milestone is set to Too Many Failed Reviews. The lead asks you, with what failed in each review, whether to accept it, change its scope or try again. |
+    | 4 with a repeated finding | `plan` | The milestone is Waiting: For Replan, and a planner rewrites it, because the plan may be the problem. |
+    | 6, mostly on new findings | `plan` | The milestone is Waiting: For Diagnosis. A planner reads every review and either rewrites it or names who has to act: the builder, the reviewer or you. |
+    | either again, after that | nothing | The milestone is set to Blocked: Too Many Failed Reviews. The lead asks you, with what failed in each review, whether to accept it, change its scope or try again. |
 
 ### The next milestone
 
 21. The lead runs `run` again for the module, and the command starts a builder on the next milestone. A milestone
     that depends on another module doesn't start early: if the lead runs `run` for `report` before the `core`
-    milestone is Done, the command prints that the milestone is Waiting on Dependency and starts nothing.
+    milestone is Done, the command prints that the milestone is Waiting: On Dependency and starts nothing.
 22. Steps 14 to 21 repeat until every milestone in every module is Done.
 
 ### When it needs you
 
-23. Some items need a person. Suppose `report` has the item "the owner confirms the layout is readable". The
-    planner marked it as needing human feedback. The builder does everything else, then stops and reports it, and
-    `run` sets the milestone to Needs Human Feedback and prints the question.
-24. The lead asks you in the chat and shows you the output, and you answer.
-25. The lead runs the `owner answer` command with your words, which saves them in the record file. Then it runs
-    `run` again, and the builder reads your answer and carries on.
+23. Some items need you. Suppose `report` has the item "the layout is readable in a terminal", which no agent can
+    judge, so the planner marked it as needing human feedback. The builder does everything else, then stops, and
+    `run` sets the milestone to Blocked: Needs Human Feedback and prints the question.
+24. The lead asks you in the chat and shows you the output, and you reply, such as "looks good to me".
+25. The lead runs the `owner feedback` command with the question and your words, which the script saves in the
+    record file as Human Feedback. Then it runs `run` again, and the builder reads your reply and carries on.
+
+An item can also need your approval for a permission, such as screen recording, or a device connected, such as a
+phone. The planner marks those as needing access or hardware. The lead runs that milestone in a session you can
+see, at a time you are at the machine, and the builder asks for the access as soon as it starts. Approving the
+prompt is all you do; nobody asks you to confirm it in the chat.
 
 A milestone can also stop because something it needs is missing, such as a login the builder doesn't have. It is
-then Blocked, and the command prints what would unblock it.
+then Blocked, with a reason, and the command prints what would unblock it.
 
 ### The report
 
@@ -164,8 +169,8 @@ such as `<MODULE>-PLAN.md`, moves with the script's `migrate` command.
 ## Milestone statuses
 
 The walkthrough above meets every status a milestone can have, and the [glossary](GLOSSARY.md#statuses) lists them
-in one table, with the shorter names the files and the script's output use for them, such as `claimed` for Ready
-for Review. When `status` shows a milestone, it adds what you need to act on: which milestone it is waiting on,
+in one table. A milestone is Waiting when its next step is lined up and needs nobody to step in, and Blocked
+when it can't move until someone does. Each carries a reason, such as Blocked: Needs Human Feedback. When `status` shows a milestone, it adds what you need to act on: which milestone it is waiting on,
 how many reviews it has failed and which lead started it, the question for you, or what would unblock it.
 
 ## Why it is built this way
@@ -366,7 +371,7 @@ and the report lists every decision saved in your name, so you can spot one you 
 | what the build has cost, for each milestone, split into planning, building and reviewing | `cost` |
 | whether the Codex weekly usage limit will last | `quota` |
 | for a report | `report` |
-| to save a decision of yours | `owner answer`, `accept`, `rereview`, `unpark` or `scope` |
+| to save a decision of yours | `owner feedback`, `accept`, `rereview`, `reopen` or `scope` |
 
 Each of these is a command of `python3 <where the skills are installed>/build/scripts/agent_loop.py`, and you can
 run them yourself if you would rather.
@@ -395,8 +400,9 @@ review itself. If any of that is wrong, nothing is saved.
 
 ### After a planner
 
-The `plan` command accepts a planner's work only if the planner ends with `PLANNED:` and the files it names, those
-files exist and have changed, and each done-when file has a design beside it. A planner that stops with only a
+The `plan` command accepts a planner's work only if the planner ends with `PLANNED`, it changed files, and each
+done-when file has a design beside it. The result lists the changed files under `files`, which the planner used to
+list on its last line, where the list pushed its report out of the part the lead reads. A planner that stops with only a
 progress note is sent a message naming what is missing. The command rejects a plan that marks any item as already
 passed or touches a record file, merges the rest, and saves the new items as the approved ones.
 

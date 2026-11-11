@@ -396,14 +396,14 @@ def setup_codex(plugins: list[str], source: str) -> None:
             agents_md.write_text(new)
         print(f"  {did} {agents_md}")
     if "orchestrate" in plugins:
-        # The Codex evaluator agent isn't a plugin component. Link it from the plugin's installed copy so it keeps
+        # The Codex reviewer agent isn't a plugin component. Link it from the plugin's installed copy so it keeps
         # working if this checkout moves. Copy the definition if there is no plugin cache.
         script = "skills/orchestration/build/scripts/install_agents.sh"
         cached = sorted((codex_home() / "plugins/cache" / MARKETPLACE / "orchestrate").glob(f"*/{script}"))
         if cached:
             run(["bash", str(cached[-1]), "--global", "--codex-only"])
         else:
-            target = (HERE / script).parent.parent / "agents/codex/orchestrate-evaluator.toml"
+            target = (HERE / script).parent.parent / "agents/codex/orchestrate-reviewer.toml"
             destination = codex_home() / "agents" / target.name
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.unlink(missing_ok=True)

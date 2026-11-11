@@ -205,7 +205,7 @@ class InteractiveOrchestration(unittest.TestCase):
                     quietly(install.link_claude_agents, "claude", record, "project", project)
             agents = project / ".claude" / "agents"
             self.assertEqual(sorted(p.name for p in agents.iterdir()),
-                             ["orchestrate-evaluator.md", "orchestrate-planner.md"])
+                             ["orchestrate-planner.md", "orchestrate-reviewer.md"])
             for agent in agents.iterdir():
                 self.assertFalse(agent.is_symlink())
                 self.assertIn("Managed by the ryannel/skills", agent.read_text())

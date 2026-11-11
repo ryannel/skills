@@ -47,9 +47,9 @@ Why it is here: the builder's recording was honest, but it showed only the one c
 
 The milestone includes an item proved on a physical iPhone. The reviewer had only the simulator.
 
-That item got Could Not Judge (`cant_tell`), not a Pass, with the reason: no device was available, and the
+That item got Could Not Judge (`could_not_judge`), not a Pass, with the reason: no device was available, and the
 simulator can't show performance. The review said what would settle it, which was a frame-time recording from the
-device. Everything else passed. The review ended `0 fail, 1 cant_tell`, so the builder's next attempt knows
+device. Everything else passed. The review ended `0 fail, 1 could_not_judge`, so the builder's next attempt knows
 exactly what evidence to bring.
 
 Why it is here: a result from a stand-in is useful, but it never becomes a Pass on the real target.

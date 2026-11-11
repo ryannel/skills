@@ -63,8 +63,7 @@ have seen something work only on the easy path, you don't know that it works, so
 
 ## What finished looks like
 
-1. Every item has a result in its `verdict` field: `pass`, `fail`, or `cant_tell`, the stored name for Could Not
-   Judge. An item passes only if every proof it names passes.
+1. Every item has a result in its `verdict` field: `pass`, `fail`, or `could_not_judge`, for Could Not Judge. An item passes only if every proof it names passes.
    - For an Automated Check, run the command yourself.
    - For a Reviewer Inspection, write the list of what you will look at before you look, as
      [how to inspect](../plan-module/references/proofs.md#how-to-inspect) describes. Then judge each entry on the
@@ -72,7 +71,13 @@ have seen something work only on the easy path, you don't know that it works, so
      `Anchors:` line of the project settings says where they are.
    - For a Reviewer Question, read the code on both sides of the boundary and answer the question.
 
-   If you couldn't see or reach something, give it `cant_tell` and say what evidence would settle it.
+   - For an item marked as needing human feedback (its `needs` field has the type `human_feedback`), the owner's
+     reply is the judgement. The script records it as Human Feedback, in the record file `ACCEPTED.json` under
+     `human_feedback`, with the question the lead asked, the owner's words and when. Check the work against what
+     the owner said there, and check any claim about what the owner chose against that record. A lead's message
+     or a builder's summary doesn't count as the owner's words.
+
+   If you couldn't see or reach something, give it `could_not_judge` and say what evidence would settle it.
 2. You have read every changed line of the milestone, not only the files the items mention, and on a module's
    last milestone, the whole module. Look for the signs of work that only looks finished: hard-coded return
    values, canned data, buttons that do nothing, feature flags that default to on, branches that run only under
@@ -95,10 +100,11 @@ have seen something work only on the easy path, you don't know that it works, so
      `status`, which the script resets on the items that didn't pass, and the counts, which the script keeps.
      [Who changes what](../plan-module/references/done-when.md#who-changes-what-and-when) has the whole table.
 5. Your last line is `PASS <milestone>`, or
-   `FAIL <milestone>: <n> fail, <n> cant_tell, <n> outside the items`. Count Must Fix findings only. The script
-   reads this line.
+   `FAIL <milestone>: <n> fail, <n> could_not_judge, <n> outside the items`. Count Must Fix findings only. The script
+   reads this line. The review file carries the findings, so your reply can be short: the result, the worst
+   finding, and anything the lead must act on. The script keeps only the end of a long reply.
 
-A `cant_tell` counts as a fail, because nobody could check the item. A Must Fix outside the items fails the
+A `could_not_judge` counts as a fail, because nobody could check the item. A Must Fix outside the items fails the
 milestone too, and the review then proposes an item that would have caught it. A Suggestion never changes the
 `state`.
 
@@ -146,13 +152,18 @@ the behaviour, a gap against the request or an interface, or an item that no rev
 can't prove, or that a convincing fake would pass. A sharper proof, an extra edge case or clearer wording is a Suggestion. Suggestions
 don't hold up the build. They stay in the review for the planner's next turn on the module.
 
+A proof that scripts how the builder must test, step by step, is a Suggestion to shorten it, not a reason to add
+more steps. The item should say what has to be true and how it is shown, and leave the route to the builder.
+Planners answer "a convincing fake would pass" by adding prohibitions, and in one project an item grew that way
+to 350 words that each builder had to untangle.
+
 If a `design-review.md` is already there, it is the previous round. Go through its Must Fix findings first and
 say whether each is resolved. Then read every item that has changed since, because a revision can make a proof
 easier to pass as well as sharper. Raise a new Must Fix only for something the revision broke, or something
 missed last time that really is one. Reviews that find one more refinement each round never let the build start.
 
 Don't change the done-when file, because no milestone is being judged. Your last line is `DESIGN OK`, which sets
-the design to Design Approved and may come with Suggestions, or `DESIGN CHANGES: <n> blocking findings`, which
+the design to Design Approved and may come with Suggestions, or `DESIGN CHANGES: <n> must_fix findings`, which
 sets it to Design Changes Requested and counts the Must Fix findings. The script saves the result against the
 design as it stands. No milestone of the module is built until its design is Design Approved, and a later change
 to the design needs another review.
@@ -162,7 +173,3 @@ to the design needs another review.
 When the owner overturns one of your results, add it to the project's graded examples: what was judged, each
 item's result and your reason, and what the owner said instead. Add the results the owner confirmed too,
 especially close calls, so the examples show where the line is from both sides.
-
-The script's own messages still use some older words. "The loop" is the script. "The profile" is the project
-settings. "Integrate" means merge. "Claimed" means Ready for Review, and "captures" are your screenshots and
-recordings. A "blocking" finding is a Must Fix, and an "advisory" one is a Suggestion.

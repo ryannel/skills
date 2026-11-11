@@ -1,0 +1,1 @@
+Still binding: change only docs/evidence/APPLE-TILE/M2-review.md and the verdict fields, state and fails in docs/plans/APPLE-TILE/DONE.json; don't commit, push or start agents. The project's rules are in ORCHESTRATE.md; re-read them if this conversation no longer holds them.

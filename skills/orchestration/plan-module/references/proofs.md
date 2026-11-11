@@ -50,7 +50,7 @@ same shape.
 | 3D asset | `inspect` | The parts of the model, each seen from several angles and distances, in its real lighting | It is one hero angle, or the turntable never shows the underside |
 | Motion or behaviour | `inspect` | What moves (physics, animation, simulation), and a scenario that shows it, as a sequence of frames | It is one still, or a slowed-down or close-up recording |
 | User journey | `inspect` | The steps and their states: empty, loading, error and resize for a screen; bad arguments, piped input and exit codes for a command-line tool | Only the easy path was tried |
-| Options to choose from | `inspect`, `attended` | A few options for one representative piece, different in kind, for the owner to pick from | The options are one idea in three colours |
+| Options to choose from | `inspect`, and `needs` with the type `human_feedback` | A few options for one representative piece, different in kind, for the owner to pick from | The options are one idea in three colours |
 | Code or interface | `ask` | A question with a real answer, such as "does every caller handle the new error case?" | It asks for an opinion |
 
 ## How to inspect
@@ -77,7 +77,7 @@ see what was looked at and what wasn't.
 
 What you can perceive depends on your tools. Most agents today can't watch live video or hear sound, so record
 anything that moves as a sequence of frames. Prove anything you can't perceive with a measurement, or give it
-`cant_tell`, which means Could Not Judge. Golden screenshots are good at catching a regression, but they never
+`could_not_judge`, which means Could Not Judge. Golden screenshots are good at catching a regression, but they never
 prove that something looks right.
 
 ## Subjective work
@@ -90,10 +90,12 @@ those as `check` items as usual. The taste itself needs four more things.
 
 People disagree about taste, so no reviewer can settle it for the owner. When the look is the product, and a
 wrong one means redoing most of the work (an asset set, a game's art style, a brand), plan a first milestone
-that makes a few options for one representative piece, different in kind. Give it an `attended` item where
-the owner picks one. Choosing early costs the owner one sitting. Rejecting finished work costs the build. The
-owner answers the lead in chat, and the lead saves their words with the `owner answer` command, so the builder
-and every later reviewer can compare the work with the option the owner chose.
+that makes a few options for one representative piece, different in kind. Give it an item where the owner
+picks one, marked as needing human feedback: `"needs": {"type": "human_feedback", "what": "pick one option"}`.
+Choosing early costs the owner one sitting. Rejecting finished work costs the build. The owner replies to the
+lead in chat, and the lead saves the question and their reply with the `owner feedback` command. The script
+records it as Human Feedback, so the builder and every later reviewer can compare the work with the option the
+owner chose.
 
 Have the builder lay the options out side by side for the owner, at the size they will be used and also
 enlarged, because a difference in line or texture can be a few pixels at real size. Have it save that as one
@@ -106,7 +108,7 @@ quality bar that says "each option" must meet the look would fail the milestone 
 rejected.
 
 When taste is one quality of a small build, such as how a little game feels, skip the options. Build it, and put
-the owner's judgement in one `attended` item on the last milestone, so nothing waits on the owner until the rest
+the owner's judgement in one item on the last milestone, marked as needing human feedback, so nothing waits on the owner until the rest
 is finished.
 
 ### Reviewers compare with references
@@ -134,5 +136,6 @@ This is the builder's own check, not the review. A failed review costs a whole b
 
 ### What agents can't perceive goes to the owner
 
-No current agent can hear a sound or feel how a game plays. Mark those items `attended` when you plan them. Left
-to a reviewer they come back `cant_tell`, which fails the milestone and tells nobody anything.
+No current agent can hear a sound or feel how a game plays. Mark those items as needing human feedback when you
+plan them. Left to a reviewer they come back `could_not_judge`, which fails the milestone and tells nobody
+anything.
