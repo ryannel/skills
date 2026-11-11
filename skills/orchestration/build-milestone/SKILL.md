@@ -24,10 +24,11 @@ If the plans folder has a `GLOSSARY.md`, read it as well. It holds the agreed na
 Use those names in anything new you write and in your report, but keep to the code's own word inside existing
 code.
 
-Your milestone is the next one in `<MODULE>-PLAN.md`. That file also has a few status lines at the top, saying where
-the module stands, and a log below them.
+The module's files are in its folder, `<plans folder>/<MODULE>/`. Your milestone is the first one in `PLAN.md`
+that isn't marked done, and its work list is there. `DESIGN.md` holds the design, and `LOG.md` the module's
+history, which you need only when you pick up unfinished work.
 
-What the milestone has to achieve is in `<MODULE>-DONE.json`, the done-when file. It lists items, and each item is
+What the milestone has to achieve is in `DONE.json`, the done-when file. It lists items, and each item is
 one thing that must be true before the milestone is Done. Each item says how it will be proved, in one or more of
 three ways:
 
@@ -49,8 +50,10 @@ keeps the project's records. Run them as `python3 <the build skill's folder>/scr
 3. The milestone's `state` says what happens next. A milestone needs a reviewer if any of its items has an
    `inspect` or `ask` field, or if it is the module's last milestone. If it does, set `state` to `claimed`, the
    stored name for Ready for Review. If not, set it to `done`.
-4. The status lines and the log in the plan file say what you did, with what you verified kept apart from what you
-   think is probably true.
+4. The work you finished is ticked in `PLAN.md`, and `LOG.md` has an entry of a few lines saying what you did,
+   with what you verified kept apart from what you think is probably true. Longer notes go in the module's
+   evidence folder, linked from the entry. Write no status lines in the plan: the script writes the owner's page,
+   `STATUS.md`, from the done-when file.
 5. Your last line is `DONE`, or `BLOCKED: <what you tried, the evidence, and what would unblock it>`, or
    `NEEDS_CONTEXT: <what is missing>`. The script and the lead read this line to decide what happens next, so keep
    to these three forms.
@@ -128,9 +131,9 @@ in `agent_loop.py lock <name> -- <command>`, so two builders don't use it at onc
 
 - Don't force-push.
 - Don't change the design, or an interface, which is what one module provides to the others. Write a proposal in
-  the plan's log, and carry on with the work that doesn't depend on it.
-- Don't build something another module owns. If it is missing, end with `BLOCKED` and name it, so a planner can add
-  it to the module that owns it. If you built it here, two modules would own the same thing.
+  `LOG.md`, and carry on with the work that doesn't depend on it.
+- Don't build something another module owns, or a later milestone of this one. If an item needs it, end with
+  `BLOCKED` and name it, so a planner can add it to the module that owns it or move the item. If you built it here, two modules would own the same thing.
 - If the work needs a decision on the `Owner decides` list in the project settings, end with `BLOCKED` and name the
   decision.
 

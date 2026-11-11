@@ -143,6 +143,24 @@ then Blocked, and the command prints what would unblock it.
 26. The lead runs the `report` command. It prints what is Done, what each review said, what waits for you, every
     decision saved in your name, and what the build cost. The lead sends you that with its own notes.
 
+### Where things stand
+
+Every project keeps its plans in the same place, `docs/plans/`, with one folder per module. The page to open is
+`docs/plans/STATUS.md`. The script writes it after every change it records, so it is never out of date and nobody
+edits it. It opens with an overview: how many modules are done, what is waiting on you, what is happening now and
+next, and what was recently done. Below that it lists every module in build order, finished and still to come,
+with what each is for and how far along it is.
+
+```
+docs/plans/
+  STATUS.md  BRIEF.md  GLOSSARY.md  ARCHITECTURE.md
+  <MODULE>/  DESIGN.md  PLAN.md  LOG.md  DONE.json  ACCEPTED.json
+```
+
+The files agents read for detail sit in each module's folder. `PLAN.md` holds only what is left to build, and the
+module's history goes in `LOG.md`, so the plan stays short enough to read. A project in the older layout, with files
+such as `<MODULE>-PLAN.md`, moves with the script's `migrate` command.
+
 ## Milestone statuses
 
 The walkthrough above meets every status a milestone can have, and the [glossary](GLOSSARY.md#statuses) lists them
@@ -356,7 +374,7 @@ run them yourself if you would rather.
 ## What the script verifies
 
 Each command verifies an agent's work before it saves anything, and only the script can set a milestone to Done.
-It keeps a record file, `<MODULE>-ACCEPTED.json`, beside each done-when file, holding the approved items, the
+It keeps a record file, `ACCEPTED.json`, beside each done-when file, holding the approved items, the
 commit that was tested, the reviews, your decisions, and whether each milestone is Done. Only the script's own
 commits write to it.
 
@@ -457,7 +475,8 @@ A module merged just before that first commit is also taken as it stands, so on 
 planner run merged.
 
 The script looks for record files in the plans folder named in the project settings. A commit that moves that
-folder hides the old record files, and every module then disappears from `status`, which is the sign.
+folder by hand hides the old record files, and every module then disappears from `status`, which is the sign. Move
+it with the `migrate` command instead, which moves the files and the `Plans:` line together.
 
 ### Your decisions depend on an honest lead
 
@@ -545,3 +564,13 @@ yet:
 - agents dedicated to research;
 - a second agent that confirms each finding;
 - running Automated Checks in a container.
+
+Some things were considered after a real failure and left out on purpose, because a smaller change already
+covers that failure:
+
+- a check for free disk space before a build: the script now removes a finished module's checkout instead;
+- a check that rejects status written into plan files: `STATUS.md` is generated, and the skills say not to write
+  status anywhere else;
+- letting the owner's approval of a design survive an edit to its header: status no longer belongs in the header,
+  so there is nothing to edit there;
+- one planner lock per module: a second planner now waits for the first instead of being turned away.

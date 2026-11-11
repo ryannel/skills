@@ -20,10 +20,10 @@ Contents:
 ```markdown
 # Project settings: <project>
 
-- **Purpose:** docs/modules/BRIEF.md  *(the project brief, or another document that says what the project is for and what finishes the current goal)*
+- **Purpose:** docs/plans/BRIEF.md  *(the project brief, or another document that says what the project is for and what finishes the current goal)*
 - **Quality bar:** <how good inspected work has to be, in words, naming shipped examples>
 - **Anchors:** <for subjective work, where the option the owner chose and the reference sets are kept; or none>
-- **Plans:** docs/modules  *(script)*
+- **Plans:** docs/plans  *(script: leave it out for the standard place; an older project may name another folder)*
 - **Evidence:** docs/evidence  *(script: review files and saved proof)*
 - **Graded examples:** docs/evidence/graded-examples.md  *(past reviews the owner agreed with or overturned)*
 - **Check:** npm run check  *(script: required; the project's test command, which must pass before a merge, or `none`)*
@@ -86,11 +86,16 @@ builder's blind spots.
 `Planner host` sends planners to one host, such as Claude Code for a Claude planner model while the builders stay
 on Codex. With `Review host: other`, their design reviews then go to the other host.
 
-The plans folder may hold two files that are not plans. `BRIEF.md` is the project brief: what the owner wants and
-why, approved by the owner before planning. `GLOSSARY.md` holds the agreed name for each thing in the project.
-Every agent looks for them there by name, so they need no line in this file. They are kept in the plans folder
-because the `adopt` command merges files from it, which lets the lead put a changed brief or glossary on the main
-branch without making a commit by hand.
+The plans folder holds four files of the project's besides the module folders. `STATUS.md` is the owner's page,
+which the script writes. `BRIEF.md` is the project brief: what the owner wants and why, approved by the owner
+before planning. `GLOSSARY.md` holds the agreed name for each thing in the project. `ARCHITECTURE.md` is the list
+of modules. Every agent looks for them there by name, so they need no line in this file. They are kept in the
+plans folder because the `adopt` command merges files from it, which lets the lead put a changed brief or glossary
+on the main branch without making a commit by hand. [The module's files](done-when.md#where-everything-is) shows
+the whole layout.
+
+This file holds settings, not progress. Write no status here, such as which milestones are done, because the
+script keeps that in `STATUS.md`, and a second copy here goes stale.
 
 ## A model or an effort for one kind of agent
 

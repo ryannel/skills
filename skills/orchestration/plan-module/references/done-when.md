@@ -1,43 +1,146 @@
-# The plan file and the done-when file
+# The module's files
 
-Each module has two files that every agent working on it reads. The plan file says where the module stands. The
-done-when file says what must be true before each milestone is Done, and how each thing will be proved. A planner
-writes both. Builders, reviewers and the script then change only their own parts of them, in a fixed order, which
-this file sets out.
+Each module has a folder of its own in the plans folder, `docs/plans/<MODULE>/`, and every agent working on the
+module reads the files in it. The plan file says what is left to build. The done-when file says what must be true
+before each milestone is Done, and how each thing will be proved. A planner writes both. Builders, reviewers and
+the script then change only their own parts of them, in a fixed order, which this file sets out.
 
 Contents:
-- [`<MODULE>-PLAN.md`](#module-planmd)
-- [`<MODULE>-DONE.json`](#module-donejson)
+- [Where everything is](#where-everything-is)
+- [`STATUS.md`, the owner's page](#statusmd-the-owners-page)
+- [The module table](#the-module-table)
+- [`PLAN.md`](#planmd)
+- [`LOG.md`](#logmd)
+- [`DONE.json`](#donejson)
 - [Statuses and their stored names](#statuses-and-their-stored-names)
 - [The record file](#the-record-file)
 - [Who changes what, and when](#who-changes-what-and-when)
 - [When a review fails](#when-a-review-fails)
 - [What makes a good item](#what-makes-a-good-item)
 
-## `<MODULE>-PLAN.md`
+## Where everything is
 
-The plan file holds a module's milestones, a few status lines at the top, and a log. Whoever updates it rewrites
-it in place, so it always describes the present. People and agents read the status lines first, so keep them
-short. The `Reviews:` line holds only the latest review, and earlier ones go in the log, because a status line
-that keeps growing stops being read.
+Every project keeps its plans in the same place, so the owner and every agent can always find them. The plans
+folder is `docs/plans` unless the project settings name another.
+
+```
+ORCHESTRATE.md               the project settings
+docs/plans/
+  STATUS.md                  the owner's page; the script writes it
+  BRIEF.md                   what the owner wants and why
+  GLOSSARY.md                the agreed name for each thing
+  ARCHITECTURE.md            the list of modules, then the interfaces between them
+  <MODULE>/
+    DESIGN.md                the design: mechanisms and interfaces
+    PLAN.md                  what is left to build
+    LOG.md                   what happened, oldest first
+    DONE.json                the done-when file
+    ACCEPTED.json            the record file; the script writes it
+    BRIEF.md                 optional: the owner's brief for this module alone
+docs/evidence/<MODULE>/      proof, reviews, and the briefs written for reviews
+```
+
+Nothing else that plans work goes anywhere else. A plan written in another shape or another place is converted
+into these files and the old one deleted, because two plans for one thing drift apart and the owner can't tell
+which is current. Notes an agent keeps while it works stay out of the repository.
+
+Each file has its readers, and is written for them:
+
+| File | Written for | So it is written |
+|---|---|---|
+| `STATUS.md` | The owner, and the lead | By the script, from stored facts |
+| `ARCHITECTURE.md`'s module table, milestone names | The owner | In plain words, as what someone can see or do |
+| `DESIGN.md`, the work in `PLAN.md`, `DONE.json` | Builders and reviewers | Precisely, with paths and IDs, as the `prompting-agents` skill describes |
+| `LOG.md` | Planners and the lead, later | One dated entry per event, a few lines at most |
+
+## `STATUS.md`, the owner's page
+
+The script writes `STATUS.md` after every record it lands, and nobody edits it, because a page somebody has to
+remember to update goes stale. It is built only from what the script stores: the done-when and record files, the
+module table, and the open assumptions in each plan. `agent_loop.py status --format md` prints the same page.
+
+It has two sections. The overview comes first, because it is what the owner reads day to day:
+
+- one line of progress, such as `4 of 11 modules done · 2 in progress · 5 to come`;
+- what is waiting on the owner: open assumptions, items that need a person or hardware, milestones that are Too
+  Many Failed Reviews, proposed names in the glossary;
+- what is happening now and what comes next, each milestone by its name;
+- what was recently done.
+
+Below it, all the modules in build order, with each one's status: Done, how far along it is, what it waits on, or
+Not planned yet.
+
+Because the page is made from milestone names and the module table, those are the words the owner reads. Name a
+milestone for what someone can see or do once it is Done ("A new user signs up and lands on an empty dashboard"),
+not for the work inside it ("Auth handler refactor").
+
+## The module table
+
+`ARCHITECTURE.md` opens with a table of every module, in the order they are built. The script reads it, so keep
+this exact header:
+
+```markdown
+| # | Module | What it's for | Needs |
+|---|---|---|---|
+| 1 | AUTH | People sign in, and stay signed in across devices | |
+| 2 | ONBOARDING | A new user gets from sign-up to a first project | AUTH |
+```
+
+`What it's for` is one sentence in plain words, for the owner. The table has no status column, because the script
+adds the status in `STATUS.md`. A module the planner has listed but not yet planned shows there as Not planned
+yet, which is how the owner sees what is still to come. The rest of `ARCHITECTURE.md`, what each module owns and
+the interfaces, comes after the table.
+
+## `PLAN.md`
+
+The plan file says what is left to build, and nothing else. It holds no status lines, because the script knows
+each milestone's status and writes it to `STATUS.md`. Status written by hand goes stale, and grows into
+paragraphs nobody reads.
 
 ```markdown
 # <Module> plan
-Reviews: <the latest review: what was reviewed, at which commit, the result, a link>
-Milestone: M2 <name>
-Now: <what is happening> (since <date>)
-Next: <what follows>
-Blocked: none
 
-## M1 <name>: done
-## M2 <name>: in progress
-- [ ] <a piece of work: what exists or passes when it is finished>
+## Open for the owner
+- Assumption: <a reading of the owner's words the planner chose, which the owner can overturn>
 
-## Log
-- <date> <what changed and why>
+## M1 <what someone can see or do>: done
+[review](../../evidence/<MODULE>/review.md)
+
+## M2 <what someone can see or do>
+- [x] <a piece of work: what exists or passes when it is finished>
+- [ ] <the next piece of work>
+
+Stop rules:
+- <when the builder stops and reports, rather than carrying on>
+
+## M3 <what someone can see or do>
+- [ ] <a piece of work>
 ```
 
-## `<MODULE>-DONE.json`
+- A Done milestone shrinks to its heading and one link to its review. The detail stays in the review, the log and
+  git.
+- `Open for the owner` holds only open assumptions. When the owner answers one, delete the line. The answer is
+  recorded with the `owner` command.
+- Briefs written for reviews go to `docs/evidence/<MODULE>/`, beside the review. Design goes in `DESIGN.md`.
+
+The script checks every plan file when it lands. On a planner's turn it refuses, and elsewhere it warns about, a
+plan over about 1,500 words, a status line (`Now:`, `Next:`, `Blocked:`, `Milestone:` or `Reviews:`), a `###`
+heading, a log, or more than one line under a Done milestone. These are the ways the plan files of earlier
+projects grew until nobody could read them.
+
+## `LOG.md`
+
+The log is the module's history: decisions, proposals to change an interface, what a failed review found, and
+what the owner said. Each entry is one dated line, with at most a few lines under it, and the newest at the
+bottom. Longer detail goes in `docs/evidence/<MODULE>/` with a link. The script warns about an entry over eight
+lines. Nobody reads the log to find out where the module stands, so it may grow.
+
+```markdown
+- 2026-11-03 M2: review failed on the empty state; fixed in the second round.
+- 2026-11-05 Owner: "keep the old URL working" (quoted from chat).
+```
+
+## `DONE.json`
 
 The done-when file lists, for each milestone, its items: the things that must be true before the milestone is
 Done. It is JSON because the script reads it, and because an agent is less likely to rewrite a whole JSON file
@@ -154,7 +257,7 @@ sets Design Changes Requested.
 
 ## The record file
 
-Beside each done-when file, the script keeps `<MODULE>-ACCEPTED.json`, the record file. Only the script writes it,
+Beside each done-when file, the script keeps `ACCEPTED.json`, the record file. Only the script writes it,
 in commits marked `Orchestrate-Loop: yes`. It is committed, so every worktree, every copy of the repository and
 every lead reads the same one. For each milestone it holds:
 
@@ -238,7 +341,9 @@ on something already ruled out.
 ## What makes a good item
 
 This section is for the planner. A good item is something you would refuse to call the milestone Done without.
-Its proof would catch a convincing fake, and it depends only on this module. Keep an inspected item small, with
+Its proof would catch a convincing fake, and it depends only on this module and on what exists when its
+milestone ends. An item whose proof needs a later milestone's work can't pass until then, so it holds up the
+milestone it sits in; put it in the later milestone. Keep an inspected item small, with
 one quality in each, so a failure points at something specific. A milestone may have many items, as long as it
 delivers one outcome.
 

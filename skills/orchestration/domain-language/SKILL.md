@@ -18,7 +18,7 @@ nobody is sure those are one thing.
 
 Some projects are built with the orchestrate set, a group of skills in which separate agents plan, build and
 review. Such a project has a file of settings, `ORCHESTRATE.md`, at its root, and a plans folder that the
-settings name on their `Plans:` line (`docs/modules` unless they say otherwise). In that kind of project, or one
+settings name on their `Plans:` line (`docs/plans` unless they say otherwise). In that kind of project, or one
 about to be planned that way, the glossary is `GLOSSARY.md` in the plans folder.
 
 The builders, the agents that write the code, work on their own branches. So a glossary you write in the owner's

@@ -84,7 +84,18 @@ one, and a builder who needs a change writes a proposal.
 A module's file saying what the module must do for the people who use it.
 
 **Plan file**
-A module's `<MODULE>-PLAN.md`: its milestones, a few status lines at the top and a log.
+A module's `PLAN.md`: what is left to build, milestone by milestone, and the assumptions open for the owner.
+
+**Log**
+A module's `LOG.md`: its history, one dated entry per event.
+
+**Status page**
+`STATUS.md` in the plans folder, which only the script writes: an overview for the owner, then every module in
+build order with its status.
+Avoid: dashboard, status lines
+
+**Module table**
+The table at the top of `ARCHITECTURE.md` listing every module in build order, what each is for and what it needs.
 
 **Milestone**
 A piece of a module small enough for one builder to finish in one session.
@@ -93,7 +104,7 @@ A piece of a module small enough for one builder to finish in one session.
 A milestone depends on a milestone in another module when it can't start until that one is Done.
 
 **Done-when file**
-A module's `<MODULE>-DONE.json`. For each milestone, it lists the items, how each is proved and its quality bar.
+A module's `DONE.json`. For each milestone, it lists the items, how each is proved and its quality bar.
 It is written before building, and the builder can't change what it requires.
 Avoid: acceptance file, DONE file
 
@@ -107,7 +118,7 @@ ripgrep's".
 Stored as: the milestone's `bar` field
 
 **Record file**
-A module's `<MODULE>-ACCEPTED.json`, which only the script writes. It records which milestones are Done.
+A module's `ACCEPTED.json`, which only the script writes. It records which milestones are Done.
 Avoid: acceptance record (except in the script's messages)
 
 **Worktree**

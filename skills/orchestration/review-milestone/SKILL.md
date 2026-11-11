@@ -32,7 +32,8 @@ If the plans folder has a `GLOSSARY.md`, read it. It holds the agreed name for e
 your review should use those names. A name in the work that disagrees with the glossary is worth reporting, but
 it doesn't fail the milestone unless an item says it does.
 
-What the milestone must achieve is in `<MODULE>-DONE.json`, the done-when file. It lists items, and each item is
+The module's files are in its folder, `<plans folder>/<MODULE>/`: the design in `DESIGN.md`, the plan in
+`PLAN.md`, the module's history in `LOG.md`. What the milestone must achieve is in `DONE.json`, the done-when file. It lists items, and each item is
 one thing that must be true before the milestone is Done. Each item says how it is proved, in one or more of
 three ways: an Automated Check (a command in its `check` field), a Reviewer Inspection (something to look at in
 the running product, in its `inspect` field), or a Reviewer Question (something to answer by reading the code, in
@@ -40,7 +41,7 @@ its `ask` field). [Proofs](../plan-module/references/proofs.md) explains each on
 bar, in its `bar` field: the standard its work is judged against.
 
 Form your own view of each item from the item, the design, the changed code and the running product before you
-read the builder's `evidence` and notes.
+read the builder's `evidence` and its entries in `LOG.md`.
 
 ## What reviewers get wrong
 
@@ -136,13 +137,13 @@ their behaviour. Try the request's own words on ordinary inputs that the design'
 that reads the request more narrowly than its words, and doesn't list that as an assumption for the owner, has a
 gap.
 
-Then read the items in the done-when file, and ask of each whether you could really judge it, and whether a
-convincing fake would pass it. Agreeing the items before building starts is what makes the later review fair.
+Then read the items in the done-when file, and ask of each whether you could really judge it when its milestone
+ends, with only the milestones before it built, and whether a convincing fake would pass it. Agreeing the items before building starts is what makes the later review fair.
 
 Write the review to `<evidence>/<MODULE>/design-review.md`, with the worst finding first and each marked Must Fix
 or Suggestion. A finding is a Must Fix when building as designed would go wrong: a mechanism that can't produce
-the behaviour, a gap against the request or an interface, or an item that no reviewer could judge or that a
-convincing fake would pass. A sharper proof, an extra edge case or clearer wording is a Suggestion. Suggestions
+the behaviour, a gap against the request or an interface, or an item that no reviewer could judge, that its milestone
+can't prove, or that a convincing fake would pass. A sharper proof, an extra edge case or clearer wording is a Suggestion. Suggestions
 don't hold up the build. They stay in the review for the planner's next turn on the module.
 
 If a `design-review.md` is already there, it is the previous round. Go through its Must Fix findings first and

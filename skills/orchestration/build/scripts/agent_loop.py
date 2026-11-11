@@ -22,7 +22,20 @@ Hosts:
   they run headless as above. Every result line from a turn says which: `path` is `visible` or `headless`, with
   `path_reason` when headless. Stopping a turn in the app gives PAUSED, and `run` again carries on.
 
-What the loop owns. Next to each done-when file it keeps `<MODULE>-ACCEPTED.json`, which only the loop writes and
+Where the plans live. The profile's `Plans` line names the plans folder (default docs/plans; a project with no
+Plans line, no docs/plans and a docs/modules folder keeps docs/modules). Each module has a folder of its own there:
+  <plans>/<MODULE>/DESIGN.md      the planner's design
+  <plans>/<MODULE>/PLAN.md        the milestones as they stand now, with open assumptions under `## Open for the owner`
+  <plans>/<MODULE>/LOG.md         short dated entries: what changed and why
+  <plans>/<MODULE>/DONE.json      the done-when file; a folder with one is a module
+  <plans>/<MODULE>/ACCEPTED.json  the record, which only the loop writes
+  <plans>/<MODULE>/BRIEF.md       a feature brief, when the module has one
+The project's own files sit beside the folders: BRIEF.md, GLOSSARY.md, ARCHITECTURE.md (which opens with the module
+table, `| # | Module | What it's for | Needs |`, in build order) and STATUS.md, the owner's page, which the loop writes
+after each record it lands and nobody edits. Plans still in the older flat layout (<MODULE>-DONE.json and the rest
+side by side in the plans folder) stop every command until `migrate` has moved them.
+
+What the loop owns. In each module's folder it keeps ACCEPTED.json, which only the loop writes and
 which is committed, so every worktree, clone and lead sees the same thing. Per milestone it holds the authorised hash
 of the acceptance definitions, the claim the loop checked (code commit and the integrated tip it ran the checks on),
 the reviews that judged it, and whether it was accepted, by checks, a reviewer or the owner. It also holds the
@@ -98,11 +111,12 @@ Subcommands:
         written when a build turn starts) where the command names none; with `Review host: other` only a review host
         the lead named on that run is kept, and a design review owed after a planner turn names the host that
         didn't plan it. A milestone review's host is left to
-        `review`, which takes the builder's from the claim record. `by: owner` marks a
-        decision only the owner may make: `ask` is what the lead asks them in chat, and `command` the `owner`
-        command the lead runs once they've answered, with their words in --text; the loop never runs those itself.
+        `review`, which takes the builder's from the claim record. `by` names who runs
+        `command` (lead or planner). `decides: owner` marks a decision only the owner may make: `ask` is what the
+        lead asks them in chat, and `command` the `owner` command the lead runs once they've answered, with their
+        words in --text; the loop never runs those itself.
         A BLOCKED milestone with attended items that haven't passed also carries `next.owner_answers`, one {item,
-        ask, command, by: owner} per item, whatever else `next` says (`ready` lists those items under `attended`;
+        ask, command, by: lead, decides: owner} per item, whatever else `next` says (`ready` lists those items under `attended`;
         `report` gives each one's command). When plan
         files under the profile's plans folder are uncommitted or not integrated, the result names them under
         `unlanded_plans` and `next` is `adopt`, with what would have come next under `then`.
@@ -127,7 +141,7 @@ Subcommands:
         (`repeated` names them), and `ladder` (and `next.ladder`) is the escalation word (same-session,
         fresh-session, replan, diagnose, park) with `next` the command it calls for: `run --message` with the
         findings, `run --fresh --message`, `plan` with a re-plan or diagnosis task naming the reviews (by:
-        planner), or `owner unpark` (by: owner, with each round under `history`) for a milestone the loop parked.
+        planner), or `owner unpark` (decides: owner, with each round under `history`) for a milestone the loop parked.
         A diagnosing planner ends with `PLANNED` (a re-plan) or `KEEP <MODULE> <milestone>: builder|reviewer|owner:
         <why>`, which `plan` records as KEPT, starting the counts again; a second diagnosis parks. After a pass it is the
         next ready milestone or "finished", the planner's revision with `findings` after DESIGN CHANGES.
@@ -135,29 +149,31 @@ Subcommands:
         added, removed or redefined since the first.
 
   plan  --worktree PATH --task TEXT [--host H] [--model M] [--effort high]
-        Runs a fresh planner in a clean worktree. Its last line must be `PLANNED: <files>` naming files it
-        changed that exist (a design beside every changed done-when file), else it's nudged with what's missing, at
+        Runs a fresh planner in the loop's own checkout of the integrated tip (<git common dir>/orchestrate/verify/
+        _PLANNER), so --worktree only names the repository and the lead's worktree is left as it is; a first plan,
+        before ORCHESTRATE.md exists, runs in --worktree itself, which must be clean. Its last line must be `PLANNED: <files>` naming files it
+        changed that exist (a DESIGN.md in the folder of every changed done-when file), else it's nudged with what's missing, at
         most twice. Then the loop checks its done-when files, commits and lands its files, and authorises the new
         definitions (resetting proof on milestones whose definitions changed). PLANNED lists the modules whose
-        design review is now owed. BLOCKED or NEEDS_CONTEXT from the planner, or UNFINISHED, lands nothing and
-        leaves its files uncommitted. Its `report` keeps the end of the planner's message (where owner decisions go),
+        design review is now owed. BLOCKED or NEEDS_CONTEXT from the planner, or UNFINISHED, lands nothing; the
+        files it changed are listed under `set_aside` and kept in a stash (`stash`), and any commits on a branch
+        (`branch`), since the planner's checkout is reset for the next plan. Its `report` keeps the end of the planner's message (where owner decisions go),
         up to 6000 characters. PLANNED's `next` is the owed design review on the review host, or `ready`;
-        `assumptions` counts, per module, the `Assumption:` lines in its plan log. The whole task is kept in the plan
+        `assumptions` counts, per module, the `Assumption:` lines in its PLAN.md. The whole task is kept in the plan
         commit's body and in each module's acceptance record under `briefs` (the authorisation stamps name only its
         first line), which design reviews are pointed at. For each
         milestone that was owed a re-plan or diagnosis and whose definitions the plan changed, the loop sets fails
         and rounds 0, adds 1 to replans (and to diagnoses, for a diagnosis) and opens it, in its own commit, whatever the planner wrote there (`replanned` lists them). In a
         repository with no commits (or origin with no main branch), FLOOR before any planner turn, with `next`
-        giving the first commit and push. One planner runs per repository at a time: another gets TAKEN, naming the
-        holder, with `next` to run it again once that one stops. A clean worktree behind the tip is fast-forwarded
-        first, and one with commits the tip lacks is refused (INVALID, `next` making a fresh worktree on the tip to
-        plan in, leaving this one alone). The loop lands only what the planner leaves uncommitted: a turn whose
-        worktree's reflog shows a commit made during it, or whose HEAD the tip lacks, is INVALID (`next` by lead, no
+        giving the first commit and push. One planner runs per repository at a time: another waits for it (listed in
+        `loops` with `waiting_for`), then plans from the tip the first one landed; `pause` doesn't reach a waiting
+        planner, but stopping its process does (PAUSED). The loop lands only what the planner leaves uncommitted: a
+        turn whose checkout's reflog shows a commit made during it, or whose HEAD the tip lacks, is INVALID (`next` by lead, no
         command), and so is one during which a commit
-        without the loop's trailer changed an acceptance record on the tip (named, `next` by owner, no command). Its
+        without the loop's trailer changed an acceptance record on the tip (named, `next` decides: owner, no command). Its
         HEAD may move along the tip meanwhile (a `land` elsewhere fast-forwards the checkout holding the base
         branch). Everything it leaves uncommitted lands, outside the plans folder too (acceptance tests, say), except
-        acceptance records. Any other INVALID turn's `next` stashes its files and gives a planner the task again
+        acceptance records. Any other INVALID turn's files are stashed, and its `next` gives a planner the task again
         with the problems. The whole task is kept once, under `briefs`. A review is refused the same way when a
         record changes on the tip without the trailer while it runs, or its checkout's reflog shows a commit. `land` refuses to run in a plan or review
         session.
@@ -180,13 +196,28 @@ Subcommands:
         built (no claim, review or acceptance, no milestone past open, no run holding the module), adopt authorises
         changed definitions (`authorised` lists the modules; the record's stamp says why), because the owed design
         review will judge them; it holds the module's run lock while it lands and checks again before each commit.
-        Refuses files outside those, acceptance records, invalid done-when files, changed definitions on a module
+        Refuses files outside those, acceptance records, a hand-edited STATUS.md, files under the old flat names,
+        a PLAN.md or LOG.md that fails the plan checks (as a planner turn's landing does), invalid done-when files, changed definitions on a module
         that's no longer a draft (with `next` naming `plan` and `owner scope`), a changed ORCHESTRATE.md the tip
         already has (the lead commits it once the owner agrees), anything `ready` would then call invalid, files the tip changed since,
         and any session the loop started. While it lands it has a `loops` record, so a run turned away names it.
         ADOPTED, NOTHING, REFUSED or FAILED (with `next` when the repository has no commits to build on).
-  status [--module CORE] --worktree PATH   Every milestone with its state, blockers and last verdict, and which
-        modules (and the planner) have a live run. A claim the loop hasn't checked yet shows as `done, unchecked`.
+  status [--module CORE] --worktree PATH [--format md]   Every milestone with its state, blockers and last verdict,
+        and which modules (and the planner) have a live run. A claim the loop hasn't checked yet shows as `done,
+        unchecked`. It warns about a module folder with no row in ARCHITECTURE.md's module table (`ready` lists the
+        same under `module_table`), and about tracked PLAN.md or *-PLAN.md files outside the plans folder.
+        --format md prints STATUS.md, the owner's page, as the loop writes it after each record it lands (in a
+        commit of its own, which never fails or holds up the record), plus any plan files here that haven't landed.
+        The page opens with an overview (a progress line, what waits on the owner, what is under way or next, and
+        what was accepted in the last 7 days), then every module in build order with its status.
+  migrate --worktree PATH [--to docs/plans]
+        Moves plans from the old flat layout into a folder per module: <M>.md to <M>/DESIGN.md, <M>-PLAN.md to
+        <M>/PLAN.md, and <M>-DONE.json, <M>-ACCEPTED.json and <M>-BRIEF.md into <M>/, with each plan's `## Log`
+        section moved to <M>/LOG.md. --to also moves the whole plans folder there and changes the Plans line in
+        ORCHESTRATE.md. It works on a clean checkout of the tip and lands as the loop's own commit, then
+        fast-forwards a clean worktree. Acceptance survives: records hold no plan paths, and a design's hash is of
+        its text. Refused while any run, review, plan or adopt is running, and while plan files here differ from the
+        tip. MIGRATED, NOTHING (the tip has folders already), REFUSED or FAILED.
   check --module CORE --milestone M2 [--worktree PATH] [--plans-from PATH] [--timeout 600] [--json]
         Runs the milestone's checks (each item's `check`, then the profile's Check) in the given tree, as it stands,
         and prints a line per check, with the why and last output lines of any that didn't pass (--json: one JSON
@@ -205,7 +236,7 @@ Subcommands:
         window, DESIGN CHANGES ones included), every decision recorded in the owner's name with their words (for the
         owner to spot one they didn't make), the planner turns that authorised definitions with the task each
         was given (where the lead puts the owner's words), the planners'
-        assumptions (lines starting `Assumption:` in each <MODULE>-PLAN.md) for the owner to overturn, what is parked,
+        assumptions (lines starting `Assumption:` in each <plans>/<MODULE>/PLAN.md) for the owner to overturn, what is parked,
         blocked or waiting, open attended items, and cost (as `cost` reads it). --write puts it in
         <evidence>/build-reports/<date>.md for `adopt`, with its links relative to that file.
   next  --module CORE --worktree PATH --milestone M2   The escalation after a failed review (see done-when.md):
@@ -362,7 +393,10 @@ else; the loop integrates them. Don't launch other agents. End with the skill's 
 PLAN_TEMPLATE = """Use the plan-module skill ({skill}) for this task: {task}
 
 You can't launch other agents. The loop commits and integrates the files you leave, and records the new \
-definitions; never edit a *-ACCEPTED.json file, and don't commit, merge, pull or land. Say what changed and any decision the owner must make. Your last line \
+definitions; never edit an ACCEPTED.json file or the plans folder's STATUS.md, which the loop writes, and don't commit, merge, pull or land. \
+Each module's files go in its own folder under the plans folder: DESIGN.md, PLAN.md, LOG.md and DONE.json. \
+PLAN.md holds only the present: one `##` heading per milestone, no status lines and no log, and the loop refuses \
+a plan that breaks this, saying why. Say what changed and any decision the owner must make. Your last line \
 is `PLANNED: <every file you wrote or changed, comma-separated>` once those files are written, or `BLOCKED: ...` or \
 `NEEDS_CONTEXT: ...` (including when nothing should change, except for a diagnosis, which ends with its `KEEP` line); \
 the loop lands nothing then. To dry-run a milestone's checks, run `python3 {loop} check --module <M> --milestone <id> --worktree .`. The loop finds the host CLIs (codex, claude) itself, so one missing from your PATH isn't a problem to report."""
@@ -381,7 +415,7 @@ class TipError(Exception):
 
 # ---------------------------------------------------------------------------------------------------------- profile
 
-PROFILE_FIELDS = {"plans": "docs/modules", "evidence": "docs/evidence", "check": None, "branch": "main",
+PROFILE_FIELDS = {"plans": "docs/plans", "evidence": "docs/evidence", "check": None, "branch": "main",
                   "remote": "origin", "integrate": None, "codex sandbox": "workspace-write", "writable roots": "",
                   "graded examples": "", "effort": "", "claude permissions": "auto", "default host": "",
                   "review host": "", "planner host": ""}
@@ -449,12 +483,17 @@ def role_setting(prof: dict, role: str, host: str) -> tuple[str | None, str | No
     return model, effort
 
 
-def profile(worktree: Path, strict: bool = False, missing_ok: bool = False) -> dict:
+OLD_PLANS = "docs/modules"  # the plans folder's default before docs/plans; still used when only it exists
+
+
+def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat_ok: bool = False) -> dict:
     """Reads the loop's settings from ORCHESTRATE.md (`- **Label:** value` lines). `Integrate` and `Check` must be
     there, because silently pushing, or integrating with no gate, isn't something to default into. A missing
     profile, or a missing, unfilled or invalid value, raises SystemExit when strict, and falls back to safe defaults
     (local integration, no Check) with a warning otherwise. `missing_ok` drops the warning for a profile that doesn't
-    exist yet, where the caller says so itself (an unplanned project) or a planner is about to write it."""
+    exist yet, where the caller says so itself (an unplanned project) or a planner is about to write it.
+    A plans folder still in the old flat layout (<MODULE>-DONE.json directly in it) stops the command with the
+    `migrate` command to run, unless `flat_ok`."""
     path = worktree / "ORCHESTRATE.md"
     problems = [] if path.exists() else [f"no ORCHESTRATE.md in {worktree}"]
     text = path.read_text() if path.exists() else ""
@@ -472,6 +511,8 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False) -> d
             out[key] = default
         else:
             out[key] = value.rstrip("/") if key in ("plans", "evidence") else value
+    if not profile_value(text, "plans") and not (worktree / out["plans"]).exists() and (worktree / OLD_PLANS).is_dir():
+        out["plans"] = OLD_PLANS  # a project from before docs/plans keeps its modules where they are
     out["integrate"] = out["integrate"] or "local"
     out["check"] = "" if (out["check"] or "none").lower() == "none" else out["check"]
     out["effort"] = out["effort"] or DEFAULT_EFFORT
@@ -516,6 +557,8 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False) -> d
     for label in BOUNDS:
         value = profile_value(text, label)
         out["bounds"][label] = value if value and not PLACEHOLDER.search(value) else None
+    if not flat_ok and flat_modules(worktree, out["plans"]):
+        raise SystemExit(flat_refusal(worktree, out["plans"]))
     if problems:
         message = "ORCHESTRATE.md has missing, unfilled or invalid fields: " + "; ".join(problems)
         if strict:
@@ -568,7 +611,7 @@ def unplanned(worktree: Path) -> dict | None:
     return {"reason": f"the project isn't planned yet: there's no ORCHESTRATE.md in {worktree}",
             "next": next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task",
                                       "Plan the project: <what the owner asked for, in their words>"), "lead",
-                             "a planner writes the profile (ORCHESTRATE.md), the module map and the first module's "
+                             "a planner writes the profile (ORCHESTRATE.md), the module table in ARCHITECTURE.md and the first module's "
                              "plan; give it the owner's ask, and their answers on hosts, integration and checks")}
 
 
@@ -782,21 +825,111 @@ def commits_made(tree: Path, seen: int) -> list[str]:
 
 # ------------------------------------------------------------------------------------------------- done-when file
 
-def module_stem(worktree: Path, prof: dict, module: str) -> str:
-    """The module's name as its files spell it, found without regard to case."""
-    folder = worktree / prof["plans"]
-    for path in sorted(folder.glob("*-DONE.json")) if folder.exists() else []:
-        if path.name[:-len("-DONE.json")].upper() == module.upper():
-            return path.name[:-len("-DONE.json")]
-    raise SystemExit(f"error: {folder}/{module}-DONE.json doesn't exist; the module needs planning (/plan-module) first")
+# The layout of the plans folder, defined here and nowhere else. Each module is a folder <plans>/<MODULE>/ holding
+# these files; a folder is a module when it holds DONE.json. The project's own files sit at the top of <plans>.
+MODULE_FILES = {"design": "DESIGN.md", "plan": "PLAN.md", "log": "LOG.md", "done": "DONE.json",
+                "record": "ACCEPTED.json", "brief": "BRIEF.md"}
+PROJECT_FILES = {"brief": "BRIEF.md", "glossary": "GLOSSARY.md", "architecture": "ARCHITECTURE.md",
+                 "status": "STATUS.md"}
+
+
+def module_file(prof: dict, stem: str, kind: str) -> str:
+    """A module's file, as a path from the repository root: <plans>/<MODULE>/<the file for `kind`>."""
+    return f"{prof['plans']}/{stem}/{MODULE_FILES[kind]}"
+
+
+def project_file(prof: dict, kind: str) -> str:
+    """A file about the whole project, at the top of the plans folder."""
+    return f"{prof['plans']}/{PROJECT_FILES[kind]}"
 
 
 def done_rel(prof: dict, stem: str) -> str:
-    return f"{prof['plans']}/{stem}-DONE.json"
+    return module_file(prof, stem, "done")
 
 
 def record_rel(prof: dict, stem: str) -> str:
-    return f"{prof['plans']}/{stem}-ACCEPTED.json"
+    return module_file(prof, stem, "record")
+
+
+def design_rel(prof: dict, stem: str) -> str:
+    return module_file(prof, stem, "design")
+
+
+def plan_rel(prof: dict, stem: str) -> str:
+    return module_file(prof, stem, "plan")
+
+
+def log_rel(prof: dict, stem: str) -> str:
+    return module_file(prof, stem, "log")
+
+
+def status_rel(prof: dict) -> str:
+    return project_file(prof, "status")
+
+
+def module_of(prof: dict, rel: str) -> tuple[str, str] | None:
+    """(module, kind) for a path that is one of a module's files, as `module_file` builds them; else None."""
+    head = prof["plans"] + "/"
+    if not rel.startswith(head):
+        return None
+    parts = rel[len(head):].split("/")
+    if len(parts) != 2 or not parts[0]:
+        return None
+    kind = next((k for k, name in MODULE_FILES.items() if name == parts[1]), None)
+    return (parts[0], kind) if kind else None
+
+
+def records_glob(prof: dict) -> str:
+    """A git pathspec for every acceptance record under the plans folder."""
+    return f":(glob){prof['plans']}/*/{MODULE_FILES['record']}"
+
+
+def modules_here(tree: Path, prof: dict) -> list[str]:
+    """The modules in a checkout's files: every folder under the plans folder that holds a done-when file."""
+    folder = tree / prof["plans"]
+    if not folder.is_dir():
+        return []
+    return sorted(p.name for p in folder.iterdir() if (p / MODULE_FILES["done"]).is_file())
+
+
+def modules_at(worktree: Path, prof: dict, ref: str) -> list[str]:
+    """The modules at `ref`, found the same way as `modules_here`."""
+    listed = git(worktree, "ls-tree", "-r", "--name-only", ref, "--", prof["plans"] + "/")
+    found = []
+    for rel in listed.stdout.splitlines() if listed.returncode == 0 else []:
+        if (where := module_of(prof, rel)) and where[1] == "done":
+            found.append(where[0])
+    return sorted(found)
+
+
+FLAT_DONE = re.compile(r"^(.+)-DONE\.json$")
+
+
+def flat_modules(tree: Path, plans: str) -> list[str]:
+    """The modules still in the old flat layout, where <MODULE>-DONE.json sat directly in the plans folder."""
+    folder = tree / plans
+    if not folder.is_dir():
+        return []
+    return sorted(m.group(1) for p in folder.iterdir() if p.is_file() and (m := FLAT_DONE.match(p.name)))
+
+
+def flat_refusal(tree: Path, plans: str) -> str:
+    """The message a command stops with when the plans folder still has the old flat layout."""
+    found = flat_modules(tree, plans)
+    return (f"error: {tree / plans} still has plan files in the old flat layout ({', '.join(f'{s}-DONE.json' for s in found[:5])}"
+            f"{', ...' if len(found) > 5 else ''}). The loop now keeps each module in a folder of its own, "
+            f"{plans}/<MODULE>/DONE.json, and reads nothing else. Move them once, with:\n  "
+            + loop_cmd("migrate", "--worktree", str(tree)) +
+            "\nIf the integrated tip has already been moved, the same command fast-forwards this worktree instead.")
+
+
+def module_stem(worktree: Path, prof: dict, module: str) -> str:
+    """The module's name as its folder spells it, found without regard to case."""
+    for stem in modules_here(worktree, prof):
+        if stem.upper() == module.upper():
+            return stem
+    raise SystemExit(f"error: {worktree / done_rel(prof, module)} doesn't exist; the module needs planning "
+                     "(/plan-module) first")
 
 
 def load_done(worktree: Path, module: str, prof: dict | None = None) -> dict:
@@ -1121,11 +1254,12 @@ def unrecorded(worktree: Path, prof: dict, ref: str) -> bool:
     """Whether the repository at `ref` has never had a loop record: none at `ref`, and no commit reachable from it
     ever touched one. Only then is a module adopted as it stands; once the loop has written any record, a module it
     has no record for is new, whoever landed it and however."""
-    glob = f":(glob){prof['plans']}/*-ACCEPTED.json"
-    listing = git(worktree, "ls-tree", "--name-only", f"{ref}:{prof['plans']}").stdout.split()
-    if any(n.endswith("-ACCEPTED.json") for n in listing):
+    listing = git(worktree, "ls-tree", "-r", "--name-only", ref, "--", prof["plans"] + "/").stdout.splitlines()
+    if any((where := module_of(prof, n)) and where[1] == "record" for n in listing):
         return False
-    return not git(worktree, "log", "-1", "--format=%H", ref, "--", glob).stdout.strip()
+    # any record anywhere in history, in the module folders or the older flat layout, wherever the plans folder was
+    return not git(worktree, "log", "-1", "--format=%H", ref, "--", f":(glob)**/{MODULE_FILES['record']}",
+                   ":(glob)**/*-ACCEPTED.json").stdout.strip()
 
 
 def take_up(tree: Path, prof: dict) -> list[str]:
@@ -1133,9 +1267,8 @@ def take_up(tree: Path, prof: dict) -> list[str]:
     module still without one, adopted as it stands, so those modules keep what the loop took them as once records
     exist. Returns the paths written."""
     written = []
-    folder = tree / prof["plans"]
-    for path in sorted(folder.glob("*-DONE.json")) if folder.exists() else []:
-        stem = path.name[:-len("-DONE.json")]
+    for stem in modules_here(tree, prof):
+        path = tree / done_rel(prof, stem)
         rec_path = tree / record_rel(prof, stem)
         if rec_path.exists():
             continue
@@ -1145,7 +1278,7 @@ def take_up(tree: Path, prof: dict) -> list[str]:
             continue
         if validate(doc, stem.upper()):
             continue
-        design = folder / f"{stem}.md"
+        design = tree / design_rel(prof, stem)
         write_json(rec_path, adopt(doc, text_hash(design.read_text() if design.exists() else None), True))
         written.append(record_rel(prof, stem))
     return written
@@ -1177,18 +1310,14 @@ def project(worktree: Path, prof: dict, ref: str) -> dict[str, dict]:
     """Every module at `ref`: {MODULE: {stem, doc, record, design, problems}}, with records adopted where missing
     (as they stand only in a repository that has never had a loop record)."""
     out = {}
-    listing = git(worktree, "ls-tree", "--name-only", f"{ref}:{prof['plans']}")
     legacy = None  # asked only when a module has no record
-    for name in listing.stdout.split() if listing.returncode == 0 else []:
-        if not name.endswith("-DONE.json"):
-            continue
-        stem = name[:-len("-DONE.json")]
+    for stem in modules_at(worktree, prof, ref):
         key = stem.upper()
         try:
-            doc = json.loads(show(worktree, ref, f"{prof['plans']}/{name}") or "")
+            doc = json.loads(show(worktree, ref, done_rel(prof, stem)) or "")
         except json.JSONDecodeError as e:
-            doc = {"unreadable": f"{name} isn't valid JSON: {e}"}
-        design = text_hash(show(worktree, ref, f"{prof['plans']}/{stem}.md"))
+            doc = {"unreadable": f"{done_rel(prof, stem)} isn't valid JSON: {e}"}
+        design = text_hash(show(worktree, ref, design_rel(prof, stem)))
         problems = validate(doc, key)
         rec_text = show(worktree, ref, record_rel(prof, stem))
         rec = None
@@ -1196,7 +1325,7 @@ def project(worktree: Path, prof: dict, ref: str) -> dict[str, dict]:
             try:
                 rec = json.loads(rec_text)
             except json.JSONDecodeError as e:
-                problems.append(f"{stem}-ACCEPTED.json isn't valid JSON: {e}")
+                problems.append(f"{record_rel(prof, stem)} isn't valid JSON: {e}")
         if rec is None and not problems:
             if legacy is None:
                 legacy = unrecorded(worktree, prof, ref)
@@ -1252,7 +1381,7 @@ def next_step(key: str, proj: dict, claims: dict | None = None, me: str = "") ->
         if not authorised(m, rec):
             return {**out, "status": "invalid", "problems": [
                 f"{m['id']}: its definitions aren't the ones last authorised by a planner turn, the owner, or "
-                f"`adopt` while the module was a draft (see {e['stem']}-ACCEPTED.json); re-plan it, or run "
+                f"`adopt` while the module was a draft (see {e['stem']}/{MODULE_FILES['record']}); re-plan it, or run "
                 "`owner scope`"]}
         if m.get("state") == "parked":
             return {**out, "status": "parked"}
@@ -1374,8 +1503,8 @@ def fit_next(then):
 
 
 def next_cmd(command: str | None, by: str, why: str, **more) -> dict:
-    """The `next` field: the exact command to run, who runs it (`lead`, or `owner` for decisions only the owner may
-    make, which the loop never runs itself), and why."""
+    """The `next` field: the exact command to run, who runs it (`lead` or `planner`), and why. A decision only the
+    owner may make carries `decides: owner` and an `ask`; the lead still runs its command, once they've answered."""
     return {"command": command, "by": by, "why": why, **more}
 
 
@@ -1651,10 +1780,10 @@ def owner_cmd(verb: str, mod: str, mid: str, wt: str, item: str | None = None) -
 
 def owner_next(verb: str, mod: str, mid: str, wt: str, ask: str, why: str, **more) -> dict:
     """A stop that needs the owner: what the lead asks them in chat (`ask`), and the command it runs on their answer.
-    `by: owner` because the decision is theirs; the lead records it, in their words."""
-    return next_cmd(owner_cmd(verb, mod, mid, wt, more.pop("item", None)), "owner",
+    The lead runs the command (`by: lead`); `decides: owner` because the decision is theirs, in their words."""
+    return next_cmd(owner_cmd(verb, mod, mid, wt, more.pop("item", None)), "lead",
                     why + ". Ask the owner in chat; once they've decided, run the command with their words in --text, "
-                    "as they gave them, and never decide for them", ask=ask, **more)
+                    "as they gave them, and never decide for them", ask=ask, decides="owner", **more)
 
 
 def attended_ask(worktree: Path, prof: dict, proj: dict | None, mod: str, mid: str, item: str, note: str = "") -> str:
@@ -1675,7 +1804,8 @@ def attended_ask(worktree: Path, prof: dict, proj: dict | None, mod: str, mid: s
 
 def owner_answers_next(mod: str, mid: str, items: list[str], wt: str, ask) -> list[dict]:
     """For a blocked milestone with open attended items: what to ask the owner about each, and the command."""
-    return [{"item": i, "ask": ask(i), "command": owner_cmd("answer", mod, mid, wt, i), "by": "owner"} for i in items]
+    return [{"item": i, "ask": ask(i), "command": owner_cmd("answer", mod, mid, wt, i), "by": "lead",
+             "decides": "owner"} for i in items]
 
 
 def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, seen: set | None = None) -> dict | None:
@@ -1815,6 +1945,8 @@ def plan_drift(worktree: Path, prof: dict, ref: str) -> dict:
     the tip doesn't have at all is part of a first plan, so it counts too. One the tip has in another form is only
     named, under `profile_differs`: the lead commits it once the owner has agreed."""
     out = folder_drift(worktree, prof["plans"], ref)
+    for key in ("uncommitted", "unintegrated"):  # the loop writes STATUS.md itself; it never waits to be landed
+        out[key] = [p for p in out[key] if p != status_rel(prof)]
     here, there = file_here(worktree, PROFILE_FILE), file_at(worktree, ref, PROFILE_FILE)
     if here is not None and there is None:
         key = "unintegrated" if file_at(worktree, "HEAD", PROFILE_FILE) == here else "uncommitted"
@@ -2431,6 +2563,19 @@ def verify_tree(worktree: Path, name: str, ref: str) -> Path:
     return path
 
 
+def drop_tree(worktree: Path, name: str) -> bool:
+    """Removes the loop's checkout `name` (a finished module's), with its build output. Disk is the cost of keeping
+    a warm cache, and a finished module has nothing left to build; `verify_tree` makes it again if it's ever needed.
+    True if there was one to remove."""
+    path = loop_dir(worktree) / "verify" / name.upper()
+    if not path.exists():
+        return False
+    if git(worktree, "worktree", "remove", "--force", str(path)).returncode != 0:
+        shutil.rmtree(path, ignore_errors=True)
+    git(worktree, "worktree", "prune")
+    return True
+
+
 def holder_of(tree: Path, branch: str) -> Path | None:
     """The worktree that has `branch` checked out, if any."""
     current = None
@@ -2489,28 +2634,32 @@ def land(tree: Path, prof: dict, check: bool = False) -> tuple[bool, str]:
 
 
 def loop_write(worktree: Path, prof: dict, name: str, change, message: str,
-               trailer: bool = True) -> tuple[bool, str]:
+               trailer: bool = True, take_up_ok: bool = True) -> tuple[bool, str]:
     """Applies `change(tree)` to a clean checkout of the integrated tip, commits it as the loop, and lands it.
     `change` returns the paths it wrote, or nothing to skip the commit. Without `trailer` the commit isn't marked as
-    the loop's own record-keeping (used for files the loop lands on someone's behalf)."""
+    the loop's own record-keeping (used for files the loop lands on someone's behalf). After a record lands (with
+    `trailer`), STATUS.md is brought up to date in a commit of its own, which can't fail the record. Without
+    `take_up_ok`, the first commit in a repository with no records doesn't write the records `take_up` would."""
     detail = ""
     for _ in range(2):
         try:
             tree = verify_tree(worktree, name, tip(worktree, prof))
         except TipError as e:
             return False, str(e)
-        legacy = trailer and unrecorded(tree, prof, "HEAD")
+        legacy = trailer and take_up_ok and unrecorded(tree, prof, "HEAD")
         paths = change(tree)
         if not paths:
             return True, head_commit(tree)
         if legacy:
             paths = [*paths, *take_up(tree, prof)]
-        git(tree, "add", "--", *paths)
+        git(tree, "add", "-A", "--", *paths)
         c = git(tree, *ident(tree), "commit", "--quiet", "-m", f"{message}\n\n{TRAILER}" if trailer else message)
         if c.returncode != 0:
             return False, f"commit failed: {(c.stdout + c.stderr).strip()[-300:]}"
         ok, detail = land(tree, prof)
         if ok:
+            if trailer:
+                land_status(worktree, prof, name, tree)
             return True, detail
     return False, detail
 
@@ -2519,8 +2668,8 @@ def record_in(tree: Path, prof: dict, stem: str, doc: dict) -> dict:
     path = tree / record_rel(prof, stem)
     if path.exists():
         return json.loads(path.read_text())
-    return adopt(doc, text_hash((tree / prof["plans"] / f"{stem}.md").read_text()
-                                if (tree / prof["plans"] / f"{stem}.md").exists() else None),
+    return adopt(doc, text_hash((tree / design_rel(prof, stem)).read_text()
+                                if (tree / design_rel(prof, stem)).exists() else None),
                  unrecorded(tree, prof, "HEAD"))
 
 
@@ -2542,7 +2691,7 @@ def loop_versions(worktree: Path, rel: str, old: str, new: str, limit: int = 50)
 def record_tampering(worktree: Path, prof: dict, old: str, new: str) -> list[str]:
     """Commits between two tips that changed an acceptance record without being the loop's."""
     out = git(worktree, "log", "--format=%H%x00%B%x01", f"{old}..{new}", "--",
-              f":(glob){prof['plans']}/*-ACCEPTED.json").stdout
+              records_glob(prof)).stdout
     bad = []
     for chunk in out.split("\x01"):
         sha, _, body = chunk.strip().partition("\x00")
@@ -2700,7 +2849,41 @@ def pin_mismatches(rollout: Path, model_pin: str = DEFAULT_MODEL, effort_pin: st
 # open milestones are likely to cost before the reset.
 
 LOOP_PROMPT = re.compile(r"milestone (\S+) of module (\S+?)[ .,]")
-LOOP_TITLE = re.compile(r"^(build|review) (\S+) (\S+)$")
+LOOP_TITLE = re.compile(r"^(?:(build|review) (\S+) (\S+)|.+ · (\S+) · (\S+) (build|review))$")
+
+
+def title_parts(title: str | None) -> tuple[str, str, str] | None:
+    """(role, module, milestone) from a title the loop gave a session, in the current form
+    ('<repository> · <MODULE> · <milestone> <role>') or the form before 1.7.0 ('<role> <MODULE> <milestone>')."""
+    m = LOOP_TITLE.match(title or "")
+    if not m:
+        return None
+    return (m.group(1), m.group(2), m.group(3)) if m.group(1) else (m.group(6), m.group(4), m.group(5))
+
+
+def repository_name(worktree: Path) -> str:
+    """The repository's folder name, the same from every worktree of it: 'thrum' for /x/thrum/.git."""
+    try:
+        common = Path(git_common_dir(worktree))
+    except Exception:
+        return worktree.name
+    return common.parent.name if common.name == ".git" else common.name.removesuffix(".git")
+
+
+def plan_title(worktree: Path, tree: Path, prof: dict, task: str) -> str:
+    """A planner's title: grouped with the module its task names first, or under 'plan' when it names none."""
+    line = task.splitlines()[0] if task.strip() else ""
+    named = [(m.start(), stem) for stem in modules_here(tree, prof)
+             for m in [re.search(rf"(?<![\w-]){re.escape(stem)}(?![\w-])", line, re.IGNORECASE)] if m]
+    return session_title(worktree, min(named)[1] if named else "plan", f"plan: {line[:60]}")
+
+
+def session_title(worktree: Path, module: str, phase: str) -> str:
+    """The title of a session the loop starts: '<repository> · <MODULE> · <phase>', such as
+    'thrum · CREATOR · M1 build' or 'thrum · CREATOR · design review'. The owner sees every session in one list
+    sorted by title, so the repository comes first and then the module, which groups each module's sessions together,
+    and the milestone comes before the role, so a milestone's build and review sit next to each other."""
+    return f"{repository_name(worktree)} · {module} · {phase}"
 QUOTA_BUDGET_S = 2.0          # reading budget on a result line; `quota` takes longer and warms the cache
 QUOTA_WORKTREE: list = []     # the worktree a command runs on, for the result line's plan forecast
 
@@ -2755,8 +2938,8 @@ def loop_threads(worktree: Path, reading: dict) -> dict[str, dict]:
                 d = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            m = LOOP_TITLE.match(d.get("title") or "")
-            own[d["thread"]] = {"module": m and m.group(2), "milestone": m and m.group(3), "role": d.get("role"),
+            m = title_parts(d.get("title"))
+            own[d["thread"]] = {"module": m and m[1], "milestone": m and m[2], "role": d.get("role"),
                                 "here": True}
         for state_file in common.glob("**/orchestrate/*.json"):
             try:
@@ -2772,11 +2955,11 @@ def loop_threads(worktree: Path, reading: dict) -> dict[str, dict]:
     for tid, meta in threads.items():
         if tid in own:
             continue
-        title = LOOP_TITLE.match(meta.get("name") or "")
+        title = title_parts(meta.get("name"))
         prompt = next((LOOP_PROMPT.search(p) for p in meta.get("prompts") or [] if LOOP_PROMPT.search(p)), None)
         mine = here(meta.get("cwd"))
         if title:
-            own[tid] = {"module": title.group(2), "milestone": title.group(3), "role": title.group(1), "here": mine}
+            own[tid] = {"module": title[1], "milestone": title[2], "role": title[0], "here": mine}
         elif prompt and meta.get("kind") in ("app", "exec"):
             own[tid] = {"module": prompt.group(2), "milestone": prompt.group(1), "role": "build", "here": mine}
         elif meta.get("origin") == "orchestrate" and meta.get("kind") in ("app", "exec"):
@@ -3625,8 +3808,7 @@ def browser_needs(worktree: Path, prof: dict) -> list[str]:
                 and BROWSER.search(row):
             targets.append(cells[0])
     found = [f"target {t}" for t in targets]
-    folder = worktree / prof.get("plans", "docs/modules")
-    for path in sorted(folder.glob("*-DONE.json")) if folder.is_dir() else []:
+    for path in [worktree / done_rel(prof, stem) for stem in modules_here(worktree, prof)]:
         try:
             doc = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError):
@@ -3639,7 +3821,7 @@ def browser_needs(worktree: Path, prof: dict) -> list[str]:
                     continue
                 said = " ".join(str(i.get(k) or "") for k in ("check", "inspect", "target"))
                 if i.get("target") in targets or BROWSER.search(said):
-                    found.append(f"{doc.get('module') or path.stem} {i.get('id')}")
+                    found.append(f"{doc.get('module') or path.parent.name} {i.get('id')}")
     return found
 
 
@@ -4381,10 +4563,10 @@ def cmd_run(a: argparse.Namespace) -> None:
             state["answers_told"] = told
         code, session, message, err, seen = run_turn(host, prof, model, effort, worktree, prompt,
                                                      None if first else state["thread"], timeout_s,
-                                                     title=f"build {stem} {mid}")
+                                                     title=session_title(worktree, stem, f"{mid} build"))
         if resumable:
             state["thread"] = session
-            note_thread(worktree, host, session, "build", f"build {stem} {mid}")
+            note_thread(worktree, host, session, "build", session_title(worktree, stem, f"{mid} build"))
         state["turns"] += 1
         state["failed_turns"] = state["failed_turns"] + 1 if code not in (0, 130) else 0
         state["path"] = SESSION_PATH.get("path")
@@ -4664,7 +4846,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     out = one_session(host, prof, model, effort, tree, prompt, "review",
                       lambda msg: None if report_line(msg).startswith(wanted) else FINISH,
                       a.turn_timeout_hours * 3600,
-                      title=f"review {stem} {mid}",
+                      title=session_title(worktree, stem, f"{mid} review"),
                       restate=binding(prof, "review", done="" if design else done_path,
                                       review=f"{review_path} (and files under {captures}/)")[0])
     result = out.pop("result")
@@ -4683,8 +4865,9 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
         return _result("INVALID", **info, landed=False, problems=[
             f"while this review ran, {plural(len(forged), 'commit')} without the loop's trailer changed an acceptance "
             f"record on the tip: {', '.join(forged)}"], session=out.get("session"), next=next_cmd(
-            None, "owner", "report it: those commits reached the integrated tip during a review, and only the loop "
-            "writes acceptance records. The owner decides what to do with them; nothing from this review landed"))
+            None, "lead", "report it to the owner, who decides what to do with those commits: they reached the "
+            "integrated tip during a review, and only the loop writes acceptance records. Nothing from this review "
+            "landed", decides="owner"))
     if made := commits_made(tree, seen):
         return _result("INVALID", **info, landed=False, problems=[
             f"the reviewer committed in its checkout ({plural(len(made), 'commit')} in its reflog during the turn: "
@@ -4770,9 +4953,9 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
             for e_ in ([prev] if prev else []) + list(record.get("design_history") or []):
                 if kept and e_.get("review") == review_path:
                     e_["review"] = kept  # the earlier review's file moved beside the new one
-            design_rel = f"{prof['plans']}/{stem}.md"
-            read = show(worktree, start, design_rel)  # what the reviewer read, not what the tip holds now
-            here = (t / design_rel).read_text() if (t / design_rel).exists() else None
+            design_at = design_rel(prof, stem)
+            read = show(worktree, start, design_at)  # what the reviewer read, not what the tip holds now
+            here = (t / design_at).read_text() if (t / design_at).exists() else None
             moved = changed_items(before_doc, doc) + (["the design document"] if read != here else [])
             entry_ = {"verdict": "ok" if passed else "changes", "review": review_path, "commit": start,
                       "hash": text_hash(read), "by": "review", **launch, "at": now()}
@@ -4889,8 +5072,11 @@ def after_pass(worktree: Path, prof: dict, key: str) -> dict:
     except (TipError, SystemExit, KeyError) as e:
         return next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", f"see what's ready ({e})")
     if step["status"] == "finished":
-        return next_cmd(None, "lead", f"{step['module']} is finished: every milestone is accepted. Start other ready "
-                                      f"work (`{loop_cmd('ready', '--worktree', str(worktree))}`)")
+        drop_tree(worktree, step["module"])
+        return next_cmd(None, "lead", f"{step['module']} is finished: every milestone is accepted. Remove the worktree "
+                                      "you built it in (`git worktree remove <path>`) once nothing in it is unmerged, "
+                                      "since its build output takes disk the other builders need. Then start other "
+                                      f"ready work (`{loop_cmd('ready', '--worktree', str(worktree))}`)")
     return next_for(step, worktree, prof, proj) or next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead",
                                                             f"{step['module']} is {step['status']}; see what's ready")
 
@@ -4935,26 +5121,29 @@ def plan_owed(worktree: Path, start: str, message: str) -> str | None:
     if word.strip("`* ") != "PLANNED":
         return "Your last line wasn't `PLANNED: <files>`. Finish the plan's files, then end with that line, or with " \
                "BLOCKED or NEEDS_CONTEXT, or, for a diagnosis that keeps the plan, the `KEEP` line your task gives."
-    plans = profile(worktree, missing_ok=True)["plans"]
+    prof = profile(worktree, missing_ok=True)
     named = [n.strip("`*'\" ") for n in re.split(r"[,\s]+", rest) if n.strip("`*'\" ")]
     changed = changed_paths(worktree, start)
     gaps = [f"{n} doesn't exist" for n in named if not (worktree / n).exists()]
     gaps += [f"{n} isn't changed" for n in named if (worktree / n).exists() and n not in changed]
-    gaps += [f"{p} has no design at {plans}/{Path(p).name[:-len('-DONE.json')]}.md" for p in changed
-             if p.startswith(plans + "/") and p.endswith("-DONE.json") and (worktree / p).exists()
-             and not (worktree / plans / (Path(p).name[:-len("-DONE.json")] + ".md")).exists()]
+    gaps += [f"{p} has no design at {design_rel(prof, where[0])}" for p in changed
+             if (where := module_of(prof, p)) and where[1] == "done" and (worktree / p).exists()
+             and not (worktree / design_rel(prof, where[0])).exists()]
     if not named or not changed:
         gaps.insert(0, "no changed files are named")
     return None if not gaps else "The plan isn't complete: " + "; ".join(gaps) + \
         ". Finish it, then end with `PLANNED: <files>`."
 
 
-def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str, info: dict, out: dict) -> None:
+def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str, info: dict, out: dict,
+              tree: Path | None = None) -> None:
     """A planner asked to diagnose a milestone kept its plan and named who has to act. The loop records that,
-    starts the milestone's counts again, and says what follows; a second diagnosis on it parks it instead."""
+    starts the milestone's counts again, and says what follows; a second diagnosis on it parks it instead. `tree` is
+    the checkout the planner worked in, when that isn't `worktree`."""
     module, mid, who, why = keep.group(1), keep.group(2), keep.group(3).lower(), keep.group(4).strip()
-    if changed := changed_paths(worktree, start):
-        emit("INVALID", **info, **out, landed=False, problems=[
+    if changed := changed_paths(tree or worktree, start):
+        emit("INVALID", **info, **out, landed=False,
+             **(keep_leftovers(tree, prof, "diagnosis that kept the plan") if tree and tree != worktree else {}), problems=[
             f"the last line keeps the plan, but the turn changed {', '.join(changed[:5])}; end with PLANNED to land a "
             "changed plan, or leave every file as it was"])
     try:
@@ -5012,16 +5201,44 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
     emit("KEPT", **info, **out, landed=True, commit=landed, module=stem, milestone=mid, who=who, why=why, next=then)
 
 
-def done_docs_at(worktree: Path, plans: str, ref: str) -> dict:
-    """The done-when files under `plans` at `ref`, by file name, parsed (ones that don't parse are left out)."""
+def done_docs_at(worktree: Path, prof: dict, ref: str) -> dict:
+    """The done-when files at `ref`, by module, parsed (ones that don't parse are left out)."""
     out = {}
-    listed = git(worktree, "ls-tree", "--name-only", f"{ref}:{plans}").stdout.split("\n")
-    for name in (n for n in listed if n.endswith("-DONE.json")):
+    for stem in modules_at(worktree, prof, ref):
         try:
-            out[name] = json.loads(show(worktree, ref, f"{plans}/{name}") or "")
+            out[stem] = json.loads(show(worktree, ref, done_rel(prof, stem)) or "")
         except json.JSONDecodeError:
             pass
     return out
+
+
+def keep_leftovers(tree: Path, prof: dict, task: str) -> dict:
+    """Keeps what a planner left in the loop's planner checkout before the next plan resets it. Uncommitted files go
+    to a stash, and commits the tip lacks go to a branch; every worktree of the repository sees both. Returns
+    {stash, branch} for what was kept, so the result can name it."""
+    kept = {}
+    label = f"planner: {task.splitlines()[0][:60] if task.strip() else ''}"
+    try:
+        ahead = git(tree, "rev-list", f"{tip(tree, prof, fetch=False)}..HEAD").stdout.split()
+    except TipError:
+        ahead = []
+    if ahead:  # named by the commit, so the same commit kept twice is one branch
+        branch = f"orchestrate/planner-{head_commit(tree)[:12]}"
+        if git(tree, "branch", "--force", branch, "HEAD").returncode == 0:
+            kept["branch"] = branch
+    if git(tree, "status", "--porcelain").stdout.strip():
+        if git(tree, "stash", "push", "--include-untracked", "-m", label).returncode == 0:
+            kept["stash"] = f"the latest stash, '{label}'"
+    return kept
+
+
+def kept_text(kept: dict) -> str:
+    """The end of a sentence saying where a planner's unlanded work was kept, or where it was left."""
+    if "left_uncommitted" in kept:
+        return "; its files are still uncommitted in the worktree"
+    parts = [kept["stash"]] if "stash" in kept else []
+    parts += [f"the branch {kept['branch']}"] if "branch" in kept else []
+    return f"; its work is kept in {' and '.join(parts)}" if parts else ""
 
 
 def cmd_plan(a: argparse.Namespace) -> None:
@@ -5031,49 +5248,47 @@ def cmd_plan(a: argparse.Namespace) -> None:
     host, model, effort = resolve(a, prof, "plan")
     preflight(host, worktree, "plan")
     info = dict(host=host, model=model, effort=effort)
-    again = loop_cmd("plan", "--worktree", str(worktree), "--task", a.task,
-                     *(["--host", a.host] if a.host else []), *(["--model", a.model] if a.model else []),
-                     *(["--effort", a.effort] if a.effort else []))
-    if not run_lock(worktree, "_plan"):
+    task_line = a.task.splitlines()[0][:80] if a.task.strip() else ""
+    if not run_lock(worktree, "_plan"):  # one planner per repository: wait for it, then plan on the tip it landed
+        install_stop()
         who = run_holder_info(worktree, "_plan")
-        emit("TAKEN", **info, by="another planner on this repository" + holder_text(who),
-             **({"holder": who} if who else {}), next=next_cmd(
-                 again, "lead", "only one planner runs per repository at a time, and another holds it"
-                                f"{holder_text(who)}; run this again once it stops (`loops --repo` shows when)"))
+        loop_register(worktree, "plan", task=task_line, waiting_for="another planner" + holder_text(who), **info)
+        print(f"waiting for another planner on this repository{holder_text(who)}", file=sys.stderr, flush=True)
+        while not run_lock(worktree, "_plan"):
+            if _STOP:
+                emit("PAUSED", **info, landed=False, reason="stopped while waiting for another planner to finish")
+            time.sleep(2)
     install_stop()
-    loop_register(worktree, "plan", task=a.task.splitlines()[0][:80] if a.task.strip() else "", **info)
+    loop_register(worktree, "plan", task=task_line, **info)
     if empty := no_base(worktree, prof):  # say so before a planner spends a turn whose files couldn't land
         emit("FLOOR", **info, reason=str(empty), next=empty.next)
-    if dirty := git(worktree, "status", "--porcelain").stdout.strip():
-        emit("INVALID", **info, problems=["the planner needs a clean worktree, so the loop can tell its files from "
-                                          "anything else: " + dirty[:300]])
     if (worktree / PROFILE_FILE).exists():
-        sync_worktree(worktree, prof)  # plan from the tip, so the planner has no reason to move the worktree itself
+        # The planner works in the loop's own checkout of the tip, as a reviewer does, so the lead's worktree is
+        # never in its way and no worktree is made for it. --worktree only names the repository.
         try:
-            ahead = git(worktree, "log", "--format=%h %s", f"{tip(worktree, prof)}..HEAD").stdout.strip().splitlines()
-        except TipError:
-            ahead = []
-        if ahead:  # they would land with the plan unmeasured
-            wt = shlex.quote(str(worktree))
-            fresh_wt = worktree.parent / f"{worktree.name}-plan-{time.strftime('%Y%m%d%H%M%S')}"
-            emit("INVALID", **info, problems=[
-                f"this worktree has {len(ahead)} commit{'s' if len(ahead) > 1 else ''} the integrated tip doesn't: "
-                f"{'; '.join(ahead[:5])}. A planner starts on the tip, so nothing lands with its plan unchecked"],
-                next=next_cmd(f"git -C {wt} worktree add --detach {shlex.quote(str(fresh_wt))} {base_ref(prof)}",
-                              "lead", f"leaves this checkout and its commits alone and makes a fresh worktree on the "
-                              f"tip, at {fresh_wt}; run the plan there. If those commits are plan files the owner "
-                              "wants, `adopt` lands them instead",
-                              then=loop_cmd("plan", "--worktree", str(fresh_wt), "--task", a.task,
-                                            *(["--host", a.host] if a.host else []),
-                                            *(["--model", a.model] if a.model else []),
-                                            *(["--effort", a.effort] if a.effort else [])),
-                              alternative=loop_cmd("adopt", "--worktree", str(worktree))))
-    start = head_commit(worktree)
-    seen = reflog_size(worktree)
-    before = done_docs_at(worktree, prof["plans"], start)
+            tree = verify_tree(worktree, "_planner", tip(worktree, prof))
+        except TipError as e:
+            emit("FLOOR", **info, reason=f"the planner's checkout of the integrated tip couldn't be made: {e}")
+    else:  # a first plan, before the settings name a base branch, works in the worktree it was given
+        tree = worktree
+        if dirty := git(tree, "status", "--porcelain").stdout.strip():
+            emit("INVALID", **info, problems=["the first planner needs a clean worktree, so the loop can tell its "
+                                              "files from anything else: " + dirty[:300]])
+
+    def leave() -> dict:
+        """What a turn that doesn't land left behind, kept where the lead can find it, since the loop's checkout is
+        reset for the next planner."""
+        paths = changed_paths(tree, start)
+        if tree == worktree:
+            return {"left_uncommitted": paths}
+        return {"set_aside": paths, **keep_leftovers(tree, prof, a.task)}
+
+    start = head_commit(tree)
+    seen = reflog_size(tree)
+    before = done_docs_at(tree, prof, start)
     prompt = PLAN_TEMPLATE.format(task=a.task, skill=skill_note("plan-module", host), loop=LOOP)
-    out = one_session(host, prof, model, effort, worktree, prompt, "plan", lambda msg: plan_owed(worktree, start, msg),
-                      a.turn_timeout_hours * 3600, title=f"plan: {a.task.splitlines()[0][:60]}")
+    out = one_session(host, prof, model, effort, tree, prompt, "plan", lambda msg: plan_owed(tree, start, msg),
+                      a.turn_timeout_hours * 3600, title=plan_title(worktree, tree, prof, a.task))
     result = out.pop("result")
     out.pop("observed", None)
     if out.get("owed") is None:
@@ -5082,80 +5297,91 @@ def cmd_plan(a: argparse.Namespace) -> None:
     if result == "FINISHED" and word in ("BLOCKED", "NEEDS_CONTEXT"):
         result = word
     if result != "FINISHED":  # a progress report, a blocker or a host failure: nothing lands
-        emit(result, **info, **out, landed=False, left_uncommitted=changed_paths(worktree, start))
+        emit(result, **info, **out, landed=False, **leave())
     try:
-        prof = profile(worktree, strict=True)
+        prof = profile(tree, strict=True)
     except SystemExit as e:
-        emit("PLANNED", **info, **out, landed=False, problems=[str(e)])
+        emit("PLANNED", **info, **out, landed=False, problems=[str(e)], **leave())
     if keep := KEEP_LINE.match(report_line(out.get("report", ""))):
-        keep_plan(worktree, prof, start, keep, host, info, out)
+        keep_plan(worktree, prof, start, keep, host, info, out, tree=tree)
 
     # What a turn wrote is what it left uncommitted; that is all the loop commits and lands. Its HEAD may have moved
     # along the tip (a `land` elsewhere fast-forwards the checkout holding the base branch), never off it.
     try:
-        fresh = tip(worktree, prof)
+        fresh = tip(tree, prof)
     except TipError as e:
-        emit("PLANNED", **info, **out, landed=False, problems=[f"the turn can't be checked, so nothing landed: {e}"])
-    wt = shlex.quote(str(worktree))
-    if forged := record_tampering(worktree, prof, start, fresh):
-        emit("INVALID", **info, **out, landed=False, problems=[
+        emit("PLANNED", **info, **out, landed=False, problems=[f"the turn can't be checked, so nothing landed: {e}"],
+             **leave())
+    if forged := record_tampering(tree, prof, start, fresh):
+        kept = leave()
+        emit("INVALID", **info, **out, landed=False, **kept, problems=[
             f"while this turn ran, {plural(len(forged), 'commit')} without the loop's trailer changed an acceptance "
             f"record on the tip: {', '.join(forged)}"], next=next_cmd(
-            None, "owner", "report it: those commits reached the integrated tip during a planner turn, and only the "
-            "loop writes acceptance records. The owner decides what to do with them; the loop doesn't take commits "
-            f"back out. Nothing from this turn landed, and its files are still uncommitted in {worktree}"))
-    if made := commits_made(worktree, seen):  # read before the loop makes its own commit here
-        emit("INVALID", **info, **out, landed=False, problems=[
-            f"the planner committed in this worktree ({plural(len(made), 'commit')} in its reflog during the turn: "
+            None, "lead", "report it to the owner, who decides what to do with those commits: they reached the "
+            "integrated tip during a planner turn, and only the loop writes acceptance records. The loop doesn't take "
+            f"commits back out. Nothing from this turn landed{kept_text(kept)}", decides="owner"))
+    if made := commits_made(tree, seen):  # read before the loop makes its own commit here
+        kept = leave()
+        emit("INVALID", **info, **out, landed=False, **kept, problems=[
+            f"the planner committed ({plural(len(made), 'commit')} in its checkout's reflog during the turn: "
             f"{'; '.join(made[:5])}); the loop lands only what a planner leaves uncommitted"], next=next_cmd(
-            None, "lead", "nothing landed. Any commit that reached the integrated tip is already there, and the "
-            "turn's other files are uncommitted here; look at them and keep or drop them yourself, then plan again "
-            "from a clean worktree on the tip"))
-    if own := git(worktree, "log", "--format=%h %s", f"{fresh}..HEAD").stdout.strip().splitlines():
-        emit("INVALID", **info, **out, landed=False, problems=[
-            f"the planner committed in this worktree ({plural(len(own), 'commit')} the tip doesn't have: "
+            None, "lead", "nothing landed. Any commit that reached the integrated tip is already there"
+            f"{kept_text(kept)}; look at what's there and keep or drop it yourself, then plan again"))
+    if own := git(tree, "log", "--format=%h %s", f"{fresh}..HEAD").stdout.strip().splitlines():
+        kept = leave()
+        emit("INVALID", **info, **out, landed=False, **kept, problems=[
+            f"the planner committed ({plural(len(own), 'commit')} the tip doesn't have: "
             f"{'; '.join(own[:5])}); the loop lands only what a planner leaves uncommitted"], next=next_cmd(
-            None, "lead", "nothing landed. The turn's commits are on this worktree's branch and any other files are "
-            "uncommitted here; look at them and keep or drop them yourself, then plan again from a clean worktree "
-            "on the tip"))
-    start = head_commit(worktree)
-    before = done_docs_at(worktree, prof["plans"], start)
-    changed = changed_paths(worktree, start)
+            None, "lead", f"nothing landed{kept_text(kept)}; look at what's there and keep or drop it yourself, then "
+            "plan again"))
+    start = head_commit(tree)
+    before = done_docs_at(tree, prof, start)
+    changed = changed_paths(tree, start)
     problems = [f"changed {p}; only the loop writes acceptance records" for p in changed
-                if p.endswith("-ACCEPTED.json")]
+                if (where := module_of(prof, p)) and where[1] == "record" or p.endswith("-ACCEPTED.json")]
+    problems += [f"changed {p}, which the loop writes from the records after each one it lands; leave it as it was"
+                 for p in changed if p == status_rel(prof)]
+    problems += flat_names(prof, changed)
+    problems += plan_checks(tree, prof, changed)
     modules = []
     for p in changed:
-        if p.startswith(prof["plans"] + "/") and p.endswith("-DONE.json") and (worktree / p).exists():
-            stem = Path(p).name[:-len("-DONE.json")]
+        if (where := module_of(prof, p)) and where[1] == "done" and (tree / p).exists():
+            stem = where[0]
             try:
-                doc = json.loads((worktree / p).read_text())
+                doc = json.loads((tree / p).read_text())
             except json.JSONDecodeError as e:
                 problems.append(f"{p} isn't valid JSON: {e}")
                 continue
             problems += [f"{stem}: {x}" for x in validate(doc, stem.upper())]
             if not validate(doc, stem.upper()):
-                problems += [f"{stem}: {x}" for x in delta_problems(before.get(Path(p).name), doc, "plan")]
+                problems += [f"{stem}: {x}" for x in delta_problems(before.get(stem), doc, "plan")]
             modules.append(stem)
     if problems:
-        emit("INVALID", **info, **out, landed=False, problems=problems[:20], next=next_cmd(
-            f"git -C {wt} stash push --include-untracked -m 'refused planner turn' && "
-            + loop_cmd("plan", "--worktree", str(worktree), "--task",
-                       f"{a.task}\n\nYour last turn on this was refused, for: {'; '.join(problems[:5])}. Its files are "
-                       "in the latest git stash (`git stash show -p --include-untracked`); reuse what holds up."),
-            "lead", "the plan didn't land and its files are still uncommitted here. This sets them aside (nothing is "
-                    "lost) and gives a planner the task again with the problems, since only a planner turn may fix "
-                    "them"))
-    if git(worktree, "status", "--porcelain").stdout.strip():
-        git(worktree, "add", "-A")
-        git(worktree, *ident(worktree), "commit", "--quiet", "-m", f"Plan: {a.task.splitlines()[0][:60]}",
+        if tree == worktree:
+            wt = shlex.quote(str(worktree))
+            command, kept = f"git -C {wt} stash push --include-untracked -m 'refused planner turn' && ", {}
+            where = "the latest git stash"
+        else:
+            kept = leave()
+            command, where = "", kept.get("stash", "a git stash")
+        emit("INVALID", **info, **out, landed=False, problems=problems[:20], **kept, next=next_cmd(
+            command + loop_cmd("plan", "--worktree", str(worktree), "--task",
+                               f"{a.task}\n\nYour last turn on this was refused, for: {'; '.join(problems[:5])}. Its "
+                               f"files are in {where} (`git stash list`, then `git stash show -p --include-untracked "
+                               "<stash>`); reuse what holds up."),
+            "lead", "the plan didn't land and its files are set aside in a stash (nothing is lost). This gives a "
+                    "planner the task again with the problems, since only a planner turn may fix them"))
+    if git(tree, "status", "--porcelain").stdout.strip():
+        git(tree, "add", "-A")
+        git(tree, *ident(tree), "commit", "--quiet", "-m", f"Plan: {a.task.splitlines()[0][:60]}",
             "-m", a.task)  # the subject is short; the body keeps the whole task
     try:  # the tip the plan lands on: its counts are the ones a re-plan settles
-        prior_ref = tip(worktree, prof)
+        prior_ref = tip(tree, prof)
     except TipError:
         prior_ref = None
-    ok, landed = land(worktree, prof)
+    ok, landed = land(tree, prof)
     if not ok:
-        emit("PLANNED", **info, **out, landed=False, problems=[f"couldn't integrate the plan: {landed}"])
+        emit("PLANNED", **info, **out, landed=False, problems=[f"couldn't integrate the plan: {landed}"], **leave())
 
     def change(t):
         written = []
@@ -5165,11 +5391,11 @@ def cmd_plan(a: argparse.Namespace) -> None:
             rec_path = t / record_rel(prof, stem)
             if rec_path.exists():
                 record = json.loads(rec_path.read_text())
-            elif Path(done_rel(prof, stem)).name in before and not validate(before[Path(done_rel(prof, stem)).name]):
+            elif stem in before and not validate(before[stem]):
                 # first loop write for a module that stood before this plan without a record: as it stood, only in
                 # a repository that had no records; otherwise it's new, and nothing in it is accepted
-                record = adopt(before[Path(done_rel(prof, stem)).name],
-                               text_hash(show(worktree, start, f"{prof['plans']}/{stem}.md")),
+                record = adopt(before[stem],
+                               text_hash(show(worktree, start, design_rel(prof, stem))),
                                unrecorded(t, prof, "HEAD"))
             else:
                 record = {"module": stem, "design": None, "milestones": {}}
@@ -5177,7 +5403,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
                 prior = json.loads(show(worktree, prior_ref, done_rel(prof, stem)) or "") if prior_ref else None
             except json.JSONDecodeError:
                 prior = None
-            was = prior or before.get(Path(done_rel(prof, stem)).name)
+            was = prior or before.get(stem)
             settled = settle_replans(was, doc, stem)
             keep_counts(was, doc, settled, stem)
             replanned.extend(settled)
@@ -5212,7 +5438,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
     found = {stem: len(assumptions(show(worktree, ref, plan_rel(prof, stem)))) for stem in modules}
     emit("PLANNED", **info, **out, landed=True, commit=detail, modules=modules, design_review_owed=owed,
          **({"assumptions": {k: n for k, n in found.items() if n},
-             "assumptions_where": "lines starting `Assumption:` in each module's plan log; `report` lists them for "
+             "assumptions_where": "lines starting `Assumption:` in each module's PLAN.md; `report` lists them for "
                                   "the owner to overturn"} if any(found.values()) else {}),
          **({"replanned": replanned} if replanned else {}), next=then)
 
@@ -5248,9 +5474,12 @@ def cmd_ready(a: argparse.Namespace) -> None:
     held_claims, mine = claims(worktree), me(worktree)
     out = {"tip": ref, **empty}
     steps = []
+    folder = Path(git_common_dir(worktree)) / "orchestrate"
     for key in sorted(proj):
         step = next_step(key, proj, held_claims, mine)
         steps.append(dict(step))
+        if step["status"] == "finished" and run_holder(folder, step["module"].upper()) is None:
+            drop_tree(worktree, step["module"])  # also frees checkouts left from before this was done on finishing
         if step["status"] == "replan_owed":  # not the builder's: say whose it is, wherever the lead reads it
             step["next"] = next_for(step, worktree, prof, proj)
         out[step.pop("status")].append(step)
@@ -5259,6 +5488,8 @@ def cmd_ready(a: argparse.Namespace) -> None:
         out.update(drift_fields(drift, worktree, None if out["ready"] else
                                 nothing_ready_next(steps, worktree, prof, proj)))
     out.update(profile_note(drift, prof))
+    if found := table_warnings(worktree, prof, ref, [e["stem"] for e in proj.values()]):
+        out["module_table"] = found
     for k in list(out):
         if isinstance(out[k], list):
             out[k] = [dict(x, next=fit_next(x["next"])) if isinstance(x, dict) and "next" in x else x for x in out[k]]
@@ -5296,11 +5527,19 @@ def cmd_status(a: argparse.Namespace) -> None:
         return
     ref, proj = read_project(worktree, prof)
     drift = plan_drift(worktree, prof, ref)
+    if getattr(a, "format", "text") == "md":  # the owner's page, as the loop commits it, plus what hasn't landed here
+        print(status_page(worktree, prof, ref, proj, drift["uncommitted"] + drift["unintegrated"]), end="")
+        return
     if drift["uncommitted"] or drift["unintegrated"]:
         fields = drift_fields(drift, worktree)
         print(f"{fields['unlanded_plans']['note']}; land them with `{fields['next']['command']}`")
     if note := profile_note(drift, prof):
         print(note["profile_differs"])
+    for warning in table_warnings(worktree, prof, ref, [e["stem"] for e in proj.values()]):
+        print(f"warning: {warning}")
+    for stray in stray_plans(worktree, prof):
+        print(f"warning: {stray} is a plan file outside {prof['plans']}, where no agent looks for plans; a planner "
+              "moves what still matters into a module's PLAN.md or LOG.md and deletes it")
     if not proj:
         print(f"no modules planned at {base_ref(prof)} yet (no done-when files under {prof['plans']})")
     keys = [a.module.upper()] if a.module else sorted(proj)
@@ -5370,7 +5609,9 @@ def cmd_profile(a: argparse.Namespace) -> None:
         print(json.dumps({"planned": False, "problems": [not_yet["reason"]], "next": not_yet["next"],
                           **({"behind": not_yet["behind"]} if not_yet.get("behind") else {})}, indent=2))
         sys.exit(1)
-    prof = profile(worktree, strict=True)
+    prof = profile(worktree, strict=True, flat_ok=True)  # the settings still print; the layout is named below
+    if flat_modules(worktree, prof["plans"]):
+        prof["flat_layout"] = flat_refusal(worktree, prof["plans"])[len("error: "):]
     host = (a.host or default_host(prof)).lower()
     prof.pop("model")  # the Codex model, kept for its flags; `models` holds every host's, so none looks like the default
     found = instruction_warnings(worktree, cli_version("claude")) if host == "claude" else []
@@ -5501,8 +5742,15 @@ def cmd_land(a: argparse.Namespace) -> None:
     if dirty := git(worktree, "status", "--porcelain").stdout.strip():
         print(json.dumps({"result": "FAILED", "detail": "commit, remove or ignore these first: " + dirty[:300]}))
         sys.exit(1)
+    # A builder's plan edits (ticked boxes, a log entry) land with its work; the plan checks only warn here.
+    base = git(worktree, "merge-base", "HEAD", base_ref(prof)).stdout.strip()
+    touched = git(worktree, "diff", "--name-only", base, "HEAD").stdout.split() if base else []
+    warnings = plan_checks(worktree, prof, touched)
+    warnings += [f"{p} changed; the loop writes it after each record it lands, so this change will be overwritten"
+                 for p in touched if p == status_rel(prof)]
     ok, detail = land(worktree, prof, check=not a.no_check)
-    print(json.dumps({"result": "LANDED" if ok else "FAILED", "detail": detail, "commit": head_commit(worktree)}))
+    print(json.dumps({"result": "LANDED" if ok else "FAILED", "detail": detail, "commit": head_commit(worktree),
+                      **({"plan_warnings": warnings} if warnings else {})}))
     sys.exit(0 if ok else 1)
 
 
@@ -5789,7 +6037,7 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
     if assumed:
         out += ["", "## Assumptions the planners made (for the owner to overturn)", "",
                 "Readings of the request a planner chose where it could be read more than one way, from the lines "
-                "starting `Assumption:` in each plan's log. Each stands until the owner overturns it; overturning one "
+                "starting `Assumption:` in each module's PLAN.md. Each stands until the owner overturns it; overturning one "
                 "is a re-plan.", "", *assumed]
     out += ["", "## Parked, blocked or waiting", "", *(waiting or ["- nothing"]), "",
             "## Attended items (need a person or hardware)", "", *(attended or ["- none open"]), "",
@@ -5870,8 +6118,13 @@ def adoptable(prof: dict, worktree: Path, ref: str, p: str) -> str | None:
             return (f"{p} differs from the one at {base_ref(prof)}; adopt doesn't land a changed profile on an existing "
                     "project: the lead commits and integrates it with git once the owner has agreed to it")
         return None
+    if p == status_rel(prof):
+        return (f"{p} is written by the loop from the records after each one it lands, so a change to it by hand "
+                f"would only be overwritten; set it back with `git checkout -- {p}`")
     if p.startswith(plans):
-        return f"{p} is an acceptance record, which only the loop writes" if p.endswith("-ACCEPTED.json") else None
+        if (where := module_of(prof, p)) and where[1] == "record" or p.endswith("-ACCEPTED.json"):
+            return f"{p} is an acceptance record, which only the loop writes"
+        return next(iter(flat_names(prof, [p])), None)
     if p.startswith(reports):
         return None
     return (f"{p} isn't a plan file under {plans}, a first {PROFILE_FILE} or a report under {reports}; commit and "
@@ -5919,13 +6172,331 @@ ASSUMPTION = re.compile(r"^\s*(?:[-*]\s+)?(?:\*\*)?Assumption:(?:\*\*)?\s*(.+?)\
 
 
 def assumptions(text: str | None) -> list[str]:
-    """The readings a planner chose for the owner to overturn: each line of a plan's log that starts `Assumption:`
+    """The readings a planner chose for the owner to overturn: each line of a module's PLAN.md that starts `Assumption:`
     (a list bullet or bold marker before it is fine). One line each; a reading continued on the next line is cut."""
     return [m.group(1) for m in ASSUMPTION.finditer(text or "")]
 
 
-def plan_rel(prof: dict, stem: str) -> str:
-    return f"{prof['plans']}/{stem}-PLAN.md"
+PLAN_WORDS = 1500  # a plan holds the present only; past this it has started to collect history or design
+LOG_ENTRY_LINES = 8  # a log entry is a few lines, with the detail linked from the evidence folder
+STATUS_LINE = re.compile(r"^\s*(?:[-*]\s+)?(?:\*\*)?(Now|Next|Blocked|Milestone|Reviews):", re.MULTILINE)
+DONE_HEADING = re.compile(r"^##\s+M\d+\b.*:\s*done\s*$", re.IGNORECASE)
+FENCE = re.compile(r"^```.*?^```[^\n]*$", re.MULTILINE | re.DOTALL)
+
+
+def plan_text_problems(rel: str, text: str) -> list[str]:
+    """What is wrong with a module's PLAN.md, each said so that a planner can fix it. A plan holds the present only:
+    one `##` heading per milestone, work lists for the current and later ones, and the open assumptions."""
+    out = []
+    words = len(text.split())
+    if words > PLAN_WORDS:
+        out.append(f"{rel} is {words} words. A plan holds only the present, so keep it under about {PLAN_WORDS:,}: "
+                   "move history to LOG.md and design to DESIGN.md")
+    body = FENCE.sub("", text)  # an example in a code block isn't the plan's own structure
+    if m := STATUS_LINE.search(body):
+        out.append(f"{rel} has a `{m.group(1)}:` line. The loop knows each milestone's status and shows it in "
+                   "STATUS.md, so delete status lines from the plan")
+    if re.search(r"^###\s", body, re.MULTILINE):
+        out.append(f"{rel} has a `###` heading. Give each milestone one `##` heading and nothing under it but its "
+                   "work list; design goes in DESIGN.md and history in LOG.md")
+    if re.search(r"^##\s+Log\s*$", body, re.MULTILINE | re.IGNORECASE):
+        out.append(f"{rel} has a `## Log` section. Move its entries to LOG.md beside it")
+    lines = body.splitlines()
+    for n, line in enumerate(lines):
+        if DONE_HEADING.match(line.strip()):
+            under = []
+            for rest in lines[n + 1:]:
+                if rest.startswith("## ") or rest.startswith("# "):
+                    break
+                if rest.strip():
+                    under.append(rest)
+            if len(under) > 1:
+                out.append(f"{rel}: under `{line.strip()}` there are {len(under)} lines. A milestone that is done "
+                           "keeps one line, a link to its review; move anything worth keeping to LOG.md")
+    return out
+
+
+def log_text_problems(rel: str, text: str) -> list[str]:
+    """What is wrong with a module's LOG.md: an entry (a `- ` line and the lines that continue it) that runs past a
+    few lines."""
+    entries, current = [], None
+    for line in FENCE.sub("", text).splitlines():
+        if line.startswith("- "):
+            current = [line]
+            entries.append(current)
+        elif current is not None and line.strip() and not line.startswith("#"):
+            current.append(line)
+        else:
+            current = None
+    long = [e for e in entries if len(e) > LOG_ENTRY_LINES]
+    if not long:
+        return []
+    return [f"{rel} has {len(long)} {'entry' if len(long) == 1 else 'entries'} longer than {LOG_ENTRY_LINES} lines "
+            f"(the first starts \"{long[0][0][:60]}\"). Keep each entry to a few lines, and put the detail in the "
+            "evidence folder with a link to it"]
+
+
+def plan_checks(tree: Path, prof: dict, paths: list[str]) -> list[str]:
+    """The plan checks for those of `paths` that are a module's PLAN.md or LOG.md, read from `tree`."""
+    out = []
+    for p in paths:
+        where = module_of(prof, p)
+        if not where or where[1] not in ("plan", "log") or not (tree / p).is_file():
+            continue
+        text = (tree / p).read_text(errors="replace")
+        out += plan_text_problems(p, text) if where[1] == "plan" else log_text_problems(p, text)
+    return out
+
+
+def flat_names(prof: dict, paths: list[str]) -> list[str]:
+    """Plan files written under the old flat names, which the loop no longer reads."""
+    out = []
+    for p in paths:
+        folder, _, name = p.rpartition("/")
+        m = re.fullmatch(r"(.+)-(DONE\.json|PLAN\.md|ACCEPTED\.json|BRIEF\.md)", name)
+        if folder == prof["plans"] and m:
+            kind = {"DONE.json": "done", "PLAN.md": "plan", "ACCEPTED.json": "record", "BRIEF.md": "brief"}[m.group(2)]
+            out.append(f"{p} uses the old flat name, which the loop doesn't read; write it as "
+                       f"{module_file(prof, m.group(1), kind)}")
+    return out
+
+
+def stray_plans(worktree: Path, prof: dict) -> list[str]:
+    """Tracked plan files outside the plans folder (a PLAN.md or <name>-PLAN.md), which no agent is pointed to."""
+    listed = git(worktree, "ls-files").stdout.splitlines()
+    return [p for p in listed if (p.rpartition("/")[2] == "PLAN.md" or p.endswith("-PLAN.md"))
+            and not p.startswith(prof["plans"] + "/")]
+
+
+# --------------------------------------------------------------------------------- the module table and STATUS.md
+
+TABLE_HEADER = ("#", "module", "what it's for", "needs")
+
+
+def table_cells(line: str) -> list[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def plain_cell(cell: str) -> str:
+    """A table cell without its markdown: links keep their text, and backticks and bold go."""
+    return re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", cell).replace("`", "").replace("**", "").strip()
+
+
+def module_table(text: str | None) -> list[dict] | None:
+    """The rows of the module table in ARCHITECTURE.md, in build order: the first markdown table whose header is
+    `# | Module | What it's for | Needs` (any case, either apostrophe). Each row is {n, module, what, needs}, as
+    written. None when there's no such table."""
+    lines = (text or "").splitlines()
+    for i, line in enumerate(lines):
+        if not line.strip().startswith("|") or i + 1 >= len(lines):
+            continue
+        head = [plain_cell(c).lower().replace("’", "'") for c in table_cells(line)]
+        if len(head) < 4 or head[0] != "#" or head[1] != "module" or not head[2].startswith(TABLE_HEADER[2]) \
+                or head[3] != "needs" or not set(lines[i + 1].replace("|", "").strip()) <= set("-: "):
+            continue
+        rows = []
+        for row in lines[i + 2:]:
+            if not row.strip().startswith("|"):
+                break
+            cells = table_cells(row) + ["", "", "", ""]
+            if plain_cell(cells[1]):
+                rows.append({"n": cells[0], "module": plain_cell(cells[1]), "what": cells[2], "needs": cells[3]})
+        return rows
+    return None
+
+
+def table_warnings(worktree: Path, prof: dict, ref: str, stems: list[str]) -> list[str]:
+    """A module folder the module table has no row for. A row with no folder is fine: that module isn't planned yet."""
+    rel = project_file(prof, "architecture")
+    text = show(worktree, ref, rel)
+    if text is None or not stems:
+        return []
+    rows = module_table(text)
+    if rows is None:
+        return [f"{rel} has no module table (a table headed `| # | Module | What it's for | Needs |`, one row per "
+                "module in build order), so STATUS.md lists the modules without it; a planner adds it"]
+    listed = {r["module"].upper() for r in rows}
+    return [f"{stem} has a folder under {prof['plans']} but no row in the module table in {rel}; a planner adds it"
+            for stem in stems if stem.upper() not in listed]
+
+
+def proposed_names(text: str | None) -> list[str]:
+    """The glossary entries the owner hasn't agreed: each entry (a bold name line) with a `Proposed:` line."""
+    out, name = [], None
+    for line in (text or "").splitlines():
+        if m := re.fullmatch(r"\s*\*\*(.+?)\*\*\s*", line):
+            name = m.group(1)
+        elif (m := re.match(r"\s*(?:[-*]\s+)?Proposed:\s*(.*)$", line)) and name:
+            out.append(f"{name} ({m.group(1).strip().rstrip('.')})" if m.group(1).strip() else name)
+            name = None
+    return out
+
+
+def status_word(step: dict, record: dict | None = None) -> str:
+    """The plain status of a module's next milestone, in the words of done-when.md's status table."""
+    status, state = step["status"], step.get("state")
+    if status == "finished":
+        return "Done"
+    if status in ("ready", "taken"):
+        return "Not Started" if state == "open" else "In Progress"
+    if status == "design_owed":
+        return "Design Changes Requested" if ((record or {}).get("design") or {}).get("verdict") == "changes" \
+            else "Design Ready for Review"
+    return {"waiting": "Waiting on Dependency", "review_owed": "Ready for Review", "parked": "Too Many Failed Reviews",
+            "replan_owed": "Awaiting Diagnosis" if step.get("ladder") == "diagnose" else "Awaiting Replan",
+            "blocked": "Needs Human Feedback" if step.get("attended") else "Blocked"}.get(status, "Invalid")
+
+
+def short_date(at: str | None) -> str:
+    try:
+        d = datetime.strptime((at or "")[:10], "%Y-%m-%d")
+    except ValueError:
+        return ""
+    return f"{d.day} {d.strftime('%b')}"
+
+
+RECENT_DAYS = 7
+
+
+def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, unlanded: list[str] | None = None) -> str:
+    """STATUS.md, the owner's page, built only from what is stored at `ref`: the done-when files, the acceptance
+    records, the module table in ARCHITECTURE.md, the `Assumption:` lines in each PLAN.md and the `Proposed:` names in
+    GLOSSARY.md. Its links are relative to the plans folder, where the page lives. `unlanded` lists plan files that
+    aren't at the tip, when the caller knows them."""
+    if proj is None:
+        proj = project(worktree, prof, ref)
+        for k, cycle in need_cycles(proj).items():
+            proj[k]["problems"].append(f"its needs form a cycle: {cycle}")
+    rows = module_table(show(worktree, ref, project_file(prof, "architecture"))) or []
+    order = {r["module"].upper(): n for n, r in enumerate(rows)}
+    keys = sorted(proj, key=lambda k: (order.get(k, len(order)), k))
+    steps = {k: next_step(k, proj) for k in keys}
+    since = datetime.fromtimestamp(time.time() - RECENT_DAYS * 86400, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def started(e: dict) -> bool:
+        return not e["problems"] and (any(m.get("state") != "open" for m in e["doc"]["milestones"]) or
+                                      any(accepted(m, e["record"]) for m in e["doc"]["milestones"]))
+
+    planned_rows = [r for r in rows if r["module"].upper() not in proj]
+    done_n = sum(steps[k]["status"] == "finished" for k in keys)
+    going = sum(steps[k]["status"] != "finished" and started(proj[k]) for k in keys)
+    total = len(keys) + len(planned_rows)
+    waiting, now_next, recent = [], [], []
+    for key in keys:
+        e, step = proj[key], steps[key]
+        stem, rec = e["stem"], e["record"]
+        plan = md_link("plan", plan_rel(prof, stem))
+        waiting += [f"- {stem} assumes: {x} ({plan})" for x in assumptions(show(worktree, ref, plan_rel(prof, stem)))]
+        if e["problems"]:
+            continue
+        ms = {m["id"]: m for m in e["doc"]["milestones"]}
+        m = ms.get(step.get("milestone")) or {}
+        name = m.get("name") or step.get("milestone") or ""
+        mid = step.get("milestone")
+        status = step["status"]
+        if status == "blocked" and step.get("attended"):
+            for i in m.get("items") or []:
+                if i["id"] in step["attended"]:
+                    waiting.append(f"- {stem} {mid} {name}: {i['id']} needs you: {i.get('statement', '')}")
+        elif status == "parked":
+            why = ((rec.get("milestones") or {}).get(mid) or {}).get("parked", {}).get("why") or \
+                "it ran out of review rounds"
+            waiting.append(f"- {stem} {mid} {name}: Too Many Failed Reviews, because {why}. Accept it, change its "
+                           "scope or give it another try")
+        elif status == "review_owed" and m.get("state") == "done":
+            waiting.append(f"- {stem} {mid} {name}: says done, but no check or review accepted it. Accept it as it "
+                           "is, or have it reviewed")
+        if status in ("ready", "taken", "review_owed") and m.get("state") != "done":
+            reviews = ((rec.get("milestones") or {}).get(mid) or {}).get("reviews") or []
+            latest = next((r["review"] for r in reversed(reviews) if r.get("review")), None)
+            now_next.append(f"- {name} ({stem} {mid}): {status_word(step, rec)} · {plan}" +
+                            (f" · {md_link('latest review', latest)}" if latest else ""))
+        elif status == "design_owed":
+            now_next.append(f"- {stem}'s design: {status_word(step, rec)} · "
+                            f"{md_link('design', design_rel(prof, stem))} · {plan}")
+        for x in e["doc"]["milestones"]:
+            acc = ((rec.get("milestones") or {}).get(x["id"]) or {}).get("accepted") or {}
+            if accepted(x, rec) and (acc.get("at") or "") >= since:
+                review = acc.get("review") or next(
+                    (r["review"] for r in reversed(((rec.get("milestones") or {}).get(x["id"]) or {}).get("reviews")
+                                                   or []) if r.get("review")), None)
+                recent.append((acc.get("at") or "", f"- {x.get('name') or x['id']} ({stem} {x['id']}), "
+                                                    f"{short_date(acc.get('at'))}" +
+                               (f" · {md_link('review', review)}" if review else "")))
+    waiting += [f"- A name in the glossary waits for your agreement: {x}"
+                for x in proposed_names(show(worktree, ref, project_file(prof, "glossary")))]
+    if unlanded:
+        waiting.append(f"- Plan files that haven't landed, so the loop can't see them: {', '.join(unlanded[:10])}")
+    reports = [n for n in git(worktree, "ls-tree", "--name-only", f"{ref}:{reports_dir(prof)}").stdout.split()
+               if re.fullmatch(r"\d{4}-\d{2}-\d{2}\.md", n)]
+    recent_lines = [line for _, line in sorted(recent, reverse=True)]
+    if reports:
+        latest = max(reports)
+        recent_lines.append(f"- The latest build report: {md_link(latest[:-3], reports_dir(prof) + '/' + latest)}")
+    out = ["# Status", "",
+           "The orchestrate script writes this page from the plan files and records after each record it lands. "
+           "Don't edit it, because the next landing overwrites it. `status --format md` prints the same page.", "",
+           "## Overview", "",
+           f"{done_n} of {total} modules done · {going} in progress · {total - done_n - going} to come", "",
+           "### Waiting on you", "", *(waiting or ["- Nothing."]), "",
+           "### Now and next", "", *(now_next or ["- Nothing is under way or ready to start."]), "",
+           "### Recently done", "", *(recent_lines or [f"- Nothing accepted in the last {RECENT_DAYS} days."]), "",
+           "## All modules", "",
+           "| # | Module | What it's for | Needs | Status |", "|---|---|---|---|---|"]
+
+    def cell(key: str) -> str:
+        e, step = proj[key], steps[key]
+        if e["problems"]:
+            return "Invalid: a planner has to fix its files"
+        if step["status"] == "finished":
+            ats = [((e["record"].get("milestones") or {}).get(m["id"]) or {}).get("accepted", {}).get("at") or ""
+                   for m in e["doc"]["milestones"]]
+            return f"Done {short_date(max(ats))}".strip()
+        if step["status"] == "waiting":
+            return "Waiting on " + ", ".join(n.replace(" (not planned)", "") for n in step.get("needs") or [])
+        if step["status"] == "design_owed":
+            return status_word(step, e["record"])
+        return f"{step['milestone']} of {len(e['doc']['milestones'])} · {status_word(step, e['record'])}"
+
+    for r in rows:
+        key = r["module"].upper()
+        status = cell(key) if key in proj else "Not planned yet"
+        out.append(f"| {r['n']} | {r['module']} | {r['what']} | {r['needs']} | {status} |")
+    for key in keys:
+        if key not in order:
+            out.append(f"|  | {proj[key]['stem']} | (no row in the module table) |  | {cell(key)} |")
+    return relink("\n".join(out) + "\n", prof["plans"])
+
+
+def land_status(worktree: Path, prof: dict, name: str, tree: Path | None = None) -> None:
+    """Writes STATUS.md in a commit of its own after a record has landed, and lands it. It is best effort: the record
+    has landed already, and nothing here may fail it. A rebase conflict (another landing's STATUS.md) regenerates the
+    page once from the newer tip; if that fails too, it says so on stderr and the next landing catches up. An
+    unchanged page makes no commit."""
+    why = ""
+    for attempt in range(2):
+        try:
+            if tree is None or attempt:
+                tree = verify_tree(worktree, name, tip(worktree, prof))
+            here = profile(tree, missing_ok=True)  # the tip's own settings: `migrate --to` may have moved the plans
+            text = status_page(tree, here, "HEAD")
+            path = tree / status_rel(here)
+            if path.is_file() and path.read_text() == text:
+                return
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+            git(tree, "add", "--", status_rel(here))
+            c = git(tree, *ident(tree), "commit", "--quiet", "-m", "orchestrate: update STATUS.md")
+            if c.returncode != 0:
+                why = f"commit failed: {(c.stdout + c.stderr).strip()[-200:]}"
+                continue
+            ok, detail = land(tree, prof)
+            if ok:
+                return
+            why = detail
+        except (Exception, SystemExit) as e:  # never the record's problem
+            why = str(e)
+    print(f"note: STATUS.md wasn't updated ({why[:300]}); the next record the loop lands writes it", file=sys.stderr)
 
 
 def authorise_doc(doc: dict, record: dict, stamp: dict) -> None:
@@ -5956,6 +6527,7 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
     invalid. While nothing has been built on a module, adopt is how an in-chat planner's changes land, so it
     authorises them as a `plan` would."""
     problems = [why for p in paths if (why := adoptable(prof, worktree, ref, p))]
+    problems += plan_checks(worktree, prof, [p for p in paths if not adoptable(prof, worktree, ref, p)])
     proj = project(worktree, prof, ref)
     sync_claims(worktree, prof)
     held = claims(worktree)
@@ -5966,11 +6538,11 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
         if base and file_at(worktree, ref, p) != file_at(worktree, base, p):
             problems.append(f"{p} changed at {base_ref(prof)} since this worktree's copy; rebase this worktree onto "
                             "it first, so landing doesn't undo that change")
-        if not (p.startswith(prof["plans"] + "/") and p.endswith("-DONE.json")):
+        if not ((where := module_of(prof, p)) and where[1] == "done"):
             continue
         if (here := file_here(worktree, p)) is None:
             continue
-        stem = Path(p).name[:-len("-DONE.json")]
+        stem = where[0]
         key = stem.upper()
         try:
             doc = json.loads(here)
@@ -5987,7 +6559,7 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
             except json.JSONDecodeError:
                 pass
         rec_text = show(worktree, ref, record_rel(prof, stem))
-        design = file_here(worktree, f"{prof['plans']}/{stem}.md")
+        design = file_here(worktree, design_rel(prof, stem))
         entry_ = {"stem": stem, "doc": copy.deepcopy(doc), "problems": [],
                   "design": text_hash(design.decode() if design is not None else None)}
         if rec_text is None:
@@ -6245,7 +6817,7 @@ def cmd_owner(a: argparse.Namespace) -> None:
         elif mid == "design":
             if verb != "accept":
                 raise SystemExit("error: only `owner accept` applies to a design")
-            design = (t / prof["plans"] / f"{stem}.md")
+            design = t / design_rel(prof, stem)
             if record.get("design"):
                 record.setdefault("design_history", []).append(record["design"])
             record["design"] = {**stamp, "verdict": "ok", "hash": text_hash(design.read_text() if design.exists() else None)}
@@ -6355,6 +6927,145 @@ def cmd_owner(a: argparse.Namespace) -> None:
     sys.exit(0 if ok else 1)
 
 
+# ------------------------------------------------------------------------------------------------- migrate
+
+FLAT_NAMES = (("{}.md", "design"), ("{}-PLAN.md", "plan"), ("{}-DONE.json", "done"), ("{}-ACCEPTED.json", "record"),
+              ("{}-BRIEF.md", "brief"))
+
+
+def split_log(text: str) -> tuple[str, str]:
+    """(a plan without its `## Log` section, the section's lines). The section runs to the next `#` or `##` heading."""
+    kept, log, inside = [], [], False
+    for line in text.splitlines(keepends=True):
+        if re.match(r"^##\s+Log\s*$", line, re.IGNORECASE):
+            inside = True
+            continue
+        if inside and re.match(r"^#{1,2}\s", line):
+            inside = False
+        (log if inside else kept).append(line)
+    return "".join(kept).rstrip("\n") + "\n", "".join(log).strip("\n")
+
+
+def set_plans_line(text: str, to: str) -> str:
+    """ORCHESTRATE.md with its Plans line naming `to`, adding the line after the last settings line if it has none."""
+    line = re.compile(r"^(\s*[-*]\s*\*\*Plans:\*\*[ \t]*).*$", re.IGNORECASE | re.MULTILINE)
+    if line.search(text):
+        return line.sub(lambda m: m.group(1) + to, text, count=1)
+    settings = list(re.finditer(r"^\s*[-*]\s*\*\*[^*]+:\*\*.*$", text, re.MULTILINE))
+    at = settings[-1].end() if settings else len(text)
+    return text[:at] + ("\n" if at else "") + f"- **Plans:** {to}" + ("" if at < len(text) else "\n") + text[at:]
+
+
+def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict) -> list[str]:
+    """Moves the plans in a checkout from the flat layout into a folder per module, splits each plan's `## Log` into
+    LOG.md, and with `to` moves the whole plans folder there and rewrites the Plans line. Returns every path
+    written or removed, and fills `done` with what it did. Records hold no paths and a design's hash is of its
+    text, so acceptance survives the move."""
+    plans, paths = prof["plans"], []
+
+    def move(src: str, dst: str) -> None:
+        if (tree / dst).exists():
+            raise SystemExit(f"error: can't move {src} to {dst}, which already exists; move or merge it by hand first")
+        (tree / dst).parent.mkdir(parents=True, exist_ok=True)
+        os.rename(tree / src, tree / dst)
+        paths.extend([src, dst])
+
+    for stem in flat_modules(tree, plans):
+        for pattern, kind in FLAT_NAMES:
+            if (tree / plans / pattern.format(stem)).is_file():
+                move(f"{plans}/{pattern.format(stem)}", module_file(prof, stem, kind))
+        done.setdefault("modules", []).append(stem)
+        plan = tree / plan_rel(prof, stem)
+        if plan.is_file():
+            kept, log = split_log(plan.read_text())
+            if log:
+                plan.write_text(kept)
+                path = tree / log_rel(prof, stem)
+                earlier = path.read_text().rstrip("\n") if path.exists() else f"# {stem} log"
+                path.write_text(f"{earlier}\n\n{log}\n")
+                paths.extend([plan_rel(prof, stem), log_rel(prof, stem)])
+                done.setdefault("logs_split", []).append(stem)
+    if to and to != plans:
+        listed = git(tree, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", plans + "/").stdout
+        for rel in sorted(n for n in listed.split("\0") if n and (tree / n).exists()):
+            move(rel, to + rel[len(plans):])
+        profile_path = tree / PROFILE_FILE
+        before = profile_path.read_text() if profile_path.exists() else ""
+        if profile_value(before, "plans") or to != PROFILE_FIELDS["plans"]:
+            profile_path.write_text(set_plans_line(before, to))
+            paths.append(PROFILE_FILE)
+        done["plans"] = to
+    tracked = set(git(tree, "ls-files", "-z", "--", *paths).stdout.split("\0")) if paths else set()
+    # a file moved twice (into its folder, then with the folder) passed through a path that never existed in git
+    return [p for p in dict.fromkeys(paths) if (tree / p).exists() or p in tracked]
+
+
+def cmd_migrate(a: argparse.Namespace) -> None:
+    """Moves a project from flat plan files (<MODULE>-DONE.json and the rest, side by side) to a folder per module,
+    through a clean checkout of the tip, committed as the loop."""
+    worktree = Path(a.worktree).resolve()
+    prof = profile(worktree, strict=True, flat_ok=True)
+
+    def done_with(result: str, code: int = 0, **fields) -> None:
+        print(json.dumps({"result": result, **fields}))
+        sys.exit(code)
+
+    if os.environ.get("ORCHESTRATE_ROLE"):
+        raise SystemExit("error: migrate can't run inside a session the loop started; the lead runs it")
+    to = a.to.strip().rstrip("/") if getattr(a, "to", None) else None
+    if to and (to.startswith("/") or ".." in Path(to).parts or not to):
+        raise SystemExit(f"error: --to {a.to!r} must be a folder inside the repository, such as docs/plans")
+    if to and to != prof["plans"] and (to.startswith(prof["plans"] + "/") or prof["plans"].startswith(to + "/")):
+        raise SystemExit(f"error: --to {to} is inside {prof['plans']}, or holds it; pick a folder beside it")
+    folder = loop_dir(worktree)
+    busy = [name for name in (p.name[len("run-"):-len(".lock")] for p in folder.glob("run-*.lock"))
+            if run_holder(folder, name) not in (None, os.getpid())]
+    if busy or not run_lock(worktree, "_plan"):
+        done_with("REFUSED", 1, problems=[
+            f"a run, review, plan or adopt is running here ({', '.join(busy) or '_plan'}). migrate moves every "
+            "module's files, so run it once they've stopped (`loops --repo` shows them, `pause` stops them)"])
+    for name in {s.upper() for s in flat_modules(worktree, prof["plans"]) + modules_here(worktree, prof)}:
+        run_lock(worktree, name)  # nothing starts on a module while its files move
+    try:
+        ref = tip(worktree, prof)
+    except TipError as e:
+        done_with("FAILED", 1, detail=str(e))
+    drift = folder_drift(worktree, prof["plans"], ref)
+    if stranded := drift["uncommitted"] + drift["unintegrated"]:
+        done_with("REFUSED", 1, problems=[
+            f"these plan files here aren't at {base_ref(prof)}: {', '.join(stranded[:10])}. migrate moves the files "
+            f"at the tip, so set these aside first (`git stash push --include-untracked -- {prof['plans']}`), "
+            "migrate, then put them back under their new names"])
+    did: dict = {}
+
+    def change(t):
+        return migrate_tree(t, profile(t, missing_ok=True, flat_ok=True), to, did)
+
+    ok, landed = loop_write(worktree, prof, "_migrate", change,
+                            "orchestrate: move the plans into a folder per module" + (f", under {to}" if to else ""),
+                            take_up_ok=False)
+    if not ok:
+        done_with("FAILED", 1, detail=landed)
+    here = "left as it was"
+    try:
+        landed_tip = tip(worktree, prof, fetch=False)  # past the migration, to the STATUS.md written after it
+    except TipError:
+        landed_tip = landed
+    if not git(worktree, "status", "--porcelain").stdout.strip() and is_ancestor(worktree, "HEAD", landed_tip):
+        if git(worktree, "merge", "--ff-only", "--quiet", landed_tip).returncode == 0:
+            here = f"fast-forwarded to {base_ref(prof)}"
+    elif git(worktree, "status", "--porcelain").stdout.strip():
+        here = "left as it was, because it has uncommitted changes; fast-forward it once they're dealt with"
+    else:
+        here = f"left as it was: it has commits of its own, so rebase it onto {base_ref(prof)}"
+    if not did:
+        done_with("NOTHING", detail=f"the plans at {base_ref(prof)} already have a folder per module", worktree=here)
+    done_with("MIGRATED", commit=landed, plans=did.get("plans", prof["plans"]), modules=did.get("modules", []),
+              **({"logs_split": did["logs_split"]} if did.get("logs_split") else {}), worktree=here,
+              next=next_cmd(loop_cmd("status", "--worktree", str(worktree)), "lead",
+                            "see the project in its new layout; STATUS.md is written beside the module folders"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -6404,7 +7115,14 @@ def main() -> None:
     status = sub.add_parser("status")
     status.add_argument("--module")
     status.add_argument("--worktree", default=".")
+    status.add_argument("--format", choices=["text", "md"], default="text",
+                        help="md: the owner's page, STATUS.md, as the loop writes it")
     status.set_defaults(func=cmd_status)
+    migrate = sub.add_parser("migrate", help="move flat plan files into a folder per module")
+    migrate.add_argument("--worktree", default=".")
+    migrate.add_argument("--to", help="also move the whole plans folder here, and change the Plans line to match "
+                                      "(for example docs/plans)")
+    migrate.set_defaults(func=cmd_migrate)
     nxt = sub.add_parser("next")
     for flag in ("--module", "--worktree", "--milestone"):
         nxt.add_argument(flag, required=True)

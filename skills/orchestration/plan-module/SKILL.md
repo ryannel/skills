@@ -28,7 +28,7 @@ treat each differently:
 
 - A decision in the owner's words, or one the owner agreed to, is fixed. Carry it into the design in the same
   words, and point at it by its number.
-- A decision marked as the agent's is yours to change, with an `Assumption:` line in the plan's log that says so.
+- A decision marked as the agent's is yours to change, with an `Assumption:` line in the plan that says so.
 - Under "Still open", a question not yet decided is yours to settle with an `Assumption:` line. One marked "the
   planner chooses" is yours to settle without one.
 
@@ -46,36 +46,66 @@ A module is a part of the project that one builder can work on without touching 
 piece of a module small enough for one builder to finish in one session. An item is one thing that must be true
 before a milestone is Done.
 
-For each module you write three files, in the plans folder the project settings name:
+Every module has a folder of its own, `docs/plans/<MODULE>/` unless the project settings name another plans
+folder. You write four files in it:
 
-- `<MODULE>.md` is the design. It says what the people who use the module need to see, feel or get, and across
-  what range. It names the mechanisms that produce that, what the module provides to other modules, and what it
-  may cost, if cost matters.
-- `<MODULE>-PLAN.md` is the plan file: the milestones, a few status lines and a log.
-- `<MODULE>-DONE.json` is the done-when file. For each milestone it lists the items and how each is proved. A
-  script reads it, so [the format](references/done-when.md) is strict. [Ways to prove an item](references/proofs.md)
+- `DESIGN.md` is the design. It says what the people who use the module need to see, feel or get, and across what
+  range. It names the mechanisms that produce that, what the module provides to other modules, and what it may
+  cost, if cost matters.
+- `PLAN.md` is the plan file: what is left to build, milestone by milestone, and the assumptions still open for
+  the owner. It has no status lines and no history.
+- `LOG.md` is the module's history, one dated line per event, newest at the bottom.
+- `DONE.json` is the done-when file. For each milestone it lists the items and how each is proved. A script reads
+  it, so [the format](references/done-when.md#donejson) is strict. [Ways to prove an item](references/proofs.md)
   explains the three proofs, Automated Check, Reviewer Inspection and Reviewer Question, and how to mix them.
 
-Don't name a module `BRIEF`, `GLOSSARY` or `ARCHITECTURE`, because its design would overwrite the file of that name.
+None of these files says where the work stands, and neither do the module list or the project settings. The
+script writes that to `STATUS.md`. A line such as "M0 is parked" is wrong the next time M0 moves, and in a design
+nobody can correct it without sending the design back for review, because an approved design is approved word for
+word.
 
-If a module already has a plan in another shape, such as a checklist in prose, convert it. Keep its log, turn each
-milestone's "done when" list into items, and give every item a proof.
+[The module's files](references/done-when.md) shows each file's shape and the whole layout of the plans folder.
+Every project uses the same layout so the owner and every agent always know where to look.
 
-These three files are prompts: a builder and a reviewer act on them with nothing else to go on. Write them the
-way the `prompting-agents` skill describes, if it is installed.
+Name each milestone for what someone can see or do once it is Done, in plain words, such as "A new user signs up
+and lands on an empty dashboard". The script puts those names on `STATUS.md`, the page the owner reads, so a name
+like "M2 auth handler refactor" tells the owner nothing.
+
+Keep the plan file short. A Done milestone shrinks to its heading and a link to its review. Briefs written for
+reviews go to `docs/evidence/<MODULE>/`, and design goes in `DESIGN.md`. The script refuses a plan over about
+1,500 words, or one with status lines, `###` headings or a log in it, because that is how the plan files of an
+earlier project grew to 800 lines nobody could read.
+
+If a module already has a plan in another shape or another place, such as a checklist in prose or a file called
+`BUILD-PLAN.md` elsewhere in the repository, convert it into these files and delete the old one. Keep its history
+in `LOG.md`, turn each milestone's "done when" list into items, and give every item a proof. A project still in the
+older flat layout, with files such as `<MODULE>-PLAN.md`, moves with the script's `migrate` command, which the
+lead runs.
+
+These files are prompts: a builder and a reviewer act on them with nothing else to go on. Write them the way the
+`prompting-agents` skill describes, if it is installed.
 
 ## The whole project
 
 If the project has more than one module, plan the project before any module. Write the module list,
-`ARCHITECTURE.md`, in the plans folder or wherever the project settings say. It names each module and what it owns,
-gives the order to build them in, says what each is for, and lists each interface, which is what one module
-provides to the others.
+`ARCHITECTURE.md`, in the plans folder. It opens with a table of every module in the order to build them, which
+the script reads:
+
+```markdown
+| # | Module | What it's for | Needs |
+|---|---|---|---|
+| 1 | AUTH | People sign in, and stay signed in across devices | |
+```
+
+`What it's for` is one plain sentence for the owner. Leave status out of the table, because the script adds it on
+`STATUS.md`, where a module you have listed but not yet planned shows as Not planned yet. After the table, say what
+each module owns and list each interface, which is what one module provides to the others.
 
 Draw the lines between modules around state, so that each kind of state has exactly one module in charge of it.
 Most bugs between modules come from two of them editing the same thing. Put first the riskiest modules and the
 ones most others depend on, because they are the most likely to force everything else to change.
 
-A module doesn't change an interface by itself. A builder who needs a change writes a proposal in its plan's log,
+A module doesn't change an interface by itself. A builder who needs a change writes a proposal in its module's log,
 and you settle it here, with every module that provides or uses that interface.
 
 ## Milestones that depend on another module
@@ -122,7 +152,8 @@ design leaves open.
 Plan what the owner's words say, not a narrower thing that is easier to pin down. Where their words could be read
 more widely than your plan covers, take the wider ordinary reading when it costs little: which letters count as
 "accents", how a "cli called x" is run, what a size limit is measured in. Otherwise write the reading you chose in
-the plan's log, as one line that starts `Assumption:`, so the owner can overturn it in a line. A question you
+the plan's `## Open for the owner` section, as one line that starts `Assumption:`, so the owner can overturn it
+in a line. When the owner answers, delete the line and note the answer in the log. A question you
 would have asked the owner goes there too, with the answer you assumed. The script counts those lines and lists
 them in the owner's report. In one test run a planner read "transliterate accents" as letters that decompose in
 Unicode, and said no decision was needed. Three reviewers then passed a tool that turned Ørsted into "rsted",
@@ -187,14 +218,14 @@ caught for nothing from then on.
    the module's entry in the module list.
 2. A reviewer has read the design. Run `agent_loop.py review --module <M> --milestone design --worktree .`, which
    gives a new reviewer only the owner's request and the design, and saves the result. No builder starts on the
-   module until that result is Design Approved. Act on what the review finds, and put the review on the plan
-   file's `Reviews:` line. If the `plan` command started you and you can't start a review, say the design still
+   module until that result is Design Approved. Act on what the review finds, and note the review in the log. If the `plan` command started you and you can't start a review, say the design still
    needs one, and the lead runs it.
 3. Every `check` runs as written. `agent_loop.py check --module <M> --milestone <id> --worktree .` tries a
    milestone's checks and saves nothing. Before the work exists, each should come back `fail`. An `error` means
    the check itself is broken, usually by shell quoting inside the JSON, and a builder would lose a session finding
    that out.
-4. The plan file's `Milestone:`, `Now:`, `Next:` and `Blocked:` lines are up to date.
+4. The module table in `ARCHITECTURE.md` lists the module, and every milestone is named for what someone can see
+   or do.
 5. Your report ends with what is left for the owner: each decision on the `Owner decides` list in the project
    settings, and each assumption. Put them last, because the lead is shown the end of a long report.
 
@@ -205,7 +236,7 @@ The `Owner decides` list says what has to go to the owner. Every other decision 
 A milestone with four failed reviews that each repeated a finding an earlier review had raised is Awaiting Replan
 (the script prints `replan_owed`), which means something about the plan is wrong. Your task names the reviews.
 Each round's review is kept beside the latest, as `<id>-review-1.md` and so on. Decide which of these happened,
-and write why in the log:
+and write why in `LOG.md`:
 
 - The milestone was too big. Split it.
 - It depended on something outside this module. Change what it covers.
@@ -238,13 +269,13 @@ why, and say so in your report:
 The script starts the milestone's counts again either way, and a second run to six failed reviews parks it. Leave
 the counts and `findings` alone: the script puts back any change a plan makes to them.
 
-Don't edit a `<MODULE>-ACCEPTED.json` record file. Only the script writes those, and it rejects a plan that touches
-one.
+Don't edit an `ACCEPTED.json` record file or `STATUS.md`. Only the script writes those, and it rejects a plan that
+touches one.
 
 ## When the owner changes what they want
 
 The lead sends you the owner's words as your task, and has already added them to the brief if there is one. Change
-the plan to match, and quote their words in the plan's log. This doesn't count as a rewrite after failed reviews,
+the plan to match, and quote their words in `LOG.md`. This doesn't count as a rewrite after failed reviews,
 unless the milestone was already Awaiting Replan; then your change is the rewrite, and the script counts it. A
 milestone whose items you change is built and reviewed again, so change only what their words reach.
 

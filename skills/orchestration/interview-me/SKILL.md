@@ -32,8 +32,8 @@ lists what it assumed.
 ## What finished looks like
 
 The set keeps a project's plans in the plans folder. `ORCHESTRATE.md`, the file of project settings at the root of
-the repository, names that folder on its `Plans:` line. When the file doesn't exist yet, the folder is
-`docs/modules`.
+the repository, names that folder on its `Plans:` line. When the file doesn't exist yet, or has no such line, the folder is
+`docs/plans`.
 
 When there is a brief, you are finished when:
 

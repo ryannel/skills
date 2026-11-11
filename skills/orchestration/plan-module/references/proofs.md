@@ -23,7 +23,7 @@ one:
   design.
 
 An item passes only when every proof it names passes.
-[The done-when file](done-when.md#module-donejson) says which milestones need a reviewer.
+[The done-when file](done-when.md#donejson) says which milestones need a reviewer.
 
 Choose the proof that would catch a convincing fake. Often one proof isn't enough, because each kind misses
 different things. Take a boat bobbing in waves. A test that the energy never grows catches a slow drift that

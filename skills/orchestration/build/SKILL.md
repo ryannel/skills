@@ -23,8 +23,21 @@ or Codex.
 The work is laid out in files the planner writes. The project is split into modules, which are parts one builder
 can work on without touching the others, and each module into milestones, which are pieces small enough for one
 builder session. An item is one thing that must be true before a milestone is Done, and a module's items are kept
-in its done-when file, `<MODULE>-DONE.json`. The project settings are in `ORCHESTRATE.md`, and the module list is
-`ARCHITECTURE.md`, in the plans folder the project settings name.
+in its done-when file. The project settings are in `ORCHESTRATE.md`. Everything else is in the plans folder,
+`docs/plans` unless the settings name another: the module list `ARCHITECTURE.md`, and a folder for each module
+holding its `DESIGN.md`, `PLAN.md`, `LOG.md`, done-when file `DONE.json` and record file `ACCEPTED.json`.
+
+`STATUS.md` in the plans folder is the owner's page: an overview of what is waiting on them, what is happening now
+and next and what was recently done, then every module in build order with its status. The script writes it after
+every record it lands, so you never edit it. When the owner asks where things stand, start from it, or from
+`status --format md`, which prints the same page.
+
+A project in the older flat layout, with files such as `<MODULE>-PLAN.md` in the plans folder, stops every command
+with a message naming `migrate`. Run `migrate --worktree <repo>` once, with `--to docs/plans` to move the folder to
+the standard place as well. It moves the files, splits each plan's log into `LOG.md`, and lands the change. Then
+start a planner to bring the plans into the new shape: the module table at the top of `ARCHITECTURE.md`,
+milestones named for what someone can see or do, Done milestones shrunk to a line, review briefs moved to the
+evidence folder, and plan files elsewhere in the repository converted or deleted.
 
 Your job is finished when every milestone in the module list is Done, or when everything left waits for the
 owner. When the owner names one milestone or one module, that is the whole job: once it is Done, report and stop.
@@ -56,11 +69,16 @@ with the date, change the decisions their words affect, merge it with `adopt`, a
 
 ## What only the script decides
 
-Only the script sets a milestone to Done. It keeps a record file, `<MODULE>-ACCEPTED.json`, beside each done-when
+Only the script sets a milestone to Done. It keeps a record file, `ACCEPTED.json`, beside each done-when
 file, and writes it only in its own commits. A milestone is Done when that record says so, not when you or
 another agent says so. So don't edit a done-when file or a record file yourself, and don't revert anyone's
 commits. If something looks wrong, the command's result says what, and
 [What each result means](#what-each-result-means) says who fixes it.
+
+For the same reason, don't write where the work stands into the project settings, a design or any other
+document. `STATUS.md`, which the script writes, is the one place for it. A status line anywhere else goes stale the
+next time a milestone moves, and correcting it costs too much: a changed design needs its review again, and a
+changed project setting needs the owner.
 
 ## What you pass on
 
@@ -94,6 +112,11 @@ write to `.git`, the builders can't fetch, commit or merge either. So the lead h
 
 Each result line says where its session ran. `path` is `visible` for the app or `headless` for the background, and
 `path_reason` says why when it is `headless`.
+
+The script names each session it starts `<repository> · <MODULE> · <step>`, such as `thrum · CREATOR · M1 build`,
+`thrum · CREATOR · M1 review` or `thrum · CREATOR · design review`. A planner's step is `plan:` and the start of
+its task, under the first module the task names, or under `plan` when it names none. Claude's Code tab lists
+sessions outside any project, and sorting them by title then keeps each module's sessions together.
 
 ## What the owner asked for
 
@@ -170,7 +193,10 @@ see. A second lead that runs `run` on it gets `TAKEN` and starts nothing.
 
 Give each module its own worktree on its own branch, in a folder git ignores. A worktree is a second working copy
 of the repository, so two builders can work at once. If the repository ignores no folder, add one to
-`.git/info/exclude`. Keep the worktree across milestones, so build caches stay warm.
+`.git/info/exclude`. Keep the worktree across milestones, so build caches stay warm, and remove it when the module
+is Done and nothing in it is unmerged. The result that says a module is finished reminds you. Build output is what
+fills the disk on a long build: in one project, checkouts of finished modules held about 15 GB while a builder
+stopped for want of 2.
 
 - With `Integrate: push`, branch from the remote:
   `git worktree add -b build/<module> <folder>/<module> <remote>/<branch>`.
@@ -192,20 +218,22 @@ When a module is down to its last milestone, and the next module in the module l
 | a builder | `run --module <M> --worktree <path> --host <host>`, as a background command |
 | a reviewer of a milestone | `review --module <M> --milestone <id> --commit <sha> --worktree <path> --host <host>` |
 | a reviewer of a design | `review --module <M> --milestone design --worktree <path> --host <host>` |
-| a planner | `plan --worktree <path> --task "<what to plan>" --host <host>`, in a clean worktree |
+| a planner | `plan --worktree <repo> --task "<what to plan>" --host <host>`, as a background command |
 
 Start reviewers and planners with these commands, never as your own subagents, because only the script can
-verify what they changed and save it.
+verify what they changed and save it. Both run in a checkout the script keeps for them, so their `--worktree` only
+names the repository, and you don't make a worktree for either.
 
 When a builder stops, `run` prints one line of JSON that says why. A `warnings` field names something the host
 would not load, such as an `AGENTS.md` that the Claude CLI won't read, with the fix. Tell the owner in your next
 report, and don't stop for it.
 
 From a planner, only a result of `PLANNED` merges anything, including files the planner wrote outside the plans
-folder, such as tests. On `BLOCKED`, `NEEDS_CONTEXT` or `UNFINISHED`, the planner's files stay uncommitted for you
-to report and then clear. One planner runs at a time in a repository. A second `plan` gets `TAKEN`, which names
-the holder, with a `next` to run it again when that planner stops. When two modules both need a planner, run them
-in turn, or give one planner both tasks.
+folder, such as tests. On `BLOCKED`, `NEEDS_CONTEXT` or `UNFINISHED`, nothing merges. The script keeps the files the
+planner changed in a git stash, and any commits on a branch, and the result names both (`stash`, `branch`), so
+report them and give what holds up to the next planner. One planner runs at a time in a repository. A second
+`plan` waits for the first to finish, then plans from what it merged, so you can start planners for two modules
+one after the other without checking on the first.
 
 Two more commands help here.
 
@@ -243,9 +271,10 @@ in the report.
 
 ## What each result means
 
-A result with `next` tells you the command to run, and `next.by` says whose move it is. `lead` or `planner` means
-you carry it out without asking the owner. `owner` means it is a decision only the owner may make: put the `ask`
-text to them in the chat, wait, and run the command with their answer in `--text`. Give that module's builder
+A result with `next` tells you the command to run, and `next.by` says who runs it: `lead` is you, and `planner`
+means the command starts a planner. Either way you run it without asking the owner, unless `next` also says
+`decides: owner`. That is a decision only the owner may make: put the `ask` text to them in the chat, wait, and
+then run the command yourself with their answer in `--text`. Give that module's builder
 other work while you wait.
 
 | The script prints | Which means | You do |
@@ -376,7 +405,7 @@ and merge the file with `adopt`. The whole report covers:
   about ten reviews, flag every one, because the owner's corrections are how the reviewer learns how strict to be;
 - new Reviewer Inspection items, the ones a reviewer judges by running the product, so the owner can adjust the
   milestone's quality bar, the words that say how good the work has to be;
-- each reading of the owner's words that a planner chose (the `Assumption:` lines in a plan's log, which a
+- each reading of the owner's words that a planner chose (the `Assumption:` lines in a plan, which a
   `PLANNED` result counts under `assumptions`), so that an unattended build doesn't settle them silently;
 - anything Blocked, Waiting on Dependency or Too Many Failed Reviews, with what would unblock it;
 - every item that needs human feedback or hardware, in one list, so the owner can settle them in one sitting;
