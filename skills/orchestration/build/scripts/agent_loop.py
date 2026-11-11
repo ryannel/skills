@@ -15,12 +15,14 @@ Hosts:
   With no --host, the host is the profile's `Default host`, else the host this command runs inside, else the only
   one installed, else codex.
 
-  On a Mac with the Codex app or Claude desktop running, codex and claude sessions are ones the app lists under the
-  project, where the owner can watch, steer, pause (Stop) and take over; the loop still drives and checks every turn.
-  Codex threads run in the app itself. Claude turns run in the loop's own signed-in `claude -p`, imported into the
-  Code tab. Otherwise (another OS, app not installed or not running, Claude CLI signed out, or ORCHESTRATE_HEADLESS=1)
-  they run headless as above. Every result line from a turn says which: `path` is `visible` or `headless`, with
-  `path_reason` when headless. Stopping a turn in the app gives PAUSED, and `run` again carries on.
+  Sessions run headless as above by default, so nothing opens in either app. With ORCHESTRATE_VISIBLE=1, on a Mac
+  with the Codex app or Claude desktop running, codex and claude sessions are ones the app lists under the project,
+  where the owner can watch, steer, pause (Stop) and take over; the loop still drives and checks every turn. Codex
+  threads then run in the app itself, and each new thread brings the app to the front. Claude turns run in the loop's
+  own signed-in `claude -p`, imported into the Code tab. When the app can't take them (another OS, app not installed
+  or not running, Claude CLI signed out), they run headless. Every result line from a turn says which: `path` is
+  `visible` or `headless`, with `path_reason` when headless. Stopping a turn in the app gives PAUSED, and `run` again
+  carries on.
 
 Where the plans live. The profile's `Plans` line names the plans folder (default docs/plans; a project with no
 Plans line, no docs/plans and a docs/modules folder keeps docs/modules). Each module has a folder of its own there:
@@ -312,6 +314,7 @@ import atexit
 import copy
 import errno
 import fcntl
+import functools
 import glob
 import hashlib
 import json
@@ -629,6 +632,15 @@ def codex_flags(prof: dict, role: str = "build") -> list[str]:
             roots = ",".join(json.dumps(str(Path(r).expanduser())) for r in prof["roots"])
             flags += ["-c", f"sandbox_workspace_write.writable_roots=[{roots}]"]
     return flags
+
+
+@functools.lru_cache(maxsize=None)
+def claude_supports(flag: str) -> bool:
+    try:
+        out = subprocess.run([CLAUDE, "--help"], capture_output=True, text=True)
+    except OSError:
+        return False
+    return flag in out.stdout
 
 
 def codex_supports(flag: str) -> bool:
@@ -3329,7 +3341,7 @@ def default_host(prof: dict) -> str:
 
 
 def host_command(host: str, prof: dict, model: str, effort: str, worktree: Path, prompt: str,
-                 session: str | None, role: str = "build", new_id: str | None = None) -> tuple[list[str], dict | None]:
+                 session: str | None, role: str = "build", new_id: str | None = None, title: str = "") -> tuple[list[str], dict | None]:
     """The command line and environment for one headless turn on `host`. `new_id` names a new Claude session."""
     env = {**os.environ, "ORCHESTRATE_ROLE": role}
     if host == "codex":
@@ -3353,6 +3365,8 @@ def host_command(host: str, prof: dict, model: str, effort: str, worktree: Path,
             args += ["--resume", session]
         elif new_id:
             args += ["--session-id", new_id]
+        if title and not session and claude_supports("--name"):  # the name the Code tab lists it under
+            args += ["--name", title]
         return args, clean_env(role)
     template = prof.get("hosts", {}).get(host)
     if not template:
@@ -3522,7 +3536,7 @@ def _run_turn(host: str, prof: dict, model: str, effort: str, worktree: Path, pr
         if session and (pid := claude_app_process(session)):
             return 130, session, "", f"the owner has this session open in Claude desktop (pid {pid}); the loop " \
                                      "won't write to it at the same time", None
-    args, env = host_command(host, prof, model, effort, worktree, prompt, session, role, new_id)
+    args, env = host_command(host, prof, model, effort, worktree, prompt, session, role, new_id, title)
     tick = None
     if host == "claude" and not why:
         tick = lambda: claude_import(sid)  # noqa: E731
@@ -3855,10 +3869,11 @@ def floor_reason(host: str, code: int, err: str) -> str:
 
 # ------------------------------------------------------------------------------------ sessions the apps show (macOS)
 #
-# On a Mac where the Codex app or Claude desktop is running, the loop's sessions are made so that the app lists them
-# under the project, and the owner can watch, steer, pause and take over there. The loop still drives every turn and
-# checks every claim itself. Elsewhere (another OS, no app, app not running, Claude CLI signed out, or
-# ORCHESTRATE_HEADLESS=1) it runs `codex exec` and `claude -p` headless, as before. The methods were proven with the
+# Off by default: the loop runs `codex exec` and `claude -p` headless, so nothing opens in either app. With
+# ORCHESTRATE_VISIBLE=1, on a Mac where the Codex app or Claude desktop is running, the loop's sessions are made so
+# that the app lists them under the project, and the owner can watch, steer, pause and take over there. The loop
+# still drives every turn and checks every claim itself. Elsewhere (another OS, no app, app not running, Claude CLI
+# signed out) it runs headless. The methods were proven with the
 # Codex app 26.1103 (CLI 0.167.0-alpha.3.2) and Claude desktop 4.23118.0; they rest on deep links, a local IPC
 # socket and experimental app-server methods, so re-check them after an app update.
 #
@@ -3889,8 +3904,8 @@ BOOTSTRAP = ("The orchestrate loop started this thread from a script; its task a
 
 def visible_unavailable(host: str) -> str | None:
     """Why `host` can't run a session its desktop app shows, or None when it can."""
-    if os.environ.get("ORCHESTRATE_HEADLESS", "") not in ("", "0"):
-        return "ORCHESTRATE_HEADLESS is set"
+    if os.environ.get("ORCHESTRATE_VISIBLE", "") in ("", "0"):
+        return "headless is the default (ORCHESTRATE_VISIBLE=1 shows sessions in the apps)"
     if sys.platform != "darwin":
         return "the apps' session links are macOS-only"
     if host == "codex":
@@ -4805,6 +4820,13 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
         start = r.stdout.strip()
         if not is_ancestor(worktree, start, ref):
             return _result("INVALID", **info, problems=[f"{start[:12]} isn't on {base_ref(prof)}, so it isn't integrated"])
+        if show(worktree, start, done_path) is None:  # claimed before `migrate` moved the plan files
+            moved = next((c for c in git(worktree, "rev-list", "--reverse", "--ancestry-path", f"{start}..{ref}")
+                          .stdout.split() if show(worktree, c, done_path) is not None), None)
+            if moved:
+                WARNINGS.append(f"{mid} was claimed at {start[:12]}, before the plan files moved to {done_path}; "
+                                f"reviewed at {moved[:12]}, the first commit where that file exists")
+                start = moved
         try:
             before_doc = json.loads(show(worktree, start, done_path) or "")
             claimed = find(before_doc, mid)
@@ -5104,9 +5126,16 @@ def cmd_review(a: argparse.Namespace) -> None:
     if result in ("FLOOR", "INVALID", "PIN") and "next" not in out:
         again = ["review", "--module", out.get("module") or a.module, "--milestone", a.milestone]
         again += [] if a.milestone == "design" else ["--commit", a.commit]
-        again += ["--worktree", str(Path(a.worktree).resolve()), "--host", other_host(out.get("host") or "codex")]
-        out["next"] = next_cmd(loop_cmd(*again), "lead", "nothing landed; run the review again, on the other host "
-                                                         "if you can")
+        again += ["--worktree", str(Path(a.worktree).resolve())]
+        if result == "INVALID":  # the request was wrong, not the host: another host would refuse it the same way
+            out["next"] = next_cmd(loop_cmd(*again), "lead", "nothing landed; fix what `problems` names, then run "
+                                   "the review again. Without --host, the profile's Review host picks the reviewer")
+        elif a.milestone == "design":
+            out["next"] = next_cmd(loop_cmd(*again, "--host", other_host(out.get("host") or "codex")), "lead",
+                                   "nothing landed; run the review again, on the other host if you can")
+        else:  # a milestone's reviewer follows the profile's Review host, which never picks the builder's host
+            out["next"] = next_cmd(loop_cmd(*again), "lead", "nothing landed; run the review again. Without --host, "
+                                   "the profile's Review host picks the reviewer, which keeps it off the builder's host")
     emit(result, **out)
 
 

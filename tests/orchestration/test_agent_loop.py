@@ -374,6 +374,13 @@ class Profiles(unittest.TestCase):
             args, env = agent_loop.host_command("gemini", p, "g-2", "medium", Path(tmp), "do it now", None)
             self.assertEqual(args, ["gemini", "-p", "do it now", "-m", "g-2"])
             self.assertEqual(env["ORCHESTRATE_ROLE"], "build")
+            with mock.patch.object(agent_loop, "claude_supports", lambda flag: True):
+                new = agent_loop.host_command("claude", p, "m", "high", Path(tmp), "go", None, new_id="abc",
+                                              title="thrum · WATER · M1 build")[0]
+                resumed = agent_loop.host_command("claude", p, "m", "high", Path(tmp), "go", "abc",
+                                                  title="thrum · WATER · M1 build")[0]
+            self.assertEqual(new[new.index("--name") + 1], "thrum · WATER · M1 build")
+            self.assertNotIn("--name", resumed)  # a resumed session keeps the name it started with
 
     def test_planner_host_sends_planners_to_that_host_unless_the_lead_names_one(self):
         base = "- **Integrate:** local\n- **Check:** none\n- **Default host:** codex\n"
@@ -680,7 +687,7 @@ else:
 FAKE_ENV = ("FAKE_DIFFERENT", "FAKE_NO_FINDINGS", "FAKE_PASS_FINDINGS", "FAKE_FINDING", "FAKE_VERSION", "FAKE_STATE", "FAKE_WEAKEN", "FAKE_FORGE", "FAKE_UPSTREAM_BREAK", "FAKE_REVIEW", "FAKE_PLAN",
             "FAKE_EXIT", "FAKE_SKIP_ATTENDED", "FAKE_LOOPS", "FAKE_LOOPS_SCRIPT", "FAKE_USAGE", "FAKE_COST", "FAKE_CAPTURE",
             "FAKE_DURING", "FAKE_ASSUME", "FAKE_PLAN_SIDE", "ORCHESTRATE_ROLE",
-            "ORCHESTRATE_HEADLESS")
+            "ORCHESTRATE_VISIBLE")
 
 
 class Repo(unittest.TestCase):
@@ -1882,9 +1889,11 @@ class VisibleChoice(unittest.TestCase):
                 mock.patch.object(agent_loop, "CODEX_APP_CLI", sys.executable), \
                 mock.patch.object(agent_loop, "CLAUDE_APP_STORE", Path(tmp)), \
                 mock.patch.object(agent_loop.sys, "platform", "darwin"):
-            with mock.patch.dict(os.environ, {"ORCHESTRATE_HEADLESS": "1"}):
-                self.assertIn("ORCHESTRATE_HEADLESS", agent_loop.visible_unavailable("codex"))
-            with mock.patch.dict(os.environ, {"ORCHESTRATE_HEADLESS": ""}):
+            for off in ("", "0"):
+                with mock.patch.dict(os.environ, {"ORCHESTRATE_VISIBLE": off}):
+                    self.assertIn("headless is the default", agent_loop.visible_unavailable("codex"))
+                    self.assertIn("headless is the default", agent_loop.visible_unavailable("claude"))
+            with mock.patch.dict(os.environ, {"ORCHESTRATE_VISIBLE": "1"}):
                 self.assertIn("isn't running", agent_loop.visible_unavailable("codex"))
                 with mock.patch.object(agent_loop, "CODEX_APP_CLI", "/no/such/app"):
                     self.assertIn("isn't installed", agent_loop.visible_unavailable("codex"))
@@ -4310,6 +4319,24 @@ class PlanFiles(Repo):
         self.assertEqual(self.git("show", "origin/main:docs/plans/GLOSSARY.md").stdout, "# Glossary\n")
         self.assertEqual(self.git("ls-tree", "--name-only", "origin/main", "docs/modules").stdout, "")
         self.assertEqual([x["milestone"] for x in self.ready()["ready"]], ["M2"])
+
+    def test_a_milestone_claimed_before_migrate_is_reviewed_at_the_move(self):
+        self.flatten()
+        doc = done(milestone("M1", "done", ["pass"]), milestone("M2", "claimed", ["pass"]))
+        (self.wt / "docs/plans/WATER-DONE.json").write_text(json.dumps(doc))
+        self.git("commit", "-qam", "claim M2", "-m", agent_loop.TRAILER)
+        self.git("push", "-q", "origin", "main")
+        claimed = self.git("rev-parse", "HEAD").stdout.strip()
+        moved = self.call(agent_loop.cmd_migrate, worktree=str(self.wt), to=None)
+        self.assertEqual(moved["result"], "MIGRATED", moved)
+        reviewed = self.review("M2", commit=claimed)
+        self.assertEqual(reviewed["result"], "REVIEWED", reviewed)
+        self.assertIn("before the plan files moved", " ".join(reviewed.get("warnings") or []))
+
+    def test_a_refused_review_keeps_the_profiles_review_host(self):
+        refused = self.review("M1", commit="0" * 40)
+        self.assertEqual(refused["result"], "INVALID", refused)
+        self.assertNotIn("--host", refused["next"]["command"])  # another host would refuse it the same way
 
     def test_migrate_waits_for_running_loops(self):
         self.flatten()

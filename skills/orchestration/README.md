@@ -424,8 +424,8 @@ planner can't save a decision for you. [Known limits](#known-limits) says what t
 
 | | Codex | Claude Code | Another command-line agent |
 |---|---|---|---|
-| How a session starts | On a Mac with the Codex app running, as a thread the app lists under the project and runs itself. Otherwise with `codex exec --json`. Either way it can be resumed. | With `claude -p`, and it can be resumed. On a Mac with Claude desktop running and the CLI signed in, the session also appears in the Code tab. | With the `Host <name>:` command from the project settings, as one new process for each turn. |
-| What you can do in the app | Watch it, type to steer it, and press Stop. After Stop the script reports the session as paused and leaves it to you. Running `run` again hands it back. | Watch the transcript. If you open the session to work in it, the script pauses and does not write to it at the same time. | Nothing. |
+| How a session starts | With `codex exec --json`. With `ORCHESTRATE_VISIBLE=1` on a Mac with the Codex app running, as a thread the app lists under the project and runs itself instead. Either way it can be resumed. | With `claude -p`, and it can be resumed. With `ORCHESTRATE_VISIBLE=1` on a Mac with Claude desktop running and the CLI signed in, the session also appears in the Code tab. | With the `Host <name>:` command from the project settings, as one new process for each turn. |
+| What you can do in the app (with `ORCHESTRATE_VISIBLE=1`) | Watch it, type to steer it, and press Stop. After Stop the script reports the session as paused and leaves it to you. Running `run` again hands it back. | Watch the transcript. If you open the session to work in it, the script pauses and does not write to it at the same time. | Nothing. |
 | Model and effort | Set when the session starts, and checked each turn from the session file. | Set when the session starts. The model is checked. The effort can't be. | Set in the command, and not checked. |
 | What the record file keeps about the session | The model and effort asked for, the CLI version, and what the session file showed was used. | The same, but only the model can be shown as used. | The model and effort asked for. |
 | Resumed sessions | With an active Codex goal, only the rules you gave are sent again. Without one, all the rules are. | The rules are sent again on every resumed turn. | Every turn after the first carries them. |
@@ -513,13 +513,13 @@ graded their results.
 
 ### Sessions in the apps
 
-Showing sessions in the Codex app and in Claude desktop depends on parts of those apps that are not public
+Sessions run in the background by default, so nothing opens in either app. Setting `ORCHESTRATE_VISIBLE=1` shows
+them in the Codex app and in Claude desktop instead. That depends on parts of those apps that are not public
 interfaces and can change with an update. They were proven with the Codex app 26.1103 and Claude desktop
-4.23118.0. Each command's output says whether its session ran in the app or in the background, and setting
-`ORCHESTRATE_HEADLESS=1` makes every session run in the background.
+4.23118.0. Each command's output says whether its session ran in the app or in the background.
 
-A new Codex thread opens in the app's window, which brings the app to the front, and starts with a one-line setup
-turn. A Claude session runs in the script's own copy of the Claude CLI, so the CLI must be signed in.
+With `ORCHESTRATE_VISIBLE=1`, a new Codex thread opens in the app's window, which brings the app to the front, and
+starts with a one-line setup turn. A Claude session runs in the script's own copy of the Claude CLI, so the CLI must be signed in.
 
 ### Smaller limits
 

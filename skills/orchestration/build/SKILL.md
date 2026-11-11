@@ -103,10 +103,11 @@ write to `.git`, the builders can't fetch, commit or merge either. So the lead h
 - A command that can't write a file because of a sandbox stops with `blocked_write` and names the path. Run that
   command outside the sandbox, or ask your host to run it with escalated permissions. Don't delete lock files
   yourself.
-- On a Mac where the Codex app is running, Codex sessions run in the app instead, as threads listed under the
-  project, with the sandbox the script sets and the app's permissions.
-- Claude sessions run in the script's own `claude -p`. With Claude desktop running and the CLI signed in, they are
-  also listed in its Code tab.
+- Sessions run in the background by default, so nothing opens in either app. Only when `ORCHESTRATE_VISIBLE=1` is
+  set, on a Mac where the Codex app is running, Codex sessions run in the app instead, as threads listed under the
+  project, with the sandbox the script sets and the app's permissions. Each new thread brings the app to the front.
+- Claude sessions run in the script's own `claude -p`. With `ORCHESTRATE_VISIBLE=1`, Claude desktop running and the
+  CLI signed in, they are also listed in its Code tab.
 - On macOS, a builder that records the screen or uses the camera needs that permission granted to the app you run
   in (Terminal, the Codex app or Claude). Its first attempt fails until the owner grants it.
 
@@ -358,8 +359,8 @@ If a builder breaks the main branch, the first builder to notice fixes it.
 The owner follows the build by talking to you and never uses a terminal, so every command is yours to run,
 including the ones that save their decisions. Never give the owner a command to type.
 
-They can watch a session that runs in an app, in the Codex app or in Claude's Code tab, and type into a Codex thread
-to steer it. If they press Stop on a Codex thread, or open a Claude session to work in it, that builder is `PAUSED`
+If `ORCHESTRATE_VISIBLE=1` is set, they can watch a session that runs in an app, in the Codex app or in Claude's
+Code tab, and type into a Codex thread to steer it. If they press Stop on a Codex thread, or open a Claude session to work in it, that builder is `PAUSED`
 and the session is theirs until `run` hands it back. When they ask you to stop, `pause --worktree <repo>` stops
 the running sessions cleanly, and `run` carries on later.
 
