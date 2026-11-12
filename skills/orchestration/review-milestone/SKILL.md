@@ -1,14 +1,15 @@
 ---
 name: review-milestone
-description: Judges a milestone that a builder has set Ready for Review, or a module's design before building starts, and writes the review, as part of the orchestrate set. Use when a milestone needs a review, or a design needs an independent read. Not for building or fixing (build-milestone).
+description: Judges a milestone that is Ready for Review, or a module's design before building starts, and writes the review, as part of the orchestrate set. Use when a milestone needs a review, or a design needs an independent read. Not for building or fixing (build-milestone).
 ---
 
 # Review a milestone
 
 Your job is to decide whether a milestone is really finished. A project is split into modules, and each module
 into milestones, which are pieces small enough to build in one session. A planner, another agent, wrote what the
-milestone must do. A builder wrote the code and then set the milestone to Ready for Review, which means "the
-builder says this is finished, and nobody has verified it". You are the reviewer, a new agent that saw none of
+milestone must do. A builder wrote the code, merged it and said it had finished. The script then ran the
+project's test command and every item's check on the merged work, and set the milestone to Ready for Review, which
+means "the builder says this is finished, the checks pass, and no reviewer has judged it yet". You are the reviewer, a new agent that saw none of
 the building. That is what makes you useful: everything you know comes from the files and from the product
 itself.
 
@@ -61,10 +62,18 @@ favourable conditions, such as slowed down, close up, or on a faster machine tha
 have, and for work that is correct but too subtle for anyone to notice from where those people really are. If you
 have seen something work only on the easy path, you don't know that it works, so give it Could Not Judge.
 
+Judge a recording from a few still frames taken from it, and read the end of a log rather than the whole file.
+Everything you look at stays in your session and is read again at every later step. In one project reviewers
+filled their sessions within 25 minutes, and one screenshot put 4.2 MB into a session.
+
 ## What finished looks like
 
 1. Every item has a result in its `verdict` field: `pass`, `fail`, or `could_not_judge`, for Could Not Judge. An item passes only if every proof it names passes.
-   - For an Automated Check, run the command yourself.
+   - For an Automated Check, read the command and judge whether it tests what the item says, because a check
+     that a fake would pass proves nothing. Before it set Ready for Review, the script ran every check and the
+     project's test command in its own clean checkout, and your task says on which commit they passed. Run a
+     check again only when you doubt that result, such as a check that depends on timing. In one project,
+     reviewers re-ran the whole test command, sometimes twice, after the script had already run it.
    - For a Reviewer Inspection, write the list of what you will look at before you look, as
      [how to inspect](../plan-module/references/proofs.md#how-to-inspect) describes. Then judge each entry on the
      list against the item and the quality bar, side by side with the project's references, if it keeps any. The
@@ -78,6 +87,10 @@ have seen something work only on the easy path, you don't know that it works, so
      or a builder's summary doesn't count as the owner's words.
 
    If you couldn't see or reach something, give it `could_not_judge` and say what evidence would settle it.
+   If you can't reach the product at all, because the screen is locked, a permission needs the owner's approval
+   or a device isn't connected, judge nothing. End with `BLOCKED needs_access: <what the owner has to do>`
+   instead of a result line. The script merges nothing and counts no round, and the lead runs the same review
+   again in a visible session while the owner is at the machine.
 2. You have read every changed line of the milestone, not only the files the items mention, and on a module's
    last milestone, the whole module. Look for the signs of work that only looks finished: hard-coded return
    values, canned data, buttons that do nothing, feature flags that default to on, branches that run only under

@@ -30,7 +30,7 @@ Contents:
 - **Merge:** local  *(script: required; `push` rebases onto Remote/Branch and pushes without force; `local` fast-forwards the local Branch only)*
 - **Branch:** main  *(script: the main branch)*
 - **Remote:** origin  *(script)*
-- **Builders:** usually one Codex builder  *(how many builders, on which hosts, when the owner doesn't say)*
+- **Builders:** one Codex builder  *(script: how many builders, on which hosts, when the owner doesn't say; `run` reads the first number and refuses a builder past it unless `--more-builders` carries the owner's words)*
 - **Default host:** codex  *(script: optional; the host used when the lead names none; otherwise the host the script runs inside)*
 - **Review host:** same  *(script: optional; see below)*
 - **Planner host:** claude  *(script: optional; the host planners run on when the lead names none; otherwise the `Default host`)*

@@ -47,7 +47,8 @@ jobs:
       - name: Installer tests
         run: python3 -m unittest discover tests/install
       - name: Orchestration tests
-        run: python3 -m unittest discover tests/orchestration
+        # in one process per core; `python3 -m unittest discover tests/orchestration` runs the same tests in one
+        run: python3 tests/orchestration/run.py
       - name: The package packs
         run: npm pack --dry-run
 

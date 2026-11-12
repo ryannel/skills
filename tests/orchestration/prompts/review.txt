@@ -1,4 +1,4 @@
-Review milestone M2 of module APPLE-TILE, using the review-milestone skill (/skills/orchestration/review-milestone/SKILL.md).
+Review milestone M2 of module APPLE-TILE, using the review-milestone skill (the file is /skills/orchestration/review-milestone/SKILL.md).
 
 The goal: a review at docs/evidence/APPLE-TILE/M2-review.md that judges every item of M2 in docs/plans/APPLE-TILE/DONE.json, with the verdict fields, state and findings set as the skill says. The script sets the counts.
 
@@ -10,9 +10,11 @@ Earlier failed rounds of M2 that still count, with their findings: round 1 (2026
 A planner's diagnosis on 2026-11-10 kept M2's items as written, for this reason: the reviews judged the capture tooling, not the tiles. Judge the items as they are written.
 
 Rules:
-- This folder is a clean checkout of commit a6101020, which the script made for you. Build and run the product from it.
+- This folder is a clean checkout of commit a6101020, which the script made for you. Build and run the product from it where an item needs you to see it working. Before it set Ready for Review, the script made sure that the project's test command (`./dev check`) and the `check` of M2.1 passed on the files at b7c2e91d04aa. It ran them in its own clean checkout, apart from any that had already passed on exactly those files. Run one again only if you doubt that result.
 - Put captures and other evidence files in docs/evidence/APPLE-TILE/M2-review/ and link them from the review, rather than embedding them in it.
+- Start a command that runs longer than a few minutes with `python3 /skills/orchestration/build/scripts/agent_loop.py background -- <command>`, and wait for it with `python3 /skills/orchestration/build/scripts/agent_loop.py wait <id>`, which returns when it ends with the end of its log. Waiting with sleep and tail re-reads this whole conversation at every check.
 - Don't commit, push or change anything else. The script checks what you changed, then merges the review itself.
 - Don't start other agents.
+- If you can't reach the product at all, because the screen is locked, a permission needs the owner's approval or a device isn't connected, judge nothing and end with `BLOCKED needs_access: <what the owner has to do>`. The script then counts no round, and the lead runs this review again while the owner is at the machine.
 
 To finish, end with the skill's last line.

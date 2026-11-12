@@ -51,7 +51,10 @@ another agent: the plan files, the brief, a `--message`, a review. Name it as a 
 lives in another domain, and `install.py` installs it whenever it installs orchestrate.
 
 Scripts are standard-library Python, with tests in `tests/orchestration/`, which are not shipped with the
-skill. Run `python3 -m unittest discover tests/orchestration` before a commit. It takes about seven minutes. A
+skill. Run `python3 tests/orchestration/run.py` before a commit. It runs them in up to eight processes and takes
+about 70 seconds on the owner's Mac; `python3 -m unittest discover tests/orchestration` runs the same tests in one
+process, in about seven minutes. The tests share a fake host, a repository and the reset between tests in
+`tests/orchestration/support.py`; put a new test on `Repo` only when it needs a repository. A
 script that starts agents goes through the host adapters in `agent_loop.py`, so that every host is handled in one
 place and Claude sessions get no API key.
 

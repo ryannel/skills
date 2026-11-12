@@ -11,13 +11,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills/orchestration/build/scripts"
-sys.path.insert(0, str(SCRIPTS))
-import agent_loop  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from support import Clean, agent_loop  # noqa: E402
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 LOOP = Path("/skills/orchestration/build/scripts/agent_loop.py")
-SKILL = "/skills/orchestration/{}/SKILL.md"
 PROF = {"plans": "docs/plans", "evidence": "docs/evidence", "merge": "push", "remote": "origin", "branch": "main",
         "test_command": "./dev check", "exclusive resources": "gpu: timing runs and captures",
         "bounds": {"Licences and paths not to touch": "no GPL code", "Owner decides": "spending and publishing"}}
@@ -34,21 +32,11 @@ ROUND = {"verdict": "fail", "at": "2026-11-09T21:00:00Z", "counts": True,
 
 def build_prompt(host: str, headless: bool, lead: str, feedback: bool, earlier: bool, needs: bool,
                  resources: bool, rules: list[str]) -> str:
+    """A builder's first prompt, as the script builds it."""
     prof = {**PROF, "exclusive resources": PROF["exclusive resources"] if resources else ""}
-    return agent_loop.BUILD_TEMPLATE.format(
-        goal=agent_loop.GOAL_LINE if host == "codex" else "", milestone="M2", module="APPLE-TILE",
-        done="docs/plans/APPLE-TILE/DONE.json", loop=LOOP, skill=SKILL.format("build-milestone"),
-        lead=f"\nFrom the lead:\n{lead}\n" if lead else "",
-        feedback=("\n" + agent_loop.feedback_note(FEEDBACK, "M2", "docs/plans/APPLE-TILE/ACCEPTED.json") + "\n")
-        if feedback else "",
-        handoff="docs/evidence/APPLE-TILE/M2-handoff.md",
-        earlier=(f"\nAn earlier session on M2 stopped short and left a handoff at "
-                 "docs/evidence/APPLE-TILE/M2-handoff.md. Read it before you start. Where it disagrees with the "
-                 "done-when file or the plan, those win, because a planner may have changed them since. Rewrite the "
-                 "handoff if you stop short too.\n") if earlier else "",
-        needs="".join(f"- {line}\n" for line in agent_loop.needs_rules(MILESTONE if needs else None, headless)),
-        resources=agent_loop.resources_rule(prof), session=agent_loop.session_rule(headless, host),
-        rules="".join(f"- {agent_loop.owner_rules_line([r])}\n" for r in rules))
+    note = agent_loop.handoff_note(agent_loop.handoff_rel(prof, "APPLE-TILE", "M2"), "M2") if earlier else ""
+    return agent_loop.build_prompt(host, headless, prof, "APPLE-TILE", "M2", MILESTONE if needs else None, lead=lead,
+                                   feedback=FEEDBACK if feedback else None, earlier=note, rules=rules)
 
 
 def prompts() -> dict[str, str]:
@@ -62,25 +50,39 @@ def prompts() -> dict[str, str]:
         PROF, "build", "M2", MILESTONE, "docs/plans/APPLE-TILE/DONE.json", rules=["never modify Broadsides"])[0]
     out["build-resumed-after-the-lead-wrote"] = "The console is unlocked now.\n\n" + agent_loop.binding(
         PROF, "build", "M2", MILESTONE, "docs/plans/APPLE-TILE/DONE.json", lead_spoke=True)[0]
+    with mock.patch.object(agent_loop, "git", lambda *a: mock.Mock(stdout="9f3c2a1 (\"Cache decoded tiles by zoom\")")), \
+            mock.patch.object(agent_loop, "worktree_jobs", lambda *a, **k: [
+                {"id": "20261112-071500-4242", "age": "1h05m", "command": "./dev capture valley --realtime",
+                 "log": "/repo/.git/orchestrate/jobs/20261112-071500-4242.log"}]):
+        out["build-resumed-after-turn-limit"] = "Continue the objective." + agent_loop.open_items(MILESTONE) + " " + \
+            agent_loop.resume_facts(Path("/repo"), MILESTONE, 124, 2.0)
+        # what a new session that takes over from a full or old one is told, in the first prompt's {earlier}
+        out["build-new-session-note"] = agent_loop.earlier_session_note(Path("/repo"), MILESTONE, 124, 2.0,
+                                                                        "origin/main", "M2")
     out["build-not-ready"] = agent_loop.not_ready_message(
         "`./dev check` exited 1: error: tile_cache.rs:88: index out of bounds",
         Path("/repo/.git/orchestrate/verify/APPLE-TILE"))
-    out["review"] = agent_loop.REVIEW_TEMPLATE.format(
-        milestone="M2", module="APPLE-TILE", commit="a6101020", done="docs/plans/APPLE-TILE/DONE.json",
-        captures="docs/evidence/APPLE-TILE/M2-review", review="docs/evidence/APPLE-TILE/M2-review.md",
-        skill=SKILL.format("review-milestone"),
-        answers=agent_loop.review_notes("M2", PROF, "APPLE-TILE", FEEDBACK, agent_loop.history_lines(
-            {"reviews": [ROUND]}), [{"why": "the reviews judged the capture tooling, not the tiles",
-                                    "at": "2026-11-10T12:00:00Z"}]))
+    # what `merge` prints, and what a builder's first prompt says, when a builder's commits set the state, which only
+    # the script sets since 2.1.0
+    set_state = [("docs/plans/APPLE-TILE/DONE.json", "M2", "ready_for_review")]
+    out["merge-refused-state"] = agent_loop.state_refusal(set_state)
+    out["build-old-branch-note"] = agent_loop.state_refusal(set_state, old_branch=True)
+    out["review"] = agent_loop.review_prompt(
+        "claude", PROF, "APPLE-TILE", "M2", "a6101020", "docs/plans/APPLE-TILE/DONE.json",
+        "docs/evidence/APPLE-TILE/M2-review.md",
+        {"id": "M2", "items": [{"id": "M2.1", "check": "./dev test tiles"}, {"id": "M2.2"}]},
+        {"ready_for_review": {"checked": "b7c2e91d04aa"}, "reviews": [ROUND]}, FEEDBACK,
+        [{"why": "the reviews judged the capture tooling, not the tiles", "at": "2026-11-10T12:00:00Z"}])
     out["review-restatement"] = agent_loop.binding(PROF, "review", done="docs/plans/APPLE-TILE/DONE.json",
                                                    review="docs/evidence/APPLE-TILE/M2-review.md")[0]
-    out["design-review"] = agent_loop.DESIGN_REVIEW_TEMPLATE.format(
-        module="APPLE-TILE", review="docs/evidence/APPLE-TILE/design-review.md",
-        captures="docs/evidence/APPLE-TILE/design-review", skill=SKILL.format("review-milestone"), briefs="",
-        changed="\nSince the last design review (docs/evidence/APPLE-TILE/design-review.md), M2.2 changed.\n")
+    out["design-review"] = agent_loop.review_prompt(
+        "claude", PROF, "APPLE-TILE", "design", "HEAD", "docs/plans/APPLE-TILE/DONE.json",
+        "docs/evidence/APPLE-TILE/design-review.md", None, {}, None, [],
+        context="Since the last design review (docs/evidence/APPLE-TILE/design-review.md), M2.2 changed.",
+        design=True)
     out["plan"] = agent_loop.PLAN_TEMPLATE.format(
         task="Plan module APPLE-TILE. The owner said on 9 November: \"tiles should load as you scroll, never "
-             "all at once\".", skill=SKILL.format("plan-module"), loop=LOOP)
+             "all at once\".", skill=agent_loop.skill_note("plan-module", "claude"), loop=LOOP)
     with mock.patch.object(agent_loop, "round_history", lambda *a, **k: agent_loop.history_lines({"reviews": [ROUND]})), \
             mock.patch.object(agent_loop, "review_rounds", lambda *a, **k: (
                 ["docs/evidence/APPLE-TILE/M2-review-1.md", "docs/evidence/APPLE-TILE/M2-review.md"], False)):
@@ -101,10 +103,11 @@ def prompts() -> dict[str, str]:
     return out
 
 
-class PromptCopies(unittest.TestCase):
+class PromptCopies(Clean):
     def test_every_prompt_matches_its_saved_copy(self):
         with mock.patch.object(agent_loop, "LOOP", LOOP):
-            rendered = prompts()
+            # the skill files' folder, written the same on every machine
+            rendered = {k: v.replace(str(agent_loop.SKILLS), "/skills/orchestration") for k, v in prompts().items()}
         if os.environ.get("ORCHESTRATE_WRITE_PROMPTS"):
             PROMPTS.mkdir(exist_ok=True)
             for old in PROMPTS.glob("*.txt"):

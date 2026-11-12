@@ -92,14 +92,16 @@ The example is a small money-tracking tool. It reads a file of transactions and 
     milestone, which becomes In Progress. Here, two builders start, one on `core` and one on `report`.
 15. Each builder writes the code and runs the Automated Checks. In the done-when file it marks each item as passed
     and notes where the evidence is saved: a screenshot, say, or a test log. It merges its work into the main
-    branch and sets the milestone to Ready for Review, which means the builder says it is finished and nobody has
-    verified it yet. If a builder stops before that, `run` sends it a message to continue, until it sets Ready for
-    Review or reports that it can't go on.
+    branch, with the milestone still In Progress, and says it has finished. If a builder stops before that, `run`
+    sends it a message to continue, until it finishes or reports that it can't go on.
 16. The `run` command then tests the work itself. In a clean copy of the main branch it runs the project's test
-    command and every Automated Check. If one fails, it sends the builder the failure, and the builder carries on.
-17. A milestone needs a reviewer if any of its items is a Reviewer Inspection or a Reviewer Question, or if it is
-    the module's last milestone. If it needs none, `run` sets it to Done in the module's record file. Otherwise it
-    stays Ready for Review.
+    command and every Automated Check, in its own process rather than the builder's sandbox. If one fails, it sends
+    the builder the failure, and the builder carries on. The main branch still says In Progress, so nothing there
+    claims more than has been checked.
+17. If every check passes, `run` sets the milestone to Ready for Review, which means the builder has finished and
+    the script's checks passed, but no reviewer has judged it yet. Only the script sets this status. A milestone
+    needs a reviewer if any of its items is a Reviewer Inspection or a Reviewer Question, or if it is the module's
+    last milestone. If it needs none, `run` sets it to Done in the module's record file instead.
 
 ### Reviewing a milestone
 
@@ -366,7 +368,7 @@ and the report lists every decision saved in your name, so you can spot one you 
 | Ask the lead | It runs |
 |---|---|
 | what is planned, what is next, and what is running in this repository | `status` |
-| what is running on this machine, in every repository | `loops` |
+| what is running on this machine, in every repository | `runs` |
 | to stop cleanly and carry on later | `pause`, then `run` again |
 | what the build has cost, for each milestone, split into planning, building and reviewing | `cost` |
 | whether the Codex weekly usage limit will last | `quota` |
@@ -385,11 +387,15 @@ commits write to it.
 
 ### After a builder
 
-Before the `run` command treats a milestone as Ready for Review, three things must hold. The done-when file is
+Before the `run` command sets a milestone to Ready for Review, three things must hold. The done-when file is
 still valid, the builder changed only its own fields, and the items are the approved ones, so a builder can't
 reword an item to make it easier. The work is committed, with no stray files, and merged into the main branch. And
 the test command and every Automated Check pass when the script runs them itself, in a clean copy of the main
-branch. If a builder goes three turns in a row without changing or reporting anything, the command stops it.
+branch. Those checks run in the script's own process, outside the builder's sandbox and outside the `merge`
+lock, so a check that needs the GPU or the screen can pass, and a 40-minute check doesn't hold up other builders'
+merges. A check that already passed on exactly the same files, in the builder's `check` or in `merge`, isn't run
+a third time. If a builder goes three turns in a row without changing or reporting anything, the command stops
+it.
 
 ### After a reviewer
 
@@ -529,7 +535,7 @@ starts with a one-line setup turn. A Claude session runs in the script's own cop
 
 ### Smaller limits
 
-- `loops` sees one machine. It keeps its notes under `~/.local/state/orchestrate/loops`, and setting
+- `runs` sees one machine. It keeps its notes under `~/.local/state/orchestrate/loops`, and setting
   `ORCHESTRATE_LOOPS_DIR` moves them. A session that can't write there, or that an older copy of the script
   started, is still listed, but without its tokens.
 - The script runs on macOS and Linux only.
@@ -579,4 +585,7 @@ covers that failure:
   status anywhere else;
 - letting the owner's approval of a design survive an edit to its header: status no longer belongs in the header,
   so there is nothing to edit there;
-- one planner lock per module: a second planner now waits for the first instead of being turned away.
+- one planner lock per module: a second planner now waits for the first instead of being turned away;
+- chaining build, review and the next milestone, or a plan and its design review, inside one command: each step
+  still costs the lead a turn, but the lead now reads each result from a file the script writes, which was the
+  larger cost.

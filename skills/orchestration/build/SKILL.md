@@ -17,6 +17,16 @@ is not an agent. Each command starts an agent or verifies some work, and saves t
 and `plan` commands each print one line of JSON that says what happened. When a command stops short of what you
 asked for, its output has a `next` field with the exact command to run next, and why.
 
+The same line is also written to a file, named in its `result_file` field, under
+`<git common dir>/orchestrate/results/`, such as `CULLING-M1-run.json`. When you start a command in the
+background, read its result from that file rather than from the command's output, which mixes in other text.
+
+Look up the script's path from this skill each time, rather than keeping it in your notes, and read this skill
+again after your conversation is compacted. Each result line carries the script's `version`, and its `warnings`
+say when a newer copy is installed. Commands change between versions, so when that happens, read this skill again
+from the newer copy before the next command. In one project the lead kept a path in its notes through a
+compaction, and started builders on the old version for a day after the new one was installed.
+
 Any host that can run shell commands can be the lead. A host is the program an agent runs in, such as Claude Code
 or Codex.
 
@@ -27,30 +37,32 @@ in its done-when file. The project settings are in `ORCHESTRATE.md`. Everything 
 `docs/plans` unless the settings name another: the module list `ARCHITECTURE.md`, and a folder for each module
 holding its `DESIGN.md`, `PLAN.md`, `LOG.md`, done-when file `DONE.json` and record file `ACCEPTED.json`.
 
-`STATUS.md` in the plans folder is the owner's page: an overview of what is waiting on them, what is happening now
-and next and what was recently done, then every module in build order with its status. The script writes it after
-every record it lands, so you never edit it. When the owner asks where things stand, start from it, or from
+`STATUS.md` in the plans folder is the owner's page: what needs them now, the choices made for them, what is
+happening now and next and what was recently done, then every module in build order with its status. The script writes it after
+every record it merges, so you never edit it. When the owner asks where things stand, start from it, or from
 `status --format md`, which prints the same page.
 
-A project in the older flat layout, with files such as `<MODULE>-PLAN.md` in the plans folder, stops every command
-with a message naming `migrate`. Run `migrate --worktree <repo>` once, with `--to docs/plans` to move the folder to
-the standard place as well. It moves the files, splits each plan's log into `LOG.md`, and lands the change. Then
-start a planner to bring the plans into the new shape: the module table at the top of `ARCHITECTURE.md`,
-milestones named for what someone can see or do, Done milestones shrunk to a line, review briefs moved to the
-evidence folder, and plan files elsewhere in the repository converted or deleted.
-
-A project whose files still use the older stored names, such as `claimed` for Ready for Review or an item's
-`attended` field, stops every command the same way. `migrate --worktree <repo>` rewrites those files to the
-current names, as well as the project settings' `Integrate:` and `Check:` lines, and merges the change.
+A project in the older flat layout, with files such as `<MODULE>-PLAN.md` in the plans folder, or with older
+stored names, such as `claimed` for Ready for Review, stops every command with a message naming `migrate`. Run
+`migrate --worktree <repo>` once, with `--to docs/plans` to move the folder to the standard place as well. It
+moves the files into a folder per module, splits each plan's log into `LOG.md`, renames the stored names and the
+`Integrate:` and `Check:` settings lines, and merges the change. After a move, start a planner to bring the
+plans into the new shape: the module table at the top of `ARCHITECTURE.md`, milestones named for what someone
+can see or do, Done milestones shrunk to a line, review briefs moved to the evidence folder, and plan files
+elsewhere converted or deleted. `run` refuses a worktree with commits of its own from before the migration, and
+`migrate` lists each in `worktrees_on_old_names`. Its conflicts are in files the renames rewrote, so don't
+rebase it by hand: `migrate --branch --worktree <its worktree>` renames its commits and rebases them onto the
+main branch while other modules keep building.
 
 Your job is finished when every milestone in the module list is Done, or when everything left waits for the
 owner. When the owner names one milestone or one module, that is the whole job: once it is Done, report and stop.
 
 ## Before the first command
 
-Read `ORCHESTRATE.md`, then run `settings --worktree <repo>` to confirm the script can read it. The command fails
-on purpose when the `Merge:` or `Test command:` line is missing, because the script won't guess whether it may push
-or which command runs the tests.
+Lead from a session that has done no other work: Thrum's lead had planned and debugged in its session first, and
+compacted its context 13 times. Read `ORCHESTRATE.md`, then run `settings --worktree <repo>` to confirm the script
+can read it. The command fails on purpose when the `Merge:` or `Test command:` line is missing, because the script
+won't guess whether it may push or which command runs the tests.
 
 If the plans folder has a `GLOSSARY.md`, read it. It holds the agreed name for each thing in the project, and you
 use those names when you talk to the owner.
@@ -73,11 +85,10 @@ with the date, change the decisions their words affect, merge it with `adopt`, a
 
 ## What only the script decides
 
-Only the script sets a milestone to Done. It keeps a record file, `ACCEPTED.json`, beside each done-when
-file, and writes it only in its own commits. A milestone is Done when that record says so, not when you or
-another agent says so. So don't edit a done-when file or a record file yourself, and don't revert anyone's
-commits. If something looks wrong, the command's result says what, and
-[What each result means](#what-each-result-means) says who fixes it.
+Only the script sets a milestone to Done. It keeps a record file, `ACCEPTED.json`, beside each done-when file, and
+writes it only in its own commits. A milestone is Done when that record says so, not when you or another agent says
+so. So don't edit a done-when file or a record file yourself, and don't revert anyone's commits. If something looks
+wrong, the command's result says what, and [What each result means](#what-each-result-means) says who fixes it.
 
 For the same reason, don't write where the work stands into the project settings, a design or any other
 document. `STATUS.md`, which the script writes, is the one place for it. A status line anywhere else goes stale the
@@ -110,10 +121,9 @@ Where a limit applies only to some of the work, say where it ends and why. "If t
 locks, block at once" stopped a builder that could have woken the panel itself. "If the console locks, block,
 because only the owner can unlock it; if the panel sleeps, wake it and carry on" would not have.
 
-The owner's own words go in quotation marks with their date, apart from your context, so a planner can tell
-which part of the task is the owner's. Planners quote the owner's request at the top of a design, and design
-reviewers judge the design against it. In one project three designs quoted the lead's summary as the owner's
-request.
+The owner's own words go in quotation marks with their date, apart from your context, so a planner can tell which
+part of the task is the owner's. Planners quote the owner's request at the top of a design, and design reviewers
+judge the design against it. In one project three designs quoted the lead's summary as the owner's request.
 
 - The owner's request goes to a planner word for word, in `--task`.
 - A restriction the owner gave only in conversation, such as "don't touch the schema", goes to the builder with
@@ -169,7 +179,9 @@ project settings, or else the host it is running inside.
 The script already chooses the model and effort: the model from the project settings, medium effort for builders
 and reviewers, and high for planners. Medium is the owner's choice, so raise it only where a run has been seen to
 fall short. Pass `--model` or `--effort` only when the owner asked for something different, and they cover only
-that one command.
+that one command. Each result line's `ran_on` field says which host, model and effort the session got, so that is
+where to look when you tell the owner what ran. A flag also overrides the settings, so one passed out of habit
+would hide a later change to them.
 
 When the owner wants one kind of agent set differently from now on, such as "plan with Fable" or "review at high
 effort", that goes in the project settings as a line such as `Claude planner: claude-fable-5-2 high` or
@@ -196,8 +208,8 @@ command. A milestone that is Blocked can't move until someone steps in. Each of 
 | `ready` | is Not Started, and nothing stops a builder starting it |
 | `waiting` | is Waiting. With `reason: on_dependency`, `depends_on` names the milestone in another module it waits for. With `for_replan` or `for_diagnosis`, a planner has to rewrite it or find out why it keeps failing, and `next` is the planner's command |
 | `taken` | is In Progress under another lead |
-| `review_owed` | is Ready for Review |
-| `design_owed` | can't start, because the module's design is not yet Design Approved by a reviewer |
+| `review_owed` | is Ready for Review: the script's checks passed and it waits for a reviewer. A milestone a builder set Ready for Review before 2.1.0, with no record of the script's checks, is listed under `ready` instead, because `run` checks it first |
+| `design_not_approved` | can't start, because the module's design is not yet Design Approved by a reviewer |
 | `blocked` | is Blocked. `reason` says why, such as `needs_human_feedback` or `too_many_failed_reviews` |
 | `invalid` | can't be read: the done-when file is malformed, or an agent changed what it may not |
 | `finished` | none. Every milestone of the module is Done |
@@ -208,7 +220,7 @@ lines of text, and `status --module <M>` lists every milestone of one module wit
 of statuses and their stored names.
 
 The script reads plans from the main branch, not from your working copy. If plan files are uncommitted or not yet
-merged, `ready` and `run` name them under `unlanded_plans`, and `next` is `adopt --worktree <repo>`. Use `adopt`
+merged, `ready` and `run` name them under `unmerged_plans`, and `next` is `adopt --worktree <repo>`. Use `adopt`
 rather than a commit you make by hand: it commits only those plan files and merges them. It also merges a first
 `ORCHESTRATE.md`, and the reports under `<evidence>/build-reports/`.
 
@@ -225,12 +237,12 @@ start the next milestone that can start, and prefer the module that builder was 
 such milestones than builders, give them to the hosts in the order the owner listed. Each milestone gets a new
 builder session, and only one builder works in a module at a time.
 
-The owner's number is a limit, not a target. A milestone with items that need access or need hardware has to
-run while the owner is at the machine, which makes it tempting to start it alongside the builders already
-running. Don't. Give it the next builder that stops, or ask the owner in the chat whether to run one more
-builder while they are there, and run it only if they say yes. One lead started a third builder for such a
-milestone on its own, against the owner's two, and told the owner afterwards. Before you say how many builders
-are running, count them with `loops`, as described under [Starting agents](#starting-agents).
+The owner's number is a limit, not a target. A milestone with items that need access or hardware has to run while
+the owner is at the machine, which makes it tempting to start it alongside the builders already running. Don't: give
+it the next builder that stops. `run` counts the builders running in the repository against the number in the
+`Builders:` line, and past it prints `REFUSED` and starts nothing. Put the `ask` in `next` to the owner, and only on
+their yes run its command, with their words in `--more-builders`. Count builders with `runs` before you tell the
+owner how many are running.
 
 Before it starts a builder, the script marks the milestone In Progress in a way every copy of the repository can
 see. A second lead that runs `run` on it gets `TAKEN` and starts nothing.
@@ -247,7 +259,8 @@ stopped for want of 2.
 - With `Merge: local`, branch from the local main branch.
 
 Builders merge with the `merge` command. It rebases, runs the project's test command, and pushes or fast-forwards
-the main branch, all under one lock.
+the main branch, all under one lock. The milestone stays In Progress: only `run` sets it Ready for Review, after
+its own checks pass on the main branch's tip, outside that lock, and `merge` refuses a builder's commit that sets it.
 
 If nothing can start, run fewer builders and say why in the report. Never have a builder start a milestone before
 a milestone it depends on is Done. That is how two modules end up with two versions of the same thing.
@@ -281,8 +294,8 @@ one after the other without checking on the first.
 
 Two more commands help here.
 
-`loops --repo <repo> --json` lists what is running now: each session's module, milestone, kind of agent, host,
-turns, time since it last did anything, and tokens. Without `--repo` it covers every repository on the machine.
+`runs --repo <repo> --json` lists what is running now: each session's module, milestone, kind of agent, host,
+turns, tokens, the step it is on, and the tool call its agent is waiting on, if any. Without `--repo` it covers every repository on the machine.
 Run it before you start builders, so that you count the ones already running. `status` also marks the modules that
 have a session running.
 
@@ -310,31 +323,40 @@ A `next` that runs a module, or reviews its design, reuses the host and the revi
 builder run. Before any builder has run, `next` follows the project settings. So when the owner works with two
 hosts and the settings say `same` or nothing, name the host yourself.
 
-If the other host fails to start (a `FLOOR` result), run the review on the same host in a new session, and say so
+If the other host fails to start (a `HOST_FAILED` result), run the review on the same host in a new session, and say so
 in the report.
 
 ## What each result means
 
 A result with `next` tells you the command to run, and `next.by` says who runs it: `lead` is you, and `planner`
 means the command starts a planner. Either way you run it without asking the owner, unless `next` also says
-`decides: owner`. That is a decision only the owner may make: put the `ask` text to them in the chat, wait, and
-then run the command yourself with their answer in `--text`. Give that module's builder
-other work while you wait.
+`decides: owner`. That is a decision only the owner may make: put the `ask` text to them in the chat, wait, and then
+run the command yourself with their answer in `--text`. Give that module's builder other work while you wait.
 
 | The script prints | Which means | You do |
 |---|---|---|
 | `READY_FOR_REVIEW`, `review: false` | The milestone is Done. It needed no reviewer, and the script's own run of the checks passed. | Start the builder's next milestone. |
-| `READY_FOR_REVIEW`, `review: true`, or `REVIEW_OWED` | The milestone is Ready for Review. | Run the `review` in `next`, at that commit, on the review host. |
+| `READY_FOR_REVIEW`, `review: true`, or `REVIEW_OWED` | The script's checks passed, and the script set the milestone to Ready for Review. `reused_checks` lists any check it didn't run again because it had already passed on the same files. | Run the `review` in `next`, at that commit, on the review host. |
 | `WAITING`, `reason: for_replan` or `for_diagnosis` | Four failed reviews repeated a finding, so a planner has to rewrite the milestone, or six failed, mostly on new findings, so a planner has to find out why. The script won't start a builder on it. | Run the `plan` command in `next`. It sends the milestone and its reviews to a planner. Once that plan is merged, `run` builds the rewritten milestone. A diagnosing planner may instead keep the plan, and `plan` prints `KEPT`: see below. |
-| `DESIGN_OWED` | `run` already ran the design review (unless you passed `--no-design-review`), and its result was not `DESIGN OK`. | `design_review` holds the result, and `next` the follow-up, as described under [After a review](#after-a-review). |
+| `DESIGN_NOT_APPROVED` | `run` already ran the design review (unless you passed `--no-design-review`), and its result was not `DESIGN OK`. | `design_review` holds the result, and `next` the follow-up, as described under [After a review](#after-a-review). |
 | `WAITING`, `reason: on_dependency` | The milestone can't start until a milestone in another module is Done. | Give the builder other work. |
 | `TAKEN` | Another lead has the milestone In Progress, or another `run` in this repository is working on the module. `by` says who. For a `run` in this repository, `holder` gives its process and worktree, and since when. | Give the builder other work. |
 | `BLOCKED` | The milestone is Blocked. The script has set its `state` to `blocked` and saved the `reason`, the items and what would unblock it in the milestone's `blocked` field. | See [A milestone that stopped](#a-milestone-that-stopped). |
 | `NEEDS_CONTEXT` | The builder is missing a fact: Blocked with `reason: needs_context`. | If the answer is in the files, resume the builder with `--message`. Otherwise bring the question to the owner. |
-| `NOT_READY`, `BUDGET` or `STALLED` | The builder kept saying it had finished when the script's checks disagreed, or stopped making progress, or kept ending its turns on progress notes. | Run a `review` on what exists, so the next attempt starts from concrete findings. |
+| `CHECKS_FAILED`, `NO_PROGRESS_FOR_HOURS` or `STALLED` | The builder kept saying it had finished when the script's checks disagreed (`CHECKS_FAILED`, or once with `run --checks-only`), made no progress in the hours given with `--budget-hours` (`NO_PROGRESS_FOR_HOURS`), or kept ending its turns on progress notes (`STALLED`). | Run a `review` on what exists, so the next attempt starts from concrete findings. |
 | `INVALID` | The done-when file is malformed, or an agent changed something that isn't its to change, or the items are not the approved ones. | Send the problems to a planner. Don't resume that builder until a planner has fixed them. |
 | `FINISHED` | Every milestone of the module is Done. | Nothing more for this module. |
-| `FLOOR`, `PIN` or `PAUSED` | The session can't go on as started. | Stop that builder and report it, with the reason the script gave. A `FLOOR` on one host doesn't stop builders on another. A `PAUSED` with a `reason` means the owner pressed Stop in the app, or has the session open there. Leave it to them until they say to carry on. |
+| `HOST_FAILED`, `WRONG_MODEL_OR_EFFORT` or `PAUSED` | The session can't go on as started. `HOST_FAILED` means the host failed: two turns failed in a row, its program is missing, or its usage limit was reached, and `reason` says which. `WRONG_MODEL_OR_EFFORT` means a turn ran on a model or effort other than the ones the run named. `PAUSED` with a `reason` means the owner pressed Stop in the app, or has the session open there. | Stop that builder and report it, with the reason the script gave. A `HOST_FAILED` on one host doesn't stop builders on another. Leave a `PAUSED` builder to the owner until they say to carry on. |
+| `SCRIPT_FAILED` | The script couldn't do a step of its own, such as fetching the main branch, making its checkout, writing a file the sandbox refused, or recording that the milestone is Ready for Review. The builder's committed work isn't lost. | Do what `reason` and `next` say, then run the command again. Report it to the owner only if you can't fix it. Don't tell them it was quota or sign-in: that is `HOST_FAILED`. |
+
+The script's other commands print results of their own. `adopt` prints `ADOPTED` and `migrate` prints `MIGRATED`,
+and either prints `NOTHING` when there was nothing to do. `unblock` prints `UNBLOCKED`. Any of these prints
+`REFUSED`, with `problems` and usually `next`, when it won't act, and `FAILED`, with `detail`, when it tried and
+couldn't. An `owner` command prints `DONE` once it has saved the decision, or `RELEASED` for `owner release`.
+
+A result's `stopped_turn` says the script ended a turn itself, because a tool call that isn't a shell command was
+open for more than 15 minutes or the turn limit was reached, and names the call. The first result after the script's
+version changes carries `changed`, the list of what now behaves differently: tell the owner what affects them.
 
 ### A milestone that stopped
 
@@ -357,9 +379,13 @@ module's builder other work while you wait.
 
 ### After a review
 
-A review prints `REVIEWED`, with the result in its `verdict` field, or `INVALID`. `INVALID` means the reviewer did
+A review prints `REVIEWED`, with the result in its `verdict` field, `INVALID`, or `BLOCKED` with `reason:
+needs_access` when the reviewer couldn't reach the product. That merges nothing and counts no round. Put its `ask`
+to the owner, and run its `next`, the same review in a visible session, while they are at the machine. `INVALID` means the reviewer did
 something a reviewer doesn't do, such as editing code, writing no review or naming the wrong milestone. Nothing
-from an invalid review is saved, so run it again, on the other host if you can.
+from an invalid review is saved, so run it again, on the other host if you can. One `INVALID` starts no reviewer:
+a milestone that is Ready for Review on the main branch with no record of the script's checks, which a builder
+before 2.1.0 set itself. Its `next` is the `run` that checks it.
 
 A reviewer marks each problem it finds as a Must Fix, which fails the review, or a Suggestion, which doesn't. After
 a `PASS`, `next` is the module's next milestone, or a `why` that says the module is finished.
@@ -376,18 +402,16 @@ names the findings that did:
 | `diagnose` | Run the `plan` command. The planner reads every round and either changes the milestone, as for `replan`, or keeps the plan and names who has to act. |
 | `too_many_failed_reviews` | The script has set the milestone to Blocked, with `reason: too_many_failed_reviews`. `next` asks the owner, with what failed in each round: accept it as it is, change its scope, or reopen it for another try. Bring that question to the chat. |
 
-When a diagnosing planner keeps the plan, `plan` prints `KEPT`, with `who` and `next`. For `builder` or
-`reviewer`, `next` starts a new builder session, and the script tells the next reviewer of a `reviewer` judgement.
-For `owner`, the milestone is Blocked with `reason: too_many_failed_reviews`, and `next` is the question for the
-owner.
+When a diagnosing planner keeps the plan, `plan` prints `KEPT`, with `who` and `next`. For `builder` or `reviewer`,
+`next` starts a new builder session, and the script tells the next reviewer of a `reviewer` judgement. For `owner`,
+the milestone is Blocked with `reason: too_many_failed_reviews`, and `next` is the question for the owner.
 
 Follow the step it names. The count is the record of what has already been tried, and a lead that overrules it
 runs the same failing attempt again.
 [The done-when reference](../plan-module/references/done-when.md#when-a-review-fails) explains each step.
 
-`next --module <M> --worktree <path> --milestone <id>` works the same step out again later, and prints it as
-`action` with the message to send. It knows only about failed reviews, so don't run it for a milestone that
-stopped for another reason.
+`next --module <M> --worktree <path> --milestone <id>` works the same step out again later, as `action` with the
+message to send. It knows only about failed reviews, not a milestone that stopped for another reason.
 
 A design review's `verdict` is `DESIGN OK` or `DESIGN CHANGES`. After `DESIGN OK` the design is Design Approved,
 and `next` is the module's first milestone. After `DESIGN CHANGES` it is Design Changes Requested, and `next` is
@@ -419,7 +443,7 @@ A decision that is the owner's is saved with
 | `accept` | A milestone is Done without a passing review. With `--milestone design`, the design is Design Approved without one. |
 | `rereview` | A milestone that is Done goes back for a new review. The old review is kept. |
 | `reopen` | A milestone that is Blocked with `reason: too_many_failed_reviews` gets another try. |
-| `release` | Another lead's hold on a milestone is dropped, so that this lead can start it. A `TAKEN` result names this command when it applies. |
+| `release` | A milestone that another lead started, and that lead is gone, is taken out of In Progress, so that this lead can start it. A `TAKEN` result names this command when it applies. |
 | `scope` | The done-when file, as edited in the worktree, is the new scope. Use it only for an edit the owner dictated exactly, such as a number: make the edit, show them the diff, and run it on their yes. |
 
 A change of mind about what is wanted goes into the brief, if the project has one, and then to a planner, with
@@ -445,7 +469,8 @@ After that, once a day, and when you stop, write the owner one screen in `<evide
 send it however the owner follows this session. `report --worktree <repo> --write` writes the factual half there:
 what is Done, each review's result, the planners' assumptions, what is Waiting or Blocked, the items that need
 the owner, the decisions saved in the owner's name, and the tokens used for each milestone. Add the rest yourself, with links,
-and merge the file with `adopt`. The whole report covers:
+and merge the file with `adopt`. Until today's report is on the main branch, the results of `run`, `review` and
+`plan` carry a `report_due` field. The whole report covers:
 
 - what is now Done, with links to the evidence;
 - each review's result, linked, so the owner can check a few. While the project's graded examples hold fewer than
@@ -470,6 +495,6 @@ limit resets. Tell the owner straight away, with its answer, and keep going. Slo
 
 ## When to stop
 
-Stop when every milestone in the module list is Done, or when everything left is Blocked, or Waiting on a
-milestone that is itself Blocked. Then remove build outputs, remove the worktrees whose work has been merged, and
-send the final report.
+Stop when every milestone in the module list is Done, or when everything left is Blocked, or Waiting on a milestone
+that is itself Blocked. Then remove build outputs, remove the worktrees whose work has been merged, and send the
+final report.

@@ -46,14 +46,20 @@ keeps the project's records. Run them as `python3 <the build skill's folder>/scr
 
 1. Every item is marked as passed, with evidence from the item's target. Evidence is saved proof, such as a test
    log or a screenshot.
-2. The work is merged with `agent_loop.py merge --worktree .`, which prints `MERGED`.
-3. The milestone's `state` says what happens next. A milestone needs a reviewer if any of its items has an
-   `inspect` or `ask` field, or if it is the module's last milestone. If it does, set `state` to `ready_for_review`. If not, set it to `done`.
-4. The work you finished is ticked in `PLAN.md`, and `LOG.md` has an entry of a few lines saying what you did,
+2. The work is merged with `agent_loop.py merge --worktree .`, which prints `MERGED`, and the milestone's `state`
+   is still `in_progress`. When you end with `DONE`, the script runs the test command and every item's check on
+   the merged work, in its own clean copy of the main branch and outside your sandbox, so checks that need the
+   GPU or the screen can pass. If they pass, the script sets the milestone to Ready for Review, the status that
+   says your work is finished and checked and waits for a reviewer, or to Done when no reviewer is needed, and
+   writes the record. If one fails, it sends you the failure. Before 2.1.0 builders set
+   that state themselves, and in one project a milestone sat on the main branch as Ready for Review for three
+   hours after the script's checks had failed it, while other builders rebased onto it. So `merge` now refuses a
+   commit that sets `ready_for_review` or `done`.
+3. The work you finished is ticked in `PLAN.md`, and `LOG.md` has an entry of a few lines saying what you did,
    with what you verified kept apart from what you think is probably true. Longer notes go in the module's
    evidence folder, linked from the entry. Write no status lines in the plan: the script writes the owner's page,
    `STATUS.md`, from the done-when file.
-5. Your last line is `DONE`, or `BLOCKED <reason>: <what would unblock it>`, or `NEEDS_CONTEXT: <what is
+4. Your last line is `DONE`, or `BLOCKED <reason>: <what would unblock it>`, or `NEEDS_CONTEXT: <what is
    missing>`. The reason is one of `needs_human_feedback`, `needs_access`, `needs_hardware` or `needs_dependency`,
    and the sections below say when each applies. When none of them fits, such as an approach that can't work,
    write `BLOCKED:` with no reason. The script and the lead read this line to decide what happens next, so keep
@@ -67,7 +73,8 @@ names it in the next agent's prompt. That lets your last line be one sentence. I
 handoff for your milestone, read it before you start, and rewrite it rather than add to it if you stop too.
 
 You change only three fields in the done-when file: an item's `status` (`open` or `pass`), an item's `evidence`
-(where the proof is saved), and the milestone's `state`. The planner and the reviewer own the rest, as
+(where the proof is saved), and the milestone's `state`, which you set only to `in_progress`. The planner and
+the reviewer own the rest, as
 [who changes what](../plan-module/references/done-when.md#who-changes-what-and-when) sets out, and the script
 rejects your work if any of the planner's fields has changed. So if an item is wrong or can't be met, leave it as
 written and say so in your report.
@@ -102,26 +109,44 @@ Say which things you confirmed by running something and which you only suspect. 
 reported that another builder's lock was stuck and should be restarted. It was only held, and the guess reached
 the lead as an instruction. Ask the lead for what you need, and leave what other builders should do to the lead.
 
-Record in your evidence the commit each proof ran on. `merge` rebases your work onto the main branch, and if that
-brought in changes that could affect an item, run that item's proof again on the merged commit before you set
-Ready for Review. One reviewer found that none of a builder's evidence came from the commit it claimed, because a
-rebase had brought in another module's change to the camera. Link evidence by its path from the repository's
-root, because your worktree's absolute paths stop working when it is reused.
+Record in your evidence the commit each proof ran on. `merge` rebases your work onto the main branch, and its
+result lists the files the rebase brought in, under `upstream_files`. Before you end with `DONE`, run again,
+on the merged commit, the proofs of the items those files could affect, and only those. One reviewer found that
+none of a builder's evidence came from the commit it claimed, because a rebase had brought in another module's
+change to the camera. In the same project, other builders re-ran every capture after each merge, whatever had
+come in. Link evidence by its path from the repository's root, because your worktree's absolute paths stop
+working when it is reused.
+
+Prove an item that needs the owner at the machine, for human feedback or for access, after your last merge, on a
+build of the merged commit, so that the owner's time is spent once. Don't rebuild an older commit to match
+evidence you took earlier; take that evidence again instead. In one project a builder rebuilt an older commit so
+that a new recording would match an old one, and the reviewer found that 96 of the 406 source files differed
+from the commit under review. That cost the owner's sitting and a round.
+
+Keep any script a proof runs, and anything an item's `check` reads, in the repository. The script runs the checks
+in its own clean checkout, where ignored folders such as `tmp/` are empty or missing, so a check that reads from
+one, or writes into one without creating it, fails there. In one project that cost a builder a failed check and
+another turn.
 
 ## Merging
 
 `agent_loop.py merge --worktree .` rebases your branch onto the main branch, runs the project's test command (the
 `Test command:` line in the project settings), and then pushes or fast-forwards the main branch as the `Merge:`
 line says. It does all of this under one lock, so two builders can't merge at once. It prints `MERGED` or
-`FAILED`.
+`FAILED`. The items' checks don't run here: the script runs them after your turn, so they don't hold the lock.
+
+If `merge` prints `FAILED` because your commits set the milestone to `ready_for_review` or `done`, which can happen
+on a branch an older builder left, set the state back to `in_progress`, commit that, and merge again.
 
 An ordinary fix that has no plan is merged the same way. Make the fix, add a test if one would catch the fault
 coming back, and run `merge`. Then a quick fix can't collide with a builder's merge or skip the tests.
 
-## Before you set Ready for Review
+## Before you finish
 
 Run `agent_loop.py check --module <M> --milestone <id> --worktree .`. It runs the milestone's `check` commands and
-the project's test command the way the script will, and changes nothing.
+the project's test command the way the script will, and changes nothing in the repository. It saves each check's
+whole output to a file and names it. A check that passes here is remembered, so when the script checks the same
+files after your merge it doesn't run that check again.
 
 Then judge each `inspect` and `ask` item yourself, the way a reviewer will, on the exact build and the real target.
 [How to inspect](../plan-module/references/proofs.md#how-to-inspect) says how. For an item judged by taste, first
@@ -132,10 +157,16 @@ keep the best round.
 
 The lead is the agent the owner chats with. When a lead is running the build, it started you, and it starts the
 reviewer too. It also doesn't take your word for anything: after you finish, the script's `run` command makes a
-clean copy of the main branch and runs the test command and every item's `check` there.
+clean copy of the main branch and runs the test command and every item's `check` there, and only if they pass
+does it set the milestone to Ready for Review.
 
-In a single chat with no lead, you start the reviewer, with
-`agent_loop.py review --module <M> --milestone <id> --commit <sha> --worktree .`. If the owner uses both Claude Code
+In a single chat with no lead, nobody else runs the script's checks, so after you merge, run
+`agent_loop.py run --module <M> --worktree . --checks-only`. It starts no agent: it runs the checks on the merged
+work and prints `READY_FOR_REVIEW` once it has set the milestone Ready for Review, or `CHECKS_FAILED` with what
+failed, for you to fix and merge again. A `READY_FOR_REVIEW` with `review: false` means the milestone is Done and
+needs no reviewer. Otherwise you start the reviewer, with
+`agent_loop.py review --module <M> --milestone <id> --commit <sha> --worktree .`, where the commit is the one that
+result names. If the owner uses both Claude Code
 and Codex, add `--host` with the one you are not running in. Pass the command nothing else, so the reviewer forms
 its own view. Only a review started by that command is saved, and only a saved review can set the milestone to
 Done. Without one, the owner has to accept the milestone by hand. If you can't start a review, end with `DONE` and
@@ -158,17 +189,41 @@ out how shipped products and published work do it. If the mechanism you have may
 behaviour at all, build the smallest reproduction that would show whether it can. If it can't, end with `BLOCKED`
 and what you found.
 
+A result you can't explain, such as a test that fails on one machine or a screenshot that differs from the
+last run, isn't a reason to end with `BLOCKED`. It is a problem to find and fix. If fixing it needs a fact or a
+choice only the owner has, end with `NEEDS_CONTEXT:` and the question, and the lead puts it to the owner.
+
 On Codex, a browser, or any other program that needs more than the `workspace-write` sandbox allows, won't start
 inside the sandbox. Ask to run that command outside it before you end with `BLOCKED`. Each request is granted or
 refused on its own. In one test run a builder ended Blocked on four items without ever asking.
+
+On Codex, edit files with the `apply_patch` tool. A script that replaces text, such as Python's `str.replace`,
+changes nothing and says nothing when the text it looks for isn't there. In one project a builder made 80 edits
+that way, and only some of them checked that the text was found.
 
 If a run needs something listed under `Exclusive resources` in the project settings, such as a simulator, wrap it
 in `agent_loop.py lock <name> -- <command>`, so two builders don't use it at once. The lock waits until the
 resource is free, so another builder holding it is normal. Do other work while you wait, and treat it as a block
 only if the holder seems stuck, naming the process.
 
-On Codex, a command that runs for more than a few minutes, such as a long capture or a full test run, can outlast
-your turn. Give it a timeout, or run it in the background with its output going to a file you then read.
+## Long commands
+
+A command that runs for more than a few minutes, such as a long capture or a full test run, can outlast your
+turn. Start it with `agent_loop.py background -- <command>`, which returns at once with the job's id, and then
+wait for it with `agent_loop.py wait <id>`. `wait` returns when the job ends, or after nine minutes if it hasn't,
+with the end of the job's log. A job started this way carries on when your turn ends, and the next turn's prompt
+names it. `agent_loop.py jobs` lists your jobs and whether each is still running, which matters on Codex, whose
+sandbox refuses `ps`.
+
+Don't wait with `sleep` and `tail`. Each check reads the whole conversation again, so many short checks cost far
+more than a few long waits. In one project these checks used three quarters of a builder's tokens. On Codex, a
+command that is still running after 30 seconds hands control back to you, so keep waiting on it with a long
+`yield_time_ms`, such as 300000 (five minutes), rather than many short waits.
+
+Read the end of a log, such as its last 50 lines, rather than the whole file, and judge a recording from a few
+still frames taken from it rather than from the video. Everything a command prints or a tool shows you stays in
+your session and is read again at every later step. In one project a single screenshot put 4.2 MB into a session,
+and builders worked with their sessions nearly full.
 
 ## Limits
 

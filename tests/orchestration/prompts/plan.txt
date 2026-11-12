@@ -1,6 +1,6 @@
 Plan module APPLE-TILE. The owner said on 9 November: "tiles should load as you scroll, never all at once".
 
-Use the plan-module skill (/skills/orchestration/plan-module/SKILL.md) for this task.
+Use the plan-module skill (the file is /skills/orchestration/plan-module/SKILL.md) for this task.
 
 Rules:
 - You can't start other agents.

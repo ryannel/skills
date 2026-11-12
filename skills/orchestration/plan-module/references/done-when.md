@@ -55,7 +55,7 @@ Each file has its readers, and is written for them:
 
 ## `STATUS.md`, the owner's page
 
-The script writes `STATUS.md` after every record it lands, and nobody edits it, because a page somebody has to
+The script writes `STATUS.md` after every record it merges, and nobody edits it, because a page somebody has to
 remember to update goes stale. It is built only from what the script stores: the done-when and record files, the
 module table, and the open assumptions in each plan. `agent_loop.py status --format md` prints the same page.
 
@@ -123,7 +123,7 @@ Stop rules:
   recorded with the `owner` command.
 - Briefs written for reviews go to `docs/evidence/<MODULE>/`, beside the review. Design goes in `DESIGN.md`.
 
-The script checks every plan file when it lands. On a planner's turn it refuses, and elsewhere it warns about, a
+The script checks every plan file when it is merged. On a planner's turn it refuses, and elsewhere it warns about, a
 plan over about 1,500 words, a status line (`Now:`, `Next:`, `Blocked:`, `Milestone:` or `Reviews:`), a `###`
 heading, a log, or more than one line under a Done milestone. These are the ways the plan files of earlier
 projects grew until nobody could read them.
@@ -252,7 +252,7 @@ in. A milestone that is Blocked can't move until someone steps in. Each carries 
 |---|---|---|---|
 | Not Started | No builder has worked on it yet. | `not_started` | `ready`, when nothing stops it starting |
 | In Progress | A builder is working on it. | `in_progress` | `taken`, when another lead started it |
-| Ready for Review | The builder has finished, and no review has run yet. | `ready_for_review` | `review_owed` |
+| Ready for Review | The builder has finished and merged, the script's checks passed on the merged work, and no review has run yet. Only the script sets it. | `ready_for_review` | `review_owed` |
 | Waiting: On Dependency | It can't start until a milestone in another module, already planned, is Done. | `not_started`, with `depends_on` | `waiting`, `reason: on_dependency` |
 | Waiting: For Replan | Four failed reviews repeated an earlier finding, so a planner rewrites it. | `in_progress`, with `fails` at 4 | `waiting`, `reason: for_replan` |
 | Waiting: For Diagnosis | Six reviews failed, mostly on findings no earlier round raised, so a planner finds out why. | `in_progress`, with `rounds` at 6 | `waiting`, `reason: for_diagnosis` |
@@ -274,7 +274,7 @@ The commands also print `invalid` for a module whose done-when file is malformed
 that may not change it.
 
 A design has three statuses of its own. Design Ready for Review and Design Changes Requested are both printed as
-`design_owed`. The reviewer's last line sets the status: `DESIGN OK` sets Design Approved, and `DESIGN CHANGES`
+`design_not_approved`. The reviewer's last line sets the status: `DESIGN OK` sets Design Approved, and `DESIGN CHANGES`
 sets Design Changes Requested.
 
 ## The record file
@@ -307,8 +307,9 @@ Only one kind of agent changes each field at any time, and the hand-overs happen
 |---|---|---|
 | `state` from `not_started` to `in_progress` | Builder | It starts the milestone. |
 | An item's `status` and `evidence` | Builder | While building. `pass` means it has proof from the item's target. |
-| `state` from `in_progress` to `ready_for_review` | Builder | Every item is `pass` with evidence, the checks pass and the work is merged, on a milestone that needs a reviewer. |
-| `state` from `in_progress` to `done` | Builder | The same, on a milestone that needs no reviewer. The script runs the checks again before it records the milestone as Done. |
+| `state` from `in_progress` to `ready_for_review`, with the Ready for Review record | Script | Every item is `pass` with evidence, the builder has merged the work and ended with `DONE`, and the test command and every item's check pass when the script runs them in its own clean checkout of the main branch. The script writes the record and the state in one commit, on a milestone that needs a reviewer. |
+| `state` from `in_progress` to `done`, with `accepted` | Script | The same, on a milestone that needs no reviewer. |
+| `state` from `ready_for_review` or `done` back to `in_progress` | Script | The main branch says Ready for Review or Done without the script's record, as a builder set it before 2.1.0, and the script's checks fail. |
 | `state` to `blocked`, with `blocked` | Script | The builder ends with `BLOCKED` or `NEEDS_CONTEXT`. |
 | `state` from `blocked` to `not_started` | Lead, with the `unblock` command, or the script when it records Human Feedback | Whatever blocked it is resolved. |
 | An item's `verdict` and `review` | Reviewer | Reviewing a milestone that is Ready for Review. Every item gets a result. |
@@ -323,6 +324,11 @@ Only one kind of agent changes each field at any time, and the hand-overs happen
 | `fails` and `rounds` back to 0, 1 more in `diagnoses`, and `state` to `blocked`, with `reason: too_many_failed_reviews`, if the owner has to decide | Script | A diagnosing planner kept the plan and ended with `KEEP`. |
 | The planner's fields, without counting as a rewrite | Owner | `owner scope`, when the owner changes what is wanted. On a milestone that is Waiting: For Replan, the new scope is the rewrite. The script sets `fails`, `rounds` and `diagnoses` back to 0, and a milestone Blocked with Too Many Failed Reviews back to `not_started`. |
 | `state` to `done` with no review, back to `ready_for_review` for a new review, or from Blocked with Too Many Failed Reviews to `not_started` | Owner | `owner accept`, `owner rereview` or `owner reopen`. A reopen sets `fails`, `rounds` and `diagnoses` back to 0. |
+
+A builder never sets `ready_for_review` or `done`. Before 2.1.0 it did, and merged that state before the script's
+checks ran, so a milestone the checks then failed sat on the main branch as Ready for Review while other builders
+rebased onto it. Now `merge` refuses a builder's commits that set either state, and a milestone that is Ready for
+Review without the script's record is checked by `run` rather than reviewed.
 
 Reviewers and planners don't commit their own changes to these files. The script compares what they changed with
 this table, and then either commits and merges all of the changes or rejects all of them.

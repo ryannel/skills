@@ -10,9 +10,10 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills/orchestration/build/scripts"
-sys.path.insert(0, str(SCRIPTS))
-import codex_quota  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from support import Clean, agent_loop  # noqa: E402
+
+codex_quota = agent_loop.codex_quota
 
 H = 3600.0
 NOW = float(int(time.time()))  # files are written now, and the reader goes by their mtime
@@ -75,8 +76,9 @@ def floor_usage(k_per_mtok: float, base: float = 0.0):
     return lambda tokens: math.floor(base + k_per_mtok * tokens / 1e6)
 
 
-class Base(unittest.TestCase):
+class Base(Clean):
     def setUp(self):
+        super().setUp()
         self.tmp = tempfile.TemporaryDirectory()
         self.home = Path(self.tmp.name) / "codex"
         self.cache = Path(self.tmp.name) / "cache.json"

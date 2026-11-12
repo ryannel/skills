@@ -1,8 +1,8 @@
 Call your create_goal tool with the paragraph that starts "The goal:" as the objective, word for word. The rest of this message is for this turn only.
 
-Build milestone M2 of module APPLE-TILE, using the build-milestone skill (/skills/orchestration/build-milestone/SKILL.md).
+Build milestone M2 of module APPLE-TILE, using the build-milestone skill ($build-milestone in Codex; the file is /skills/orchestration/build-milestone/SKILL.md).
 
-The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has status pass, with evidence from the item's target; M2's state is ready_for_review (or done, when no item has inspect or ask and it isn't the module's last milestone); and the work is merged.
+The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has status pass, with evidence from the item's target, and the work is merged, with M2's state left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the state itself.
 
 Human Feedback on M2, recorded by the script in docs/plans/APPLE-TILE/ACCEPTED.json under milestones.M2.human_feedback, oldest first. These are the owner's own words. Use their words as given, and cite that record rather than restating them as your own, because the reviewer checks your work against it.
 - 2026-11-10T08:37:00Z, on M2.2: asked "Is the resize smooth enough to ship?"; the owner said "Looks good to me, but the corners flicker once."
@@ -12,7 +12,8 @@ An earlier session on M2 stopped short and left a handoff at docs/evidence/APPLE
 For this session:
 - Work only in this worktree. The lead starts the review, so don't start a reviewer.
 - The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`. Merge with its `merge --worktree .` command.
-- This session runs in the background, so approval prompts, such as a Computer Use or a permission dialog, can't appear in it.
+- Start a command that runs longer than a few minutes with the script's `background -- <command>`, and wait for it with its `wait <id>`, not with sleep and tail, as the skill's "Long commands" section says.
+- This session runs in the background, so approval prompts, such as a Computer Use or a permission dialog, can't appear in it. A question you ask through a tool reaches nobody either, so when you need an answer, end your turn with `BLOCKED` or `NEEDS_CONTEXT` instead, as below.
 - This project's exclusive resources are: gpu: timing runs and captures. Wrap any command that uses one in the script's `lock <name> -- <command>`. The lock waits its turn: another builder holding it is normal, so do other work while you wait, and treat it as a block only if the holder seems stuck, naming the process that holds it.
 - M2.2 (does the tile animation read as smooth) needs human feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the owner to look at, then end with `BLOCKED needs_human_feedback: <the question for the owner>`.
 - M2.3 (an iPhone connected over USB) needs hardware: someone has to connect a device, and nobody can in this session. Do every other item, then end with `BLOCKED needs_hardware: <what is needed>`. Don't ask anyone to confirm anything.

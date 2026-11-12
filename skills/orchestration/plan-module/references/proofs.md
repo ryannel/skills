@@ -55,7 +55,7 @@ same shape.
 
 ## How to inspect
 
-This applies to a builder checking its own work before Ready for Review, and to a reviewer. Before you look at
+This applies to a builder checking its own work before it ends with `DONE`, and to a reviewer. Before you look at
 anything, write down what you are going to look at.
 
 Agents that skipped this looked at whatever caught their eye, decided it looked fine, and missed the broken
