@@ -5321,6 +5321,10 @@ def floor_reason(host: str, code: int, err: str) -> str:
 # bootstrap turn, so the rollout records the model, effort and sandbox the app then resumes with. Each loop turn
 # queues the prompt (`codex queue`) and fires `codex://threads/wake/<id>`; the app's own app-server runs it. The
 # loop waits on the thread's rollout file until the turn (and any goal turns the app chains after it) has ended.
+# Threads whose last visible turn the script stopped on a hung tool call, with the call's name. In Thrum, 13 Nov, the
+# app then held the queued message that resumes the thread, and the run waited out the 2-hour turn limit on it.
+HUNG_THREADS: dict = {}
+
 # `codex://threads/<id>` makes the app window own the thread, so the IPC router can stop it on a pause or timeout.
 #
 # Claude: only the app can sign in a process it starts, so the script keeps running its own signed-in `claude -p` per
@@ -5680,6 +5684,7 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
     began = time.time()
     deadline, running, started, quiet, woken = began + timeout_s, set(), False, began, 0
     message, error, aborted = "", "", False
+    hung_before = HUNG_THREADS.pop(thread, None)
     # The app runs the tools, so the script follows the calls in the rollout file, as it does for `codex exec`: a
     # visible review in Thrum waited 30 minutes on a Computer Use call that never answered.
     watch = HeadlessWatch("codex", None)
@@ -5720,12 +5725,18 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
                 codex_goal_activate(thread)
             TURN_STOP.update(stopped_turn(watch, 124, timeout_s))
             if hung:  # like a headless turn the script ends early: the agent is resumed and told about the call
+                HUNG_THREADS[thread] = watch.stopped["name"]
                 return 0, thread, message, f"({hung})", None
             return 124, thread, message, "(timed out)", None
         if not started:
             # The app can hold a queued turn a long time (sleep, a busy window), so keep waking it while the message
             # waits; give up early only when the message has gone without a turn starting, or the app is gone.
             waited = time.time() - began
+            if hung_before and waited > START_S and not visible_unavailable("codex"):
+                codex_unqueue(thread)
+                return 1, thread, "", (f"the Codex app didn't start the turn that resumes the thread after the script "
+                                       f"stopped its tool call {hung_before}; the app may still be waiting on that "
+                                       "call, so the queued message was removed"), None
             gone = waited > 2 * START_S and (not codex_queued(thread) or visible_unavailable("codex"))
             if gone or waited > 2 * START_S + STALL_START_S:
                 codex_unqueue(thread)
@@ -6540,7 +6551,10 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
         loop_note(step=f"{'planner' if role == 'plan' else 'reviewer'} turn {turns + 1}")
         code, session, message, err, seen = run_turn(host, prof, model, effort, worktree, text, resume, timeout_s,
                                                      role, title)
-        stop = dict(TURN_STOP)
+        before, stop = stop, dict(TURN_STOP)
+        if code not in (0, 130) and not stop and before.get("tool_call"):  # the turn after a stop failed: keep the stop
+            stop = before
+            err = f"{err.strip()} (after the script stopped the earlier turn: {before['why']})"
         note_thread(worktree, host, session, role, title)
         turns += 1
         usage = add_usage(usage, TURN_USAGE)
@@ -6556,6 +6570,7 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
             return {"result": "HOST_FAILED", "reason": floor_reason(host, code, err) if code == 127 else
                     f"the {role} turn on {host} was stopped: {stop['why']}" if code == 124 and stop else
                     f"the {role} turn on {host} reached the {timeout_s / 3600:g}-hour turn limit" if code == 124 else
+                    f"the {role} turn on {host} failed: {err.strip()}" if stop.get("tool_call") else
                     f"the {role} turn on {host} failed (exit {code}); likely quota, sign-in or outage",
                     "exit_code": code, "stderr": err, "session": session, **spent}
         owed = missing(message)

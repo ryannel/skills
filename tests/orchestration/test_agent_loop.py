@@ -1869,7 +1869,8 @@ class FakeCodexApp:
         return True
 
     def wake(self, t):
-        if self.behaviour == "never" or (self.behaviour == "late" and self.ignored_wakes < 3):
+        if self.behaviour == "never" or (self.behaviour == "late" and self.ignored_wakes < 3) or \
+                (self.behaviour == "hung_call_held" and self.interrupts):  # the app holds the resume, as in Thrum
             self.ignored_wakes += 1
             return
         text = self.queued.pop(t, None)
@@ -1879,9 +1880,9 @@ class FakeCodexApp:
         self.write(t, {"type": "event_msg", "payload": {"type": "task_started", "turn_id": turn}},
                    {"type": "turn_context", "payload": {"turn_id": turn, "model": info["model"],
                                                         "effort": self.effort_seen or info["effort"]}})
-        if self.behaviour == "hang" or (self.behaviour == "hung_call" and not self.interrupts):
+        if self.behaviour == "hang" or (self.behaviour.startswith("hung_call") and not self.interrupts):
             info["running"] = turn
-            if self.behaviour == "hung_call":  # a Computer Use call that never answers, as in Thrum
+            if self.behaviour.startswith("hung_call"):  # a Computer Use call that never answers, as in Thrum
                 self.write(t, {"type": "response_item", "payload": {
                     "type": "function_call", "namespace": "mcp__cua_repl", "name": "js", "call_id": "c1",
                     "arguments": '{"code":"await cua.getApp(\'ThrumReview.app\')"}'}})
@@ -2230,6 +2231,20 @@ class Fold(Repo):
         self.assertEqual(result["verdict"], "PASS")  # resumed after the stop, and told which call hung
         self.assertEqual(len(app.interrupts), 1)
         self.assertIn("the tool call mcp__cua_repl.js had been open for", app.sent[-1])
+
+    def test_a_resume_the_codex_app_holds_after_a_hung_call_fails_in_minutes_and_names_the_call(self):
+        self.write_done([milestone("M1", "not_started", ["open"], inspect="frames"), milestone("M2", "not_started", ["open"])])
+        self.commit_all()
+        with FakeCodexApp(self).installed():
+            commit = self.run_loop()["commit"]
+        with FakeCodexApp(self, behaviour="hung_call_held").installed() as app, \
+                mock.patch.object(agent_loop, "TOOL_CALL_LIMIT_S", 0.05):
+            result = self.review(commit=commit, host="codex")  # a 6-minute turn limit; it should end long before
+        self.assertEqual(result["result"], "HOST_FAILED")
+        self.assertIn("didn't start the turn that resumes the thread after the script stopped its tool call "
+                      "mcp__cua_repl.js", result["reason"])
+        self.assertEqual(result["stopped_turn"]["tool_call"]["name"], "mcp__cua_repl.js")
+        self.assertEqual(app.queued, {})
 
     # Item 7: the loader check runs on the resolved launch.
 
