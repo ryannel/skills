@@ -1,6 +1,6 @@
 Build milestone M2 of module APPLE-TILE, using the build-milestone skill (the file is /skills/orchestration/build-milestone/SKILL.md).
 
-The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has status pass, with evidence from the item's target, and the work is merged, with M2's state left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the state itself.
+The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has builder_result pass, with evidence from the item's target, and the work is merged, with M2's status left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the status itself.
 
 About this session:
 - This worktree is yours for the milestone. Other builders are working in their own, so keep your changes inside this one.

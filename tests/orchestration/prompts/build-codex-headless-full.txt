@@ -2,7 +2,7 @@ Call your create_goal tool with the paragraph that starts "The goal:" as the obj
 
 Build milestone M2 of module APPLE-TILE, using the build-milestone skill ($build-milestone in Codex; the file is /skills/orchestration/build-milestone/SKILL.md).
 
-The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has status pass, with evidence from the item's target, and the work is merged, with M2's state left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the state itself.
+The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has builder_result pass, with evidence from the item's target, and the work is merged, with M2's status left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the status itself.
 
 Human Feedback on M2, recorded by the script in docs/plans/APPLE-TILE/ACCEPTED.json under milestones.M2.human_feedback, oldest first. These are the human's own words. Use their words as given, and cite that record rather than restating them as your own, because the reviewer checks your work against it.
 - 2026-11-10T08:37:00Z, on M2.2: asked "Is the resize smooth enough to ship?"; the human said "Looks good to me, but the corners flicker once."

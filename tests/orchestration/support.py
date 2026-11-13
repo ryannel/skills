@@ -129,7 +129,7 @@ def item(iid, status="open", **proof):
 
 def milestone(mid, state, statuses, failed_reviews_with_repeat=0, **proof):
     items = [item(f"{mid}.{i}", s, **proof) for i, s in enumerate(statuses, 1)]
-    return {"id": mid, "name": mid, "state": state, "failed_reviews_with_repeat": failed_reviews_with_repeat, "diagnoses": 0,
+    return {"id": mid, "name": mid, "status": state, "failed_reviews_with_repeat": failed_reviews_with_repeat, "diagnoses": 0,
             "items": items}
 
 
@@ -215,8 +215,8 @@ if role == "build" and os.environ.get("FAKE_HANDOFF"):
 if role == "build" and os.environ.get("FAKE_PASS") == "1":
     d = json.loads(path.read_text())
     for m in d["milestones"]:
-        if m["state"] in ("not_started", "in_progress"):
-            m["state"] = os.environ.get("FAKE_STATE", "in_progress")
+        if m["status"] in ("not_started", "in_progress"):
+            m["status"] = os.environ.get("FAKE_STATE", "in_progress")
             for i in m["items"]:
                 if i.get("needs") and os.environ.get("FAKE_SKIP_NEEDS"):
                     continue
@@ -228,7 +228,7 @@ if role == "build" and os.environ.get("FAKE_PASS") == "1":
             break
     if os.environ.get("FAKE_FORGE"):
         last = d["milestones"][-1]
-        last["state"] = "done"
+        last["status"] = "done"
         for i in last["items"]:
             i.update(builder_result="pass", evidence="x", verdict="pass", review="x")
     path.write_text(json.dumps(d))
@@ -247,7 +247,7 @@ elif role == "review":
     if os.environ.get("FAKE_DURING"):  # something lands on the tip while the review runs
         subprocess.run(os.environ["FAKE_DURING"], shell=True, check=True, capture_output=True)
     d = json.loads(path.read_text())
-    target = next((m for m in d["milestones"] if m["state"] == "ready_for_review"), None)
+    target = next((m for m in d["milestones"] if m["status"] == "ready_for_review"), None)
     ev = cwd / "docs/evidence/WATER"
     ev.mkdir(parents=True, exist_ok=True)
     if mode == "design":
@@ -266,11 +266,11 @@ elif role == "review":
         for i in target["items"]:
             i["verdict"], i["review"] = verdict, f"docs/evidence/WATER/{mid}-review.md"
         if verdict == "pass":
-            target["state"] = "done"
+            target["status"] = "done"
             if os.environ.get("FAKE_PASS_FINDINGS"):
                 target["findings"] = [{"name": "a nit"}]
         else:
-            target["state"] = "in_progress"
+            target["status"] = "in_progress"
             target["findings"] = [{"name": os.environ.get("FAKE_FINDING", "the water is flat") + f" ({i['id']})",
                                    "item": i["id"]} for i in target["items"]]
             if os.environ.get("FAKE_DIFFERENT"):
@@ -279,7 +279,7 @@ elif role == "review":
             if os.environ.get("FAKE_NO_FINDINGS"):
                 target.pop("findings")
         if mode == "delete":
-            d["milestones"] = [m for m in d["milestones"] if m is target or m["state"] != "not_started"]
+            d["milestones"] = [m for m in d["milestones"] if m is target or m["status"] != "not_started"]
         path.write_text(json.dumps(d))
         n = int(target.get("failed_reviews", 0) or 0) + (verdict != "pass")  # the loop counts this round after the fake
         text = f"review of {mid}: {verdict}, failed round {n}"
@@ -315,7 +315,7 @@ elif role == "plan":
         m = d["milestones"][0]
         m["items"][0]["statement"] = "a smaller first step"
         if mode == "replan_counted":
-            m.update(failed_reviews_with_repeat=0, diagnoses=m.get("diagnoses", 0) + 1, state="not_started")
+            m.update(failed_reviews_with_repeat=0, diagnoses=m.get("diagnoses", 0) + 1, status="not_started")
         water.write_text(json.dumps(d))
         (cwd / "docs/plans/WATER/DESIGN.md").write_text("# Water design, re-planned")
         reply = "Re-planned M1.\\nPLANNED: docs/plans/WATER/DONE.json, docs/plans/WATER/DESIGN.md"
@@ -329,7 +329,7 @@ elif role == "plan":
             (cwd / "docs/plans/PAY/DESIGN.md").write_text("# Pay design")
             (cwd / "docs/plans/PAY/PLAN.md").write_text("# Pay plan" + os.environ.get("FAKE_ASSUME", ""))
         (cwd / "docs/plans/PAY/DONE.json").write_text(json.dumps({"module": "PAY", "milestones": [
-            {"id": "M1", "name": "pay", "state": "not_started", "failed_reviews_with_repeat": 0, "diagnoses": 0,
+            {"id": "M1", "name": "pay", "status": "not_started", "failed_reviews_with_repeat": 0, "diagnoses": 0,
              "items": [{"id": "M1.1", "statement": "pays", "check": "true", "builder_result": "open", "evidence": ""}]}]}))
         reply = "Planned PAY. Nothing for the human to decide.\\nPLANNED" + ("" if os.environ.get("FAKE_PLAN_BARE") else ": " + ", ".join(files))
         side = os.environ.get("FAKE_PLAN_SIDE")
@@ -570,7 +570,7 @@ class Repo(Clean):
         evidence, and the record saying so. Returns the commit, for a review. It stands in for a builder turn
         (1.9 s) where a test only needs something to review (0.2 s)."""
         m1 = m1 or milestone("M1", "ready_for_review", ["pass"], inspect="frame sequence")
-        m1["state"] = "ready_for_review"
+        m1["status"] = "ready_for_review"
         for i in m1["items"]:
             i["builder_result"] = "pass"
         self.write_done([proved(m1), milestone("M2", "not_started", ["open"])], ready=("M1",))

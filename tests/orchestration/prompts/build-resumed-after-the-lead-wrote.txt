@@ -1,3 +1,3 @@
 The console is unlocked now.
 
-Still binding: the goal is every item of M2 pass with evidence and the work merged with `python3 /skills/orchestration/build/scripts/agent_loop.py merge --worktree .`, with M2's state left in_progress for the script to set. In docs/plans/APPLE-TILE/DONE.json, change only M2's items' status and evidence, and its state only to in_progress. The project's rules are in ORCHESTRATE.md; re-read them if this conversation no longer holds them.
+Still binding: the goal is every item of M2 pass with evidence and the work merged with `python3 /skills/orchestration/build/scripts/agent_loop.py merge --worktree .`, with M2's status left in_progress for the script to set. In docs/plans/APPLE-TILE/DONE.json, change only M2's items' builder_result and evidence, and its status only to in_progress. The project's rules are in ORCHESTRATE.md; re-read them if this conversation no longer holds them.
