@@ -57,7 +57,7 @@ keeps the project's records. Run them as `python3 <the build skill's folder>/scr
    commit that sets `ready_for_review` or `done`.
 3. The work you finished is ticked in `PLAN.md`, and `LOG.md` has an entry of a few lines saying what you did,
    with what you verified kept apart from what you think is probably true. Longer notes go in the module's
-   evidence folder, linked from the entry. Write no status lines in the plan: the script writes the owner's page,
+   evidence folder, linked from the entry. Write no status lines in the plan: the script writes the human's page,
    `STATUS.md`, from the done-when file.
 4. Your last line is `DONE`, or `BLOCKED <reason>: <what would unblock it>`, or `NEEDS_CONTEXT: <what is
    missing>`. The reason is one of `needs_human_feedback`, `needs_access`, `needs_hardware` or `needs_dependency`,
@@ -87,11 +87,11 @@ Some items can't be finished by a builder alone. The planner marks them with a `
 what is needed:
 
 - `human_feedback`: someone has to look at the result and judge it, because you can't tell. Do every other item
-  first, and save the evidence the owner will look at. Then end with `BLOCKED needs_human_feedback`, naming the
-  items and the question to put to the owner. The lead asks them, and the script records their reply as Human
+  first, and save the evidence the human will look at. Then end with `BLOCKED needs_human_feedback`, naming the
+  items and the question to put to the human. The lead asks them, and the script records their reply as Human
   Feedback. When a later session reads that reply, cite where the script recorded it rather than restating it.
-- `access`: the owner has to approve a permission or a prompt, such as Computer Use for an app. Ask for that
-  access as soon as your session starts, so the prompt appears while the owner is there. Their approval in the
+- `access`: the human has to approve a permission or a prompt, such as Computer Use for an app. Ask for that
+  access as soon as your session starts, so the prompt appears while the human is there. Their approval in the
   prompt is all you need, so don't ask them to confirm it in words. If the prompt can't appear, because the session
   runs in the background, do every other item and end with `BLOCKED needs_access`, naming what has to be approved.
 - `hardware`: a device has to be connected, such as an iPhone. If it is there, use it. If not, do every other item
@@ -99,7 +99,7 @@ what is needed:
 
 ## What you write
 
-The lead reads your last line, your handoff and your log entry, and passes what matters to the owner. Write them
+The lead reads your last line, your handoff and your log entry, and passes what matters to the human. Write them
 in whole sentences, the way the `prompting-agents` skill describes. Name an item by its ID and a few words of what
 it is about, such as "D2.5, the window resize recording", and a module by its name in the plans, not by a gate or
 a crate. In one project a builder's "G3b needs render-owner support" cost a planner turn spent finding out which
@@ -117,11 +117,11 @@ change to the camera. In the same project, other builders re-ran every capture a
 come in. Link evidence by its path from the repository's root, because your worktree's absolute paths stop
 working when it is reused.
 
-Prove an item that needs the owner at the machine, for human feedback or for access, after your last merge, on a
-build of the merged commit, so that the owner's time is spent once. Don't rebuild an older commit to match
+Prove an item that needs the human at the machine, for human feedback or for access, after your last merge, on a
+build of the merged commit, so that the human's time is spent once. Don't rebuild an older commit to match
 evidence you took earlier; take that evidence again instead. In one project a builder rebuilt an older commit so
 that a new recording would match an old one, and the reviewer found that 96 of the 406 source files differed
-from the commit under review. That cost the owner's sitting and a round.
+from the commit under review. That cost the human's sitting and a round.
 
 Keep any script a proof runs, and anything an item's `check` reads, in the repository. The script runs the checks
 in its own clean checkout, where ignored folders such as `tmp/` are empty or missing, so a check that reads from
@@ -155,7 +155,7 @@ keep the best round.
 
 ## The review
 
-The lead is the agent the owner chats with. When a lead is running the build, it started you, and it starts the
+The lead is the agent the human chats with. When a lead is running the build, it started you, and it starts the
 reviewer too. It also doesn't take your word for anything: after you finish, the script's `run` command makes a
 clean copy of the main branch and runs the test command and every item's `check` there, and only if they pass
 does it set the milestone to Ready for Review.
@@ -166,10 +166,10 @@ work and prints `READY_FOR_REVIEW` once it has set the milestone Ready for Revie
 failed, for you to fix and merge again. A `READY_FOR_REVIEW` with `review: false` means the milestone is Done and
 needs no reviewer. Otherwise you start the reviewer, with
 `agent_loop.py review --module <M> --milestone <id> --commit <sha> --worktree .`, where the commit is the one that
-result names. If the owner uses both Claude Code
+result names. If the human uses both Claude Code
 and Codex, add `--host` with the one you are not running in. Pass the command nothing else, so the reviewer forms
 its own view. Only a review started by that command is saved, and only a saved review can set the milestone to
-Done. Without one, the owner has to accept the milestone by hand. If you can't start a review, end with `DONE` and
+Done. Without one, the human has to accept the milestone by hand. If you can't start a review, end with `DONE` and
 say the milestone still needs one.
 
 When a review fails, run `agent_loop.py next --module <M> --milestone <id> --worktree .` and do what it prints.
@@ -191,7 +191,7 @@ and what you found.
 
 A result you can't explain, such as a test that fails on one machine or a screenshot that differs from the
 last run, isn't a reason to end with `BLOCKED`. It is a problem to find and fix. If fixing it needs a fact or a
-choice only the owner has, end with `NEEDS_CONTEXT:` and the question, and the lead puts it to the owner.
+choice only the human has, end with `NEEDS_CONTEXT:` and the question, and the lead puts it to the human.
 
 On Codex, a browser, or any other program that needs more than the `workspace-write` sandbox allows, won't start
 inside the sandbox. Ask to run that command outside it before you end with `BLOCKED`. Each request is granted or
@@ -236,7 +236,7 @@ and builders worked with their sessions nearly full.
   decision.
 
 When you need a name for something new and the glossary has none, add an entry in the same commit, with the line
-`Proposed: by builder, <date>. Not yet agreed by the owner.` Mention it in your report and carry on. If your merge
+`Proposed: by builder, <date>. Not yet agreed by the human.` Mention it in your report and carry on. If your merge
 then fails because another builder added an entry to the same file, keep both.
 
-This skill covers one milestone. To keep going past it, or to run with no one watching, the owner uses `/build`.
+This skill covers one milestone. To keep going past it, or to run with no one watching, the human uses `/build`.

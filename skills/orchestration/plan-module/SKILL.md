@@ -15,30 +15,31 @@ so everything they need has to be in the files you write. You are the planner.
 The project settings are in `ORCHESTRATE.md` at the root of the repository. They say where things are kept, how
 the project is tested, and what this project cares about. If there is no such file, write it from
 [the template](references/profile.md), filling in what you can work out from the repository. In a chat with the
-owner, the person the project is for, ask once for the rest. When the script's `plan` command started you, there
+human, the person the project is for, ask once for the rest. When the script's `plan` command started you, there
 is nobody to ask, so take the safest reading and list what you assumed. The script is `agent_loop.py`, in the build
 skill's `scripts/` folder. It is a set of commands that start agents, run the tests and keep the records. The lead,
-the agent the owner chats with, runs those commands.
+the agent the human chats with, runs those commands.
 
-Two files in the plans folder say what the owner wants. Read them if they exist.
+Two files in the plans folder say what the human wants. Read them if they exist.
 
-`BRIEF.md` is the project brief, which the owner approved before planning. Don't edit it. It is the owner's page,
-and the lead changes it when the owner says something new. Its numbered decisions come in three kinds, and you
+`BRIEF.md` is the project brief, which the human approved before planning. Don't edit it. It is the human's page,
+and the lead changes it when the human says something new. Its numbered decisions come in three kinds, and you
 treat each differently:
 
-- A decision in the owner's words, or one the owner agreed to, is fixed. Carry it into the design in the same
+- A decision in the human's words, or one the human agreed to, is fixed. Carry it into the design in the same
   words, and point at it by its number.
 - A decision marked as the agent's is yours to change, with an `Assumption:` line in the plan that says so.
 - Under "Still open", a question not yet decided is yours to settle with an `Assumption:` line. One marked "the
   planner chooses" is yours to settle without one.
 
 Take the `Builders:`, `Merge:` and `Owner decides` lines of the project settings from the brief's section "How
-the owner wants to work". If the owner named a model or an effort for one kind of agent there, write the line for
+the human wants to work". A brief written by an older version of this set says "the owner" for the human, and
+calls that section "How the owner wants to work". If the human named a model or an effort for one kind of agent there, write the line for
 it, as [the settings reference](references/profile.md#a-model-or-an-effort-for-one-kind-of-agent) describes.
 
 `GLOSSARY.md` holds the agreed name for each thing in the project. Use those names in the design, the items and
 the interfaces. When you need a name for something new, add an entry with the line
-`Proposed: by planner, <date>. Not yet agreed by the owner.`, and mention it in your report.
+`Proposed: by planner, <date>. Not yet agreed by the human.`, and mention it in your report.
 
 ## What you write
 
@@ -53,7 +54,7 @@ folder. You write four files in it:
   range. It names the mechanisms that produce that, what the module provides to other modules, and what it may
   cost, if cost matters.
 - `PLAN.md` is the plan file: what is left to build, milestone by milestone, and the assumptions still open for
-  the owner. It has no status lines and no history.
+  the human. It has no status lines and no history.
 - `LOG.md` is the module's history, one dated line per event, newest at the bottom.
 - `DONE.json` is the done-when file. For each milestone it lists the items and how each is proved. A script reads
   it, so [the format](references/done-when.md#donejson) is strict. [Ways to prove an item](references/proofs.md)
@@ -65,11 +66,11 @@ nobody can correct it without sending the design back for review, because an app
 word.
 
 [The module's files](references/done-when.md) shows each file's shape and the whole layout of the plans folder.
-Every project uses the same layout so the owner and every agent always know where to look.
+Every project uses the same layout so the human and every agent always know where to look.
 
 Name each milestone for what someone can see or do once it is Done, in plain words, such as "A new user signs up
-and lands on an empty dashboard". The script puts those names on `STATUS.md`, the page the owner reads, so a name
-like "M2 auth handler refactor" tells the owner nothing.
+and lands on an empty dashboard". The script puts those names on `STATUS.md`, the page the human reads, so a name
+like "M2 auth handler refactor" tells the human nothing.
 
 Keep the plan file short. A Done milestone shrinks to its heading and a link to its review. Briefs written for
 reviews go to `docs/evidence/<MODULE>/`, and design goes in `DESIGN.md`. The script refuses a plan over about
@@ -100,7 +101,7 @@ the script reads:
 | 1 | AUTH | People sign in, and stay signed in across devices | |
 ```
 
-`What it's for` is one plain sentence for the owner. Leave status out of the table, because the script adds it on
+`What it's for` is one plain sentence for the human. Leave status out of the table, because the script adds it on
 `STATUS.md`, where a module you have listed but not yet planned shows as Not planned yet. After the table, say what
 each module owns and list each interface, which is what one module provides to the others.
 
@@ -151,31 +152,31 @@ lot of effort goes into tuning mechanisms that could never have worked. Where th
 with money, say what keeps it exact and up to what size of input. A reviewer will try the edge of any range the
 design leaves open.
 
-### The owner's words
+### The human's words
 
-Plan what the owner's words say, not a narrower thing that is easier to pin down. Where their words could be read
+Plan what the human's words say, not a narrower thing that is easier to pin down. Where their words could be read
 more widely than your plan covers, take the wider ordinary reading when it costs little: which letters count as
 "accents", how a "cli called x" is run, what a size limit is measured in. Otherwise write the reading you chose in
-the plan's `## Open for the owner` section, as one line that starts `Assumption:`, so the owner can overturn it
-in a line. When the owner answers, delete the line and note the answer in the log. A question you
-would have asked the owner goes there too, with the answer you assumed. The script counts those lines and lists
-them in the owner's report. In one test run a planner read "transliterate accents" as letters that decompose in
+the plan's `## Open for the human` section, as one line that starts `Assumption:`, so the human can overturn it
+in a line. When the human answers, delete the line and note the answer in the log. A question you
+would have asked the human goes there too, with the answer you assumed. The script counts those lines and lists
+them in the human's report. In one test run a planner read "transliterate accents" as letters that decompose in
 Unicode, and said no decision was needed. Three reviewers then passed a tool that turned Ørsted into "rsted",
 because it matched the plan.
 
-Add a requirement only when the owner's words or the design need it, because reviewers fail the build on every
+Add a requirement only when the human's words or the design need it, because reviewers fail the build on every
 requirement you add. In another test run a planner decided that a small accounting tool's output must fit 80
-columns. Three of the four findings that failed its reviews were about that limit, which the owner never asked
+columns. Three of the four findings that failed its reviews were about that limit, which the human never asked
 for.
 
-Quote the owner's request word for word at the top of the design, and name the project brief there if there is
-one. Reviewers judge the design against the request, and that quote is all they have of the owner. One reviewer
+Quote the human's request word for word at the top of the design, and name the project brief there if there is
+one. Reviewers judge the design against the request, and that quote is all they have of the human. One reviewer
 found the request cut short in a commit message, and judged against the planner's summary of it instead.
 
-Quote only the owner: the brief, or words your task marks as the owner's, in quotation marks with a date. The
-rest of a task is the lead's, or the script's. When no words of the owner's were passed on, say so, as in "The
-owner's words weren't passed on; this design answers the lead's task", rather than quoting the task. In one
-project three designs quoted the lead's summary as the owner's request, and one quoted the task the script writes
+Quote only the human: the brief, or words your task marks as the human's, in quotation marks with a date. The
+rest of a task is the lead's, or the script's. When no words of the human's were passed on, say so, as in "The
+human's words weren't passed on; this design answers the lead's task", rather than quoting the task. In one
+project three designs quoted the lead's summary as the human's request, and one quoted the task the script writes
 after a failed design review.
 
 ### Milestones and items
@@ -191,7 +192,7 @@ splitting once its models could hold a longer build. A milestone may have as man
 each item short and choose its proof on purpose.
 [What makes a good item](references/done-when.md#what-makes-a-good-item) says how, and why long items get rewritten.
 
-Work judged by taste, such as a game's look, a set of 3D assets or a visual design, starts with options the owner
+Work judged by taste, such as a game's look, a set of 3D assets or a visual design, starts with options the human
 chooses from, because no reviewer can settle taste for them. Read
 [subjective work](references/proofs.md#subjective-work) before you write its milestones.
 
@@ -199,14 +200,14 @@ Some items can't be finished by a builder alone. Mark each with a `needs` field,
 needed, and whose `what` says it in plain words:
 
 - `human_feedback`, when someone has to look at the result and judge it, because no agent can tell. The builder
-  does everything else first, and the milestone stops until the owner replies.
-- `access`, when the owner has to approve a permission or a prompt, such as screen recording. The builder can
-  finish it only in a visible session while the owner is at the machine, so the milestone runs when the owner says
+  does everything else first, and the milestone stops until the human replies.
+- `access`, when the human has to approve a permission or a prompt, such as screen recording. The builder can
+  finish it only in a visible session while the human is at the machine, so the milestone runs when the human says
   they are there.
 - `hardware`, when a device has to be connected, such as a phone. The builder can finish it only while the device
   is there.
 
-A milestone with such an item still open holds back every later milestone of the module, so put the owner's
+A milestone with such an item still open holds back every later milestone of the module, so put the human's
 judgements in the last milestone, unless later work depends on the answer. [The done-when
 reference](references/done-when.md#donejson) has the field's form.
 
@@ -218,14 +219,14 @@ by asking to run that command outside the sandbox, and each request is granted o
 a reviewer on Codex asked and was granted it each time. So plan for the review to move to Claude if it is refused,
 and don't plan for a reviewer to judge the builder's screenshots in place of its own. A build that drives a
 browser throughout shouldn't rest on asking. Say so in the design, and either list
-`Codex sandbox: danger-full-access` as a decision for the owner, who is the one giving up the sandbox, or name a
+`Codex sandbox: danger-full-access` as a decision for the human, who is the one giving up the sandbox, or name a
 Claude builder for that module.
 
 A condition the work must survive, such as a locked screen or a denied permission, is not a condition for checking
 it. Have the check record that state and pass either way, unless the claim really depends on it. Otherwise checking
-stops whenever the owner uses the machine.
+stops whenever the human uses the machine.
 
-Use only cost targets that are real, from the project brief or from the owner. If nobody has set one, record
+Use only cost targets that are real, from the project brief or from the human. If nobody has set one, record
 measurements and set tripwires, and don't make a number up.
 
 The same goes for every number an item tests against, such as a precision bound. A bound nobody measured is a
@@ -242,7 +243,7 @@ caught for nothing from then on.
 1. The design, the plan file and the done-when file exist, and agree with each other, with the interfaces and with
    the module's entry in the module list.
 2. A reviewer has read the design. Run `agent_loop.py review --module <M> --milestone design --worktree .`, which
-   gives a new reviewer only the owner's request and the design, and saves the result. The done-when items are
+   gives a new reviewer only the human's request and the design, and saves the result. The done-when items are
    part of what it approves, because they are what the builder will be held to. No builder starts on the
    module until that result is Design Approved. Act on what the review finds, and note the review in the log. If the `plan` command started you and you can't start a review, say the design still
    needs one, and the lead runs it.
@@ -254,10 +255,10 @@ caught for nothing from then on.
    that out.
 4. The module table in `ARCHITECTURE.md` lists the module, and every milestone is named for what someone can see
    or do.
-5. Your report ends with what is left for the owner: each decision on the `Owner decides` list in the project
+5. Your report ends with what is left for the human: each decision on the `Owner decides` list in the project
    settings, and each assumption. Put them last, because the lead is shown the end of a long report.
 
-The `Owner decides` list says what has to go to the owner. Every other decision about the plan is yours.
+The `Owner decides` list says what has to go to the human. Every other decision about the plan is yours.
 
 ## When a milestone keeps failing on the same finding
 
@@ -281,7 +282,7 @@ saves the new items as the approved ones and clears the old proof, because that 
 Give each milestone you split off the same `replans` and `diagnoses` counts as the one it came from. The script
 can't tell which new milestone came from which, so you set them. With the counts carried over, a second run of
 four repeated failures ends at Blocked, with the reason Too Many Failed Reviews (`too_many_failed_reviews`), where
-the milestone waits for the owner, rather than at another rewrite.
+the milestone waits for the human, rather than at another rewrite.
 
 ## When reviews keep finding something new
 
@@ -296,7 +297,7 @@ why, and say so in your report:
   `KEEP <MODULE> <milestone>: builder|reviewer|owner: <why>`, naming who has to act. `builder` is for a builder
   who keeps breaking something, and starts a new builder session with your reasons. `reviewer` is for findings
   that go beyond the items, and the next reviewer is told to judge the items as written. `owner` is for a decision
-  only the owner can make, and sets the milestone to Blocked: Too Many Failed Reviews, with your diagnosis.
+  only the human can make, and sets the milestone to Blocked: Too Many Failed Reviews, with your diagnosis.
 
 The script starts the milestone's counts again either way, and a second run to six failed reviews sets it to
 Blocked: Too Many Failed Reviews. Leave
@@ -305,9 +306,9 @@ the counts and `findings` alone: the script puts back any change a plan makes to
 Don't edit an `ACCEPTED.json` record file or `STATUS.md`. Only the script writes those, and it rejects a plan that
 touches one.
 
-## When the owner changes what they want
+## When the human changes what they want
 
-The lead sends you the owner's words as your task, and has already added them to the brief if there is one. Change
+The lead sends you the human's words as your task, and has already added them to the brief if there is one. Change
 the plan to match, and quote their words in `LOG.md`. Rewrite each item their words reach from what it claims,
 as for a rewrite after failed reviews. This doesn't count as a rewrite after failed reviews,
 unless the milestone was already Waiting: For Replan; then your change is the rewrite, and the script counts it. A

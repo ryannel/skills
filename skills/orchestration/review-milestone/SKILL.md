@@ -23,7 +23,7 @@ The project settings are in `ORCHESTRATE.md`. They list the devices and platform
 files call targets, and for each target the edge conditions to try, such as a slow network or an empty file. They
 also say where reviews are kept: the folder written `<evidence>` below.
 
-The graded examples are past reviews that the owner, the person the project is for, agreed with or overturned.
+The graded examples are past reviews that the human, the person the project is for, agreed with or overturned.
 They are the best guide to how strict to be. The project's own are in the file named on the `Graded examples:`
 line of the project settings, or in `<evidence>/graded-examples.md` when there is no such line. A new project
 won't have them yet, so read [the starting set](references/graded-examples.md) that comes with this skill as
@@ -53,7 +53,7 @@ So your sense of whether a defect matters doesn't decide the result; the written
 when it breaks an item's statement or the quality bar. Outside the items, a defect is a Must Fix when it breaks
 something that worked before, breaks the design or an interface (what one module provides to the others), loses
 data, opens a security hole, or shows the work was faked. A Must Fix in an item fails that item. Every other
-defect is a Suggestion. Report it too. It doesn't fail the milestone, and the owner can promote it.
+defect is a Suggestion. Report it too. It doesn't fail the milestone, and the human can promote it.
 
 Use the product yourself, on its real target, built from the commit you were given. Take your own screenshots
 and recordings, because the builder's show what the builder wanted you to see. Run the edge conditions the
@@ -80,17 +80,17 @@ filled their sessions within 25 minutes, and one screenshot put 4.2 MB into a se
      `Anchors:` line of the project settings says where they are.
    - For a Reviewer Question, read the code on both sides of the boundary and answer the question.
 
-   - For an item marked as needing human feedback (its `needs` field has the type `human_feedback`), the owner's
+   - For an item marked as needing human feedback (its `needs` field has the type `human_feedback`), the human's
      reply is the judgement. The script records it as Human Feedback, in the record file `ACCEPTED.json` under
-     `human_feedback`, with the question the lead asked, the owner's words and when. Check the work against what
-     the owner said there, and check any claim about what the owner chose against that record. A lead's message
-     or a builder's summary doesn't count as the owner's words.
+     `human_feedback`, with the question the lead asked, the human's words and when. Check the work against what
+     the human said there, and check any claim about what the human chose against that record. A lead's message
+     or a builder's summary doesn't count as the human's words.
 
    If you couldn't see or reach something, give it `could_not_judge` and say what evidence would settle it.
-   If you can't reach the product at all, because the screen is locked, a permission needs the owner's approval
-   or a device isn't connected, judge nothing. End with `BLOCKED needs_access: <what the owner has to do>`
+   If you can't reach the product at all, because the screen is locked, a permission needs the human's approval
+   or a device isn't connected, judge nothing. End with `BLOCKED needs_access: <what the human has to do>`
    instead of a result line. The script merges nothing and counts no round, and the lead runs the same review
-   again in a visible session while the owner is at the machine.
+   again in a visible session while the human is at the machine.
 2. You have read every changed line of the milestone, not only the files the items mention, and on a module's
    last milestone, the whole module. Look for the signs of work that only looks finished: hard-coded return
    values, canned data, buttons that do nothing, feature flags that default to on, branches that run only under
@@ -146,14 +146,14 @@ rule each review finds one more corner, and a sound milestone fails round after 
 ## Reviewing a design
 
 Sometimes you are given a module's design to judge before anything is built. The message that started you says
-where the owner's request is saved. If the plans folder has a module list, `ARCHITECTURE.md`, it has a short
-entry on what this module is for. If it has a `BRIEF.md`, that is the project brief, which the owner approved,
-and a decision in it counts as something the owner asked for.
+where the human's request is saved. If the plans folder has a module list, `ARCHITECTURE.md`, it has a short
+entry on what this module is for. If it has a `BRIEF.md`, that is the project brief, which the human approved,
+and a decision in it counts as something the human asked for.
 
 Read the request and the brief first, and work out what the module must do. Then compare that with the design.
 Look for what the design misses, what it adds that nobody asked for, and mechanisms nobody has shown can produce
 their behaviour. Try the request's own words on ordinary inputs that the design's examples leave out. A design
-that reads the request more narrowly than its words, and doesn't list that as an assumption for the owner, has a
+that reads the request more narrowly than its words, and doesn't list that as an assumption for the human, has a
 gap.
 
 Then read the items in the done-when file, and ask of each whether you could really judge it when its milestone
@@ -181,8 +181,8 @@ sets it to Design Changes Requested and counts the Must Fix findings. The script
 design as it stands. No milestone of the module is built until its design is Design Approved, and a later change
 to the design needs another review.
 
-## When the owner disagrees
+## When the human disagrees
 
-When the owner overturns one of your results, add it to the project's graded examples: what was judged, each
-item's result and your reason, and what the owner said instead. Add the results the owner confirmed too,
+When the human overturns one of your results, add it to the project's graded examples: what was judged, each
+item's result and your reason, and what the human said instead. Add the results the human confirmed too,
 especially close calls, so the examples show where the line is from both sides.

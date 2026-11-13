@@ -17,7 +17,7 @@ Hosts:
 
   Sessions run headless as above by default, so nothing opens in either app. With ORCHESTRATE_VISIBLE=1, on a Mac
   with the Codex app or Claude desktop running, codex and claude sessions are ones the app lists under the project,
-  where the owner can watch, steer, pause (Stop) and take over; the script still drives and checks every turn. Codex
+  where the human can watch, steer, pause (Stop) and take over; the script still drives and checks every turn. Codex
   threads then run in the app itself, and each new thread brings the app to the front. Claude turns run in the script's
   own signed-in `claude -p`, imported into the Code tab. When the app can't take them (another OS, app not installed
   or not running, Claude CLI signed out), they run headless. Every result line from a turn says which: `path` is
@@ -27,20 +27,20 @@ Hosts:
 Where the plans live. The settings' `Plans` line names the plans folder (default docs/plans; a project with no
 Plans line, no docs/plans and a docs/modules folder keeps docs/modules). Each module has a folder of its own there:
   <plans>/<MODULE>/DESIGN.md      the planner's design
-  <plans>/<MODULE>/PLAN.md        the milestones as they stand now, with open assumptions under `## Open for the owner`
+  <plans>/<MODULE>/PLAN.md        the milestones as they stand now, with open assumptions under `## Open for the human`
   <plans>/<MODULE>/LOG.md         short dated entries: what changed and why
   <plans>/<MODULE>/DONE.json      the done-when file; a folder with one is a module
   <plans>/<MODULE>/ACCEPTED.json  the record, which only the script writes
   <plans>/<MODULE>/BRIEF.md       a feature brief, when the module has one
 The project's own files sit beside the folders: BRIEF.md, GLOSSARY.md, ARCHITECTURE.md (which opens with the module
-table, `| # | Module | What it's for | Needs |`, in build order) and STATUS.md, the owner's page, which the script writes
+table, `| # | Module | What it's for | Needs |`, in build order) and STATUS.md, the human's page, which the script writes
 after each record it merges and nobody edits. Plans still in the older flat layout (<MODULE>-DONE.json and the rest
 side by side in the plans folder) stop every command until `migrate` has moved them.
 
 What the script owns. In each module's folder it keeps ACCEPTED.json, which only the script writes and
 which is committed, so every worktree, clone and lead sees the same thing. Per milestone it holds the authorised hash
 of the acceptance definitions, the Ready for Review record the script checked (code commit and the main branch's tip it ran the checks on),
-the reviews that judged it, and whether it was accepted, by checks, a reviewer or the owner. It also holds the
+the reviews that judged it, and whether it was accepted, by checks, a reviewer or the human. It also holds the
 module's design review. A milestone is finished only when the record accepts it with its current definitions; a
 `done` state in the done-when file isn't enough. A module with no record yet has its definitions authorised and
 nothing accepted, with its design review owed. Only in a repository that has never had a record file is a module
@@ -75,7 +75,7 @@ Subcommands:
                       that need someone decide it once every other item passes, and otherwise it is needs_context
                       (also the reason for a builder's `NEEDS_CONTEXT: ...` ending). A run that isn't visible stops
                       BLOCKED needs_access or needs_hardware by itself once only such items are open, and its `next`
-                      is the same `run` with ORCHESTRATE_VISIBLE=1, for when the owner is at the machine; a visible
+                      is the same `run` with ORCHESTRATE_VISIBLE=1, for when the human is at the machine; a visible
                       run on a milestone blocked that way unblocks it and builds.
         CHECKS_FAILED the agent said DONE (or its goal completed) three times without the work holding up
         INVALID       the done-when file is malformed, or something outside the builder's fields changed
@@ -109,7 +109,7 @@ Subcommands:
                       a milestone
         WRONG_MODEL_OR_EFFORT
                       a turn ran on a model or effort other than the named ones
-        PAUSED        `pause` stopped it, the owner stopped it or has it open in the app, or the Codex goal is
+        PAUSED        `pause` stopped it, the human stopped it or has it open in the app, or the Codex goal is
                       paused; `run` again carries on (re-activating a paused goal on a visible thread)
         A run on the same milestone resumes its session (with --message as the first prompt, e.g. the reviewer's
         findings) unless --fresh is given or the host, model or effort changed. A new milestone starts a new session.
@@ -117,8 +117,8 @@ Subcommands:
         --checks-only starts no agent: it runs the script's checks on a milestone whose work is merged with every item
         passing, and prints READY_FOR_REVIEW, or CHECKS_FAILED with `reasons`. A builder in a chat with no lead uses it.
         Each resumed turn restates the goal and what binds the builder (its fields, `merge`, the test command, the
-        settings' `Licences and paths not to touch` and `Owner decides` lines, items that need someone, owner rules), except
-        on a Codex thread whose goal is active, which gets only the owner rules; `goal` in the result says which, and `constraints_missing` names settings lines that
+        settings' `Licences and paths not to touch` and `Owner decides` lines, items that need someone, the human's rules), except
+        on a Codex thread whose goal is active, which gets only the human's rules; `goal` in the result says which, and `constraints_missing` names settings lines that
         weren't there to restate. Ready for Review records and reviews record the requested host, model and effort, the CLI's
         version, under `observed` only what the host's own output showed, and under `usage` the tokens its headless
         turns reported (input not read from cache, cache reads, output, and Claude's list-price estimate for that
@@ -136,7 +136,7 @@ Subcommands:
         the lead named on that run is kept, and a design review owed after a planner turn names the host that
         didn't plan it. A milestone review's host is left to
         `review`, which takes the builder's from the Ready for Review record. `by` names who runs
-        `command` (lead or planner). `decides: owner` marks a decision only the owner may make: `ask` is what the
+        `command` (lead or planner). `decides: owner` marks a decision only the human may make: `ask` is what the
         lead asks them in chat, and `command` the `owner` command the lead runs once they've replied, with their
         words in --said (feedback) or --text; the script never runs those itself. For Blocked: Needs Human Feedback,
         `next` is `owner feedback` naming the blocked items, and `ask` shows each item, what it needs judged and
@@ -160,7 +160,7 @@ Subcommands:
         that built the milestone swapped, or for a design review the host of the planner turn that wrote the plan
         swapped, else the settings' default host swapped). REVIEWED's `next` is the
         {command, by, why}. After a failed milestone review `rounds` counts its failed reviews since the last
-        re-plan, diagnosis or owner decision, `fails` those with a finding that repeated an earlier round's
+        re-plan, diagnosis or decision of the human's, `fails` those with a finding that repeated an earlier round's
         (`repeated` names them), and `ladder` (and `next.ladder`) is the escalation word (same-session,
         fresh-session, replan, diagnose, too_many_failed_reviews) with `next` the command it calls for: `run
         --message` with the findings, `run --fresh --message`, `plan` with a re-plan or diagnosis task naming the
@@ -182,7 +182,7 @@ Subcommands:
         definitions (resetting proof on milestones whose definitions changed). PLANNED lists the modules whose
         design review is now owed. BLOCKED or NEEDS_CONTEXT from the planner, or UNFINISHED, merges nothing; the
         files it changed are listed under `set_aside` and kept in a stash (`stash`), and any commits on a branch
-        (`branch`), since the planner's checkout is reset for the next plan. Its `report` keeps the end of the planner's message (where owner decisions go),
+        (`branch`), since the planner's checkout is reset for the next plan. Its `report` keeps the end of the planner's message (where the human's decisions go),
         up to 6000 characters. PLANNED's `next` is the owed design review on the review host, or `ready`;
         `assumptions` counts, per module, the `Assumption:` lines in its PLAN.md. The whole task is kept in the plan
         commit's body and in each module's record file under `briefs` (the authorisation stamps name only its
@@ -211,7 +211,7 @@ Subcommands:
 
   ready [--worktree PATH]       What each module's next milestone is waiting for, read at the main branch's tip. When
         nothing is ready it adds `next`. A milestone Waiting for a re-plan or diagnosis, or Blocked with too many
-        failed reviews, carries its own `next` (the planner's or the owner's command), never as ready. `plan_ahead`
+        failed reviews, carries its own `next` (the planner's or the human's command), never as ready. `plan_ahead`
         lists the module table's modules with no plan yet whose Needs are all planned, in build order, each with
         the `plan` command in its `next`. It names unmerged plan files (`unmerged_plans`) as `run` does, and
         `settings_differ` when ORCHESTRATE.md here differs from the tip's. With no ORCHESTRATE.md it gives `unplanned`
@@ -228,16 +228,16 @@ Subcommands:
         Refuses files outside those, record files, a hand-edited STATUS.md, files under the old flat names,
         a PLAN.md or LOG.md that fails the plan checks (as a planner turn's merging does), invalid done-when files, changed definitions on a module
         that's no longer a draft (with `next` naming `plan` and `owner scope`), a changed ORCHESTRATE.md the tip
-        already has (the lead commits it once the owner agrees), anything `ready` would then call invalid, files the tip changed since,
+        already has (the lead commits it once the human agrees), anything `ready` would then call invalid, files the tip changed since,
         and any session the script started. While it merges it has a `runs` record, so a run turned away names it.
         ADOPTED, NOTHING, REFUSED or FAILED (with `next` when the repository has no commits to build on).
   status [--module CORE] --worktree PATH [--format md]   Every milestone with its state, blockers and last verdict,
         and which modules (and the planner) have a live run. A milestone the script hasn't checked yet shows as `done,
         unchecked`. It warns about a module folder with no row in ARCHITECTURE.md's module table (`ready` lists the
         same under `module_table`), and about tracked PLAN.md or *-PLAN.md files outside the plans folder.
-        --format md prints STATUS.md, the owner's page, as the script writes it after each record it merges (in a
+        --format md prints STATUS.md, the human's page, as the script writes it after each record it merges (in a
         commit of its own, which never fails or holds up the record), plus any plan files here that haven't merged.
-        The page opens with an overview (a progress line, what waits on the owner, what is under way or next, and
+        The page opens with an overview (a progress line, what waits on the human, what is under way or next, and
         what was accepted in the last 7 days), then every module in build order with its status.
   migrate --worktree PATH [--to docs/plans]
         Moves plans from the old flat layout into a folder per module: <M>.md to <M>/DESIGN.md, <M>-PLAN.md to
@@ -287,10 +287,10 @@ Subcommands:
         `usage` its Ready for Review records and reviews carry in the committed record file, and marked as from the record.
   report [--since 24] --worktree PATH [--write]
         The factual half of the lead's report: what closed, the verdicts with links (every design review in the
-        window, DESIGN CHANGES ones included), every decision recorded in the owner's name with their words (for the
-        owner to spot one they didn't make), the planner turns that authorised definitions with the task each
-        was given (where the lead puts the owner's words), the planners'
-        assumptions (lines starting `Assumption:` in each <plans>/<MODULE>/PLAN.md) for the owner to overturn, what is
+        window, DESIGN CHANGES ones included), every decision recorded in the human's name with their words (for the
+        human to spot one they didn't make), the planner turns that authorised definitions with the task each
+        was given (where the lead puts the human's words), the planners'
+        assumptions (lines starting `Assumption:` in each <plans>/<MODULE>/PLAN.md) for the human to overturn, what is
         blocked or waiting, the open items that need human feedback, access or hardware, and cost (as `cost` reads it). --write puts it in
         <evidence>/build-reports/<date>.md for `adopt`, with its links relative to that file.
   next  --module CORE --worktree PATH --milestone M2   The escalation after a failed review (see done-when.md):
@@ -301,7 +301,7 @@ Subcommands:
   pause [--module CORE] --worktree PATH   Stops the runs in this repository, and their agents, cleanly.
   owner accept|rereview|reopen|scope|release --module CORE --milestone M2|design --worktree PATH --text TEXT
   owner feedback --module CORE --milestone M2 [--item M2.3]... --worktree PATH --asked TEXT --said TEXT
-        Records a decision the owner made in chat; the lead runs it, with the owner's words in --text (--said for
+        Records a decision the human made in chat; the lead runs it, with the human's words in --text (--said for
         feedback, where --text also works) as they gave them. Every verb records those words, when, and which verb, under `decisions` in the module's record (the
         script can't tell who ran it, so it doesn't say), and `report` lists them all. Refused inside any session the
         script started (ORCHESTRATE_ROLE set: Claude's environment, and Codex's shell through shell_environment_policy,
@@ -311,7 +311,7 @@ Subcommands:
         (by default the blocked items, else every open one); it is refused for an item that needs access or
         hardware, which is done at the machine and never recorded. It puts a milestone Blocked: Needs Human
         Feedback back in the queue; the resumed builder is told to read it there, oldest first, and the reviewer
-        counts it as the owner's words. `release` takes a milestone out of In Progress when the lead that started it is gone. `scope` takes the done-when file as edited in the
+        counts it as the human's words. `release` takes a milestone out of In Progress when the lead that started it is gone. `scope` takes the done-when file as edited in the
         worktree (refused, saying nothing changed, when it matches the tip), leaves the worktree clean on the tip where it can, and says under `worktree` what to do where it
         can't. A `scope` that changes a milestone owed a re-plan is the re-plan: fails 0, one more replans, state
         not_started, listed under `replanned` with `replanned_why`. `reopen` takes a milestone Blocked with too many
@@ -434,7 +434,7 @@ GOAL_LINE = ("Call your create_goal tool with the paragraph that starts \"The go
 # this install's paths, this session's facts and the lead's note. A Codex builder makes the paragraph that starts
 # "The goal:" its goal, which Codex re-sends every turn, so nothing that is only for this turn sits in it. {lead} is the lead's --message under
 # "From the lead", after the rules, {feedback} the Human Feedback note, {earlier} names the handoff an earlier
-# session left, {needs} one rule per kind of item that needs someone, and {rules} the owner's rules; each is empty
+# session left, {needs} one rule per kind of item that needs someone, and {rules} the human's rules; each is empty
 # when there is none. {handoff} is where this session writes its own handoff if it stops short.
 BUILD_TEMPLATE = """{goal}Build milestone {milestone} of module {module}, using the build-milestone skill ({skill}).
 
@@ -469,16 +469,16 @@ it with `python3 {loop} wait <id>`, which returns when it ends with the end of i
 re-reads this whole conversation at every check.
 - Don't commit, push or change anything else. The script checks what you changed, then merges the review itself.
 - Don't start other agents.
-- If you can't reach the product at all, because the screen is locked, a permission needs the owner's approval \
-or a device isn't connected, judge nothing and end with `BLOCKED needs_access: <what the owner has to do>`. The \
-script then counts no round, and the lead runs this review again while the owner is at the machine.
+- If you can't reach the product at all, because the screen is locked, a permission needs the human's approval \
+or a device isn't connected, judge nothing and end with `BLOCKED needs_access: <what the human has to do>`. The \
+script then counts no round, and the lead runs this review again while the human is at the machine.
 
 To finish, end with the skill's last line."""
 
 DESIGN_REVIEW_TEMPLATE = """Review the design of module {module}, using the "Reviewing a design" section of the \
 review-milestone skill ({skill}).
 
-The goal: a review at {review} that says whether the design does what the owner asked for.
+The goal: a review at {review} that says whether the design does what the human asked for.
 {changed}{briefs}
 Rules:
 - This folder is a clean checkout of the main branch's tip.
@@ -500,7 +500,7 @@ or push. Never edit an ACCEPTED.json file or the plans folder's STATUS.md, which
 tries a milestone's item checks without recording anything. It leaves out the project's test command, and runs \
 each check under the item's lock, waiting while a builder holds it.
 
-To finish: say what changed and any decision the owner must make, then end with `PLANNED` once the files are \
+To finish: say what changed and any decision the human must make, then end with `PLANNED` once the files are \
 written. The script lists the files you changed itself. If nothing should change, or you can't go on, end with \
 `BLOCKED: ...` or `NEEDS_CONTEXT: ...`, and the script merges nothing."""
 
@@ -617,7 +617,7 @@ NUMBER_WORDS = {w: n for n, w in enumerate(("one", "two", "three", "four", "five
 def builders_count(text: str) -> int | None:
     """The first number in the settings' `Builders:` line, as a digit or a word ("two Codex builders"), which `run`
     keeps to; None when the line has no number, which sets no limit. In Thrum four to six builders ran against "two
-    Codex builders", once right after the lead had told the owner the setting was in force."""
+    Codex builders", once right after the lead had told the human the setting was in force."""
     value = profile_value(text, "builders")
     if not value or PLACEHOLDER.search(value):
         return None
@@ -754,15 +754,15 @@ def unplanned(worktree: Path) -> dict | None:
                                      "lead", "fast-forwards this worktree to the planned tip")}
         return {"reason": f"{ref} is planned (it has {PROFILE_FILE}), but {worktree} has none and has commits "
                           f"{ref} doesn't, so it can't simply be brought up to date. Use a worktree on {ref}, or "
-                          "ask the owner what this branch is for",
+                          "ask the human what this branch is for",
                 "behind": ref,
                 "next": next_cmd(None, "lead", "this worktree has diverged from the planned tip; the script leaves "
                                                "merging it to whoever owns that branch")}
     return {"reason": f"the project isn't planned yet: there's no ORCHESTRATE.md in {worktree}",
             "next": next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task",
-                                      "Plan the project: <what the owner asked for, in their words>"), "lead",
+                                      "Plan the project: <what the human asked for, in their words>"), "lead",
                              "a planner writes the project settings (ORCHESTRATE.md), the module table in ARCHITECTURE.md and the first module's "
-                             "plan; give it the owner's ask, and their answers on hosts, merging and checks")}
+                             "plan; give it the human's ask, and their answers on hosts, merging and checks")}
 
 
 def codex_flags(prof: dict, role: str = "build") -> list[str]:
@@ -1147,6 +1147,26 @@ def module_stem(worktree: Path, prof: dict, module: str) -> str:
                      "(/plan-module) first")
 
 
+def stem_at_tip(worktree: Path, prof: dict, module: str) -> str:
+    """module_stem, falling back to the main branch's tip, for commands that read the tip anyway. A worktree behind
+    the tip lacks a module a planner has just merged: in Thrum, `plan`'s `next` named a builder's worktree for
+    CONTENT-LOOP's design review, and the review stopped because that worktree didn't have the module yet."""
+    try:
+        return module_stem(worktree, prof, module)
+    except SystemExit:
+        try:
+            ref = tip(worktree, prof)
+        except TipError:
+            raise SystemExit(f"error: {worktree / done_rel(prof, module)} doesn't exist, and the main branch's tip "
+                             "can't be read") from None
+        stems = {n.split("/")[-1] for n in names(git(worktree, "ls-tree", "-z", "--name-only", f"{ref}:{prof['plans']}"))}
+        for stem in stems:
+            if stem.upper() == module.upper():
+                return stem
+        raise SystemExit(f"error: {module} isn't planned here or at {base_ref(prof)}; the module needs planning "
+                         "(/plan-module) first") from None
+
+
 def load_done(worktree: Path, module: str, prof: dict | None = None) -> dict:
     prof = prof or profile(worktree)
     path = worktree / done_rel(prof, module_stem(worktree, prof, module))
@@ -1318,7 +1338,7 @@ def old_needs(item: dict) -> dict:
     """An old `attended` value as the `needs` object: an attended item asked a person to do or judge something, so
     it becomes Needs Human Feedback, unless its note names an approval (Needs Access) or a device (Needs Hardware)."""
     what = item.get("attended")
-    text = what if isinstance(what, str) and what.strip() else (item.get("statement") or "the owner's judgement")
+    text = what if isinstance(what, str) and what.strip() else (item.get("statement") or "the human's judgement")
     if re.search(r"\b(approve|approval|permission|grant|prompt|computer use|screen recording|unlock)", text, re.I):
         return {"type": "access", "what": text}
     hardware = bool(re.search(r"\b(plug|connect|device|iphone|ipad|phone|hardware|usb|cable)\b", text, re.I))
@@ -1343,7 +1363,7 @@ def upgrade_doc(doc):
         elif state == "parked":
             m["state"] = "blocked"
             m["blocked"] = {"reason": "too_many_failed_reviews",
-                            "what": "it kept failing review after its rewrite or diagnosis; the owner decides"}
+                            "what": "it kept failing review after its rewrite or diagnosis; the human decides"}
         if m.get("state") == "blocked" and isinstance(m.get("blocked"), str):
             m["blocked"] = {"reason": "needs_context", "what": m["blocked"]}
         for i in m.get("items") or []:
@@ -1522,7 +1542,7 @@ ROUNDS_TO_DIAGNOSE = 6
 
 def escalation(fails: int, replans: int = 0, rounds: int = 0, diagnoses: int = 0) -> str:
     """The ladder's word for a milestone's counts: `fails` is failed reviews with a repeated finding, `rounds` every
-    failed review, both since the last re-plan, diagnosis or owner decision."""
+    failed review, both since the last re-plan, diagnosis or decision of the human's."""
     if fails >= 4:
         return "replan" if replans == 0 else "too_many_failed_reviews"
     if rounds >= ROUNDS_TO_DIAGNOSE:
@@ -1783,7 +1803,7 @@ def next_step(key: str, proj: dict, holds: dict | None = None, me: str = "") -> 
         out = {**base, "milestone": m["id"], "name": m.get("name", ""), "state": m.get("state")}
         if not authorised(m, rec):
             return {**out, "status": "invalid", "problems": [
-                f"{m['id']}: its definitions aren't the ones last authorised by a planner turn, the owner, or "
+                f"{m['id']}: its definitions aren't the ones last authorised by a planner turn, the human, or "
                 f"`adopt` while the module was a draft (see {e['stem']}/{MODULE_FILES['record']}); re-plan it, or run "
                 "`owner scope`"]}
         if m.get("state") == "blocked":
@@ -1908,7 +1928,7 @@ def fit_next(then):
 
 def next_cmd(command: str | None, by: str, why: str, **more) -> dict:
     """The `next` field: the exact command to run, who runs it (`lead` or `planner`), and why. A decision only the
-    owner may make carries `decides: owner` and an `ask`; the lead still runs its command, once they've answered."""
+    human may make carries `decides: owner` and an `ask`; the lead still runs its command, once they've answered."""
     return {"command": command, "by": by, "why": why, **more}
 
 
@@ -1946,7 +1966,7 @@ def review_rounds(worktree: Path, prof: dict, module: str, mid: str) -> tuple[li
 def round_history(worktree: Path | None, prof: dict, module: str, mid: str, after: int | None = None) -> list[str]:
     """One line per failed review the milestone's counts cover (or every one after position `after`), oldest first: what
     failed, and which findings repeated an earlier round. Read from the record at the last-fetched tip, for a
-    planner and for the owner."""
+    planner and for the human."""
     if worktree is None:
         return []
     try:
@@ -2020,7 +2040,7 @@ def diagnose_task(module: str, mid: str, rounds: int, prof: dict, worktree: Path
             f"If the plan is right, change no file (your reasons go in the line itself) and end with "
             f"`KEEP {module} {mid}: builder: <why>`, "
             "`... reviewer: <why>` or `... owner: <why>`, naming who has to act: a builder who keeps breaking "
-            "something, a reviewer whose findings go beyond the items, or the owner, for a decision only they can make.")
+            "something, a reviewer whose findings go beyond the items, or the human, for a decision only they can make.")
 
 
 def keep_round(tree: Path, current: Path) -> tuple[str, list[str]]:
@@ -2055,7 +2075,7 @@ def keep_round(tree: Path, current: Path) -> tuple[str, list[str]]:
 def settle_replans(before: dict | None, after: dict, stem: str) -> list[str]:
     """The re-plan's bookkeeping, done by the script: each milestone that was owed a re-plan in `before` and whose
     definitions `after` changes gets fails 0, one more replans than before, and state open, whatever the planner or
-    owner wrote there (so a forgotten count doesn't send the lead round again, and a done one isn't counted twice).
+    the human wrote there (so a forgotten count doesn't send the lead round again, and a done one isn't counted twice).
     Returns the milestones it settled, as `STEM Mn`."""
     old = {m.get("id"): m for m in (before or {}).get("milestones") or [] if isinstance(m, dict)}
     out = []
@@ -2134,7 +2154,7 @@ def ladder_next(word: str, module: str, mid: str, counts: dict, worktree: Path, 
 
 def reopen_next(module: str, mid: str, wt: str, worktree: Path | None, prof: dict, how: str | None = None,
                 after: int | None = None) -> dict:
-    """The owner's decision on a milestone Blocked with too many failed reviews, with each round's failures so they
+    """The human's decision on a milestone Blocked with too many failed reviews, with each round's failures so they
     can decide in one word. With no `how`, the reason and rounds the script recorded when it blocked it."""
     if how is None:
         held = {}
@@ -2150,7 +2170,7 @@ def reopen_next(module: str, mid: str, wt: str, worktree: Path | None, prof: dic
     return owner_next("reopen", module, mid, wt,
                       f"{module} {mid} is Blocked with too many failed reviews: {how}. Accept it as it is, change its "
                       "scope, reopen it for another try, or leave it blocked?",
-                      f"{how}, so the script blocked it. Report it to the owner with what failed in each round and "
+                      f"{how}, so the script blocked it. Report it to the human with what failed in each round and "
                       "your recommendation. The decision is theirs: run `owner accept` or `owner scope` instead of "
                       "reopen if that is what they choose. Later milestones of the module wait until it is decided",
                       ladder="too_many_failed_reviews", **({"history": history} if history else {}))
@@ -2166,8 +2186,8 @@ HELD_BY_SOMEONE = ("access", "hardware")  # done at the machine, not said, so no
 
 
 def owner_decisions(stem: str, rec: dict) -> list[tuple[str, str]]:
-    """(when, report line) for every decision recorded in the owner's name in a module's record: `decisions`, and
-    the stamps older records kept instead (an owner action, feedback typed or relayed, a design accepted, a scope)."""
+    """(when, report line) for every decision recorded in the human's name in a module's record: `decisions`, and
+    the stamps older records kept instead (a human action, feedback typed or relayed, a design accepted, a scope)."""
     out = [(d.get("at") or "", f"- {stem} {d.get('milestone')}" +
             (f" {', '.join(d['items'])}" if d.get("items") else f" {d['item']}" if d.get("item") else "") +
             f": {d.get('action')}, {d.get('at')}: " + (f"asked \"{d['asked']}\", said " if d.get("asked") else "") +
@@ -2190,29 +2210,29 @@ def owner_decisions(stem: str, rec: dict) -> list[tuple[str, str]]:
 
 
 def owner_cmd(verb: str, mod: str, mid: str, wt: str, items: list[str] | str | None = None) -> str:
-    """The `owner` command the lead runs once the owner has decided in chat, with their words to fill in. Feedback
-    also takes the question the lead asked, and every item the owner's words cover."""
+    """The `owner` command the lead runs once the human has decided in chat, with their words to fill in. Feedback
+    also takes the question the lead asked, and every item the human's words cover."""
     items = [items] if isinstance(items, str) else list(items or [])
     if verb == "feedback":
         return (loop_cmd("owner", "feedback", "--module", mod, "--milestone", mid,
                          *[x for i in items for x in ("--item", i)], "--worktree", wt) +
-                " --asked '<the question you asked the owner>' --said '<what the owner said, in their words>'")
+                " --asked '<the question you asked the human>' --said '<what the human said, in their words>'")
     return (loop_cmd("owner", verb, "--module", mod, "--milestone", mid, *[x for i in items for x in ("--item", i)],
-                     "--worktree", wt) + " --text '<what the owner said, in their words>'")
+                     "--worktree", wt) + " --text '<what the human said, in their words>'")
 
 
 def owner_next(verb: str, mod: str, mid: str, wt: str, ask: str, why: str, **more) -> dict:
-    """A stop that needs the owner: what the lead asks them in chat (`ask`), and the command it runs on their reply.
+    """A stop that needs the human: what the lead asks them in chat (`ask`), and the command it runs on their reply.
     The lead runs the command (`by: lead`); `decides: owner` because the decision is theirs, in their words."""
     flag = "--said" if verb == "feedback" else "--text"
     return next_cmd(owner_cmd(verb, mod, mid, wt, more.pop("items", None)), "lead",
-                    why + f". Ask the owner in chat; once they have replied, run the command with their words in "
+                    why + f". Ask the human in chat; once they have replied, run the command with their words in "
                     f"{flag}, as they gave them, and never decide for them", ask=ask, decides="owner", **more)
 
 
 def needs_ask(worktree: Path, prof: dict, proj: dict | None, mod: str, mid: str, items: list[str],
               note: str = "") -> str:
-    """What the lead asks the owner about items that need human feedback: each item as the done-when file states it,
+    """What the lead asks the human about items that need human feedback: each item as the done-when file states it,
     what it needs judged, the builder's note, and where the evidence to show them is."""
     doc = ((proj or {}).get(mod.upper()) or {}).get("doc")
     if doc is None:
@@ -2248,7 +2268,7 @@ def worktree_roots(worktree: Path) -> list[str]:
 def repo_relative(text: str, roots: list[str]) -> str:
     """`text` with paths inside the repository's worktrees made relative to the repository, as every agent's
     checkout has them. In Thrum some Blocked messages linked to one builder's worktree, which other agents and the
-    owner's page can't open."""
+    human's page can't open."""
     for root in roots:
         text = re.sub(re.escape(root.rstrip("/")) + r"/(?=\S)", "", text)
     return text
@@ -2330,18 +2350,18 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
         if reason == "needs_human_feedback":
             return owner_next("feedback", mod, mid, wt, needs_ask(worktree, prof, proj, mod, mid, items, what),
                               f"{mod} {mid} is Blocked: Needs Human Feedback on {', '.join(items) or 'its items'}. The "
-                              "owner judges it: the lead shows them the evidence and asks the question. Their reply "
+                              "human judges it: the lead shows them the evidence and asks the question. Their reply "
                               "goes into the record file, "
-                              "where the builder reads it and the reviewer counts it as the owner's words, and puts the "
+                              "where the builder reads it and the reviewer counts it as the human's words, and puts the "
                               "milestone back in the queue; then `run` resumes the builder. Don't pass it through "
                               "`run --message`, because a reviewer can't tell those words from an agent's." + work,
                               items=items, then=loop_cmd("run", "--module", mod, "--worktree", wt))
         if reason in ("needs_access", "needs_hardware"):
             kind = "approve the access prompts" if reason == "needs_access" else "connect the device"
             return next_cmd(visible_run(mod, wt), "lead",
-                            f"{mod} {mid} is Blocked: {reason.replace('_', ' ').capitalize()} ({what}). The owner "
+                            f"{mod} {mid} is Blocked: {reason.replace('_', ' ').capitalize()} ({what}). The human "
                             f"has to be at the machine to {kind}, and the lead runs the builder again in a visible "
-                            "session while they are. The visible run unblocks it; nothing is recorded, and the owner "
+                            "session while they are. The visible run unblocks it; nothing is recorded, and the human "
                             "isn't asked to confirm it."
                             + work,
                             ask=f"Are you at the machine to {kind} for {mod} {mid}? {what}")
@@ -2354,7 +2374,7 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
                             alternative=loop_cmd("unblock", "--module", mod, "--milestone", mid, "--worktree", wt))
         return next_cmd(loop_cmd("run", "--module", mod, "--worktree", wt) + " --message '<the missing fact>'", "lead",
                         f"{mod} {mid} is Blocked: Needs Context ({what}). The lead finds the missing fact, or asks the "
-                        "owner when only they know it, and resumes the builder with it in `run --message`, which "
+                        "human when only they know it, and resumes the builder with it in `run --message`, which "
                         "unblocks it. If another module owns it, or it's a design problem, a planner plans it "
                         "instead." + work,
                         alternative=loop_cmd("plan", "--worktree", wt, "--task",
@@ -2363,7 +2383,7 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
         problems = step.get("problems") or []
         if any("aren't the ones last authorised" in p for p in problems):
             return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", plan_task(mod, problems)), "lead",
-                            f"{mod} {mid}'s definitions changed outside a planner turn. Re-plan them, or the owner "
+                            f"{mod} {mid}'s definitions changed outside a planner turn. Re-plan them, or the human "
                             "takes the edited file as the new scope",
                             owner=owner_cmd("scope", mod, mid, wt))
         return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", plan_task(mod, problems)), "lead",
@@ -2384,7 +2404,7 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
     if status == "taken":
         return next_cmd(loop_cmd("ready", "--worktree", wt), "lead",
                         f"{mod} {mid} is held by {step.get('by')}; give the builder other ready work. If that lead is "
-                        "gone for good, `owner release` frees it, once the owner says so in chat",
+                        "gone for good, `owner release` frees it, once the human says so in chat",
                         owner=owner_cmd("release", mod, mid, wt))
     return None
 
@@ -2489,7 +2509,7 @@ def plan_drift(worktree: Path, prof: dict, ref: str) -> dict:
     """Plan files in this worktree that the main branch's tip doesn't have: uncommitted (edited, staged or untracked) or
     committed but not merged. `run` and `ready` read plans at the tip, so these are invisible to them. A settings file
     the tip doesn't have at all is part of a first plan, so it counts too. One the tip has in another form is only
-    named, under `settings_differ`: the lead commits it once the owner has agreed."""
+    named, under `settings_differ`: the lead commits it once the human has agreed."""
     out = folder_drift(worktree, prof["plans"], ref)
     for key in ("uncommitted", "unmerged"):  # the script writes STATUS.md itself; it never waits to be merged
         out[key] = [p for p in out[key] if p != status_rel(prof)]
@@ -2513,7 +2533,7 @@ def profile_note(drift: dict, prof: dict) -> dict:
         return {}
     return {"settings_differ": f"this worktree's {PROFILE_FILE} differs from the one at {base_ref(prof)}, which "
                                "builders, reviewers and the script's checks read. The lead commits and merges a "
-                               "changed settings file once the owner has agreed to it; the script doesn't merge it"}
+                               "changed settings file once the human has agreed to it; the script doesn't merge it"}
 
 
 def drift_fields(drift: dict, worktree: Path, step_next: dict | None = None) -> dict:
@@ -3081,7 +3101,7 @@ def loop_view(rec: dict) -> dict:
     turn = rec.get("turn_started_at")
     out["turn_running_s"] = round(stamp - turn) if turn else None
     # What the run is doing now, such as "builder turn 3" or "checking M1: M1.2", so the lead reports it rather
-    # than guessing: in Thrum it told the owner a run was waiting for the GPU while a tool call had hung.
+    # than guessing: in Thrum it told the human a run was waiting for the GPU while a tool call had hung.
     out["step"] = rec.get("step")
     call = rec.get("open_tool_call") if turn else None
     if isinstance(call, dict) and call.get("name"):
@@ -3719,7 +3739,7 @@ def plan_title(worktree: Path, tree: Path, prof: dict, task: str) -> str:
 
 def session_title(worktree: Path, module: str, phase: str) -> str:
     """The title of a session the script starts: '<repository> · <MODULE> · <phase>', such as
-    'thrum · CREATOR · M1 build' or 'thrum · CREATOR · design review'. The owner sees every session in one list
+    'thrum · CREATOR · M1 build' or 'thrum · CREATOR · design review'. The human sees every session in one list
     sorted by title, so the repository comes first and then the module, which groups each module's sessions together,
     and the milestone comes before the role, so a milestone's build and review sit next to each other."""
     return f"{repository_name(worktree)} · {module} · {phase}"
@@ -3729,7 +3749,7 @@ QUOTA_WORKTREE: list = []     # the worktree a command runs on, for the result l
 
 def note_thread(worktree: Path, host: str, session: str | None, role: str, title: str) -> None:
     """Appends a session the script started to the repository's thread ledger, so the forecast can tell its own threads
-    from the owner's. Never fails the caller."""
+    from the human's. Never fails the caller."""
     if not session:
         return
     try:
@@ -3869,7 +3889,7 @@ def milestone_costs(worktree: Path, reading: dict, fit: dict, own: dict) -> tupl
                 history.append(row)
             if not done and not (state == "blocked" and blocked_of(m)["reason"] == "too_many_failed_reviews"):
                 if held:
-                    behind_blocked += 1  # milestones run in order, so these wait on the owner
+                    behind_blocked += 1  # milestones run in order, so these wait on the human
                 else:
                     open_ms.append(row)
     return history, open_ms, {"plans_at": ref, "behind_blocked": behind_blocked}
@@ -4361,7 +4381,7 @@ def run_turn(host: str, prof: dict, model: str, effort: str, worktree: Path, pro
              timeout_s: float, role: str = "build", title: str = "") -> tuple[int, str | None, str, str, str | None]:
     """Runs one turn; returns (exit code, session id, last agent message, stderr tail, model the host reported).
     Codex and Claude turns run as sessions their desktop apps show when they can (see `visible_unavailable`), else
-    headless; PATH records which, for the result line. 130 means stopped: by `pause`, or by the owner in the app.
+    headless; PATH records which, for the result line. 130 means stopped: by `pause`, or by the human in the app.
     The process's record for `runs` notes the turn starting and ending, with its session and tokens."""
     if LIVE:
         same = bool(session) and session == LIVE.get("session")
@@ -4426,7 +4446,7 @@ class HeadlessWatch:
 
     It also follows the agent's tool calls, from Claude's stream and from Codex's rollout file, and ends the turn
     when one that isn't a shell command has been open for TOOL_CALL_LIMIT_S. In Thrum two Computer Use calls hung
-    for 98 and 116 minutes, and the lead, which couldn't see them, told the owner the run was waiting for the GPU.
+    for 98 and 116 minutes, and the lead, which couldn't see them, told the human the run was waiting for the GPU.
     The script can't limit a host's tool, but it can stop waiting for one. `stopped` holds the call it stopped on,
     and `last_call` the last call opened, for a turn the script stops at the turn limit."""
 
@@ -4555,7 +4575,7 @@ def _run_turn(host: str, prof: dict, model: str, effort: str, worktree: Path, pr
         new_id = None if session else str(uuid.uuid4())
         sid = session or new_id
         if session and (pid := claude_app_process(session)):
-            return 130, session, "", f"the owner has this session open in Claude desktop (pid {pid}); the script " \
+            return 130, session, "", f"the human has this session open in Claude desktop (pid {pid}); the script " \
                                      "won't write to it at the same time", None
     args, env = host_command(host, prof, model, effort, worktree, prompt, session, role, new_id, title)
     tick = None
@@ -4678,7 +4698,7 @@ def newer_install() -> str | None:
 
 # What behaves differently in each version, for a lead whose project has just moved to it. The first result after
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
-# owner so.
+# human so.
 CHANGES = {
     "2.1.0": [
         "Only the script sets a milestone to Ready for Review now. A builder merges its work with the milestone still "
@@ -4692,7 +4712,7 @@ CHANGES = {
         "is CHECKS_FAILED and BUDGET is NO_PROGRESS_FOR_HOURS. The `loops` command is now `runs`, and it shows the "
         "step each run is on.",
         "`run` prints REFUSED when as many builders as the project settings' Builders line names are already "
-        "running. Ask the owner, and pass their words with `--more-builders` to start one more.",
+        "running. Ask the human, and pass their words with `--more-builders` to start one more.",
         "A reviewer who can't reach the product ends with BLOCKED needs_access. `review` then prints BLOCKED, merges "
         "nothing and counts no round, and `next` is the same review in a visible session.",
         "The script stops a background turn when a tool call that isn't a shell command has been open for 15 "
@@ -4739,7 +4759,7 @@ def version_change(worktree: Path) -> dict | None:
 
 def report_due(worktree: Path) -> str | None:
     """Whether today's report is missing from the main branch, for a `run`, `review` or `plan` result. The lead is
-    asked for one a day; in Thrum it wrote none in two days, and answered the owner's questions about speed from
+    asked for one a day; in Thrum it wrote none in two days, and answered the human's questions about speed from
     `git log`."""
     try:
         prof = profile(worktree, missing_ok=True)
@@ -4892,22 +4912,22 @@ def launch_record(host: str, model: str, effort: str, path: str | None, observed
 
 
 def feedback_note(feedback: list[dict], mid: str, record: str, role: str = "build") -> str:
-    """The Human Feedback for a milestone, oldest first: each question the lead asked, and the owner's words as the
-    script recorded them. For the builder, and for the reviewer, who counts it as the owner's own words."""
+    """The Human Feedback for a milestone, oldest first: each question the lead asked, and the human's words as the
+    script recorded them. For the builder, and for the reviewer, who counts it as the human's own words."""
     lines = []
     for f in feedback:
         items = ", ".join(f.get("items") or []) or mid
         asked = f"asked \"{f['asked']}\"; " if f.get("asked") else ""
-        lines.append(f"- {f.get('at')}, on {items}: {asked}the owner said \"{f.get('said')}\"")
-    use = ("Check any claim about what the owner chose against it." if role == "review" else
+        lines.append(f"- {f.get('at')}, on {items}: {asked}the human said \"{f.get('said')}\"")
+    use = ("Check any claim about what the human chose against it." if role == "review" else
            "Use their words as given, and cite that record rather than restating them as your own, because the "
            "reviewer checks your work against it.")
     return (f"Human Feedback on {mid}, recorded by the script in {record} under milestones.{mid}.human_feedback, "
-            f"oldest first. These are the owner's own words. {use}\n" + "\n".join(lines))
+            f"oldest first. These are the human's own words. {use}\n" + "\n".join(lines))
 
 
 def owner_rules_line(rules: list[str]) -> str:
-    return " ".join(f"Owner: {r.strip().rstrip('.')}." for r in rules)
+    return " ".join(f"The human's rule: {r.strip().rstrip('.')}." for r in rules)
 
 
 def resources_rule(prof: dict) -> str:
@@ -4987,8 +5007,8 @@ def needs_rules(milestone: dict | None, headless: bool) -> list[str]:
         return ", ".join(items) + (" needs" if len(items) == 1 else " need")
     if "human_feedback" in by_type:
         out.append(f"{named('human_feedback')} human feedback: someone has to look at the result and judge it. Do "
-                   "every other item first and save the evidence for the owner to look at, then end with "
-                   "`BLOCKED needs_human_feedback: <the question for the owner>`.")
+                   "every other item first and save the evidence for the human to look at, then end with "
+                   "`BLOCKED needs_human_feedback: <the question for the human>`.")
     for kind, word in (("access", "approve a permission or a prompt"), ("hardware", "connect a device")):
         if kind not in by_type:
             continue
@@ -5011,7 +5031,7 @@ def binding(prof: dict, role: str, mid: str = "", milestone: dict | None = None,
             lead_spoke: bool = False) -> tuple[str, list[str]]:
     """The short restatement for resumed turns, which may follow a compaction that dropped the first prompt, and the
     settings lines it found empty. It restates the goal and the role's own boundaries, and points to ORCHESTRATE.md
-    for the project's rules rather than copying them: in Thrum the copy cut multi-line rules short. The owner's rules
+    for the project's rules rather than copying them: in Thrum the copy cut multi-line rules short. The human's rules
     stored with the run (`--owner-rule`) go in whole. The line about items that need someone is left out when the
     lead has just written, because the lead's message is the newer fact. A reviewer is never told to merge."""
     missing = [label for label, value in prof.get("bounds", {}).items() if not value]
@@ -5163,7 +5183,7 @@ def browser_warnings(worktree: Path, module: str | None = None, milestone: str |
     return [f"{shown} need a browser, and a browser won't start inside Codex's workspace-write sandbox. The agent "
             "has to ask to run it outside the sandbox, and auto-review may refuse; Codex reviewers have asked and been "
             "granted one, and a builder that didn't ask lost its turn. If browser work has to be dependable on this "
-            "build, the owner can set `Codex sandbox: danger-full-access` in ORCHESTRATE.md (that hands the agent "
+            "build, the human can set `Codex sandbox: danger-full-access` in ORCHESTRATE.md (that hands the agent "
             "this machine)"]
 
 
@@ -5177,7 +5197,7 @@ def floor_reason(host: str, code: int, err: str) -> str:
 #
 # Off by default: the script runs `codex exec` and `claude -p` headless, so nothing opens in either app. With
 # ORCHESTRATE_VISIBLE=1, on a Mac where the Codex app or Claude desktop is running, the script's sessions are made so
-# that the app lists them under the project, and the owner can watch, steer, pause and take over there. The script
+# that the app lists them under the project, and the human can watch, steer, pause and take over there. The script
 # still drives every turn and checks every Ready for Review itself. Elsewhere (another OS, no app, app not running, Claude CLI
 # signed out) it runs headless. The methods were proven with the
 # Codex app 26.1103 (CLI 0.167.0-alpha.3.2) and Claude desktop 4.23118.0; they rest on deep links, a local IPC
@@ -5191,7 +5211,7 @@ def floor_reason(host: str, code: int, err: str) -> str:
 #
 # Claude: only the app can sign in a process it starts, so the script keeps running its own signed-in `claude -p` per
 # turn, under a session id it chooses, and imports the session into the app with `claude://resume?session=<id>`.
-# The Code tab then lists it with its transcript. A session the owner has open in the app (a live app process on it)
+# The Code tab then lists it with its transcript. A session the human has open in the app (a live app process on it)
 # is never written to by the script at the same time: the turn reports PAUSED instead.
 
 SESSION_PATH: dict = {}  # which path the last turn ran on, for the result line
@@ -5574,7 +5594,7 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
                 codex_unqueue(thread)
             goal = goal_status(thread)
             codex_interrupt(thread)
-            if goal == "active":  # Stop pauses the goal; a timeout isn't the owner pausing it
+            if goal == "active":  # Stop pauses the goal; a timeout isn't the human pausing it
                 codex_goal_activate(thread)
             return 124, thread, message, "(timed out)", None
         if not started:
@@ -5627,7 +5647,7 @@ def claude_transcript(session: str) -> Path | None:
 
 def claude_import(session: str, wait_s: float = 0.0) -> None:
     """Imports a CLI session into the Code tab once its transcript exists (`claude://resume` writes the app's
-    record). Called while the turn runs, so the owner can watch the first turn too."""
+    record). Called while the turn runs, so the human can watch the first turn too."""
     if claude_app_record(session) or not claude_transcript(session):
         return
     if session not in _IMPORTS_SENT:
@@ -5639,7 +5659,7 @@ def claude_import(session: str, wait_s: float = 0.0) -> None:
 
 
 def claude_app_process(session: str) -> int | None:
-    """The pid of a live Claude desktop process on `session`, if the owner has it open in the app."""
+    """The pid of a live Claude desktop process on `session`, if the human has it open in the app."""
     for f in glob.glob(str(CLAUDE_HOME / "sessions" / "*.json")):
         try:
             reg = json.loads(Path(f).read_text())
@@ -5663,7 +5683,7 @@ RUN_RESULTS = {"review_owed": "REVIEW_OWED", "waiting": "WAITING", "design_not_a
 def block_for(current: dict, named: str | None, what: str) -> tuple[str, list[str], str]:
     """(reason, items, what) for a milestone the builder stopped on. The reason the builder named stands. With none,
     items that need someone decide it when every other item has passed (access or hardware first, since those
-    need the owner at the machine), and otherwise the builder is missing context."""
+    need the human at the machine), and otherwise the builder is missing context."""
     if named:
         kind = named[len("needs_"):]
         return named, open_needs(current, (kind,)) if kind in NEEDS_TYPES else [], what
@@ -5747,7 +5767,7 @@ def resume_facts(worktree: Path, milestone: dict | None, last_exit: int | None, 
     return " ".join(parts)
 
 
-NEW_SESSION_AT = 0.6  # how full a session may be before the next turn starts a new one; the owner chose 60%
+NEW_SESSION_AT = 0.6  # how full a session may be before the next turn starts a new one; the human chose 60%
 
 
 def stale_session(state: dict) -> str | None:
@@ -5821,7 +5841,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     stem = module_stem(worktree, prof, a.module)
     key = stem.upper()
     again = run_again(a, stem, worktree)
-    # Items that need access or hardware are done only in a session the owner can see and answer.
+    # Items that need access or hardware are done only in a session the human can see and answer.
     headless = host not in ("codex", "claude") or visible_unavailable(host) is not None
     if not run_lock(worktree, key):
         who = run_holder_info(worktree, key)
@@ -5866,7 +5886,7 @@ def cmd_run(a: argparse.Namespace) -> None:
         lifts = (("needs_access", "needs_hardware") if not headless else ()) + \
             (("needs_context",) if getattr(a, "message", None) else ())
         if step["status"] == "blocked" and step.get("reason") in lifts:
-            # what this block waits for is here: a visible run with the owner at the machine, or the missing fact in
+            # what this block waits for is here: a visible run with the human at the machine, or the missing fact in
             # the lead's --message. The run unblocks it itself
             def reopen(tree, mid=step["milestone"]):
                 path = tree / done_rel(prof, stem)
@@ -5930,11 +5950,11 @@ def cmd_run(a: argparse.Namespace) -> None:
                 names = ", ".join(f"{r['module'] or '?'} {r['milestone'] or ''}".strip() for r in others)
                 be = "is" if len(others) == 1 else "are"
                 why = (f"{plural(len(others), 'builder')} {be} already running in this repository ({names}), and the "
-                       f"project settings' Builders line allows {prof['builders']}. The owner decides whether to run "
+                       f"project settings' Builders line allows {prof['builders']}. The human decides whether to run "
                        "one more: ask them, and if they say yes, run this command with their words in "
                        "--more-builders. Otherwise start it when one of those builders stops")
                 emit("REFUSED", module=stem, milestone=mid, problems=[why], running=others, next=next_cmd(
-                    again + " --more-builders '<what the owner said, in their words>'", "lead", why,
+                    again + " --more-builders '<what the human said, in their words>'", "lead", why,
                     decides="owner", ask=f"{plural(len(others), 'builder')} {be} running ({names}), the number in the "
                                          f"project settings. Shall I start one more, for {stem} {mid}?"))
             # Kept with the run, so the result shows whose words started the extra builder.
@@ -5969,7 +5989,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     # "PIN" is the name before 2.1.0, still in the state files of runs started earlier.
     fresh = (a.fresh or state.get("milestone") != mid or state.get("result") in ("WRONG_MODEL_OR_EFFORT", "PIN")
              or state.get("pin") != pin)
-    # The owner's rules outlive fresh sessions and milestones, until the owner has them cleared.
+    # The human's rules outlive fresh sessions and milestones, until the human has them cleared.
     rules = [] if getattr(a, "clear_owner_rules", False) else list(state.get("owner_rules") or [])
     rules += [r.strip() for r in getattr(a, "owner_rule", None) or [] if r.strip() and r.strip() not in rules]
     if fresh:
@@ -6216,7 +6236,7 @@ def cmd_run(a: argparse.Namespace) -> None:
                 "Continue the objective." + open_items(now_done) + (" " + facts if facts else "")
             a.message = None
             # A resumed turn may follow a compaction that dropped the first prompt. An active Codex goal already
-            # re-sends its objective each turn, so only a thread without one gets the restatement; the owner's rules
+            # re-sends its objective each turn, so only a thread without one gets the restatement; the human's rules
             # may postdate the goal, so they go every time.
             if status != "active":
                 prompt += "\n\n" + (binding(prof, "build", mid, milestone, done_rel(prof, stem), rules=rules,
@@ -6332,7 +6352,7 @@ def cmd_run(a: argparse.Namespace) -> None:
         else:
             state["reports"] = 0
         # A headless run can't do items that need access or hardware. Once they are all that is left, the run stops
-        # Blocked on them, for a visible run while the owner is at the machine; nobody is asked to confirm anything.
+        # Blocked on them, for a visible run while the human is at the machine; nobody is asked to confirm anything.
         if headless and open_needs(current, HELD_BY_SOMEONE) and all(
                 i.get("status") == "pass" for i in current["items"]
                 if (i.get("needs") or {}).get("type") not in HELD_BY_SOMEONE):
@@ -6361,7 +6381,7 @@ CLAUDE_TURN_NOTE = ("Your turn ending is read as your work ending, so wait for a
 
 
 def tail(text: str, limit: int) -> str:
-    """The end of an agent's final message, where planners put the owner's decisions; when cut, cut at a line or
+    """The end of an agent's final message, where planners put the human's decisions; when cut, cut at a line or
     sentence start (else a word) and marked."""
     if len(text) <= limit:
         return text
@@ -6428,7 +6448,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     if not a.host and prof.get("review_host"):  # the settings' Review host, against whoever made what's judged
         builder, rec = default_host(prof), {}
         try:
-            rec = json.loads(show(worktree, base_ref(prof), record_rel(prof, module_stem(worktree, prof, a.module)))
+            rec = json.loads(show(worktree, base_ref(prof), record_rel(prof, stem_at_tip(worktree, prof, a.module)))
                              or "{}")
         except (json.JSONDecodeError, SystemExit):
             pass
@@ -6443,7 +6463,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     preflight(host, worktree, "review")
     if locked:  # keep the build's loader warnings beside the review's
         WARNINGS[:] = list(dict.fromkeys(before + WARNINGS))
-    stem = module_stem(worktree, prof, a.module)
+    stem = stem_at_tip(worktree, prof, a.module)
     key, mid, design = stem.upper(), a.milestone, a.milestone == "design"
     info = dict(host=host, model=model, effort=effort, module=stem, milestone=mid)
     if not locked and not run_lock(worktree, key):
@@ -6551,8 +6571,8 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
             {"verdict": "DESIGN CHANGES", "review": rec["design"].get("review")}, stem, worktree, prof))
     briefs = (f"The tasks planners were given for this module, whole and verbatim, are in {record_rel(prof, stem)} "
               "under `briefs`, oldest first. Some are the lead's or the script's own words, such as re-plan tasks. "
-              "Where a task disagrees with the owner's words, in the project brief or quoted in the design, the "
-              "owner's words win."
+              "Where a task disagrees with the human's words, in the project brief or quoted in the design, the "
+              "human's words win."
               if design and rec.get("briefs") else "")
     context = " ".join(x.strip() for x in (changed, briefs) if x.strip())
     prompt = review_prompt(host, prof, stem, mid, start, done_path, review_path, None if design else under_review, e_,
@@ -6591,7 +6611,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
         return _result("INVALID", **info, merged=False, problems=[
             f"while this review ran, {plural(len(forged), 'commit')} without the script's trailer changed a record "
             f"file on the tip: {', '.join(forged)}"], session=out.get("session"), next=next_cmd(
-            None, "lead", "report it to the owner, who decides what to do with those commits: they reached the "
+            None, "lead", "report it to the human, who decides what to do with those commits: they reached the "
             "main branch's tip during a review, and only the script writes record files. Nothing from this review "
             "was merged", decides="owner"))
     if made := commits_made(tree, seen):
@@ -6604,11 +6624,11 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     named, what = blocked_report(out["last_line"]) if not design else (None, "")
     if named == "needs_access":
         # In Thrum a reviewer that couldn't reach the Mac's locked screen failed the milestone on it, and the builder
-        # lost a round to a problem that wasn't in the work (F1). Access is the owner's to give, not the builder's.
+        # lost a round to a problem that wasn't in the work (F1). Access is the human's to give, not the builder's.
         what = repo_relative(what, worktree_roots(worktree)) or "the reviewer couldn't reach the product"
         why = (f"the reviewer of {stem} {mid} couldn't reach the product from its session: {sentence(what)} Nothing "
                "was merged and no round was counted, and the milestone is still Ready for Review. The lead runs the "
-               "same review again in a visible session while the owner is at the machine to unlock or approve it")
+               "same review again in a visible session while the human is at the machine to unlock or approve it")
         return _result("BLOCKED", **info, reason="needs_access", what=what, merged=False, commit=start,
                        last_line=out["last_line"], session=out.get("session"),
                        **({"usage": out["usage"]} if out.get("usage") else {}),
@@ -6747,7 +6767,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                 target["fails"] = int(target.get("fails", 0) or 0) + (1 if again else 0)
                 reset_proof(target, only_failed=True)
                 if ladder(target) == "too_many_failed_reviews":
-                    # the ladder has run out; only the owner reopens it
+                    # the ladder has run out; only the human reopens it
                     why = ("it ran out of review rounds" if int(target.get("fails", 0) or 0) < 4 else
                            "its failed reviews kept repeating the same findings after a re-plan")
                     target["state"] = "blocked"
@@ -6839,7 +6859,7 @@ def design_review_next(out: dict, stem: str, worktree: Path, prof: dict) -> dict
         return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", task), "planner",
                         "the design review found Must Fix findings; send them to the planner, then review the design "
                         "again. Report the module only if a Must Fix finding returns after the planner fixed it, or "
-                        "needs an owner decision", findings=out.get("review"))
+                        "needs a human decision", findings=out.get("review"))
     host = out.get("host") or default_host(prof)
     return next_cmd(loop_cmd("review", "--module", stem, "--milestone", "design", "--worktree", wt, "--host",
                              other_host(host)), "lead",
@@ -6913,8 +6933,8 @@ def plan_owed(worktree: Path, start: str, message: str) -> str | None:
 def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str, info: dict, out: dict,
               tree: Path | None = None) -> None:
     """A planner asked to diagnose a milestone kept its plan and named who has to act. The script records that,
-    starts the milestone's counts again, and says what follows; a planner naming the owner blocks it with too many
-    failed reviews, for the owner to decide. `tree` is the checkout the planner worked in, when that isn't
+    starts the milestone's counts again, and says what follows; a planner naming the human blocks it with too many
+    failed reviews, for the human to decide. `tree` is the checkout the planner worked in, when that isn't
     `worktree`."""
     module, mid, who, why = keep.group(1), keep.group(2), keep.group(3).lower(), keep.group(4).strip()
     if changed := changed_paths(tree or worktree, start):
@@ -6931,7 +6951,7 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
     if ladder(m) != "diagnose":
         emit("INVALID", **info, **out, merged=False, problems=[
             f"KEEP is the answer to a diagnosis, and {stem} {mid} isn't owed one (its ladder is {ladder(m)})"])
-    try:  # the rounds the planner diagnosed, which the owner sees if it's theirs to decide
+    try:  # the rounds the planner diagnosed, which the human sees if it's theirs to decide
         diagnosed = ((json.loads(show(worktree, tip(worktree, prof), record_rel(prof, stem)) or "{}")
                       .get("milestones") or {}).get(mid) or {}).get("counted_after", 0)
     except (TipError, SystemExit, json.JSONDecodeError):
@@ -7098,7 +7118,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
         emit("INVALID", **info, **out, merged=False, **kept, problems=[
             f"while this turn ran, {plural(len(forged), 'commit')} without the script's trailer changed a record "
             f"file on the tip: {', '.join(forged)}"], next=next_cmd(
-            None, "lead", "report it to the owner, who decides what to do with those commits: they reached the "
+            None, "lead", "report it to the human, who decides what to do with those commits: they reached the "
             "main branch's tip during a planner turn, and only the script writes record files. The script doesn't take "
             f"commits back out. Nothing from this turn was merged{kept_text(kept)}", decides="owner"))
     if made := commits_made(tree, seen):  # read before the script makes its own commit here
@@ -7221,7 +7241,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
          files=changed,
          **({"assumptions": {k: n for k, n in found.items() if n},
              "assumptions_where": "lines starting `Assumption:` in each module's PLAN.md; `report` lists them for "
-                                  "the owner to overturn"} if any(found.values()) else {}),
+                                  "the human to overturn"} if any(found.values()) else {}),
          **({"replanned": replanned} if replanned else {}), next=then)
 
 
@@ -7311,7 +7331,7 @@ def cmd_status(a: argparse.Namespace) -> None:
         return
     ref, proj = read_project(worktree, prof)
     drift = plan_drift(worktree, prof, ref)
-    if getattr(a, "format", "text") == "md":  # the owner's page, as the script commits it, plus what hasn't merged here
+    if getattr(a, "format", "text") == "md":  # the human's page, as the script commits it, plus what hasn't merged here
         print(status_page(worktree, prof, ref, proj, drift["uncommitted"] + drift["unmerged"]), end="")
         return
     if drift["uncommitted"] or drift["unmerged"]:
@@ -7377,7 +7397,7 @@ def cmd_next(a: argparse.Namespace) -> None:
     counts = {k: int(milestone.get(k, 0) or 0) for k in ("fails", "replans", "rounds", "diagnoses")}
     action = "too_many_failed_reviews" if milestone.get("state") == "blocked" and \
         blocked_of(milestone)["reason"] == "too_many_failed_reviews" else ladder(milestone)
-    if action in ("replan", "diagnose", "too_many_failed_reviews"):  # for the planner or the owner, rather than the builder's findings
+    if action in ("replan", "diagnose", "too_many_failed_reviews"):  # for the planner or the human, rather than the builder's findings
         then = ladder_next(action, stem, milestone["id"], counts, worktree, prof)
         message = (replan_task(stem, milestone["id"], counts["fails"], prof, worktree) if action == "replan" else
                    diagnose_task(stem, milestone["id"], counts["rounds"], prof, worktree) if action == "diagnose" else
@@ -7745,7 +7765,7 @@ def cmd_merge(a: argparse.Namespace) -> None:
     base = git(worktree, "merge-base", "HEAD", upstream).stdout.strip()
     # Only the script sets Ready for Review or Done, after its own checks pass. In Thrum a builder's Ready for Review
     # reached the main branch before the script's checks failed it, and other builders rebased onto it for three
-    # hours. A planner or a reviewer never runs `merge`, and the owner's and the script's records are merged by the
+    # hours. A planner or a reviewer never runs `merge`, and the human's and the script's records are merged by the
     # script itself, so this catches only a builder, including one from before 2.1.0 or a branch it left.
     if base and (found := states_set(worktree, prof, base)):
         print(json.dumps({"result": "FAILED", "detail": state_refusal(found), "commit": head_commit(worktree)}))
@@ -7830,11 +7850,11 @@ def cmd_unblock(a: argparse.Namespace) -> None:
             raise SystemExit(f"error: {a.milestone} is {m.get('state')}, not blocked")
         reason = blocked_of(m)["reason"]
         if reason == "too_many_failed_reviews":
-            raise SystemExit(f"error: {a.milestone} is Blocked with too many failed reviews, which only the owner "
+            raise SystemExit(f"error: {a.milestone} is Blocked with too many failed reviews, which only the human "
                              "decides: ask them, then run `owner reopen`, `owner accept` or `owner scope` with their "
                              "words")
         if reason == "needs_human_feedback":
-            raise SystemExit(f"error: {a.milestone} is Blocked: Needs Human Feedback. Ask the owner, then record "
+            raise SystemExit(f"error: {a.milestone} is Blocked: Needs Human Feedback. Ask the human, then record "
                              "their reply with `owner feedback`, which unblocks it")
         m["state"] = "in_progress"
         m.pop("blocked", None)
@@ -8052,7 +8072,7 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
                 if b["reason"] == "too_many_failed_reviews":
                     why = ((rec.get("milestones") or {}).get(m["id"]) or {}).get("too_many_failed_reviews", {}) \
                         .get("why") or b.get("what") or "it ran out of review rounds"
-                    waiting.append(f"- {stem} {m['id']}: Blocked: Too Many Failed Reviews, because {why}. The owner "
+                    waiting.append(f"- {stem} {m['id']}: Blocked: Too Many Failed Reviews, because {why}. The human "
                                    "accepts it (`owner accept`), re-scopes it (`owner scope`) or reopens it "
                                    "(`owner reopen`)")
                 else:
@@ -8063,10 +8083,10 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
                     n = i.get("needs")
                     if not isinstance(n, dict) or i.get("status") == "pass":
                         continue
-                    how = (f"Ask the owner in chat; their reply goes in "
+                    how = (f"Ask the human in chat; their reply goes in "
                            f"`{owner_cmd('feedback', stem, m['id'], str(worktree), i['id'])}`"
                            if n.get("type") == "human_feedback" else
-                           f"Done at the machine, not said: run the builder visibly while the owner is there, with "
+                           f"Done at the machine, not said: run the builder visibly while the human is there, with "
                            f"`{visible_run(stem, str(worktree))}`")
                     needing.append(f"- {stem} {m['id']} {i['id']} (needs {n.get('type', '').replace('_', ' ')}: "
                                    f"{n.get('what', '')}): {i.get('statement', '')}\n  {how}")
@@ -8091,17 +8111,17 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
                 "Revised outside a planner turn while the module was a draft; its design review judges them.", "",
                 *adopted]
     if decided:
-        out += ["", "## Decisions recorded in the owner's name (check each is one you made)", "",
-                "Every `owner` command in this window, with the words recorded as the owner's. The script can't tell "
-                "who ran one, so a decision here that the owner didn't make is the thing to look for.", "", *decided]
+        out += ["", "## Decisions recorded in your name (check each is one you made)", "",
+                "Every `owner` command in this window, with the words recorded as yours. The script can't tell "
+                "who ran one, so a decision here that you didn't make is the thing to look for.", "", *decided]
     if planned:
         out += ["", "## Planner turns (with the task each was given)", "",
                 *[f"- {at.replace('T', ' ')}, {', '.join(mods)}: " + task.replace("\n", "\n  ")
                   for (at, task), mods in sorted(planned.items())]]
     if assumed:
-        out += ["", "## Assumptions the planners made (for the owner to overturn)", "",
+        out += ["", "## Assumptions the planners made (for you to overturn)", "",
                 "Readings of the request a planner chose where it could be read more than one way, from the lines "
-                "starting `Assumption:` in each module's PLAN.md. Each stands until the owner overturns it; overturning one "
+                "starting `Assumption:` in each module's PLAN.md. Each stands until you overturn it; overturning one "
                 "is a re-plan.", "", *assumed]
     out += ["", "## Blocked or waiting", "", *(waiting or ["- nothing"]), "",
             "## Items that need human feedback, access or hardware", "", *(needing or ["- none open"]), "",
@@ -8164,7 +8184,7 @@ def md_link(text: str, target: str) -> str:
 def relink(text: str, folder: str | None) -> str:
     """The report's own links (from `md_link`), with targets written from the repository root made relative to a
     file in `folder`, so they resolve where the file is opened; with no folder, left as they are. Links in quoted
-    text (an owner's words, an assumption) aren't the report's, and stay as written."""
+    text (a human's words, an assumption) aren't the report's, and stay as written."""
     def fix(m: re.Match) -> str:
         return f"]({os.path.relpath(m.group(1), folder) if folder else m.group(1)})"
     return re.sub(r"\]\(" + LINK_MARK + r"([^)\s]+)\)", fix, text)
@@ -8180,7 +8200,7 @@ def adoptable(prof: dict, worktree: Path, ref: str, p: str) -> str | None:
     if p == PROFILE_FILE:
         if file_at(worktree, ref, p) is not None:
             return (f"{p} differs from the one at {base_ref(prof)}; adopt doesn't merge a changed settings file on an existing "
-                    "project: the lead commits and merges it with git once the owner has agreed to it")
+                    "project: the lead commits and merges it with git once the human has agreed to it")
         return None
     if p == status_rel(prof):
         return (f"{p} is written by the script from the records after each one it merges, so a change to it by hand "
@@ -8204,7 +8224,7 @@ def building_begun(doc: dict, record: dict, held: dict, key: str) -> bool:
 
 
 def design_passed(record: dict) -> bool:
-    """Whether a design review of the module has ever passed (or the owner or an adoption agreed its design). Until
+    """Whether a design review of the module has ever passed (or the human or an adoption agreed its design). Until
     then its definitions are a draft, which the owed design review will judge. Once passed, a later DESIGN CHANGES
     doesn't make it a draft again, so the history counts as well as the latest verdict; a review that judged a plan
     which changed while it ran (`not_counted`) never counts."""
@@ -8237,7 +8257,7 @@ ASSUMPTION = re.compile(r"^\s*(?:[-*]\s+)?(?:\*\*)?Assumption:(?:\*\*)?\s*(.+?)\
 
 
 def assumptions(text: str | None) -> list[str]:
-    """The readings a planner chose for the owner to overturn: each line of a module's PLAN.md that starts `Assumption:`
+    """The readings a planner chose for the human to overturn: each line of a module's PLAN.md that starts `Assumption:`
     (a list bullet or bold marker before it is fine). One line each; a reading continued on the next line is cut."""
     return [m.group(1) for m in ASSUMPTION.finditer(text or "")]
 
@@ -8386,7 +8406,7 @@ def table_warnings(worktree: Path, prof: dict, ref: str, stems: list[str]) -> li
 
 
 def proposed_names(text: str | None) -> list[str]:
-    """The glossary entries the owner hasn't agreed: each entry (a bold name line) with a `Proposed:` line."""
+    """The glossary entries the human hasn't agreed: each entry (a bold name line) with a `Proposed:` line."""
     out, name = [], None
     for line in (text or "").splitlines():
         if m := re.fullmatch(r"\s*\*\*(.+?)\*\*\s*", line):
@@ -8424,7 +8444,7 @@ RECENT_DAYS = 7
 
 
 def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, unlanded: list[str] | None = None) -> str:
-    """STATUS.md, the owner's page, built only from what is stored at `ref`: the done-when files, the acceptance
+    """STATUS.md, the human's page, built only from what is stored at `ref`: the done-when files, the acceptance
     records, the module table in ARCHITECTURE.md, the `Assumption:` lines in each PLAN.md and the `Proposed:` names in
     GLOSSARY.md. Its links are relative to the plans folder, where the page lives. `unlanded` lists plan files that
     aren't at the tip, when the caller knows them."""
@@ -8447,7 +8467,7 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
     going = sum(steps[k]["status"] != "finished" and started(proj[k]) for k in keys)
     total = len(keys) + len(planned_rows)
     # "Waiting on you" is split in two. In Thrum it held 30 lines, about 28 of them a planner's assumptions, so the
-    # two or three that needed the owner were lost among them.
+    # two or three that needed the human were lost among them.
     waiting, chosen, now_next, recent = [], [], [], []
     roots = worktree_roots(worktree)
     for key in keys:
@@ -8657,11 +8677,11 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
                 if changed else None
             if closed:
                 problems.append(f"{p}: changes the definitions of {', '.join(changed)}, and {closed}, so they're no "
-                                "longer a draft: the change needs a planner turn (`plan`) or the owner (`owner scope`)")
+                                "longer a draft: the change needs a planner turn (`plan`) or the human (`owner scope`)")
                 refusal = next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task",
                                             f"Re-plan {stem}: the changes in {p} that adopt refused"), "lead",
                                    f"{stem}'s definitions are no longer a draft ({closed}); a planner turn re-plans "
-                                   "them, or the owner takes the edited file as the new scope",
+                                   "them, or the human takes the edited file as the new scope",
                                    owner=owner_cmd("scope", stem, changed[0], str(worktree)))
                 continue
             if changed:
@@ -8724,7 +8744,7 @@ def cmd_adopt(a: argparse.Namespace) -> None:
         if not run_lock(worktree, stem.upper()):
             who = run_holder_info(worktree, stem.upper())
             problems.append(f"{stem}: a run holds it{holder_text(who)}, so building on it has begun; the change "
-                            "needs a planner turn (`plan`) or the owner (`owner scope`)")
+                            "needs a planner turn (`plan`) or the human (`owner scope`)")
     if problems:
         done_with("REFUSED", 1, files=paths, problems=problems[:20], **({"next": refusal} if refusal else {}))
     if authorise:  # a record, so a run turned away meanwhile can say who holds the module
@@ -8831,7 +8851,7 @@ def cmd_adopt(a: argparse.Namespace) -> None:
 
 
 def settle_scoped(worktree: Path, prof: dict, rel: str) -> str:
-    """After `owner scope` merged the owner's edited done-when file through the script's own checkout, this worktree
+    """After `owner scope` merged the human's edited done-when file through the script's own checkout, this worktree
     still holds the edit uncommitted. Sets it back and fast-forwards, so the tree is clean and on the tip; or says
     what's left when it can't."""
     try:
@@ -8852,17 +8872,17 @@ def settle_scoped(worktree: Path, prof: dict, rel: str) -> str:
 
 
 def owner_guard(worktree: Path, stem: str, verb: str) -> None:
-    """What stands between an owner decision and a session that would record one itself: refused inside any session
+    """What stands between a human decision and a session that would record one itself: refused inside any session
     the script started (ORCHESTRATE_ROLE), and while a run, review or plan holds the module or the planner. These stop
     mistakes and casual shortcuts, not a determined agent."""
     if os.environ.get("ORCHESTRATE_ROLE"):
         raise SystemExit(f"error: owner {verb} can't run inside a session the script started; the lead records the "
-                         "owner's decisions, from what the owner told it")
+                         "human's decisions, from what the human told it")
     folder = Path(git_common_dir(worktree)) / "orchestrate"
     for name, what in ((stem.upper(), f"a run, review or design review holds {stem}"), ("_plan", "a planner is running")):
         if (pid := run_holder(folder, name)) is not None:
             raise SystemExit(f"error: owner {verb} is refused while {what} (pid {pid}), so no session the script started "
-                             "can record a decision in the owner's name. Nothing more is needed from the owner: you "
+                             "can record a decision in the human's name. Nothing more is needed from the human: you "
                              "have their words, so run this same command again once that has stopped (`runs` shows "
                              "when)")
 
@@ -8877,16 +8897,16 @@ def cmd_owner(a: argparse.Namespace) -> None:
     asked = (getattr(a, "asked", None) or "").strip()
     items = list(dict.fromkeys(getattr(a, "item", None) or []))
     if not words:
-        raise SystemExit(f"error: owner {verb} needs " + ("--said, the owner's words as they gave them" if feedback else
-                         "--text, the owner's words for this decision as they gave them"))
+        raise SystemExit(f"error: owner {verb} needs " + ("--said, the human's words as they gave them" if feedback else
+                         "--text, the human's words for this decision as they gave them"))
     if feedback and not asked:
-        raise SystemExit("error: owner feedback needs --asked, the question you asked the owner, so the builder and "
-                         "the reviewer read the owner's words against it")
+        raise SystemExit("error: owner feedback needs --asked, the question you asked the human, so the builder and "
+                         "the reviewer read the human's words against it")
     if items and not feedback:
         raise SystemExit(f"error: --item is for owner feedback, not owner {verb}")
     owner_guard(worktree, stem, verb)
-    # what the script records: the owner's words, when, and which verb. It can't tell who ran the command, so it
-    # doesn't say; `report` lists every one, recorded in the owner's name, for the owner to check
+    # what the script records: the human's words, when, and which verb. It can't tell who ran the command, so it
+    # doesn't say; `report` lists every one, recorded in the human's name, for the human to check
     decision = {"action": verb, "milestone": mid, "words": words, "at": now(),
                 **({"asked": asked} if feedback else {}), **({"items": items} if items else {})}
     stamp = {"by": "owner decision", "words": words, "at": decision["at"]}
@@ -8930,11 +8950,11 @@ def cmd_owner(a: argparse.Namespace) -> None:
                     else None
                 if kind in HELD_BY_SOMEONE:
                     raise SystemExit(f"error: {item} needs {kind}, which is done at the machine, not said, so no reply "
-                                     "is recorded for it. Run the builder again in a visible session while the owner "
+                                     "is recorded for it. Run the builder again in a visible session while the human "
                                      "is there: " + visible_run(stem, str(worktree)))
                 if kind != "human_feedback":
                     raise SystemExit(f"error: {item} isn't marked as needing human feedback, so the reviewer judges it, "
-                                     "not the owner. If the owner has something to say about it, pass it to the "
+                                     "not the human. If the human has something to say about it, pass it to the "
                                      "builder with `run --message`, or have a planner mark the item")
             given = {"asked": asked, "said": words, "items": covered, "at": decision["at"]}
             decision["items"] = covered
@@ -8972,7 +8992,7 @@ def cmd_owner(a: argparse.Namespace) -> None:
                         # the definitions its reviews failed are gone, so this scope is the re-plan
                         if m["id"] not in out.setdefault("replanned", []):
                             out["replanned"].append(m["id"])
-                    m.update(fails=0, rounds=0, diagnoses=0)  # the owner's new scope starts the counts again
+                    m.update(fails=0, rounds=0, diagnoses=0)  # the human's new scope starts the counts again
                     m.pop("findings", None)
                 e = record["milestones"].get(m["id"]) or {}
                 record["milestones"][m["id"]] = {"definitions": definitions(m), "reviews": e.get("reviews", []),
@@ -8985,7 +9005,7 @@ def cmd_owner(a: argparse.Namespace) -> None:
             scoped = {**{k: v for k, v in new.items() if k != "milestones"}, "milestones": merged}
             if scoped == doc:
                 raise SystemExit(f"error: nothing changed: {done_rel(prof, stem)} here has the same definitions as the "
-                                 "tip, so there's no scope to record. Edit it as the owner asked first")
+                                 "tip, so there's no scope to record. Edit it as the human asked first")
             write_json(path, scoped)
             written.append(done_rel(prof, stem))
         else:
@@ -9439,16 +9459,16 @@ def build_parser() -> argparse.ArgumentParser:
                           "old session is over 60%% full, another version of the script started it, or resuming it "
                           "failed, and says why in fresh_because")
     run.add_argument("--message", help="first prompt on resume, e.g. the reviewer's findings message")
-    run.add_argument("--owner-rule", action="append", help="a restriction the owner gave in conversation; stored "
+    run.add_argument("--owner-rule", action="append", help="a restriction the human gave in conversation; stored "
                      "with the module's run state and restated every turn, across --fresh and milestones")
-    run.add_argument("--clear-owner-rules", action="store_true", help="drop stored owner rules (when the owner says)")
+    run.add_argument("--clear-owner-rules", action="store_true", help="drop the human's stored rules (when the human says so)")
     run.add_argument("--budget-hours", type=float, default=4.0)
     run.add_argument("--no-design-review", action="store_true", help="return DESIGN_NOT_APPROVED instead of running the "
                      "owed design review first")
     run.add_argument("--checks-only", action="store_true", help="start no agent: run the script's checks on the "
                      "milestone's merged work and set it Ready for Review if they pass (READY_FOR_REVIEW), or say why "
                      "not (CHECKS_FAILED). For a builder in a chat with no lead, after it merges")
-    run.add_argument("--more-builders", metavar="OWNER_WORDS", help="the owner's words, as they gave them, for "
+    run.add_argument("--more-builders", metavar="HUMAN_WORDS", help="the human's words, as they gave them, for "
                      "starting a builder past the count in the project settings' Builders line, where `run` "
                      "otherwise prints REFUSED")
     run.add_argument("--review-host", help="the host for the owed design review run starts itself (default: the "
@@ -9478,7 +9498,7 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--module")
     status.add_argument("--worktree", default=".")
     status.add_argument("--format", choices=["text", "md"], default="text",
-                        help="md: the owner's page, STATUS.md, as the script writes it")
+                        help="md: the human's page, STATUS.md, as the script writes it")
     status.set_defaults(func=cmd_status)
     migrate = sub.add_parser("migrate", help="move flat plan files into a folder per module, and bring a project to "
                                              "the names of orchestrate 2.0")
@@ -9507,15 +9527,15 @@ def build_parser() -> argparse.ArgumentParser:
     pause.add_argument("--module")
     pause.add_argument("--worktree", default=".")
     pause.set_defaults(func=cmd_pause)
-    owner = sub.add_parser("owner", help="record a decision the owner gave the lead in chat")
+    owner = sub.add_parser("owner", help="record a decision the human gave the lead in chat")
     owner.add_argument("action", choices=["accept", "rereview", "reopen", "scope", "release", "feedback"])
     for flag in ("--module", "--milestone", "--worktree"):
         owner.add_argument(flag, required=True)
     owner.add_argument("--text", "--reason", dest="text",
-                       help="the owner's words for this decision, as they gave them (for feedback, --said)")
-    owner.add_argument("--said", help="feedback: the owner's words, as they gave them")
-    owner.add_argument("--asked", help="feedback: the question the lead asked the owner")
-    owner.add_argument("--item", action="append", help="feedback: an item the owner's words cover (repeatable)")
+                       help="the human's words for this decision, as they gave them (for feedback, --said)")
+    owner.add_argument("--said", help="feedback: the human's words, as they gave them")
+    owner.add_argument("--asked", help="feedback: the question the lead asked the human")
+    owner.add_argument("--item", action="append", help="feedback: an item the human's words cover (repeatable)")
     owner.set_defaults(func=cmd_owner)
     quota = sub.add_parser("quota")
     quota.add_argument("--worktree", help="also forecast this repository's open milestones")

@@ -22,25 +22,25 @@ Contents:
 
 - **Purpose:** docs/plans/BRIEF.md  *(the project brief, or another document that says what the project is for and what finishes the current goal)*
 - **Quality bar:** <how good inspected work has to be, in words, naming shipped examples>
-- **Anchors:** <for subjective work, where the option the owner chose and the reference sets are kept; or none>
+- **Anchors:** <for subjective work, where the option the human chose and the reference sets are kept; or none>
 - **Plans:** docs/plans  *(script: leave it out for the standard place; an older project may name another folder)*
 - **Evidence:** docs/evidence  *(script: review files and saved proof)*
-- **Graded examples:** docs/evidence/graded-examples.md  *(past reviews the owner agreed with or overturned)*
+- **Graded examples:** docs/evidence/graded-examples.md  *(past reviews the human agreed with or overturned)*
 - **Test command:** npm run check  *(script: required; the project's test command, which must pass before a merge, or `none`)*
 - **Merge:** local  *(script: required; `push` rebases onto Remote/Branch and pushes without force; `local` fast-forwards the local Branch only)*
 - **Branch:** main  *(script: the main branch)*
 - **Remote:** origin  *(script)*
-- **Builders:** one Codex builder  *(script: how many builders, on which hosts, when the owner doesn't say; `run` reads the first number and refuses a builder past it unless `--more-builders` carries the owner's words)*
+- **Builders:** one Codex builder  *(script: how many builders, on which hosts, when the human doesn't say; `run` reads the first number and refuses a builder past it unless `--more-builders` carries the human's words)*
 - **Default host:** codex  *(script: optional; the host used when the lead names none; otherwise the host the script runs inside)*
 - **Review host:** same  *(script: optional; see below)*
 - **Planner host:** claude  *(script: optional; the host planners run on when the lead names none; otherwise the `Default host`)*
 - **Codex model:** gpt-6.1-sol  *(script: any `<host> model:` line sets that host's model)*
 - **Claude model:** claude-opus-5-5  *(script)*
-- **Claude planner:** <model> <effort>  *(script: optional, and only when the owner asked; a model, an effort or both for one kind of agent on one host; see the last section)*
-- **Reviewer:** <effort>  *(script: optional, and only when the owner asked; an effort for one kind of agent on every host)*
+- **Claude planner:** <model> <effort>  *(script: optional, and only when the human asked; a model, an effort or both for one kind of agent on one host; see the last section)*
+- **Reviewer:** <effort>  *(script: optional, and only when the human asked; an effort for one kind of agent on every host)*
 - **Effort:** medium  *(script: optional; for builders and reviewers, default medium; planners run at high unless `--effort` says otherwise)*
 - **Claude permissions:** auto  *(script: the permission mode for Claude sessions in the background: auto, acceptEdits, dontAsk or bypassPermissions)*
-- **Codex sandbox:** workspace-write  *(script: or danger-full-access, which only the owner chooses; a browser won't start inside workspace-write)*
+- **Codex sandbox:** workspace-write  *(script: or danger-full-access, which only the human chooses; a browser won't start inside workspace-write)*
 - **Writable roots:** <paths the build writes outside the worktree, such as ~/.cargo or ~/.npm>  *(script)*
 - **Host gemini:** gemini -p {prompt} -m {model}  *(script: optional; any other command-line agent, with {prompt}, {model}, {effort} and {cwd} placeholders)*
 - **Gemini model:** <model>  *(script: needed for each host line)*
@@ -68,8 +68,8 @@ needs, where secrets come from, and how two worktrees avoid sharing a port or a 
 
 ## Lines that need care
 
-`Merge: push` is standing permission to push verified work to the main branch, so set it only if the owner has
-given that permission. Without it, use `local`, and the owner merges. If the project's `AGENTS.md` or `CLAUDE.md`
+`Merge: push` is standing permission to push verified work to the main branch, so set it only if the human has
+given that permission. Without it, use `local`, and the human merges. If the project's `AGENTS.md` or `CLAUDE.md`
 says not to push without authorisation, say in this line's note that the line is that authorisation, so an agent
 that reads both knows which one wins.
 
@@ -80,14 +80,14 @@ that reads both knows which one wins.
   a design review goes to the host that didn't write the plan, when the `plan` command started the planner.
 - A host name means that host.
 
-Write `other` when the owner builds with both hosts, because a reviewer from another company shares fewer of the
+Write `other` when the human builds with both hosts, because a reviewer from another company shares fewer of the
 builder's blind spots.
 
 `Planner host` sends planners to one host, such as Claude Code for a Claude planner model while the builders stay
 on Codex. With `Review host: other`, their design reviews then go to the other host.
 
-The plans folder holds four files of the project's besides the module folders. `STATUS.md` is the owner's page,
-which the script writes. `BRIEF.md` is the project brief: what the owner wants and why, approved by the owner
+The plans folder holds four files of the project's besides the module folders. `STATUS.md` is the human's page,
+which the script writes. `BRIEF.md` is the project brief: what the human wants and why, approved by the human
 before planning. `GLOSSARY.md` holds the agreed name for each thing in the project. `ARCHITECTURE.md` is the list
 of modules. Every agent looks for them there by name, so they need no line in this file. They are kept in the
 plans folder because the `adopt` command merges files from it, which lets the lead put a changed brief or glossary
@@ -134,5 +134,5 @@ For the effort:
 
 A design reviewer with no line of its own uses the reviewer's.
 
-Add these lines only when the owner asked for them, because a larger model or a higher effort spends the owner's
+Add these lines only when the human asked for them, because a larger model or a higher effort spends the human's
 quota faster. Use an effort the host accepts.

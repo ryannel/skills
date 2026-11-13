@@ -43,14 +43,14 @@ same shape.
 | Automated test | `check` | The behaviour, and a command that tests it end to end | It tests a mock, or only the easy path |
 | Property or fuzz test | `check` | The rule that must always hold, the inputs to throw at it, and for how long | The inputs miss the cases that happen in real use |
 | Golden output | `check` | The expected output, how close is close enough, and why it is right | The golden file was made by the code under test, and nobody checked it |
-| Benchmark tripwire | `check` | What to measure, and a threshold from the project brief or a recorded baseline. For a number the owner gave, such as a frame rate, pair a generous `check` that catches a collapse with the precise measurement on the real target | Someone made the number up, or it ran on a busy or different machine, or the owner's number is left to a reviewer reading one timing sample |
+| Benchmark tripwire | `check` | What to measure, and a threshold from the project brief or a recorded baseline. For a number the human gave, such as a frame rate, pair a generous `check` that catches a collapse with the precise measurement on the real target | Someone made the number up, or it ran on a busy or different machine, or the human's number is left to a reviewer reading one timing sample |
 | Determinism | `check` | The same input, run twice, gives the same output (frames, files, results) | It compares a run only with itself in one process, or ignores timing and threads |
 | Visual quality | `inspect` | One quality, and the views that show it | It is one flattering shot, or screenshots from a different build |
 | 2D image | `inspect` | The parts of the image, each seen whole, cropped at full resolution, and at the size it is shown | It was judged only as a thumbnail, or in one condition |
 | 3D asset | `inspect` | The parts of the model, each seen from several angles and distances, in its real lighting | It is one hero angle, or the turntable never shows the underside |
 | Motion or behaviour | `inspect` | What moves (physics, animation, simulation), and a scenario that shows it, as a sequence of frames | It is one still, or a slowed-down or close-up recording |
 | User journey | `inspect` | The steps and their states: empty, loading, error and resize for a screen; bad arguments, piped input and exit codes for a command-line tool | Only the easy path was tried |
-| Options to choose from | `inspect`, and `needs` with the type `human_feedback` | A few options for one representative piece, different in kind, for the owner to pick from | The options are one idea in three colours |
+| Options to choose from | `inspect`, and `needs` with the type `human_feedback` | A few options for one representative piece, different in kind, for the human to pick from | The options are one idea in three colours |
 | Code or interface | `ask` | A question with a real answer, such as "does every caller handle the new error case?" | It asks for an opinion |
 
 ## How to inspect
@@ -86,29 +86,29 @@ Subjective work is work judged by taste: a game's look, a set of 3D assets, a vi
 minimum requirements (the file loads, the model is under its triangle budget, the frame time holds), so write
 those as `check` items as usual. The taste itself needs four more things.
 
-### The owner chooses the look first
+### The human chooses the look first
 
-People disagree about taste, so no reviewer can settle it for the owner. When the look is the product, and a
+People disagree about taste, so no reviewer can settle it for the human. When the look is the product, and a
 wrong one means redoing most of the work (an asset set, a game's art style, a brand), plan a first milestone
-that makes a few options for one representative piece, different in kind. Give it an item where the owner
+that makes a few options for one representative piece, different in kind. Give it an item where the human
 picks one, marked as needing human feedback: `"needs": {"type": "human_feedback", "what": "pick one option"}`.
-Choosing early costs the owner one sitting. Rejecting finished work costs the build. The owner replies to the
+Choosing early costs the human one sitting. Rejecting finished work costs the build. The human replies to the
 lead in chat, and the lead saves the question and their reply with the `owner feedback` command. The script
 records it as Human Feedback, so the builder and every later reviewer can compare the work with the option the
-owner chose.
+human chose.
 
-Have the builder lay the options out side by side for the owner, at the size they will be used and also
+Have the builder lay the options out side by side for the human, at the size they will be used and also
 enlarged, because a difference in line or texture can be a few pixels at real size. Have it save that as one
-image in the evidence folder too. The owner sees it in the chat with the lead, and won't open a file in the
+image in the evidence folder too. The human sees it in the chat with the lead, and won't open a file in the
 repository.
 
 Hold the options to the minimum requirements, and to being different in kind, and to nothing more. They exist so
-the owner can turn some down. The full quality bar starts with the chosen option, from the next milestone on. A
-quality bar that says "each option" must meet the look would fail the milestone on the very options the owner
+the human can turn some down. The full quality bar starts with the chosen option, from the next milestone on. A
+quality bar that says "each option" must meet the look would fail the milestone on the very options the human
 rejected.
 
 When taste is one quality of a small build, such as how a little game feels, skip the options. Build it, and put
-the owner's judgement in one item on the last milestone, marked as needing human feedback, so nothing waits on the owner until the rest
+the human's judgement in one item on the last milestone, marked as needing human feedback, so nothing waits on the human until the rest
 is finished.
 
 ### Reviewers compare with references
@@ -128,13 +128,13 @@ usual. Every round costs a fresh look at all the screenshots, so stop at the fir
 would change.
 
 Commit each round, and keep the best one, which isn't always the last. Anthropic's design runs improved for
-several rounds, levelled off, and sometimes peaked in the middle. Options the owner hasn't chosen from yet get
+several rounds, levelled off, and sometimes peaked in the middle. Options the human hasn't chosen from yet get
 one round at most, because most of them will be turned down.
 
 This is the builder's own check, not the review. A failed review costs a whole builder run and one of the
 [escalation steps](done-when.md#when-a-review-fails), which is the wrong price for an ordinary round of polish.
 
-### What agents can't perceive goes to the owner
+### What agents can't perceive goes to the human
 
 No current agent can hear a sound or feel how a game plays. Mark those items as needing human feedback when you
 plan them. Left to a reviewer they come back `could_not_judge`, which fails the milestone and tells nobody

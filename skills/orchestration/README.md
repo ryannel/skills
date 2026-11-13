@@ -198,7 +198,7 @@ conversation skill: [Superpowers](https://github.com/obra/superpowers/blob/main/
 and [Matt Pocock's skills](https://github.com/mattpocock/skills). Asking only questions whose answer would change
 the build roughly halved filler questions in Superpowers' blind-graded tests, and asking why before offering
 choices is what kept the reason in the conversation. Those numbers grade the conversation. Nobody, us included, has
-measured whether the result ends up closer to what the owner wanted. Some parts of the brief are our own: how the
+measured whether the result ends up closer to what you wanted. Some parts of the brief are our own: how the
 result will be judged, which judgements only you can make, your request kept word for word, and the difference
 between "I don't know", "I don't mind" and "you decide".
 
@@ -206,11 +206,11 @@ between "I don't know", "I don't mind" and "you decide".
 
 Each agent starts new and knows only the files, so a name that isn't written down gets invented again, slightly
 differently, by the next agent. This set went through that itself: by 10 November 2026 its files said "claimed",
-"the loop", "the ladder" and "parked", and its owner couldn't tell what they meant. Going through them one by one
+"the loop", "the ladder" and "parked", and its human couldn't tell what they meant. Going through them one by one
 produced the set's own glossary and the rules in `domain-language`. The rules for keeping a glossary from going
 wrong, such as holding names and nothing else, and removing entries as well as adding them, come from Matt Pocock's
 and Compound Engineering's reports. Nobody has measured whether agents do better work with a glossary. We keep it
-because the owner couldn't follow the build without it.
+because the human couldn't follow the build without it.
 
 ### What "done" means is written before building, and the builder can't change it
 
@@ -283,7 +283,7 @@ recommend this for long work, because a long session loses track of its early in
 Each message that starts an agent says what must be true at the end, which skill to read, what the agent may
 change, and how to end, because the script reads the last line. It gives no steps. The lead passes on file paths
 and your own words, without its summary or opinion, because a reviewer handed a conclusion tends to agree with it.
-Your request reaches the planner word for word: in one test run a plan read "accents" more narrowly than the owner
+Your request reaches the planner word for word: in one test run a plan read "accents" more narrowly than the human
 meant, and the finished tool dropped the letter `Ø`. Rules that must hold for a whole session are sent again when
 it is resumed, and reviewers and planners are started unable to start other agents, because a reviewer that hands
 its reading to a helper hasn't read the work. The
@@ -297,7 +297,7 @@ Nothing published supports these. Each is here because it fixed something we saw
 - After a failed review, the steps run from the same builder, to a new builder, to a rewritten plan or a planner's
   diagnosis, to stopping for you. Each step exists because the one before it has been tried. Only a repeated
   finding counts toward a rewrite, because one project's milestone failed eight reviews, each on something new
-  that the builder then fixed, and stopped for its owner with nothing wrong in its plan.
+  that the builder then fixed, and stopped for its human with nothing wrong in its plan.
 - A milestone proved only by Automated Checks is Done without a reviewer, unless it is the module's last
   milestone, whose review reads the whole module. Anthropic's rule for when a reviewer is worth its cost was how
   hard the task is for the model, not how the work is proved, so this is a trade-off to revisit.
@@ -430,7 +430,8 @@ After that, only a planner run or `owner scope` changes the items.
 
 The lead asks you in the chat and runs an `owner` command with your words, the script saves them, and `report`
 lists them. The `owner` commands refuse to run inside any session the script started, so a builder, reviewer or
-planner can't save a decision for you. [Known limits](#known-limits) says what this does and doesn't stop.
+planner can't save a decision for you. The commands keep `owner`, the set's older word for you.
+[Known limits](#known-limits) says what this does and doesn't stop.
 
 ## Claude Code and Codex
 
@@ -555,13 +556,13 @@ tool that dropped the letter `Ø`, which the planning skill now guards against. 
 milestone, for reasons that have been fixed but not run again.
 
 Those runs were short; the longest took 97 minutes. Each was run once, no person graded a review, and in each the
-lead also played the owner. Only the last had the lead save an owner's decisions the way it does now. Accepting a
+lead also played the human. Only the last had the lead save a human's decisions the way it does now. Accepting a
 milestone by hand, asking for a new review and editing the scope are covered by automated tests only.
 
 The `interview-me` and `domain-language` skills were added after those runs. Each was tested on three requests,
-with a second agent playing the owner, against a run of the same request with no skill, graded blind against checks
-written beforehand. With the skill, the agent asked why before offering choices, kept the owner's words apart from
-its own decisions, and planned nothing before the owner approved. Without it, one agent built a whole app after two
+with a second agent playing the human, against a run of the same request with no skill, graded blind against checks
+written beforehand. With the skill, the agent asked why before offering choices, kept the human's words apart from
+its own decisions, and planned nothing before the human approved. Without it, one agent built a whole app after two
 replies, and another wrote a brief without asking a single question. The first round showed two gaps in the
 skills, which were fixed and run again. No conversation has been run with a real
 person, and each request was run once or twice, so this is a first reading. The record is in
@@ -583,7 +584,7 @@ covers that failure:
 - a check for free disk space before a build: the script now removes a finished module's checkout instead;
 - a check that rejects status written into plan files: `STATUS.md` is generated, and the skills say not to write
   status anywhere else;
-- letting the owner's approval of a design survive an edit to its header: status no longer belongs in the header,
+- letting your approval of a design survive an edit to its header: status no longer belongs in the header,
   so there is nothing to edit there;
 - one planner lock per module: a second planner now waits for the first instead of being turned away;
 - chaining build, review and the next milestone, or a plan and its design review, inside one command: each step

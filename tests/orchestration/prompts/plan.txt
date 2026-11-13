@@ -1,4 +1,4 @@
-Plan module APPLE-TILE. The owner said on 9 November: "tiles should load as you scroll, never all at once".
+Plan module APPLE-TILE. The human said on 9 November: "tiles should load as you scroll, never all at once".
 
 Use the plan-module skill (the file is /skills/orchestration/plan-module/SKILL.md) for this task.
 
@@ -8,4 +8,4 @@ Rules:
 - Each module's files go in its own folder under the plans folder: DESIGN.md, PLAN.md, LOG.md and DONE.json.
 - The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`. Its `check --module <M> --milestone <id> --worktree . --items-only` command tries a milestone's item checks without recording anything. It leaves out the project's test command, and runs each check under the item's lock, waiting while a builder holds it.
 
-To finish: say what changed and any decision the owner must make, then end with `PLANNED` once the files are written. The script lists the files you changed itself. If nothing should change, or you can't go on, end with `BLOCKED: ...` or `NEEDS_CONTEXT: ...`, and the script merges nothing.
+To finish: say what changed and any decision the human must make, then end with `PLANNED` once the files are written. The script lists the files you changed itself. If nothing should change, or you can't go on, end with `BLOCKED: ...` or `NEEDS_CONTEXT: ...`, and the script merges nothing.

@@ -1,7 +1,7 @@
 """The script's result names and fields keep to the set's glossary.
 
 The authoring spec says the script uses the glossary's names, but nothing checked it, and by 2.0.0 the script
-printed results such as FLOOR and PIN that no glossary entry or skill explained. A lead reading FLOOR told the owner
+printed results such as FLOOR and PIN that no glossary entry or skill explained. A lead reading FLOOR told the human
 "likely quota" for a merge that had finished after its turn ended. These tests fail when a result or field name
 drifts from the glossary again.
 """

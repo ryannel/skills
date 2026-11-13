@@ -1,7 +1,7 @@
 """What every orchestration test shares: a folder of this process's own, the script, the fake host and `Repo`.
 
 Import it first in every test file. Before it imports the script, it points every host, home and state folder the
-script reads at that folder, so no test reads the owner's settings or writes under their home folder. A test that
+script reads at that folder, so no test reads the human's settings or writes under their home folder. A test that
 forgets to install a fake host fails at once instead of starting the real CLI.
 
 Tests run many commands in one process, and the script keeps per-process state in module globals. `Clean` puts that
@@ -45,7 +45,7 @@ os.environ.update(
     XDG_STATE_HOME=str(PROCESS / "state"), XDG_CACHE_HOME=str(PROCESS / "cache"),
     ORCHESTRATE_LOOPS_DIR=str(PROCESS / "loops"), ORCHESTRATE_CODEX="/no/such/host",
     ORCHESTRATE_CLAUDE="/no/such/host",
-    # The owner's git settings (pull.rebase, the LFS filters) never reach the test repositories. The file here
+    # The human's git settings (pull.rebase, the LFS filters) never reach the test repositories. The file here
     # gives commits an author, as CI's global settings do.
     GIT_CONFIG_GLOBAL=str(PROCESS / "gitconfig"), GIT_CONFIG_NOSYSTEM="1")
 for key in [k for k in os.environ if k.startswith("FAKE_")] + ["ORCHESTRATE_ROLE", "ORCHESTRATE_VISIBLE"]:
@@ -322,7 +322,7 @@ elif role == "plan":
         reply = f"Read every round.\\nKEEP WATER M1: {mode[5:]}: the {mode[5:]} has to act"
     elif mode == "blocked":
         (cwd / "docs/plans/PAY/DESIGN.md").write_text("# Pay design, half done")
-        reply = "BLOCKED: the owner must choose the payment provider"
+        reply = "BLOCKED: the human must choose the payment provider"
     else:
         if mode != "nodesign":
             (cwd / "docs/plans/PAY/DESIGN.md").write_text("# Pay design")
@@ -413,7 +413,7 @@ def check_next_commands(result):
 
 def loop_commands(text):
     """The arguments of each `agent_loop.py` command in a shell command line, which must be one a lead can paste:
-    the shell must parse it, and a placeholder such as '<what the owner said, in their words>' must be quoted, so
+    the shell must parse it, and a placeholder such as '<what the human said, in their words>' must be quoted, so
     it reaches the script as one word. In 2.1.0 a placeholder with an apostrophe in it ended its own quotes."""
     try:
         words = shlex.split(text)
@@ -649,7 +649,7 @@ class Repo(Clean):
         return json.loads(self.printed(agent_loop.cmd_ready, worktree=str(where or self.wt)))
 
     def owner(self, action, milestone_id, reason="owner said so", where=None, item=None, asked=None):
-        """An owner command. For `feedback`, `reason` is what the owner said and `asked` the lead's question."""
+        """A human command. For `feedback`, `reason` is what the human said and `asked` the lead's question."""
         feedback = action == "feedback"
         return self.call(agent_loop.cmd_owner, action=action, module="WATER", milestone=milestone_id,
                          item=[item] if isinstance(item, str) else item, worktree=str(where or self.wt),

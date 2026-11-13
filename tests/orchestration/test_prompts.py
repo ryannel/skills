@@ -1,5 +1,5 @@
 """Every prompt the script sends, rendered from fixed data and kept as a text file in prompts/, so a change to a
-template or to the text the script adds shows as a readable diff for the owner to review.
+template or to the text the script adds shows as a readable diff for the human to review.
 
 When a change is intended, write the new copies with
     ORCHESTRATE_WRITE_PROMPTS=1 python3 -m unittest tests.orchestration.test_prompts
@@ -43,7 +43,7 @@ def prompts() -> dict[str, str]:
     """name -> the prompt, for every kind of prompt the script sends."""
     out = {}
     out["build-codex-headless-full"] = build_prompt(
-        "codex", True, "The owner said at 08:37 they would be away until noon. The lock on gpu is held by the "
+        "codex", True, "The human said at 08:37 they would be away until noon. The lock on gpu is held by the "
         "APPLE-PRESENTATION builder's capture; that is normal.", True, True, True, True, ["never modify Broadsides"])
     out["build-claude-visible-plain"] = build_prompt("claude", False, "", False, False, True, False, [])
     out["build-resumed-restatement"] = agent_loop.binding(
@@ -81,7 +81,7 @@ def prompts() -> dict[str, str]:
         context="Since the last design review (docs/evidence/APPLE-TILE/design-review.md), M2.2 changed.",
         design=True)
     out["plan"] = agent_loop.PLAN_TEMPLATE.format(
-        task="Plan module APPLE-TILE. The owner said on 9 November: \"tiles should load as you scroll, never "
+        task="Plan module APPLE-TILE. The human said on 9 November: \"tiles should load as you scroll, never "
              "all at once\".", skill=agent_loop.skill_note("plan-module", "claude"), loop=LOOP)
     with mock.patch.object(agent_loop, "round_history", lambda *a, **k: agent_loop.history_lines({"reviews": [ROUND]})), \
             mock.patch.object(agent_loop, "review_rounds", lambda *a, **k: (

@@ -21,6 +21,13 @@ project the lead merged one by hand and its builder resolved the conflicts by de
 `migrate --branch --worktree <its worktree>`, which renames its commits and rebases them onto the main branch. It
 holds only that module's lock, so other modules keep building.
 
+## Files that say "the owner"
+
+Older versions of this set called the human "the owner". A project planned by one says "the owner" in its brief,
+plans, glossary and reviews, and its plan files have a section `## Open for the owner`. All of these mean the
+human. Nothing needs migrating: the script doesn't read those words, and its own commands and fields still say
+`owner`.
+
 ## Ready for Review set by a builder
 
 Before 2.1.0 a builder set its own milestone Ready for Review. A milestone in that state on the main branch, with

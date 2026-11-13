@@ -56,7 +56,7 @@ Why it is here: a result from a stand-in is useful, but it never becomes a Pass 
 
 ## Meets the numbers, misses the look
 
-The milestone: twelve harbour props for a low-poly sailing game, judged against the option the owner chose, which
+The milestone: twelve harbour props for a low-poly sailing game, judged against the option the human chose, which
 was hand-painted, chunky and slightly crooked. Every prop loaded, sat under its triangle budget and shared one
 texture atlas, so the Automated Checks passed.
 
