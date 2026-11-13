@@ -135,7 +135,7 @@ line says. It does all of this under one lock, so two builders can't merge at on
 `FAILED`. The items' checks don't run here: the script runs them after your turn, so they don't hold the lock.
 
 If `merge` prints `FAILED` because your commits set the milestone to `ready_for_review` or `done`, which can happen
-on a branch an older builder left, set the state back to `in_progress`, commit that, and merge again.
+on a branch an older builder left, set the `status` back to `in_progress`, commit that, and merge again.
 
 An ordinary fix that has no plan is merged the same way. Make the fix, add a test if one would catch the fault
 coming back, and run `merge`. Then a quick fix can't collide with a builder's merge or skip the tests.

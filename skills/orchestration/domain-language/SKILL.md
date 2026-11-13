@@ -154,7 +154,7 @@ every fact. A step or a thing that has no agreed name yet stays in, described in
 In a project built with the orchestrate set, only a planner, the agent that writes the plans, changes the plan
 files. So the lead, the agent the human chats with, gives a planner the human's words. The set also keeps each
 piece of work's checks and results in JSON files beside the plans. Leave those as they are when a name changes,
-because the set's script checks who changed them, and a planner rewrites an item whose words have to change. In
+because the set's script checks who changed them, and a planner changes an item whose words have to change. In
 any other project, update the documents yourself.
 
 Entries have to leave the glossary as well as arrive, or it grows until nobody reads it. Propose removing an

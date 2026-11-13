@@ -91,8 +91,7 @@ which the script writes. `BRIEF.md` is the project brief: what the human wants a
 before planning. `GLOSSARY.md` holds the agreed name for each thing in the project. `ARCHITECTURE.md` is the list
 of modules. Every agent looks for them there by name, so they need no line in this file. They are kept in the
 plans folder because the `adopt` command merges files from it, which lets the lead put a changed brief or glossary
-on the main branch without making a commit by hand. [The module's files](done-when.md#where-everything-is) shows
-the whole layout.
+on the main branch without making a commit by hand.
 
 This file holds settings, not progress. Write no status here, such as which milestones are done, because the
 script keeps that in `STATUS.md`, and a second copy here goes stale.

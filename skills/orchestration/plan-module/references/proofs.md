@@ -23,7 +23,7 @@ one:
   design.
 
 An item passes only when every proof it names passes.
-[The done-when file](done-when.md#donejson) says which milestones need a reviewer.
+The done-when file's format, in `done-when.md`, says which milestones need a reviewer.
 
 Choose the proof that would catch a convincing fake. Often one proof isn't enough, because each kind misses
 different things. Take a boat bobbing in waves. A test that the energy never grows catches a slow drift that
@@ -128,8 +128,8 @@ change.
 
 Commit each attempt, and keep the best one, which isn't always the last, because quality can peak in the middle. Options the human hasn't chosen from yet get one attempt at most, because most of them will be turned down.
 
-This is the builder's own check, not the review. A failed review costs a whole builder run and one of the
-[escalation steps](done-when.md#when-a-review-fails), which is the wrong price for an ordinary attempt at polish.
+This is the builder's own check, not the review. A failed review costs a whole builder run and counts towards sending
+the milestone back to a planner, which is the wrong price for an ordinary attempt at polish.
 
 ### What agents can't perceive goes to the human
 

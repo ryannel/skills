@@ -353,12 +353,12 @@ A `--message` that starts a new session has to stand on its own. Use the item's 
 names, not short names you made up while following the work, because the builder can't ask what "the
 matched-state captures" are.
 
-The human's words go in quotation marks with their date, apart from your own context, so a planner can tell which
-part is the human's. Planners quote the human's request at the top of a design, and design reviewers judge the
-design against it, so a summary of yours that is taken for the human's words becomes what the design is judged
-against.
+Write a planner's task yourself, from what the human asked for, as a task another agent can act on. The planner plans
+from your task, and the design reviewer judges the design against it and the project brief. So where your task
+settles something the human's words left open, say so in the task, and the planner lists it as an assumption the
+human can overturn. Don't present your own words as the human's.
 
-- The human's request goes to a planner word for word, in `--task`.
+- The planner's task goes in `--task`.
 - A restriction the human gave only in conversation, such as "don't touch the schema", goes to the builder with
   `--human-rule`. The script saves it for the module and sends it on every turn, across sessions and milestones,
   until you pass `--clear-human-rules` because the human said so.

@@ -40,7 +40,7 @@ side by side in the plans folder) stop every command until `migrate` has moved t
 
 What the script owns. In each module's folder it keeps RECORD.json, which only the script writes and
 which is committed, so every worktree, clone and lead sees the same thing. Per milestone it holds the authorised hash
-of the acceptance definitions, the Ready for Review record the script checked (code commit and the main branch's tip it ran the checks on),
+of the approved items, the Ready for Review record the script checked (code commit and the main branch's tip it ran the checks on),
 the reviews that judged it, and whether it was accepted, by checks, a reviewer or the human. It also holds the
 module's design review. A milestone is finished only when the record accepts it with its current definitions; a
 `done` status in the done-when file isn't enough. A module with no record yet has its definitions authorised and
@@ -63,14 +63,14 @@ Subcommands:
                       item's `check` exit 0 in the script's clean checkout of that tip, run in this process, outside
                       the builder's sandbox and the merge lock (a check that already passed on the same files isn't
                       run again; `reused_checks` lists those). Only then does the script write the record and set
-                      the state, `ready_for_review`, or `done` when no review is needed, in one commit. The builder
+                      the status, `ready_for_review`, or `done` when no review is needed, in one commit. The builder
                       leaves the status in_progress, and `merge` refuses a commit that sets it. `review` says whether
                       a reviewer must judge it, `commit` is the builder's commit and `checked` the tip the checks ran
                       on. A milestone that needs no review is accepted there and then. `next` is the review command
                       on the review host, or, with no review owed, `run` for the next milestone. Before any turn,
                       `run` checks a milestone whose work is already merged with every item passing, and after a
                       turn it waits for a `merge` the builder left running as a background job.
-        BLOCKED       the milestone can't move until someone steps in. The script records `state: blocked` and a
+        BLOCKED       the milestone can't move until someone steps in. The script records `status: blocked` and a
                       `blocked` object, {reason, items?, what}, and the result carries `reason` and `blocked`. The
                       reason is the one the builder's last line named (`BLOCKED needs_access: ...`); with none, items
                       that need someone decide it once every other item passes, and otherwise it is needs_context
@@ -234,7 +234,7 @@ Subcommands:
         already has (the lead commits it once the human agrees), anything `ready` would then call invalid, files the tip changed since,
         and any session the script started. While it merges it has a `runs` record, so a run turned away names it.
         ADOPTED, NOTHING, REFUSED or FAILED (with `next` when the repository has no commits to build on).
-  status [--module CORE] --worktree PATH [--format md]   Every milestone with its state, blockers and last verdict,
+  status [--module CORE] --worktree PATH [--format md]   Every milestone with its status, blockers and last verdict,
         and which modules (and the planner) have a live run. A milestone the script hasn't checked yet shows as `done,
         unchecked`. It warns about a module folder with no row in ARCHITECTURE.md's module table (`ready` lists the
         same under `module_table`), and about tracked PLAN.md or *-PLAN.md files outside the plans folder.
@@ -4763,7 +4763,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.2.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.2.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -4792,6 +4792,12 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.2.2": [
+        "You write a planner's task yourself, from what the human asked for, rather than passing the human's words on "
+        "unchanged. Where your task settles something the human's words left open, say so in the task, so the planner "
+        "lists it as an assumption. A design review judges the design against the planner's tasks and the project brief, "
+        "and the brief wins where they disagree.",
+    ],
     "2.2.1": [
         "`pause`, a hung tool call and the turn limit now stop a Codex turn whose thread the app's window has moved "
         "away from. The app refused that stop before, the script took the turn as stopped, and it worked on with "
@@ -6755,8 +6761,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
             {"verdict": "DESIGN CHANGES", "review": rec["design"].get("review")}, stem, worktree, prof))
     briefs = (f"The tasks planners were given for this module, whole and verbatim, are in {record_rel(prof, stem)} "
               "under `briefs`, oldest first. Some are the lead's or the script's own words, such as re-plan tasks. "
-              "Where a task disagrees with the human's words, in the project brief or quoted in the design, the "
-              "human's words win."
+              "Where a task disagrees with the project brief, the brief wins, because the human approved it."
               if design and rec.get("briefs") else "")
     context = " ".join(x.strip() for x in (changed, briefs) if x.strip())
     prompt = review_prompt(host, prof, stem, mid, start, done_path, review_path, None if design else under_review, e_,
@@ -9631,9 +9636,21 @@ def cmd_migrate(a: argparse.Namespace) -> None:
                                              "module folders")))
 
 
+USAGE = """Starts and checks the builders, reviewers and planners of the orchestrate set, and keeps each module's
+record. The lead of the build skill runs it, and you can run it by hand. Project settings come from ORCHESTRATE.md at
+the worktree root.
+
+Each command has its own --help for its flags. The docstring at the top of this file explains the whole design.
+
+examples:
+  agent_loop.py ready --worktree .
+  agent_loop.py run --module CORE --worktree ../core-wt
+"""
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The command line: every command, its flags and their defaults."""
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description=USAGE, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
 
     def host_args(p):
@@ -9643,7 +9660,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--effort", help="default: medium (high for planners), or the settings' Effort")
         p.add_argument("--turn-timeout-hours", type=float, default=2.0)
 
-    run = sub.add_parser("run")
+    run = sub.add_parser("run", help="build a module's next milestone with a builder, then check and review it")
     run.add_argument("--module", required=True)
     run.add_argument("--worktree", required=True)
     run.add_argument("--milestone")
@@ -9672,13 +9689,13 @@ def build_parser() -> argparse.ArgumentParser:
                      "or the builder isn't on when the script doesn't know the planner; else the builder's host)")
     host_args(run)
     run.set_defaults(func=cmd_run)
-    review = sub.add_parser("review")
+    review = sub.add_parser("review", help="review a milestone that is Ready for Review, or a module's design")
     for flag in ("--module", "--milestone", "--worktree"):
         review.add_argument(flag, required=True)
     review.add_argument("--commit", default="HEAD")
     host_args(review)
     review.set_defaults(func=cmd_review)
-    plan = sub.add_parser("plan")
+    plan = sub.add_parser("plan", help="start a planner on a task, and check and merge its plan")
     plan.add_argument("--worktree", required=True)
     plan.add_argument("--task", required=True)
     host_args(plan)
@@ -9687,10 +9704,10 @@ def build_parser() -> argparse.ArgumentParser:
     merge_p.add_argument("--worktree", default=".")
     merge_p.add_argument("--no-check", action="store_true", help="skip the test command")
     merge_p.set_defaults(func=cmd_merge)
-    ready = sub.add_parser("ready")
+    ready = sub.add_parser("ready", help="say what each module's next milestone is waiting for")
     ready.add_argument("--worktree", default=".")
     ready.set_defaults(func=cmd_ready)
-    status = sub.add_parser("status")
+    status = sub.add_parser("status", help="list every milestone with its status, blockers and last verdict")
     status.add_argument("--module")
     status.add_argument("--worktree", default=".")
     status.add_argument("--format", choices=["text", "md"], default="text",
@@ -9706,20 +9723,20 @@ def build_parser() -> argparse.ArgumentParser:
                               "the new names and rebase them onto it, holding only the module's run lock")
     migrate.add_argument("--module", help="with --branch: the module the worktree builds, when the script can't tell")
     migrate.set_defaults(func=cmd_migrate)
-    nxt = sub.add_parser("next")
+    nxt = sub.add_parser("next", help="say what to do after a failed review, and print the command")
     for flag in ("--module", "--worktree", "--milestone"):
         nxt.add_argument(flag, required=True)
     nxt.set_defaults(func=cmd_next)
-    unblock = sub.add_parser("unblock")
+    unblock = sub.add_parser("unblock", help="put a blocked milestone back in the queue")
     for flag in ("--module", "--worktree", "--milestone"):
         unblock.add_argument(flag, required=True)
     unblock.set_defaults(func=cmd_unblock)
-    adopt_p = sub.add_parser("adopt")
+    adopt_p = sub.add_parser("adopt", help="commit and merge plan files, such as a changed brief or glossary")
     adopt_p.add_argument("--worktree", default=".")
     adopt_p.add_argument("--message", help="the commit message (default: names the files)")
     adopt_p.add_argument("paths", nargs="*", help="plan files to merge (default: every unmerged one)")
     adopt_p.set_defaults(func=cmd_adopt)
-    pause = sub.add_parser("pause")
+    pause = sub.add_parser("pause", help="stop the runs in this repository, and their agents, cleanly")
     pause.add_argument("--module")
     pause.add_argument("--worktree", default=".")
     pause.set_defaults(func=cmd_pause)
@@ -9734,7 +9751,7 @@ def build_parser() -> argparse.ArgumentParser:
     human.add_argument("--asked", help="feedback: the question the lead asked the human")
     human.add_argument("--item", action="append", help="feedback: an item the human's words cover (repeatable)")
     human.set_defaults(func=cmd_human)
-    quota = sub.add_parser("quota")
+    quota = sub.add_parser("quota", help="show how much of the weekly Codex limit is used and forecast")
     quota.add_argument("--worktree", help="also forecast this repository's open milestones")
     quota.add_argument("--budget", type=float, default=120.0, help="seconds to spend reading rollouts")
     quota.add_argument("--json", action="store_true", help="the full report, as JSON")
@@ -9743,7 +9760,7 @@ def build_parser() -> argparse.ArgumentParser:
     prof.add_argument("--worktree", default=".")
     prof.add_argument("--host", help="also check that host's loader (default: see above)")
     prof.set_defaults(func=cmd_settings)
-    check = sub.add_parser("check")
+    check = sub.add_parser("check", help="run a milestone's checks in a tree as it stands, saving nothing")
     check.add_argument("--module", required=True)
     check.add_argument("--milestone", required=True)
     check.add_argument("--worktree", default=".", help="the tree to run the checks in (default: here)")
@@ -9753,22 +9770,22 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--items-only", action="store_true",
                        help="run only the items' checks, each under its own lock, and not the project's test command")
     check.set_defaults(func=cmd_check)
-    cost = sub.add_parser("cost")
+    cost = sub.add_parser("cost", help="show tokens used per milestone on this machine")
     cost.add_argument("--worktree", default=".")
     cost.add_argument("--module", help="only this module")
     cost.add_argument("--since", type=float, help="only the last this many hours")
     cost.add_argument("--json", action="store_true")
     cost.set_defaults(func=cmd_cost)
-    report = sub.add_parser("report")
+    report = sub.add_parser("report", help="write the factual half of the lead's report to the human")
     report.add_argument("--worktree", default=".")
     report.add_argument("--since", type=float, default=24.0, help="hours to cover (default 24)")
     report.add_argument("--write", action="store_true", help="write <evidence>/build-reports/<date>.md for adopt")
     report.set_defaults(func=cmd_report)
-    runs = sub.add_parser("runs", aliases=["loops"])  # `loops` before 2.1.0
+    runs = sub.add_parser("runs", aliases=["loops"], help="list every run, review and plan running on this machine")  # `loops` before 2.1.0
     runs.add_argument("--repo", help="only runs in the repository holding this path")
     runs.add_argument("--json", action="store_true", help="one JSON object, for a lead")
     runs.set_defaults(func=cmd_loops)
-    lock = sub.add_parser("lock")
+    lock = sub.add_parser("lock", help="run a command under a lock shared by every worktree of the repository")
     lock.add_argument("--worktree")
     lock.add_argument("name")
     lock.add_argument("command_args", nargs=argparse.REMAINDER)

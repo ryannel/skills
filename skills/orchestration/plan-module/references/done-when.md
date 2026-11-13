@@ -198,7 +198,7 @@ The planner writes the fields that say what a milestone asks for:
 - `statement` says what must be true, in words a reviewer can judge.
 - `check`, `inspect` and `ask` say how the item is proved: `check` is an Automated Check, `inspect` a Reviewer
   Inspection, and `ask` a Reviewer Question. An item uses at least one of them, and may use more.
-  [Proofs](proofs.md) describes each.
+  The proofs reference, `proofs.md`, describes each.
 - `target` is one of the targets in the project settings, meaning a device or platform the product runs on. When
   the proof runs on a stand-in, it is `stand_in:<what it stands in for>`.
 - `lock` is optional. It names an exclusive resource that the item's `check` needs, such as `gpu`, and the script
@@ -218,7 +218,7 @@ The planner writes the fields that say what a milestone asks for:
   Builders do these items together, so the human can settle them in one sitting.
 - `quality_bar` is the milestone's quality bar: how good it has to be, in words. It takes the quality bar in the project
   settings and makes it specific to this milestone, and it is what a Reviewer Inspection is judged against. Name
-  real examples in it, or the project's [references](proofs.md#subjective-work) for subjective work.
+  real examples in it, or the project's reference sets for subjective work.
 - `depends_on` is optional. It lists the milestones in other modules that this one depends on, written `"AUTH:M1"`, and
   each must be Done before this one starts. Milestones inside one module already run in order, so listing an
   earlier one from the same module adds nothing. The script reports an error for a later milestone of the same

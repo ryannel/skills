@@ -1,6 +1,6 @@
 ---
 name: orchestration-skill
-description: Authoring spec for the orchestration domain (skills/orchestration). Use when adding or changing a skill, agent file or script in that domain. Not for the generative-media domain (media-model-skill).
+description: Sets the rules for writing the orchestrate skills in skills/orchestration, their agent files and agent_loop.py. Use when adding or changing interview-me, domain-language, plan-module, build, build-milestone or review-milestone, an orchestrate agent file, or the script and its prompts. Not for the generative-media domain (media-model-skill).
 metadata:
   internal: true
 ---
@@ -37,7 +37,8 @@ it to the template, and to `profile()` in `agent_loop.py` if the script reads it
 
 Model and effort are set when a session starts, by the script's flags or the project settings, and saved in
 the record of that session. Skills and Claude agent files name neither, because Claude lets that frontmatter
-override the command line.
+override the command line. The Codex agent file `build/agents/codex/orchestrate-reviewer.toml` is the exception: it
+names both, because Codex reads them only from that file.
 
 One kind of agent writes each field of the done-when file, as the table in
 `plan-module/references/done-when.md` lists. A change to who writes what updates that table, the skills that
@@ -57,17 +58,22 @@ A boundary the script enforces needs no line in a prompt. A message about a fail
 and where it is kept, and leaves out a list of what to fix, because a list of findings gets cleared and nothing
 more, while the next reviewer starts again from the items.
 
-Scripts are standard-library Python, with tests in `tests/orchestration/`, which are not shipped with the
-skill. Run `python3 tests/orchestration/run.py` before a commit. It runs them in up to eight processes and takes
-about 70 seconds on the human's Mac; `python3 -m unittest discover tests/orchestration` runs the same tests in one
-process, in about seven minutes. The tests share a fake host, a repository and the reset between tests in
-`tests/orchestration/support.py`; put a new test on `Repo` only when it needs a repository. A
-script that starts agents goes through the host adapters in `agent_loop.py`, so that every host is handled in one
-place and Claude sessions get no API key.
+Scripts are standard-library Python, with tests in `tests/orchestration/`, which are not shipped with the skill. Run
+`python3 tests/orchestration/run.py` before a commit. It runs them in up to eight processes and takes about 70 seconds
+on the human's Mac. `python3 -m unittest discover tests/orchestration` runs the same tests in one process, in about
+seven minutes. `tests/orchestration/prompts/` holds a saved copy of each prompt the script sends, and `test_prompts.py`
+fails when a template changes. When the change is intended, write the new copies with
+`ORCHESTRATE_WRITE_PROMPTS=1 python3 -m unittest tests.orchestration.test_prompts`, and read their diff. The tests
+share a fake host, a repository and the reset between tests in `tests/orchestration/support.py`. Put a new test on
+`Repo` only when it needs a repository. A script that starts agents goes through the host adapters in `agent_loop.py`,
+so that every host is handled in one place and Claude sessions get no API key.
 
 Agent files for Claude live in `build/agents/claude/` and are listed in the marketplace entry. The Codex
 copies live in `build/agents/codex/` and are installed by `install_agents.sh`. The script and the installer use
-the files' names, so keep the names.
+the files' names, so keep the names. The `build` skill sets `disable-model-invocation: true`, and
+`build/agents/openai.yaml` sets `allow_implicit_invocation: false` for Codex, because a build runs agents for hours
+and should start only when the human asks for it. `check_skill.py` prints a note about that field, and the note is
+expected.
 
 Add guidance only for a failure that has been seen. Write it as what to do and why, so the reader can apply it
 to cases the failure didn't cover, and leave the story of what happened out of the skill. The story goes in the

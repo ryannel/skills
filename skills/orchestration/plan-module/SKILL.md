@@ -99,6 +99,36 @@ lead runs.
 These files are prompts: a builder and a reviewer act on them with nothing else to go on. Write them the way the
 `prompting-agents` skill describes, if it is installed.
 
+## What finished looks like
+
+1. The design, the plan file and the done-when file exist, and agree with each other, with the interfaces and with
+   the module's entry in the module list.
+2. A reviewer has read the design, and the result is Design Approved. The review gives a new reviewer only the
+   planner's tasks, the brief and the design. The done-when items are part of what it approves, because they are
+   what the builder will be held to, and no builder starts on the module before then. When the `plan` command
+   started you, the lead runs the review after your turn, so say in your report that the design still needs one.
+   When you are planning in a chat with the human, run it yourself with
+   `agent_loop.py review --module <M> --milestone design --worktree .`, act on what it finds, and note the review
+   in the log.
+3. Every `check` runs as written. `agent_loop.py check --module <M> --milestone <id> --worktree . --items-only` tries
+   a milestone's item checks and saves nothing. It leaves out the project's test command and waits for each item's
+   lock, so it doesn't disturb builders that are working. Before the work exists, each check should come back `fail`.
+   An `error` means the check itself is broken, usually by shell quoting inside the JSON, and a builder would lose a
+   session finding that out.
+4. The module table in `ARCHITECTURE.md` lists the module, and every milestone is named for what someone can see
+   or do.
+5. Your report ends with what is left for the human: each decision on the `Human decides` list in the project
+   settings, and each assumption. Put them last, because the lead is shown the end of a long report.
+
+The `Human decides` list says what has to go to the human. Every other decision about the plan is yours.
+
+## What the script does with your files
+
+Leave the files you write uncommitted. When your turn ends with `PLANNED`, the `plan` command checks them, commits
+and merges them, and saves the new items as the approved ones, so a commit, merge, pull or push of your own gets
+in its way and it merges nothing. Leave each `RECORD.json` record file and `STATUS.md` as they are too. Only the
+script writes those, and it rejects a plan that touches one.
+
 ## The whole project
 
 If the project has more than one module, plan the project before any module. Write the module list,
@@ -175,6 +205,10 @@ A narrow reading that nobody wrote down can't be caught later, because reviewers
 Read "accents" as only the letters that decompose in Unicode, and a tool that turns Ørsted into "rsted" passes
 every review.
 
+Add a requirement only when the human's words or the design need it, because reviewers fail the build on every
+requirement you add. A limit that seemed sensible to you, such as output that fits 80 columns, can cost several
+failed reviews over something the human didn't ask for.
+
 ### Milestones and items
 
 Make each milestone one outcome that a reviewer can judge, and put the riskiest first. Usually the outcome is
@@ -236,29 +270,6 @@ When you plan a module's next piece, or re-plan one, look through its reviews. A
 command in the project's test command (the `Test command:` line of the project settings) or an item's `check`, so from
 then on it is caught without a review.
 
-## What finished looks like
-
-1. The design, the plan file and the done-when file exist, and agree with each other, with the interfaces and with
-   the module's entry in the module list.
-2. A reviewer has read the design, and the result is Design Approved. The review gives a new reviewer only the
-   human's request and the design. The done-when items are part of what it approves, because they are what the
-   builder will be held to, and no builder starts on the module before then. When the `plan` command started you,
-   the lead runs the review after your turn, so say in your report that the design still needs one. When you are
-   planning in a chat with the human, run it yourself with
-   `agent_loop.py review --module <M> --milestone design --worktree .`, act on what it finds, and note the review
-   in the log.
-3. Every `check` runs as written. `agent_loop.py check --module <M> --milestone <id> --worktree . --items-only` tries
-   a milestone's item checks and saves nothing. It leaves out the project's test command and waits for each item's
-   lock, so it doesn't disturb builders that are working. Before the work exists, each check should come back `fail`.
-   An `error` means the check itself is broken, usually by shell quoting inside the JSON, and a builder would lose a
-   session finding that out.
-4. The module table in `ARCHITECTURE.md` lists the module, and every milestone is named for what someone can see
-   or do.
-5. Your report ends with what is left for the human: each decision on the `Human decides` list in the project
-   settings, and each assumption. Put them last, because the lead is shown the end of a long report.
-
-The `Human decides` list says what has to go to the human. Every other decision about the plan is yours.
-
 ## When a milestone keeps failing review
 
 A milestone that keeps failing review is Waiting, with the reason For Diagnosis (the script prints `waiting` with
@@ -298,17 +309,10 @@ Give each milestone you split off the same `diagnoses` count as the one it came 
 new milestone came from which, so you set it. Leave the other counts and `findings` alone, because the script
 puts back any change a plan makes to them.
 
-## What the script does with your files
-
-Leave the files you write uncommitted. When your turn ends with `PLANNED`, the `plan` command checks them, commits
-and merges them, and saves the new items as the approved ones, so a commit, merge, pull or push of your own gets
-in its way and it merges nothing. Leave each `RECORD.json` record file and `STATUS.md` as they are too. Only the
-script writes those, and it rejects a plan that touches one.
-
 ## When the human changes what they want
 
-The lead sends you the human's words as your task, and has already added them to the brief if there is one. Change the
-plan to match, and quote their words in `LOG.md`. Write each item their words reach again from what it claims, as you
-would in a re-plan. This doesn't count as the milestone's diagnosis, unless the milestone was already Waiting: For
+The lead sends you what the human asked for as your task, and has already added it to the brief if there is one. Change
+the plan to match, and quote their words in `LOG.md`. Write each item their words reach again from what it claims, as
+you would in a re-plan. This doesn't count as the milestone's diagnosis, unless the milestone was already Waiting: For
 Diagnosis. Then your change is the re-plan, and the script counts it. A milestone whose items you change is built and
 reviewed again, so change only what their words reach.
