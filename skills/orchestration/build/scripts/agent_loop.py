@@ -30,14 +30,14 @@ Plans line, no docs/plans and a docs/modules folder keeps docs/modules). Each mo
   <plans>/<MODULE>/PLAN.md        the milestones as they stand now, with open assumptions under `## Open for the human`
   <plans>/<MODULE>/LOG.md         short dated entries: what changed and why
   <plans>/<MODULE>/DONE.json      the done-when file; a folder with one is a module
-  <plans>/<MODULE>/ACCEPTED.json  the record, which only the script writes
+  <plans>/<MODULE>/RECORD.json    the record, which only the script writes
   <plans>/<MODULE>/BRIEF.md       a feature brief, when the module has one
 The project's own files sit beside the folders: BRIEF.md, GLOSSARY.md, ARCHITECTURE.md (which opens with the module
 table, `| # | Module | What it's for | Needs |`, in build order) and STATUS.md, the human's page, which the script writes
 after each record it merges and nobody edits. Plans still in the older flat layout (<MODULE>-DONE.json and the rest
 side by side in the plans folder) stop every command until `migrate` has moved them.
 
-What the script owns. In each module's folder it keeps ACCEPTED.json, which only the script writes and
+What the script owns. In each module's folder it keeps RECORD.json, which only the script writes and
 which is committed, so every worktree, clone and lead sees the same thing. Per milestone it holds the authorised hash
 of the acceptance definitions, the Ready for Review record the script checked (code commit and the main branch's tip it ran the checks on),
 the reviews that judged it, and whether it was accepted, by checks, a reviewer or the human. It also holds the
@@ -53,7 +53,7 @@ scripts.
 Subcommands:
 
   run   --module CORE --worktree PATH [--host H] [--model M] [--effort E] [--milestone M2] [--fresh]
-        [--message TEXT] [--human-rule TEXT]... [--clear-human-rules] [--budget-hours 4] [--no-design-review]
+        [--message TEXT] [--human-rule TEXT]... [--clear-human-rules] [--no-progress-hours 4] [--no-design-review]
         [--review-host H] [--checks-only]
         Starts (or resumes) a builder session on the module's next milestone and drives it one turn at a time until:
         READY_FOR_REVIEW  the script checked the milestone and set it to Ready for Review: the done-when file is
@@ -100,7 +100,7 @@ Subcommands:
                       worktree, since when) where the records show it
         NO_PROGRESS_FOR_HOURS
                       no new passing item, and no commit of the builder's own outside the plans folder, for
-                      --budget-hours
+                      --no-progress-hours
         STALLED       three turns in a row changed nothing and reported nothing (progress updates); the two
                       continuations between them named the open items
         HOST_FAILED   two failed turns in a row, the host CLI is missing, or the goal is usage- or budget-limited
@@ -252,6 +252,12 @@ Subcommands:
         becomes `needs` ({type: human_feedback, or hardware when it names a device, what}), cant_tell becomes
         could_not_judge and a `proxy:` target `stand_in:`; in each ACCEPTED.json `owner_answers` {text, item}
         becomes `human_feedback` {asked: null, said, items, at} and `parked` becomes `too_many_failed_reviews`.
+        It also brings a project to the names of 2.2: the settings line `Owner decides:` becomes `Human decides:`;
+        each ACCEPTED.json becomes RECORD.json, and in it `accepted` becomes `done` and an `owner decision` a `human
+        decision`; in each DONE.json a milestone's `state` becomes `status`, an item's `status` becomes
+        `builder_result`, `bar` becomes `quality_bar`, and the counts `rounds`, `fails` and `replans` become
+        `failed_reviews`, `failed_reviews_with_repeat` and `diagnoses`, where an earlier re-plan or diagnosis counts
+        as the milestone's one diagnosis.
         Each stored definitions hash the rename alone changed is re-stamped, so nothing reads as changed outside a
         planner turn. Every other command refuses a project with the old names, naming `migrate`. It works on a clean checkout of the tip and merges as the script's own commit, then
         fast-forwards a clean worktree. Acceptance survives: records hold no plan paths, and a design's hash is of
@@ -996,7 +1002,8 @@ def commits_made(tree: Path, seen: int) -> list[str]:
 # The layout of the plans folder, defined here and nowhere else. Each module is a folder <plans>/<MODULE>/ holding
 # these files; a folder is a module when it holds DONE.json. The project's own files sit at the top of <plans>.
 MODULE_FILES = {"design": "DESIGN.md", "plan": "PLAN.md", "log": "LOG.md", "done": "DONE.json",
-                "record": "ACCEPTED.json", "brief": "BRIEF.md"}
+                "record": "RECORD.json", "brief": "BRIEF.md"}
+OLD_RECORD = "ACCEPTED.json"  # the record file's name before 2.2
 PROJECT_FILES = {"brief": "BRIEF.md", "glossary": "GLOSSARY.md", "architecture": "ARCHITECTURE.md",
                  "status": "STATUS.md"}
 
@@ -1053,9 +1060,9 @@ def module_of(prof: dict, rel: str) -> tuple[str, str] | None:
     return (parts[0], kind) if kind else None
 
 
-def records_glob(prof: dict) -> str:
-    """A git pathspec for every record file under the plans folder."""
-    return f":(glob){prof['plans']}/*/{MODULE_FILES['record']}"
+def records_glob(prof: dict) -> list[str]:
+    """Git pathspecs for every record file under the plans folder, under today's name and the one before 2.2."""
+    return [f":(glob){prof['plans']}/*/{name}" for name in (MODULE_FILES["record"], OLD_RECORD)]
 
 
 def modules_here(tree: Path, prof: dict) -> list[str]:
@@ -1110,7 +1117,10 @@ def old_names_here(tree: Path, plans: str, settings: str | None = None) -> list[
     found = [f"{PROFILE_FILE}'s `{old}:` line (now `{new}:`)" for old, new in OLD_LABELS.items()
              if profile_value(settings, old) is not None and profile_value(settings, new) is None]
     folder = tree / plans
-    for kind, test in (("DONE.json", old_names_in_doc), ("ACCEPTED.json", old_names_in_record)):
+    for p in sorted(folder.glob(f"*/{OLD_RECORD}")) if folder.is_dir() else []:
+        found.append(f"{p.relative_to(tree)} (now {MODULE_FILES['record']})")
+    for kind, test in ((MODULE_FILES["done"], old_names_in_doc), (MODULE_FILES["record"], old_names_in_record),
+                       (OLD_RECORD, old_names_in_record)):
         for p in sorted(folder.glob(f"*/{kind}")) if folder.is_dir() else []:
             try:
                 names = test(json.loads(p.read_text()))
@@ -1123,7 +1133,7 @@ def old_names_here(tree: Path, plans: str, settings: str | None = None) -> list[
 
 def old_names_refusal(tree: Path, found: list[str]) -> str:
     """The message a command stops with when the project still uses the names from before 2.0."""
-    return ("error: this project still uses the names from before orchestrate 2.0: " + "; ".join(found[:6]) +
+    return ("error: this project still uses names from before orchestrate 2.2: " + "; ".join(found[:6]) +
             ("; ..." if len(found) > 6 else "") + ". Bring it to the new names once, in one commit, with:\n  " +
             loop_cmd("migrate", "--worktree", str(tree)) +
             "\nIf the main branch has already been migrated, the same command fast-forwards this worktree instead, "
@@ -1290,9 +1300,10 @@ def findings_problems(m: dict, mid: str, items: list) -> list[str]:
 
 def definitions(milestone: dict) -> str:
     """A hash of what the milestone asks for, as opposed to what anyone has claimed about it. Inside the hash the
-    fields keep the names they had before 2.0 (`needs` for the dependency list, `attended` for an item's needs), so
+    fields keep the names they had before 2.0 (`needs` for the dependency list, `attended` for an item's needs, and
+    `bar` for the quality bar, renamed in 2.2), so
     a milestone that uses neither hashes as it always did, and only those that do are re-stamped by `migrate`."""
-    spec = {"bar": milestone.get("bar"), "needs": milestone.get("depends_on") or [],
+    spec = {"bar": milestone.get("quality_bar"), "needs": milestone.get("depends_on") or [],
             "items": [{**{k: i.get(k) for k in DEFINITION_KEYS if k != "needs"}, "attended": i.get("needs")}
                       for i in milestone["items"]]}
     return hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
@@ -1342,6 +1353,8 @@ def old_names_in_doc(doc) -> list[str]:
             continue
         if "state" in m:
             found.append("a milestone's `state` (now `status`)")
+        if "bar" in m:
+            found.append("a milestone's `bar` (now `quality_bar`)")
         state = m.get("status", m.get("state"))
         if state in ("open", "claimed", "parked"):
             found.append(f"status {state}")
@@ -1393,6 +1406,8 @@ def upgrade_doc(doc):
             upgrade_counts(m)
         if "state" in m:
             m.setdefault("status", m.pop("state"))
+        if "bar" in m:
+            m.setdefault("quality_bar", m.pop("bar"))
         state = m.get("status")
         if state in OLD_STATES:
             m["status"] = OLD_STATES[state]
@@ -1433,6 +1448,8 @@ def old_names_in_record(rec) -> list[str]:
             found.append("`owner_answers` (now `human_feedback`)")
         if "parked" in e:
             found.append("`parked` (now `too_many_failed_reviews`)")
+        if "accepted" in e:
+            found.append("`accepted` (now `done`)")
         if "claim" in e:
             found.append("`claim` (now `ready_for_review`)")
         if "cant_tell" in json.dumps(e.get("reviews") or e.get("review") or ""):
@@ -1466,6 +1483,8 @@ def upgrade_record(rec: dict, old_doc: dict | None = None, new_doc: dict | None 
                 e["human_feedback"].append(entry)
         if "parked" in e:
             e["too_many_failed_reviews"] = e.pop("parked")
+        if "accepted" in e:  # renamed in 2.2.0
+            e.setdefault("done", e.pop("accepted"))
         if "claim" in e:  # renamed in 2.1.0
             e["ready_for_review"] = e.pop("claim")
         for key in ("reviews",):
@@ -1487,7 +1506,7 @@ def changed_items(before: dict, after: dict) -> list[str]:
     def index(doc: dict) -> tuple[dict, dict]:
         ms, items = {}, {}
         for m in doc.get("milestones") or []:
-            ms[m.get("id")] = (m.get("bar"), m.get("depends_on") or [])
+            ms[m.get("id")] = (m.get("quality_bar"), m.get("depends_on") or [])
             items[m.get("id")] = {i.get("id"): {k: i.get(k) for k in DEFINITION_KEYS} for i in m.get("items") or []}
         return ms, items
     (old_ms, old_items), (new_ms, new_items) = index(before), index(after)
@@ -1497,7 +1516,7 @@ def changed_items(before: dict, after: dict) -> list[str]:
             out.append(f"{mid} added")
             continue
         if spec != old_ms[mid]:
-            out.append(f"{mid}'s bar or depends_on changed")
+            out.append(f"{mid}'s quality_bar or depends_on changed")
         was, now = old_items[mid], new_items[mid]
         out += [f"{iid} added" if iid not in was else f"{iid} changed" for iid in now if now[iid] != was.get(iid)]
         out += [f"{iid} removed" for iid in was if iid not in now]
@@ -1718,9 +1737,9 @@ def adopt(doc: dict, design: str, as_it_stands: bool = False) -> dict:
         entry = {"definitions": definitions(m), "authorised": {"by": "adopted"}, "reviews": []}
         if as_it_stands and m.get("status") == "done" and (not needs_review(m, doc) or
                                                           all(i.get("verdict") == "pass" for i in m["items"])):
-            entry["accepted"] = {"by": "adopted"}
+            entry["done"] = {"by": "adopted"}
         rec["milestones"][m["id"]] = entry
-    if any(e.get("accepted") for e in rec["milestones"].values()):
+    if any(e.get("done") for e in rec["milestones"].values()):
         rec["design"] = {"verdict": "ok", "hash": design, "by": "adopted"}
     return rec
 
@@ -1734,7 +1753,7 @@ def unrecorded(worktree: Path, prof: dict, ref: str) -> bool:
         return False
     # any record anywhere in history, in the module folders or the older flat layout, wherever the plans folder was
     return not git(worktree, "log", "-1", "--format=%H", ref, "--", f":(glob)**/{MODULE_FILES['record']}",
-                   ":(glob)**/*-ACCEPTED.json").stdout.strip()
+                   f":(glob)**/{OLD_RECORD}", f":(glob)**/*-{OLD_RECORD}").stdout.strip()
 
 
 def take_up(tree: Path, prof: dict) -> list[str]:
@@ -1763,9 +1782,9 @@ def entry(rec: dict, mid: str) -> dict:
     return rec.setdefault("milestones", {}).setdefault(mid, {"reviews": []})
 
 
-def accepted(m: dict, rec: dict) -> bool:
+def recorded_done(m: dict, rec: dict) -> bool:
     e = rec.get("milestones", {}).get(m["id"]) or {}
-    return m.get("status") == "done" and bool(e.get("accepted")) and e.get("definitions") == definitions(m)
+    return m.get("status") == "done" and bool(e.get("done")) and e.get("definitions") == definitions(m)
 
 
 def authorised(m: dict, rec: dict) -> bool:
@@ -1794,7 +1813,7 @@ def project(worktree: Path, prof: dict, ref: str) -> dict[str, dict]:
             doc = {"unreadable": f"{done_rel(prof, stem)} isn't valid JSON: {e}"}
         design = text_hash(show(worktree, ref, design_rel(prof, stem)))
         old = old_names_in_doc(doc)
-        problems = [f"{done_rel(prof, stem)} still uses the names from before 2.0 ({', '.join(old)}); run "
+        problems = [f"{done_rel(prof, stem)} still uses names from before 2.2 ({', '.join(old)}); run "
                     f"`migrate`"] if old else validate(doc, key)
         rec_text = show(worktree, ref, record_rel(prof, stem))
         rec = None
@@ -1860,7 +1879,7 @@ def next_step(key: str, proj: dict, holds: dict | None = None, me: str = "") -> 
         return {**base, "status": "invalid", "problems": e["problems"][:10]}
     doc, rec = e["doc"], e["record"]
     for m in doc["milestones"]:
-        if accepted(m, rec):
+        if recorded_done(m, rec):
             continue
         out = {**base, "milestone": m["id"], "name": m.get("name", ""), "stored_status": m.get("status")}
         if not authorised(m, rec):
@@ -1898,7 +1917,7 @@ def next_step(key: str, proj: dict, holds: dict | None = None, me: str = "") -> 
                 problems.append(f"depends on {mod}:{mid}, which isn't in {mod}'s done-when file")
             elif target.get("status") == "blocked" and blocked_of(target)["reason"] == "too_many_failed_reviews":
                 problems.append(f"depends on {mod}:{mid}, which is Blocked: Too Many Failed Reviews")
-            elif not accepted(target, other["record"]):
+            elif not recorded_done(target, other["record"]):
                 waiting.append(f"{mod}:{mid}")
         if problems:
             return {**out, "status": "invalid", "problems": [f"{m['id']}: {p}" for p in problems]}
@@ -2390,10 +2409,10 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
                                      step.get("commit") or base_ref(prof), "--worktree", wt), "lead",
                             f"{mod} {mid} is Ready for Review")
         return human_next("accept", mod, mid, wt,
-                          f"{mod} {mid} says done in its file, but the script never accepted it. Accept it without a "
+                          f"{mod} {mid} says done in its file, but no check or review passed it. Accept it without a "
                           "review, or have a planner set it back to in_progress, so that the script checks it and a "
                           "reviewer judges it?",
-                          f"{mod} {mid} says done in its file, but the script never accepted it")
+                          f"{mod} {mid} says done in its file, but no check or review passed it")
     if status == "blocked":
         b = step.get("blocked") or {}
         what = repo_relative(b.get("what") or "", worktree_roots(worktree)) or "see the done-when file"
@@ -3388,7 +3407,7 @@ def loop_versions(worktree: Path, rel: str, old: str, new: str, limit: int = 50)
 def record_tampering(worktree: Path, prof: dict, old: str, new: str) -> list[str]:
     """Commits between two tips that changed a record file without being the script's."""
     out = git(worktree, "log", "--format=%H%x00%B%x01", f"{old}..{new}", "--",
-              records_glob(prof)).stdout
+              *records_glob(prof)).stdout
     bad = []
     for chunk in out.split("\x01"):
         sha, _, body = chunk.strip().partition("\x00")
@@ -3948,7 +3967,7 @@ def milestone_costs(worktree: Path, reading: dict, fit: dict, own: dict) -> tupl
                 continue
             state = m.get("status")
             held = held or (state == "blocked" and blocked_of(m)["reason"] == "too_many_failed_reviews")
-            done = state == "done" or accepted(m, e["record"])
+            done = state == "done" or recorded_done(m, e["record"])
             g = by_ms.get((key, m["id"]))
             row = {"module": e["stem"], "milestone": m["id"], "status": state,
                    "reviews": int(m.get("failed_reviews", 0) or 0) + 1}
@@ -4743,7 +4762,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.1.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.2.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -4772,6 +4791,25 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.2.0": [
+        "Stored names changed, and `migrate` brings a project's files to them in one commit. Every other command "
+        "stops until it has run. In the done-when file a milestone's `state` is now `status`, an item's `status` is "
+        "`builder_result`, `bar` is `quality_bar`, and the counts `rounds` and `fails` are `failed_reviews` and "
+        "`failed_reviews_with_repeat`. The record file ACCEPTED.json is RECORD.json, and `accepted` in it is `done`. "
+        "The settings line `Owner decides:` is `Human decides:`.",
+        "A milestone that keeps failing review gets one diagnosis, where it used to get a re-plan and then a "
+        "diagnosis. After four failed reviews with a repeated finding, or six failed reviews in all, it is Waiting: "
+        "For Diagnosis, and `cause` says which. The planner changes the plan, which is a re-plan, or keeps it with "
+        "`KEEP`. If the milestone reaches either count again, the script blocks it with too many failed reviews. "
+        "The human's `scope` and `reopen` start the counts again, the diagnosis too.",
+        "The `owner` command is now `human`, `--owner-rule` is `--human-rule`, and `decides: owner` in a `next` is "
+        "`decides: human`. The old command and flags still work.",
+        "The groups `ready` prints have new names: `ready` is `can_start`, `review_owed` is `ready_for_review` and "
+        "`taken` is `in_progress_elsewhere`. `run` prints NEEDS_REVIEW where it printed REVIEW_OWED, and "
+        "IN_PROGRESS_ELSEWHERE where it printed TAKEN. After a failed review, `ladder` is now `escalation`, with "
+        "same_builder, new_builder_session and diagnosis.",
+        "`--budget-hours` is now `--no-progress-hours`, which says what it measures. The old flag still works.",
+    ],
     "2.1.0": [
         "Only the script sets a milestone to Ready for Review now. A builder merges its work with the milestone still "
         "In Progress and ends with DONE; `run` then runs the checks on the main branch and sets the status if they "
@@ -6189,7 +6227,7 @@ def cmd_run(a: argparse.Namespace) -> None:
                                      **ready_usage(state)}
             paths = [record_rel(prof, stem)]
             if not review:
-                e["accepted"] = {"by": "checks", "commit": head, "checked": checked, "at": now()}
+                e["done"] = {"by": "checks", "commit": head, "checked": checked, "at": now()}
             target = "ready_for_review" if review else "done"
             if find(doc, mid).get("status") != target:
                 find(doc, mid)["status"] = target
@@ -6217,7 +6255,7 @@ def cmd_run(a: argparse.Namespace) -> None:
                          + (f", on {reviewer}, the review host" if reviewer != host else ""))
                 if review else
                 next_cmd(loop_cmd("run", "--module", stem, "--worktree", str(worktree)), "lead",
-                         f"{stem} {mid} was accepted on its checks alone (no item needs a reviewer); run "
+                         f"{stem} {mid} is Done on its checks alone (no item needs a reviewer); run "
                          "builds the module's next milestone"))
         finish(state_path, state, "READY_FOR_REVIEW", review=review, commit=head, checked=checked,
                **({"reused_checks": reused} if reused else {}), next=then)
@@ -6453,8 +6491,8 @@ def cmd_run(a: argparse.Namespace) -> None:
         if status == "blocked":
             named, what = blocked_report(report_line(message))
             stop_blocked(named, what or "the Codex goal is blocked", message)
-        if time.time() - state["progress_at"] > a.budget_hours * 3600:
-            finish(state_path, state, "NO_PROGRESS_FOR_HOURS", hours=a.budget_hours)
+        if time.time() - state["progress_at"] > a.no_progress_hours * 3600:
+            finish(state_path, state, "NO_PROGRESS_FOR_HOURS", hours=a.no_progress_hours)
 
 
 # ------------------------------------------------------------------------------------------ reviewing and planning
@@ -6823,7 +6861,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                 for m in doc["milestones"]:
                     e = record["milestones"].get(m["id"])
                     if e and e.get("definitions") != definitions(m) and not e.get("reviews") \
-                            and not e.get("accepted"):
+                            and not e.get("done"):
                         e["definitions"] = definitions(m)
                         e["authorised"] = {"by": "design review", "review": review_path, "commit": start,
                                            "at": now()}
@@ -6875,7 +6913,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                                                 "items": {i["id"]: i.get("verdict", "") for i in reviewed["items"]},
                                                 **({"findings": found} if found else {}), **launch, "at": now()})
             if passed:
-                e["accepted"] = {"by": "review", "commit": start, "review": review_path,
+                e["done"] = {"by": "review", "commit": start, "review": review_path,
                                  "checked": ready_record(e).get("checked"), "at": now()}
         write_json(t / record_rel(prof, stem), record)
         return write + [record_rel(prof, stem)]
@@ -6928,7 +6966,7 @@ def after_pass(worktree: Path, prof: dict, key: str) -> dict:
         return next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", f"see what's ready ({e})")
     if step["status"] == "finished":
         drop_tree(worktree, step["module"])
-        return next_cmd(None, "lead", f"{step['module']} is finished: every milestone is accepted. Remove the worktree "
+        return next_cmd(None, "lead", f"{step['module']} is finished: every milestone is Done. Remove the worktree "
                                       "you built it in (`git worktree remove <path>`) once nothing in it is unmerged, "
                                       "since its build output takes disk the other builders need. Then start other "
                                       f"ready work (`{loop_cmd('ready', '--worktree', str(worktree))}`)")
@@ -7231,7 +7269,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
     before = done_docs_at(tree, prof, start)
     changed = changed_paths(tree, start)
     problems = [f"changed {p}; only the script writes record files" for p in changed
-                if (where := module_of(prof, p)) and where[1] == "record" or p.endswith("-ACCEPTED.json")]
+                if (where := module_of(prof, p)) and where[1] == "record" or p.endswith(("-" + OLD_RECORD, "/" + OLD_RECORD))]
     problems += [f"changed {p}, which the script writes from the records after each one it merges; leave it as it was"
                  for p in changed if p == status_rel(prof)]
     problems += flat_names(prof, changed)
@@ -7456,8 +7494,8 @@ def cmd_status(a: argparse.Namespace) -> None:
             continue
         for m in e["doc"]["milestones"]:
             flags, state = [], m.get("status")
-            if accepted(m, e["record"]):
-                flags.append("accepted")
+            if recorded_done(m, e["record"]):
+                flags.append("in the record")
             elif m["id"] == step.get("milestone"):
                 if step["status"] == "can_start" and state in ("done", "ready_for_review"):
                     # the builder's file says so, but the script hasn't checked it yet; `run` checks it
@@ -8143,15 +8181,15 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
         step = next_step(key, proj, holds(worktree), me(worktree))
         for m in e["doc"].get("milestones") or []:
             r = rec.get("milestones", {}).get(m["id"]) or {}
-            acc = r.get("accepted") or {}
+            acc = r.get("done") or {}
             auth = r.get("authorised") or {}
             if auth.get("by") == "adopt" and auth.get("at", "") >= since:
                 adopted.append(f"- {stem} {m['id']}: definitions authorised by adopt {auth.get('at')}, before the "
                                f"design review passed (files: {', '.join(auth.get('files') or [])})")
-            if accepted(m, rec) and acc.get("at", "") >= since:
+            if recorded_done(m, rec) and acc.get("at", "") >= since:
                 link = f", {md_link(acc['review'], acc['review'])}" if acc.get("review") else ""
                 name = m.get("name") if m.get("name") not in (None, "", m["id"]) else ""
-                closed.append(f"- {stem} {m['id']} {name}".rstrip() + f": accepted by {acc.get('by')} "
+                closed.append(f"- {stem} {m['id']} {name}".rstrip() + f": Done, by {acc.get('by')} "
                               f"{acc.get('at')}{link}")
             for v in r.get("reviews") or []:
                 if v.get("at", "") >= since:
@@ -8170,7 +8208,7 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
                 else:
                     waiting.append(f"- {stem} {m['id']}: Blocked: {b['reason'].replace('_', ' ').capitalize()}" +
                                    (f": {b['what']}" if b.get("what") else ""))
-            if not accepted(m, rec):
+            if not recorded_done(m, rec):
                 for i in m.get("items") or []:
                     n = i.get("needs")
                     if not isinstance(n, dict) or i.get("builder_result") == "pass":
@@ -8194,7 +8232,7 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
     out = [f"# Build report {date}", "",
            f"The last {hours:g} h, from the records at {ref} and this machine's usage ledger. The lead adds what it "
            "means and what comes next.", "",
-           "## Closed", "", *(closed or ["- nothing accepted in this window"]), "",
+           "## Closed", "", *(closed or ["- nothing became Done in this window"]), "",
            "## Verdicts", "", *(verdicts or ["- no reviews in this window"])]
     if verdicts and flag:
         out += ["", flag.strip()]
@@ -8298,7 +8336,7 @@ def adoptable(prof: dict, worktree: Path, ref: str, p: str) -> str | None:
         return (f"{p} is written by the script from the records after each one it merges, so a change to it by hand "
                 f"would only be overwritten; set it back with `git checkout -- {p}`")
     if p.startswith(plans):
-        if (where := module_of(prof, p)) and where[1] == "record" or p.endswith("-ACCEPTED.json"):
+        if (where := module_of(prof, p)) and where[1] == "record" or p.endswith(("-" + OLD_RECORD, "/" + OLD_RECORD)):
             return f"{p} is a record file, which only the script writes"
         return next(iter(flat_names(prof, [p])), None)
     if p.startswith(reports):
@@ -8311,7 +8349,7 @@ def building_begun(doc: dict, record: dict, held: dict, key: str) -> bool:
     """Whether building has started on a module: a milestone past `not_started`, a Ready for Review record, a review or
     an acceptance."""
     return any(m.get("status") != "not_started" for m in doc.get("milestones") or []) or \
-        any(ready_record(e) or e.get("reviews") or e.get("accepted") for e in (record.get("milestones") or {}).values()) or \
+        any(ready_record(e) or e.get("reviews") or e.get("done") for e in (record.get("milestones") or {}).values()) or \
         any(k == key for k, _ in held)
 
 
@@ -8553,7 +8591,7 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
 
     def started(e: dict) -> bool:
         return not e["problems"] and (any(m.get("status") != "not_started" for m in e["doc"]["milestones"]) or
-                                      any(accepted(m, e["record"]) for m in e["doc"]["milestones"]))
+                                      any(recorded_done(m, e["record"]) for m in e["doc"]["milestones"]))
 
     planned_rows = [r for r in rows if r["module"].upper() not in proj]
     done_n = sum(steps[k]["status"] == "finished" for k in keys)
@@ -8597,7 +8635,7 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
             what = repo_relative((step.get("blocked") or {}).get("what") or "", roots) or "see the done-when file"
             now_next.append(f"- {stem} {mid} {name}: {status_word(step, rec)}: {sentence(what)} {who}")
         elif status == "ready_for_review" and m.get("status") == "done":
-            waiting.append(f"- {stem} {mid} {name}: says done, but no check or review accepted it. Accept it as it "
+            waiting.append(f"- {stem} {mid} {name}: says done, but no check or review passed it. Accept it as it "
                            "is, or have it reviewed")
         if status in ("can_start", "in_progress_elsewhere", "ready_for_review") and m.get("status") != "done":
             reviews = ((rec.get("milestones") or {}).get(mid) or {}).get("reviews") or []
@@ -8608,8 +8646,8 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
             now_next.append(f"- {stem}'s design: {status_word(step, rec)} · "
                             f"{md_link('design', design_rel(prof, stem))} · {plan}")
         for x in e["doc"]["milestones"]:
-            acc = ((rec.get("milestones") or {}).get(x["id"]) or {}).get("accepted") or {}
-            if accepted(x, rec) and (acc.get("at") or "") >= since:
+            acc = ((rec.get("milestones") or {}).get(x["id"]) or {}).get("done") or {}
+            if recorded_done(x, rec) and (acc.get("at") or "") >= since:
                 review = acc.get("review") or next(
                     (r["review"] for r in reversed(((rec.get("milestones") or {}).get(x["id"]) or {}).get("reviews")
                                                    or []) if r.get("review")), None)
@@ -8637,7 +8675,7 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
                "otherwise.",
               ""] + chosen if chosen else ["- Nothing."]), "",
            "### Now and next", "", *(now_next or ["- Nothing is under way or ready to start."]), "",
-           "### Recently done", "", *(recent_lines or [f"- Nothing accepted in the last {RECENT_DAYS} days."]), "",
+           "### Recently done", "", *(recent_lines or [f"- Nothing became Done in the last {RECENT_DAYS} days."]), "",
            "## All modules", "",
            "| # | Module | What it's for | Needs | Status |", "|---|---|---|---|---|"]
 
@@ -8646,7 +8684,7 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
         if e["problems"]:
             return "Invalid: a planner has to fix its files"
         if step["status"] == "finished":
-            ats = [((e["record"].get("milestones") or {}).get(m["id"]) or {}).get("accepted", {}).get("at") or ""
+            ats = [((e["record"].get("milestones") or {}).get(m["id"]) or {}).get("done", {}).get("at") or ""
                    for m in e["doc"]["milestones"]]
             return f"Done {short_date(max(ats))}".strip()
         if step["status"] == "waiting" and step.get("reason") == "on_dependency":
@@ -9109,18 +9147,18 @@ def cmd_human(a: argparse.Namespace) -> None:
             if verb == "accept":
                 m["status"] = "done"
                 m.pop("blocked", None)
-                e["accepted"] = {**stamp, "commit": head_commit(t)}
+                e["done"] = {**stamp, "commit": head_commit(t)}
             elif verb == "rereview":
-                if not accepted(m, record):
-                    raise SystemExit(f"error: {mid} isn't accepted, so there's nothing to re-review")
+                if not recorded_done(m, record):
+                    raise SystemExit(f"error: {mid} isn't Done in the record, so there's nothing to re-review")
                 old_review = t / prof["evidence"] / stem / f"{mid}-review.md"
                 if old_review.exists():
                     n = 1
                     while (t / prof["evidence"] / stem / f"{mid}-review-{n}.md").exists():
                         n += 1
                     shutil.copy(old_review, old_review.with_name(f"{mid}-review-{n}.md"))
-                out["commit"] = e["accepted"].get("commit") or ready_record(e).get("commit")
-                e.setdefault("history", []).append(e.pop("accepted"))
+                out["commit"] = e["done"].get("commit") or ready_record(e).get("commit")
+                e.setdefault("history", []).append(e.pop("done"))
                 m["status"] = "ready_for_review"
             elif verb == "reopen":
                 if m.get("status") != "blocked" or blocked_of(m)["reason"] != "too_many_failed_reviews":
@@ -9231,6 +9269,9 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict) -> list[str
         done.setdefault("renamed", []).append(PROFILE_FILE)
     now_plans = {**prof, "plans": done.get("plans", plans)}
     for stem in modules_here(tree, now_plans):
+        if (tree / now_plans["plans"] / stem / OLD_RECORD).is_file():  # the record file's name before 2.2
+            move(f"{now_plans['plans']}/{stem}/{OLD_RECORD}", record_rel(now_plans, stem))
+            done.setdefault("renamed", []).append(record_rel(now_plans, stem))
         doc_path, rec_path = tree / done_rel(now_plans, stem), tree / record_rel(now_plans, stem)
         try:
             old_doc = json.loads(doc_path.read_text())
@@ -9253,7 +9294,8 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict) -> list[str
     return [p for p in dict.fromkeys(paths) if (tree / p).exists() or p in tracked]
 
 
-MIGRATE_SUBJECT = "orchestrate: migrate the plans to a folder per module and the names of 2.0"
+MIGRATE_SUBJECTS = "orchestrate: migrate the plans to a folder per module and the names of "  # every version's
+MIGRATE_SUBJECT = MIGRATE_SUBJECTS + "2.2"
 
 
 def old_names_in_tree(tree: Path) -> tuple[list[str], dict]:
@@ -9404,7 +9446,7 @@ def migrate_branch(a: argparse.Namespace, worktree: Path, prof: dict, done_with)
         done_with("FAILED", 1, detail=f"couldn't move {wt} to its renamed commits: {r.stderr.strip()[-300:]}")
     log = git(worktree, "log", "--first-parent", "--format=%H%x00%P%x00%s", f"{base}..{ref}").stdout.splitlines()
     migration = next(((h, parents.split()[0]) for h, parents, subject in (l.split("\x00", 2) for l in log)
-                      if subject.startswith(MIGRATE_SUBJECT) and parents), None)
+                      if subject.startswith(MIGRATE_SUBJECTS) and parents), None)
 
     def rebase_onto(target: str) -> list[str]:
         """Rebases the renamed commits onto `target`: the files that conflicted, after aborting, or none."""
@@ -9557,7 +9599,8 @@ def build_parser() -> argparse.ArgumentParser:
                      "with the module's run state and restated every turn, across --fresh and milestones")
     run.add_argument("--clear-human-rules", "--clear-owner-rules", dest="clear_human_rules", action="store_true",
                      help="drop the human's stored rules (when the human says so)")
-    run.add_argument("--budget-hours", type=float, default=4.0)
+    run.add_argument("--no-progress-hours", "--budget-hours", dest="no_progress_hours", type=float, default=4.0,
+                     help="stop the run when no item has passed for this long (--budget-hours before 2.2)")
     run.add_argument("--no-design-review", action="store_true", help="return DESIGN_NOT_APPROVED instead of running the "
                      "owed design review first")
     run.add_argument("--checks-only", action="store_true", help="start no agent: run the script's checks on the "

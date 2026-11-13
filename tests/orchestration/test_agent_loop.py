@@ -310,7 +310,7 @@ class Deltas(Clean):
 
     def test_rebased_upstream_changes_are_allowed(self):
         upstream = self.after()
-        upstream["milestones"][1]["bar"] = "planner's new bar"
+        upstream["milestones"][1]["quality_bar"] = "planner's new bar"
         a = json.loads(json.dumps(upstream))
         self.assertEqual(agent_loop.delta_problems(self.before, a, "build", "M1", upstream), [])
 
@@ -713,7 +713,7 @@ class Building(Repo):
         self.commit_all()
         prof = agent_loop.profile(self.wt, strict=True)
         doc = json.loads((self.wt / "docs/plans/WATER/DONE.json").read_text())
-        authorised = json.loads((self.wt / "docs/plans/WATER/ACCEPTED.json").read_text())["milestones"]["M1"]
+        authorised = json.loads((self.wt / "docs/plans/WATER/RECORD.json").read_text())["milestones"]["M1"]
         if leave:
             leave()
         return "; ".join(agent_loop.ready_problems(self.wt, prof, "WATER", doc["milestones"][0], doc,
@@ -749,7 +749,7 @@ class Building(Repo):
         self.assertIn("quota", result)
         self.assertFalse([w for w in result.get("warnings", []) if "AGENTS.md" in w])  # codex reads AGENTS.md
         record = self.read_record()["milestones"]["M1"]
-        self.assertEqual(record["accepted"]["by"], "checks")
+        self.assertEqual(record["done"]["by"], "checks")
         claim = record["ready_for_review"]  # no rollout, so nothing observed
         self.assertEqual((claim["effort"], claim["observed"], claim["cli"], claim["path"]),
                          ("high", {}, "2.1.239 (Claude Code)", "headless"))
@@ -789,7 +789,7 @@ class Building(Repo):
         self.write_done([milestone("M1", "not_started", ["open"], check="test ! -f broken"), milestone("M2", "not_started", ["open"])])
         self.commit_all()
         os.environ.update(FAKE_UPSTREAM_BREAK="1")
-        self.assertEqual(self.run_loop(budget_hours=0.0)["result"], "NO_PROGRESS_FOR_HOURS")
+        self.assertEqual(self.run_loop(no_progress_hours=0.0)["result"], "NO_PROGRESS_FOR_HOURS")
         self.assertIn("M1.1 `test ! -f broken` exited 1", self.state()["not_ready_reasons"])
 
     def test_invalid_file_stops_before_any_turn(self):
@@ -816,7 +816,7 @@ class Building(Repo):
         os.environ.update(FAKE_STATE="done")
         self.write_done([milestone("M1", "not_started", ["open"], inspect="captures"), milestone("M2", "not_started", ["open"])])
         self.commit_all()
-        result = self.run_loop(budget_hours=0.0)
+        result = self.run_loop(no_progress_hours=0.0)
         # the builder's done counts for nothing: the script checks the work and sets the state, so it still gets reviewed
         self.assertEqual((result["result"], result["review"]), ("READY_FOR_REVIEW", True), result)
         self.assertEqual(self.read_done()["milestones"][0]["status"], "ready_for_review")
@@ -1031,8 +1031,8 @@ class Reviewing(Repo):
         self.assertEqual((result["result"], result["verdict"]), ("REVIEWED", "PASS"))
         rec = self.read_record()["milestones"]["M1"]
         # the reviewer judged the script's commit that set Ready for Review, which follows the builder's work
-        reviewed = rec["accepted"]["commit"]
-        self.assertEqual(rec["accepted"]["by"], "review")
+        reviewed = rec["done"]["commit"]
+        self.assertEqual(rec["done"]["by"], "review")
         self.assertEqual(self.git("merge-base", "--is-ancestor", commit, reviewed).returncode, 0)
         self.assertEqual(agent_loop.state_at(self.wt, reviewed, "docs/plans/WATER/DONE.json", "M1"), "ready_for_review")
         self.assertEqual(self.ready()["can_start"][0]["milestone"], "M2")
@@ -1115,7 +1115,7 @@ class Reviewing(Repo):
         self.claim()
         result = self.human("accept", "M1", reason="typo fix")
         self.assertEqual(result["result"], "DONE")
-        accepted = self.read_record()["milestones"]["M1"]["accepted"]
+        accepted = self.read_record()["milestones"]["M1"]["done"]
         self.assertEqual((accepted["by"], accepted["words"]), ("human decision", "typo fix"))
         self.assertEqual(self.ready()["can_start"][0]["milestone"], "M2")
         # Now a reviewed acceptance, then a re-review.
@@ -1139,9 +1139,9 @@ class Reviewing(Repo):
 
     def test_astra_1_a_record_edited_outside_the_loop_blocks_the_claim(self):
         start = agent_loop.head_commit(self.wt)
-        rec = json.loads((self.wt / "docs/plans/WATER/ACCEPTED.json").read_text())
-        rec["milestones"]["M1"]["accepted"] = {"by": "review"}
-        put(self.wt / "docs/plans/WATER/ACCEPTED.json", json.dumps(rec))
+        rec = json.loads((self.wt / "docs/plans/WATER/RECORD.json").read_text())
+        rec["milestones"]["M1"]["done"] = {"by": "review"}
+        put(self.wt / "docs/plans/WATER/RECORD.json", json.dumps(rec))
         self.commit_all()
         prof = agent_loop.profile(self.wt, strict=True)
         self.assertEqual(len(agent_loop.record_tampering(self.wt, prof, start, agent_loop.head_commit(self.wt))), 1)
@@ -1175,7 +1175,7 @@ class HumanAndPlanner(Repo):
         self.assertEqual(result["design_review_owed"], ["PAY"])
         self.assertIn("features.multi_agent=false", self.calls()[0]["argv"])
         self.assertIn({"module": "PAY"}, self.ready()["design_not_approved"])
-        rec = json.loads(self.git("show", "origin/main:docs/plans/PAY/ACCEPTED.json").stdout)
+        rec = json.loads(self.git("show", "origin/main:docs/plans/PAY/RECORD.json").stdout)
         self.assertEqual(rec["milestones"]["M1"]["authorised"]["by"], "plan")
 
     def test_planner_editing_a_record_is_invalid(self):
@@ -1428,7 +1428,7 @@ class Guidance(Repo):
     def test_fix1_adopt_refuses_a_plan_that_grants_what_a_planner_cant(self):
         forged = milestone("M1", "done", ["pass"])
         put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(done(forged, milestone("M2", "not_started", ["open"]))))
-        put(self.wt / "docs/plans/WATER/ACCEPTED.json", "{}")
+        put(self.wt / "docs/plans/WATER/RECORD.json", "{}")
         result = self.adopt()
         self.assertEqual(result["result"], "REFUSED")
         self.assertTrue(any("only the script writes" in p for p in result["problems"]), result)
@@ -1562,7 +1562,7 @@ class Guidance(Repo):
         self.assertIn(" human accept ", result["next"]["command"])
         self.assertFalse(self.log.exists())
         self.assertEqual(self.read_done()["milestones"][0]["status"], "done")
-        self.assertNotIn("accepted", self.read_record()["milestones"]["M1"])
+        self.assertNotIn("done", self.read_record()["milestones"]["M1"])
 
     def test_fix4_taken_points_at_other_work(self):
         prof = agent_loop.profile(self.wt, strict=True)
@@ -1672,9 +1672,14 @@ class WhatTheLeadSees(Repo):
         for words in ("Only the script sets a milestone to Ready for Review", "over 60% full", "HOST_FAILED",
                       "`runs`", "--more-builders", "BLOCKED needs_access"):
             self.assertTrue(any(words in l for l in lines), words)
+        for words in ("`migrate` brings a project's files to them", "one diagnosis", "`owner` command is now `human`",
+                      "`ready` is `can_start`", "--no-progress-hours"):
+            self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(list(agent_loop.version_change(self.wt)), ["2.1.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0"])
+        note.write_text('{"version": "2.1.0"}')
+        self.assertEqual(list(agent_loop.version_change(self.wt)), ["2.2.0"])
 
     def test_a_blocked_message_gives_paths_in_the_repository_and_names_who_acts(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY=f"BLOCKED: the seam shows in {self.wt}/docs/evidence/WATER/f.png "
@@ -1929,7 +1934,7 @@ class VisibleCodex(Repo):
         self.assertIn(f"codex://threads/wake/{t}", app.links)
         self.assertEqual((self.state()["thread"], self.state()["path"]), (t, "visible"))
         self.assertTrue(self.calls(), "the app ran the turn")
-        self.assertEqual(self.read_record()["milestones"]["M1"]["accepted"]["by"], "checks")
+        self.assertEqual(self.read_record()["milestones"]["M1"]["done"]["by"], "checks")
 
     def test_decision_8_a_resumed_turn_goes_to_the_same_thread_with_the_message(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: which device?")
@@ -2769,7 +2774,7 @@ class FirstRuns(Repo):
         written = json.loads(report)["written"]
         self.assertTrue(written.startswith("docs/evidence/build-reports/"))
         body = (self.wt / written).read_text()
-        self.assertIn("- WATER M1: accepted by review", body)
+        self.assertIn("- WATER M1: Done, by review", body)
         self.assertIn("fewer than about ten, so spot-check every one", body)
         self.assertEqual(self.adopt()["result"], "ADOPTED")
 
@@ -3157,7 +3162,7 @@ class FirstRuns(Repo):
         self.assertIn("these changed: M2.1 changed.", second)
         before = {"milestones": [milestone("M1", "not_started", ["open", "open"]), milestone("M2", "not_started", ["open"])]}
         after = {"milestones": [milestone("M1", "not_started", ["open"]), milestone("M3", "not_started", ["open"])]}
-        after["milestones"][0]["bar"] = "higher"
+        after["milestones"][0]["quality_bar"] = "higher"
         self.assertEqual(agent_loop.changed_items(before, after),
                          ["M1's bar or depends_on changed", "M1.2 removed", "M3 added", "M2 removed"])
 
@@ -3293,7 +3298,7 @@ class FirstRuns(Repo):
         self.assertIn(', PAY: Plan PAY. The human said: "card payments only, no PayPal"', section)
 
     def test_r18_older_records_read_as_they_were_written_once_migrated(self):
-        rec = json.loads((self.wt / "docs/plans/WATER/ACCEPTED.json").read_text())
+        rec = json.loads((self.wt / "docs/plans/WATER/RECORD.json").read_text())
         at = agent_loop.now()
         m1 = rec["milestones"]["M1"]
         m1["owner"] = [{"by": "owner", "reason": "typo fix", "at": at, "action": "accept"}]
@@ -3301,7 +3306,7 @@ class FirstRuns(Repo):
                                {"by": "lead", "text": "Direction B", "at": at, "item": "M1.1", "relayed": True}]
         rec["design"] = {"by": "owner", "reason": "fine as it is", "at": at, "verdict": "ok",
                          "hash": rec["design"]["hash"]}
-        put(self.wt / "docs/plans/WATER/ACCEPTED.json", json.dumps(rec))
+        put(self.wt / "docs/plans/WATER/RECORD.json", json.dumps(rec))
         self.commit_all()
         self.assertEqual(self.migrate()["result"], "MIGRATED")
         self.git("pull", "-q", "--rebase", "origin", "main")
@@ -3313,7 +3318,7 @@ class FirstRuns(Repo):
         self.assertIn('"Direction B"', section)
         self.assertIn('- WATER design: accept, ', section)
         feedback = self.read_record()["milestones"]["M1"]["human_feedback"]
-        note = agent_loop.feedback_note(feedback, "M1", "docs/plans/WATER/ACCEPTED.json")
+        note = agent_loop.feedback_note(feedback, "M1", "docs/plans/WATER/RECORD.json")
         self.assertLess(note.index("Direction A"), note.index("Direction B"), "oldest first")
 
 
@@ -3354,7 +3359,7 @@ class FirstRuns(Repo):
         self.assertIn("ok", lines[1])
         self.assertIn("docs/evidence/WATER/design-review.md)", lines[1])
         # a record from before the history was kept still shows the kept review, from its file
-        rec = json.loads(self.git("show", "origin/main:docs/plans/WATER/ACCEPTED.json").stdout)
+        rec = json.loads(self.git("show", "origin/main:docs/plans/WATER/RECORD.json").stdout)
         rec.pop("design_history")
         prof = agent_loop.profile(self.wt)
         ref = self.git("rev-parse", "origin/main").stdout.strip()
@@ -3646,7 +3651,7 @@ class FirstRuns(Repo):
         prompt = self.calls()[prompt_before]["argv"][-1]
         self.assertIn("M1 has failed review 1 time since its counts last started", prompt)
         self.assertIn("docs/evidence/WATER/M1-review.md", prompt)
-        self.assertIn("docs/plans/WATER/ACCEPTED.json under milestones.M1.reviews", prompt)
+        self.assertIn("docs/plans/WATER/RECORD.json under milestones.M1.reviews", prompt)
         self.assertNotIn("the water is flat", prompt)
 
 
@@ -3829,7 +3834,7 @@ class FirstRuns(Repo):
         # another module's claim (with the loop's trailer) lands mid-turn, and the planner fast-forwards to it: that
         # commit is on the tip and isn't the planner's work, so the turn lands what it left uncommitted
         os.environ.update(FAKE_PLAN="catch_up", FAKE_DURING=(
-            f"cd {other} && echo '{{}}' > docs/plans/WATER/ACCEPTED.json && git add -A && "
+            f"cd {other} && echo '{{}}' > docs/plans/WATER/RECORD.json && git add -A && "
             f"git -c user.name=t -c user.email=t@t commit -qm 'orchestrate: claim WATER M1' -m '{agent_loop.TRAILER}' "
             "&& git push -q origin main"))
         planned = self.plan()
@@ -3842,7 +3847,7 @@ class FirstRuns(Repo):
         """A FAKE_DURING command: a commit without the loop's trailer changes WATER's acceptance record on the tip."""
         other = self.root / "other"
         self.sh("git", "clone", "-q", str(self.origin), str(other))
-        return (f"cd {other} && echo '{{\"forged\": true}}' > docs/plans/WATER/ACCEPTED.json && git add -A && "
+        return (f"cd {other} && echo '{{\"forged\": true}}' > docs/plans/WATER/RECORD.json && git add -A && "
                 "git -c user.name=t -c user.email=t@t commit -qm 'tidy records' && git push -q origin main")
 
     def test_r15_a_record_forged_elsewhere_during_a_planner_turn_refuses_it(self):
@@ -3886,7 +3891,7 @@ class FirstRuns(Repo):
         files = self.git("ls-tree", "-r", "--name-only", "main", where=main).stdout.split()
         self.assertIn("feature", files)
         self.assertIn("docs/plans/PAY/DONE.json", files)
-        self.assertIn("docs/plans/PAY/ACCEPTED.json", files)
+        self.assertIn("docs/plans/PAY/RECORD.json", files)
 
     # Round sixteen: a module the loop has no record for is new once any record exists; planner commits are refused
 
@@ -3960,8 +3965,8 @@ class FirstRuns(Repo):
         self.assertEqual((planned["result"], planned["merged"]), ("PLANNED", True), planned)
         self.assertIn("SHIP", planned["modules"])
         self.assertIn("SHIP", planned["design_review_owed"])
-        rec = json.loads(self.git("show", "origin/main:docs/plans/SHIP/ACCEPTED.json").stdout)
-        self.assertNotIn("accepted", rec["milestones"]["M1"])
+        rec = json.loads(self.git("show", "origin/main:docs/plans/SHIP/RECORD.json").stdout)
+        self.assertNotIn("done", rec["milestones"]["M1"])
         self.assertIsNone(rec["design"])
         self.git("pull", "-q", "--rebase", "origin", "main")
         self.assert_ship_is_new(self.wt)
@@ -3978,8 +3983,8 @@ class FirstRuns(Repo):
         self.assertEqual((planned["result"], planned["merged"]), ("PLANNED", True), planned)
         self.assertIn("SHIP", planned["modules"])  # through the plan's own record-keeping
         self.assertIn("SHIP", planned["design_review_owed"])
-        rec = json.loads(self.git("show", "main:docs/plans/SHIP/ACCEPTED.json", where=main).stdout)
-        self.assertNotIn("accepted", rec["milestones"]["M1"])
+        rec = json.loads(self.git("show", "main:docs/plans/SHIP/RECORD.json", where=main).stdout)
+        self.assertNotIn("done", rec["milestones"]["M1"])
         self.assert_ship_is_new(main)
 
     def test_r16_a_reviewer_that_commits_is_refused(self):
@@ -4012,15 +4017,15 @@ class FirstRuns(Repo):
         # the loop's first record-keeping commit (here, a plan's) writes WATER's record as it was taken
         planned = self.plan(worktree=str(wt))
         self.assertEqual(planned["result"], "PLANNED", planned)
-        rec = json.loads(self.git("show", "origin/main:docs/plans/WATER/ACCEPTED.json", where=wt).stdout)
-        self.assertEqual(rec["milestones"]["M1"]["accepted"], {"by": "adopted"})
+        rec = json.loads(self.git("show", "origin/main:docs/plans/WATER/RECORD.json", where=wt).stdout)
+        self.assertEqual(rec["milestones"]["M1"]["done"], {"by": "adopted"})
         self.assertFalse(agent_loop.unrecorded(wt, prof, "origin/main"))
         self.git("pull", "-q", "--rebase", "origin", "main", where=wt)
         r = self.ready(where=wt)
         self.assertEqual([(x["module"], x["milestone"]) for x in r["can_start"]], [("WATER", "M2")], r)
         self.assertIn({"module": "PAY"}, r["design_not_approved"])
         # once a record has existed, deleting every record doesn't bring adoption as it stands back
-        self.git("rm", "-q", "docs/plans/WATER/ACCEPTED.json", "docs/plans/PAY/ACCEPTED.json", where=wt)
+        self.git("rm", "-q", "docs/plans/WATER/RECORD.json", "docs/plans/PAY/RECORD.json", where=wt)
         self.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "drop records", where=wt)
         self.assertFalse(agent_loop.unrecorded(wt, prof, "HEAD"))
 
@@ -4034,7 +4039,7 @@ class FirstRuns(Repo):
         self.assertEqual(planned["result"], "PLANNED", planned)
         self.assertTrue(planned["next"]["command"].endswith("--host codex"), planned["next"])
         self.git("pull", "-q", "--rebase", "origin", "main")
-        rec = json.loads(self.git("show", "origin/main:docs/plans/PAY/ACCEPTED.json").stdout)
+        rec = json.loads(self.git("show", "origin/main:docs/plans/PAY/RECORD.json").stdout)
         self.assertEqual(rec["planner"]["host"], "claude")
         r = self.ready()
         self.assertIn(" review --module PAY --milestone design ", r["next"]["command"])
@@ -4100,12 +4105,12 @@ class FirstRuns(Repo):
         self.assertIn("tidy", refused["problems"][0])
         self.assertEqual((refused["next"]["command"], refused["next"]["by"]), (None, "lead"))
         self.assertTrue(refused["branch"].startswith("orchestrate/planner-"))  # its commit is kept, not landed
-        self.assertNotIn("forged", self.git("show", "origin/main:docs/plans/WATER/ACCEPTED.json").stdout)
+        self.assertNotIn("forged", self.git("show", "origin/main:docs/plans/WATER/RECORD.json").stdout)
         # the next plan lands nothing of it
         os.environ.pop("FAKE_PLAN_SIDE")
         planned = self.plan()
         self.assertEqual(planned["result"], "PLANNED", planned)
-        self.assertNotIn("forged", self.git("show", "origin/main:docs/plans/WATER/ACCEPTED.json").stdout)
+        self.assertNotIn("forged", self.git("show", "origin/main:docs/plans/WATER/RECORD.json").stdout)
 
     def test_r15_a_second_refusal_from_the_same_start_is_refused_the_same_way(self):
         os.environ.update(FAKE_PLAN_SIDE="ref")
@@ -4142,7 +4147,7 @@ class FirstRuns(Repo):
         refused = self.plan(task="x")
         self.assertEqual(refused["result"], "INVALID")
         self.assertIn("planner", refused["stash"])  # the loop set the turn's files aside itself
-        self.assertIn("docs/plans/WATER/ACCEPTED.json",
+        self.assertIn("docs/plans/WATER/RECORD.json",
                       self.git("stash", "show", "--include-untracked", "--name-only", "stash@{0}").stdout.split())
         self.assertNotIn("stash push", refused["next"]["command"])
         self.assertIn(" plan --worktree ", refused["next"]["command"])
@@ -4264,14 +4269,14 @@ class FirstRuns(Repo):
         ask = "Plan the project: " + "a slug tool that handles accents, " * 12 + "and when the input is empty, says so"
         planned = self.plan(task=ask)
         self.assertEqual(planned["result"], "PLANNED", planned)
-        rec = json.loads(self.git("show", "origin/main:docs/plans/PAY/ACCEPTED.json").stdout)
+        rec = json.loads(self.git("show", "origin/main:docs/plans/PAY/RECORD.json").stdout)
         self.assertEqual(rec["briefs"][-1]["task"], ask)
         self.assertEqual(rec["milestones"]["M1"]["authorised"]["task"], ask[:120])  # the whole ask is kept once
         self.assertIn("and when the input is empty, says so", self.git("log", "--format=%B", "origin/main").stdout)
         self.git("pull", "-q", "--rebase", "origin", "main")
         os.environ.update(FAKE_REVIEW="design")
         self.review("design", module="PAY", commit=None)
-        self.assertIn("docs/plans/PAY/ACCEPTED.json under `briefs`", self.calls()[-1]["argv"][-1])
+        self.assertIn("docs/plans/PAY/RECORD.json under `briefs`", self.calls()[-1]["argv"][-1])
 
     def test_r12_a_planners_assumptions_are_counted_and_reported(self):
         os.environ.update(FAKE_ASSUME="\n\n## Open for the human\n\n- Assumption: accents means any letter with a Latin base\n"
@@ -4462,11 +4467,11 @@ class PlanFiles(Repo):
 
     def flatten(self, root="docs/plans", log=True):
         """Puts WATER back in the old flat layout, with M1 accepted, a design, a plan with a log and a brief."""
-        rec = json.loads((self.wt / "docs/plans/WATER/ACCEPTED.json").read_text())
+        rec = json.loads((self.wt / "docs/plans/WATER/RECORD.json").read_text())
         design = "# Water design\n"
         rec["design"] = {"verdict": "ok", "hash": agent_loop.text_hash(design)}
         doc = done(milestone("M1", "done", ["pass"]), milestone("M2", "not_started", ["open"]))
-        rec["milestones"]["M1"]["accepted"] = {"by": "checks", "at": "2026-11-10T10:00:00Z"}
+        rec["milestones"]["M1"]["done"] = {"by": "checks", "at": "2026-11-10T10:00:00Z"}
         self.git("rm", "-rq", "docs/plans")
         flat = self.wt / root
         flat.mkdir(parents=True, exist_ok=True)
@@ -4519,10 +4524,10 @@ class PlanFiles(Repo):
         self.assertEqual((moved["modules"], moved["logs_split"]), (["WATER"], ["WATER"]))
         self.assertTrue(moved["worktree"].startswith("fast-forwarded"), moved)
         files = self.git("ls-tree", "-r", "--name-only", "origin/main", "docs/plans").stdout.split()
-        self.assertEqual(sorted(files), ["docs/plans/GLOSSARY.md", "docs/plans/STATUS.md", "docs/plans/WATER/ACCEPTED.json",
-                                         "docs/plans/WATER/BRIEF.md", "docs/plans/WATER/DESIGN.md",
-                                         "docs/plans/WATER/DONE.json", "docs/plans/WATER/LOG.md",
-                                         "docs/plans/WATER/PLAN.md"])
+        self.assertEqual(sorted(files), ["docs/plans/GLOSSARY.md", "docs/plans/STATUS.md", "docs/plans/WATER/BRIEF.md",
+                                         "docs/plans/WATER/DESIGN.md", "docs/plans/WATER/DONE.json",
+                                         "docs/plans/WATER/LOG.md", "docs/plans/WATER/PLAN.md",
+                                         "docs/plans/WATER/RECORD.json"])
         plan = self.git("show", "origin/main:docs/plans/WATER/PLAN.md").stdout
         self.assertNotIn("## Log", plan)
         self.assertIn("## M2 waves", plan)
@@ -4544,7 +4549,7 @@ class PlanFiles(Repo):
         m4 = milestone("M4", "open", ["open"])
         m4["items"][0]["attended"] = "the human picks a direction"
         doc = done(milestone("M1", "done", ["pass"]), m2, dict(milestone("M3", "parked", ["open"]), failed_reviews_with_repeat=4), m4)
-        rec = json.loads((self.wt / "docs/plans/WATER/ACCEPTED.json").read_text())
+        rec = json.loads((self.wt / "docs/plans/WATER/RECORD.json").read_text())
         rec["milestones"] = {m["id"]: {"definitions": agent_loop.old_definitions(m), "authorised": {"by": "plan"},
                                        "reviews": []} for m in doc["milestones"]}
         rec["milestones"]["M1"].update(accepted={"by": "checks", "at": at},
@@ -4552,7 +4557,7 @@ class PlanFiles(Repo):
         rec["milestones"]["M2"]["owner_answers"] = [{"by": "owner", "text": "Direction B", "at": at, "item": "M2.2"}]
         rec["milestones"]["M3"]["parked"] = {"why": "it kept failing", "after": 4, "at": at}
         put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
-        put(self.wt / "docs/plans/WATER/ACCEPTED.json", json.dumps(rec))
+        put(self.wt / "docs/plans/WATER/RECORD.json", json.dumps(rec))
         (self.wt / "ORCHESTRATE.md").write_text(PROFILE.replace("**Merge:**", "**Integrate:**")
                                                 .replace("**Test command:**", "**Check:**"))
         self.git("add", "-A")
@@ -4560,12 +4565,76 @@ class PlanFiles(Repo):
         self.git("push", "-q", "origin", "main")
         return doc
 
+    def names_of_2_1(self):
+        """Puts WATER back in the names of 2.1: a milestone's `state`, `bar` and its counts `fails`, `rounds` and
+        `replans`, an item's `status`, ACCEPTED.json with `accepted` and an `owner decision`, and the settings line
+        `Owner decides`."""
+        at = "2026-11-12T10:00:00Z"
+        doc = done(dict(milestone("M1", "done", ["pass"]), quality_bar="as calm as a pond"),
+                   dict(milestone("M2", "in_progress", ["open"]), failed_reviews=5, failed_reviews_with_repeat=2))
+        rec = json.loads((self.wt / "docs/plans/WATER/RECORD.json").read_text())
+        rec["milestones"] = {m["id"]: {"definitions": agent_loop.definitions(m), "reviews": [],
+                                       "authorised": {"by": "owner decision", "words": "as planned", "at": at}}
+                             for m in doc["milestones"]}
+        rec["milestones"]["M1"]["accepted"] = {"by": "checks", "at": at}
+        rec["milestones"]["M2"]["diagnoses"] = [{"who": "owner", "why": "the human decides", "at": at}]
+        for m in doc["milestones"]:
+            m["state"], m["fails"], m["rounds"] = m.pop("status"), m.pop("failed_reviews_with_repeat"), m.pop("failed_reviews", 0)
+            m["replans"] = 1 if m["id"] == "M2" else 0  # M2 has had its re-plan
+            m.pop("diagnoses")
+            if "quality_bar" in m:
+                m["bar"] = m.pop("quality_bar")
+            for i in m["items"]:
+                i["status"] = i.pop("builder_result")
+        put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
+        (self.wt / "docs/plans/WATER/RECORD.json").unlink()
+        put(self.wt / "docs/plans/WATER/ACCEPTED.json", json.dumps(rec))
+        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Owner decides:** spending and publishing\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "the names of 2.1", "-m", agent_loop.TRAILER)
+        self.git("push", "-q", "origin", "main")
+        return doc
+
+    def test_migrate_brings_a_project_from_the_names_of_2_1_to_2_2(self):
+        self.names_of_2_1()
+        with self.assertRaises(SystemExit) as stop, contextlib.redirect_stdout(io.StringIO()):
+            agent_loop.cmd_ready(argparse.Namespace(worktree=str(self.wt)))
+        release()
+        for old in ("names from before orchestrate 2.2", "ACCEPTED.json (now RECORD.json)", "`state` (now `status`)",
+                    "`Owner decides:` line (now `Human decides:`)", "migrate --worktree"):
+            self.assertIn(old, str(stop.exception))
+        moved = self.migrate()
+        self.assertEqual(moved["result"], "MIGRATED", moved)
+        self.git("pull", "-q", "--rebase", "origin", "main")
+        files = self.git("ls-tree", "-r", "--name-only", "origin/main", "docs/plans/WATER").stdout.split()
+        self.assertIn("docs/plans/WATER/RECORD.json", files)
+        self.assertNotIn("docs/plans/WATER/ACCEPTED.json", files)
+        self.assertIn("- **Human decides:** spending and publishing", self.git("show", "origin/main:ORCHESTRATE.md").stdout)
+        m1, m2 = self.read_done()["milestones"]
+        self.assertEqual((m1["status"], m1["quality_bar"], m1["items"][0]["builder_result"]),
+                         ("done", "as calm as a pond", "pass"))
+        self.assertEqual((m2["status"], m2["failed_reviews"], m2["failed_reviews_with_repeat"], m2["diagnoses"]),
+                         ("in_progress", 5, 2, 1))
+        for gone in ("state", "bar", "fails", "rounds", "replans"):
+            self.assertNotIn(gone, m1)
+            self.assertNotIn(gone, m2)
+        self.assertNotIn("status", m1["items"][0])
+        rec = self.read_record()["milestones"]
+        self.assertEqual((rec["M1"]["done"]["by"], "accepted" in rec["M1"], rec["M1"]["authorised"]["by"]),
+                         ("checks", False, "human decision"))
+        self.assertEqual(rec["M2"]["diagnoses"][0]["who"], "human")
+        # no hash changed: M1 is still Done in the record, and M2 is the next to build
+        self.assertEqual(rec["M1"]["definitions"], agent_loop.definitions(m1))
+        ready = self.ready()
+        self.assertEqual([x["milestone"] for x in ready["can_start"]], ["M2"], ready)
+        self.assertEqual(self.migrate()["result"], "NOTHING")
+
     def test_an_unmigrated_project_is_refused_by_every_other_command(self):
         self.old_names()
         for func, kw in ((agent_loop.cmd_ready, dict()),
                          (agent_loop.cmd_status, dict(module=None)),
                          (agent_loop.cmd_run, dict(module="WATER", milestone=None, fresh=False, message=None,
-                                                   budget_hours=1.0, turn_timeout_hours=0.1, host=None, model=None,
+                                                   no_progress_hours=1.0, turn_timeout_hours=0.1, host=None, model=None,
                                                    effort=None, human_rule=None, clear_human_rules=False,
                                                    no_design_review=False)),
                          (agent_loop.cmd_human, dict(action="accept", module="WATER", milestone="M2", item=None,
@@ -4576,7 +4645,7 @@ class PlanFiles(Repo):
                         func(argparse.Namespace(worktree=str(self.wt), **kw))
                 finally:
                     release()
-                self.assertIn("names from before orchestrate 2.0", str(stop.exception))
+                self.assertIn("names from before orchestrate 2.2", str(stop.exception))
                 self.assertIn("migrate --worktree", str(stop.exception))
         settings = json.loads(self.printed(agent_loop.cmd_settings, worktree=str(self.wt), host="codex"))
         self.assertTrue(settings["old_names"], settings)
@@ -4590,7 +4659,7 @@ class PlanFiles(Repo):
         self.git("pull", "-q", "--rebase", "origin", "main")
         subjects = self.git("log", "--format=%s", f"{before}..origin/main").stdout.splitlines()
         self.assertEqual([s for s in subjects if "STATUS.md" not in s],
-                         ["orchestrate: migrate the plans to a folder per module and the names of 2.0"])
+                         ["orchestrate: migrate the plans to a folder per module and the names of 2.2"])
         settings = self.git("show", "origin/main:ORCHESTRATE.md").stdout
         self.assertIn("- **Merge:** push", settings)
         self.assertIn("- **Test command:** none", settings)
@@ -4788,9 +4857,9 @@ class PlanFiles(Repo):
         put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
         rec = agent_loop.adopt(doc, agent_loop.text_hash(None))
         rec["design"] = {"verdict": "ok", "hash": agent_loop.text_hash(None)}
-        rec["milestones"]["M1"]["accepted"] = {"by": "review", "at": agent_loop.now(),
+        rec["milestones"]["M1"]["done"] = {"by": "review", "at": agent_loop.now(),
                                                 "review": "docs/evidence/WATER/M1-review.md"}
-        put(self.wt / "docs/plans/WATER/ACCEPTED.json", json.dumps(rec))
+        put(self.wt / "docs/plans/WATER/RECORD.json", json.dumps(rec))
         put(self.wt / "docs/plans/WATER/PLAN.md", "# Water\n\n## Open for the human\n- Assumption: waves are blue\n")
         self.write_done([milestone("M1", "not_started", ["open"])], module="EXTRA")
         put(self.wt / "docs/plans/ARCHITECTURE.md", ARCH)
@@ -4959,7 +5028,7 @@ class OnlyTheScriptSetsReadyForReview(Repo):
                                    check="echo building; echo 'thread main panicked at tile.rs:88' >&2; exit 3"),
                          milestone("M2", "not_started", ["open"])])
         self.commit_all()
-        self.assertEqual(self.run_loop(budget_hours=0.0)["result"], "NO_PROGRESS_FOR_HOURS")
+        self.assertEqual(self.run_loop(no_progress_hours=0.0)["result"], "NO_PROGRESS_FOR_HOURS")
         self.assertEqual(self.read_done()["milestones"][0]["status"], "in_progress")
         self.assertNotIn("ready_for_review", self.read_record()["milestones"]["M1"])
         why = self.state()["not_ready_reasons"]
@@ -5071,7 +5140,7 @@ class OnlyTheScriptSetsReadyForReview(Repo):
                          milestone("M2", "not_started", ["open"])])
         self.commit_all()
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="Working on it.")
-        self.assertEqual(self.run_loop(budget_hours=0.0)["result"], "NO_PROGRESS_FOR_HOURS")
+        self.assertEqual(self.run_loop(no_progress_hours=0.0)["result"], "NO_PROGRESS_FOR_HOURS")
         self.assertEqual(self.read_done()["milestones"][0]["status"], "in_progress")
         self.assertIn("From the script:\nThe script can't set the milestone to Ready for Review yet: M1.1 "
                       "`test -f proof` exited 1", self.prompt(self.calls()[0]))

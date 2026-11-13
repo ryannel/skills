@@ -305,8 +305,8 @@ elif role == "plan":
     files = ["docs/plans/PAY/DONE.json"] + ([] if mode == "nodesign" else ["docs/plans/PAY/DESIGN.md",
                                                                              "docs/plans/PAY/PLAN.md"])
     if mode == "forge":
-        (cwd / "docs/plans/WATER/ACCEPTED.json").write_text("{}")
-        reply = "PLANNED: docs/plans/WATER/ACCEPTED.json"
+        (cwd / "docs/plans/WATER/RECORD.json").write_text("{}")
+        reply = "PLANNED: docs/plans/WATER/RECORD.json"
     elif mode == "progress" or (mode == "late" and turn == 1):
         reply = "I've read the brief. Next I'll write the PAY design and its done-when file."
     elif mode in ("replan", "replan_counted"):  # re-plans WATER M1; `replan_counted` also does the bookkeeping
@@ -334,8 +334,8 @@ elif role == "plan":
         reply = "Planned PAY. Nothing for the human to decide.\\nPLANNED" + ("" if os.environ.get("FAKE_PLAN_BARE") else ": " + ", ".join(files))
         side = os.environ.get("FAKE_PLAN_SIDE")
         if side:  # a planner that forges a record, commits it and puts it on the tip itself, or fakes the tip
-            (cwd / "docs/plans/WATER/ACCEPTED.json").write_text('{"forged": true}')
-            git("add", "docs/plans/WATER/ACCEPTED.json")
+            (cwd / "docs/plans/WATER/RECORD.json").write_text('{"forged": true}')
+            git("add", "docs/plans/WATER/RECORD.json")
             git("commit", "-qm", "tidy")
             git(*(["push", "-q", "origin", "HEAD:main"] if side == "push" else
                   ["update-ref", "refs/remotes/origin/main", "HEAD"]))
@@ -475,7 +475,7 @@ def build_base():
     put(wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
     rec = agent_loop.adopt(doc, agent_loop.text_hash(None))
     rec["design"] = {"verdict": "ok", "hash": agent_loop.text_hash(None)}
-    put(wt / "docs/plans/WATER/ACCEPTED.json", json.dumps(rec))
+    put(wt / "docs/plans/WATER/RECORD.json", json.dumps(rec))
     sh("git", "-C", str(wt), "add", "-A")
     sh("git", "-C", str(wt), "commit", "-qm", "init")
     sh("git", "-C", str(wt), "remote", "add", "origin", str(origin))
@@ -563,7 +563,7 @@ class Repo(Clean):
             rec["design"] = {"verdict": "ok", "hash": agent_loop.text_hash(None)} if design_ok else None
             for mid in ready:
                 rec["milestones"][mid]["ready_for_review"] = {"at": agent_loop.now(), "checks": []}
-            put(where / f"docs/plans/{module}/ACCEPTED.json", json.dumps(rec))
+            put(where / f"docs/plans/{module}/RECORD.json", json.dumps(rec))
 
     def ready_for_review(self, m1=None):
         """Merges M1 as the script leaves it once its checks pass: Ready for Review, every item passing with
@@ -576,7 +576,7 @@ class Repo(Clean):
         self.write_done([proved(m1), milestone("M2", "not_started", ["open"])], ready=("M1",))
         self.commit_all()
         work = agent_loop.head_commit(self.wt)
-        record = self.wt / "docs/plans/WATER/ACCEPTED.json"
+        record = self.wt / "docs/plans/WATER/RECORD.json"
         rec = json.loads(record.read_text())
         rec["milestones"]["M1"]["ready_for_review"]["commit"] = work
         record.write_text(json.dumps(rec))
@@ -589,7 +589,7 @@ class Repo(Clean):
 
     def read_record(self, ref="origin/main"):
         self.git("fetch", "-q", "origin")
-        return json.loads(self.git("show", f"{ref}:docs/plans/WATER/ACCEPTED.json").stdout)
+        return json.loads(self.git("show", f"{ref}:docs/plans/WATER/RECORD.json").stdout)
 
     def commit_all(self, where=None):
         where = where or self.wt
@@ -628,7 +628,7 @@ class Repo(Clean):
         return out.getvalue()
 
     def run_loop(self, **kw):
-        args = dict(module="WATER", worktree=str(self.wt), budget_hours=4.0, turn_timeout_hours=0.1)
+        args = dict(module="WATER", worktree=str(self.wt), no_progress_hours=4.0, turn_timeout_hours=0.1)
         args.update(kw)
         return self.call(agent_loop.cmd_run, **args)
 
