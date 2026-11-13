@@ -1,8 +1,8 @@
 # Review of every instruction an agent reads in the orchestrate set
 
 13 November 2026. Findings 1 to 7 were applied the same day, uncommitted when this was written; "Applied" at
-the end says what changed and what was left. Finding 8 was looked at in Thrum's plans, and its section now says
-what is there.
+the end says what changed and what was left. Finding 8 was looked at in Thrum's plans and then applied too; its section
+says what was there.
 
 ## What I measured each text against
 
@@ -197,12 +197,12 @@ The script reads none of it. It checks the plan's length and headings and counts
 nothing reads a tick. The list comes from the template in `done-when.md` and from two lines in the builder's
 skill. The planner's skill never says what the list is for.
 
-Proposed, not applied: each milestone in the plan file gets a short note in sentences, holding what a builder
+Applied to the reference, the planner's skill and the builder's skill: each milestone in the plan file gets a short note in sentences, holding what a builder
 couldn't work out from the items and the design: what already exists, what another module owns, an order where
 the order matters, and any work no item covers, named as such. A boundary goes where it holds, with its reason:
 the project settings for one that is true everywhere, the design for one about the module. The builder stops
 ticking, because the items' `status`, the log and the handoff already say what an earlier session finished.
-Existing plans keep working, since nothing reads the list. What is lost is a breakdown of the work that some
+Existing plans keep working, since nothing reads the list, and the builder's skill says how to read an older one. What is lost is a breakdown of the work that some
 builders may lean on, and I can't tell from the record how many do.
 
 ## Every text, and what I found
