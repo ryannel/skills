@@ -2,10 +2,10 @@ Build milestone M2 of module APPLE-TILE, using the build-milestone skill (the fi
 
 The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has status pass, with evidence from the item's target, and the work is merged, with M2's state left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the state itself.
 
-For this session:
-- Work only in this worktree. The lead starts the review, so don't start a reviewer.
-- The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`. Merge with its `merge --worktree .` command.
-- Start a command that runs longer than a few minutes with the script's `background -- <command>`, and wait for it with its `wait <id>`, not with sleep and tail, as the skill's "Long commands" section says.
+About this session:
+- This worktree is yours for the milestone. Other builders are working in their own, so keep your changes inside this one.
+- A lead is running this build, and starts the reviewer once the script's checks pass on your merged work.
+- The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`.
 - This session is visible in the Claude app, so an approval prompt can appear in it if someone is there to answer it.
 - M2.2 (does the tile animation read as smooth) needs human feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the human to look at, then end with `BLOCKED needs_human_feedback: <the question for the human>`.
 - M2.3 (an iPhone connected over USB) needs hardware. Check the device is connected before other work. If it isn't, do the rest and end with `BLOCKED needs_hardware: <the device>`.

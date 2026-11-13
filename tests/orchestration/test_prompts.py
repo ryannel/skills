@@ -26,6 +26,7 @@ MILESTONE = {"id": "M2", "items": [
 FEEDBACK = [{"at": "2026-11-10T08:37:00Z", "items": ["M2.2"], "asked": "Is the resize smooth enough to ship?",
              "said": "Looks good to me, but the corners flicker once."}]
 ROUND = {"verdict": "fail", "at": "2026-11-09T21:00:00Z", "counts": True,
+         "review": "docs/evidence/APPLE-TILE/M2-review.md",
          "findings": [{"name": "corner flicker on resize", "item": "M2.2"},
                       {"name": "log written to the worktree", "repeat": True}]}
 

@@ -44,17 +44,17 @@ plan and the code already disagree needs the conversation below.
 
 ## Which name to choose
 
-Most of these rules come from names a human rejected.
+The aim is a name the human understands on sight, without having it explained.
 
 - The human's own word wins. If the human already calls a thing something, that is its name, even where you
   would have picked another.
-- Otherwise choose the explicit, familiar name, even when it is longer. One human replaced "claimed" with "Ready
-  for Review", and "attended" with "Needs Human Feedback". A short name that has to be explained is worse than a
-  long one the reader understands on sight.
+- Otherwise choose the explicit, familiar name, even when it is longer: "Ready for Review" rather than
+  "claimed", and "Needs Human Feedback" rather than "attended". A short name that has to be explained is worse
+  than a long one the reader understands on sight.
 - A name people already know from the tools they use beats a new one. "In Progress", "Blocked" and "Done" need
   no explaining.
-- Leave a good short name alone. The same human kept "Blocked" and "Done", and said a draft that turned every
-  name into a phrase had gone too far.
+- Leave a good short name alone. "Blocked" and "Done" are already clear, and turning every name into a phrase
+  makes the text harder to read.
 - One thing has one name. When two names are in use, choose one, and list the other under `Avoid`.
 - One name means one thing. If "account" means both the customer and their login, those are two entries with
   two names. A status that covers two causes is split the same way.
@@ -85,8 +85,8 @@ Proposed: by a builder, 12 March 2027. Not yet agreed by the human.
   decision, so an unmarked guess is worse than no entry.
 
 The glossary holds names and what they mean, and nothing else. Decisions, plans and how a thing is built go in
-other files. In one widely used skill library this was the most-reported problem: agents rewrote the glossary
-after every answer, until it was a second plan.
+other files. A glossary that takes those in gets rewritten after every answer, until it is a second plan that
+disagrees with the first.
 
 ## Agreeing the names with the human
 
@@ -95,9 +95,8 @@ after every answer, until it was a second plan.
    the human's. The code shows which names are in use; it doesn't decide which name is right.
 2. Get the human's own words before you propose any. If the chat doesn't already hold them, ask the human to
    say what the product does from start to finish. That one question gives you their word for most things at
-   once. A name that appears only in the code or the documents is not the human's word until they use it. In two
-   test conversations the agent proposed tidy names of its own, the human accepted them, and the words the human
-   uses every day were never heard.
+   once. A name that appears only in the code or the documents is not the human's word until they use it. A
+   human tends to accept a tidy name that is offered, and then the words they use every day go unheard.
 3. Find the clashes: things with two names, names the human didn't use, and things with no name that keep being
    described with a phrase. Put them to the human in the chat, a few at a time.
    - Where the human's telling gave a word, that word is the name.
@@ -108,9 +107,9 @@ after every answer, until it was a second plan.
    Write the names into the message itself, because a human who follows the work in a chat won't open a file
    to read them.
 4. Show the names in use. Write the main thing the product does as numbered steps that use the names, with each
-   step saying who or what does it. One human was shown a table of terms and couldn't tell what they meant until
-   the same terms appeared in steps. The steps also showed that a term was missing. If you can't write a step
-   without a new word, that word needs an entry.
+   step saying who or what does it. A table of terms is hard to judge, because a name shows what it means only
+   when it is used. The steps also show what is missing: if you can't write a step without a new word, that word
+   needs an entry.
 5. When the human objects to a name, offer others and take the one they pick. Write each entry as soon as its
    name is agreed.
 
@@ -150,15 +149,16 @@ entries. Keep using the agreed names, and put what you would change, and why, in
 
 When the human does change a name, put the old one under `Avoid`, and leave logs, finished reviews and other
 records of the past as they were written. Then update the documents still in use, changing the names and keeping
-every fact. In one test the agent cut two steps from an overview because the human had no name for them.
+every fact. A step or a thing that has no agreed name yet stays in, described in plain words.
 
 In a project built with the orchestrate set, only a planner, the agent that writes the plans, changes the plan
 files. So the lead, the agent the human chats with, gives a planner the human's words. The set also keeps each
-piece of work's checks and results in JSON files beside the plans. Don't edit those to change a name. In any
-other project, update the documents yourself.
+piece of work's checks and results in JSON files beside the plans. Leave those as they are when a name changes,
+because the set's script checks who changed them, and a planner rewrites an item whose words have to change. In
+any other project, update the documents yourself.
 
-Entries have to leave the glossary as well as arrive. One project's glossary took 380 lines of additions and 11
-of removals over 25 changes. Propose removing an entry when the thing it names is gone.
+Entries have to leave the glossary as well as arrive, or it grows until nobody reads it. Propose removing an
+entry when the thing it names is gone.
 
 A later session has to be able to find the glossary without this skill. In the orchestrate set, each agent's own
 skill tells it to read `GLOSSARY.md` in the plans folder. In any other project, add one line that names the file

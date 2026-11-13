@@ -22,8 +22,8 @@ the agent the human chats with, runs those commands.
 
 Two files in the plans folder say what the human wants. Read them if they exist.
 
-`BRIEF.md` is the project brief, which the human approved before planning. Don't edit it. It is the human's page,
-and the lead changes it when the human says something new. Its numbered decisions come in three kinds, and you
+`BRIEF.md` is the project brief, which the human approved before planning. Leave it as it is, because it is the
+human's page, and the lead changes it when the human says something new. Its numbered decisions come in three kinds, and you
 treat each differently:
 
 - A decision in the human's words, or one the human agreed to, is fixed. Carry it into the design in the same
@@ -54,7 +54,8 @@ folder. You write four files in it:
   range. It names the mechanisms that produce that, what the module provides to other modules, and what it may
   cost, if cost matters.
 - `PLAN.md` is the plan file: what is left to build, milestone by milestone, and the assumptions still open for
-  the human. It has no status lines and no history.
+  the human. Under a milestone it holds at most a short note for the builder. It has no status lines and no
+  history.
 - `LOG.md` is the module's history, one dated line per event, newest at the bottom.
 - `DONE.json` is the done-when file. For each milestone it lists the items and how each is proved. A script reads
   it, so [the format](references/done-when.md#donejson) is strict. [Ways to prove an item](references/proofs.md)
@@ -74,11 +75,19 @@ like "M2 auth handler refactor" tells the human nothing.
 
 Keep the plan file short. A Done milestone shrinks to its heading and a link to its review. Briefs written for
 reviews go to `docs/evidence/<MODULE>/`, and design goes in `DESIGN.md`. The script refuses a plan over about
-1,500 words, or one with status lines, `###` headings or a log in it, because that is how the plan files of an
-earlier project grew to 800 lines nobody could read. Meet the limit by moving text, not by squeezing it: design
-goes to `DESIGN.md`, history to `LOG.md`, and a line that tells a builder to do what it would do anyway, such as
-"run the checks before claiming", comes out. A work list cut down to strings of labels saves words and loses the
-reader.
+1,500 words, or one with status lines, `###` headings or a log in it, because a plan file that collects those
+grows until no builder reads all of it.
+
+Under a milestone, write only what its builder couldn't work out from the items and the design: what already
+exists and where it is, what another module owns that the milestone comes close to, or an order where the order
+is part of the task. Write it in sentences, and leave the section empty when there is nothing to add. Leave out a
+list of steps. The builder sees the code close up and plans the work better than a list written before the code
+existed, and a builder handed steps to tick tends to tick them and stop there. If the milestone can't be Done
+without some piece of work and no item asks for it, an item is what is missing, so add the item.
+
+A limit on what a builder may do goes where it holds, with its reason. Put it in the project settings, or the
+building guidance they link to, when it is true of every module, and in the design when it is about this module.
+Only a limit on one milestone goes in that milestone's note.
 
 If a module already has a plan in another shape or another place, such as a checklist in prose or a file called
 `BUILD-PLAN.md` elsewhere in the repository, convert it into these files and delete the old one. Keep its history
@@ -133,8 +142,6 @@ own the same thing.
 
 ## What makes a plan work
 
-Each rule below is here because a plan without it went wrong.
-
 ### The design
 
 Research before you design. Most problems have been solved before, in shipped products or published work, so find
@@ -160,24 +167,22 @@ more widely than your plan covers, take the wider ordinary reading when it costs
 the plan's `## Open for the human` section, as one line that starts `Assumption:`, so the human can overturn it
 in a line. When the human answers, delete the line and note the answer in the log. A question you
 would have asked the human goes there too, with the answer you assumed. The script counts those lines and lists
-them in the human's report. In one test run a planner read "transliterate accents" as letters that decompose in
-Unicode, and said no decision was needed. Three reviewers then passed a tool that turned Ørsted into "rsted",
-because it matched the plan.
+them in the human's report. A narrow reading that nobody wrote down can't be caught later, because reviewers
+judge the work against the plan. Read "accents" as only the letters that decompose in Unicode, and a tool that
+turns Ørsted into "rsted" passes every review.
 
 Add a requirement only when the human's words or the design need it, because reviewers fail the build on every
-requirement you add. In another test run a planner decided that a small accounting tool's output must fit 80
-columns. Three of the four findings that failed its reviews were about that limit, which the human never asked
-for.
+requirement you add. A limit that seemed sensible to you, such as output that fits 80 columns, can cost several
+failed reviews over something the human didn't ask for.
 
 Quote the human's request word for word at the top of the design, and name the project brief there if there is
-one. Reviewers judge the design against the request, and that quote is all they have of the human. One reviewer
-found the request cut short in a commit message, and judged against the planner's summary of it instead.
+one. Reviewers judge the design against the request, and that quote is all they have of the human. Where it is
+missing or cut short, they judge against your summary of it instead.
 
 Quote only the human: the brief, or words your task marks as the human's, in quotation marks with a date. The
 rest of a task is the lead's, or the script's. When no words of the human's were passed on, say so, as in "The
-human's words weren't passed on; this design answers the lead's task", rather than quoting the task. In one
-project three designs quoted the lead's summary as the human's request, and one quoted the task the script writes
-after a failed design review.
+human's words weren't passed on; this design answers the lead's task", rather than quoting the task. A design
+that quotes the lead's summary as the human's request gets reviewed against words the human didn't say.
 
 ### Milestones and items
 
@@ -215,10 +220,10 @@ reference](references/done-when.md#donejson) has the field's form.
 
 Check that whoever has to reach a target can reach it, reviewers included. A browser won't start inside Codex's
 default `workspace-write` sandbox, and other programs with a window can fail there too. A Codex agent runs one only
-by asking to run that command outside the sandbox, and each request is granted or refused on its own. In test runs
-a reviewer on Codex asked and was granted it each time. So plan for the review to move to Claude if it is refused,
-and don't plan for a reviewer to judge the builder's screenshots in place of its own. A build that drives a
-browser throughout shouldn't rest on asking. Say so in the design, and either list
+by asking to run that command outside the sandbox, and each request is granted or refused on its own. A request
+is usually granted, so plan for the reviewer to ask, and for the review to move to Claude if it is refused. The
+builder's screenshots can't stand in for the reviewer's own, because they show only what the builder chose to
+capture. A build that drives a browser throughout shouldn't rest on asking. Say so in the design, and either list
 `Codex sandbox: danger-full-access` as a decision for the human, who is the one giving up the sandbox, or name a
 Claude builder for that module.
 
@@ -227,12 +232,12 @@ it. Have the check record that state and pass either way, unless the claim reall
 stops whenever the human uses the machine.
 
 Use only cost targets that are real, from the project brief or from the human. If nobody has set one, record
-measurements and set tripwires, and don't make a number up.
+measurements and set tripwires. A number you make up becomes a requirement that reviewers fail the build on.
 
 The same goes for every number an item tests against, such as a precision bound. A bound nobody measured is a
 guess. Measure it while you plan, or make measuring it the milestone's first item, with the bound set from the
-result. In one project a planner wrote an error bound it hadn't measured, to answer a design review. The bound was
-wrong, and finding that out cost a builder session, a planner, a design review and a second builder session.
+result. A wrong bound is found only when a builder can't meet it, and by then it has cost a builder session and
+a new plan.
 
 When you plan a module's next piece, or rewrite one, look through its reviews. A finding that came up twice becomes
 a command in the project's test command (the `Check:` line of the project settings) or an item's `check`, so it is
@@ -263,21 +268,26 @@ The `Owner decides` list says what has to go to the human. Every other decision 
 ## When a milestone keeps failing on the same finding
 
 A milestone with four failed reviews that each repeated a finding an earlier review had raised is Waiting, with
-the reason For Replan (the script prints `waiting` with `reason: for_replan`), which means something about the
-plan is wrong. Your task names the reviews.
-Each round's review is kept beside the latest, as `<id>-review-1.md` and so on. Decide which of these happened,
-and write why in `LOG.md`:
+the reason For Replan (the script prints `waiting` with `reason: for_replan`). The fixes aren't holding, and
+nobody has yet found out why. Your task names the reviews, and each round's review is kept beside the latest, as
+`<id>-review-1.md` and so on. Read every round and the code, and decide why the same finding keeps coming back.
 
-- The milestone was too big. Split it.
-- It depended on something outside this module. Change what it covers.
-- It used a mechanism that can't work. Redesign it.
+The cause may be in the plan. The milestone may be too big for one session, and should be split. It may depend
+on something outside this module, so that what it covers has to change. It may use a mechanism that can't produce
+the behaviour, and need a new design. The cause may also be outside the plan. A builder can fix the one place
+each review names while the same defect stays in places no reviewer has tried yet, and a reviewer's findings can
+go beyond what the items ask. A rewrite cures neither of those, and it costs a design review and a rebuild.
 
-Then change the items. Rewrite each changed item from what it claims, as if it were new, and move the history
-and the reason for the change to `LOG.md`. Patching an item by adding a clause each time turns it into a procedure:
-one item in an earlier project grew to 350 words of steps and prohibitions left over from old fixes, and each
-builder had to work out which still applied. When your plan is merged, the script sets that milestone's `fails` and `rounds` to 0, adds
-1 to `replans`, and sets its `state` to `not_started`, once, whatever you wrote in those fields. It
-saves the new items as the approved ones and clears the old proof, because that proved something else.
+When the plan is sound, change no file, and end with the `KEEP` line described under
+[When reviews keep finding something new](#when-reviews-keep-finding-something-new), naming who has to act. The
+script counts that as the milestone's re-plan, so a second run of four repeated failures goes to the human.
+
+When the plan is at fault, change the items, and write the reason in `LOG.md`. Rewrite each changed item from
+what it claims, as if it were new, and move the history to `LOG.md`. Patching an item by adding a clause each
+time turns it into a procedure, full of steps and prohibitions left over from old fixes, and each builder has to
+work out which still apply. When your plan is merged, the script sets that milestone's `fails` and `rounds` to 0,
+adds 1 to `replans`, and sets its `state` to `not_started`, once, whatever you wrote in those fields. It saves
+the new items as the approved ones and clears the old proof, because that proved something else.
 
 Give each milestone you split off the same `replans` and `diagnoses` counts as the one it came from. The script
 can't tell which new milestone came from which, so you set them. With the counts carried over, a second run of
@@ -303,8 +313,12 @@ The script starts the milestone's counts again either way, and a second run to s
 Blocked: Too Many Failed Reviews. Leave
 the counts and `findings` alone: the script puts back any change a plan makes to them.
 
-Don't edit an `ACCEPTED.json` record file or `STATUS.md`. Only the script writes those, and it rejects a plan that
-touches one.
+## What the script does with your files
+
+Leave the files you write uncommitted. When your turn ends with `PLANNED`, the `plan` command checks them, commits
+and merges them, and saves the new items as the approved ones, so a commit, merge, pull or push of your own gets
+in its way and it merges nothing. Leave each `ACCEPTED.json` record file and `STATUS.md` as they are too. Only the
+script writes those, and it rejects a plan that touches one.
 
 ## When the human changes what they want
 

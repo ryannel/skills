@@ -2460,7 +2460,9 @@ class HolisticAlone(ProfileOnly):
         self.assertIn("A Suggestion never changes the\n`state`.", review)
         self.assertIn("Count Must Fix findings only.", review)
         self.assertNotIn("If you think the defect doesn't matter, say so in the finding", review)
-        self.assertIn("Fix every Must Fix finding", agent_loop.FINDINGS_TEMPLATE)
+        self.assertIn("finished when every item is true as it is written", agent_loop.FINDINGS_TEMPLATE)
+        self.assertNotIn("Fix every", agent_loop.FINDINGS_TEMPLATE)
+        self.assertIn("yours to take or leave", agent_loop.FINDINGS_TEMPLATE)
 
 
 class Locks(Clean):
@@ -2964,7 +2966,7 @@ class FirstRuns(Repo):
         self.assertEqual(claim["result"], "READY_FOR_REVIEW", claim)
         prompt = self.calls()[-1]["argv"][-1]
         order = [prompt.find(part) for part in (
-            "Build milestone M1 of module WATER,", "The goal: ", "Human Feedback on M1", "\nFor this session:\n",
+            "Build milestone M1 of module WATER,", "The goal: ", "Human Feedback on M1", "\nAbout this session:\n",
             "\nFrom the lead:\nShow the ink direction first.", "\nTo finish: ")]
         self.assertTrue(all(i >= 0 for i in order) and order == sorted(order), (order, prompt))
         self.assertIn('on M1.2, M1.3: asked "Which direction do you want, A or B?"; '
@@ -3548,8 +3550,23 @@ class FirstRuns(Repo):
                 self.assertEqual((again["fails"], again["rounds"], again["repeated"]), (0, 1, []), again)
 
     @shares("four-fails")
-    def test_keep_is_refused_when_no_diagnosis_is_owed(self):
-        self.four_fails()
+    def test_a_replan_that_keeps_the_plan_counts_as_the_replan(self):
+        failed = self.four_fails()
+        self.assertIn("KEEP WATER M1: builder", failed["next"]["command"])
+        self.assertNotIn("the plan is wrong", failed["next"]["command"])
+        kept = self.diagnose("keep_builder")
+        self.assertEqual((kept["result"], kept["who"], kept["next"]["by"]), ("KEPT", "builder", "lead"), kept)
+        self.assertIn("--fresh", kept["next"]["command"])
+        m1 = self.read_done()["milestones"][0]
+        self.assertEqual((m1["fails"], m1["rounds"], m1["replans"], m1.get("diagnoses", 0), m1["state"]),
+                         (0, 0, 1, 0, "in_progress"))
+        # a second run of four repeated failures goes to the human, as it does after a rewrite
+        self.assertEqual(agent_loop.ladder(dict(m1, fails=4)), "too_many_failed_reviews")
+
+    def test_keep_is_refused_when_no_replan_or_diagnosis_is_owed(self):
+        self.write_done([milestone("M1", "not_started", ["open"], inspect="frames"),
+                         milestone("M2", "not_started", ["open"])])
+        self.commit_all()
         refused = self.diagnose("keep_builder")
         self.assertEqual(refused["result"], "INVALID", refused)
         self.assertIn("isn't owed one", refused["problems"][0])
@@ -3601,10 +3618,12 @@ class FirstRuns(Repo):
         self.assertEqual((passed["result"], passed["verdict"]), ("REVIEWED", "PASS"), passed)
         self.git("pull", "-q", "--rebase", "origin", "main")
         self.assertNotIn("findings", self.read_done()["milestones"][0])
-        # the second reviewer was told the first round's findings, so it can keep their names
+        # the second reviewer is told where the first round is kept, and not what it found, so it judges the items first
         prompt = self.calls()[prompt_before]["argv"][-1]
-        self.assertIn("Earlier failed rounds of M1 that still count", prompt)
-        self.assertIn("the water is flat (M1.1)", prompt)
+        self.assertIn("M1 has failed review 1 time since its counts last started", prompt)
+        self.assertIn("docs/evidence/WATER/M1-review.md", prompt)
+        self.assertIn("docs/plans/WATER/ACCEPTED.json under milestones.M1.reviews", prompt)
+        self.assertNotIn("the water is flat", prompt)
 
 
     @shares("six-rounds-1")

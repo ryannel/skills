@@ -11,9 +11,7 @@ why, well enough that someone else can plan it without guessing, and to write th
 This skill belongs to the orchestrate set, a group of skills in which one agent plans a project, others build it
 and others review it. You are the lead: the agent the human chats with. The agent that plans is called the
 planner. It is a new session that can't ask the human anything, so whatever this conversation leaves open, the
-planner settles with a guess. Two test runs show how that goes wrong. One planner read "transliterate accents"
-narrowly, and the finished tool turned Ørsted into "rsted". Another added an 80-column limit that nobody had
-asked for, and reviewers failed the build on it three times.
+planner settles with a guess. The guess is then built and reviewed as if the human had asked for it.
 
 If you can't reach the human, because a script started you or nobody is answering, this skill doesn't apply.
 Plan or build from the request as it stands.
@@ -44,8 +42,8 @@ When there is a brief, you are finished when:
 4. The brief is on the main branch and a planner has started, as [handing over](#handing-over-to-planning)
    describes, or the human has chosen to stop here.
 
-Start a planner only after the human has approved the brief, or has told you to skip it. Agents that had
-understood a request tended to go straight to work without showing the human anything.
+Start a planner once the human has approved the brief, or has told you to skip it. Understanding a request can
+feel like permission to start, but until the human has seen the brief they haven't seen what you understood.
 
 ## Before your first message
 
@@ -64,26 +62,27 @@ three things:
 
 ## What to ask
 
-Ask a question only when the answer would change what gets built and only the human can give it. A skill without
-this rule had its agent asking people why they wanted a fix they had just asked for. For everything else, make the
+Ask a question when the answer would change what gets built and only the human can give it. Any other question
+spends the human's attention on something you could have settled. For everything else, make the
 decision yourself and state it with your reason, as a proposal the human can correct. That includes questions
 about process, such as where a file should go or whether to look further: do those things and say so. Ask first
 about what would be expensive to undo.
 
 A number or a limit that the request turns on, such as how old is too old or how fast is fast enough, does need
-the human. Ask for it, and don't choose a default. In one test the agent left such a limit open with a default of
-its own, and the human had an exact rule that was never heard.
+the human. Ask for it rather than choosing a default. The human often has an exact rule in mind, and a default
+that sounds sensible keeps it from being said.
 
 For a new project or feature, two questions are nearly always worth asking, because only the human has the
 answers and the answers settle the cases nobody mentioned.
 
 The first is why the human wants this. Ask it before you offer any choices, with no example answers and without
-your own guess in it. An agent that offered options first got a pick, and never learned the reason.
+your own guess in it. Once options are on the table the human picks one, and the reason behind the request goes
+unsaid.
 
 The second is what would make the result a failure even if it works, including anything that must not change.
-Ask it before you write the brief, and don't answer it for the human. In two test conversations the agent filled
-this in itself with sensible guesses, and the human's firmest requirement stayed unsaid both times. In one, the
-tool had to work in a part of the building with no phone signal.
+Ask it before you write the brief, and leave the answer to the human. Sensible guesses fill this in easily, and
+the human's firmest requirement is usually one you couldn't have guessed, such as a tool that has to work in a
+part of the building with no phone signal.
 
 Once you know the reason, lay out a decision with choices you can name: each choice sketched in a line, what it
 costs, and the one you recommend. Word a yes-or-no question so that "yes" accepts your recommendation.
@@ -106,8 +105,8 @@ This is a map of what to find out. Most of it you will find or decide without a 
 - What is left out, and what would make the result a failure even if it works.
 - What exists today that must not change.
 - How the human will judge that it is finished, and which judgements only they can make.
-- What it runs on. The brief always says this, whoever decided it. One session designed an iOS app, never raised
-  the platform, and built a web app.
+- What it runs on. The brief says this whoever decided it, because a platform nobody names gets chosen by
+  whoever builds first.
 - How the human wants to work with the agents. Take this from `ORCHESTRATE.md` when it exists. Otherwise decide
   it, and mark it as your decision: agents don't push to the remote repository, the work is built in the program
   this chat is running in, and anything that spends money, publishes or can't be undone comes to the human.
@@ -159,8 +158,8 @@ a "never", because each later document tends to soften them. Anything you filled
 decision, with your reason, in whichever section it sits.
 
 During the conversation, a weak yes approves nothing in particular. "Sounds good", after a message that covered
-six things, is not agreement to each of the six. One session took "that scope is ok" as permission to start
-building. When a decision matters, put it to the human by itself.
+six things, is not agreement to each of the six, and "that scope is ok" is not permission to start building.
+When a decision matters, put it to the human by itself.
 
 The brief is the one place where a single yes covers a page. That is why every decision in it says whose it is,
 and why the human's approval changes none of those marks. A decision marked as the agent's stays the agent's, and

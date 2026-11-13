@@ -1,20 +1,17 @@
 Review milestone M2 of module APPLE-TILE, using the review-milestone skill (the file is /skills/orchestration/review-milestone/SKILL.md).
 
-The goal: a review at docs/evidence/APPLE-TILE/M2-review.md that judges every item of M2 in docs/plans/APPLE-TILE/DONE.json, with the verdict fields, state and findings set as the skill says. The script sets the counts.
+The goal: a review at docs/evidence/APPLE-TILE/M2-review.md that judges every item of M2 in docs/plans/APPLE-TILE/DONE.json, with the verdict fields, state and findings set as the skill says.
 
 Human Feedback on M2, recorded by the script in docs/plans/APPLE-TILE/ACCEPTED.json under milestones.M2.human_feedback, oldest first. These are the human's own words. Check any claim about what the human chose against it.
 - 2026-11-10T08:37:00Z, on M2.2: asked "Is the resize smooth enough to ship?"; the human said "Looks good to me, but the corners flicker once."
 
-Earlier failed rounds of M2 that still count, with their findings: round 1 (2026-11-09): corner flicker on resize (M2.2), new; log written to the worktree (outside the items), repeated. A finding still there keeps its name. An item that failed before and fails for a new reason needs `different`.
+M2 has failed review 1 time since its counts last started. Those reviews are docs/evidence/APPLE-TILE/M2-review.md. Your review replaces the latest one, and the script keeps a copy of it. The name of each finding is in docs/plans/APPLE-TILE/ACCEPTED.json under milestones.M2.reviews. Judge the items before you read any of these, as the skill's section "A milestone that has been reviewed before" describes.
 
 A planner's diagnosis on 2026-11-10 kept M2's items as written, for this reason: the reviews judged the capture tooling, not the tiles. Judge the items as they are written.
 
-Rules:
+About this session:
 - This folder is a clean checkout of commit a6101020, which the script made for you. Build and run the product from it where an item needs you to see it working. Before it set Ready for Review, the script made sure that the project's test command (`./dev check`) and the `check` of M2.1 passed on the files at b7c2e91d04aa. It ran them in its own clean checkout, apart from any that had already passed on exactly those files. Run one again only if you doubt that result.
-- Put captures and other evidence files in docs/evidence/APPLE-TILE/M2-review/ and link them from the review, rather than embedding them in it.
-- Start a command that runs longer than a few minutes with `python3 /skills/orchestration/build/scripts/agent_loop.py background -- <command>`, and wait for it with `python3 /skills/orchestration/build/scripts/agent_loop.py wait <id>`, which returns when it ends with the end of its log. Waiting with sleep and tail re-reads this whole conversation at every check.
-- Don't commit, push or change anything else. The script checks what you changed, then merges the review itself.
-- Don't start other agents.
-- If you can't reach the product at all, because the screen is locked, a permission needs the human's approval or a device isn't connected, judge nothing and end with `BLOCKED needs_access: <what the human has to do>`. The script then counts no round, and the lead runs this review again while the human is at the machine.
+- Captures and other evidence files go in docs/evidence/APPLE-TILE/M2-review/.
+- The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`, for the `background` and `wait` commands the skill describes.
 
 To finish, end with the skill's last line.

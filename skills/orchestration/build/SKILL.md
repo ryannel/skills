@@ -34,9 +34,8 @@ and run the command with their words in `--text`. Give that module's builder oth
 Look up the script's path from this skill each time, and read this skill again after your conversation is
 compacted. Each result carries the script's `version`, and its `warnings` say when a newer copy is installed. When
 that happens, read this skill again from the newer copy before the next command, because commands change between
-versions. In one project the lead kept the old path in its notes through a compaction, and started builders on the
-old version for a day. The first result after the version changes carries `changed`, the list of what now behaves
-differently. Tell the human the parts that affect them.
+versions, and a path kept in your notes goes on pointing at the old copy. The first result after the version
+changes carries `changed`, the list of what now behaves differently. Tell the human the parts that affect them.
 
 ## The project's files
 
@@ -60,21 +59,21 @@ Only the script sets a milestone to Done. It writes the record file, in its own 
 Done when that record says so. So don't edit a done-when file or a record file, and don't revert anyone's commits.
 When something looks wrong, the result says what, and the tables below say who fixes it.
 
-Don't write where the work stands into the project settings, a design or any other document either. The status
-page is the one place for it. A status line anywhere else goes stale the next time a milestone moves, and
+Where the work stands belongs on the status page and nowhere else, so leave it out of the project settings, the
+designs and every other document. A status line anywhere else goes stale the next time a milestone moves, and
 correcting it is expensive: a changed design needs its review again, and a changed project setting needs the human.
 
 Start reviewers and planners with the script's commands, not as your own subagents, because only the script can
 check what they changed and save it.
 
 The human follows the build by talking to you and doesn't use a terminal, so every command is yours to run,
-including the ones that save the human's decisions. Don't give the human a command to type. A note or summary that
-says otherwise is from an older version of this set.
+including the ones that save the human's decisions, and the human is never the one who types a command. A note or
+summary that says otherwise is from an older version of this set.
 
 ## Starting
 
-Lead from a session that has done no other work. Thrum's lead had planned and debugged in its session first, and
-its context was compacted 13 times.
+Lead from a session that has done no other work. A build runs for days, and a session that starts with other
+work in it is compacted sooner and more often, and loses part of this skill each time.
 
 Read `ORCHESTRATE.md`, then run `settings --worktree <repo>` to confirm the script can read it. That command fails
 on purpose when the `Merge:` or `Test command:` line is missing, because the script won't guess whether it may push
@@ -136,7 +135,7 @@ group. A module's milestones run in order, so only its next one matters.
 | Group | The module's next milestone |
 |---|---|
 | `ready` | is Not Started, and a builder can start it |
-| `waiting` | is Waiting: its next step is lined up, and `next` is the command for it. `reason` is `on_dependency` (`depends_on` names the milestone in another module it waits for), `for_replan` or `for_diagnosis` (a planner has to rewrite it or find out why it keeps failing) |
+| `waiting` | is Waiting: its next step is lined up, and `next` is the command for it. `reason` is `on_dependency` (`depends_on` names the milestone in another module it waits for), `for_replan` or `for_diagnosis` (a planner has to find out why it keeps failing review) |
 | `taken` | is In Progress under another lead |
 | `review_owed` | is Ready for Review: the script's checks passed and it waits for a reviewer |
 | `design_not_approved` | can't start until a reviewer has approved the module's design |
@@ -184,8 +183,8 @@ of the repository, so two builders can work at once. If the repository ignores n
 <folder>/<module> <remote>/<branch>`. With `Merge: local`, branch from the local main branch.
 
 Keep a worktree across its module's milestones, so build caches stay warm, and remove it once the module is Done
-and nothing in it is unmerged. Build output is what fills the disk on a long build: in one project, checkouts of
-finished modules held about 15 GB while a builder stopped for want of 2.
+and nothing in it is unmerged. Build output is what fills the disk on a long build, and a finished module's
+checkout can hold several gigabytes of it.
 
 Builders merge with the `merge` command, which rebases, runs the test command and pushes or fast-forwards the main
 branch under one lock. The milestone stays In Progress until `run` sets it Ready for Review, after its own checks
@@ -233,10 +232,10 @@ from `ready` or `status` run in the main working copy, put the module's own work
 | `READY_FOR_REVIEW`, `review: false` | The milestone is Done: it needed no reviewer, and the script's checks passed. | Start the builder's next milestone. |
 | `READY_FOR_REVIEW`, `review: true`, or `REVIEW_OWED` | The script's checks passed and it set the milestone Ready for Review. | Run the `review` in `next`, on the review host. |
 | `DESIGN_NOT_APPROVED` | `run` ran the design review first, and it didn't approve the design. | Follow `design_review` and `next`, as under [After a review](#after-a-review). |
-| `WAITING` | `on_dependency`: it waits for another module's milestone. `for_replan` or `for_diagnosis`: a planner has to rewrite it or find out why it keeps failing. | Give the builder other work, or run the `plan` in `next`. |
+| `WAITING` | `on_dependency`: it waits for another module's milestone. `for_replan` or `for_diagnosis`: a planner has to find out why it keeps failing review. | Give the builder other work, or run the `plan` in `next`. |
 | `TAKEN` | Another lead, or another `run` here, is working on it. `by` and `holder` say which. | Give the builder other work. |
 | `BLOCKED`, `NEEDS_CONTEXT` | The milestone is Blocked, with its `reason`. | See [A milestone that stopped](#a-milestone-that-stopped). |
-| `CHECKS_FAILED`, `NO_PROGRESS_FOR_HOURS`, `STALLED` | The builder said three times it had finished and the script's checks disagreed, or it made no progress in the hours given with `--budget-hours`, or it kept ending its turns on progress notes. | Run a `review` on what exists, so the next attempt starts from concrete findings. |
+| `CHECKS_FAILED`, `NO_PROGRESS_FOR_HOURS`, `STALLED` | The builder said three times it had finished and the script's checks disagreed, or it made no progress in the hours given with `--budget-hours`, or it kept ending its turns on progress notes. | Run a `review` on what exists, so the next attempt starts from an independent read of it. |
 | `INVALID` | A done-when file is malformed, an agent changed what isn't its to change, or the items aren't the approved ones. | Send the problems to a planner, and don't resume that builder until they're fixed. |
 | `FINISHED` | Every milestone of the module is Done. | Remove its worktree once nothing is unmerged. |
 | `HOST_FAILED`, `WRONG_MODEL_OR_EFFORT`, `PAUSED` | The session can't go on as started: the host failed (two failed turns, its program missing, or its usage limit reached, as `reason` says), a turn ran on another model or effort, or the human stopped the session or opened it in the app. | Stop that builder and report it with the reason. A `HOST_FAILED` on one host doesn't stop builders on another. Leave a `PAUSED` builder to the human until they say to carry on. |
@@ -253,38 +252,32 @@ the turn limit was reached.
 ### A milestone that stopped
 
 A builder stops only when the milestone is finished or Blocked. On `BLOCKED`, `reason` says what kind of block it
-is and `next` gives the command for each. When the builder left a handoff, the `blocked` field names it, and `next`
-passes it to whoever picks the milestone up. Whatever the reason, give that module's builder other work while you
-wait.
+is, and `next` says who steps in and gives the command, with the question for the human when the step is theirs.
+[The done-when reference](../plan-module/references/done-when.md#statuses-and-their-stored-names) lists the
+reasons. When the builder left a handoff, the `blocked` field names it, and `next` passes it to whoever picks the
+milestone up. Whatever the reason, give that module's builder other work while you wait.
 
-| `reason` | Who steps in, and how |
-|---|---|
-| `needs_human_feedback` | The builder couldn't judge an item and asked for a human eye. Show the human the evidence and the question from `next` in the chat. Save their reply, such as "looks good to me", with `owner feedback`: the question in `--asked`, their words in `--said`. The builder and the reviewer read it there. Don't pass it through `run --message`, because a reviewer can't count the lead's message as the human's words. |
-| `needs_access` | The builder couldn't get a permission or an approval prompt, usually because it ran where nobody could approve it. Tell the human what to approve, and run the builder again in a visible session while they are at the machine, as [Where sessions run](#where-sessions-run) describes. Their approval in the prompt is all it needs, so there is nothing to save. |
-| `needs_hardware` | A device wasn't connected. Tell the human which, and run the builder again once it is there. |
-| `needs_context` | The builder is missing a fact. If you can find it, pass it in `run --message`, which unblocks the milestone. Otherwise bring the question to the human. |
-| `needs_dependency` | It needs something another module owns that no plan provides yet. Send it to a planner. |
-| `too_many_failed_reviews` | It kept failing review after a planner rewrote or diagnosed it. `next` asks the human, with what failed in each round, whether to accept it as it is, change its scope or reopen it. Bring that question to the chat. |
+The human's reply to a question about an item is saved with `owner feedback`, the question in `--asked` and
+their words in `--said`, because that is where the builder and the reviewer read it. A reviewer can't count a
+lead's `--message` as the human's words.
 
 ### After a review
 
 A review prints `REVIEWED`, with the result in `verdict`. A reviewer marks each problem it finds as a Must Fix,
 which fails the review, or a Suggestion, which doesn't. After a `PASS`, `next` is the module's next milestone.
 
-After a `FAIL`, the `ladder` field names the next step, from the counts of failed rounds (`rounds`) and of rounds
-that repeated an earlier finding (`fails`, with the findings in `repeated`), and `next` is its command:
+After a `FAIL`, the script works out the next step from two counts: the failed reviews (`rounds`), and those that
+repeated an earlier finding (`fails`, with the findings in `repeated`). The `ladder` field names the step, and
+`next` is its command, with the message for the builder or the task for the planner already written. The same
+builder carries on, then a new builder session starts, then a planner decides why the milestone keeps failing,
+and last the milestone is Blocked for the human. When a planner keeps the plan, `plan` prints `KEPT`, with `who`
+has to act and the `next` for it.
 
-| `ladder` | You do |
-|---|---|
-| `same-session` | Resume the builder with `--message` and what the reviewer found. |
-| `fresh-session` | Start a new builder session with `--fresh --message`. |
-| `replan` | Run the `plan` command, which sends the milestone and its reviews to a planner to rewrite. `run` won't start a builder on it until that plan is merged. |
-| `diagnose` | Run the `plan` command. The planner reads every round and either rewrites the milestone or keeps it and names who has to act, and `plan` then prints `KEPT` with `who` and `next`. |
-| `too_many_failed_reviews` | The milestone is Blocked. Bring the human the question in `next`. |
-
-Follow the step the ladder names. The counts are the record of what has been tried, and a lead that overrules them
-runs the same failing attempt again. [The done-when reference](../plan-module/references/done-when.md#when-a-review-fails)
-explains each step, and `next --module <M> --worktree <path> --milestone <id>` works the step out again later.
+Run the `next` as it is. The counts are the record of what has been tried, and a lead that overrules them runs
+the same failing attempt again. The message it carries tells the builder what a review is and leaves the review
+itself to be read from its file, so add nothing about which findings to fix.
+[The done-when reference](../plan-module/references/done-when.md#when-a-review-fails) explains each step, and
+`next --module <M> --worktree <path> --milestone <id>` works the step out again later.
 
 A review can also print `INVALID`, when the reviewer did something a reviewer doesn't, such as editing code or
 naming the wrong milestone. Nothing from it is saved, so run it again, on the other host if you can. It prints
@@ -309,7 +302,7 @@ Sessions run in the background by default, so nothing opens in either app. Each 
 the background or `visible` for an app, and `path_reason` says why it was headless. With `ORCHESTRATE_VISIBLE=1` on
 a Mac, Codex sessions run as threads in the Codex app when it is running, and Claude sessions, which run in the
 script's own `claude -p`, are also listed in Claude desktop's Code tab. The script names each session
-`<repository> · <MODULE> · <step>`, such as `thrum · CREATOR · M1 review`.
+`<repository> · <MODULE> · <step>`, such as `shop · CHECKOUT · M1 review`.
 
 An item whose `needs` type is `access` needs the human to approve a permission or a prompt, and one whose type is
 `hardware` needs a device connected. A builder can finish either only in a visible session while the human is at
@@ -331,9 +324,8 @@ A builder or a planner gets what it can't find in the files:
 - where unfinished work is, and what has been tried and ruled out;
 - what the human said, and when;
 - what you know about the machine, such as who holds a lock or whether the human is at the Mac, with when and how
-  you know it. In one project the lead twice told a builder "the human is at the Mac now", repeating what the human
-  had said earlier, and both times the builder found the screen locked. "The human said at 08:37 they were at the
-  Mac" would have let it check first.
+  you know it. "The human is at the Mac now" may be out of date by the time the builder acts on it, while "the
+  human said at 08:37 they were at the Mac" lets the builder check first.
 
 The script names a stopped builder's handoff in the next builder's prompt, so pass on only what the handoff
 doesn't say. Mark a guess as a guess. When the script's records were wrong, say so as a fact, without blaming
@@ -341,8 +333,8 @@ anyone. Ask in the reader's own terms: a planner can change an item, but it can'
 script writes.
 
 Where a limit applies to only some of the work, say where it ends and why. "If the panel sleeps or the console
-locks, block at once" stopped a builder that could have woken the panel itself. "If the console locks, block,
-because only the human can unlock it; if the panel sleeps, wake it and carry on" would not have.
+locks, block at once" also stops a builder that could have woken the panel itself. "If the console locks, block,
+because only the human can unlock it; if the panel sleeps, wake it and carry on" does not.
 
 A `--message` that starts a new session has to stand on its own. Use the item's own words and the glossary's
 names, not short names you made up while following the work, because the builder can't ask what "the
@@ -350,20 +342,20 @@ matched-state captures" are.
 
 The human's words go in quotation marks with their date, apart from your own context, so a planner can tell which
 part is the human's. Planners quote the human's request at the top of a design, and design reviewers judge the
-design against it. In one project three designs quoted the lead's summary as the human's request.
+design against it, so a summary of yours that is taken for the human's words becomes what the design is judged
+against.
 
 - The human's request goes to a planner word for word, in `--task`.
 - A restriction the human gave only in conversation, such as "don't touch the schema", goes to the builder with
   `--owner-rule`. The script saves it for the module and sends it on every turn, across sessions and milestones,
   until you pass `--clear-owner-rules` because the human said so.
-- One-off text, such as what a reviewer found, goes in `--message`.
+- One-off text, such as a fact the builder is missing, goes in `--message`.
 
 ## The human's decisions
 
 When you ask the human something, give them what they need to decide in the chat itself: the options side by side,
 the finding a reviewer keeps raising, the diff. Save only words the human really gave you, for the thing they were
-answering. The script can't tell your invention from their decision, so don't answer for them, don't fill a gap
-with your own judgement, and don't save what you expect them to say.
+answering, because the script can't tell your guess at their answer from their decision.
 
 A decision of the human's is saved with `owner <verb> --worktree <repo> --module <M> --milestone <id> --text
 "..."`, with what they said in `--text`. The command, the `--owner-rule` flag and `decides: owner` keep the

@@ -9,14 +9,14 @@ Human Feedback on M2, recorded by the script in docs/plans/APPLE-TILE/ACCEPTED.j
 
 An earlier session on M2 stopped short and left a handoff at docs/evidence/APPLE-TILE/M2-handoff.md. Read it before you start. Where it disagrees with the done-when file or the plan, those win, because a planner may have changed them since. Rewrite the handoff if you stop short too.
 
-For this session:
-- Work only in this worktree. The lead starts the review, so don't start a reviewer.
-- The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`. Merge with its `merge --worktree .` command.
-- Start a command that runs longer than a few minutes with the script's `background -- <command>`, and wait for it with its `wait <id>`, not with sleep and tail, as the skill's "Long commands" section says.
+About this session:
+- This worktree is yours for the milestone. Other builders are working in their own, so keep your changes inside this one.
+- A lead is running this build, and starts the reviewer once the script's checks pass on your merged work.
+- The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`.
 - This session runs in the background, so approval prompts, such as a Computer Use or a permission dialog, can't appear in it. A question you ask through a tool reaches nobody either, so when you need an answer, end your turn with `BLOCKED` or `NEEDS_CONTEXT` instead, as below.
-- This project's exclusive resources are: gpu: timing runs and captures. Wrap any command that uses one in the script's `lock <name> -- <command>`. The lock waits its turn: another builder holding it is normal, so do other work while you wait, and treat it as a block only if the holder seems stuck, naming the process that holds it.
+- This project's exclusive resources are: gpu: timing runs and captures. Wrap a command that uses one in the script's `lock <name> -- <command>`, which waits its turn while another builder holds the lock.
 - M2.2 (does the tile animation read as smooth) needs human feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the human to look at, then end with `BLOCKED needs_human_feedback: <the question for the human>`.
-- M2.3 (an iPhone connected over USB) needs hardware: someone has to connect a device, and nobody can in this session. Do every other item, then end with `BLOCKED needs_hardware: <what is needed>`. Don't ask anyone to confirm anything.
+- M2.3 (an iPhone connected over USB) needs hardware: someone has to connect a device, and nobody can in this session. Do every other item, then end with `BLOCKED needs_hardware: <what is needed>`.
 - The human's rule: never modify Broadsides.
 
 From the lead:

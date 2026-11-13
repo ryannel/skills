@@ -16,9 +16,9 @@ moved to the evidence folder, and plan files elsewhere converted or deleted.
 ## Worktrees with commits from before the migration
 
 `run` refuses a worktree with commits of its own from before the migration, and `migrate` lists each one under
-`worktrees_on_old_names`. Its conflicts are in the files the renames rewrote, so don't rebase it by hand: in one
-project the lead merged one by hand and its builder resolved the conflicts by deleting the markers. Run
-`migrate --branch --worktree <its worktree>`, which renames its commits and rebases them onto the main branch. It
+`worktrees_on_old_names`. A rebase by hand conflicts in the files the renames rewrote, and those conflicts are
+easy to resolve wrongly. Run `migrate --branch --worktree <its worktree>` instead, which renames its commits and
+rebases them onto the main branch. It
 holds only that module's lock, so other modules keep building.
 
 ## Files that say "the owner"

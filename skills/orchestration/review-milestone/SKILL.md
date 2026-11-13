@@ -63,17 +63,22 @@ have, and for work that is correct but too subtle for anyone to notice from wher
 have seen something work only on the easy path, you don't know that it works, so give it Could Not Judge.
 
 Judge a recording from a few still frames taken from it, and read the end of a log rather than the whole file.
-Everything you look at stays in your session and is read again at every later step. In one project reviewers
-filled their sessions within 25 minutes, and one screenshot put 4.2 MB into a session.
+Everything you look at stays in your session and is read again at every later step, and a session that fills up
+leaves you less room to judge.
+
+A command that runs for more than a few minutes, such as a full build, can outlast your turn. Start it with the
+script's `background -- <command>`, and wait for it with `wait <id>`, which returns when the job ends, with the
+end of its log. Each time you look at a job, the whole conversation is read again, so one long wait costs far
+less than many short looks with `sleep` and `tail`. Your task gives the script's path.
 
 ## What finished looks like
 
 1. Every item has a result in its `verdict` field: `pass`, `fail`, or `could_not_judge`, for Could Not Judge. An item passes only if every proof it names passes.
    - For an Automated Check, read the command and judge whether it tests what the item says, because a check
      that a fake would pass proves nothing. Before it set Ready for Review, the script ran every check and the
-     project's test command in its own clean checkout, and your task says on which commit they passed. Run a
-     check again only when you doubt that result, such as a check that depends on timing. In one project,
-     reviewers re-ran the whole test command, sometimes twice, after the script had already run it.
+     project's test command in its own clean checkout, and your task says on which commit they passed. You can
+     rely on that result, so run a check again when you have a reason to doubt it, such as a check that depends
+     on timing.
    - For a Reviewer Inspection, write the list of what you will look at before you look, as
      [how to inspect](../plan-module/references/proofs.md#how-to-inspect) describes. Then judge each entry on the
      list against the item and the quality bar, side by side with the project's references, if it keeps any. The
@@ -96,15 +101,18 @@ filled their sessions within 25 minutes, and one screenshot put 4.2 MB into a se
    values, canned data, buttons that do nothing, feature flags that default to on, branches that run only under
    test, tests that were weakened or deleted, silenced warnings, and output files that were committed instead of
    computed.
-3. Each finding lets someone reproduce it and find it, because a builder who never saw your session will act on
-   it. Say what you did, what happened, what should have happened, and where: a file and line, the steps, or a
-   screenshot. The `prompting-agents` skill, if it is installed, says more about writing for another agent. Put
+3. Each finding is written for a builder who saw none of your session and will take it as everything you know.
+   Lead with the item, and say that its statement isn't true yet. Then give what you saw that shows it: what you
+   did, what happened, what should have happened, and where, as a file and line, the steps, or a screenshot. Say
+   what you tried and what you left untried, because the builder can't tell one from the other. If the old name
+   was still in the workspace switcher, and you didn't open the breadcrumb or the rail, the builder needs to
+   know both. The `prompting-agents` skill, if it is installed, says more about writing for another agent. Put
    the worst finding first. Mark each one Must Fix or Suggestion, and say whether you verified it or only suspect
    it. Include problems outside the items, and items too weak to catch a fake.
 4. The review is written down, in two files and one folder:
    - The full review, with your inspection lists, goes in `<evidence>/<MODULE>/<milestone>-review.md`.
    - Screenshots and recordings go in the folder `<evidence>/<MODULE>/<milestone>-review/`. Link them from the
-     review, and don't embed them.
+     review rather than embedding them, because whoever reads the review loads everything embedded in it.
    - In the done-when file, set each item's `verdict`, and point its `review` field at the review file. If every
      result is `pass` and no Must Fix lies outside the items, set the milestone's `state` to `done`, and the
      script clears `findings`. Otherwise set `state` back to `in_progress`, and list every Must Fix in the
@@ -121,18 +129,22 @@ A `could_not_judge` counts as a fail, because nobody could check the item. A Mus
 milestone too, and the review then proposes an item that would have caught it. A Suggestion never changes the
 `state`.
 
-Change only those two files and that folder, and don't commit. If you fixed what you found, nothing independent
-would have checked the fix. If you change any of the planner's fields, or touch another milestone, the `review`
-command rejects the whole review and saves none of it.
+Change only those two files and that folder, and leave them uncommitted, because the `review` command commits
+and merges them itself. Leave the code as you found it: if you fixed what you found, nothing independent would
+have checked the fix. If you change any of the planner's fields, or touch another milestone, the `review` command
+rejects the whole review and saves none of it. Do the reading and the judging yourself rather than starting other
+agents, because a review whose reading was handed to a helper hasn't read the work.
 
 ## A milestone that has been reviewed before
 
-Start from the earlier review, and say whether each Must Fix in it is now fixed. Then judge the items again as
-they are written.
+When earlier reviews of the milestone failed, your task says how many still count and where they are kept. Judge
+the items as they are written before you read them, the same way you form your own view before you read the
+builder's evidence. An earlier review tells you where to look, and a reviewer who reads it first ends up checking
+that the places it named are fixed, which is a narrower job than judging the items.
 
-Your task lists the earlier rounds that still count, with their findings. The script counts a finding as a repeat
-when its name matches one from an earlier round, or when it fails an item that failed before. Four rounds with a
-repeat send the milestone back to a planner, so name findings truthfully:
+Then read them, and say in your review whether each Must Fix in the latest one is still there. The script counts
+a finding as a repeat when its name matches one from an earlier round, or when it fails an item that failed
+before. Four rounds with a repeat send the milestone to a planner, so the names have to be truthful:
 
 - A Must Fix that is still there, or is back, keeps its earlier `name` exactly.
 - A new defect gets a new name.
@@ -140,8 +152,8 @@ repeat send the milestone back to a planner, so name findings truthfully:
   same defect. Without it the failure counts as a repeat.
 
 Hold an open-ended item, such as a lint that must catch "any violation", to the range the design names and the
-inputs the product really has. A hole that only an input nothing produces can reach is a Suggestion. Without this
-rule each review finds one more corner, and a sound milestone fails round after round and goes back to a planner.
+inputs the product really has. A hole that only an input nothing produces can reach is a Suggestion. Otherwise
+each review finds one more corner, and a sound milestone fails round after round and goes back to a planner.
 
 ## Reviewing a design
 
@@ -167,15 +179,15 @@ don't hold up the build. They stay in the review for the planner's next turn on 
 
 A proof that scripts how the builder must test, step by step, is a Suggestion to shorten it, not a reason to add
 more steps. The item should say what has to be true and how it is shown, and leave the route to the builder.
-Planners answer "a convincing fake would pass" by adding prohibitions, and in one project an item grew that way
-to 350 words that each builder had to untangle.
+Planners tend to answer "a convincing fake would pass" by adding prohibitions, and an item that grows that way
+turns into a procedure each builder has to untangle.
 
 If a `design-review.md` is already there, it is the previous round. Go through its Must Fix findings first and
 say whether each is resolved. Then read every item that has changed since, because a revision can make a proof
 easier to pass as well as sharper. Raise a new Must Fix only for something the revision broke, or something
 missed last time that really is one. Reviews that find one more refinement each round never let the build start.
 
-Don't change the done-when file, because no milestone is being judged. Your last line is `DESIGN OK`, which sets
+Leave the done-when file as it is, because no milestone is being judged. Your last line is `DESIGN OK`, which sets
 the design to Design Approved and may come with Suggestions, or `DESIGN CHANGES: <n> must_fix findings`, which
 sets it to Design Changes Requested and counts the Must Fix findings. The script saves the result against the
 design as it stands. No milestone of the module is built until its design is Design Approved, and a later change

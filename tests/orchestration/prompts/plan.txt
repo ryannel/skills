@@ -2,10 +2,8 @@ Plan module APPLE-TILE. The human said on 9 November: "tiles should load as you 
 
 Use the plan-module skill (the file is /skills/orchestration/plan-module/SKILL.md) for this task.
 
-Rules:
-- You can't start other agents.
-- The script commits and merges the files you leave and records the new definitions, so don't commit, merge, pull or push. Never edit an ACCEPTED.json file or the plans folder's STATUS.md, which the script writes.
-- Each module's files go in its own folder under the plans folder: DESIGN.md, PLAN.md, LOG.md and DONE.json.
+About this session:
+- The `plan` command started this session, and it commits and merges the files you leave uncommitted when you end with `PLANNED`. The lead runs the design review after that.
 - The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`. Its `check --module <M> --milestone <id> --worktree . --items-only` command tries a milestone's item checks without recording anything. It leaves out the project's test command, and runs each check under the item's lock, waiting while a builder holds it.
 
 To finish: say what changed and any decision the human must make, then end with `PLANNED` once the files are written. The script lists the files you changed itself. If nothing should change, or you can't go on, end with `BLOCKED: ...` or `NEEDS_CONTEXT: ...`, and the script merges nothing.

@@ -25,8 +25,11 @@ Use those names in anything new you write and in your report, but keep to the co
 code.
 
 The module's files are in its folder, `<plans folder>/<MODULE>/`. Your milestone is the first one in `PLAN.md`
-that isn't marked done, and its work list is there. `DESIGN.md` holds the design, and `LOG.md` the module's
-history, which you need only when you pick up unfinished work.
+that isn't marked done. Under its heading the planner may have left a note on what the items and the design
+don't say, such as what already exists or what another module owns. How to break the work down is yours to
+decide. A plan written by an older version of this set may have a list of steps to tick and a list of stop rules
+there instead. The steps are the planner's suggestion, and the stop rules are limits to keep. `DESIGN.md` holds
+the design, and `LOG.md` the module's history, which you need only when you pick up unfinished work.
 
 What the milestone has to achieve is in `DONE.json`, the done-when file. It lists items, and each item is
 one thing that must be true before the milestone is Done. Each item says how it will be proved, in one or more of
@@ -51,14 +54,14 @@ keeps the project's records. Run them as `python3 <the build skill's folder>/scr
    the merged work, in its own clean copy of the main branch and outside your sandbox, so checks that need the
    GPU or the screen can pass. If they pass, the script sets the milestone to Ready for Review, the status that
    says your work is finished and checked and waits for a reviewer, or to Done when no reviewer is needed, and
-   writes the record. If one fails, it sends you the failure. Before 2.1.0 builders set
-   that state themselves, and in one project a milestone sat on the main branch as Ready for Review for three
-   hours after the script's checks had failed it, while other builders rebased onto it. So `merge` now refuses a
-   commit that sets `ready_for_review` or `done`.
-3. The work you finished is ticked in `PLAN.md`, and `LOG.md` has an entry of a few lines saying what you did,
-   with what you verified kept apart from what you think is probably true. Longer notes go in the module's
-   evidence folder, linked from the entry. Write no status lines in the plan: the script writes the human's page,
-   `STATUS.md`, from the done-when file.
+   writes the record. If one fails, it sends you the failure. Leave both of those states to the script: `merge`
+   refuses a commit that sets `ready_for_review` or `done`, because other builders rebase onto the main branch
+   and would take a status they find there as checked.
+3. `LOG.md` has an entry of a few lines saying what you did, with what you verified kept apart from what you
+   think is probably true. Longer notes go in the module's evidence folder, linked from the entry. Leave status
+   out of the plan file. The script writes the human's page,
+   `STATUS.md`, from the done-when file, and a status line anywhere else is out of date the next time a milestone
+   moves.
 4. Your last line is `DONE`, or `BLOCKED <reason>: <what would unblock it>`, or `NEEDS_CONTEXT: <what is
    missing>`. The reason is one of `needs_human_feedback`, `needs_access`, `needs_hardware` or `needs_dependency`,
    and the sections below say when each applies. When none of them fits, such as an approach that can't work,
@@ -101,32 +104,28 @@ what is needed:
 
 The lead reads your last line, your handoff and your log entry, and passes what matters to the human. Write them
 in whole sentences, the way the `prompting-agents` skill describes. Name an item by its ID and a few words of what
-it is about, such as "D2.5, the window resize recording", and a module by its name in the plans, not by a gate or
-a crate. In one project a builder's "G3b needs render-owner support" cost a planner turn spent finding out which
-module G3b was.
+it is about, such as "D2.5, the window resize recording", and a module by its name in the plans. The lead knows
+the plan's names. It has no way to look up a short name you made up while you worked, or the name of a crate.
 
-Say which things you confirmed by running something and which you only suspect. In the same project a builder
-reported that another builder's lock was stuck and should be restarted. It was only held, and the guess reached
-the lead as an instruction. Ask the lead for what you need, and leave what other builders should do to the lead.
+Say which things you confirmed by running something and which you only suspect. The lead acts on your report as
+it is written, so a guess that reads like a fact turns into an instruction. Ask the lead for what you need. What
+other builders should do is the lead's to decide, because only the lead can see every run.
 
 Record in your evidence the commit each proof ran on. `merge` rebases your work onto the main branch, and its
-result lists the files the rebase brought in, under `upstream_files`. Before you end with `DONE`, run again,
-on the merged commit, the proofs of the items those files could affect, and only those. One reviewer found that
-none of a builder's evidence came from the commit it claimed, because a rebase had brought in another module's
-change to the camera. In the same project, other builders re-ran every capture after each merge, whatever had
-come in. Link evidence by its path from the repository's root, because your worktree's absolute paths stop
+result lists the files the rebase brought in, under `upstream_files`. Before you end with `DONE`, run again, on
+the merged commit, the proofs of the items those files could affect. Another module's change can alter what your
+proof shows, and the reviewer judges the merged commit. Your other proofs still hold, so running them again only
+costs time. Link evidence by its path from the repository's root, because your worktree's absolute paths stop
 working when it is reused.
 
 Prove an item that needs the human at the machine, for human feedback or for access, after your last merge, on a
-build of the merged commit, so that the human's time is spent once. Don't rebuild an older commit to match
-evidence you took earlier; take that evidence again instead. In one project a builder rebuilt an older commit so
-that a new recording would match an old one, and the reviewer found that 96 of the 406 source files differed
-from the commit under review. That cost the human's sitting and a round.
+build of the merged commit, so that the human's time is spent once. When a new proof has to match evidence you
+took earlier, take the earlier evidence again on the merged commit. A build of an older commit differs from the
+one under review, so the reviewer can't count anything recorded on it.
 
 Keep any script a proof runs, and anything an item's `check` reads, in the repository. The script runs the checks
 in its own clean checkout, where ignored folders such as `tmp/` are empty or missing, so a check that reads from
-one, or writes into one without creating it, fails there. In one project that cost a builder a failed check and
-another turn.
+one, or writes into one without creating it, fails there.
 
 ## Merging
 
@@ -156,9 +155,7 @@ keep the best round.
 ## The review
 
 The lead is the agent the human chats with. When a lead is running the build, it started you, and it starts the
-reviewer too. It also doesn't take your word for anything: after you finish, the script's `run` command makes a
-clean copy of the main branch and runs the test command and every item's `check` there, and only if they pass
-does it set the milestone to Ready for Review.
+reviewer too, once the script's checks have passed on your merged work.
 
 In a single chat with no lead, nobody else runs the script's checks, so after you merge, run
 `agent_loop.py run --module <M> --worktree . --checks-only`. It starts no agent: it runs the checks on the merged
@@ -172,34 +169,49 @@ its own view. Only a review started by that command is saved, and only a saved r
 Done. Without one, the human has to accept the milestone by hand. If you can't start a review, end with `DONE` and
 say the milestone still needs one.
 
-When a review fails, run `agent_loop.py next --module <M> --milestone <id> --worktree .` and do what it prints.
-Depending on how many reviews the milestone has failed, and how many of those repeated an earlier finding, it
-tells you to fix what the reviewer found in this session, to hand over to a new session, or to send the milestone
-back to a planner. [The escalation steps](../plan-module/references/done-when.md#when-a-review-fails) explain
-each one.
+## When a review fails
 
-The milestone's `findings`, in the done-when file, lists each Must Fix and marks with `repeat` each one
-an earlier round raised. Repeats are what send a milestone back to a planner, so make sure those stay fixed.
+A failed review is easy to take for the list of what is wrong with the milestone. It is narrower than that. A
+reviewer can't try everything, so a review describes what one reviewer happened to try. Where it says an item
+failed, it shows one thing that makes the item's statement untrue, and there may be others like it that the
+reviewer never reached. The next review is done by a new reviewer, who starts again from the items and chooses
+what to try. So the milestone is finished when every item is true as it is written, which is what finished meant
+before the review.
+
+The script sets the items that didn't pass back to `open`, and each needs new evidence. An item marked
+`could_not_judge` is one the reviewer couldn't see for itself, so it needs evidence a reviewer can reach. The
+Suggestions in a review are yours to take or leave.
+
+The milestone's `findings`, in the done-when file, names each Must Fix, and the script marks with `repeat` any
+that an earlier review also found. After four reviews with a repeat, the script sends the milestone to a planner
+instead of a builder.
+
+When a lead is running the build, the script sends you the review. In a single chat with no lead, run
+`agent_loop.py next --module <M> --milestone <id> --worktree .` after a failed review. It prints the step that
+the counts of failed reviews call for: carry on in this session, hand over to a new session, or send the
+milestone to a planner. [The escalation steps](../plan-module/references/done-when.md#when-a-review-fails)
+explain each one.
 
 ## When a behaviour won't come
 
-Agents that can't get a behaviour right tend to keep adjusting the same approach. After three different
-approaches, each built and run, stop adjusting. Most behaviours a milestone needs have been built before, so find
-out how shipped products and published work do it. If the mechanism you have may be unable to produce the
-behaviour at all, build the smallest reproduction that would show whether it can. If it can't, end with `BLOCKED`
-and what you found.
+Agents that can't get a behaviour right tend to keep adjusting the same approach. When adjusting isn't getting
+closer, the cause is often that the mechanism can't produce the behaviour at all, and more adjusting won't show
+that. Most behaviours a milestone needs have been built before, so find out how shipped products and published
+work do it, and build the smallest reproduction that would show whether your mechanism can. If it can't, end
+with `BLOCKED` and what you found.
 
 A result you can't explain, such as a test that fails on one machine or a screenshot that differs from the
 last run, isn't a reason to end with `BLOCKED`. It is a problem to find and fix. If fixing it needs a fact or a
 choice only the human has, end with `NEEDS_CONTEXT:` and the question, and the lead puts it to the human.
 
 On Codex, a browser, or any other program that needs more than the `workspace-write` sandbox allows, won't start
-inside the sandbox. Ask to run that command outside it before you end with `BLOCKED`. Each request is granted or
-refused on its own. In one test run a builder ended Blocked on four items without ever asking.
+inside the sandbox. Ask to run that command outside it. The script starts Codex so that each request is granted
+or refused automatically, which works in a background session too. Each one is decided on its own, so one refusal
+doesn't settle the next, and an item is Blocked only once its own request has been refused.
 
-On Codex, edit files with the `apply_patch` tool. A script that replaces text, such as Python's `str.replace`,
-changes nothing and says nothing when the text it looks for isn't there. In one project a builder made 80 edits
-that way, and only some of them checked that the text was found.
+On Codex, edit files with the `apply_patch` tool, which fails when the text it expects isn't there. A script
+that replaces text, such as Python's `str.replace`, changes nothing and says nothing in that case, so an edit
+can be missing without your knowing.
 
 If a run needs something listed under `Exclusive resources` in the project settings, such as a simulator, wrap it
 in `agent_loop.py lock <name> -- <command>`, so two builders don't use it at once. The lock waits until the
@@ -215,25 +227,29 @@ with the end of the job's log. A job started this way carries on when your turn 
 names it. `agent_loop.py jobs` lists your jobs and whether each is still running, which matters on Codex, whose
 sandbox refuses `ps`.
 
-Don't wait with `sleep` and `tail`. Each check reads the whole conversation again, so many short checks cost far
-more than a few long waits. In one project these checks used three quarters of a builder's tokens. On Codex, a
-command that is still running after 30 seconds hands control back to you, so keep waiting on it with a long
-`yield_time_ms`, such as 300000 (five minutes), rather than many short waits.
+Wait with `wait` rather than with `sleep` and `tail`. Each time you look at a job, the whole conversation is
+read again, so many short looks cost far more than a few long waits. On Codex, a command that is still running
+after 30 seconds hands control back to you, so keep waiting on it with a long `yield_time_ms`, such as 300000
+(five minutes).
 
 Read the end of a log, such as its last 50 lines, rather than the whole file, and judge a recording from a few
 still frames taken from it rather than from the video. Everything a command prints or a tool shows you stays in
-your session and is read again at every later step. In one project a single screenshot put 4.2 MB into a session,
-and builders worked with their sessions nearly full.
+your session and is read again at every later step, and a session that fills up leaves you less room to work.
 
 ## Limits
 
-- Don't force-push.
-- Don't change the design, or an interface, which is what one module provides to the others. Write a proposal in
-  `LOG.md`, and carry on with the work that doesn't depend on it.
-- Don't build something another module owns, or a later milestone of this one. If an item needs it, end with
-  `BLOCKED needs_dependency` and name it, so a planner can add it to the module that owns it or move the item. If you built it here, two modules would own the same thing.
-- If the work needs a decision on the `Owner decides` list in the project settings, end with `BLOCKED` and name the
-  decision.
+Some things belong to someone else, and each has a way to ask for a change.
+
+- The main branch's history belongs to every builder, because their worktrees are built on it. Bring work in with
+  `merge`, and leave force-pushing out.
+- The design, and each interface, which is what one module provides to the others, belong to the planner. Other
+  modules are built against them, and a design is approved as it is written. When one has to change, write a
+  proposal in `LOG.md`, and carry on with the work that doesn't depend on it.
+- Something another module owns, or a later milestone of this one, belongs there. Built here, it would have two
+  modules in charge of it. When an item needs it, end with `BLOCKED needs_dependency` and name it, so a planner
+  can add it to the module that owns it or move the item.
+- A decision on the `Owner decides` list in the project settings belongs to the human. End with `BLOCKED` and name
+  the decision.
 
 When you need a name for something new and the glossary has none, add an entry in the same commit, with the line
 `Proposed: by builder, <date>. Not yet agreed by the human.` Mention it in your report and carry on. If your merge

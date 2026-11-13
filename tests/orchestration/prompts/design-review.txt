@@ -4,9 +4,8 @@ The goal: a review at docs/evidence/APPLE-TILE/design-review.md that says whethe
 
 Since the last design review (docs/evidence/APPLE-TILE/design-review.md), M2.2 changed.
 
-Rules:
+About this session:
 - This folder is a clean checkout of the main branch's tip.
-- Put any captures in docs/evidence/APPLE-TILE/design-review/, and change nothing else. The script merges them.
-- Don't start other agents.
+- Any captures go in docs/evidence/APPLE-TILE/design-review/. The script merges the review and that folder, so leave every other file as it is.
 
 To finish, end with the skill's last line.

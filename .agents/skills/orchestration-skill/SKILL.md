@@ -30,7 +30,7 @@ so it goes with a step in the script's `migrate` command that rewrites them.
 The script is not an agent. Write "the lead runs the `plan` command", and never "the lead tells the script to
 plan". Name who does each step.
 
-Nothing in a skill is particular to one project. Paths, commands, targets, the owner's rules and the
+Nothing in a skill is particular to one project. Paths, commands, targets, the human's rules and the
 standards for a kind of work come from the project's `ORCHESTRATE.md`
 ([template](../../../skills/orchestration/plan-module/references/profile.md)). If a skill needs a new setting, add
 it to the template, and to `profile()` in `agent_loop.py` if the script reads it.
@@ -50,9 +50,16 @@ any other, and follow `prompting-agents` too. The skills name `prompting-agents`
 another agent: the plan files, the brief, a `--message`, a review. Name it as a skill, not as a link, because it
 lives in another domain, and `install.py` installs it whenever it installs orchestrate.
 
+Say each thing once, close to the moment it applies. A session's first prompt carries that session's facts: its
+paths, whether it is visible, which items need someone, the human's rules. The skill carries the guidance, with
+its reason. The message on a resumed turn restates the goal, because a compacted session may have lost the skill.
+A boundary the script enforces needs no line in a prompt. A message about a failed review says what a review is
+and where it is kept, and leaves out a list of what to fix, because a list of findings gets cleared and nothing
+more, while the next reviewer starts again from the items.
+
 Scripts are standard-library Python, with tests in `tests/orchestration/`, which are not shipped with the
 skill. Run `python3 tests/orchestration/run.py` before a commit. It runs them in up to eight processes and takes
-about 70 seconds on the owner's Mac; `python3 -m unittest discover tests/orchestration` runs the same tests in one
+about 70 seconds on the human's Mac; `python3 -m unittest discover tests/orchestration` runs the same tests in one
 process, in about seven minutes. The tests share a fake host, a repository and the reset between tests in
 `tests/orchestration/support.py`; put a new test on `Repo` only when it needs a repository. A
 script that starts agents goes through the host adapters in `agent_loop.py`, so that every host is handled in one
@@ -62,8 +69,10 @@ Agent files for Claude live in `build/agents/claude/` and are listed in the mark
 copies live in `build/agents/codex/` and are installed by `install_agents.sh`. The script and the installer use
 the files' names, so keep the names.
 
-Add a line only for a failure that has been seen, and say what happened. Record what was left out on purpose
-in the domain README.
+Add guidance only for a failure that has been seen. Write it as what to do and why, so the reader can apply it
+to cases the failure didn't cover, and leave the story of what happened out of the skill. The story goes in the
+commit message, or in the domain README when it explains why the set is built the way it is. Record what was left
+out on purpose in the README too.
 
 Check the result with `python3 skills/agent-writing/skill-creator/scripts/check_skill.py <skill-folder>`,
 `claude plugin validate .` and `npx skills add ./ --list`.

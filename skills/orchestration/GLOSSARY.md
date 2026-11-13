@@ -315,8 +315,8 @@ Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
 
 **Builders count**
 How many builders the human wants running at once in the project, read from the number in the project settings'
-`Builders:` line. `run` refuses a builder past that count, since in one project a lead started a fourth builder
-the human had never asked for. The human's own words, passed with `--more-builders`, let one more start.
+`Builders:` line. `run` refuses a builder past that count, so that the number running is the number the human
+asked for. The human's own words, passed with `--more-builders`, let one more start.
 Avoid: parallelism, concurrency (in prose)
 Stored as: the `Builders:` line; `run --more-builders '<what the human said, in their words>'`; `more_builders` in `run`'s result,
 with what they said, how many builders were running and when
@@ -330,8 +330,8 @@ Agreed: by the human, 2026-11-12.
 
 **Saved check output**
 The whole stdout and stderr of each check the script runs, for the builder's `check`, for `merge`'s test command
-and for the script's own checks, kept in files that the check's failure message names. In Thrum a builder asked
-for a check's whole output, because the panic wasn't in the 30 lines the message held.
+and for the script's own checks, kept in files that the check's failure message names. The message holds only
+the end of the output, and the line that explains a failure is often earlier.
 Stored as: files under `<git common dir>/orchestrate/checks/`. `check --json` names them in each item's `stdout`
 and `stderr`.
 Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
@@ -339,7 +339,7 @@ Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
 **Reused check**
 A check the script didn't run again, because the same command had already passed on the same files: the files
 checked out, leaving out the plans folder, with nothing outside it changed. A pass is reused, never a failure.
-In Thrum the checks at the end of one milestone ran three times on the same files, for 35 minutes.
+Without this, the checks at the end of a milestone run up to three times on the same files.
 Stored as: `reused` on an item in `check`'s output; `reused_checks` in `run`'s `READY_FOR_REVIEW` result, and
 `reused` in the Ready for Review record; each pass is kept beside the saved check output
 Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
@@ -373,8 +373,8 @@ Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
 
 **Stopped turn**
 A headless turn the script ended itself. It stops a turn whose tool call, other than a shell command, a subagent
-or a wait, has been open for more than 15 minutes, since in Thrum a builder waited 15 hours on a screenshot of a
-locked screen. The next turn is told which call was stopped. A turn that reached the turn limit names its last
+or a wait, has been open for more than 15 minutes, because a call such as a screenshot of a locked screen can
+wait for hours without failing. The next turn is told which call was stopped. A turn that reached the turn limit names its last
 open tool call the same way.
 Stored as: `stopped_turn` in the run's state file and in the result of the command whose turn it was, with `why`
 and `tool_call` (its `name` and `input`)
@@ -390,8 +390,8 @@ Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
 **Migrating a branch**
 Renaming a worktree's own commits, made before the main branch was migrated, the way `migrate` renamed the main
 branch, then rebasing them onto it. `run` refuses such a worktree, and a plain rebase conflicts in the files the
-renames rewrote: in one project the lead merged one by hand and its builder resolved the conflicts by deleting the
-markers. It holds only that module's run lock, so other modules keep building.
+renames rewrote, which are easy to resolve wrongly by hand. It holds only that module's run lock, so other
+modules keep building.
 Stored as: `migrate --branch`; `worktrees_on_old_names` in `migrate`'s result lists the worktrees that need it
 Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
 
@@ -421,7 +421,7 @@ below. The lead decides what to do next from it, and the `build` skill's tables 
 | `INVALID` | `run`, `review`, `plan` | A done-when file can't be read, or an agent changed what isn't its to change |
 | `REVIEWED` | `review` | The review was saved, with its verdict in `verdict` |
 | `PLANNED` | `plan` | The planner's files were checked and merged |
-| `KEPT` | `plan` | A diagnosing planner kept the milestone as it is and named who has to act |
+| `KEPT` | `plan` | A planner asked to re-plan or diagnose a milestone kept it as it is and named who has to act |
 | `UNFINISHED` | `plan` | The planner's turn ended without one of its endings, so nothing was merged |
 | `MERGED`, `FAILED` | `merge` | The work was merged, or wasn't, with the reason in `detail` |
 | `ADOPTED` | `adopt` | Plan files left uncommitted or unmerged were committed and merged |

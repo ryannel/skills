@@ -163,12 +163,13 @@ Subcommands:
         re-plan, diagnosis or decision of the human's, `fails` those with a finding that repeated an earlier round's
         (`repeated` names them), and `ladder` (and `next.ladder`) is the escalation word (same-session,
         fresh-session, replan, diagnose, too_many_failed_reviews) with `next` the command it calls for: `run
-        --message` with the findings, `run --fresh --message`, `plan` with a re-plan or diagnosis task naming the
-        reviews (by: planner), or `owner reopen` (decides: owner, with each round under `history`) for a milestone
-        the script blocked with too many failed reviews.
-        A diagnosing planner ends with `PLANNED` (a re-plan) or `KEEP <MODULE> <milestone>: builder|reviewer|owner:
-        <why>`, which `plan` records as KEPT, starting the counts again; `owner` there, or a second diagnosis,
-        blocks it with too many failed reviews. After a pass it is the
+        --message` pointing the builder to the review, `run --fresh --message`, `plan` with a re-plan or diagnosis
+        task naming the reviews (by: planner), or `owner reopen` (decides: owner, with each round under `history`)
+        for a milestone the script blocked with too many failed reviews.
+        A planner given either task ends with `PLANNED` (a rewrite) or `KEEP <MODULE> <milestone>:
+        builder|reviewer|owner: <why>`, which `plan` records as KEPT, starting the counts again and adding 1 to
+        replans or diagnoses; `owner` there, or a second run to the same step, blocks it with too many failed
+        reviews. After a pass it is the
         next ready milestone or "finished", the planner's revision with `findings` after DESIGN CHANGES.
         A second design review keeps the first as design-review-N.md, and its prompt names the done-when items
         added, removed or redefined since the first.
@@ -442,11 +443,11 @@ The goal: every item of {milestone} in {done} has status pass, with evidence fro
 is merged, with {milestone}'s state left as in_progress. When you end with DONE, the script runs the checks on the \
 merged work and sets the state itself.
 {feedback}{earlier}
-For this session:
-- Work only in this worktree. The lead starts the review, so don't start a reviewer.
-- The script is `python3 {loop}`. Merge with its `merge --worktree .` command.
-- Start a command that runs longer than a few minutes with the script's `background -- <command>`, and wait for it \
-with its `wait <id>`, not with sleep and tail, as the skill's "Long commands" section says.
+About this session:
+- This worktree is yours for the milestone. Other builders are working in their own, so keep your changes inside \
+this one.
+- A lead is running this build, and starts the reviewer once the script's checks pass on your merged work.
+- The script is `python3 {loop}`.
 - {session}
 {resources}{needs}{rules}{lead}
 To finish: when the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to \
@@ -457,21 +458,13 @@ a fact, with `NEEDS_CONTEXT: <the fact you need>`."""
 REVIEW_TEMPLATE = """Review milestone {milestone} of module {module}, using the review-milestone skill ({skill}).
 
 The goal: a review at {review} that judges every item of {milestone} in {done}, with the verdict fields, state and \
-findings set as the skill says. The script sets the counts.
+findings set as the skill says.
 {answers}
-Rules:
+About this session:
 - This folder is a clean checkout of commit {commit}, which the script made for you. Build and run the product \
 from it where an item needs you to see it working.{checks}
-- Put captures and other evidence files in {captures}/ and link them from the review, rather than embedding them \
-in it.
-- Start a command that runs longer than a few minutes with `python3 {loop} background -- <command>`, and wait for \
-it with `python3 {loop} wait <id>`, which returns when it ends with the end of its log. Waiting with sleep and tail \
-re-reads this whole conversation at every check.
-- Don't commit, push or change anything else. The script checks what you changed, then merges the review itself.
-- Don't start other agents.
-- If you can't reach the product at all, because the screen is locked, a permission needs the human's approval \
-or a device isn't connected, judge nothing and end with `BLOCKED needs_access: <what the human has to do>`. The \
-script then counts no round, and the lead runs this review again while the human is at the machine.
+- Captures and other evidence files go in {captures}/.
+- The script is `python3 {loop}`, for the `background` and `wait` commands the skill describes.
 
 To finish, end with the skill's last line."""
 
@@ -480,10 +473,9 @@ review-milestone skill ({skill}).
 
 The goal: a review at {review} that says whether the design does what the human asked for.
 {changed}{briefs}
-Rules:
+About this session:
 - This folder is a clean checkout of the main branch's tip.
-- Put any captures in {captures}/, and change nothing else. The script merges them.
-- Don't start other agents.
+- Any captures go in {captures}/. The script merges the review and that folder, so leave every other file as it is.
 
 To finish, end with the skill's last line."""
 
@@ -491,11 +483,9 @@ PLAN_TEMPLATE = """{task}
 
 Use the plan-module skill ({skill}) for this task.
 
-Rules:
-- You can't start other agents.
-- The script commits and merges the files you leave and records the new definitions, so don't commit, merge, pull \
-or push. Never edit an ACCEPTED.json file or the plans folder's STATUS.md, which the script writes.
-- Each module's files go in its own folder under the plans folder: DESIGN.md, PLAN.md, LOG.md and DONE.json.
+About this session:
+- The `plan` command started this session, and it commits and merges the files you leave uncommitted when you end \
+with `PLANNED`. The lead runs the design review after that.
 - The script is `python3 {loop}`. Its `check --module <M> --milestone <id> --worktree . --items-only` command \
 tries a milestone's item checks without recording anything. It leaves out the project's test command, and runs \
 each check under the item's lock, waiting while a builder holds it.
@@ -504,13 +494,25 @@ To finish: say what changed and any decision the human must make, then end with 
 written. The script lists the files you changed itself. If nothing should change, or you can't go on, end with \
 `BLOCKED: ...` or `NEEDS_CONTEXT: ...`, and the script merges nothing."""
 
-FINDINGS_TEMPLATE = """The reviewer failed {milestone}. The review is {evidence}/{module}/{milestone}-review.md. The \
-script has set the items that didn't pass back to open, so each needs fresh evidence. Fix every Must Fix finding, \
-including items the reviewer marked could_not_judge (they need evidence the reviewer can reach) and Must Fix \
-defects outside the items. Suggestions are your call. The milestone's `findings` in the done-when file lists each \
-Must Fix and marks with `repeat` any that an earlier round raised; those are what escalate the milestone, so make \
-sure they stay fixed. Add the findings to the plan as work items, fix them, re-verify the affected items, merge, \
-and end with DONE. Leave the state as in_progress: the script runs the checks again and sets Ready for Review."""
+# What a builder is sent after a failed review. It says what a review is, and leaves the review itself to be read
+# from its file, because a list of findings to clear gets cleared and nothing more: the next reviewer starts again
+# from the items. How to merge and finish is in the goal, which every turn restates.
+FINDINGS_TEMPLATE = """A reviewer has judged {milestone}, and it isn't finished yet. The review is at \
+{evidence}/{module}/{milestone}-review.md.
+
+A reviewer can't try everything, so a review describes what one reviewer happened to try. Where it says an item \
+failed, it shows one thing that makes the item's statement untrue, and there may be others like it that the \
+reviewer never reached. The next review is done by a new reviewer, who starts again from the items and chooses \
+what to try.
+
+So the milestone is finished when every item is true as it is written, which is what finished meant before the \
+review. A Must Fix that the review raises outside the items, such as something that worked before and is now \
+broken, has to be gone as well. The script has set the items that didn't pass back to open, and each needs new \
+evidence. An item marked could_not_judge is one the reviewer couldn't see for itself, so it needs evidence a \
+reviewer can reach. The Suggestions in the review are yours to take or leave.
+
+The `findings` list in the done-when file marks with `repeat` anything an earlier review also found. After four \
+reviews with a repeat, the script sends the milestone to a planner instead of a builder."""
 
 
 class TipError(Exception):
@@ -1976,17 +1978,22 @@ def round_history(worktree: Path | None, prof: dict, module: str, mid: str, afte
     return history_lines((rec.get("milestones") or {}).get(mid) or {}, after)
 
 
-def review_notes(mid: str, prof: dict, stem: str, feedback: list | None, history: list[str], judged: list) -> str:
-    """What a milestone reviewer is told beyond the template, as paragraphs: the Human Feedback, the earlier rounds
-    that still count (so a finding still there keeps its name), and a planner's judgement that earlier findings
-    overreached. Empty when there is none of these."""
+def review_notes(mid: str, prof: dict, stem: str, feedback: list | None, earlier: list[dict], judged: list) -> str:
+    """What a milestone reviewer is told beyond the template, as paragraphs: the Human Feedback, where the earlier
+    failed rounds that still count are kept, and a planner's judgement that earlier findings overreached. The
+    earlier findings aren't printed, because a reviewer who starts from them checks the places they name; the
+    record holds their names, for a finding that is still there. Empty when there is none of these."""
     parts = []
     if feedback:
         parts.append(feedback_note(feedback, mid, record_rel(prof, stem), "review"))
-    if history:
-        parts.append(f"Earlier failed rounds of {mid} that still count, with their findings: " + " | ".join(history) +
-                     ". A finding still there keeps its name. An item that failed before and fails for a new reason "
-                     "needs `different`.")
+    if earlier:
+        files = [r["review"] for r in earlier if r.get("review")]
+        kept = (f"Those reviews are {', '.join(files)}. Your review replaces the latest one, and the script keeps a "
+                "copy of it" if files else "Those reviews are only in git history")
+        parts.append(f"{mid} has failed review {plural(len(earlier), 'time')} since its counts last started. {kept}. "
+                     f"The name of each finding is in {record_rel(prof, stem)} under milestones.{mid}.reviews. Judge "
+                     "the items before you read any of these, as the skill's section \"A milestone that has been "
+                     "reviewed before\" describes.")
     if judged:
         j = judged[-1]
         on = f" on {j['at'][:10]}" if j.get("at") else ""
@@ -2020,10 +2027,14 @@ def replan_task(module: str, mid: str, fails: int, prof: dict, worktree: Path | 
         (f" (earlier rounds are only in git history: git log -p -- {latest})" if lost or not files else "")
     history = round_history(worktree, prof, module, mid)
     rounds = f" What failed in each round: {' | '.join(history)}." if history else ""
-    return (f"Re-plan {module} {mid}: {fails} of its failed reviews repeated a finding an earlier round had raised, "
-            f"so the plan is wrong (plan-module, \"When a milestone keeps failing on the same finding\"). {where}.{rounds} Find "
-            f"what keeps failing and change the definitions of {mid} so it can be met. The script resets its counts, "
-            "counts the re-plan and opens it when your plan merges.")
+    return (f"Re-plan {module} {mid}. {fails} of its failed reviews repeated a finding that an earlier review had "
+            f"raised, so the fixes aren't holding, and nobody has yet found out why. {where}.{rounds} Read every "
+            "round and decide why the same finding keeps coming back, as the plan-module skill's section \"When a "
+            f"milestone keeps failing on the same finding\" describes. If the plan is at fault, change the definitions "
+            f"of {mid} so it can be met, and end with PLANNED. The script then starts its counts again, counts the "
+            "re-plan and opens it. If the plan is sound, change no file and end with "
+            f"`KEEP {module} {mid}: builder: <why>`, `... reviewer: <why>` or `... owner: <why>`, naming who has to "
+            "act.")
 
 
 def diagnose_task(module: str, mid: str, rounds: int, prof: dict, worktree: Path | None = None) -> str:
@@ -2034,13 +2045,13 @@ def diagnose_task(module: str, mid: str, rounds: int, prof: dict, worktree: Path
         (f" (earlier rounds are only in git history: git log -p -- {latest})" if lost or not files else "")
     history = round_history(worktree, prof, module, mid)
     rounds_text = f" What failed in each round: {' | '.join(history)}." if history else ""
-    return (f"Diagnose {module} {mid}: it has failed review {rounds} times, mostly on findings no earlier round had "
-            f"raised (plan-module, \"When reviews keep finding something new\"). {where}.{rounds_text} Decide why. If "
-            f"the items are too broad or can't be met, change the definitions of {mid} and end with PLANNED as usual. "
-            f"If the plan is right, change no file (your reasons go in the line itself) and end with "
-            f"`KEEP {module} {mid}: builder: <why>`, "
-            "`... reviewer: <why>` or `... owner: <why>`, naming who has to act: a builder who keeps breaking "
-            "something, a reviewer whose findings go beyond the items, or the human, for a decision only they can make.")
+    return (f"Diagnose {module} {mid}. It has failed review {rounds} times, mostly on findings no earlier review had "
+            f"raised, so each fix held and the milestone still isn't passing. {where}.{rounds_text} Read every round "
+            "and decide why, as the plan-module skill's section \"When reviews keep finding something new\" "
+            f"describes. If the items are too broad or can't be met, change the definitions of {mid} and end with "
+            "PLANNED as usual. If the plan is sound, change no file and end with "
+            f"`KEEP {module} {mid}: builder: <why>`, `... reviewer: <why>` or `... owner: <why>`, naming who has to "
+            "act. Your reasons go in that line.")
 
 
 def keep_round(tree: Path, current: Path) -> tuple[str, list[str]]:
@@ -2134,14 +2145,16 @@ def ladder_next(word: str, module: str, mid: str, counts: dict, worktree: Path, 
              f"{plural(fails, 'time')} on a finding an earlier round had raised")
     if word == "same-session":
         return next_cmd(loop_cmd("run", "--module", module, "--worktree", wt, "--message", findings), "lead",
-                        f"{tally}: resume the builder with the findings", ladder=word)
+                        f"{tally}: resume the builder with this message, which points it to the review", ladder=word)
     if word == "fresh-session":
         return next_cmd(loop_cmd("run", "--module", module, "--worktree", wt, "--fresh", "--message", findings),
-                        "lead", f"{tally}: start the builder again in a new session with the findings", ladder=word)
+                        "lead", f"{tally}: start the builder again in a new session with this message, which points "
+                                "it to the review", ladder=word)
     if word == "replan":
         return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", replan_task(module, mid, fails, prof, worktree)),
-                        "planner", f"{tally}, so the ladder calls for a re-plan; `run` won't start a builder on it "
-                                   "until the planner has changed its definitions",
+                        "planner", f"{tally}, so a planner decides why before any more building: it changes the "
+                                   "definitions, or keeps them and names who has to act; `run` won't start a builder "
+                                   "on it until then",
                         ladder=word, findings=f"{prof['evidence']}/{module}/{mid}-review.md")
     if word == "diagnose":
         return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", diagnose_task(module, mid, rounds, prof, worktree)),
@@ -4739,6 +4752,11 @@ CHANGES = {
         "branch was migrated: it renames them and rebases them onto the main branch, holding only that module's run "
         "lock, so other modules keep building. Plain `migrate` no longer waits for runs once the main branch is "
         "migrated, and lists the worktrees still on the old names.",
+        "After a failed review, the message in `next` tells the builder what a review is and points it to the "
+        "review file. It no longer lists findings to fix, so add none. A reviewer of a milestone that failed before "
+        "is told where the earlier reviews are, and judges the items before reading them.",
+        "A planner sent a re-plan can keep the plan, as it can on a diagnosis: it ends with KEEP, naming who has to "
+        "act, and `plan` prints KEPT. That counts as the milestone's re-plan.",
     ],
 }
 VERSION_FILE = "version.json"  # under <git common dir>/orchestrate: the version of the script that last printed a result
@@ -4954,10 +4972,8 @@ def resources_rule(prof: dict) -> str:
     names = (prof.get("exclusive resources") or "").strip()
     if not names or names.lower() in ("none", "none."):
         return ""
-    return (f"- This project's exclusive resources are: {names.rstrip('.')}. Wrap any command that uses one in the "
-            "script's `lock <name> -- <command>`. The lock waits its turn: another builder holding it is normal, so "
-            "do other work while you wait, and treat it as a block only if the holder seems stuck, naming the "
-            "process that holds it.\n")
+    return (f"- This project's exclusive resources are: {names.rstrip('.')}. Wrap a command that uses one in the "
+            "script's `lock <name> -- <command>`, which waits its turn while another builder holds the lock.\n")
 
 
 def session_rule(headless: bool, host: str) -> str:
@@ -5032,8 +5048,7 @@ def needs_rules(milestone: dict | None, headless: bool) -> list[str]:
             continue
         if headless:
             out.append(f"{named(kind)} {kind}: someone has to {word}, and nobody can in this session. Do every "
-                       f"other item, then end with `BLOCKED needs_{kind}: <what is needed>`. Don't ask anyone to "
-                       "confirm anything.")
+                       f"other item, then end with `BLOCKED needs_{kind}: <what is needed>`.")
         elif kind == "access":
             out.append(f"{named(kind)} access. Ask for it as soon as you start, before other work, while someone may "
                        "be there to approve it. If nobody approves it, do the rest and end with "
@@ -5054,8 +5069,9 @@ def binding(prof: dict, role: str, mid: str = "", milestone: dict | None = None,
     lead has just written, because the lead's message is the newer fact. A reviewer is never told to merge."""
     missing = [label for label, value in prof.get("bounds", {}).items() if not value]
     if role == "review":
-        own = f"{review}" + (f" and the verdict fields, state and fails in {done}" if done else "")
-        text = f"Still binding: change only {own}; don't commit, push or start agents."
+        fields = f", and the verdict fields, state and findings in {done}" if done else ""
+        text = (f"Still binding: the review at {review} and its folder of captures{fields} are what you write. Leave "
+                "them uncommitted, because the script checks what you changed and merges it itself.")
     else:
         text = (f"Still binding: the goal is every item of {mid} pass with evidence and the work merged with "
                 f"`python3 {LOOP} merge --worktree .`, with {mid}'s state left in_progress for the script to set. In "
@@ -6909,8 +6925,10 @@ def review_prompt(host: str, prof: dict, stem: str, mid: str, commit: str, done:
                                                                             ready_record(entry).get("checked")),
                            changed=f"\n{context}\n" if context else "", briefs="", review=review,
                            skill=skill_note("review-milestone", host),
-                           answers=moved + review_notes(mid, prof, stem, feedback,
-                                                        [] if design else history_lines(entry), judged))
+                           answers=moved + review_notes(
+                               mid, prof, stem, feedback,
+                               [] if design else [r for r in counted_rounds(entry) if r.get("verdict") == "fail"],
+                               judged))
 
 
 def cmd_review(a: argparse.Namespace) -> None:
@@ -6945,7 +6963,7 @@ def plan_owed(worktree: Path, start: str, message: str) -> str | None:
         return None
     if word.strip("`* ") != "PLANNED":
         return "Your last line wasn't `PLANNED`. Finish the plan's files, then end with that line, or with " \
-               "BLOCKED or NEEDS_CONTEXT, or, for a diagnosis that keeps the plan, the `KEEP` line your task gives."
+               "BLOCKED or NEEDS_CONTEXT, or, for a re-plan or diagnosis that keeps the plan, the `KEEP` line your task gives."
     prof = profile(worktree, missing_ok=True)
     named = [n.strip("`*'\" ") for n in re.split(r"[,\s]+", rest) if n.strip("`*'\" ")]
     changed = changed_paths(worktree, start)
@@ -6962,7 +6980,7 @@ def plan_owed(worktree: Path, start: str, message: str) -> str | None:
 
 def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str, info: dict, out: dict,
               tree: Path | None = None) -> None:
-    """A planner asked to diagnose a milestone kept its plan and named who has to act. The script records that,
+    """A planner asked to re-plan or diagnose a milestone kept its plan and named who has to act. The script records that,
     starts the milestone's counts again, and says what follows; a planner naming the human blocks it with too many
     failed reviews, for the human to decide. `tree` is the checkout the planner worked in, when that isn't
     `worktree`."""
@@ -6978,9 +6996,11 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
         m = find(doc, mid)
     except (TipError, SystemExit, json.JSONDecodeError, KeyError) as e:
         emit("INVALID", **info, **out, merged=False, problems=[f"KEEP names {module} {mid}, which can't be read: {e}"])
-    if ladder(m) != "diagnose":
+    step = ladder(m)
+    if step not in ("replan", "diagnose"):
         emit("INVALID", **info, **out, merged=False, problems=[
-            f"KEEP is the answer to a diagnosis, and {stem} {mid} isn't owed one (its ladder is {ladder(m)})"])
+            f"KEEP is the answer to a re-plan or a diagnosis, and {stem} {mid} isn't owed one (its ladder is {step})"])
+    count = "replans" if step == "replan" else "diagnoses"  # a kept plan is that step's one try, as a rewrite is
     try:  # the rounds the planner diagnosed, which the human sees if it's theirs to decide
         diagnosed = ((json.loads(show(worktree, tip(worktree, prof), record_rel(prof, stem)) or "{}")
                       .get("milestones") or {}).get(mid) or {}).get("counted_after", 0)
@@ -6991,7 +7011,7 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
     def change(t):
         doc = json.loads((t / done_rel(prof, stem)).read_text())
         target = find(doc, mid)
-        target.update(fails=0, rounds=0, diagnoses=int(target.get("diagnoses", 0) or 0) + 1)
+        target.update({"fails": 0, "rounds": 0, count: int(target.get(count, 0) or 0) + 1})
         record = record_in(t, prof, stem, doc)
         e = entry(record, mid)
         if who == "owner":
@@ -7005,7 +7025,8 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
         write_json(t / record_rel(prof, stem), record)
         return [done_rel(prof, stem), record_rel(prof, stem)]
 
-    ok, landed = loop_write(worktree, prof, "_plan", change, f"orchestrate: diagnosis of {stem} {mid}: {who}")
+    ok, landed = loop_write(worktree, prof, "_plan", change,
+                            f"orchestrate: {'re-plan' if step == 'replan' else 'diagnosis'} of {stem} {mid} kept the plan: {who}")
     if not ok:
         emit("INVALID", **info, **out, merged=False, problems=[f"couldn't record the diagnosis: {landed}"])
     wt = str(worktree)
@@ -7785,7 +7806,8 @@ def cmd_merge(a: argparse.Namespace) -> None:
     if dirty := git(worktree, "status", "--porcelain").stdout.strip():
         print(json.dumps({"result": "FAILED", "detail": "commit, remove or ignore these first: " + dirty[:300]}))
         sys.exit(1)
-    # A builder's plan edits (ticked boxes, a log entry) merge with its work; the plan checks only warn here.
+    # A builder's edits to the plan files (a log entry, ticks in an older plan) merge with its work; the plan checks
+    # only warn here.
     # The tip is fetched first, so that the script's own records already on the main branch, such as another
     # milestone it set Ready for Review, count as the main branch's and not as this branch's change.
     try:
@@ -8301,7 +8323,8 @@ FENCE = re.compile(r"^```.*?^```[^\n]*$", re.MULTILINE | re.DOTALL)
 
 def plan_text_problems(rel: str, text: str) -> list[str]:
     """What is wrong with a module's PLAN.md, each said so that a planner can fix it. A plan holds the present only:
-    one `##` heading per milestone, work lists for the current and later ones, and the open assumptions."""
+    one `##` heading per milestone, a short note for the builder under the current and later ones, and the open
+    assumptions."""
     out = []
     words = len(text.split())
     if words > PLAN_WORDS:
@@ -8312,8 +8335,8 @@ def plan_text_problems(rel: str, text: str) -> list[str]:
         out.append(f"{rel} has a `{m.group(1)}:` line. The script knows each milestone's status and shows it in "
                    "STATUS.md, so delete status lines from the plan")
     if re.search(r"^###\s", body, re.MULTILINE):
-        out.append(f"{rel} has a `###` heading. Give each milestone one `##` heading and nothing under it but its "
-                   "work list; design goes in DESIGN.md and history in LOG.md")
+        out.append(f"{rel} has a `###` heading. Give each milestone one `##` heading and nothing under it but a "
+                   "short note for its builder; design goes in DESIGN.md and history in LOG.md")
     if re.search(r"^##\s+Log\s*$", body, re.MULTILINE | re.IGNORECASE):
         out.append(f"{rel} has a `## Log` section. Move its entries to LOG.md beside it")
     lines = body.splitlines()

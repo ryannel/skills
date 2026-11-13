@@ -115,9 +115,9 @@ The example is a small money-tracking tool. It reads a file of transactions and 
 
     | Failed reviews | What the lead runs | What happens |
     |---|---|---|
-    | 1 or 2 | `run`, with the review | The same builder fixes what the reviewer found. |
+    | 1 or 2 | `run`, with the review | The same builder carries on. It is told that a review shows what one reviewer tried, so the milestone is finished when every item is true, not when the review's findings are cleared. |
     | 3 | `run`, with a new builder | A builder with no memory of the first attempts starts from the files and the review. |
-    | 4 with a repeated finding | `plan` | The milestone is Waiting: For Replan, and a planner rewrites it, because the plan may be the problem. |
+    | 4 with a repeated finding | `plan` | The milestone is Waiting: For Replan. A planner reads every review and decides why the same finding keeps coming back. It either rewrites the milestone or names who has to act: the builder, the reviewer or you. |
     | 6, mostly on new findings | `plan` | The milestone is Waiting: For Diagnosis. A planner reads every review and either rewrites it or names who has to act: the builder, the reviewer or you. |
     | either again, after that | nothing | The milestone is set to Blocked: Too Many Failed Reviews. The lead asks you, with what failed in each review, whether to accept it, change its scope or try again. |
 

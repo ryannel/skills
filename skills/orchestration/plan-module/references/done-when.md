@@ -50,7 +50,7 @@ Each file has its readers, and is written for them:
 |---|---|---|
 | `STATUS.md` | The human, and the lead | By the script, from stored facts |
 | `ARCHITECTURE.md`'s module table, milestone names | The human | In plain words, as what someone can see or do |
-| `DESIGN.md`, the work in `PLAN.md`, `DONE.json` | Builders and reviewers | Precisely, with paths and IDs, as the `prompting-agents` skill describes |
+| `DESIGN.md`, the notes in `PLAN.md`, `DONE.json` | Builders and reviewers | Precisely, with paths and IDs, as the `prompting-agents` skill describes |
 | `LOG.md` | Planners and the lead, later | One dated entry per event, a few lines at most |
 
 ## `STATUS.md`, the human's page
@@ -107,14 +107,9 @@ paragraphs nobody reads.
 [review](../../evidence/<MODULE>/review.md)
 
 ## M2 <what someone can see or do>
-- [x] <a piece of work: what exists or passes when it is finished>
-- [ ] <the next piece of work>
-
-Stop rules:
-- <when the builder stops and reports, rather than carrying on>
+<A few sentences for the builder, on what the items and the design don't say. Nothing, when there is nothing.>
 
 ## M3 <what someone can see or do>
-- [ ] <a piece of work>
 ```
 
 - A Done milestone shrinks to its heading and one link to its review. The detail stays in the review, the log and
@@ -122,6 +117,21 @@ Stop rules:
 - `Open for the human` holds only open assumptions. When the human answers one, delete the line. The answer is
   recorded with the `owner` command.
 - Briefs written for reviews go to `docs/evidence/<MODULE>/`, beside the review. Design goes in `DESIGN.md`.
+
+Under a milestone that isn't Done goes a note for its builder, and only when there is something the items and the
+design don't say. That is usually one of three things: what already exists that the milestone builds on, and where
+it is; what another module owns that the milestone comes close to; or an order, where the order is part of the
+task, as when one item's measurement sets the bound another item tests. Many milestones need no note, and have
+only their heading.
+
+The note is written in sentences, and it has no list of steps to tick. What must be true is in the done-when file
+and how the module works is in the design, so a list of steps would say both again, in an order chosen before the
+code existed. The builder sees the code close up and plans the work better from there. Nothing reads a tick
+either: the items' `status`, the log and a handoff already tell a later session what an earlier one finished.
+
+A limit on what a builder may do goes where it holds, with its reason beside it. One that is true of every module,
+such as how a browser is started or a path nobody edits, goes in the project settings or the building guidance
+they link to. One about this module goes in the design. Only a limit on this one milestone goes in its note.
 
 The script checks every plan file when it is merged. On a planner's turn it refuses, and elsewhere it warns about, a
 plan over about 1,500 words, a status line (`Now:`, `Next:`, `Blocked:`, `Milestone:` or `Reviews:`), a `###`
@@ -254,7 +264,7 @@ in. A milestone that is Blocked can't move until someone steps in. Each carries 
 | In Progress | A builder is working on it. | `in_progress` | `taken`, when another lead started it |
 | Ready for Review | The builder has finished and merged, the script's checks passed on the merged work, and no review has run yet. Only the script sets it. | `ready_for_review` | `review_owed` |
 | Waiting: On Dependency | It can't start until a milestone in another module, already planned, is Done. | `not_started`, with `depends_on` | `waiting`, `reason: on_dependency` |
-| Waiting: For Replan | Four failed reviews repeated an earlier finding, so a planner rewrites it. | `in_progress`, with `fails` at 4 | `waiting`, `reason: for_replan` |
+| Waiting: For Replan | Four failed reviews repeated an earlier finding, so a planner finds out why. | `in_progress`, with `fails` at 4 | `waiting`, `reason: for_replan` |
 | Waiting: For Diagnosis | Six reviews failed, mostly on findings no earlier round raised, so a planner finds out why. | `in_progress`, with `rounds` at 6 | `waiting`, `reason: for_diagnosis` |
 | Blocked | It can't move until someone steps in. The `blocked` field's `reason` says why. | `blocked` | `blocked`, with its `reason` |
 | Done | Every check and review has passed. | `done` | `finished`, for a module whose milestones are all Done |
@@ -321,14 +331,14 @@ Only one kind of agent changes each field at any time, and the hand-overs happen
 | `state` to `blocked`, with `reason: too_many_failed_reviews` | Script | After a failed review, when the escalation steps below reach Too Many Failed Reviews. |
 | The planner's fields | Planner | A rewrite of a milestone that is Waiting: For Replan, a revision after a design review, or a change the human asked for. Milestones split off from a rewritten one start with its `replans` and `diagnoses` counts. The script saves the new items as the approved ones and clears the old proof. |
 | `fails` and `rounds` back to 0, 1 more in `replans`, `state` to `not_started` | Script | A planner's plan, or the human's `scope`, has changed the items of a milestone that was Waiting: For Replan or For Diagnosis. After a diagnosis it also adds 1 to `diagnoses`. Done once, whatever the planner wrote in those fields. |
-| `fails` and `rounds` back to 0, 1 more in `diagnoses`, and `state` to `blocked`, with `reason: too_many_failed_reviews`, if the human has to decide | Script | A diagnosing planner kept the plan and ended with `KEEP`. |
+| `fails` and `rounds` back to 0, 1 more in `diagnoses`, or in `replans` when the milestone was Waiting: For Replan, and `state` to `blocked`, with `reason: too_many_failed_reviews`, if the human has to decide | Script | A planner kept the plan and ended with `KEEP`. |
 | The planner's fields, without counting as a rewrite | Human | `owner scope`, when the human changes what is wanted. On a milestone that is Waiting: For Replan, the new scope is the rewrite. The script sets `fails`, `rounds` and `diagnoses` back to 0, and a milestone Blocked with Too Many Failed Reviews back to `not_started`. |
 | `state` to `done` with no review, back to `ready_for_review` for a new review, or from Blocked with Too Many Failed Reviews to `not_started` | Human | `owner accept`, `owner rereview` or `owner reopen`. A reopen sets `fails`, `rounds` and `diagnoses` back to 0. |
 
-A builder never sets `ready_for_review` or `done`. Before 2.1.0 it did, and merged that state before the script's
-checks ran, so a milestone the checks then failed sat on the main branch as Ready for Review while other builders
-rebased onto it. Now `merge` refuses a builder's commits that set either state, and a milestone that is Ready for
-Review without the script's record is checked by `run` rather than reviewed.
+A builder leaves `ready_for_review` and `done` to the script. If a builder set one, the main branch would say a
+milestone had passed checks that hadn't run yet, and other builders rebase onto the main branch. So `merge` refuses
+a builder's commits that set either state, and a milestone that is Ready for Review without the script's record is
+checked by `run` rather than reviewed.
 
 Reviewers and planners don't commit their own changes to these files. The script compares what they changed with
 this table, and then either commits and merges all of the changes or rejects all of them.
@@ -347,15 +357,20 @@ but whose reviews keep finding something new. The first row that applies is the 
 
 | Counts | What happens |
 |---|---|
-| `fails` at 4 | The milestone is Waiting: For Replan, and a planner rewrites it, because the plan may be the problem. If it has been rewritten before, the script sets it to Blocked: Too Many Failed Reviews, and it waits for the human. |
+| `fails` at 4 | The milestone is Waiting: For Replan. A planner reads every round and decides why the same finding keeps coming back, because the plan may be the problem. If a planner has been through this before, the script sets it to Blocked: Too Many Failed Reviews, and it waits for the human. |
 | `rounds` at 6 | The milestone is Waiting: For Diagnosis. A planner reads every round and decides why it keeps failing. If it has been diagnosed before, the script sets it to Blocked: Too Many Failed Reviews. |
 | `fails` at 3, or `rounds` at 3 | A new builder session starts, with only the files and the review. |
-| Any other failed review | The same builder fixes what the reviewer found, in the same session. |
+| Any other failed review | The same builder carries on in the same session, with the review. |
 
-A diagnosing planner either rewrites the milestone, which the script settles like a re-plan, or keeps the plan and
-says who has to act. A builder who keeps breaking something gets a new session with the planner's reasons. A
-reviewer whose findings go beyond the items is overruled: the next reviewer is told to judge the items as written.
-A decision only the human can make sets the milestone to Blocked: Too Many Failed Reviews, with the diagnosis.
+A review shows what one reviewer tried, and the next reviewer starts again from the items. So after any failed
+review the milestone is finished when every item is true as it is written. Clearing the places a review named
+doesn't by itself make it so.
+
+In either planner step, the planner rewrites the milestone or keeps the plan and says who has to act. A builder
+who keeps breaking something gets a new session with the planner's reasons. A reviewer whose findings go beyond
+the items is overruled: the next reviewer is told to judge the items as written. A decision only the human can
+make sets the milestone to Blocked: Too Many Failed Reviews, with the planner's reasons. A kept plan counts as
+that step's one try, the same as a rewrite.
 
 The counts start again from 0 after a rewrite, a diagnosis, `owner scope` or `owner reopen`. Rounds before that
 no longer count as earlier rounds, so a finding they raised isn't a repeat.
@@ -379,8 +394,6 @@ delivers one outcome.
 Keep each item short: one thing that must be true, and the proof that would show it. Say what will be observed,
 and leave it to the builder to arrange the observation. An item that scripts its own procedure breaks the first
 time the builder learns something the plan didn't know, and each break costs a rewrite and another design review.
-On one engine project the items grew to a median of 135 words, and its milestones were rewritten up to four times
-each before any review had failed. In the rewrites we read from that project, the proof couldn't run as written.
 
 Choose each proof on purpose, because `inspect` and `ask` are what bring in a reviewer.
 
