@@ -67,17 +67,38 @@ class ProfileOnly(Clean):
 
 
 class Decisions(Clean):
-    def test_escalation_ladder(self):
-        self.assertEqual([agent_loop.escalation(n) for n in range(6)],
-                         ["none", "same-session", "same-session", "fresh-session", "replan", "replan"])
-        self.assertEqual(agent_loop.escalation(4, replans=1), "too_many_failed_reviews")
-        self.assertEqual(agent_loop.escalation(2, replans=1), "same-session")
-        # every failed review counts as a round; three rounds start a new session even with nothing repeated
-        self.assertEqual([agent_loop.escalation(0, rounds=n) for n in range(1, 8)],
-                         ["same-session", "same-session", "fresh-session", "same-session", "same-session",
-                          "diagnose", "diagnose"])
-        self.assertEqual(agent_loop.escalation(1, rounds=6, diagnoses=1), "too_many_failed_reviews")
-        self.assertEqual(agent_loop.escalation(4, rounds=6), "replan")  # a repeated failure is the plan's fault first
+    def test_what_the_counts_call_for(self):
+        # failed reviews that repeat a finding: a new builder session at three, a diagnosis at four
+        self.assertEqual([agent_loop.escalation(n, with_repeat=n) for n in range(6)],
+                         ["none", "same_builder", "same_builder", "new_builder_session", "diagnosis", "diagnosis"])
+        # every failed review counts: three start a new session even with nothing repeated, and six a diagnosis
+        self.assertEqual([agent_loop.escalation(n) for n in range(1, 8)],
+                         ["same_builder", "same_builder", "new_builder_session", "same_builder", "same_builder",
+                          "diagnosis", "diagnosis"])
+        # a milestone gets one diagnosis, so the same counts after it block the milestone
+        self.assertEqual(agent_loop.escalation(4, with_repeat=4, diagnoses=1), "too_many_failed_reviews")
+        self.assertEqual(agent_loop.escalation(6, with_repeat=1, diagnoses=1), "too_many_failed_reviews")
+        self.assertEqual(agent_loop.escalation(2, with_repeat=2, diagnoses=1), "same_builder")
+
+    def test_the_counts_from_before_2_2_become_one_diagnosis(self):
+        for old, new in (
+                ({"fails": 0, "replans": 0}, (0, 0, 0)),
+                ({"fails": 2, "rounds": 3, "replans": 0}, (3, 2, 0)),
+                ({"fails": 1, "replans": 1}, (1, 1, 1)),  # written before `rounds`, when only repeats were counted
+                ({"fails": 0, "rounds": 2, "replans": 1, "diagnoses": 1}, (2, 0, 1)),  # a re-plan and a diagnosis are one
+                # owed a re-plan or a diagnosis when it was migrated: still owed its diagnosis
+                ({"fails": 4, "rounds": 4, "replans": 0, "diagnoses": 1}, (4, 4, 0)),
+                ({"fails": 1, "rounds": 6, "replans": 1, "diagnoses": 0}, (6, 1, 0)),
+                # it had used both, so it stays as stuck as it was
+                ({"fails": 4, "rounds": 6, "replans": 1, "diagnoses": 1}, (6, 4, 1))):
+            with self.subTest(old=old):
+                m = {k: v for k, v in milestone("M1", "in_progress", ["open"]).items() if k not in agent_loop.COUNTS}
+                doc = done(dict(m, **old))
+                self.assertTrue(agent_loop.old_names_in_doc(doc))
+                up = agent_loop.upgrade_doc(doc)
+                self.assertEqual(tuple(up["milestones"][0][k] for k in agent_loop.COUNTS), new)
+                self.assertEqual((agent_loop.old_names_in_doc(up), agent_loop.validate(up, "WATER")), ([], []))
+        self.assertEqual(agent_loop.escalation_of({"failed_reviews": 6, "failed_reviews_with_repeat": 1}), "diagnosis")
 
     def test_a_finding_repeats_by_name_or_by_item_unless_it_says_how_it_differs(self):
         found = [{"name": "seams show", "item": "M1.1"}, {"name": "crash on load"},
@@ -100,13 +121,13 @@ class Decisions(Clean):
 
     def test_plan_forecast_lasts_when_the_open_work_fits(self):
         acc = {"used_percent": 50.0, "hours_left": 100.0}
-        history = [{"state": "done", "rounds": 3, "pct": [1.0, 1.2, 1.5]},
-                   {"state": "done", "rounds": 1, "pct": [2.0, 2.4, 3.0]}]
-        open_ms = [{"state": "not_started", "rounds": 1}] * 4
+        history = [{"state": "done", "reviews": 3, "pct": [1.0, 1.2, 1.5]},
+                   {"state": "done", "reviews": 1, "pct": [2.0, 2.4, 3.0]}]
+        open_ms = [{"state": "not_started", "reviews": 1}] * 4
         recent = {"hours": 12.0, "loop": [1.0, 1.0, 1.0], "other": [0.6, 1.2, 1.8]}
         f = agent_loop.plan_forecast(acc, history, open_ms, recent)
         self.assertEqual(f["per_milestone"], [1.0, 1.8, 3.0])
-        self.assertEqual(f["rounds_per_milestone"], 2.0)
+        self.assertEqual(f["reviews_per_milestone"], 2.0)
         self.assertEqual(f["plan_pct"], [4.0, 7.2, 12.0])
         self.assertEqual(f["other_use_before_reset"], [5.0, 10.0, 15.0])  # at the last 12 h's rate, not the week's
         self.assertFalse(f["warn"])
@@ -114,7 +135,7 @@ class Decisions(Clean):
         self.assertNotIn("runs_out", f)
 
     def test_plan_forecast_warns_only_when_it_wont_last(self):
-        history = [{"state": "done", "rounds": 1, "pct": [4.0, 5.0, 6.0], "builder_hours": 2.0}] * 2
+        history = [{"state": "done", "reviews": 1, "pct": [4.0, 5.0, 6.0], "builder_hours": 2.0}] * 2
         recent = {"hours": 10.0, "loop": [1.0, 1.0, 1.0], "other": [0.0, 0.0, 0.0]}
         short = agent_loop.plan_forecast({"used_percent": 90.0, "hours_left": 100.0}, history,
                                          [{"state": "not_started"}] * 4, recent)  # 16-24 % against 10 % left
@@ -179,7 +200,7 @@ class Decisions(Clean):
 
     def test_astra_14_malformed_shapes_are_problems_not_crashes(self):
         for bad in ({"milestones": "bad"}, {"milestones": ["x"]}, [], {"milestones": [{"id": 3, "items": "no"}]},
-                    done(dict(milestone("M1", "not_started", ["open"]), fails=-1)),
+                    done(dict(milestone("M1", "not_started", ["open"]), failed_reviews_with_repeat=-1)),
                     done(dict(milestone("M1", "not_started", ["open"]), items=[{"id": "a", "statement": "s", "check": 3}]))):
             self.assertTrue(agent_loop.validate(bad), bad)
 
@@ -278,7 +299,7 @@ class Deltas(Clean):
         a["milestones"][0]["state"] = "ready_for_review"
         a["milestones"][0]["items"][0].update(status="pass", evidence="log")
         self.assertEqual(agent_loop.delta_problems(self.before, a, "build", "M1"), [])
-        a["milestones"][0]["replans"] = 1
+        a["milestones"][0]["diagnoses"] = 1
         self.assertTrue(agent_loop.delta_problems(self.before, a, "build", "M1"))
 
     def test_astra_1_builder_forging_another_milestone_is_caught(self):
@@ -300,7 +321,7 @@ class Deltas(Clean):
 
     def test_a_reviewer_cant_set_the_counts(self):
         before = done(milestone("M1", "ready_for_review", ["pass"]))
-        for field in ("rounds", "replans", "diagnoses"):
+        for field in ("failed_reviews", "failed_reviews_with_repeat", "diagnoses"):
             a = json.loads(json.dumps(before))
             a["milestones"][0].update(state="in_progress", **{field: 2})
             self.assertTrue(agent_loop.delta_problems(before, a, "review", "M1"), field)
@@ -1020,9 +1041,9 @@ class Reviewing(Repo):
         commit = self.run_loop()["commit"]  # a builder's real turn, whose session t1 the findings resume
         os.environ.update(FAKE_REVIEW="fail")
         result = self.review(commit=commit)
-        self.assertEqual((result["result"], result["verdict"], result["fails"], result["rounds"], result["ladder"]),
-                         ("REVIEWED", "FAIL", 0, 1, "same-session"))
-        self.assertEqual(result["next"]["ladder"], "same-session")
+        self.assertEqual((result["result"], result["verdict"], result["failed_reviews_with_repeat"], result["failed_reviews"], result["escalation"]),
+                         ("REVIEWED", "FAIL", 0, 1, "same_builder"))
+        self.assertEqual(result["next"]["escalation"], "same_builder")
         self.assertIn(" run --module WATER ", result["next"]["command"])
         self.assertIn("--message", result["next"]["command"])
         m1 = self.read_done()["milestones"][0]
@@ -1036,13 +1057,13 @@ class Reviewing(Repo):
         self.assertIn("--add-dir", last["argv"][:last["argv"].index("resume")])
         self.assertTrue(last["argv"][-1].startswith("FINDINGS"), last["argv"][-1][:300])
 
-    def test_the_script_blocks_a_milestone_when_the_ladder_runs_out(self):
+    def test_the_script_blocks_a_milestone_that_keeps_failing_after_its_diagnosis(self):
         commit = self.ready_for_review(failed_before(dict(milestone("M1", "not_started", ["open"], inspect="frames"),
-                                                          fails=3, replans=1, rounds=3)))
+                                                          failed_reviews_with_repeat=3, diagnoses=1, failed_reviews=3)))
         os.environ.update(FAKE_REVIEW="fail")
         stuck = self.review(commit=commit)
-        self.assertEqual((stuck["fails"], stuck["repeated"]), (4, ["the water is flat (M1.1)"]))
-        self.assertEqual((stuck["ladder"], stuck["next"]["ladder"], stuck["next"]["decides"]),
+        self.assertEqual((stuck["failed_reviews_with_repeat"], stuck["repeated"]), (4, ["the water is flat (M1.1)"]))
+        self.assertEqual((stuck["escalation"], stuck["next"]["escalation"], stuck["next"]["decides"]),
                          ("too_many_failed_reviews", "too_many_failed_reviews", "owner"))
         self.assertIn(" owner reopen --module WATER --milestone M1 ", stuck["next"]["command"])
         m1 = self.read_done()["milestones"][0]
@@ -1127,25 +1148,25 @@ class Reviewing(Repo):
 
 
 class OwnerAndPlanner(Repo):
-    def test_fable_7_owner_scope_change_authorises_without_spending_a_replan(self):
+    def test_fable_7_owner_scope_change_authorises_without_spending_the_diagnosis(self):
         d = json.loads((self.wt / "docs/plans/WATER/DONE.json").read_text())
         d["milestones"][0]["items"][0]["statement"] = "M1.1 works, and faster"
         put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(d))
         self.assertEqual(self.owner("scope", "M1")["result"], "DONE")
         m1 = self.read_done()["milestones"][0]
-        self.assertEqual((m1["replans"], m1["fails"], m1["items"][0]["statement"]), (0, 0, "M1.1 works, and faster"))
+        self.assertEqual((m1["diagnoses"], m1["failed_reviews_with_repeat"], m1["items"][0]["statement"]), (0, 0, "M1.1 works, and faster"))
         self.assertEqual(self.read_record()["milestones"]["M1"]["authorised"]["by"], "owner decision")
         self.git("checkout", "-q", "--", ".")
         self.assertEqual(self.run_loop()["result"], "READY_FOR_REVIEW")
 
     def test_owner_reopen(self):
-        self.write_done([dict(too_many("M1", ["open"]), fails=4), milestone("M2", "not_started", ["open"])])
+        self.write_done([dict(too_many("M1", ["open"]), failed_reviews_with_repeat=4), milestone("M2", "not_started", ["open"])])
         self.commit_all()
         result = self.run_loop()
         self.assertEqual((result["result"], result["reason"]), ("BLOCKED", "too_many_failed_reviews"), result)
         self.owner("reopen", "M1")
         m1 = self.read_done()["milestones"][0]
-        self.assertEqual((m1["state"], m1["fails"], "blocked" in m1), ("in_progress", 0, False))
+        self.assertEqual((m1["state"], m1["failed_reviews_with_repeat"], "blocked" in m1), ("in_progress", 0, False))
 
     def test_fable_9_a_planned_module_is_committed_landed_and_queued(self):
         result = self.call(agent_loop.cmd_plan, worktree=str(self.wt), task="plan PAY", host=None, model=None,
@@ -1566,7 +1587,7 @@ class ReviewerAccess(Repo):
         self.git("fetch", "-q", "origin")
         return self.git("rev-parse", "origin/main").stdout.strip()
 
-    def test_a_reviewer_that_cant_reach_the_product_ends_blocked_and_costs_no_round(self):
+    def test_a_reviewer_that_cant_reach_the_product_ends_blocked_and_costs_no_review(self):
         before = self.tip()
         os.environ.update(FAKE_REVIEW="needs_access")
         result = self.review(commit=self.commit)
@@ -1576,11 +1597,11 @@ class ReviewerAccess(Repo):
         then = result["next"]
         self.assertTrue(then["command"].startswith("ORCHESTRATE_VISIBLE=1 "), then)
         self.assertIn(f" review --module WATER --milestone M1 --commit {self.commit} ", then["command"])
-        self.assertIn("no round was counted", then["why"])
+        self.assertIn("no review was counted", then["why"])
         self.assertIn("Are you there now?", then["ask"])
         self.assertEqual(self.tip(), before)  # nothing merged, so no round and no review file
         m1 = self.read_done()["milestones"][0]
-        self.assertEqual((m1["state"], m1.get("rounds", 0), m1["fails"]), ("ready_for_review", 0, 0))
+        self.assertEqual((m1["state"], m1.get("failed_reviews", 0), m1["failed_reviews_with_repeat"]), ("ready_for_review", 0, 0))
         self.assertFalse(self.read_record()["milestones"]["M1"].get("reviews"))
         # the same review, once the human is at the machine, judges it as usual
         os.environ.update(FAKE_REVIEW="pass")
@@ -3144,7 +3165,7 @@ class FirstRuns(Repo):
     # Round five: the ladder's re-plan rung
 
     def test_r5_four_failed_reviews_hand_every_surface_the_planners_command(self):
-        self.write_done([failed_before(dict(milestone("M1", "not_started", ["open"], inspect="frames"), fails=3, rounds=3)),
+        self.write_done([failed_before(dict(milestone("M1", "not_started", ["open"], inspect="frames"), failed_reviews_with_repeat=3, failed_reviews=3)),
                          milestone("M2", "not_started", ["open"])])
         self.commit_all()
         claim = self.run_loop()
@@ -3152,41 +3173,41 @@ class FirstRuns(Repo):
         os.environ.update(FAKE_REVIEW="fail")
         failed = self.review(commit=claim["commit"])
         os.environ.pop("FAKE_REVIEW")
-        self.assertEqual((failed["fails"], failed["ladder"]), (4, "replan"))
-        self.assertEqual((failed["next"]["ladder"], failed["next"]["by"]), ("replan", "planner"))
+        self.assertEqual((failed["failed_reviews_with_repeat"], failed["escalation"]), (4, "diagnosis"))
+        self.assertEqual((failed["next"]["escalation"], failed["next"]["by"]), ("diagnosis", "planner"))
         self.assertIn(" plan --worktree ", failed["next"]["command"])
-        self.assertIn("Re-plan WATER M1", failed["next"]["command"])
+        self.assertIn("Diagnose WATER M1", failed["next"]["command"])
         self.assertIn("docs/evidence/WATER/M1-review.md", failed["next"]["command"])
         self.assertEqual(failed["next"]["findings"], "docs/evidence/WATER/M1-review.md")
-        # ready: not ready, owed a re-plan, with the command
+        # ready: not ready, owed a diagnosis, with the command
         r = self.ready()
         self.assertEqual(r["ready"], [])
-        self.assertEqual([(s["milestone"], s["reason"]) for s in r["waiting"]], [("M1", "for_replan")])
+        self.assertEqual([(s["milestone"], s["reason"]) for s in r["waiting"]], [("M1", "for_diagnosis")])
         self.assertEqual(r["waiting"][0]["next"]["command"], failed["next"]["command"])
         self.assertEqual(r["next"]["command"], failed["next"]["command"])
         # next: the planner's task, not the builder's findings
         nxt = json.loads(self.printed(agent_loop.cmd_next, module="WATER", milestone="M1", worktree=str(self.wt)))
-        self.assertEqual(nxt["action"], "replan")
-        self.assertTrue(nxt["message"].startswith("Re-plan WATER M1"), nxt["message"])
+        self.assertEqual(nxt["action"], "diagnosis")
+        self.assertTrue(nxt["message"].startswith("Diagnose WATER M1"), nxt["message"])
         self.assertNotIn("set the state back to ready_for_review", nxt["message"])
         self.assertEqual(nxt["next"]["command"], failed["next"]["command"])
         # status says so, with the command
         status = self.printed(agent_loop.cmd_status, module=None, worktree=str(self.wt))
-        self.assertIn("WATER: waiting: for_replan (M1)", status)
+        self.assertIn("WATER: waiting: for_diagnosis (M1)", status)
         self.assertIn("a planner looks at it before any more building", status)
-        self.assertIn("Re-plan WATER M1", status)
+        self.assertIn("Diagnose WATER M1", status)
         # run starts no builder
         before = len(self.calls())
         stopped = self.run_loop()
-        self.assertEqual((stopped["result"], stopped["reason"]), ("WAITING", "for_replan"), stopped)
+        self.assertEqual((stopped["result"], stopped["reason"]), ("WAITING", "for_diagnosis"), stopped)
         self.assertEqual(stopped["next"]["command"], failed["next"]["command"])
         self.assertEqual(len(self.calls()), before)
         report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
-        self.assertIn("WATER M1: waiting: for replan", report)
-        # once the planner has re-planned (fails 0, replans 1), it's the builder's again
+        self.assertIn("WATER M1: waiting: for diagnosis", report)
+        # once the planner has re-planned (its counts at 0, diagnoses 1), it's the builder's again
         doc = self.read_done()
         m1 = doc["milestones"][0]
-        m1.update(fails=0, replans=1, state="not_started")
+        m1.update(failed_reviews_with_repeat=0, failed_reviews=0, diagnoses=1, state="not_started")
         m1["items"][0]["statement"] = "a smaller first step"
         self.assertEqual(agent_loop.next_step("WATER", {"WATER": entry_for(doc)})["status"], "ready")
 
@@ -3237,7 +3258,7 @@ class FirstRuns(Repo):
         self.assertIn("Human Feedback on M1", self.calls()[-1]["argv"][-1])
 
     def test_r18_every_verb_keeps_the_owners_words_and_report_lists_them(self):
-        self.write_done([dict(too_many("M1", ["open"]), fails=4), milestone("M2", "not_started", ["open"])])
+        self.write_done([dict(too_many("M1", ["open"]), failed_reviews_with_repeat=4), milestone("M2", "not_started", ["open"])])
         self.commit_all()
         self.assertEqual(self.owner("reopen", "M1", "give it one more go")["result"], "DONE")
         self.assertEqual(self.owner("accept", "design", "the design is fine")["result"], "DONE")
@@ -3405,13 +3426,13 @@ class FirstRuns(Repo):
     # Round eight: the re-plan's bookkeeping, scope as a re-plan, and every review round kept
 
     def four_fails(self):
-        """WATER M1 after its fourth failed review, owed a re-plan, with each round's review kept. Built once per
+        """WATER M1 after its fourth failed review, owed a diagnosis, with each review kept. Built once per
         process and copied back after that."""
         return self.restore("four-fails", self.build_four_fails)
 
     def build_four_fails(self):
         # three failed reviews so far, two of them repeats; both rounds below repeat what failed before
-        self.write_done([failed_before(dict(milestone("M1", "not_started", ["open"], inspect="frames"), fails=2, rounds=3)),
+        self.write_done([failed_before(dict(milestone("M1", "not_started", ["open"], inspect="frames"), failed_reviews_with_repeat=2, failed_reviews=3)),
                          milestone("M2", "not_started", ["open"])])
         self.commit_all()
         for n in range(2):
@@ -3425,15 +3446,15 @@ class FirstRuns(Repo):
         return failed
 
     @shares("four-fails")
-    def test_r8_every_review_round_is_kept_and_named(self):
+    def test_r8_every_review_is_kept_and_named(self):
         failed = self.four_fails()
-        self.assertEqual(failed["ladder"], "replan")
-        rounds = [r.get("review") for r in self.read_record()["milestones"]["M1"]["reviews"]]
-        self.assertEqual(rounds, ["docs/evidence/WATER/M1-review-1.md", "docs/evidence/WATER/M1-review.md"])
+        self.assertEqual((failed["escalation"], failed["next"]["cause"]), ("diagnosis", "a finding keeps coming back"))
+        kept = [r.get("review") for r in self.read_record()["milestones"]["M1"]["reviews"]]
+        self.assertEqual(kept, ["docs/evidence/WATER/M1-review-1.md", "docs/evidence/WATER/M1-review.md"])
         files = self.git("ls-tree", "-r", "--name-only", "origin/main").stdout
         self.assertIn("docs/evidence/WATER/M1-review-1.md", files)
         task = failed["next"]["command"]
-        self.assertIn("Its reviews, one per round: docs/evidence/WATER/M1-review-1.md, "
+        self.assertIn("Its reviews, oldest first: docs/evidence/WATER/M1-review-1.md, "
                       "docs/evidence/WATER/M1-review.md", task)
         self.assertNotIn("git log", task)
         report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
@@ -3446,13 +3467,14 @@ class FirstRuns(Repo):
                 self.setUp()
                 self.four_fails()
                 os.environ.update(FAKE_PLAN=mode)
-                planned = self.call(agent_loop.cmd_plan, worktree=str(self.wt), task="Re-plan WATER M1", host=None,
+                planned = self.call(agent_loop.cmd_plan, worktree=str(self.wt), task="Diagnose WATER M1", host=None,
                                     model=None, effort=None, turn_timeout_hours=0.1)
                 self.assertEqual((planned["result"], planned["replanned"]), ("PLANNED", ["WATER M1"]), planned)
                 m1 = self.read_done()["milestones"][0]
-                self.assertEqual((m1["fails"], m1["replans"], m1["state"]), (0, 1, "not_started"))
+                self.assertEqual((m1["failed_reviews_with_repeat"], m1["failed_reviews"], m1["diagnoses"], m1["state"]),
+                                 (0, 0, 1, "not_started"))
                 self.assertNotEqual(agent_loop.next_step("WATER", agent_loop.read_project(
-                    self.wt, agent_loop.profile(self.wt))[1]).get("reason"), "for_replan")
+                    self.wt, agent_loop.profile(self.wt))[1]).get("reason"), "for_diagnosis")
 
 
     # A milestone that keeps failing on something new: the round-six diagnosis
@@ -3463,7 +3485,7 @@ class FirstRuns(Repo):
         return self.restore(f"six-rounds-{diagnoses}", lambda: self.build_six_rounds(diagnoses))
 
     def build_six_rounds(self, diagnoses):
-        self.write_done([dict(milestone("M1", "not_started", ["open"], inspect="frames"), fails=1, rounds=5,
+        self.write_done([dict(milestone("M1", "not_started", ["open"], inspect="frames"), failed_reviews_with_repeat=1, failed_reviews=5,
                               diagnoses=diagnoses), milestone("M2", "not_started", ["open"])])
         self.commit_all()
         claim = self.run_loop()
@@ -3483,11 +3505,12 @@ class FirstRuns(Repo):
         return out
 
     @shares("six-rounds-0")
-    def test_six_rounds_of_new_findings_owe_a_diagnosis_not_a_replan(self):
+    def test_six_failed_reviews_on_new_findings_owe_a_diagnosis(self):
         failed = self.six_rounds()
-        self.assertEqual((failed["fails"], failed["rounds"], failed["repeated"], failed["ladder"]),
-                         (1, 6, [], "diagnose"), failed)
-        self.assertEqual((failed["next"]["ladder"], failed["next"]["by"]), ("diagnose", "planner"))
+        self.assertEqual((failed["failed_reviews_with_repeat"], failed["failed_reviews"], failed["repeated"], failed["escalation"]),
+                         (1, 6, [], "diagnosis"), failed)
+        self.assertEqual((failed["next"]["escalation"], failed["next"]["by"], failed["next"]["cause"]),
+                         ("diagnosis", "planner", "reviews keep finding something new"))
         self.assertIn(" plan --worktree ", failed["next"]["command"])
         self.assertIn("Diagnose WATER M1", failed["next"]["command"])
         self.assertIn("KEEP WATER M1: builder", failed["next"]["command"])
@@ -3499,19 +3522,19 @@ class FirstRuns(Repo):
         self.assertEqual((rnd["items"], rnd["findings"][0]["name"]), ({"M1.1": "fail"}, "the water is flat (M1.1)"))
 
     @shares("six-rounds-0")
-    def test_a_diagnosis_that_changes_the_plan_settles_like_a_replan(self):
+    def test_a_diagnosis_that_changes_the_plan_is_a_replan(self):
         self.six_rounds()
         planned = self.diagnose("replan")
         self.assertEqual((planned["result"], planned["replanned"]), ("PLANNED", ["WATER M1"]), planned)
         m1 = self.read_done()["milestones"][0]
-        self.assertEqual((m1["fails"], m1["rounds"], m1["replans"], m1["diagnoses"], m1["state"]),
-                         (0, 0, 1, 1, "not_started"))
+        self.assertEqual((m1["failed_reviews_with_repeat"], m1["failed_reviews"], m1["diagnoses"], m1["state"]),
+                         (0, 0, 1, "not_started"))
         self.assertNotIn("findings", m1)
 
     @shares("six-rounds-0")
     def test_a_diagnosis_that_keeps_the_plan_names_who_acts(self):
         for who, by, has in (("builder", "lead", "--fresh"), ("reviewer", "lead", "--fresh"),
-                             ("owner", "owner", " owner reopen ")):
+                             ("human", "owner", " owner reopen ")):
             with self.subTest(who=who):
                 self.setUp()
                 self.six_rounds()
@@ -3521,12 +3544,12 @@ class FirstRuns(Repo):
                 self.assertIn(has, kept["next"]["command"])
                 self.assertIn(f"the {who} has to act", json.dumps(kept["next"]))
                 m1 = self.read_done()["milestones"][0]
-                self.assertEqual((m1["fails"], m1["rounds"], m1["diagnoses"]), (0, 0, 1))
-                self.assertEqual(m1["state"], "blocked" if who == "owner" else "in_progress")
+                self.assertEqual((m1["failed_reviews_with_repeat"], m1["failed_reviews"], m1["diagnoses"]), (0, 0, 1))
+                self.assertEqual(m1["state"], "blocked" if who == "human" else "in_progress")
                 e = self.read_record()["milestones"]["M1"]
                 self.assertEqual(e["diagnoses"][-1]["who"], who)
                 self.assertEqual(e["counted_from"], e["diagnoses"][-1]["at"])
-                if who == "owner":
+                if who == "human":
                     self.assertTrue(kept["next"]["ask"])
                     self.assertTrue(kept["next"]["history"])
                     # every later readout gives the planner's reason and the rounds it read
@@ -3547,10 +3570,10 @@ class FirstRuns(Repo):
                 told = "diagnosis on" in prompt and "kept M1's items as written" in prompt
                 self.assertEqual(told, who == "reviewer")
                 # the rounds before the diagnosis no longer count: the same finding isn't a repeat
-                self.assertEqual((again["fails"], again["rounds"], again["repeated"]), (0, 1, []), again)
+                self.assertEqual((again["failed_reviews_with_repeat"], again["failed_reviews"], again["repeated"]), (0, 1, []), again)
 
     @shares("four-fails")
-    def test_a_replan_that_keeps_the_plan_counts_as_the_replan(self):
+    def test_a_kept_plan_after_repeated_findings_counts_as_the_diagnosis(self):
         failed = self.four_fails()
         self.assertIn("KEEP WATER M1: builder", failed["next"]["command"])
         self.assertNotIn("the plan is wrong", failed["next"]["command"])
@@ -3558,12 +3581,13 @@ class FirstRuns(Repo):
         self.assertEqual((kept["result"], kept["who"], kept["next"]["by"]), ("KEPT", "builder", "lead"), kept)
         self.assertIn("--fresh", kept["next"]["command"])
         m1 = self.read_done()["milestones"][0]
-        self.assertEqual((m1["fails"], m1["rounds"], m1["replans"], m1.get("diagnoses", 0), m1["state"]),
-                         (0, 0, 1, 0, "in_progress"))
-        # a second run of four repeated failures goes to the human, as it does after a rewrite
-        self.assertEqual(agent_loop.ladder(dict(m1, fails=4)), "too_many_failed_reviews")
+        self.assertEqual((m1["failed_reviews_with_repeat"], m1["failed_reviews"], m1["diagnoses"], m1["state"]),
+                         (0, 0, 1, "in_progress"))
+        # a second run of four repeated failures goes to the human, as it does after a re-plan
+        self.assertEqual(agent_loop.escalation_of(dict(m1, failed_reviews=4, failed_reviews_with_repeat=4)),
+                         "too_many_failed_reviews")
 
-    def test_keep_is_refused_when_no_replan_or_diagnosis_is_owed(self):
+    def test_keep_is_refused_when_no_diagnosis_is_owed(self):
         self.write_done([milestone("M1", "not_started", ["open"], inspect="frames"),
                          milestone("M2", "not_started", ["open"])])
         self.commit_all()
@@ -3572,9 +3596,9 @@ class FirstRuns(Repo):
         self.assertIn("isn't owed one", refused["problems"][0])
 
     @shares("six-rounds-1")
-    def test_a_second_diagnosis_blocks_it_with_each_rounds_failures(self):
+    def test_the_same_counts_after_a_diagnosis_block_it_with_each_reviews_failures(self):
         stuck = self.six_rounds(diagnoses=1)
-        self.assertEqual((stuck["ladder"], stuck["next"]["decides"]), ("too_many_failed_reviews", "owner"), stuck)
+        self.assertEqual((stuck["escalation"], stuck["next"]["decides"]), ("too_many_failed_reviews", "owner"), stuck)
         self.assertEqual(self.read_done()["milestones"][0]["blocked"]["reason"], "too_many_failed_reviews")
         self.assertTrue(any("the water is flat (M1.1)" in h for h in stuck["next"]["history"]), stuck["next"])
         for verb in ("Accept it", "change its scope", "reopen it"):
@@ -3583,12 +3607,12 @@ class FirstRuns(Repo):
         self.assertEqual(self.owner("reopen", "M1", "one more go")["result"], "DONE")
         self.git("pull", "-q", "--rebase", "origin", "main")
         m1 = self.read_done()["milestones"][0]
-        self.assertEqual((m1["state"], m1["fails"], m1["rounds"], m1["diagnoses"]), ("in_progress", 0, 0, 0))
+        self.assertEqual((m1["state"], m1["failed_reviews_with_repeat"], m1["failed_reviews"], m1["diagnoses"]), ("in_progress", 0, 0, 0))
         self.assertTrue(self.read_record()["milestones"]["M1"]["counted_from"])
         claim = self.run_loop()
         os.environ.update(FAKE_REVIEW="fail")
         again = self.review(commit=claim["commit"])
-        self.assertEqual((again["fails"], again["rounds"], again["ladder"]), (0, 1, "same-session"), again)
+        self.assertEqual((again["failed_reviews_with_repeat"], again["failed_reviews"], again["escalation"]), (0, 1, "same_builder"), again)
 
     def test_a_failure_says_how_it_differs_or_counts_as_a_repeat(self):
         self.write_done([dict(milestone("M1", "not_started", ["open"], inspect="frames")), milestone("M2", "not_started", ["open"])])
@@ -3602,10 +3626,10 @@ class FirstRuns(Repo):
             os.environ.update(FAKE_REVIEW="fail")
             results.append(self.review(commit=claim["commit"]))
         # round 2 fails the same item with a new name and no `different`: a repeat; round 3 says how it differs
-        self.assertEqual([(r["fails"], r["rounds"]) for r in results], [(0, 1), (1, 2), (1, 3)])
-        self.assertEqual(results[2]["ladder"], "fresh-session")
+        self.assertEqual([(r["failed_reviews_with_repeat"], r["failed_reviews"]) for r in results], [(0, 1), (1, 2), (1, 3)])
+        self.assertEqual(results[2]["escalation"], "new_builder_session")
 
-    def test_a_pass_after_a_failed_round_clears_the_findings(self):
+    def test_a_pass_after_a_failed_review_clears_the_findings(self):
         self.write_done([dict(milestone("M1", "not_started", ["open"], inspect="frames")), milestone("M2", "not_started", ["open"])])
         self.commit_all()
         claim = self.run_loop()
@@ -3635,7 +3659,7 @@ class FirstRuns(Repo):
         self.assertEqual(self.owner("scope", "M1")["result"], "DONE")
         self.git("pull", "-q", "--rebase", "origin", "main")
         m1 = self.read_done()["milestones"][0]
-        self.assertEqual((m1["state"], m1["fails"], m1["rounds"], m1["diagnoses"]), ("not_started", 0, 0, 0))
+        self.assertEqual((m1["state"], m1["failed_reviews_with_repeat"], m1["failed_reviews"], m1["diagnoses"]), ("not_started", 0, 0, 0))
         self.assertNotIn("findings", m1)
 
     def test_a_review_must_list_its_findings_on_a_fail_and_none_on_a_pass(self):
@@ -3658,16 +3682,16 @@ class FirstRuns(Repo):
             self.assertNotIn("findings", m1)
 
     @shares("four-fails")
-    def test_r8_owner_scope_on_an_owed_milestone_is_the_replan(self):
+    def test_r8_owner_scope_on_an_owed_milestone_leaves_nothing_to_diagnose(self):
         self.four_fails()
         doc = self.read_done("HEAD")
         doc["milestones"][0]["items"][0]["statement"] = "what the human wants now"
         put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
         scoped = self.owner("scope", "M1")
         self.assertEqual((scoped["result"], scoped["replanned"]), ("DONE", ["M1"]), scoped)
-        self.assertIn("counts as the re-plan", scoped["replanned_why"])
+        self.assertIn("nothing is left to diagnose", scoped["replanned_why"])
         m1 = self.read_done()["milestones"][0]
-        self.assertEqual((m1["fails"], m1["replans"], m1["state"]), (0, 1, "not_started"))
+        self.assertEqual((m1["failed_reviews_with_repeat"], m1["diagnoses"], m1["state"]), (0, 0, "not_started"))
 
 
     # Round nine: the second whole-change review
@@ -3869,8 +3893,8 @@ class FirstRuns(Repo):
     SHIP = ("import json, os, sys\n"
             "d = sys.argv[1]\n"
             "os.makedirs(d + '/docs/plans/SHIP', exist_ok=True)\n"
-            "json.dump({'module': 'SHIP', 'milestones': [{'id': 'M1', 'name': 'ship', 'state': 'done', 'fails': 0,"
-            " 'replans': 0, 'items': [{'id': 'M1.1', 'statement': 'ships', 'check': 'true', 'status': 'pass',"
+            "json.dump({'module': 'SHIP', 'milestones': [{'id': 'M1', 'name': 'ship', 'state': 'done', 'failed_reviews': 0,"
+            " 'diagnoses': 0, 'items': [{'id': 'M1.1', 'statement': 'ships', 'check': 'true', 'status': 'pass',"
             " 'evidence': 'x', 'verdict': 'pass', 'review': 'x'"
             + "}]}]}, open(d + '/docs/plans/SHIP/DONE.json', 'w'))\n"
             "open(d + '/docs/plans/SHIP/DESIGN.md', 'w').write('# Ship')\n")
@@ -4317,8 +4341,8 @@ class FirstRunsAlone(ProfileOnly):
                          ["0%", "under 0.1%", "0.4%", "3.2%", "42%"])
         acc = {"used_percent": 30.0, "hours_left": 50.0}
         recent = {"hours": 12.0, "loop": [0.1, 0.2, 0.3], "other": [0.01, 0.02, 0.03]}
-        done_ms = [{"module": "W", "milestone": "M1", "state": "done", "pct": [0.1, 0.2, 0.3], "rounds": 1}]
-        open_one = [{"module": "W", "milestone": "M2", "state": "not_started", "rounds": 1}]
+        done_ms = [{"module": "W", "milestone": "M1", "state": "done", "pct": [0.1, 0.2, 0.3], "reviews": 1}]
+        open_one = [{"module": "W", "milestone": "M2", "state": "not_started", "reviews": 1}]
         verdict = agent_loop.plan_forecast(acc, done_ms, open_one, recent)["verdict"]
         self.assertTrue(verdict.startswith("Quota lasts: the 1 open milestone and other use need about 0.3%"), verdict)
         verdict = agent_loop.plan_forecast(acc, done_ms, [], recent)["verdict"]
@@ -4338,25 +4362,25 @@ class FirstRunsAlone(ProfileOnly):
 
     def test_r5_next_gives_a_command_on_every_rung(self):
         prof = agent_loop.profile(self.wt)
-        for fails, replans, rounds, diagnoses, word, by, has in (
-                (0, 0, 1, 0, "same-session", "lead", "--message"),
-                (1, 0, 2, 0, "same-session", "lead", "--message"),
-                (0, 0, 3, 0, "fresh-session", "lead", "--fresh"),
-                (3, 0, 4, 0, "fresh-session", "lead", "--fresh"),
-                (4, 0, 4, 0, "replan", "planner", " plan "),
-                (4, 1, 5, 0, "too_many_failed_reviews", "owner", " owner reopen "),  # the lead runs it once the human decides
-                (1, 0, 6, 0, "diagnose", "planner", " plan "),
-                (1, 1, 6, 1, "too_many_failed_reviews", "owner", " owner reopen ")):
-            word_now = agent_loop.escalation(fails, replans, rounds, diagnoses)
-            counts = {"fails": fails, "replans": replans, "rounds": rounds, "diagnoses": diagnoses}
-            then = agent_loop.ladder_next(word_now, "WATER", "M1", counts, self.wt, prof)
-            self.assertEqual((word_now, then["ladder"], then.get("decides") or then["by"]), (word, word, by))
+        for with_repeat, failed, diagnoses, word, by, has in (
+                (0, 1, 0, "same_builder", "lead", "--message"),
+                (1, 2, 0, "same_builder", "lead", "--message"),
+                (0, 3, 0, "new_builder_session", "lead", "--fresh"),
+                (3, 4, 0, "new_builder_session", "lead", "--fresh"),
+                (4, 4, 0, "diagnosis", "planner", " plan "),
+                (4, 5, 1, "too_many_failed_reviews", "owner", " owner reopen "),  # the lead runs it once the human decides
+                (1, 6, 0, "diagnosis", "planner", " plan "),
+                (1, 6, 1, "too_many_failed_reviews", "owner", " owner reopen ")):
+            word_now = agent_loop.escalation(failed, with_repeat, diagnoses)
+            counts = {"failed_reviews": failed, "failed_reviews_with_repeat": with_repeat, "diagnoses": diagnoses}
+            then = agent_loop.escalation_next(word_now, "WATER", "M1", counts, self.wt, prof)
+            self.assertEqual((word_now, then["escalation"], then.get("decides") or then["by"]), (word, word, by))
             self.assertIn(has, then["command"])
 
     def test_r18_owner_stops_ask_in_chat_and_never_send_anyone_to_a_terminal(self):
         prof = agent_loop.profile(self.wt)
         for word in ("too_many_failed_reviews",):
-            then = agent_loop.ladder_next(word, "WATER", "M1", {"fails": 4, "replans": 1, "rounds": 4}, self.wt, prof)
+            then = agent_loop.escalation_next(word, "WATER", "M1", {"failed_reviews": 4, "failed_reviews_with_repeat": 4, "diagnoses": 1}, self.wt, prof)
             self.assertEqual(then["decides"], "owner")
             self.assertTrue(then["ask"])
             self.assertIn("--text '<what the human said", then["command"])
@@ -4373,28 +4397,28 @@ class FirstRunsAlone(ProfileOnly):
 
 
     def test_r8_a_plan_that_leaves_an_owed_milestone_alone_settles_nothing(self):
-        before = {"milestones": [dict(milestone("M1", "in_progress", ["open"]), fails=4)]}
+        before = {"milestones": [dict(milestone("M1", "in_progress", ["open"]), failed_reviews_with_repeat=4)]}
         after = json.loads(json.dumps(before))
-        self.assertEqual(agent_loop.settle_replans(before, after, "WATER"), [])
-        self.assertEqual(after["milestones"][0]["fails"], 4)
+        self.assertEqual(agent_loop.settle_replanned(before, after, "WATER"), [])
+        self.assertEqual(after["milestones"][0]["failed_reviews_with_repeat"], 4)
         after["milestones"][0]["items"][0]["check"] = "test -f smaller"
-        self.assertEqual(agent_loop.settle_replans(before, after, "WATER"), ["WATER M1"])
-        self.assertEqual((after["milestones"][0]["fails"], after["milestones"][0]["replans"]), (0, 1))
+        self.assertEqual(agent_loop.settle_replanned(before, after, "WATER"), ["WATER M1"])
+        self.assertEqual((after["milestones"][0]["failed_reviews_with_repeat"], after["milestones"][0]["diagnoses"]), (0, 1))
 
     def test_a_planner_cant_change_the_counts(self):
-        before = {"milestones": [dict(too_many("M1", ["open"]), fails=3, rounds=5, diagnoses=1,
+        before = {"milestones": [dict(too_many("M1", ["open"]), failed_reviews_with_repeat=3, failed_reviews=5, diagnoses=1,
                                       findings=[{"name": "x"}])]}
         after = json.loads(json.dumps(before))
         m = after["milestones"][0]
-        m.update(fails=0, rounds=0, diagnoses=0, state="not_started")
+        m.update(failed_reviews_with_repeat=0, failed_reviews=0, diagnoses=0, state="not_started")
         m.pop("findings")
-        after["milestones"].append(dict(milestone("M1b", "not_started", ["open"]), fails=2, replans=1, diagnoses=1))
-        settled = agent_loop.settle_replans(before, after, "WATER")
+        after["milestones"].append(dict(milestone("M1b", "not_started", ["open"]), failed_reviews_with_repeat=2, diagnoses=1))
+        settled = agent_loop.settle_replanned(before, after, "WATER")
         agent_loop.keep_counts(before, after, settled, "WATER")
         m, split = after["milestones"]
-        self.assertEqual((m["fails"], m["rounds"], m["diagnoses"], m["state"], m["findings"]),
+        self.assertEqual((m["failed_reviews_with_repeat"], m["failed_reviews"], m["diagnoses"], m["state"], m["findings"]),
                          (3, 5, 1, "blocked", [{"name": "x"}]))
-        self.assertEqual((split["fails"], split["rounds"], split["replans"], split["diagnoses"]), (0, 0, 1, 1))
+        self.assertEqual((split["failed_reviews_with_repeat"], split["failed_reviews"], split["diagnoses"]), (0, 0, 1))
 
     def test_r9_a_review_host_the_profile_cant_resolve_is_a_problem(self):
         (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Review host:** codx\n")
@@ -4519,7 +4543,7 @@ class PlanFiles(Repo):
         m2["items"][1].update(inspect="on the phone", attended="plug in the iPhone")
         m4 = milestone("M4", "open", ["open"])
         m4["items"][0]["attended"] = "the human picks a direction"
-        doc = done(milestone("M1", "done", ["pass"]), m2, dict(milestone("M3", "parked", ["open"]), fails=4), m4)
+        doc = done(milestone("M1", "done", ["pass"]), m2, dict(milestone("M3", "parked", ["open"]), failed_reviews_with_repeat=4), m4)
         rec = json.loads((self.wt / "docs/plans/WATER/ACCEPTED.json").read_text())
         rec["milestones"] = {m["id"]: {"definitions": agent_loop.old_definitions(m), "authorised": {"by": "plan"},
                                        "reviews": []} for m in doc["milestones"]}
@@ -5098,7 +5122,7 @@ class ScriptFactsTest(Clean):
 
     def test_a_round_without_recorded_findings_names_its_review(self):
         e = {"reviews": [{"verdict": "fail", "at": "2026-11-11T03:14:00Z", "review": "docs/evidence/C/M1-review-1.md"}]}
-        with mock.patch.object(agent_loop, "counted_rounds", lambda e, after=None: e["reviews"]):
+        with mock.patch.object(agent_loop, "counted_reviews", lambda e, after=None: e["reviews"]):
             line = agent_loop.history_lines(e)[0]
         self.assertNotIn("no findings recorded", line)
         self.assertIn("read docs/evidence/C/M1-review-1.md", line)

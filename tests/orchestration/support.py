@@ -127,9 +127,10 @@ def item(iid, status="open", **proof):
     return {"id": iid, "statement": f"{iid} works", **proof, "status": status, "evidence": ""}
 
 
-def milestone(mid, state, statuses, fails=0, **proof):
+def milestone(mid, state, statuses, failed_reviews_with_repeat=0, **proof):
     items = [item(f"{mid}.{i}", s, **proof) for i, s in enumerate(statuses, 1)]
-    return {"id": mid, "name": mid, "state": state, "fails": fails, "replans": 0, "items": items}
+    return {"id": mid, "name": mid, "state": state, "failed_reviews_with_repeat": failed_reviews_with_repeat, "diagnoses": 0,
+            "items": items}
 
 
 def proved(m):
@@ -223,7 +224,7 @@ if role == "build" and os.environ.get("FAKE_PASS") == "1":
                 if os.environ.get("FAKE_WEAKEN"):
                     i["check"] = "true"
             if os.environ.get("FAKE_WEAKEN"):
-                m["replans"] = m.get("replans", 0) + 1
+                m["diagnoses"] = m.get("diagnoses", 0) + 1
             break
     if os.environ.get("FAKE_FORGE"):
         last = d["milestones"][-1]
@@ -280,7 +281,7 @@ elif role == "review":
         if mode == "delete":
             d["milestones"] = [m for m in d["milestones"] if m is target or m["state"] != "not_started"]
         path.write_text(json.dumps(d))
-        n = int(target.get("rounds", 0) or 0) + (verdict != "pass")  # the loop counts this round after the fake
+        n = int(target.get("failed_reviews", 0) or 0) + (verdict != "pass")  # the loop counts this round after the fake
         text = f"review of {mid}: {verdict}, failed round {n}"
         if os.environ.get("FAKE_CAPTURE"):
             (ev / f"{mid}-review").mkdir(exist_ok=True)
@@ -314,7 +315,7 @@ elif role == "plan":
         m = d["milestones"][0]
         m["items"][0]["statement"] = "a smaller first step"
         if mode == "replan_counted":
-            m.update(fails=0, replans=m.get("replans", 0) + 1, state="not_started")
+            m.update(failed_reviews_with_repeat=0, diagnoses=m.get("diagnoses", 0) + 1, state="not_started")
         water.write_text(json.dumps(d))
         (cwd / "docs/plans/WATER/DESIGN.md").write_text("# Water design, re-planned")
         reply = "Re-planned M1.\\nPLANNED: docs/plans/WATER/DONE.json, docs/plans/WATER/DESIGN.md"
@@ -328,7 +329,7 @@ elif role == "plan":
             (cwd / "docs/plans/PAY/DESIGN.md").write_text("# Pay design")
             (cwd / "docs/plans/PAY/PLAN.md").write_text("# Pay plan" + os.environ.get("FAKE_ASSUME", ""))
         (cwd / "docs/plans/PAY/DONE.json").write_text(json.dumps({"module": "PAY", "milestones": [
-            {"id": "M1", "name": "pay", "state": "not_started", "fails": 0, "replans": 0,
+            {"id": "M1", "name": "pay", "state": "not_started", "failed_reviews_with_repeat": 0, "diagnoses": 0,
              "items": [{"id": "M1.1", "statement": "pays", "check": "true", "status": "open", "evidence": ""}]}]}))
         reply = "Planned PAY. No owner decisions.\\nPLANNED" + ("" if os.environ.get("FAKE_PLAN_BARE") else ": " + ", ".join(files))
         side = os.environ.get("FAKE_PLAN_SIDE")

@@ -82,10 +82,10 @@ Subcommands:
         REVIEW_OWED   the module's next milestone is Ready for Review, with the script's record, and waiting for its
                       review. One that is Ready for Review without the record is checked by `run` instead
         WAITING       `reason` on_dependency: the next milestone depends on milestones in other modules that aren't
-                      Done yet (`depends_on` lists them). `reason` for_replan or for_diagnosis: it failed review four
-                      times on a repeated finding, or six times in all (`ladder` replan or diagnose); `next` is the
-                      planner's task, and no builder starts on it until the planner has changed its definitions or,
-                      for a diagnosis, kept them
+                      Done yet (`depends_on` lists them). `reason` for_diagnosis: it failed review four
+                      times on a repeated finding, or six times in all (`cause` says which); `next` is the
+                      planner's task, and no builder starts on it until the planner has changed its definitions
+                      or kept them
         DESIGN_NOT_APPROVED
                       the module's design hasn't passed a design review (or changed since it did). Unless
                       --no-design-review, `run` first runs that review itself, as `review --milestone design` would
@@ -151,24 +151,24 @@ Subcommands:
   review --module CORE --milestone M2 --commit SHA --worktree PATH [--host H] [--model M] [--effort E]
         Runs a fresh reviewer in a clean checkout of the commit that is Ready for Review (or of the main branch's tip, with --milestone
         design), then checks what it did: only the review file and the reviewer's own fields changed, the verdicts
-        agree with its last line, and a fail added 1 to `fails`. If all holds, the script merges the review itself,
-        sets failed items back to open, and records the verdict. An earlier round's review is kept beside the new
+        agree with its last line. If all holds, the script merges the review itself,
+        sets failed items back to open, and records the verdict. An earlier review is kept beside the new
         one as <milestone>-review-N.md (reusing `owner rereview`'s copy of the same text), and its record entry
-        points there; entries overwritten before rounds were kept say `review_in_history`. Captures go in the folder beside the review file
+        points there; entries overwritten before reviews were kept say `review_in_history`. Captures go in the folder beside the review file
         (<evidence>/<MODULE>/<milestone>-review/), which merges with it. REVIEWED, INVALID (nothing merged), or the host's
         HOST_FAILED, SCRIPT_FAILED, WRONG_MODEL_OR_EFFORT or PAUSED. With no --host, a review goes to the settings' `Review host` (`other` means the host
         that built the milestone swapped, or for a design review the host of the planner turn that wrote the plan
         swapped, else the settings' default host swapped). REVIEWED's `next` is the
-        {command, by, why}. After a failed milestone review `rounds` counts its failed reviews since the last
-        re-plan, diagnosis or decision of the human's, `fails` those with a finding that repeated an earlier round's
-        (`repeated` names them), and `ladder` (and `next.ladder`) is the escalation word (same-session,
-        fresh-session, replan, diagnose, too_many_failed_reviews) with `next` the command it calls for: `run
-        --message` pointing the builder to the review, `run --fresh --message`, `plan` with a re-plan or diagnosis
-        task naming the reviews (by: planner), or `owner reopen` (decides: owner, with each round under `history`)
+        {command, by, why}. After a failed milestone review `failed_reviews` counts its failed reviews since the last
+        re-plan, kept plan or decision of the human's, `failed_reviews_with_repeat` those with a finding that repeated
+        an earlier review's (`repeated` names them), and `escalation` (and `next.escalation`) says what the counts
+        call for (same_builder, new_builder_session, diagnosis, too_many_failed_reviews) with `next` the command for
+        it: `run --message` pointing the builder to the review, `run --fresh --message`, `plan` with a diagnosis
+        task naming the reviews (by: planner), or `owner reopen` (decides: owner, with each review under `history`)
         for a milestone the script blocked with too many failed reviews.
-        A planner given either task ends with `PLANNED` (a rewrite) or `KEEP <MODULE> <milestone>:
-        builder|reviewer|owner: <why>`, which `plan` records as KEPT, starting the counts again and adding 1 to
-        replans or diagnoses; `owner` there, or a second run to the same step, blocks it with too many failed
+        A planner given a diagnosis ends with `PLANNED` (a re-plan) or `KEEP <MODULE> <milestone>:
+        builder|reviewer|human: <why>`, which `plan` records as KEPT. Either starts the counts again and adds 1 to
+        diagnoses; `human` there, or the same counts reached a second time, blocks it with too many failed
         reviews. After a pass it is the
         next ready milestone or "finished", the planner's revision with `findings` after DESIGN CHANGES.
         A second design review keeps the first as design-review-N.md, and its prompt names the done-when items
@@ -188,8 +188,8 @@ Subcommands:
         `assumptions` counts, per module, the `Assumption:` lines in its PLAN.md. The whole task is kept in the plan
         commit's body and in each module's record file under `briefs` (the authorisation stamps name only its
         first line), which design reviews are pointed at. For each
-        milestone that was owed a re-plan or diagnosis and whose definitions the plan changed, the script sets fails
-        and rounds 0, adds 1 to replans (and to diagnoses, for a diagnosis) and sets it not_started, in its own commit, whatever the planner wrote there (`replanned` lists them). In a
+        milestone that was owed a diagnosis and whose definitions the plan changed, the script sets failed_reviews
+        and failed_reviews_with_repeat 0, adds 1 to diagnoses and sets it not_started, in its own commit, whatever the planner wrote there (`replanned` lists them). In a
         repository with no commits (or origin with no main branch), SCRIPT_FAILED before any planner turn, with `next`
         giving the first commit and push. One planner runs per repository at a time: another waits for it (listed in
         `runs` with `waiting_for`), then plans from the tip the first one merged; `pause` doesn't reach a waiting
@@ -295,8 +295,8 @@ Subcommands:
         blocked or waiting, the open items that need human feedback, access or hardware, and cost (as `cost` reads it). --write puts it in
         <evidence>/build-reports/<date>.md for `adopt`, with its links relative to that file.
   next  --module CORE --worktree PATH --milestone M2   The escalation after a failed review (see done-when.md):
-        read at the main branch's tip, where the review merged. `action` is the ladder's word, `message` what to send (the builder's findings, or for `replan` and
-        `diagnose` the planner's task), and `next` the command.
+        read at the main branch's tip, where the review merged. `action` is what the counts call for, `message` what to send (the builder's message, or for
+        `diagnosis` the planner's task), and `next` the command.
   unblock --module CORE --milestone M2 --worktree PATH   Puts a blocked milestone back in the queue, in_progress.
         Refused for Needs Human Feedback (`owner feedback` unblocks it) and Too Many Failed Reviews (`owner reopen`).
   pause [--module CORE] --worktree PATH   Stops the runs in this repository, and their agents, cleanly.
@@ -314,14 +314,15 @@ Subcommands:
         Feedback back in the queue; the resumed builder is told to read it there, oldest first, and the reviewer
         counts it as the human's words. `release` takes a milestone out of In Progress when the lead that started it is gone. `scope` takes the done-when file as edited in the
         worktree (refused, saying nothing changed, when it matches the tip), leaves the worktree clean on the tip where it can, and says under `worktree` what to do where it
-        can't. A `scope` that changes a milestone owed a re-plan is the re-plan: fails 0, one more replans, state
-        not_started, listed under `replanned` with `replanned_why`. `reopen` takes a milestone Blocked with too many
-        failed reviews back to in_progress, with fails, rounds and diagnoses 0.
+        can't. A `scope` that changes a milestone owed a diagnosis replaces the definitions its reviews failed, so
+        nothing is left to diagnose: it is not_started, listed under `replanned` with `replanned_why`. `scope` and
+        `reopen` both start the milestone's counts again, diagnoses too. `reopen` takes a milestone Blocked with too
+        many failed reviews back to in_progress.
   quota [--worktree PATH] [--budget 120] [--json]
         A short readout leading with the verdict, saying whose use each figure counts; --json gives everything.
         The weekly Codex limit, read from Codex's local rollouts by codex_quota.py beside this file: burn per active
         hour (idle time excluded) and per builder-hour by model and effort, a tokens-to-percent fit with its range, what
-        each milestone of this repository cost (its turns and rounds; runs in other repositories count only as the
+        each milestone of this repository cost (its turns and reviews; runs in other repositories count only as the
         machine's orchestrate use), the script's own use apart from other local threads and from usage
         no local rollout explains, and a forecast of the open milestones against what's left before the reset, with a
         one-sentence verdict. Every result line carries a short `quota` field: the rate (what's left, hours to the
@@ -1213,7 +1214,7 @@ def validate(done, module: str = "") -> list[str]:
             if not isinstance(b, dict) or b.get("reason") not in BLOCK_REASONS or not isinstance(b.get("what", ""), str):
                 problems.append(f"{mid}: blocked, but \"blocked\" should be an object like {{\"reason\": "
                                 f"\"needs_context\", \"what\": \"...\"}}, with reason one of {', '.join(BLOCK_REASONS)}")
-        for counter in ("fails", "replans", "rounds", "diagnoses"):
+        for counter in COUNTS:
             if not is_count(m.get(counter, 0)):
                 problems.append(f"{mid}: {counter} {m.get(counter)!r} isn't a whole number of 0 or more")
         items = m.get("items")
@@ -1264,7 +1265,7 @@ def validate(done, module: str = "") -> list[str]:
 
 def findings_problems(m: dict, mid: str, items: list) -> list[str]:
     """What's wrong with a milestone's `findings`: the reviewer's list of the Must Fix findings of its last review,
-    each with a short `name` kept the same from round to round, the `item` it fails (none for a defect outside the
+    each with a short `name` kept the same from review to review, the `item` it fails (none for a defect outside the
     items), and `different` saying how a new failure of an item that failed before isn't the same defect."""
     found = m.get("findings", [])
     if not isinstance(found, list):
@@ -1309,6 +1310,26 @@ def old_definitions(milestone: dict) -> str:
     return hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
 
 
+OLD_COUNTS = ("fails", "rounds", "replans")  # a milestone's counts before 2.2, beside `diagnoses`
+
+
+def upgrade_counts(m: dict) -> None:
+    """Gives a milestone its counts under the names of 2.2. Before 2.2 a milestone that kept failing got a re-plan
+    after four failed reviews with a repeated finding and a diagnosis after six failed reviews, one of each. Now
+    it gets one diagnosis for either, so an earlier re-plan or diagnosis counts as that one. A milestone that was
+    owed either when it was migrated is still owed its diagnosis."""
+    fails, rounds, replans = (m.pop(k, None) for k in OLD_COUNTS)
+    whole = lambda v: v if is_count(v) else 0
+    with_repeat = whole(fails)
+    failed = whole(rounds) if rounds is not None else with_repeat  # before `rounds`, only repeats were counted
+    had = whole(replans), whole(m.get("diagnoses"))
+    owed = (with_repeat >= REPEATS_TO_DIAGNOSE and had[0] == 0) or \
+        (with_repeat < REPEATS_TO_DIAGNOSE and failed >= FAILED_REVIEWS_TO_DIAGNOSE and had[1] == 0)
+    m["failed_reviews"], m["failed_reviews_with_repeat"] = failed, with_repeat
+    if replans is not None or "diagnoses" in m:
+        m["diagnoses"] = 0 if owed else min(1, sum(had))
+
+
 def old_names_in_doc(doc) -> list[str]:
     """The names from before 2.0 that a done-when document still uses, one phrase each; empty when it has none."""
     if not isinstance(doc, dict) or not isinstance(doc.get("milestones"), list):
@@ -1324,6 +1345,9 @@ def old_names_in_doc(doc) -> list[str]:
             found.append("a blocked milestone whose `blocked` is text")
         if "needs" in m:
             found.append("a milestone's `needs` list (now `depends_on`)")
+        if any(k in m for k in OLD_COUNTS):
+            found.append("a milestone's `fails`, `rounds` or `replans` (now `failed_reviews_with_repeat`, "
+                         "`failed_reviews` and `diagnoses`)")
         for i in m.get("items") or []:
             if not isinstance(i, dict):
                 continue
@@ -1359,13 +1383,15 @@ def upgrade_doc(doc):
         if "needs" in m:
             deps = m.pop("needs")
             m.setdefault("depends_on", deps)
+        if any(k in m for k in OLD_COUNTS):
+            upgrade_counts(m)
         state = m.get("state")
         if state in OLD_STATES:
             m["state"] = OLD_STATES[state]
         elif state == "parked":
             m["state"] = "blocked"
             m["blocked"] = {"reason": "too_many_failed_reviews",
-                            "what": "it kept failing review after its rewrite or diagnosis; the human decides"}
+                            "what": "it kept failing review after its diagnosis; the human decides"}
         if m.get("state") == "blocked" and isinstance(m.get("blocked"), str):
             m["blocked"] = {"reason": "needs_context", "what": m["blocked"]}
         for i in m.get("items") or []:
@@ -1534,35 +1560,54 @@ def passing(milestone: dict) -> int:
     return sum(1 for item in milestone["items"] if item.get("status") == "pass")
 
 
-# A failed review moves a milestone up the ladder only when one of its findings repeats an earlier round's, so a
-# builder that fixes each finding and is shown a new one isn't treated as stuck. `rounds` counts every failed review,
-# repeated or not; at ROUNDS_TO_DIAGNOSE a planner is asked what keeps failing, since reviews that keep finding new
+# A failed review counts twice over. `failed_reviews` counts every failed review, and `failed_reviews_with_repeat`
+# those with a finding that repeats an earlier review's, so a builder that fixes each finding and is shown a new one
+# isn't treated as stuck as soon as one whose fixes don't hold. At REPEATS_TO_DIAGNOSE of the second, or
+# FAILED_REVIEWS_TO_DIAGNOSE of the first, a planner is asked once what keeps failing: reviews that keep finding new
 # things can mean the checks are too broad.
-FRESH_AFTER_ROUNDS = 3
-ROUNDS_TO_DIAGNOSE = 6
+NEW_SESSION_AFTER_FAILED_REVIEWS = 3
+REPEATS_TO_DIAGNOSE = 4
+FAILED_REVIEWS_TO_DIAGNOSE = 6
+COUNTS = ("failed_reviews", "failed_reviews_with_repeat", "diagnoses")  # a milestone's counts, kept by the script
 
 
-def escalation(fails: int, replans: int = 0, rounds: int = 0, diagnoses: int = 0) -> str:
-    """The ladder's word for a milestone's counts: `fails` is failed reviews with a repeated finding, `rounds` every
-    failed review, both since the last re-plan, diagnosis or decision of the human's."""
-    if fails >= 4:
-        return "replan" if replans == 0 else "too_many_failed_reviews"
-    if rounds >= ROUNDS_TO_DIAGNOSE:
-        return "diagnose" if diagnoses == 0 else "too_many_failed_reviews"
-    if fails <= 0 and rounds <= 0:
+def escalation(failed_reviews: int, with_repeat: int = 0, diagnoses: int = 0) -> str:
+    """What a milestone's counts call for after a failed review. The first two start again at a re-plan, a kept plan
+    or a decision of the human's. A milestone gets one diagnosis, so the same counts after it block the milestone."""
+    if with_repeat >= REPEATS_TO_DIAGNOSE or failed_reviews >= FAILED_REVIEWS_TO_DIAGNOSE:
+        return "diagnosis" if diagnoses == 0 else "too_many_failed_reviews"
+    if with_repeat <= 0 and failed_reviews <= 0:
         return "none"
-    if fails == 3 or rounds == FRESH_AFTER_ROUNDS:
-        return "fresh-session"
-    return "same-session"
+    if with_repeat == REPEATS_TO_DIAGNOSE - 1 or failed_reviews == NEW_SESSION_AFTER_FAILED_REVIEWS:
+        return "new_builder_session"
+    return "same_builder"
 
 
-def ladder(m: dict) -> str:
+def counts_of(m: dict) -> dict:
+    """A milestone's counts as whole numbers, 0 where it has none."""
+    return {k: int(m.get(k, 0) or 0) for k in COUNTS}
+
+
+def escalation_of(m: dict) -> str:
     """`escalation` for a milestone of a done-when file."""
-    return escalation(*(int(m.get(k, 0) or 0) for k in ("fails", "replans", "rounds", "diagnoses")))
+    return escalation(*counts_of(m).values())
+
+
+def diagnosis_cause(counts: dict) -> str:
+    """Why a milestone is owed a diagnosis, in the words the lead and the human read."""
+    return ("a finding keeps coming back" if int(counts.get("failed_reviews_with_repeat", 0) or 0) >= REPEATS_TO_DIAGNOSE
+            else "reviews keep finding something new")
+
+
+def blocked_after_diagnosis(counts: dict) -> str:
+    """Why the script blocked a milestone that reached the same counts again after its diagnosis."""
+    return ("a finding kept coming back after its diagnosis"
+            if int(counts.get("failed_reviews_with_repeat", 0) or 0) >= REPEATS_TO_DIAGNOSE
+            else "its reviews kept finding something new after its diagnosis")
 
 
 def repeats(findings: list, earlier_names: set, earlier_items: set) -> list[str]:
-    """The names of this round's findings that repeat an earlier round's: the same name, or a failure of an item
+    """The names of this review's findings that repeat an earlier review's: the same name, or a failure of an item
     that failed before, unless the reviewer said under `different` how it isn't the same defect."""
     return [f["name"] for f in findings if f["name"] in earlier_names
             or (f.get("item") in earlier_items and not f.get("different"))]
@@ -1583,8 +1628,7 @@ def reset_proof(milestone: dict, only_failed: bool = False) -> None:
 # ------------------------------------------------------------------------------------------------ deltas by role
 
 BUILDER_FIELDS = {"state"}, {"status", "evidence"}
-# `fails` is listed so that a reviewer following an older skill isn't refused for it; the script sets the counts.
-REVIEWER_FIELDS = {"state", "fails", "findings"}, {"verdict", "review"}
+REVIEWER_FIELDS = {"state", "findings"}, {"verdict", "review"}
 
 
 def delta_problems(before: dict | None, after: dict, role: str, mid: str | None = None,
@@ -1813,10 +1857,11 @@ def next_step(key: str, proj: dict, holds: dict | None = None, me: str = "") -> 
             return {**out, "status": "blocked", "reason": b["reason"], "blocked": b}
         if not design_ok(rec, e["design"]):
             return {**base, "status": "design_not_approved"}
-        if (word := ladder(m)) in ("replan", "diagnose"):
-            # repeated failures, or many new ones: another build round would only repeat them until a planner looks
-            return {**out, "status": "waiting", "reason": "for_replan" if word == "replan" else "for_diagnosis",
-                    "ladder": word, "fails": int(m.get("fails", 0) or 0), "rounds": int(m.get("rounds", 0) or 0)}
+        if escalation_of(m) == "diagnosis":
+            # repeated failures, or many new ones: another build would only repeat them until a planner looks
+            return {**out, "status": "waiting", "reason": "for_diagnosis", "cause": diagnosis_cause(m),
+                    "escalation": "diagnosis", "failed_reviews": int(m.get("failed_reviews", 0) or 0),
+                    "failed_reviews_with_repeat": int(m.get("failed_reviews_with_repeat", 0) or 0)}
         # Ready for Review with no record of the script's checks was set by a builder before 2.1.0. It isn't owed a
         # review: `run` takes it like any milestone it builds, runs the checks, and records it if they pass.
         if (m.get("state") == "ready_for_review" and ready_current(rec["milestones"].get(m["id"]))) or \
@@ -1944,30 +1989,30 @@ def counted_since(e: dict) -> str:
     return max((e.get("authorised") or {}).get("at") or "", e.get("counted_from") or "")
 
 
-def counted_rounds(e: dict, after: int | None = None) -> list[dict]:
-    """The review rounds a milestone's counts cover, oldest first: those after the last diagnosis or `owner reopen`
-    (by position, since both can be recorded in the same second as a round) and not older than its definitions. `after`
-    takes the rounds from that position instead."""
+def counted_reviews(e: dict, after: int | None = None) -> list[dict]:
+    """The reviews a milestone's counts cover, oldest first: those after the last diagnosis or `owner reopen`
+    (by position, since both can be recorded in the same second as a review) and not older than its definitions. `after`
+    takes the reviews from that position instead."""
     auth = (e.get("authorised") or {}).get("at") or ""
     start = e.get("counted_after", 0) if after is None else after
     return [r for r in (e.get("reviews") or [])[start:] if (r.get("at") or "") >= auth]
 
 
-def review_rounds(worktree: Path, prof: dict, module: str, mid: str) -> tuple[list[str], bool]:
-    """(the review files of every round against the milestone's current definitions, oldest first; whether some of
-    those rounds were overwritten before rounds were kept), read from the record at the last-fetched tip."""
+def review_files(worktree: Path, prof: dict, module: str, mid: str) -> tuple[list[str], bool]:
+    """(the file of every review against the milestone's current definitions, oldest first; whether some of
+    those files were overwritten before the script kept them), read from the record at the last-fetched tip."""
     try:
         rec = json.loads(show(worktree, base_ref(prof), record_rel(prof, module)) or "{}")
     except (json.JSONDecodeError, SystemExit):
         rec = {}
     e = (rec.get("milestones") or {}).get(mid) or {}
-    rounds = counted_rounds(e)
-    return [r["review"] for r in rounds if r.get("review")], any(r.get("review_in_history") for r in rounds)
+    reviews = counted_reviews(e)
+    return [r["review"] for r in reviews if r.get("review")], any(r.get("review_in_history") for r in reviews)
 
 
-def round_history(worktree: Path | None, prof: dict, module: str, mid: str, after: int | None = None) -> list[str]:
+def review_history(worktree: Path | None, prof: dict, module: str, mid: str, after: int | None = None) -> list[str]:
     """One line per failed review the milestone's counts cover (or every one after position `after`), oldest first: what
-    failed, and which findings repeated an earlier round. Read from the record at the last-fetched tip, for a
+    failed, and which findings repeated an earlier review. Read from the record at the last-fetched tip, for a
     planner and for the human."""
     if worktree is None:
         return []
@@ -1980,7 +2025,7 @@ def round_history(worktree: Path | None, prof: dict, module: str, mid: str, afte
 
 def review_notes(mid: str, prof: dict, stem: str, feedback: list | None, earlier: list[dict], judged: list) -> str:
     """What a milestone reviewer is told beyond the template, as paragraphs: the Human Feedback, where the earlier
-    failed rounds that still count are kept, and a planner's judgement that earlier findings overreached. The
+    failed reviews that still count are kept, and a planner's judgement that earlier findings overreached. The
     earlier findings aren't printed, because a reviewer who starts from them checks the places they name; the
     record holds their names, for a finding that is still there. Empty when there is none of these."""
     parts = []
@@ -2003,11 +2048,11 @@ def review_notes(mid: str, prof: dict, stem: str, feedback: list | None, earlier
 
 
 def history_lines(e: dict, after: int | None = None) -> list[str]:
-    """`round_history` for a milestone's record entry."""
+    """`review_history` for a milestone's record entry."""
     lines = []
-    for n, r in enumerate(r for r in counted_rounds(e, after) if r.get("verdict") == "fail"):
+    for n, r in enumerate(r for r in counted_reviews(e, after) if r.get("verdict") == "fail"):
         found = r.get("findings")
-        if found is None:  # rounds from before findings were recorded: point at the review rather than say "none"
+        if found is None:  # reviews from before findings were recorded: point at the review rather than say "none"
             failed = [i for i, v in (r.get("items") or {}).items() if v != "pass"]
             read = f"read {r['review']}" if r.get("review") else "its review is only in git history"
             what = (f"items {', '.join(failed)} didn't pass; " if failed else "") + \
@@ -2015,49 +2060,38 @@ def history_lines(e: dict, after: int | None = None) -> list[str]:
         else:
             what = "; ".join(f["name"] + (f" ({f['item']})" if f.get("item") else " (outside the items)")
                              + (", repeated" if f.get("repeat") else ", new") for f in found)
-        lines.append(f"round {n + 1} ({(r.get('at') or '')[:10]}): {what}")
+        lines.append(f"review {n + 1} ({(r.get('at') or '')[:10]}): {what}")
     return lines
 
 
-def replan_task(module: str, mid: str, fails: int, prof: dict, worktree: Path | None = None) -> str:
-    """The planner's task when the ladder reaches a re-plan: which milestone, why, and each round's review."""
+def diagnosis_task(module: str, mid: str, counts: dict, prof: dict, worktree: Path | None = None) -> str:
+    """The planner's task when a milestone is owed its diagnosis: which milestone, what its failed reviews have in
+    common, and where each review is."""
+    failed = int(counts.get("failed_reviews", 0) or 0)
+    repeated = int(counts.get("failed_reviews_with_repeat", 0) or 0)
     latest = f"{prof['evidence']}/{module}/{mid}-review.md"
-    files, lost = review_rounds(worktree, prof, module, mid) if worktree else ([], True)
-    where = (f"Its reviews, one per round: {', '.join(files)}" if files else f"The latest review is {latest}") + \
-        (f" (earlier rounds are only in git history: git log -p -- {latest})" if lost or not files else "")
-    history = round_history(worktree, prof, module, mid)
-    rounds = f" What failed in each round: {' | '.join(history)}." if history else ""
-    return (f"Re-plan {module} {mid}. {fails} of its failed reviews repeated a finding that an earlier review had "
-            f"raised, so the fixes aren't holding, and nobody has yet found out why. {where}.{rounds} Read every "
-            "round and decide why the same finding keeps coming back, as the plan-module skill's section \"When a "
-            f"milestone keeps failing on the same finding\" describes. If the plan is at fault, change the definitions "
-            f"of {mid} so it can be met, and end with PLANNED. The script then starts its counts again, counts the "
-            "re-plan and opens it. If the plan is sound, change no file and end with "
-            f"`KEEP {module} {mid}: builder: <why>`, `... reviewer: <why>` or `... owner: <why>`, naming who has to "
-            "act.")
+    files, lost = review_files(worktree, prof, module, mid) if worktree else ([], True)
+    where = (f"Its reviews, oldest first: {', '.join(files)}" if files else f"The latest review is {latest}") + \
+        (f" (earlier ones are only in git history: git log -p -- {latest})" if lost or not files else "")
+    history = review_history(worktree, prof, module, mid)
+    each = f" What failed in each review: {' | '.join(history)}." if history else ""
+    if repeated >= REPEATS_TO_DIAGNOSE:
+        what = (f"It has failed review {plural(failed, 'time')}, and {repeated} of those reviews repeated a finding "
+                "that an earlier review had raised, so the fixes aren't holding")
+    else:
+        what = (f"It has failed review {plural(failed, 'time')}, mostly on findings that no earlier review had "
+                "raised, so each fix held and the milestone still doesn't pass")
+    return (f"Diagnose {module} {mid}. {what}. {where}.{each} Read every review and decide why it keeps failing, as "
+            "the plan-module skill's section \"When a milestone keeps failing review\" describes. If the plan is at "
+            f"fault, change the definitions of {mid} so that it can be met, and end with PLANNED. If the plan is "
+            f"sound, change no file and end with `KEEP {module} {mid}: builder: <why>`, `... reviewer: <why>` or "
+            "`... human: <why>`, naming who has to act.")
 
 
-def diagnose_task(module: str, mid: str, rounds: int, prof: dict, worktree: Path | None = None) -> str:
-    """The planner's task when a milestone has failed review ROUNDS_TO_DIAGNOSE times, each time on something new."""
-    latest = f"{prof['evidence']}/{module}/{mid}-review.md"
-    files, lost = review_rounds(worktree, prof, module, mid) if worktree else ([], True)
-    where = (f"Its reviews, one per round: {', '.join(files)}" if files else f"The latest review is {latest}") + \
-        (f" (earlier rounds are only in git history: git log -p -- {latest})" if lost or not files else "")
-    history = round_history(worktree, prof, module, mid)
-    rounds_text = f" What failed in each round: {' | '.join(history)}." if history else ""
-    return (f"Diagnose {module} {mid}. It has failed review {rounds} times, mostly on findings no earlier review had "
-            f"raised, so each fix held and the milestone still isn't passing. {where}.{rounds_text} Read every round "
-            "and decide why, as the plan-module skill's section \"When reviews keep finding something new\" "
-            f"describes. If the items are too broad or can't be met, change the definitions of {mid} and end with "
-            "PLANNED as usual. If the plan is sound, change no file and end with "
-            f"`KEEP {module} {mid}: builder: <why>`, `... reviewer: <why>` or `... owner: <why>`, naming who has to "
-            "act. Your reasons go in that line.")
-
-
-def keep_round(tree: Path, current: Path) -> tuple[str, list[str]]:
+def keep_review(tree: Path, current: Path) -> tuple[str, list[str]]:
     """Keeps `current` (a review about to be replaced) as <name>-N.md beside it, reusing a copy `owner rereview`
     already made of the same text. Its captures folder <name>/ is copied beside it, to <name>-N/, and the kept file's
-    links to it are rewritten, so each round keeps its own evidence. The folder itself stays, so the next round's
+    links to it are rewritten, so each review keeps its own evidence. The folder itself stays, so the next review's
     captures are saved among the earlier ones, replacing any with the same name. Returns the kept file's path relative
     to `tree`, and every path written."""
     text, stem = current.read_text(), current.name[:-len(".md")]
@@ -2083,42 +2117,36 @@ def keep_round(tree: Path, current: Path) -> tuple[str, list[str]]:
     return touched[0], touched
 
 
-def settle_replans(before: dict | None, after: dict, stem: str) -> list[str]:
-    """The re-plan's bookkeeping, done by the script: each milestone that was owed a re-plan in `before` and whose
-    definitions `after` changes gets fails 0, one more replans than before, and state open, whatever the planner or
-    the human wrote there (so a forgotten count doesn't send the lead round again, and a done one isn't counted twice).
-    Returns the milestones it settled, as `STEM Mn`."""
+def settle_replanned(before: dict | None, after: dict, stem: str) -> list[str]:
+    """The bookkeeping of a re-plan, done by the script: each milestone that was owed a diagnosis in `before` and whose
+    definitions `after` changes gets its failed reviews counted from 0, one more in diagnoses, and state not_started,
+    whatever the planner or the human wrote there (so a forgotten count doesn't send the lead back to the planner,
+    and a done one isn't counted twice). Returns the milestones it settled, as `STEM Mn`."""
     old = {m.get("id"): m for m in (before or {}).get("milestones") or [] if isinstance(m, dict)}
     out = []
     for m in after.get("milestones") or []:
         was = old.get(m.get("id"))
-        word = ladder(was) if was else "none"
-        if word not in ("replan", "diagnose"):
+        if not was or escalation_of(was) != "diagnosis":
             continue
         if definitions(was) == definitions(m):
             continue  # nothing re-planned yet: still owed
-        m.update(fails=0, rounds=0, replans=int(was.get("replans", 0)) + 1, state="not_started",
-                 diagnoses=int(was.get("diagnoses", 0) or 0) + (1 if word == "diagnose" else 0))
+        m.update(failed_reviews=0, failed_reviews_with_repeat=0, diagnoses=int(was.get("diagnoses", 0) or 0) + 1,
+                 state="not_started")
         m.pop("blocked", None)
         m.pop("findings", None)
         out.append(f"{stem} {m['id']}")
     return out
-
-
-COUNTS = ("fails", "rounds", "replans", "diagnoses")
-
-
 def keep_counts(before: dict | None, after: dict, settled: list[str], stem: str) -> None:
     """Puts back what a planner changed in the script's counts: on each milestone the plan didn't settle, the counts,
-    `findings` and a Too Many Failed Reviews block as they were. A milestone split off a new one keeps the `replans` and `diagnoses`
-    it was given, and starts with no failed rounds."""
+    `findings` and a Too Many Failed Reviews block as they were. A milestone split off a new one keeps the `diagnoses`
+    it was given, and starts with no failed reviews."""
     old = {m.get("id"): m for m in (before or {}).get("milestones") or [] if isinstance(m, dict)}
     for m in after.get("milestones") or []:
         if f"{stem} {m.get('id')}" in settled:
             continue
         was = old.get(m.get("id"))
         if was is None:
-            m.update(fails=0, rounds=0)
+            m.update(failed_reviews=0, failed_reviews_with_repeat=0)
             m.pop("findings", None)
             continue
         for k in COUNTS + ("findings",):
@@ -2135,40 +2163,37 @@ def keep_counts(before: dict | None, after: dict, settled: list[str], stem: str)
                 m.pop("blocked", None)
 
 
-def ladder_next(word: str, module: str, mid: str, counts: dict, worktree: Path, prof: dict) -> dict:
-    """`next` after a failed milestone review: the ladder's word under `ladder`, with the command it calls for.
-    `counts` holds the milestone's fails, rounds and replans as the review left them."""
+def escalation_next(word: str, module: str, mid: str, counts: dict, worktree: Path, prof: dict) -> dict:
+    """`next` after a failed milestone review: what the counts call for under `escalation`, with the command for it.
+    `counts` holds the milestone's counts as the review left them."""
     wt = str(worktree)
-    fails, rounds = int(counts.get("fails", 0) or 0), int(counts.get("rounds", 0) or 0)
+    failed = int(counts.get("failed_reviews", 0) or 0)
+    repeated = int(counts.get("failed_reviews_with_repeat", 0) or 0)
     findings = FINDINGS_TEMPLATE.format(milestone=mid, module=module, evidence=prof["evidence"])
-    tally = (f"{module} {mid} has failed review {plural(rounds, 'time')}, "
-             f"{plural(fails, 'time')} on a finding an earlier round had raised")
-    if word == "same-session":
+    tally = (f"{module} {mid} has failed review {plural(failed, 'time')}, "
+             f"{plural(repeated, 'time')} on a finding an earlier review had raised")
+    if word == "same_builder":
         return next_cmd(loop_cmd("run", "--module", module, "--worktree", wt, "--message", findings), "lead",
-                        f"{tally}: resume the builder with this message, which points it to the review", ladder=word)
-    if word == "fresh-session":
+                        f"{tally}: resume the builder with this message, which points it to the review",
+                        escalation=word)
+    if word == "new_builder_session":
         return next_cmd(loop_cmd("run", "--module", module, "--worktree", wt, "--fresh", "--message", findings),
                         "lead", f"{tally}: start the builder again in a new session with this message, which points "
-                                "it to the review", ladder=word)
-    if word == "replan":
-        return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", replan_task(module, mid, fails, prof, worktree)),
+                                "it to the review", escalation=word)
+    if word == "diagnosis":
+        return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", diagnosis_task(module, mid, counts, prof, worktree)),
                         "planner", f"{tally}, so a planner decides why before any more building: it changes the "
                                    "definitions, or keeps them and names who has to act; `run` won't start a builder "
                                    "on it until then",
-                        ladder=word, findings=f"{prof['evidence']}/{module}/{mid}-review.md")
-    if word == "diagnose":
-        return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", diagnose_task(module, mid, rounds, prof, worktree)),
-                        "planner", f"{tally}, so a planner decides why before any more building: it changes the "
-                                   "definitions, or keeps them and names who has to act; `run` won't start a builder "
-                                   "on it until then", ladder=word,
+                        escalation=word, cause=diagnosis_cause(counts),
                         findings=f"{prof['evidence']}/{module}/{mid}-review.md")
-    return reopen_next(module, mid, wt, worktree, prof, f"{tally}, and the ladder has run out")
+    return reopen_next(module, mid, wt, worktree, prof, f"{tally}, and it has had its diagnosis")
 
 
 def reopen_next(module: str, mid: str, wt: str, worktree: Path | None, prof: dict, how: str | None = None,
                 after: int | None = None) -> dict:
-    """The human's decision on a milestone Blocked with too many failed reviews, with each round's failures so they
-    can decide in one word. With no `how`, the reason and rounds the script recorded when it blocked it."""
+    """The human's decision on a milestone Blocked with too many failed reviews, with each review's failures so they
+    can decide in one word. With no `how`, the reason and reviews the script recorded when it blocked it."""
     if how is None:
         held = {}
         if worktree is not None:
@@ -2177,16 +2202,16 @@ def reopen_next(module: str, mid: str, wt: str, worktree: Path | None, prof: dic
                 held = ((rec.get("milestones") or {}).get(mid) or {}).get("too_many_failed_reviews") or {}
             except (json.JSONDecodeError, SystemExit):
                 pass
-        how = held.get("why") or "it ran out of review rounds"
+        how = held.get("why") or "it failed review too many times"
         after = held.get("after", after)
-    history = round_history(worktree, prof, module, mid, after)
+    history = review_history(worktree, prof, module, mid, after)
     return owner_next("reopen", module, mid, wt,
                       f"{module} {mid} is Blocked with too many failed reviews: {how}. Accept it as it is, change its "
                       "scope, reopen it for another try, or leave it blocked?",
-                      f"{how}, so the script blocked it. Report it to the human with what failed in each round and "
+                      f"{how}, so the script blocked it. Report it to the human with what failed in each review and "
                       "your recommendation. The decision is theirs: run `owner accept` or `owner scope` instead of "
                       "reopen if that is what they choose. Later milestones of the module wait until it is decided",
-                      ladder="too_many_failed_reviews", **({"history": history} if history else {}))
+                      escalation="too_many_failed_reviews", **({"history": history} if history else {}))
 
 
 def open_needs(milestone: dict, types: tuple = NEEDS_TYPES) -> list[str]:
@@ -2332,8 +2357,8 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
         return next_cmd(loop_cmd("run", "--module", mod, "--worktree", wt), "lead",
                         f"{mod} {mid} is ready to build. Run it in the module's worktree; `run` fast-forwards a clean "
                         f"worktree that's behind {base_ref(prof)} itself, so there's no need to merge first")
-    if status == "waiting" and reason in ("for_replan", "for_diagnosis"):
-        return ladder_next(step.get("ladder", "replan"), mod, mid, step, worktree, prof)
+    if status == "waiting" and reason == "for_diagnosis":
+        return escalation_next("diagnosis", mod, mid, step, worktree, prof)
     if status == "design_not_approved":
         record = ((proj or {}).get(mod.upper()) or {}).get("record")
         # with `Review host: other` and a known planner, the host decided as everywhere else (a review host the
@@ -2424,7 +2449,7 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
 
 # The order `ready` looks for something to do when nothing is ready: a step's status, with its reason where that
 # changes whose move it is.
-NEXT_ORDER = ("review_owed", "waiting:for_replan", "waiting:for_diagnosis", "design_not_approved", "blocked", "invalid",
+NEXT_ORDER = ("review_owed", "waiting:for_diagnosis", "design_not_approved", "blocked", "invalid",
               "waiting:on_dependency", "taken", "blocked:too_many_failed_reviews")
 
 
@@ -3910,7 +3935,7 @@ def milestone_costs(worktree: Path, reading: dict, fit: dict, own: dict) -> tupl
             done = state == "done" or accepted(m, e["record"])
             g = by_ms.get((key, m["id"]))
             row = {"module": e["stem"], "milestone": m["id"], "state": state,
-                   "rounds": (m["rounds"] if "rounds" in m else m.get("fails") or 0) + 1}
+                   "reviews": int(m.get("failed_reviews", 0) or 0) + 1}
             if g:
                 row.update(pct=codex_quota.cost(g["tokens"], fit), turns=g["turns"], builder_hours=round(g["hours"], 1))
                 history.append(row)
@@ -3963,10 +3988,10 @@ def plan_forecast(acc: dict, history: list[dict], open_ms: list[dict], recent: d
         lo, hi = min(h["pct"][0] for h in finished), max(h["pct"][2] for h in finished)
         if len(finished) == 1:
             lo, hi = lo / 2, hi * 2  # one milestone of history says little about the next
-        rounds = sum(h["rounds"] for h in finished) / len(finished)
+        reviews = sum(h["reviews"] for h in finished) / len(finished)
         spent = [h.get("pct") or [0, 0, 0] for h in open_ms]
         plan = [max(0.0, x * len(open_ms) - sum(s[i] for s in spent)) for i, x in enumerate((lo, mean, hi))]
-        out.update(per_milestone=[round(lo, 2), round(mean, 2), round(hi, 2)], rounds_per_milestone=round(rounds, 1),
+        out.update(per_milestone=[round(lo, 2), round(mean, 2), round(hi, 2)], reviews_per_milestone=round(reviews, 1),
                    learned_from=len(finished), plan_pct=[round(x, 1) for x in plan])
         need = [plan[i] + other_need[i] for i in range(3)]
     out["need_pct"] = [round(x, 1) for x in need]
@@ -6482,7 +6507,7 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
 
 
 REVIEW_LINE = re.compile(r"^(PASS|FAIL)\s+([A-Za-z0-9_.-]+)\b|^(DESIGN OK|DESIGN CHANGES)\b")
-KEEP_LINE = re.compile(r"^KEEP\s+([A-Za-z0-9_.-]+)\s+([A-Za-z0-9_.-]+)\s*:\s*(builder|reviewer|owner)\b\s*:?\s*(.*)$",
+KEEP_LINE = re.compile(r"^KEEP\s+([A-Za-z0-9_.-]+)\s+([A-Za-z0-9_.-]+)\s*:\s*(builder|reviewer|human|owner)\b\s*:?\s*(.*)$",
                        re.IGNORECASE)
 
 
@@ -6607,7 +6632,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     feedback = (rec["milestones"].get(mid) or {}).get("human_feedback") if not design else None
     e_ = rec["milestones"].get(mid) or {}
     judged = [d for d in e_.get("diagnoses") or [] if d.get("who") == "reviewer"
-              and (d.get("at") or "") >= counted_since(e_)]  # only a judgement on the rounds the counts still cover
+              and (d.get("at") or "") >= counted_since(e_)]  # only a judgement on the reviews the counts still cover
     changed, any_change = design_changes(worktree, rec, done_path, proj[key]["doc"], design_rel(prof, stem),
                                          show(worktree, start, design_rel(prof, stem))) if design else ("", None)
     if design and any_change is False and (rec.get("design") or {}).get("verdict") == "changes":
@@ -6670,10 +6695,10 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     named, what = blocked_report(out["last_line"]) if not design else (None, "")
     if named == "needs_access":
         # In Thrum a reviewer that couldn't reach the Mac's locked screen failed the milestone on it, and the builder
-        # lost a round to a problem that wasn't in the work (F1). Access is the human's to give, not the builder's.
+        # lost a review to a problem that wasn't in the work (F1). Access is the human's to give, not the builder's.
         what = repo_relative(what, worktree_roots(worktree)) or "the reviewer couldn't reach the product"
         why = (f"the reviewer of {stem} {mid} couldn't reach the product from its session: {sentence(what)} Nothing "
-               "was merged and no round was counted, and the milestone is still Ready for Review. The lead runs the "
+               "was merged and no review was counted, and the milestone is still Ready for Review. The lead runs the "
                "same review again in a visible session while the human is at the machine to unlock or approve it")
         return _result("BLOCKED", **info, reason="needs_access", what=what, merged=False, commit=start,
                        last_line=out["last_line"], session=out.get("session"),
@@ -6743,8 +6768,8 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
         (t / review_path).parent.mkdir(parents=True, exist_ok=True)
         earlier, kept = t / review_path, None
         if earlier.exists() and earlier.read_text() != review_text:
-            # keep the earlier round beside the new one, named as `owner rereview` names its copies
-            kept, moved_files = keep_round(t, earlier)
+            # keep the earlier review beside the new one, named as `owner rereview` names its copies
+            kept, moved_files = keep_review(t, earlier)
             write += [p for p in moved_files if p not in write]
         (t / review_path).write_text(review_text)
         for p, data in captured.items():  # captures the reviewer saved beside the review
@@ -6788,17 +6813,17 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
         else:
             reviewed, target = find(after, mid), find(doc, mid)
             e = entry(record, mid)
-            # what failed in the rounds the counts cover; a round recorded before rounds kept their items falls
+            # what failed in the reviews the counts cover; a review recorded before the record kept each one's items falls
             # back to the verdicts the previous review left in the file
-            earlier = [r for r in counted_rounds(e) if r.get("verdict") == "fail"]
+            earlier = [r for r in counted_reviews(e) if r.get("verdict") == "fail"]
             names = {f["name"] for r in earlier for f in r.get("findings") or []}
             items = {i for r in earlier for i, v in (r.get("items") or {}).items() if v != "pass"}
-            # a milestone counted before rounds kept their items: its last review's verdicts are still in the file.
-            # Not after a reset (rounds 0), when the rounds those verdicts came from no longer count
-            counted = under_review["rounds"] if "rounds" in under_review else under_review.get("fails", 0)
+            # a milestone counted before the record kept each review's items: its last review's verdicts are still in the file.
+            # Not after a reset (failed_reviews 0), when the reviews those verdicts came from no longer count
+            counted = under_review.get("failed_reviews", 0)
             if int(counted or 0) > 0 and not any("items" in r for r in earlier):
                 items |= {i["id"] for i in under_review["items"] if (i.get("verdict") or "pass") != "pass"}
-            found = [] if passed else [dict(f) for f in reviewed.get("findings") or []]  # a pass clears the last round's
+            found = [] if passed else [dict(f) for f in reviewed.get("findings") or []]  # a pass clears the last review's
             again = repeats(found, names, items) if not passed else []
             for f in found:
                 f["repeat"] = f["name"] in again
@@ -6809,25 +6834,24 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
             for i in target["items"]:
                 i["verdict"], i["review"] = by_id[i["id"]].get("verdict", ""), by_id[i["id"]].get("review", "")
             if not passed:
-                target["rounds"] = int(target.get("rounds", 0) or 0) + 1
-                target["fails"] = int(target.get("fails", 0) or 0) + (1 if again else 0)
+                target["failed_reviews"] = int(target.get("failed_reviews", 0) or 0) + 1
+                target["failed_reviews_with_repeat"] = int(target.get("failed_reviews_with_repeat", 0) or 0) + (1 if again else 0)
                 reset_proof(target, only_failed=True)
-                if ladder(target) == "too_many_failed_reviews":
-                    # the ladder has run out; only the human reopens it
-                    why = ("it ran out of review rounds" if int(target.get("fails", 0) or 0) < 4 else
-                           "its failed reviews kept repeating the same findings after a re-plan")
+                if escalation_of(target) == "too_many_failed_reviews":
+                    # it has had its diagnosis; only the human reopens it
+                    why = blocked_after_diagnosis(target)
                     target["state"] = "blocked"
                     target["blocked"] = {"reason": "too_many_failed_reviews", "what": why}
                     e["too_many_failed_reviews"] = {"why": why, "after": e.get("counted_after", 0), "at": now()}
-            counts.update({k: int(target.get(k, 0) or 0) for k in ("fails", "replans", "rounds", "diagnoses")},
+            counts.update({k: int(target.get(k, 0) or 0) for k in COUNTS},
                           repeated=again, state=target["state"])
             write_json(t / done_path, doc)
             write.append(done_path)
-            if kept:  # the earlier round's file moved; its record entry follows it
-                rounds = [r for r in e.get("reviews") or [] if r.get("review") == review_path]
-                if rounds:
-                    rounds[-1]["review"] = kept
-                for r in rounds[:-1]:  # overwritten before rounds were kept: only git history has them
+            if kept:  # the earlier review's file moved; its record entry follows it
+                same = [r for r in e.get("reviews") or [] if r.get("review") == review_path]
+                if same:
+                    same[-1]["review"] = kept
+                for r in same[:-1]:  # overwritten before reviews were kept: only git history has them
                     r["review_in_history"] = r.pop("review")
             e.setdefault("reviews", []).append({"verdict": "pass" if passed else "fail", "commit": start,
                                                 "review": review_path,
@@ -6846,8 +6870,8 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                        problems=[f"the review was valid but couldn't be merged: {landed}"])
     if passed and not design:
         drop_hold(worktree, prof, key, mid)
-    fails = counts.get("fails") if counts else None
-    # On a FAIL, `next` is the command the escalation ladder calls for, with its word under `ladder`.
+    with_repeat = counts.get("failed_reviews_with_repeat") if counts else None
+    # On a FAIL, `next` is the command the counts call for, and `escalation` says what they call for.
     if design and stale:
         why = (f"the plan changed while this design review ran ({', '.join(stale['moved'])}), so its verdict doesn't "
                "count for the plan at the tip: the review is kept and listed, and the design review is still owed")
@@ -6857,15 +6881,16 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                        next=next_cmd(loop_cmd("review", "--module", stem, "--milestone", "design", "--worktree",
                                               str(worktree), "--host", host), "lead", why))
     if not passed and not design:
-        word = escalation(*(counts.get(k, 0) for k in ("fails", "replans", "rounds", "diagnoses")))
-        action = ladder_next(word, stem, mid, counts, worktree, prof)
+        word = escalation(*(counts.get(k, 0) for k in COUNTS))
+        action = escalation_next(word, stem, mid, counts, worktree, prof)
     elif not passed:
         action = design_review_next({"verdict": verdict, "review": review_path, "line": out["last_line"]}, stem,
                                     worktree, prof)
     else:
         action = after_pass(worktree, prof, key)
     return _result("REVIEWED", **info, verdict=verdict, commit=start, review=review_path, review_commit=landed,
-                   fails=fails, **({"rounds": counts["rounds"], "repeated": counts["repeated"], "ladder": word}
+                   failed_reviews_with_repeat=with_repeat,
+                   **({"failed_reviews": counts["failed_reviews"], "repeated": counts["repeated"], "escalation": word}
                                    if not passed and not design else {}),
                    next=action, last_line=out["last_line"],
                    session=out.get("session"),
@@ -6927,7 +6952,7 @@ def review_prompt(host: str, prof: dict, stem: str, mid: str, commit: str, done:
                            skill=skill_note("review-milestone", host),
                            answers=moved + review_notes(
                                mid, prof, stem, feedback,
-                               [] if design else [r for r in counted_rounds(entry) if r.get("verdict") == "fail"],
+                               [] if design else [r for r in counted_reviews(entry) if r.get("verdict") == "fail"],
                                judged))
 
 
@@ -6980,11 +7005,12 @@ def plan_owed(worktree: Path, start: str, message: str) -> str | None:
 
 def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str, info: dict, out: dict,
               tree: Path | None = None) -> None:
-    """A planner asked to re-plan or diagnose a milestone kept its plan and named who has to act. The script records that,
+    """A planner asked to diagnose a milestone kept its plan and named who has to act. The script records that,
     starts the milestone's counts again, and says what follows; a planner naming the human blocks it with too many
     failed reviews, for the human to decide. `tree` is the checkout the planner worked in, when that isn't
     `worktree`."""
     module, mid, who, why = keep.group(1), keep.group(2), keep.group(3).lower(), keep.group(4).strip()
+    who = "human" if who == "owner" else who  # a planner following a skill from before 2.2
     if changed := changed_paths(tree or worktree, start):
         emit("INVALID", **info, **out, merged=False,
              **(keep_leftovers(tree, prof, "diagnosis that kept the plan") if tree and tree != worktree else {}), problems=[
@@ -6996,12 +7022,10 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
         m = find(doc, mid)
     except (TipError, SystemExit, json.JSONDecodeError, KeyError) as e:
         emit("INVALID", **info, **out, merged=False, problems=[f"KEEP names {module} {mid}, which can't be read: {e}"])
-    step = ladder(m)
-    if step not in ("replan", "diagnose"):
+    if (step := escalation_of(m)) != "diagnosis":
         emit("INVALID", **info, **out, merged=False, problems=[
-            f"KEEP is the answer to a re-plan or a diagnosis, and {stem} {mid} isn't owed one (its ladder is {step})"])
-    count = "replans" if step == "replan" else "diagnoses"  # a kept plan is that step's one try, as a rewrite is
-    try:  # the rounds the planner diagnosed, which the human sees if it's theirs to decide
+            f"KEEP is the answer to a diagnosis, and {stem} {mid} isn't owed one (its counts call for {step})"])
+    try:  # the reviews the planner diagnosed, which the human sees if it's theirs to decide
         diagnosed = ((json.loads(show(worktree, tip(worktree, prof), record_rel(prof, stem)) or "{}")
                       .get("milestones") or {}).get(mid) or {}).get("counted_after", 0)
     except (TipError, SystemExit, json.JSONDecodeError):
@@ -7011,11 +7035,11 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
     def change(t):
         doc = json.loads((t / done_rel(prof, stem)).read_text())
         target = find(doc, mid)
-        target.update({"fails": 0, "rounds": 0, count: int(target.get(count, 0) or 0) + 1})
+        target.update(failed_reviews=0, failed_reviews_with_repeat=0, diagnoses=int(target.get("diagnoses", 0) or 0) + 1)
         record = record_in(t, prof, stem, doc)
         e = entry(record, mid)
-        if who == "owner":
-            why_owner = f"a planner read every round, kept the plan, and found it needs your decision: {why}"
+        if who == "human":
+            why_owner = f"a planner read every review, kept the plan, and found it needs your decision: {why}"
             target["state"] = "blocked"
             target["blocked"] = {"reason": "too_many_failed_reviews", "what": why_owner[:500]}
             e["too_many_failed_reviews"] = {"why": why_owner, "after": e.get("counted_after", 0), "at": at}
@@ -7026,14 +7050,14 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
         return [done_rel(prof, stem), record_rel(prof, stem)]
 
     ok, landed = loop_write(worktree, prof, "_plan", change,
-                            f"orchestrate: {'re-plan' if step == 'replan' else 'diagnosis'} of {stem} {mid} kept the plan: {who}")
+                            f"orchestrate: diagnosis of {stem} {mid} kept the plan: {who}")
     if not ok:
         emit("INVALID", **info, **out, merged=False, problems=[f"couldn't record the diagnosis: {landed}"])
     wt = str(worktree)
     findings = FINDINGS_TEMPLATE.format(milestone=mid, module=stem, evidence=prof["evidence"])
     if who == "builder":
         then = next_cmd(loop_cmd("run", "--module", stem, "--worktree", wt, "--fresh", "--message",
-                                 f"{findings}\n\nA planner read every round and kept the plan: {why}"), "lead",
+                                 f"{findings}\n\nA planner read every review and kept the plan: {why}"), "lead",
                         f"the planner kept {stem} {mid}'s plan and found the building at fault; start the builder "
                         "again in a new session with its reasons")
     elif who == "reviewer":
@@ -7045,7 +7069,7 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
                         f"the planner kept {stem} {mid}'s plan and found the reviews went beyond its items; start the "
                         "builder again in a new session to prove the items")
     else:
-        then = reopen_next(stem, mid, wt, worktree, prof, f"a planner read every round, kept the plan, and found it "
+        then = reopen_next(stem, mid, wt, worktree, prof, f"a planner read every review, kept the plan, and found it "
                                                          f"needs your decision: {why}", after=diagnosed)
     emit("KEPT", **info, **out, merged=True, commit=landed, module=stem, milestone=mid, who=who, why=why, next=then)
 
@@ -7256,7 +7280,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
             except json.JSONDecodeError:
                 prior = None
             was = prior or before.get(stem)
-            settled = settle_replans(was, doc, stem)
+            settled = settle_replanned(was, doc, stem)
             keep_counts(was, doc, settled, stem)
             replanned.extend(settled)
             # the stamp names the task; the whole of it is kept once, under `briefs`
@@ -7333,7 +7357,7 @@ def cmd_ready(a: argparse.Namespace) -> None:
         steps.append(dict(step))
         if step["status"] == "finished" and run_holder(folder, step["module"].upper()) is None:
             drop_tree(worktree, step["module"])  # also frees checkouts left from before this was done on finishing
-        if step_key(step) in ("waiting:for_replan", "waiting:for_diagnosis", "blocked:too_many_failed_reviews"):
+        if step_key(step) in ("waiting:for_diagnosis", "blocked:too_many_failed_reviews"):
             step["next"] = next_for(step, worktree, prof, proj)  # not the builder's: say whose it is
         out[step.pop("status")].append(step)
     if ahead := plan_ahead(worktree, prof, ref, proj):
@@ -7407,9 +7431,9 @@ def cmd_status(a: argparse.Namespace) -> None:
               (f" ({step['milestone']})" if step.get("milestone") else "") + running(key))
         for problem in e["problems"] or step.get("problems", []):
             print(f"  invalid: {problem}")
-        if step_key(step) in ("waiting:for_replan", "waiting:for_diagnosis"):
-            print(f"  {step['milestone']} failed review {plural(step.get('rounds', 0), 'time')}, "
-                  f"{step['fails']} on a repeated finding; a planner looks at it before any more building:\n"
+        if step_key(step) == "waiting:for_diagnosis":
+            print(f"  {step['milestone']} failed review {plural(step.get('failed_reviews', 0), 'time')}, "
+                  f"{step['failed_reviews_with_repeat']} on a repeated finding; a planner looks at it before any more building:\n"
                   f"    {next_for(step, worktree, prof, proj)['command']}")
         if e["problems"]:
             continue
@@ -7432,7 +7456,7 @@ def cmd_status(a: argparse.Namespace) -> None:
             reviews = (e["record"]["milestones"].get(m["id"]) or {}).get("reviews") or []
             if reviews:
                 flags.append(f"last review {reviews[-1]['verdict']} {reviews[-1].get('at', '')}".strip())
-            print(f"  {m['id']}\t{state}\tfails={m.get('fails', 0)} rounds={m.get('rounds', 0)}\t{passing(m)}/{len(m['items'])} pass"
+            print(f"  {m['id']}\t{state}\tfailed_reviews={m.get('failed_reviews', 0)} with_repeat={m.get('failed_reviews_with_repeat', 0)}\t{passing(m)}/{len(m['items'])} pass"
                   f"\t{m.get('name', '')}" + ("\t" + "; ".join(flags) if flags else ""))
 
 
@@ -7445,17 +7469,16 @@ def cmd_next(a: argparse.Namespace) -> None:
     except (TipError, json.JSONDecodeError, SystemExit):
         doc = load_done(worktree, stem, prof)
     milestone = find(doc, a.milestone)
-    counts = {k: int(milestone.get(k, 0) or 0) for k in ("fails", "replans", "rounds", "diagnoses")}
+    counts = {k: int(milestone.get(k, 0) or 0) for k in COUNTS}
     action = "too_many_failed_reviews" if milestone.get("state") == "blocked" and \
-        blocked_of(milestone)["reason"] == "too_many_failed_reviews" else ladder(milestone)
-    if action in ("replan", "diagnose", "too_many_failed_reviews"):  # for the planner or the human, rather than the builder's findings
-        then = ladder_next(action, stem, milestone["id"], counts, worktree, prof)
-        message = (replan_task(stem, milestone["id"], counts["fails"], prof, worktree) if action == "replan" else
-                   diagnose_task(stem, milestone["id"], counts["rounds"], prof, worktree) if action == "diagnose" else
+        blocked_of(milestone)["reason"] == "too_many_failed_reviews" else escalation_of(milestone)
+    if action in ("diagnosis", "too_many_failed_reviews"):  # for the planner or the human, rather than the builder's findings
+        then = escalation_next(action, stem, milestone["id"], counts, worktree, prof)
+        message = (diagnosis_task(stem, milestone["id"], counts, prof, worktree) if action == "diagnosis" else
                    then["why"])
     else:
         message = FINDINGS_TEMPLATE.format(milestone=milestone["id"], module=stem, evidence=prof["evidence"])
-        then = ladder_next(action, stem, milestone["id"], counts, worktree, prof) if action != "none" else None
+        then = escalation_next(action, stem, milestone["id"], counts, worktree, prof) if action != "none" else None
     print(json.dumps({"milestone": milestone["id"], **counts,
                       "action": action, "message": message, **({"next": fit_next(then)} if then else {})}))
 
@@ -8117,13 +8140,13 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
                 if v.get("at", "") >= since:
                     verdicts.append(f"- {stem} {m['id']}: {v.get('verdict')} ({v.get('at')}, {v.get('host') or 'host?'})"
                                     + (f", {md_link(v['review'], v['review'])}" if v.get("review") else
-                                       f", overwritten before rounds were kept (git log -p -- {v['review_in_history']})"
+                                       f", overwritten before reviews were kept (git log -p -- {v['review_in_history']})"
                                        if v.get("review_in_history") else ""))
             if m.get("state") == "blocked":
                 b = blocked_of(m)
                 if b["reason"] == "too_many_failed_reviews":
                     why = ((rec.get("milestones") or {}).get(m["id"]) or {}).get("too_many_failed_reviews", {}) \
-                        .get("why") or b.get("what") or "it ran out of review rounds"
+                        .get("why") or b.get("what") or "it failed review too many times"
                     waiting.append(f"- {stem} {m['id']}: Blocked: Too Many Failed Reviews, because {why}. The human "
                                    "accepts it (`owner accept`), re-scopes it (`owner scope`) or reopens it "
                                    "(`owner reopen`)")
@@ -8538,7 +8561,7 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
         reason = step.get("reason")
         if status == "blocked" and reason == "too_many_failed_reviews":
             why = ((rec.get("milestones") or {}).get(mid) or {}).get("too_many_failed_reviews", {}).get("why") or \
-                "it ran out of review rounds"
+                "it failed review too many times"
             waiting.append(f"- {stem} {mid} {name}: Blocked: Too Many Failed Reviews, because {why}. You decide: "
                            "accept it, change its scope or give it another try")
         elif status == "blocked" and reason in ("needs_human_feedback", "needs_access", "needs_hardware"):
@@ -9038,14 +9061,14 @@ def cmd_owner(a: argparse.Namespace) -> None:
                 if m["state"] != "blocked":
                     m.pop("blocked", None)
                 if was is not None:
-                    for k in ("fails", "replans", "rounds", "diagnoses", "findings"):
+                    for k in COUNTS + ("findings",):
                         if k in was:
                             m[k] = was[k]
-                    if settle_replans({"milestones": [was]}, {"milestones": [m]}, stem):
-                        # the definitions its reviews failed are gone, so this scope is the re-plan
+                    if settle_replanned({"milestones": [was]}, {"milestones": [m]}, stem):
+                        # the definitions its reviews failed are gone, so nothing is left to diagnose
                         if m["id"] not in out.setdefault("replanned", []):
                             out["replanned"].append(m["id"])
-                    m.update(fails=0, rounds=0, diagnoses=0)  # the human's new scope starts the counts again
+                    m.update(failed_reviews=0, failed_reviews_with_repeat=0, diagnoses=0)  # the human's new scope starts the counts again
                     m.pop("findings", None)
                 e = record["milestones"].get(m["id"]) or {}
                 record["milestones"][m["id"]] = {"definitions": definitions(m), "reviews": e.get("reviews", []),
@@ -9085,7 +9108,7 @@ def cmd_owner(a: argparse.Namespace) -> None:
             elif verb == "reopen":
                 if m.get("state") != "blocked" or blocked_of(m)["reason"] != "too_many_failed_reviews":
                     raise SystemExit(f"error: {mid} is {m.get('state')}, not Blocked with too many failed reviews")
-                m.update(state="in_progress", fails=0, rounds=0, diagnoses=0)
+                m.update(state="in_progress", failed_reviews=0, failed_reviews_with_repeat=0, diagnoses=0)
                 m.pop("blocked", None)
                 e["counted_from"], e["counted_after"] = stamp["at"], len(e.get("reviews") or [])  # counts start again
                 e.pop("too_many_failed_reviews", None)
@@ -9104,8 +9127,8 @@ def cmd_owner(a: argparse.Namespace) -> None:
         out["worktree"] = settle_scoped(worktree, prof, done_rel(prof, stem))
         if out.get("replanned"):
             out["replanned_why"] = (f"{', '.join(out['replanned'])} {'was' if len(out['replanned']) == 1 else 'were'} "
-                                    "owed a re-plan; this scope replaced the definitions its reviews failed, so it "
-                                    "counts as the re-plan: fails 0, one more replans, state not_started")
+                                    "owed a diagnosis; this scope replaced the definitions its reviews failed, so "
+                                    "nothing is left to diagnose: the counts start again, state not_started")
     if ok and feedback:
         out["next"] = next_cmd(loop_cmd("run", "--module", stem, "--worktree", str(worktree)), "lead",
                                f"the Human Feedback is in the record file; the resumed builder is told to read it "

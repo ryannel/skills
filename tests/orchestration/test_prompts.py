@@ -84,11 +84,13 @@ def prompts() -> dict[str, str]:
     out["plan"] = agent_loop.PLAN_TEMPLATE.format(
         task="Plan module APPLE-TILE. The human said on 9 November: \"tiles should load as you scroll, never "
              "all at once\".", skill=agent_loop.skill_note("plan-module", "claude"), loop=LOOP)
-    with mock.patch.object(agent_loop, "round_history", lambda *a, **k: agent_loop.history_lines({"reviews": [ROUND]})), \
-            mock.patch.object(agent_loop, "review_rounds", lambda *a, **k: (
+    with mock.patch.object(agent_loop, "review_history", lambda *a, **k: agent_loop.history_lines({"reviews": [ROUND]})), \
+            mock.patch.object(agent_loop, "review_files", lambda *a, **k: (
                 ["docs/evidence/APPLE-TILE/M2-review-1.md", "docs/evidence/APPLE-TILE/M2-review.md"], False)):
-        out["planner-replan-task"] = agent_loop.replan_task("APPLE-TILE", "M2", 4, PROF, Path("/repo"))
-        out["planner-diagnose-task"] = agent_loop.diagnose_task("APPLE-TILE", "M2", 6, PROF, Path("/repo"))
+        out["planner-diagnosis-task-repeated-finding"] = agent_loop.diagnosis_task(
+            "APPLE-TILE", "M2", {"failed_reviews": 4, "failed_reviews_with_repeat": 4}, PROF, Path("/repo"))
+        out["planner-diagnosis-task-new-findings"] = agent_loop.diagnosis_task(
+            "APPLE-TILE", "M2", {"failed_reviews": 6, "failed_reviews_with_repeat": 1}, PROF, Path("/repo"))
     out["planner-after-design-changes"] = agent_loop.design_review_next(
         {"verdict": "DESIGN CHANGES", "review": "docs/evidence/APPLE-TILE/design-review.md",
          "line": "DESIGN CHANGES: 2 must_fix findings"}, "APPLE-TILE", Path("/repo"), PROF)["command"]
