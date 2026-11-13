@@ -658,8 +658,20 @@ class Building(Repo):
         self.assertTrue(use["other_local_pct"][0] <= 10 <= use["other_local_pct"][2], use)
         self.assertEqual(use["other_local_threads"][0]["name"], "Clouds")
         summary = agent_loop.quota_summary(acc)
-        self.assertEqual(set(summary) - {"runs_out", "note"}, {"used_percent", "resets_at", "burn", "verdict", "warn",
-                                                                "detail"})
+        self.assertEqual(set(summary) - {"runs_out", "note"}, {"rate", "used_percent", "resets_at", "burn", "verdict",
+                                                                "warn", "detail"})
+        rate = acc["rate"]
+        self.assertEqual(rate["left_pct"], round(100 - acc["used_percent"], 1))
+        self.assertTrue(rate["left_at_reset_pct"][0] <= rate["left_at_reset_pct"][2], rate)
+        self.assertTrue(summary["rate"].startswith(f"{rate['left_pct']:.0f}% left and "), summary["rate"])
+        self.assertTrue(agent_loop.quota_text(acc).startswith(summary["rate"]))
+        bare = Path(self.enterContext(tempfile.TemporaryDirectory()))  # a checkout with no settings or plans
+        subprocess.run(["git", "init", "-q", str(bare)], check=True)
+        subprocess.run(["git", "-C", str(bare), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", "start"], check=True)
+        blind = agent_loop.quota_report(bare, reading=reading)["forecast"]
+        self.assertIsNone(blind["open_milestones"])
+        self.assertIn("No milestone forecast: no plans found", blind["verdict"])
 
     def test_a_script_checkout_whose_git_entry_is_gone_is_made_again(self):
         tree = agent_loop.verify_tree(self.wt, "WATER", "origin/main")
@@ -2699,7 +2711,7 @@ class FirstRuns(Repo):
     # 6. quota
 
 
-    def test_item6_quota_reads_out_the_verdict_first_and_json_behind_a_flag(self):
+    def test_item6_quota_reads_out_the_rate_and_verdict_first_and_json_behind_a_flag(self):
         acc = {"used_percent": 30.0, "resets_at": "2026-11-12T00:00:00Z", "hours_left": 40.0, "complete": True,
                "recent": {"hours": 12, "burn": {}}, "outside": {"pct": 0.5},
                "use_this_window": {"runs_pct": [1.0, 1.2, 1.4], "other_local_pct": [0.0, 0.0, 0.0],
@@ -2708,7 +2720,7 @@ class FirstRuns(Repo):
         with mock.patch.object(agent_loop, "quota_report", lambda *a, **k: acc):
             text = self.printed(agent_loop.cmd_quota, worktree=None, budget=1.0, json=False)
             raw = json.loads(self.printed(agent_loop.cmd_quota, worktree=None, budget=1.0, json=True))
-        self.assertTrue(text.startswith("Quota lasts: x."), text)
+        self.assertTrue(text.startswith("70% left and 40 h to the reset.\nQuota lasts: x."), text)
         self.assertIn("1.2% by orchestrate runs on this machine (any repository)", text)
         self.assertIn("from elsewhere", text)
         self.assertEqual(raw["used_percent"], 30.0)

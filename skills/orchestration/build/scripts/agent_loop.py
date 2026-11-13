@@ -321,7 +321,8 @@ Subcommands:
         each milestone of this repository cost (its turns and rounds; runs in other repositories count only as the
         machine's orchestrate use), the script's own use apart from other local threads and from usage
         no local rollout explains, and a forecast of the open milestones against what's left before the reset, with a
-        one-sentence verdict. Every result line carries a short `quota` field: used, reset, recent burn, the verdict,
+        one-sentence verdict. Every result line carries a short `quota` field: the rate (what's left, hours to the
+        reset, %/h, what's left at the reset), used, reset, recent burn, the verdict,
         `warn` (only when the quota won't last) and `runs_out` when one builder at the usual pace would use it up.
         Reading is cached and capped at two seconds on a result line; a first, cold read finishes here. Only result
         lines from a run that launched or meant to launch Codex carry `quota`.
@@ -3785,6 +3786,10 @@ def milestone_costs(worktree: Path, reading: dict, fit: dict, own: dict) -> tupl
     prof = profile(worktree, missing_ok=True)
     ref = base_ref(prof) if git(worktree, "rev-parse", "--verify", "-q", base_ref(prof)).returncode == 0 else "HEAD"
     proj = project(worktree, prof, ref)
+    if not proj:  # e.g. a checkout still on an old layout: say so, rather than forecast 0 open milestones
+        return [], [], {"plans_at": ref, "plan_unavailable": f"no plans found at {ref} from {worktree} (no "
+                        "ORCHESTRATE.md or no plans folder there); pass --worktree with a checkout on the current "
+                        "main branch"}
     tokens = codex_quota.tokens_by(reading, lambda r: r["thread"])
     turns: dict[str, int] = {}
     hours: dict[str, float] = {}
@@ -3938,6 +3943,7 @@ def quota_report(worktree: Path | None, budget_s: float = QUOTA_BUDGET_S, readin
               "other": [x + elsewhere for x in codex_quota.cost(recent_tokens.get(False, [0, 0, 0]), fit) or [0.0] * 3]}
     acc["recent"] = {"hours": round(recent_h, 1), "runs_pct": recent["runs"], "other_pct": recent["other"],
                      "burn": codex_quota.burn(reading, fit, since, now_s, elsewhere)}
+    acc["rate"] = quota_rate(acc["used_percent"], acc["hours_left"], recent)
     history, open_ms, notes = [], [], {}
     if worktree:
         try:
@@ -3948,7 +3954,40 @@ def quota_report(worktree: Path | None, budget_s: float = QUOTA_BUDGET_S, readin
     else:
         notes = {"plan_unavailable": "no --worktree, so no plan to cost"}
     acc["forecast"] = {**plan_forecast(acc, history, open_ms, recent), **notes}
+    if notes.get("plan_unavailable"):  # the milestone forecast would count other use only, so the rate stands alone
+        short = acc["rate"]["left_at_reset_pct"][0] <= 0
+        acc["forecast"].update(open_milestones=None, warn=short,
+                               verdict=f"No milestone forecast: {notes['plan_unavailable']}. The rate above is the "
+                                       "forecast" + (", and at its fastest it runs out before the reset." if short
+                                                     else "."))
     return acc
+
+
+def quota_rate(used: float, hours_left: float, recent: dict) -> dict:
+    """What is left, how fast it is going, and what that leaves at the reset: all use on the account (orchestrate
+    runs, other Codex threads, usage from elsewhere) over the last RECENT_H hours, carried on to the reset."""
+    left = max(0.0, 100.0 - used)
+    spent = [recent["runs"][i] + recent["other"][i] for i in range(3)]
+    per_h = [x / recent["hours"] for x in spent]
+    return {"left_pct": round(left, 1), "hours_left": round(hours_left, 1), "over_hours": round(recent["hours"], 1),
+            "used_pct": [round(x, 2) for x in spent], "pct_per_hour": [round(x, 2) for x in per_h],
+            "left_at_reset_pct": [round(max(0.0, left - x * hours_left), 1) for x in reversed(per_h)]}
+
+
+def rate_line(acc: dict) -> str:
+    """The quota in one sentence, as a rate: e.g. 21% left and 28 h to the reset; 0.16%/h over the last 12 h;
+    about 16% left at the reset at that rate."""
+    r = acc.get("rate")
+    if not r:
+        return f"{max(0.0, 100.0 - acc['used_percent']):.0f}% left and {acc['hours_left']:.0f} h to the reset."
+    lo, mid, hi = r["left_at_reset_pct"]
+    at_reset = f"about {mid:.0f}% left at the reset" + (f" ({lo:.0f}%-{hi:.0f}%)" if round(lo) != round(hi) else "")
+    if mid <= 0:
+        hours = r["left_pct"] / r["pct_per_hour"][1] if r["pct_per_hour"][1] else 0
+        at_reset = f"it runs out in about {hours:.0f} h, before the reset"
+    return (f"{r['left_pct']:.0f}% left and {r['hours_left']:.0f} h to the reset. All use on the account ran at "
+            f"{r['pct_per_hour'][1]:.2f}%/h over the last {r['over_hours']:.0f} h ({r['used_pct'][1]:.1f}% in all); "
+            f"at that rate, {at_reset}.")
 
 
 def burn_line(acc: dict) -> str:
@@ -3969,12 +4008,12 @@ def burn_line(acc: dict) -> str:
 
 
 def quota_summary(acc: dict | None) -> dict | None:
-    """The result line's few fields: used, reset, recent burn, a one-sentence verdict, and whether to warn."""
+    """The result line's few fields: the rate line, used, reset, recent burn, a one-sentence verdict, and whether to warn."""
     if not acc:
         return None
     f = acc["forecast"]
     recent = acc["recent"]["burn"].get("per_active_hour")
-    out = {"used_percent": acc["used_percent"], "resets_at": acc["resets_at"],
+    out = {"rate": rate_line(acc), "used_percent": acc["used_percent"], "resets_at": acc["resets_at"],
            "burn": burn_line(acc),
            "verdict": f.get("verdict"), "warn": bool(f.get("warn"))}
     if f.get("runs_out"):
@@ -3997,7 +4036,7 @@ def quota_text(acc: dict | None) -> str:
     s = quota_summary(acc)
     f, use = acc.get("forecast") or {}, acc.get("use_this_window") or {}
     mid = lambda r: r[1] if isinstance(r, list) and len(r) == 3 else r or 0
-    lines = [s["verdict"] or "No verdict.",
+    lines = [s["rate"], s["verdict"] or "No verdict.",
              f"Codex weekly limit: {acc['used_percent']:.0f}% used, resets {acc['resets_at']} "
              f"(in {acc['hours_left']:.0f} h). Burn: {s['burn']}."]
     if use and not use.get("runs_apart", True):
@@ -4019,8 +4058,6 @@ def quota_text(acc: dict | None) -> str:
                          f"{pct(row['pct'][2])}, {plural(row.get('turns', 0), 'turn')}, "
                          f"{row.get('builder_hours', 0)} builder-h" + ("" if row["state"] == "done" else
                                                                        " so far; a running turn counts when it ends"))
-    if f.get("plan_unavailable"):
-        lines.append(f"No plan to cost: {f['plan_unavailable']}.")
     lines.append("Everything, as JSON: add --json.")
     return "\n".join(lines)
 
@@ -6147,7 +6184,7 @@ def cmd_run(a: argparse.Namespace) -> None:
             if not first:
                 prompt += "\n\n" + feedback_note(feedback, mid, record_rel(prof, stem))
             state["feedback_told"] = told
-        loop_note(step=f"builder turn {state['turns'] + 1}" + (" (a new session)" if first and state["turns"] else ""))
+        loop_note(step=f"builder turn {LIVE.get('turns', 0) + 1}" + (" (a new session)" if first and state["turns"] else ""))
         code, session, message, err, seen = run_turn(host, prof, model, effort, worktree, prompt,
                                                      None if first else state["thread"], timeout_s,
                                                      title=session_title(worktree, stem, f"{mid} build"))
@@ -7708,7 +7745,7 @@ def cmd_loops(a: argparse.Namespace) -> None:
     if a.json:
         print(json.dumps({"runs": views, "cleaned": removed}, indent=2))
         return
-    print(f"{len(views)} loop{'' if len(views) == 1 else 's'} running" + (f" in {repo}" if repo else "") +
+    print(f"{len(views)} run{'' if len(views) == 1 else 's'} going" + (f" in {repo}" if repo else "") +
           (f"; cleared {len(removed)} file{'' if len(removed) == 1 else 's'} left by runs that died" if removed
            else ""))
     shown = object()
