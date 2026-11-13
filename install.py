@@ -400,6 +400,8 @@ def setup_codex(plugins: list[str], source: str) -> None:
         registered = None
     if registered is None:
         run([codex, "plugin", "marketplace", "add", source])
+    elif not Path(source).expanduser().exists():  # a Git marketplace is a snapshot, which `add` alone won't refresh
+        run([codex, "plugin", "marketplace", "upgrade", MARKETPLACE])
     for p in plugins:
         # A local marketplace is copied at install time, so re-adding picks up changes.
         for old in RETIRED_PLUGINS.get(p, []):

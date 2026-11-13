@@ -194,7 +194,8 @@ line in Codex's `AGENTS.md`.
 
 **Updates.** Push to `main`, then run `install.py` again. Both hosts fetch the marketplace from GitHub and keep a
 copy per plugin version. Claude Code re-copies a plugin only when its `version` changes, so `install.py` reinstalls
-one whose copy was made from an older commit. Codex copies on every `install.py` run. With `--source <folder>`,
+one whose copy was made from an older commit. For Codex, `install.py` refreshes its snapshot of the marketplace
+and copies every plugin again. With `--source <folder>`,
 Claude Code 2.1.317 loads the plugins from that folder in place, which is why it is only for trying changes.
 
 **Don't add a root `.claude-plugin/plugin.json`.** All four marketplace entries use the repo root as their source with
