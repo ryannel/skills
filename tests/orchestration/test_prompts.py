@@ -20,9 +20,9 @@ PROF = {"plans": "docs/plans", "evidence": "docs/evidence", "merge": "push", "re
         "test_command": "./dev check", "exclusive resources": "gpu: timing runs and captures",
         "bounds": {"Licences and paths not to touch": "no GPL code", "Human decides": "spending and publishing"}}
 MILESTONE = {"id": "M2", "items": [
-    {"id": "M2.1", "status": "pass"},
-    {"id": "M2.2", "status": "open", "needs": {"type": "human_feedback", "what": "does the tile animation read as smooth"}},
-    {"id": "M2.3", "status": "open", "needs": {"type": "hardware", "what": "an iPhone connected over USB"}}]}
+    {"id": "M2.1", "builder_result": "pass"},
+    {"id": "M2.2", "builder_result": "open", "needs": {"type": "human_feedback", "what": "does the tile animation read as smooth"}},
+    {"id": "M2.3", "builder_result": "open", "needs": {"type": "hardware", "what": "an iPhone connected over USB"}}]}
 FEEDBACK = [{"at": "2026-11-10T08:37:00Z", "items": ["M2.2"], "asked": "Is the resize smooth enough to ship?",
              "said": "Looks good to me, but the corners flicker once."}]
 ROUND = {"verdict": "fail", "at": "2026-11-09T21:00:00Z", "counts": True,

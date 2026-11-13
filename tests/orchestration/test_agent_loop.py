@@ -179,7 +179,7 @@ class Decisions(Clean):
     def test_definitions_ignore_claims_but_not_checks_or_needs(self):
         m = milestone("M1", "not_started", ["open"])
         before = agent_loop.definitions(m)
-        m["items"][0].update(status="pass", evidence="log", verdict="pass")
+        m["items"][0].update(builder_result="pass", evidence="log", verdict="pass")
         self.assertEqual(agent_loop.definitions(m), before)
         m["items"][0]["needs"] = needs("hardware", "plug in the phone")
         self.assertNotEqual(agent_loop.definitions(m), before)
@@ -297,7 +297,7 @@ class Deltas(Clean):
     def test_builder_may_change_only_its_fields_on_its_milestone(self):
         a = self.after()
         a["milestones"][0]["state"] = "ready_for_review"
-        a["milestones"][0]["items"][0].update(status="pass", evidence="log")
+        a["milestones"][0]["items"][0].update(builder_result="pass", evidence="log")
         self.assertEqual(agent_loop.delta_problems(self.before, a, "build", "M1"), [])
         a["milestones"][0]["diagnoses"] = 1
         self.assertTrue(agent_loop.delta_problems(self.before, a, "build", "M1"))
@@ -305,7 +305,7 @@ class Deltas(Clean):
     def test_astra_1_builder_forging_another_milestone_is_caught(self):
         a = self.after()
         a["milestones"][1]["state"] = "done"
-        a["milestones"][1]["items"][0].update(verdict="pass", status="pass")
+        a["milestones"][1]["items"][0].update(verdict="pass", builder_result="pass")
         self.assertTrue(any("M2" in p for p in agent_loop.delta_problems(self.before, a, "build", "M1")))
 
     def test_rebased_upstream_changes_are_allowed(self):
@@ -899,7 +899,7 @@ class Building(Repo):
         result = self.run_loop()
         self.assertEqual((result["result"], result["reason"]), ("BLOCKED", "needs_access"), result)
         m1 = self.read_done()["milestones"][0]
-        self.assertEqual([i["status"] for i in m1["items"]], ["pass", "open"])
+        self.assertEqual([i["builder_result"] for i in m1["items"]], ["pass", "open"])
         self.assertEqual((m1["blocked"]["reason"], m1["blocked"]["items"]), ("needs_access", ["M1.2"]))
         self.assertIn("approve Computer Use for IINA", m1["blocked"]["what"])
         self.assertEqual(len(self.calls()), 1)  # nobody is asked to confirm anything; the visible run is next
@@ -1047,7 +1047,7 @@ class Reviewing(Repo):
         self.assertIn(" run --module WATER ", result["next"]["command"])
         self.assertIn("--message", result["next"]["command"])
         m1 = self.read_done()["milestones"][0]
-        self.assertEqual((m1["state"], m1["items"][0]["status"], m1["items"][0]["evidence"]), ("in_progress", "open", ""))
+        self.assertEqual((m1["state"], m1["items"][0]["builder_result"], m1["items"][0]["evidence"]), ("in_progress", "open", ""))
         self.assertEqual(m1["items"][0]["verdict"], "fail")
         # The builder resumes its session with the findings, in its worktree.
         os.environ.pop("FAKE_REVIEW")
@@ -3894,7 +3894,7 @@ class FirstRuns(Repo):
             "d = sys.argv[1]\n"
             "os.makedirs(d + '/docs/plans/SHIP', exist_ok=True)\n"
             "json.dump({'module': 'SHIP', 'milestones': [{'id': 'M1', 'name': 'ship', 'state': 'done', 'failed_reviews': 0,"
-            " 'diagnoses': 0, 'items': [{'id': 'M1.1', 'statement': 'ships', 'check': 'true', 'status': 'pass',"
+            " 'diagnoses': 0, 'items': [{'id': 'M1.1', 'statement': 'ships', 'check': 'true', 'builder_result': 'pass',"
             " 'evidence': 'x', 'verdict': 'pass', 'review': 'x'"
             + "}]}]}, open(d + '/docs/plans/SHIP/DONE.json', 'w'))\n"
             "open(d + '/docs/plans/SHIP/DESIGN.md', 'w').write('# Ship')\n")
@@ -4649,7 +4649,7 @@ class PlanFiles(Repo):
         self.git("worktree", "add", "-q", "-b", "water-m2", str(tree), "origin/main")
         doc = json.loads((tree / "docs/plans/WATER/DONE.json").read_text())
         doc["milestones"][1]["state"] = "in_progress"
-        doc["milestones"][1]["items"][0]["status"] = "pass"
+        doc["milestones"][1]["items"][0]["builder_result"] = "pass"
         (tree / "docs/plans/WATER/DONE.json").write_text(json.dumps(doc))
         self.git("commit", "-qam", "M2: first wave", where=tree)
         put(tree / "src/waves.py", "WAVES = 3\n")
@@ -4704,7 +4704,7 @@ class PlanFiles(Repo):
         self.assertEqual(rebased.returncode, 0, rebased.stderr)  # nothing left to conflict
         doc = json.loads((tree / "docs/plans/WATER/DONE.json").read_text())
         m2 = doc["milestones"][1]
-        self.assertEqual((m2["state"], m2["items"][0]["status"], m2["depends_on"]), ("in_progress", "pass", ["M1"]))
+        self.assertEqual((m2["state"], m2["items"][0]["builder_result"], m2["depends_on"]), ("in_progress", "pass", ["M1"]))
         self.assertEqual(m2["items"][1]["needs"]["type"], "hardware")
         self.assertEqual((tree / "src/waves.py").read_text(), "WAVES = 3\n")
         self.assertEqual(agent_loop.old_names_in_tree(tree)[0], [])
@@ -4936,7 +4936,7 @@ class OnlyTheScriptSetsReadyForReview(Repo):
         doc = json.loads(path.read_text())
         doc["milestones"][0]["state"] = state
         for i in doc["milestones"][0]["items"]:
-            i["status"], i["evidence"] = status, "docs/evidence/WATER/run.log" if status == "pass" else ""
+            i["builder_result"], i["evidence"] = status, "docs/evidence/WATER/run.log" if status == "pass" else ""
         path.write_text(json.dumps(doc))
         self.git("commit", "-qam", f"M1 {state}", where=where)
 

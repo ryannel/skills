@@ -124,7 +124,7 @@ def done(*milestones, module="WATER"):
 
 def item(iid, status="open", **proof):
     proof = proof or {"check": "true"}
-    return {"id": iid, "statement": f"{iid} works", **proof, "status": status, "evidence": ""}
+    return {"id": iid, "statement": f"{iid} works", **proof, "builder_result": status, "evidence": ""}
 
 
 def milestone(mid, state, statuses, failed_reviews_with_repeat=0, **proof):
@@ -136,7 +136,7 @@ def milestone(mid, state, statuses, failed_reviews_with_repeat=0, **proof):
 def proved(m):
     """The milestone with evidence on every item that passes."""
     for i in m["items"]:
-        if i["status"] == "pass":
+        if i["builder_result"] == "pass":
             i["evidence"] = "docs/evidence/WATER/run.log"
     return m
 
@@ -220,7 +220,7 @@ if role == "build" and os.environ.get("FAKE_PASS") == "1":
             for i in m["items"]:
                 if i.get("needs") and os.environ.get("FAKE_SKIP_NEEDS"):
                     continue
-                i["status"], i["evidence"] = "pass", "run log"
+                i["builder_result"], i["evidence"] = "pass", "run log"
                 if os.environ.get("FAKE_WEAKEN"):
                     i["check"] = "true"
             if os.environ.get("FAKE_WEAKEN"):
@@ -230,7 +230,7 @@ if role == "build" and os.environ.get("FAKE_PASS") == "1":
         last = d["milestones"][-1]
         last["state"] = "done"
         for i in last["items"]:
-            i.update(status="pass", evidence="x", verdict="pass", review="x")
+            i.update(builder_result="pass", evidence="x", verdict="pass", review="x")
     path.write_text(json.dumps(d))
     if os.environ.get("FAKE_COMMIT", "1") == "1":
         git("commit", "-qam", "pass")
@@ -330,7 +330,7 @@ elif role == "plan":
             (cwd / "docs/plans/PAY/PLAN.md").write_text("# Pay plan" + os.environ.get("FAKE_ASSUME", ""))
         (cwd / "docs/plans/PAY/DONE.json").write_text(json.dumps({"module": "PAY", "milestones": [
             {"id": "M1", "name": "pay", "state": "not_started", "failed_reviews_with_repeat": 0, "diagnoses": 0,
-             "items": [{"id": "M1.1", "statement": "pays", "check": "true", "status": "open", "evidence": ""}]}]}))
+             "items": [{"id": "M1.1", "statement": "pays", "check": "true", "builder_result": "open", "evidence": ""}]}]}))
         reply = "Planned PAY. Nothing for the human to decide.\\nPLANNED" + ("" if os.environ.get("FAKE_PLAN_BARE") else ": " + ", ".join(files))
         side = os.environ.get("FAKE_PLAN_SIDE")
         if side:  # a planner that forges a record, commits it and puts it on the tip itself, or fakes the tip
@@ -572,7 +572,7 @@ class Repo(Clean):
         m1 = m1 or milestone("M1", "ready_for_review", ["pass"], inspect="frame sequence")
         m1["state"] = "ready_for_review"
         for i in m1["items"]:
-            i["status"] = "pass"
+            i["builder_result"] = "pass"
         self.write_done([proved(m1), milestone("M2", "not_started", ["open"])], ready=("M1",))
         self.commit_all()
         work = agent_loop.head_commit(self.wt)

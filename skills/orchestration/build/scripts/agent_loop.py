@@ -411,7 +411,7 @@ CLAUDE = os.environ.get("ORCHESTRATE_CLAUDE") or shutil.which("claude") or "clau
 CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
 REPORT_WORDS = ("DONE", "BLOCKED", "NEEDS_CONTEXT")
 STATES = {"not_started", "in_progress", "ready_for_review", "done", "blocked"}
-STATUSES = {"open", "pass"}  # an item's status; "open" here is not the milestone state
+BUILDER_RESULTS = {"open", "pass"}  # an item's status; "open" here is not the milestone state
 VERDICTS = {"", "pass", "fail", "could_not_judge"}
 # Why a milestone is Blocked: the `reason` of its `blocked` object, {"reason", "items"?, "what"}.
 BLOCK_REASONS = ("needs_human_feedback", "needs_access", "needs_hardware", "needs_context", "needs_dependency",
@@ -1239,8 +1239,8 @@ def validate(done, module: str = "") -> list[str]:
                 problems.append(f"{iid}: no statement")
             if not any(item.get(k) for k in ("check", "inspect", "ask")):
                 problems.append(f"{iid}: no check, inspect or ask, so nothing proves it")
-            if item.get("status", "open") not in STATUSES:
-                problems.append(f"{iid}: status {item.get('status')!r} isn't one of {sorted(STATUSES)}")
+            if item.get("builder_result", "open") not in BUILDER_RESULTS:
+                problems.append(f"{iid}: builder_result {item.get('builder_result')!r} isn't one of {sorted(BUILDER_RESULTS)}")
             if item.get("verdict", "") not in VERDICTS:
                 problems.append(f"{iid}: verdict {item.get('verdict')!r} isn't one of {sorted(VERDICTS - {''})}")
             if "needs" in item:
@@ -1353,6 +1353,8 @@ def old_names_in_doc(doc) -> list[str]:
         for i in m.get("items") or []:
             if not isinstance(i, dict):
                 continue
+            if "status" in i:
+                found.append("an item's `status` (now `builder_result`)")
             if "attended" in i:
                 found.append("an item's `attended` (now `needs`)")
             if i.get("verdict") == "cant_tell":
@@ -1399,6 +1401,8 @@ def upgrade_doc(doc):
         for i in m.get("items") or []:
             if not isinstance(i, dict):
                 continue
+            if "status" in i:
+                i.setdefault("builder_result", i.pop("status"))
             if "attended" in i:
                 if i["attended"]:
                     i["needs"] = old_needs(i)
@@ -1565,7 +1569,7 @@ def needs_of(milestone: dict, module: str) -> list[tuple[str, str]]:
 
 
 def passing(milestone: dict) -> int:
-    return sum(1 for item in milestone["items"] if item.get("status") == "pass")
+    return sum(1 for item in milestone["items"] if item.get("builder_result") == "pass")
 
 
 # A failed review counts twice over. `failed_reviews` counts every failed review, and `failed_reviews_with_repeat`
@@ -1628,14 +1632,14 @@ def reset_proof(milestone: dict, only_failed: bool = False) -> None:
     if only_failed and any(i.get("verdict") != "pass" for i in items):
         items = [i for i in items if i.get("verdict") != "pass"]
     for i in items:
-        i["status"], i["evidence"] = "open", ""
+        i["builder_result"], i["evidence"] = "open", ""
         if not only_failed:
             i["verdict"], i["review"] = "", ""
 
 
 # ------------------------------------------------------------------------------------------------ deltas by role
 
-BUILDER_FIELDS = {"state"}, {"status", "evidence"}
+BUILDER_FIELDS = {"state"}, {"builder_result", "evidence"}
 REVIEWER_FIELDS = {"state", "findings"}, {"verdict", "review"}
 
 
@@ -1655,7 +1659,7 @@ def delta_problems(before: dict | None, after: dict, role: str, mid: str | None 
             was_items = {i.get("id"): i for i in was.get("items", [])}
             for i in m["items"]:
                 w = was_items.get(i["id"], {})
-                for key in ("status", "verdict"):
+                for key in ("builder_result", "verdict"):
                     if i.get(key) == "pass" and w.get(key) != "pass":
                         problems.append(f"{i['id']}: a planner can't set {key} pass")
         return problems
@@ -2225,7 +2229,7 @@ def reopen_next(module: str, mid: str, wt: str, worktree: Path | None, prof: dic
 def open_needs(milestone: dict, types: tuple = NEEDS_TYPES) -> list[str]:
     """The ids of the milestone's items that need someone (their `needs` type one of `types`) and haven't passed."""
     return [i["id"] for i in milestone.get("items") or []
-            if isinstance(i.get("needs"), dict) and i["needs"].get("type") in types and i.get("status") != "pass"]
+            if isinstance(i.get("needs"), dict) and i["needs"].get("type") in types and i.get("builder_result") != "pass"]
 
 
 HELD_BY_SOMEONE = ("access", "hardware")  # done at the machine, not said, so nothing is recorded for them
@@ -5065,7 +5069,7 @@ def needs_rules(milestone: dict | None, headless: bool) -> list[str]:
     by_type: dict = {}
     for i in (milestone or {}).get("items", []):
         n = i.get("needs")
-        if isinstance(n, dict) and n.get("type") in NEEDS_TYPES and i.get("status") != "pass":
+        if isinstance(n, dict) and n.get("type") in NEEDS_TYPES and i.get("builder_result") != "pass":
             by_type.setdefault(n["type"], []).append(f"{i['id']} ({n.get('what')})" if n.get("what") else i["id"])
     out = []
 
@@ -5765,7 +5769,7 @@ def block_for(current: dict, named: str | None, what: str) -> tuple[str, list[st
     if named:
         kind = named[len("needs_"):]
         return named, open_needs(current, (kind,)) if kind in NEEDS_TYPES else [], what
-    others_pass = all(i.get("status") == "pass" for i in current["items"] if not isinstance(i.get("needs"), dict))
+    others_pass = all(i.get("builder_result") == "pass" for i in current["items"] if not isinstance(i.get("needs"), dict))
     for kind in ("access", "hardware", "human_feedback"):
         if others_pass and (items := open_needs(current, (kind,))):
             return f"needs_{kind}", items, what or "; ".join(
@@ -5780,13 +5784,13 @@ def work_marks(worktree: Path, milestone: dict | None) -> str:
     """A fingerprint of the builder's uncommitted work and its milestone's builder fields, so a turn that changed
     neither is told apart from one that did work without committing it."""
     tree = git(worktree, "status", "--porcelain").stdout + git(worktree, "diff", "HEAD").stdout
-    fields = json.dumps([(milestone or {}).get("state")] + [(i.get("id"), i.get("status"), i.get("evidence"))
+    fields = json.dumps([(milestone or {}).get("state")] + [(i.get("id"), i.get("builder_result"), i.get("evidence"))
                                                           for i in (milestone or {}).get("items", [])])
     return hashlib.sha256((tree + fields).encode()).hexdigest()
 
 
 def open_items(milestone: dict | None) -> str:
-    ids = [i["id"] for i in (milestone or {}).get("items", []) if i.get("status") != "pass"]
+    ids = [i["id"] for i in (milestone or {}).get("items", []) if i.get("builder_result") != "pass"]
     return f" Still open: {', '.join(ids)}." if ids else ""
 
 
@@ -5834,7 +5838,7 @@ def resume_facts(worktree: Path, milestone: dict | None, last_exit: int | None, 
         if last:
             parts.append(f"{'The last commit in this worktree' if earlier else 'Your last commit'} is {last}.")
         items = (milestone or {}).get("items", [])
-        passed = [i["id"] for i in items if i.get("status") == "pass"]
+        passed = [i["id"] for i in items if i.get("builder_result") == "pass"]
         if passed:
             parts.append(f"Passed: {', '.join(passed)}.")
     running = worktree_jobs(worktree, running_only=True)
@@ -6265,7 +6269,7 @@ def cmd_run(a: argparse.Namespace) -> None:
                 reasons.append(f"HEAD is not on {base_ref(prof)} yet; merge with `python3 {LOOP} merge --worktree .`")
             if passing(milestone) < len(milestone["items"]):
                 reasons.append("items not yet pass: " + ", ".join(i["id"] for i in milestone["items"]
-                                                                  if i.get("status") != "pass"))
+                                                                  if i.get("builder_result") != "pass"))
             state["not_ready_reasons"] = "; ".join(reasons)
     if getattr(a, "checks_only", False):
         # nothing passed: the checks failed, or the work isn't merged with every item passing yet
@@ -6410,7 +6414,7 @@ def cmd_run(a: argparse.Namespace) -> None:
             reasons = check_and_record(current, done)
         else:
             reasons = ["items not yet pass: " + ", ".join(i["id"] for i in current["items"]
-                                                           if i.get("status") != "pass")]
+                                                           if i.get("builder_result") != "pass")]
         state["not_ready_reasons"] = "; ".join(reasons)
         if word == "DONE" or status == "complete":
             state["not_ready_turns"] += 1
@@ -6433,7 +6437,7 @@ def cmd_run(a: argparse.Namespace) -> None:
         # A headless run can't do items that need access or hardware. Once they are all that is left, the run stops
         # Blocked on them, for a visible run while the human is at the machine; nobody is asked to confirm anything.
         if headless and open_needs(current, HELD_BY_SOMEONE) and all(
-                i.get("status") == "pass" for i in current["items"]
+                i.get("builder_result") == "pass" for i in current["items"]
                 if (i.get("needs") or {}).get("type") not in HELD_BY_SOMEONE):
             stop_blocked(None, "", message)
         # A turn that changed nothing and reported nothing is a progress update, not work. After STALL_TURNS of
@@ -6441,7 +6445,7 @@ def cmd_run(a: argparse.Namespace) -> None:
         state["idle"] = 0 if (changed_anything or word) else state.get("idle", 0) + 1
         if state["idle"] >= STALL_TURNS:
             finish(state_path, state, "STALLED", turns=state["idle"], open=[
-                i["id"] for i in current["items"] if i.get("status") != "pass"], report=tail(message, 1500))
+                i["id"] for i in current["items"] if i.get("builder_result") != "pass"], report=tail(message, 1500))
         if status == "blocked":
             named, what = blocked_report(report_line(message))
             stop_blocked(named, what or "the Codex goal is blocked", message)
@@ -8165,7 +8169,7 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
             if not accepted(m, rec):
                 for i in m.get("items") or []:
                     n = i.get("needs")
-                    if not isinstance(n, dict) or i.get("status") == "pass":
+                    if not isinstance(n, dict) or i.get("builder_result") == "pass":
                         continue
                     how = (f"Ask the human in chat; their reply goes in "
                            f"`{human_cmd('feedback', stem, m['id'], str(worktree), i['id'])}`"
