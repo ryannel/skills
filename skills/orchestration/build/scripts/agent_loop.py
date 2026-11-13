@@ -4549,6 +4549,10 @@ class HeadlessWatch:
             self.noted_call = current
             loop_note(open_tool_call={"name": current["name"], "input": current["input"],
                                       "opened_at": current["opened"]} if current else None)
+        return self.hung()
+
+    def hung(self) -> str | None:
+        """Why the turn should stop, when a call that isn't a shell command has been open past TOOL_CALL_LIMIT_S."""
         hung = [c for c in self.calls.values()
                 if not c["closed"] and not c["shell"] and time.time() - c["opened"] > TOOL_CALL_LIMIT_S]
         if hung:
@@ -5566,12 +5570,17 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
     began = time.time()
     deadline, running, started, quiet, woken = began + timeout_s, set(), False, began, 0
     message, error, aborted = "", "", False
+    # The app runs the tools, so the script follows the calls in the rollout file, as it does for `codex exec`: a
+    # visible review in Thrum waited 30 minutes on a Computer Use call that never answered.
+    watch = HeadlessWatch("codex", None)
     while True:
         rollout = rollout or rollout_for(thread)
         events, offset = new_events(rollout, offset)
         for event in events:
             p = event.get("payload") or {}
             kind = p.get("type")
+            if event.get("type") == "response_item":
+                watch.codex_item(p)
             if event.get("type") == "response_item" and kind == "message" and p.get("role") == "assistant":
                 text = [c.get("text", "") for c in p.get("content") or [] if isinstance(c, dict)]
                 message = "\n".join(t for t in text if t) or message
@@ -5584,18 +5593,24 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
                 running.discard(p.get("turn_id"))
                 aborted, quiet = kind == "turn_aborted", time.time()
                 message = p.get("last_agent_message") or message
+                for call_id in list(watch.calls):  # a turn's end closes whatever it left open
+                    watch.closed(call_id)
             elif kind == "error":
                 error = str(p.get("message") or p)[:500]
         if _STOP:
             codex_interrupt(thread)
             return 130, thread, message, "(stopped)", None
-        if time.time() > deadline:
+        hung = watch.hung()
+        if hung or time.time() > deadline:
             if not started:
                 codex_unqueue(thread)
             goal = goal_status(thread)
             codex_interrupt(thread)
             if goal == "active":  # Stop pauses the goal; a timeout isn't the human pausing it
                 codex_goal_activate(thread)
+            TURN_STOP.update(stopped_turn(watch, 124, timeout_s))
+            if hung:  # like a headless turn the script ends early: the agent is resumed and told about the call
+                return 0, thread, message, f"({hung})", None
             return 124, thread, message, "(timed out)", None
         if not started:
             # The app can hold a queued turn a long time (sleep, a busy window), so keep waking it while the message
@@ -6424,6 +6439,7 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
         if code != 0:
             return {"result": "HOST_FAILED", "reason": floor_reason(host, code, err) if code == 127 else
                     f"the {role} turn on {host} was stopped: {stop['why']}" if code == 124 and stop else
+                    f"the {role} turn on {host} reached the {timeout_s / 3600:g}-hour turn limit" if code == 124 else
                     f"the {role} turn on {host} failed (exit {code}); likely quota, sign-in or outage",
                     "exit_code": code, "stderr": err, "session": session, **spent}
         owed = missing(message)

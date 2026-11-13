@@ -1852,8 +1852,12 @@ class FakeCodexApp:
         self.write(t, {"type": "event_msg", "payload": {"type": "task_started", "turn_id": turn}},
                    {"type": "turn_context", "payload": {"turn_id": turn, "model": info["model"],
                                                         "effort": self.effort_seen or info["effort"]}})
-        if self.behaviour == "hang":
+        if self.behaviour == "hang" or (self.behaviour == "hung_call" and not self.interrupts):
             info["running"] = turn
+            if self.behaviour == "hung_call":  # a Computer Use call that never answers, as in Thrum
+                self.write(t, {"type": "response_item", "payload": {
+                    "type": "function_call", "namespace": "mcp__cua_repl", "name": "js", "call_id": "c1",
+                    "arguments": '{"code":"await cua.getApp(\'ThrumReview.app\')"}'}})
             return
         if self.behaviour == "owner_stop":
             self.write(t, {"type": "event_msg", "payload": {"type": "turn_aborted", "turn_id": turn}})
@@ -2182,6 +2186,23 @@ class Fold(Repo):
                          {"model": "gpt-6.1-sol", "effort": "high", "cli": "codex-cli 0.167.0", "path": "visible",
                           "observed": {"model": "gpt-6.1-sol", "effort": "high"}})
 
+
+    def test_a_visible_review_stops_a_hung_tool_call_and_a_timeout_is_named(self):
+        self.write_done([milestone("M1", "not_started", ["open"], inspect="frames"), milestone("M2", "not_started", ["open"])])
+        self.commit_all()
+        with FakeCodexApp(self).installed():
+            commit = self.run_loop()["commit"]
+        with FakeCodexApp(self, behaviour="hang").installed():
+            result = self.review(commit=commit, host="codex", turn_timeout_hours=0.1 / 3600)
+        self.assertEqual(result["result"], "HOST_FAILED")
+        self.assertIn("the review turn on codex was stopped: the turn reached the", result["reason"])
+        self.assertNotIn("quota", result["reason"])
+        with FakeCodexApp(self, behaviour="hung_call").installed() as app, \
+                mock.patch.object(agent_loop, "TOOL_CALL_LIMIT_S", 0.05):
+            result = self.review(commit=commit, host="codex")
+        self.assertEqual(result["verdict"], "PASS")  # resumed after the stop, and told which call hung
+        self.assertEqual(len(app.interrupts), 1)
+        self.assertIn("the tool call mcp__cua_repl.js had been open for", app.sent[-1])
 
     # Item 7: the loader check runs on the resolved launch.
 
