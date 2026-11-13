@@ -6,11 +6,13 @@ Usage:
   python3 install.py --replace-standalone     # the same, first moving aside earlier standalone copies and hook
   python3 install.py --plugins prompting-agents --host codex
   python3 install.py --repo ~/code/app        # also set up that repo (see below)
-  python3 install.py --repo ~/code/app --scope project --source ryannel/skills
+  python3 install.py --repo ~/code/app --scope project
                                               # Claude plugins declared in the repo's .claude/settings.json
+  python3 install.py --source .               # this checkout instead, to try changes before they are pushed
 
-Claude Code: registers this checkout (or --source) as the `ryannel-skills` plugin marketplace and installs each
-plugin. If that marketplace is already registered from another source, it says so and re-registers it from this one,
+Claude Code: registers ryannel/skills on GitHub (or --source) as the `ryannel-skills` plugin marketplace and installs
+each plugin. Installing from GitHub means every session loads the published version from the hosts' plugin caches,
+never a working copy that someone is editing. If that marketplace is already registered from another source, it says so and re-registers it from this one,
 reinstalling the plugins it had.
 
 Codex: the same marketplace with the Codex CLI (the copy inside the Codex app when `codex` isn't on PATH), which
@@ -56,6 +58,7 @@ RETIRED_SKILLS = {"prompting-agents": ["instructing-agents"]}  # skills that no 
 # A plugin, and the plugins it needs installed beside it. Orchestrate's agents write prompts for each other all day,
 # and its skills tell them to use prompting-agents. skill-creator takes its writing guidance from it.
 REQUIRES = {e["name"]: e.get("dependencies", []) for e in ENTRIES.values()}  # Codex ignores `dependencies`
+PUBLISHED = "ryannel/skills"
 CODEX_APP_CLI = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
 CLAUDE_READS_AGENTS_MD = (2, 1, 277)
 AGENTS_LINE = "Apply the `prompting-agents` skill before you hand a prompt to another agent."
@@ -274,6 +277,21 @@ def stale_copy(plugin: str, install_path: Path) -> bool:
                for p in paths)
 
 
+def older_commit(plugin: str, scope: str) -> bool:
+    """Whether Claude Code's copy of a plugin from the GitHub marketplace was made at an older commit than the
+    marketplace's clone now holds. Claude Code re-copies only when `version` changes, so a fix pushed at the same
+    version would otherwise never arrive."""
+    home = claude_home() / "plugins"
+    head = subprocess.run(["git", "-C", str(home / "marketplaces" / MARKETPLACE), "rev-parse", "HEAD"],
+                          text=True, capture_output=True).stdout.strip()
+    try:
+        recs = json.loads((home / "installed_plugins.json").read_text())["plugins"].get(f"{plugin}@{MARKETPLACE}", [])
+    except (OSError, ValueError, KeyError):
+        return False
+    sha = next((r.get("gitCommitSha") for r in recs if r.get("scope") == scope), None)
+    return bool(head and sha and sha != head)
+
+
 def setup_claude(plugins: list[str], scope: str, repo: Path | None, source: str) -> None:
     claude = shutil.which("claude")
     if not claude:
@@ -314,9 +332,10 @@ def setup_claude(plugins: list[str], scope: str, repo: Path | None, source: str)
         rec = next((x for x in quiet_json([claude, "plugin", "list", "--json"], cwd=cwd) or []
                     if x["id"] == f"{p}@{MARKETPLACE}" and x.get("scope") == scope), None)
         # Claude Code before in-place loading copies a local plugin and re-copies only when `version` changes.
-        if rec and not rec.get("readFromFolder") and Path(source).expanduser().exists() \
-                and stale_copy(p, Path(rec["installPath"])):
-            print(f"  the cached copy of {p} differs from this checkout at the same version; reinstalling it")
+        local = Path(source).expanduser().exists()
+        if rec and not rec.get("readFromFolder") and (local and stale_copy(p, Path(rec["installPath"])) or
+                                                      not local and older_commit(p, scope)):
+            print(f"  the cached copy of {p} is older than {source} at the same version; reinstalling it")
             run([claude, "plugin", "uninstall", "--keep-data", "--scope", scope, f"{p}@{MARKETPLACE}"], cwd=cwd)
             run([claude, "plugin", "install", "--scope", scope, f"{p}@{MARKETPLACE}"], cwd=cwd)
     installed = {x["id"].split("@")[0]: x for x in quiet_json([claude, "plugin", "list", "--json"], cwd=cwd) or []
@@ -499,7 +518,7 @@ def choose_orchestration_install(a: argparse.Namespace) -> None:
     except (EOFError, KeyboardInterrupt):
         sys.exit("Installation cancelled.")
     a.plugins = "orchestrate"
-    a.source = "ryannel/skills"
+    a.source = PUBLISHED
     a.repo = None
     if a.scope == "project":
         git_root = subprocess.run(["git", "rev-parse", "--show-toplevel"], text=True, capture_output=True)
@@ -528,8 +547,9 @@ def parse_scripted_args() -> argparse.Namespace:
     ap.add_argument("--scope", choices=["user", "project", "local"], default="user",
                     help="Claude Code install scope; project and local need --repo")
     ap.add_argument("--repo", type=Path, help="a repository to set up as well")
-    ap.add_argument("--source", default=str(HERE),
-                    help="marketplace source: this checkout (default) or ryannel/skills, which suits --scope project")
+    ap.add_argument("--source", default=PUBLISHED,
+                    help=f"marketplace source: {PUBLISHED} on GitHub (default), or a local checkout such as this one "
+                         "when testing changes before they are pushed")
     ap.add_argument("--replace-standalone", action="store_true",
                     help="move aside earlier standalone copies of these skills and the hand-installed hook")
     a = ap.parse_args()

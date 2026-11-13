@@ -164,21 +164,22 @@ python3 install.py --repo ~/code/app     # and set that repo up too
 python3 install.py --plugins prompting-agents --host codex
 ```
 
-Run it from the checkout you mean to keep, such as the main clone rather than a temporary worktree: it registers
-that folder as the `ryannel-skills` marketplace, and newer Claude Code reads the plugins from it in place. If the
-marketplace is already registered from somewhere else, it says so and re-registers it from this folder. It ends by
-printing where each plugin loads from and the checkout's revision.
+It registers this repo on GitHub, `ryannel/skills`, as the `ryannel-skills` marketplace, so both hosts install
+what is published into their own plugin caches. No session loads skills from a working copy that someone is
+editing. If the marketplace is already registered from somewhere else, such as a local folder, it says so and
+re-registers it from GitHub. To try changes before they are pushed, pass `--source .`, and run `install.py` again
+without it afterwards. It ends by printing where each plugin loads from.
 
 What each host gets (checked 9 November 2026 on Claude Code 2.1.239 and 2.1.317 and the Codex CLI 0.167.0-alpha.3.2
 inside the Codex app):
 
 | | Claude Code | Codex |
 |---|---|---|
-| How | adds this repo as the `ryannel-skills` marketplace, then `claude plugin install` for each plugin | the same marketplace through `codex plugin marketplace add` and `codex plugin add`; Codex reads `.claude-plugin/marketplace.json` itself. Without `codex` on PATH it uses the CLI inside `/Applications/ChatGPT.app` |
+| How | adds `ryannel/skills` as the `ryannel-skills` marketplace, then `claude plugin install` for each plugin | the same marketplace through `codex plugin marketplace add` and `codex plugin add`; Codex reads `.claude-plugin/marketplace.json` itself. Without `codex` on PATH it uses the CLI inside `/Applications/ChatGPT.app` |
 | Skills | each plugin's skills, as `plugin:skill` | each plugin's skills, listed as `plugin:skill`, where the app loads them (`$CODEX_HOME/plugins/cache`) |
 | prompting-agents | the skill only; its description is what makes it trigger. Installing skill-creator or orchestrate installs it too, through the `dependencies` in `marketplace.json` | the skill, plus one line in `$CODEX_HOME/AGENTS.md` saying to apply it before a handoff. Codex ignores `dependencies`, so `install.py` adds it when you install skill-creator or orchestrate |
 | orchestrate | the planner and evaluator agents, linked into `~/.claude/agents` from the installed plugin, because neither Claude Code version loads the `agents` a marketplace entry lists (`claude plugin details` shows `Agents (0)`) | the evaluator agent, linked into `$CODEX_HOME/agents` from the plugin cache by `install_agents.sh --global --codex-only` |
-| `--repo` | says whether Claude will read the repo's AGENTS.md, judged from the CLI version and any `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the repo or above it; when it won't and the repo has no `CLAUDE.md`, writes one holding `@AGENTS.md`. With orchestrate it checks `ORCHESTRATE.md`, and a failed check fails the run. `--scope project` declares the plugins in the repo's `.claude/settings.json` instead of user settings (use `--source ryannel/skills` so the entry works on other machines) | nothing; Codex reads AGENTS.md |
+| `--repo` | says whether Claude will read the repo's AGENTS.md, judged from the CLI version and any `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the repo or above it; when it won't and the repo has no `CLAUDE.md`, writes one holding `@AGENTS.md`. With orchestrate it checks `ORCHESTRATE.md`, and a failed check fails the run. `--scope project` declares the plugins in the repo's `.claude/settings.json` instead of user settings | nothing; Codex reads AGENTS.md |
 
 **Replacing an earlier install.** Skills installed earlier with `npx skills` (in `~/.claude/skills`, `~/.agents/skills`
 or `~/.codex/skills`) would load next to the plugins, giving two descriptions per skill, and an older hand-installed handoff hook in
@@ -191,10 +192,10 @@ the same name that doesn't match any committed version of these skills is left a
 `instructing-agents` plugin, treats a standalone copy of the old skill as an earlier install, and rewrites the old
 line in Codex's `AGENTS.md`.
 
-**Updates.** On Claude Code 2.1.317 a plugin from a marketplace added by local path loads in place, so edits to the
-checkout take effect at the next session start. Claude Code 2.1.239 copies it into its cache and re-copies only when
-the plugin's `version` in `marketplace.json` changes; re-running `install.py` reinstalls a copy that has drifted from
-the checkout. Codex copies on every `install.py` run.
+**Updates.** Push to `main`, then run `install.py` again. Both hosts fetch the marketplace from GitHub and keep a
+copy per plugin version. Claude Code re-copies a plugin only when its `version` changes, so `install.py` reinstalls
+one whose copy was made from an older commit. Codex copies on every `install.py` run. With `--source <folder>`,
+Claude Code 2.1.317 loads the plugins from that folder in place, which is why it is only for trying changes.
 
 **Don't add a root `.claude-plugin/plugin.json`.** All four marketplace entries use the repo root as their source with
 `strict: false` and declare their components, so a manifest there conflicts with every entry and none of the plugins
