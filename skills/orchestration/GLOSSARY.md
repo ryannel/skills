@@ -242,7 +242,7 @@ after a colon, such as "Blocked: Needs Access".
 | Status | Means | Stored as |
 |---|---|---|
 | Not Started | No builder has worked on it yet | `not_started` |
-| In Progress | A builder is working on it | `in_progress`, or `taken` when another lead started it |
+| In Progress | A builder is working on it | `in_progress`, or `in_progress_elsewhere` when another lead started it |
 | Ready for Review | The builder says it is finished, the script's checks passed on the merged work, and no reviewer has judged it yet. Only the script sets it | `ready_for_review` |
 | Waiting | It isn't stuck. The next step is already lined up, and happens without anyone stepping in | `waiting`, in the script's output, with its `reason` |
 | Blocked | It can't move until someone steps in | `blocked`, with the milestone's `blocked` field giving `reason`, `items` and `what` |
@@ -404,12 +404,12 @@ below. The lead decides what to do next from it, and the `build` skill's tables 
 | Result | Printed by | Means |
 |---|---|---|
 | `READY_FOR_REVIEW` | `run` | The builder finished, the script's checks passed on the merged work, and the script set the milestone to Ready for Review. With `review: false` it needed no reviewer, so it is Done |
-| `REVIEW_OWED` | `run` | The module's next milestone is already Ready for Review, with its record, and needs its review |
+| `NEEDS_REVIEW` | `run` | The module's next milestone is already Ready for Review, with its record, and needs its review |
 | `DESIGN_NOT_APPROVED` | `run` | The module's design isn't Design Approved: it is Design Ready for Review or Design Changes Requested |
 | `WAITING` | `run` | The milestone is Waiting, with the reason in `reason` |
 | `BLOCKED` | `run`, `plan`, `review` | The milestone is Blocked, or the planner ended Blocked, or the reviewer couldn't reach the product (`reason` `needs_access`), so nothing was merged and no round counted |
 | `NEEDS_CONTEXT` | `run`, `plan` | The agent is missing a fact |
-| `TAKEN` | `run` | Another lead or run is working on the module |
+| `IN_PROGRESS_ELSEWHERE` | `run` | Another lead or run is working on the module |
 | `FINISHED` | `run` | Every milestone of the module is Done |
 | `CHECKS_FAILED` | `run` | The builder said it had finished three times, and each time the script's checks disagreed. With `--checks-only`, the checks failed once, or the work wasn't merged with every item passing |
 | `NO_PROGRESS_FOR_HOURS` | `run` | No new item passed and the builder made no commit of its own for the hours given with `--budget-hours` |
@@ -429,7 +429,7 @@ below. The lead decides what to do next from it, and the `build` skill's tables 
 | `NOTHING` | `adopt`, `migrate` | There was nothing to do |
 | `REFUSED` | `adopt`, `migrate`, `run` | The command wouldn't act, with the reasons in `problems`. `run` refuses a builder past the `Builders:` count, naming the others in `running`, unless `--more-builders` carries the human's words |
 | `UNBLOCKED` | `unblock` | The milestone is no longer Blocked |
-| `DONE`, `RELEASED`, `FAILED` | `owner` | The human's decision was saved, or, for `owner release`, a milestone another lead started was taken out of In Progress. `FAILED` says it couldn't be saved |
+| `DONE`, `RELEASED`, `FAILED` | `human` | The human's decision was saved, or, for `human release`, a milestone another lead started was taken out of In Progress. `FAILED` says it couldn't be saved |
 
 Avoid: `FLOOR` (now `HOST_FAILED` or `SCRIPT_FAILED`), `PIN` (now `WRONG_MODEL_OR_EFFORT`), `DESIGN_OWED` (now
 `DESIGN_NOT_APPROVED`), `NOT_READY` (now `CHECKS_FAILED`), `BUDGET` (now `NO_PROGRESS_FOR_HOURS`). The script

@@ -79,7 +79,7 @@ Subcommands:
                       run on a milestone blocked that way unblocks it and builds.
         CHECKS_FAILED the agent said DONE (or its goal completed) three times without the work holding up
         INVALID       the done-when file is malformed, or something outside the builder's fields changed
-        REVIEW_OWED   the module's next milestone is Ready for Review, with the script's record, and waiting for its
+        NEEDS_REVIEW   the module's next milestone is Ready for Review, with the script's record, and waiting for its
                       review. One that is Ready for Review without the record is checked by `run` instead
         WAITING       `reason` on_dependency: the next milestone depends on milestones in other modules that aren't
                       Done yet (`depends_on` lists them). `reason` for_diagnosis: it failed review four
@@ -95,7 +95,8 @@ Subcommands:
                       After DESIGN OK, every later result of the run carries `design_review` (verdict, host, model,
                       review file and its `usage`), so the review's cost shows with the build's
         FINISHED      the module has nothing left
-        TAKEN         another lead or run holds this module or milestone; `by` and `holder` say which (pid, role,
+        IN_PROGRESS_ELSEWHERE
+                      another lead or run holds this module or milestone; `by` and `holder` say which (pid, role,
                       worktree, since when) where the records show it
         NO_PROGRESS_FOR_HOURS
                       no new passing item, and no commit of the builder's own outside the plans folder, for
@@ -127,8 +128,8 @@ Subcommands:
         stopped before its result event, counted from its messages). A result line's `usage` is the session's
         running total. A Ready for Review record's `usage` is what the session spent since its previous one, so a
         milestone's records add up; `session_usage` beside it is the running total, not to be added.
-        Every result that stops short of building (WAITING, DESIGN_NOT_APPROVED, REVIEW_OWED, BLOCKED, INVALID,
-        HOST_FAILED, SCRIPT_FAILED, TAKEN) carries `next`: {command, by, why}, the exact command to run next. Its `--worktree` is the one
+        Every result that stops short of building (WAITING, DESIGN_NOT_APPROVED, NEEDS_REVIEW, BLOCKED, INVALID,
+        HOST_FAILED, SCRIPT_FAILED, IN_PROGRESS_ELSEWHERE) carries `next`: {command, by, why}, the exact command to run next. Its `--worktree` is the one
         the command producing it was given, so a `next` from `ready` or `status` run in the main checkout names the
         main checkout. A `run` or design `review` in any `next` (and in `ready`'s and `next`'s) gets the host and
         review host of that module's latest build run on this machine (<git common dir>/orchestrate/last-runs.json,
@@ -1874,7 +1875,7 @@ def next_step(key: str, proj: dict, holds: dict | None = None, me: str = "") -> 
         if (m.get("state") == "ready_for_review" and ready_current(rec["milestones"].get(m["id"]))) or \
                 (m.get("state") == "done" and needs_review(m, doc)):
             ready = ready_record(rec["milestones"].get(m["id"]))
-            return {**out, "status": "review_owed", "commit": ready.get("commit")}
+            return {**out, "status": "ready_for_review", "commit": ready.get("commit")}
         waiting, problems = [], []
         for mod, mid in needs_of(m, key):
             other = proj.get(mod)
@@ -1897,8 +1898,8 @@ def next_step(key: str, proj: dict, holds: dict | None = None, me: str = "") -> 
             return {**out, "status": "waiting", "reason": "on_dependency", "depends_on": waiting}
         holder = (holds or {}).get((key, m["id"]))
         if holder and holder != me:
-            return {**out, "status": "taken", "by": holder}
-        return {**out, "status": "ready"}
+            return {**out, "status": "in_progress_elsewhere", "by": holder}
+        return {**out, "status": "can_start"}
     return {**base, "status": "finished"}
 
 
@@ -2360,7 +2361,7 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
     follows its first dependency to the module that has to move first."""
     wt, mod, mid, status = str(worktree), step["module"], step.get("milestone"), step["status"]
     reason = step.get("reason")
-    if status == "ready":
+    if status == "can_start":
         return next_cmd(loop_cmd("run", "--module", mod, "--worktree", wt), "lead",
                         f"{mod} {mid} is ready to build. Run it in the module's worktree; `run` fast-forwards a clean "
                         f"worktree that's behind {base_ref(prof)} itself, so there's no need to merge first")
@@ -2375,7 +2376,7 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
         host = ["--host", design_review_host(prof, record, default_host(prof))] if named else []
         return next_cmd(loop_cmd("review", "--module", mod, "--milestone", "design", "--worktree", wt, *host), "lead",
                         f"{mod}'s design hasn't passed a design review, or changed since it did")
-    if status == "review_owed":
+    if status == "ready_for_review":
         if step.get("state") == "ready_for_review":
             return next_cmd(loop_cmd("review", "--module", mod, "--milestone", mid, "--commit",
                                      step.get("commit") or base_ref(prof), "--worktree", wt), "lead",
@@ -2446,7 +2447,7 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
             if then:
                 return {**then, "why": f"{why}; {then['why']}"}
         return next_cmd(loop_cmd("run", "--module", other, "--worktree", wt), "lead", why)
-    if status == "taken":
+    if status == "in_progress_elsewhere":
         return next_cmd(loop_cmd("ready", "--worktree", wt), "lead",
                         f"{mod} {mid} is held by {step.get('by')}; give the builder other ready work. If that lead is "
                         "gone for good, `human release` frees it, once the human says so in chat",
@@ -2456,8 +2457,8 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
 
 # The order `ready` looks for something to do when nothing is ready: a step's status, with its reason where that
 # changes whose move it is.
-NEXT_ORDER = ("review_owed", "waiting:for_diagnosis", "design_not_approved", "blocked", "invalid",
-              "waiting:on_dependency", "taken", "blocked:too_many_failed_reviews")
+NEXT_ORDER = ("ready_for_review", "waiting:for_diagnosis", "design_not_approved", "blocked", "invalid",
+              "waiting:on_dependency", "in_progress_elsewhere", "blocked:too_many_failed_reviews")
 
 
 def step_key(step: dict) -> str:
@@ -2721,7 +2722,7 @@ def take_file_lock(path: Path, patience_s: float = 0.0):
     never removed (an older copy of this script locks without checking the file is still the one at the path, so
     removing one could let two runs hold "it"), but a loop's own record lock is, so the handle is checked to still be
     the file at `path`, and taken again if it isn't. `patience_s` retries a held lock for that long, because an older
-    copy's `pause` holds a run lock for a moment, and that mustn't turn a start into TAKEN."""
+    copy's `pause` holds a run lock for a moment, and that mustn't turn a start into IN_PROGRESS_ELSEWHERE."""
     deadline = time.time() + patience_s
     while True:
         handle = open(path, "a+")
@@ -2805,7 +2806,7 @@ def run_holder(folder: Path, name: str) -> int | None:
 
 
 def run_holder_info(worktree: Path, name: str) -> dict:
-    """Who holds a run lock, for TAKEN: the pid and, from its `runs` record, its role, milestone, worktree and start.
+    """Who holds a run lock, for IN_PROGRESS_ELSEWHERE: the pid and, from its `runs` record, its role, milestone, worktree and start.
     Empty when no live process holds it (it ended in between)."""
     try:
         pid = run_holder(Path(git_common_dir(worktree)) / "orchestrate", name)
@@ -5753,8 +5754,8 @@ def claude_app_process(session: str) -> int | None:
 
 # ------------------------------------------------------------------------------------------------------- building
 
-RUN_RESULTS = {"review_owed": "REVIEW_OWED", "waiting": "WAITING", "design_not_approved": "DESIGN_NOT_APPROVED", "blocked": "BLOCKED",
-               "finished": "FINISHED", "taken": "TAKEN", "invalid": "INVALID"}
+RUN_RESULTS = {"ready_for_review": "NEEDS_REVIEW", "waiting": "WAITING", "design_not_approved": "DESIGN_NOT_APPROVED", "blocked": "BLOCKED",
+               "finished": "FINISHED", "in_progress_elsewhere": "IN_PROGRESS_ELSEWHERE", "invalid": "INVALID"}
 
 
 def block_for(current: dict, named: str | None, what: str) -> tuple[str, list[str], str]:
@@ -5922,7 +5923,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     headless = host not in ("codex", "claude") or visible_unavailable(host) is not None
     if not run_lock(worktree, key):
         who = run_holder_info(worktree, key)
-        emit("TAKEN", module=stem, by="another run on this repository" + holder_text(who),
+        emit("IN_PROGRESS_ELSEWHERE", module=stem, by="another run on this repository" + holder_text(who),
              **({"holder": who} if who else {}), next=next_cmd(
                  again, "lead", f"another `run` on this repository holds {stem}{holder_text(who)}; run it again once "
                                 "that one stops (`runs` shows whether it's still working)"))
@@ -6011,7 +6012,7 @@ def cmd_run(a: argparse.Namespace) -> None:
              why=f"{a.milestone} isn't the module's next milestone; that is {step.get('milestone')} "
                     f"({step['status']}), and milestones in a module run in order",
              next=next_for(step, worktree, prof, proj))
-    if step["status"] != "ready":
+    if step["status"] != "can_start":
         emit(RUN_RESULTS[step["status"]], **step, **unlanded(next_for(step, worktree, prof, proj)))
     mid = step["milestone"]
     loop_note(milestone=mid)
@@ -6038,8 +6039,8 @@ def cmd_run(a: argparse.Namespace) -> None:
             EMIT_EXTRA["more_builders"] = {"said": more, "running": len(others), "at": now()}
     ok, holder = take_hold(worktree, prof, key, mid)
     if not ok:
-        emit("TAKEN", module=stem, milestone=mid, by=holder,
-             next=next_for({**step, "status": "taken", "by": holder}, worktree, prof, proj))
+        emit("IN_PROGRESS_ELSEWHERE", module=stem, milestone=mid, by=holder,
+             next=next_for({**step, "status": "in_progress_elsewhere", "by": holder}, worktree, prof, proj))
 
     done = load_done(worktree, stem, prof)
     if problems := validate(done, key):
@@ -6547,7 +6548,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     info = dict(host=host, model=model, effort=effort, module=stem, milestone=mid)
     if not locked and not run_lock(worktree, key):
         who = run_holder_info(worktree, key)
-        return _result("TAKEN", **info, by="another run on this repository" + holder_text(who),
+        return _result("IN_PROGRESS_ELSEWHERE", **info, by="another run on this repository" + holder_text(who),
                        **({"holder": who} if who else {}))
     install_stop()
     if locked:  # a design review inside `run`: the same process, doing a review for now
@@ -7345,7 +7346,7 @@ def read_project(worktree: Path, prof: dict) -> tuple[str, dict]:
 def cmd_ready(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, missing_ok=True)
-    empty = {"ready": [], "waiting": [], "review_owed": [], "design_not_approved": [], "blocked": [], "taken": [],
+    empty = {"can_start": [], "waiting": [], "ready_for_review": [], "design_not_approved": [], "blocked": [], "in_progress_elsewhere": [],
              "finished": [], "invalid": []}
     if not_yet := unplanned(worktree):
         try:
@@ -7371,8 +7372,8 @@ def cmd_ready(a: argparse.Namespace) -> None:
     if ahead := plan_ahead(worktree, prof, ref, proj):
         out["plan_ahead"] = ahead
     drift = plan_drift(worktree, prof, ref)
-    if drift["uncommitted"] or drift["unmerged"] or not out["ready"]:
-        out.update(drift_fields(drift, worktree, None if out["ready"] else
+    if drift["uncommitted"] or drift["unmerged"] or not out["can_start"]:
+        out.update(drift_fields(drift, worktree, None if out["can_start"] else
                                 nothing_ready_next(steps, worktree, prof, proj, ahead)))
     out.update(profile_note(drift, prof))
     if found := table_warnings(worktree, prof, ref, [e["stem"] for e in proj.values()]):
@@ -7450,7 +7451,7 @@ def cmd_status(a: argparse.Namespace) -> None:
             if accepted(m, e["record"]):
                 flags.append("accepted")
             elif m["id"] == step.get("milestone"):
-                if step["status"] == "ready" and state in ("done", "ready_for_review"):
+                if step["status"] == "can_start" and state in ("done", "ready_for_review"):
                     # the builder's file says so, but the script hasn't checked it yet; `run` checks it
                     state = f"{state}, unchecked"
                     flags.append("the script hasn't checked this yet; `run` checks it")
@@ -8173,7 +8174,7 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
                            f"`{visible_run(stem, str(worktree))}`")
                     needing.append(f"- {stem} {m['id']} {i['id']} (needs {n.get('type', '').replace('_', ' ')}: "
                                    f"{n.get('what', '')}): {i.get('statement', '')}\n  {how}")
-        if step["status"] in ("waiting", "design_not_approved", "review_owed") and step.get("milestone"):
+        if step["status"] in ("waiting", "design_not_approved", "ready_for_review") and step.get("milestone"):
             why = (step.get("reason") or "").replace("_", " ") + \
                 (f": {', '.join(step['depends_on'])}" if step.get("depends_on") else "")
             waiting.append(f"- {stem} {step['milestone']}: {step['status'].replace('_', ' ')}" + (f": {why}" if why else ""))
@@ -8506,14 +8507,14 @@ def status_word(step: dict, record: dict | None = None) -> str:
     status, state = step["status"], step.get("state")
     if status == "finished":
         return "Done"
-    if status in ("ready", "taken"):
+    if status in ("can_start", "in_progress_elsewhere"):
         return "Not Started" if state == "not_started" else "In Progress"
     if status == "design_not_approved":
         return "Design Changes Requested" if ((record or {}).get("design") or {}).get("verdict") == "changes" \
             else "Design Ready for Review"
     if status in ("waiting", "blocked"):
         return f"{status.capitalize()}: " + " ".join(w.capitalize() for w in (step.get("reason") or "").split("_"))
-    return {"review_owed": "Ready for Review"}.get(status, "Invalid")
+    return {"ready_for_review": "Ready for Review"}.get(status, "Invalid")
 
 
 def short_date(at: str | None) -> str:
@@ -8587,10 +8588,10 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
                    "The lead finds the missing fact, or asks you for it")
             what = repo_relative((step.get("blocked") or {}).get("what") or "", roots) or "see the done-when file"
             now_next.append(f"- {stem} {mid} {name}: {status_word(step, rec)}: {sentence(what)} {who}")
-        elif status == "review_owed" and m.get("state") == "done":
+        elif status == "ready_for_review" and m.get("state") == "done":
             waiting.append(f"- {stem} {mid} {name}: says done, but no check or review accepted it. Accept it as it "
                            "is, or have it reviewed")
-        if status in ("ready", "taken", "review_owed") and m.get("state") != "done":
+        if status in ("can_start", "in_progress_elsewhere", "ready_for_review") and m.get("state") != "done":
             reviews = ((rec.get("milestones") or {}).get(mid) or {}).get("reviews") or []
             latest = next((r["review"] for r in reversed(reviews) if r.get("review")), None)
             now_next.append(f"- {name} ({stem} {mid}): {status_word(step, rec)} · {plan}" +

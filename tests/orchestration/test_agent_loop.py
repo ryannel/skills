@@ -220,7 +220,7 @@ class Queue(Clean):
         core = done(milestone("M1", "done", ["pass"], inspect="captures"), module="CORE")
         water = done(dict(milestone("M1", "not_started", ["open"]), depends_on=["CORE:M1"]))
         proj = {"CORE": entry_for(core), "WATER": entry_for(water)}
-        self.assertEqual(agent_loop.next_step("CORE", proj)["status"], "review_owed")
+        self.assertEqual(agent_loop.next_step("CORE", proj)["status"], "ready_for_review")
         step = agent_loop.next_step("WATER", proj)
         self.assertEqual((step["status"], step["depends_on"]), ("waiting", ["CORE:M1"]))
 
@@ -235,7 +235,7 @@ class Queue(Clean):
         self.assertEqual(agent_loop.next_step("WATER", {"WATER": entry_for(water)})["milestone"], "M1")
         water = done(milestone("M1", "in_progress", ["pass"]), milestone("M2", "not_started", ["open"]))
         step = agent_loop.next_step("WATER", {"WATER": entry_for(water)})
-        self.assertEqual((step["milestone"], step["status"]), ("M1", "ready"))
+        self.assertEqual((step["milestone"], step["status"]), ("M1", "can_start"))
 
     def test_milestones_run_in_file_order_not_in_progress_first(self):
         water = done(milestone("M1", "done", ["pass"]), milestone("M2", "not_started", ["open"]),
@@ -278,7 +278,7 @@ class Queue(Clean):
         self.assertTrue(any("migrate" in p or "blocked" in p for p in agent_loop.validate(water, "WATER")))
         water = done(milestone("M1", "not_started", ["open"]))
         step = agent_loop.next_step("WATER", {"WATER": entry_for(water)}, {("WATER", "M1"): "other"}, "me")
-        self.assertEqual((step["status"], step["by"]), ("taken", "other"))
+        self.assertEqual((step["status"], step["by"]), ("in_progress_elsewhere", "other"))
 
     def test_unauthorised_definitions_are_invalid(self):
         water = done(milestone("M1", "not_started", ["open"]))
@@ -753,7 +753,7 @@ class Building(Repo):
         claim = record["ready_for_review"]  # no rollout, so nothing observed
         self.assertEqual((claim["effort"], claim["observed"], claim["cli"], claim["path"]),
                          ("high", {}, "2.1.239 (Claude Code)", "headless"))
-        self.assertEqual(self.ready()["ready"][0]["milestone"], "M2")
+        self.assertEqual(self.ready()["can_start"][0]["milestone"], "M2")
         agent_loop.sync_holds(self.wt, agent_loop.profile(self.wt, strict=True))
         self.assertNotIn(("WATER", "M1"), agent_loop.holds(self.wt))  # the claim is released once accepted
         self.assertEqual(agent_loop.ledger_rows(self.wt)[0]["usage"], {"incomplete_turns": 1})
@@ -826,7 +826,7 @@ class Building(Repo):
         self.commit_all()
         self.assertEqual(self.run_loop()["result"], "READY_FOR_REVIEW")
         result = self.run_loop()
-        self.assertEqual((result["result"], result["milestone"]), ("REVIEW_OWED", "M1"))
+        self.assertEqual((result["result"], result["milestone"]), ("NEEDS_REVIEW", "M1"))
 
     def test_design_owed_holds_the_module(self):
         self.write_done([milestone("M1", "not_started", ["open"])], design_ok=False)
@@ -877,7 +877,7 @@ class Building(Repo):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             agent_loop.cmd_unblock(argparse.Namespace(module="WATER", milestone="M1", worktree=str(self.wt)))
-        self.assertEqual(self.ready()["ready"][0]["milestone"], "M1")
+        self.assertEqual(self.ready()["can_start"][0]["milestone"], "M1")
 
     def test_items_that_need_someone_are_batched_into_the_blocked_reason(self):
         self.write_done([dict(milestone("M1", "not_started", ["open"]), items=[
@@ -1035,7 +1035,7 @@ class Reviewing(Repo):
         self.assertEqual(rec["accepted"]["by"], "review")
         self.assertEqual(self.git("merge-base", "--is-ancestor", commit, reviewed).returncode, 0)
         self.assertEqual(agent_loop.state_at(self.wt, reviewed, "docs/plans/WATER/DONE.json", "M1"), "ready_for_review")
-        self.assertEqual(self.ready()["ready"][0]["milestone"], "M2")
+        self.assertEqual(self.ready()["can_start"][0]["milestone"], "M2")
 
     def test_fable_3_a_failed_review_resets_the_items_that_failed(self):
         commit = self.run_loop()["commit"]  # a builder's real turn, whose session t1 the findings resume
@@ -1117,7 +1117,7 @@ class Reviewing(Repo):
         self.assertEqual(result["result"], "DONE")
         accepted = self.read_record()["milestones"]["M1"]["accepted"]
         self.assertEqual((accepted["by"], accepted["words"]), ("human decision", "typo fix"))
-        self.assertEqual(self.ready()["ready"][0]["milestone"], "M2")
+        self.assertEqual(self.ready()["can_start"][0]["milestone"], "M2")
         # Now a reviewed acceptance, then a re-review.
         self.human("rereview", "M1")
         self.git("pull", "-q", "--rebase", "origin", "main")
@@ -1200,8 +1200,8 @@ class Leads(Repo):
         ok, holder = agent_loop.take_hold(other, prof, "WATER", "M1")
         self.assertFalse(ok)
         self.assertEqual(holder, agent_loop.me(self.wt))
-        self.assertEqual(self.ready(other)["taken"][0]["milestone"], "M1")
-        self.assertEqual(self.run_loop(worktree=str(other))["result"], "TAKEN")
+        self.assertEqual(self.ready(other)["in_progress_elsewhere"][0]["milestone"], "M1")
+        self.assertEqual(self.run_loop(worktree=str(other))["result"], "IN_PROGRESS_ELSEWHERE")
 
     def test_fable_6_pause_signals_the_running_loop(self):
         code = (f"import sys, time; sys.path.insert(0, {str(SCRIPTS)!r}); import agent_loop; from pathlib import Path\n"
@@ -1235,13 +1235,13 @@ class Leads(Repo):
                                                                             module="CORE")))
         self.commit_all()
         r = self.ready()
-        self.assertEqual(r["ready"][0]["milestone"], "M1")
+        self.assertEqual(r["can_start"][0]["milestone"], "M1")
         self.assertEqual(r["design_not_approved"], [{"module": "CORE"}])
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             agent_loop.cmd_status(argparse.Namespace(module=None, worktree=str(self.wt)))
         self.assertIn("CORE: design_not_approved", out.getvalue())
-        self.assertIn("WATER: ready (M1)", out.getvalue())
+        self.assertIn("WATER: can_start (M1)", out.getvalue())
 
     def test_ready_names_the_modules_to_plan_next(self):
         put(self.wt / "docs/plans/ARCHITECTURE.md", ARCH.replace(
@@ -1326,7 +1326,7 @@ class Loops(Repo):
         proc = self.holder()
         try:
             self.assertEqual([(r["pid"], r["registered"]) for r in self.listed()], [(proc.pid, True)])
-            self.assertIn("WATER: ready (M1); running: build M1 codex, pid", self.status())
+            self.assertIn("WATER: can_start (M1); running: build M1 codex, pid", self.status())
         finally:
             proc.kill()
             proc.wait(timeout=5)
@@ -1514,7 +1514,7 @@ class Guidance(Repo):
         result = self.run_loop()
         self.assertIn(" review --module CORE --milestone design ", result["next"]["command"])
         r = self.ready()  # nothing ready: the lead still gets a command
-        self.assertEqual(r["ready"], [])
+        self.assertEqual(r["can_start"], [])
         self.assertIn(" review --module CORE --milestone design ", r["next"]["command"])
 
     def test_fix4_review_blocked_invalid_and_floor_carry_the_next_command(self):
@@ -1522,7 +1522,7 @@ class Guidance(Repo):
                         ready=["M1"])
         self.commit_all()
         owed = self.run_loop()
-        self.assertEqual(owed["result"], "REVIEW_OWED")
+        self.assertEqual(owed["result"], "NEEDS_REVIEW")
         self.assertIn(" review --module WATER --milestone M1 --commit ", owed["next"]["command"])
         self.write_done([milestone("M1", "not_started", ["open"]), milestone("M2", "not_started", ["open"])])
         self.commit_all()
@@ -1558,7 +1558,7 @@ class Guidance(Repo):
                         authorise=False)  # done in the file, never accepted by the loop
         self.commit_all()
         result = self.run_loop()
-        self.assertEqual((result["result"], result["next"]["decides"]), ("REVIEW_OWED", "human"))
+        self.assertEqual((result["result"], result["next"]["decides"]), ("NEEDS_REVIEW", "human"))
         self.assertIn(" human accept ", result["next"]["command"])
         self.assertFalse(self.log.exists())
         self.assertEqual(self.read_done()["milestones"][0]["state"], "done")
@@ -1570,7 +1570,7 @@ class Guidance(Repo):
         self.sh("git", "clone", "-q", str(self.origin), str(other))
         self.assertTrue(agent_loop.take_hold(other, prof, "WATER", "M1")[0])
         result = self.run_loop()
-        self.assertEqual(result["result"], "TAKEN")
+        self.assertEqual(result["result"], "IN_PROGRESS_ELSEWHERE")
         self.assertIn(" ready --worktree ", result["next"]["command"])
         self.assertIn(" human release ", result["next"]["human"])
 
@@ -2851,7 +2851,7 @@ class FirstRuns(Repo):
             proc.kill()
             proc.wait()
             proc.stdout.close()
-        self.assertEqual(result["result"], "TAKEN")
+        self.assertEqual(result["result"], "IN_PROGRESS_ELSEWHERE")
         self.assertEqual(result["holder"]["pid"], proc.pid)
         self.assertEqual(result["holder"]["worktree"], str(self.wt))
         self.assertIn(f"pid {proc.pid}", result["by"])
@@ -2897,7 +2897,7 @@ class FirstRuns(Repo):
 
     def test_item9_pause_and_status_never_lock_a_run_lock(self):
         """An older copy of the script takes the run lock without waiting, so nothing but a run may lock it, even for
-        a moment: `pause`, `status`, `loops` and the TAKEN holder find liveness without it."""
+        a moment: `pause`, `status`, `loops` and the IN_PROGRESS_ELSEWHERE holder find liveness without it."""
         self.assertTrue(agent_loop.run_lock(self.wt, "WATER"))
         release()
         import fcntl
@@ -3181,7 +3181,7 @@ class FirstRuns(Repo):
         self.assertEqual(failed["next"]["findings"], "docs/evidence/WATER/M1-review.md")
         # ready: not ready, owed a diagnosis, with the command
         r = self.ready()
-        self.assertEqual(r["ready"], [])
+        self.assertEqual(r["can_start"], [])
         self.assertEqual([(s["milestone"], s["reason"]) for s in r["waiting"]], [("M1", "for_diagnosis")])
         self.assertEqual(r["waiting"][0]["next"]["command"], failed["next"]["command"])
         self.assertEqual(r["next"]["command"], failed["next"]["command"])
@@ -3209,7 +3209,7 @@ class FirstRuns(Repo):
         m1 = doc["milestones"][0]
         m1.update(failed_reviews_with_repeat=0, failed_reviews=0, diagnoses=1, state="not_started")
         m1["items"][0]["statement"] = "a smaller first step"
-        self.assertEqual(agent_loop.next_step("WATER", {"WATER": entry_for(doc)})["status"], "ready")
+        self.assertEqual(agent_loop.next_step("WATER", {"WATER": entry_for(doc)})["status"], "can_start")
 
 
     # Round six: the taste-led rerun
@@ -4008,7 +4008,7 @@ class FirstRuns(Repo):
         prof = agent_loop.profile(wt)
         self.assertTrue(agent_loop.unrecorded(wt, prof, "origin/main"))
         r = self.ready(where=wt)
-        self.assertEqual([(x["module"], x["milestone"]) for x in r["ready"]], [("WATER", "M2")], r)
+        self.assertEqual([(x["module"], x["milestone"]) for x in r["can_start"]], [("WATER", "M2")], r)
         # the loop's first record-keeping commit (here, a plan's) writes WATER's record as it was taken
         planned = self.plan(worktree=str(wt))
         self.assertEqual(planned["result"], "PLANNED", planned)
@@ -4017,7 +4017,7 @@ class FirstRuns(Repo):
         self.assertFalse(agent_loop.unrecorded(wt, prof, "origin/main"))
         self.git("pull", "-q", "--rebase", "origin", "main", where=wt)
         r = self.ready(where=wt)
-        self.assertEqual([(x["module"], x["milestone"]) for x in r["ready"]], [("WATER", "M2")], r)
+        self.assertEqual([(x["module"], x["milestone"]) for x in r["can_start"]], [("WATER", "M2")], r)
         self.assertIn({"module": "PAY"}, r["design_not_approved"])
         # once a record has existed, deleting every record doesn't bring adoption as it stands back
         self.git("rm", "-q", "docs/plans/WATER/ACCEPTED.json", "docs/plans/PAY/ACCEPTED.json", where=wt)
@@ -4306,7 +4306,7 @@ class FirstRuns(Repo):
                         ready=["M1"])
         self.commit_all()
         owed = self.run_loop(host="claude")
-        self.assertEqual(owed["result"], "REVIEW_OWED", owed)
+        self.assertEqual(owed["result"], "NEEDS_REVIEW", owed)
         agent_loop.RUN_HERE.clear()
         self.assertEqual(agent_loop.known_run(str(self.wt), "WATER"), {})
 
@@ -4385,8 +4385,8 @@ class FirstRunsAlone(ProfileOnly):
             self.assertTrue(then["ask"])
             self.assertIn("--text '<what the human said", then["command"])
         for step in ({"module": "WATER", "milestone": "M1", "status": "blocked", "reason": "too_many_failed_reviews"},
-                     {"module": "WATER", "milestone": "M1", "status": "review_owed", "state": "done"},
-                     {"module": "WATER", "milestone": "M1", "status": "taken", "by": "elsewhere"}):
+                     {"module": "WATER", "milestone": "M1", "status": "ready_for_review", "state": "done"},
+                     {"module": "WATER", "milestone": "M1", "status": "in_progress_elsewhere", "by": "elsewhere"}):
             n = agent_loop.next_for(step, self.wt, prof)
             text = json.dumps(n)
             self.assertNotIn("terminal", text)
@@ -4494,7 +4494,7 @@ class PlanFiles(Repo):
         self.assertEqual(agent_loop.module_of(prof, "docs/plans/WATER/LOG.md"), ("WATER", "log"))
         self.assertIsNone(agent_loop.module_of(prof, "docs/plans/BRIEF.md"))  # the project's brief, not a module's
         self.assertIsNone(agent_loop.module_of(prof, "docs/plans/WATER/notes.md"))
-        self.assertEqual(self.ready()["ready"][0]["module"], "WATER")
+        self.assertEqual(self.ready()["can_start"][0]["module"], "WATER")
 
     def test_a_project_without_a_plans_line_keeps_docs_modules(self):
         (self.wt / "ORCHESTRATE.md").write_text(PROFILE.replace("- **Plans:** docs/plans\n", ""))
@@ -4530,7 +4530,7 @@ class PlanFiles(Repo):
         self.assertIn("- 2026-11-02 M1 done", log)
         self.assertIn(agent_loop.TRAILER, self.git("log", "--format=%B", "origin/main").stdout)
         r = self.ready()  # M1 stays accepted and the design agreed: the move changed no hash
-        self.assertEqual([x["milestone"] for x in r["ready"]], ["M2"])
+        self.assertEqual([x["milestone"] for x in r["can_start"]], ["M2"])
         self.assertEqual(r["design_not_approved"], [])
         again = self.call(agent_loop.cmd_migrate, worktree=str(self.wt), to=None)
         self.assertEqual(again["result"], "NOTHING", again)
@@ -4613,7 +4613,7 @@ class PlanFiles(Repo):
         self.assertEqual(rec["M1"]["definitions"], agent_loop.old_definitions(old["milestones"][0]),
                          "a milestone with no renamed field keeps its hash")
         r = self.ready()
-        self.assertEqual(([x["milestone"] for x in r["ready"]], r["invalid"]), (["M2"], []), r)
+        self.assertEqual(([x["milestone"] for x in r["can_start"]], r["invalid"]), (["M2"], []), r)
         self.assertEqual(self.migrate()["result"], "NOTHING")
 
     def test_migrate_to_moves_the_whole_plans_folder_and_the_plans_line(self):
@@ -4624,7 +4624,7 @@ class PlanFiles(Repo):
         self.assertIn("- **Plans:** docs/plans", self.git("show", "origin/main:ORCHESTRATE.md").stdout)
         self.assertEqual(self.git("show", "origin/main:docs/plans/GLOSSARY.md").stdout, "# Glossary\n")
         self.assertEqual(self.git("ls-tree", "--name-only", "origin/main", "docs/modules").stdout, "")
-        self.assertEqual([x["milestone"] for x in self.ready()["ready"]], ["M2"])
+        self.assertEqual([x["milestone"] for x in self.ready()["can_start"]], ["M2"])
 
     def test_a_milestone_ready_for_review_before_migrate_is_reviewed_at_the_move(self):
         self.flatten()
@@ -5059,7 +5059,7 @@ class OnlyTheScriptSetsReadyForReview(Repo):
         self.assertEqual(refused["result"], "INVALID", refused)
         self.assertIn("no record that its checks passed", refused["problems"][0])
         self.assertIn(" run --module WATER ", refused["next"]["command"])
-        self.assertEqual(self.ready()["ready"][0]["milestone"], "M1")
+        self.assertEqual(self.ready()["can_start"][0]["milestone"], "M1")
         os.environ.update(FAKE_PASS="0")
         result = self.run_loop()
         self.assertEqual((result["result"], result["review"]), ("READY_FOR_REVIEW", True), result)
