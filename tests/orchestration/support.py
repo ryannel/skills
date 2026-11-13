@@ -331,7 +331,7 @@ elif role == "plan":
         (cwd / "docs/plans/PAY/DONE.json").write_text(json.dumps({"module": "PAY", "milestones": [
             {"id": "M1", "name": "pay", "state": "not_started", "failed_reviews_with_repeat": 0, "diagnoses": 0,
              "items": [{"id": "M1.1", "statement": "pays", "check": "true", "status": "open", "evidence": ""}]}]}))
-        reply = "Planned PAY. No owner decisions.\\nPLANNED" + ("" if os.environ.get("FAKE_PLAN_BARE") else ": " + ", ".join(files))
+        reply = "Planned PAY. Nothing for the human to decide.\\nPLANNED" + ("" if os.environ.get("FAKE_PLAN_BARE") else ": " + ", ".join(files))
         side = os.environ.get("FAKE_PLAN_SIDE")
         if side:  # a planner that forges a record, commits it and puts it on the tip itself, or fakes the tip
             (cwd / "docs/plans/WATER/ACCEPTED.json").write_text('{"forged": true}')
@@ -403,7 +403,7 @@ def check_next_commands(result):
         return
     for key, value in result.items():
         if key == "next" and isinstance(value, dict):
-            for field in ("command", "then", "alternative", "owner"):
+            for field in ("command", "then", "alternative", "human"):
                 text = value.get(field)
                 if isinstance(text, str) and str(agent_loop.LOOP) in text and \
                         (field in ("command", "then") or text.startswith(("python3 ", "ORCHESTRATE_"))):
@@ -649,19 +649,19 @@ class Repo(Clean):
     def ready(self, where=None):
         return json.loads(self.printed(agent_loop.cmd_ready, worktree=str(where or self.wt)))
 
-    def owner(self, action, milestone_id, reason="owner said so", where=None, item=None, asked=None):
+    def human(self, action, milestone_id, reason="the human said so", where=None, item=None, asked=None):
         """A human command. For `feedback`, `reason` is what the human said and `asked` the lead's question."""
         feedback = action == "feedback"
-        return self.call(agent_loop.cmd_owner, action=action, module="WATER", milestone=milestone_id,
+        return self.call(agent_loop.cmd_human, action=action, module="WATER", milestone=milestone_id,
                          item=[item] if isinstance(item, str) else item, worktree=str(where or self.wt),
                          text=None if feedback else reason, said=reason if feedback else None,
                          asked=(asked or "Which direction do you want?") if feedback else None)
 
     def refused_feedback(self, mid, items, said="approved it"):
-        """The error `owner feedback` stops with."""
+        """The error `human feedback` stops with."""
         try:
             with self.assertRaises(SystemExit) as stop, contextlib.redirect_stdout(io.StringIO()):
-                agent_loop.cmd_owner(parse(agent_loop.cmd_owner, action="feedback", module="WATER", milestone=mid,
+                agent_loop.cmd_human(parse(agent_loop.cmd_human, action="feedback", module="WATER", milestone=mid,
                                            item=items, said=said, asked="Is it right?", worktree=str(self.wt)))
         finally:
             release()

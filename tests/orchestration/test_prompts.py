@@ -18,7 +18,7 @@ PROMPTS = Path(__file__).resolve().parent / "prompts"
 LOOP = Path("/skills/orchestration/build/scripts/agent_loop.py")
 PROF = {"plans": "docs/plans", "evidence": "docs/evidence", "merge": "push", "remote": "origin", "branch": "main",
         "test_command": "./dev check", "exclusive resources": "gpu: timing runs and captures",
-        "bounds": {"Licences and paths not to touch": "no GPL code", "Owner decides": "spending and publishing"}}
+        "bounds": {"Licences and paths not to touch": "no GPL code", "Human decides": "spending and publishing"}}
 MILESTONE = {"id": "M2", "items": [
     {"id": "M2.1", "status": "pass"},
     {"id": "M2.2", "status": "open", "needs": {"type": "human_feedback", "what": "does the tile animation read as smooth"}},
