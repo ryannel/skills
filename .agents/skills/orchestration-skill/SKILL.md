@@ -22,7 +22,7 @@ thing in the set, the names to avoid, and the stored name where it differs. Read
 entry, marked as proposed, for any new thing you have to name. The glossary isn't installed, so define each name
 in each skill before its first use, because each skill is read alone. The script, its files and its messages
 use the glossary's names too, so a stored name is the agreed name written as a field, a value or a command, such
-as `ready_for_review` or `owner feedback`. Give the stored name once, where the reader will meet it.
+as `ready_for_review` or `human feedback`. Give the stored name once, where the reader will meet it.
 [The done-when reference](../../../skills/orchestration/plan-module/references/done-when.md#statuses-and-their-stored-names)
 holds the full table of statuses and their stored names. Renaming a stored name changes existing projects' files,
 so it goes with a step in the script's `migrate` command that rewrites them.

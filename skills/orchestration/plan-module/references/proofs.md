@@ -43,7 +43,7 @@ same shape.
 | Automated test | `check` | The behaviour, and a command that tests it end to end | It tests a mock, or only the easy path |
 | Property or fuzz test | `check` | The rule that must always hold, the inputs to throw at it, and for how long | The inputs miss the cases that happen in real use |
 | Golden output | `check` | The expected output, how close is close enough, and why it is right | The golden file was made by the code under test, and nobody checked it |
-| Benchmark tripwire | `check` | What to measure, and a threshold from the project brief or a recorded baseline. For a number the human gave, such as a frame rate, pair a generous `check` that catches a collapse with the precise measurement on the real target | Someone made the number up, or it ran on a busy or different machine, or the human's number is left to a reviewer reading one timing sample |
+| Benchmark tripwire | `check` | What to measure, and a threshold from the project brief or a recorded baseline. When the human gave the number, such as a frame rate, use two proofs: a generous `check` that catches a collapse, and the precise measurement on the real target | Someone made the number up. It ran on a busy or different machine. The human's number is left to a reviewer reading one timing sample |
 | Determinism | `check` | The same input, run twice, gives the same output (frames, files, results) | It compares a run only with itself in one process, or ignores timing and threads |
 | Visual quality | `inspect` | One quality, and the views that show it | It is one flattering shot, or screenshots from a different build |
 | 2D image | `inspect` | The parts of the image, each seen whole, cropped at full resolution, and at the size it is shown | It was judged only as a thumbnail, or in one condition |
@@ -58,10 +58,10 @@ same shape.
 This applies to a builder checking its own work before it ends with `DONE`, and to a reviewer. Before you look at
 anything, write down what you are going to look at.
 
-Agents that skipped this looked at whatever caught their eye, decided it looked fine, and missed the broken
-parts. So break the thing into pieces first. For a boat, the pieces might be the bow, the stern, where the mast
-sits, and the guns. For a cloud: the edges, the lit side, the shadowed side, and the glow around the sun. For a
-command-line tool: its subcommands, flags, output and failure messages. For a screen: its states and controls.
+A reader without a list looks at whatever catches its eye, decides it looks fine, and misses the broken parts. So
+break the thing into pieces first. For a command-line tool, the pieces might be its subcommands, its flags, its output
+and its failure messages. A picture or a 3D model breaks into pieces the same way: a boat into the bow, the stern,
+where the mast sits, and the guns.
 
 Then decide how you need to see each piece. A 3D model needs a few angles. An image needs close crops as well as
 the whole frame, so use a crop or zoom tool, and don't judge a scaled-down copy. Most things need a few
@@ -93,7 +93,7 @@ wrong one means redoing most of the work (an asset set, a game's art style, a br
 that makes a few options for one representative piece, different in kind. Give it an item where the human
 picks one, marked as needing human feedback: `"needs": {"type": "human_feedback", "what": "pick one option"}`.
 Choosing early costs the human one sitting. Rejecting finished work costs the build. The human replies to the
-lead in chat, and the lead saves the question and their reply with the `owner feedback` command. The script
+lead in chat, and the lead saves the question and their reply with the `human feedback` command. The script
 records it as Human Feedback, so the builder and every later reviewer can compare the work with the option the
 human chose.
 
@@ -102,10 +102,9 @@ enlarged, because a difference in line or texture can be a few pixels at real si
 image in the evidence folder too. The human sees it in the chat with the lead, and won't open a file in the
 repository.
 
-Hold the options to the minimum requirements, and to being different in kind, and to nothing more. They exist so
-the human can turn some down. The full quality bar starts with the chosen option, from the next milestone on. A
-quality bar that says "each option" must meet the look would fail the milestone on the very options the human
-rejected.
+Hold the options to two things only: the minimum requirements, and being different in kind. They exist so the human
+can turn some down. The full quality bar starts with the chosen option, from the next milestone on. A quality bar that
+says "each option" must meet the look would fail the milestone on the very options the human rejected.
 
 When taste is one quality of a small build, such as how a little game feels, skip the options. Build it, and put
 the human's judgement in one item on the last milestone, marked as needing human feedback, so nothing waits on the human until the rest
@@ -121,18 +120,16 @@ quality without fixing the accidents.
 
 ### The builder gets a fresh opinion before a review
 
-A builder working on an item judged by taste gets an opinion from an agent that has seen none of the work,
-when the host can start one: a subagent given only the item, the quality bar, the references and new screenshots. The builder
-fixes what it finds, and goes round again while it keeps finding things that matter. Two or three rounds is
-usual. Every round costs a fresh look at all the screenshots, so stop at the first round that finds nothing you
-would change.
+A builder working on an item judged by taste gets an opinion from an agent that has seen none of the work, when the
+host can start one: a subagent given only the item, the quality bar, the references and new screenshots. The builder
+fixes what it finds, and asks again while the opinion keeps finding things that matter. Two or three attempts is
+usual. Every attempt costs a fresh look at all the screenshots, so stop at the first one that finds nothing you would
+change.
 
-Commit each round, and keep the best one, which isn't always the last. Anthropic's design runs improved for
-several rounds, levelled off, and sometimes peaked in the middle. Options the human hasn't chosen from yet get
-one round at most, because most of them will be turned down.
+Commit each attempt, and keep the best one, which isn't always the last, because quality can peak in the middle. Options the human hasn't chosen from yet get one attempt at most, because most of them will be turned down.
 
 This is the builder's own check, not the review. A failed review costs a whole builder run and one of the
-[escalation steps](done-when.md#when-a-review-fails), which is the wrong price for an ordinary round of polish.
+[escalation steps](done-when.md#when-a-review-fails), which is the wrong price for an ordinary attempt at polish.
 
 ### What agents can't perceive goes to the human
 

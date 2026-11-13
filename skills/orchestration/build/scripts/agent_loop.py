@@ -458,10 +458,9 @@ this one.
 - The script is `python3 {loop}`.
 - {session}
 {resources}{needs}{rules}{lead}
-To finish: when the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to \
-{handoff} and commit it with your work, then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, \
-where the reason is needs_human_feedback, needs_access, needs_hardware or needs_dependency, or, when you're missing \
-a fact, with `NEEDS_CONTEXT: <the fact you need>`."""
+When the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to {handoff} and \
+commit it with your work. Then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, or with \
+`NEEDS_CONTEXT: <the fact you need>` when what you are missing is a fact. The skill lists the reasons."""
 
 REVIEW_TEMPLATE = """Review milestone {milestone} of module {module}, using the review-milestone skill ({skill}).
 
@@ -520,7 +519,8 @@ evidence. An item marked could_not_judge is one the reviewer couldn't see for it
 reviewer can reach. The Suggestions in the review are yours to take or leave.
 
 The `findings` list in the done-when file marks with `repeat` anything an earlier review also found. After four \
-reviews with a repeat, the script sends the milestone to a planner instead of a builder."""
+failed reviews with a repeat, or six failed reviews in all, the script sends the milestone to a planner instead of a \
+builder."""
 
 
 class TipError(Exception):
@@ -2070,7 +2070,7 @@ def review_notes(mid: str, prof: dict, stem: str, feedback: list | None, earlier
         files = [r["review"] for r in earlier if r.get("review")]
         kept = (f"Those reviews are {', '.join(files)}. Your review replaces the latest one, and the script keeps a "
                 "copy of it" if files else "Those reviews are only in git history")
-        parts.append(f"{mid} has failed review {plural(len(earlier), 'time')} since its counts last started. {kept}. "
+        parts.append(f"{mid} has failed review {plural(len(earlier), 'time')} since the script last started counting. {kept}. "
                      f"The name of each finding is in {record_rel(prof, stem)} under milestones.{mid}.reviews. Judge "
                      "the items before you read any of these, as the skill's section \"A milestone that has been "
                      "reviewed before\" describes.")
@@ -2118,7 +2118,7 @@ def diagnosis_task(module: str, mid: str, counts: dict, prof: dict, worktree: Pa
                 "raised, so each fix held and the milestone still doesn't pass")
     return (f"Diagnose {module} {mid}. {what}. {where}.{each} Read every review and decide why it keeps failing, as "
             "the plan-module skill's section \"When a milestone keeps failing review\" describes. If the plan is at "
-            f"fault, change the definitions of {mid} so that it can be met, and end with PLANNED. If the plan is "
+            f"fault, change {mid}'s items so that they can be met, and end with PLANNED. If the plan is "
             f"sound, change no file and end with `KEEP {module} {mid}: builder: <why>`, `... reviewer: <why>` or "
             "`... human: <why>`, naming who has to act.")
 
@@ -2218,7 +2218,7 @@ def escalation_next(word: str, module: str, mid: str, counts: dict, worktree: Pa
     if word == "diagnosis":
         return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", diagnosis_task(module, mid, counts, prof, worktree)),
                         "planner", f"{tally}, so a planner decides why before any more building: it changes the "
-                                   "definitions, or keeps them and names who has to act; `run` won't start a builder "
+                                   "items, or keeps them and names who has to act; `run` won't start a builder "
                                    "on it until then",
                         escalation=word, cause=diagnosis_cause(counts),
                         findings=f"{prof['evidence']}/{module}/{mid}-review.md")
@@ -5149,12 +5149,13 @@ def binding(prof: dict, role: str, mid: str = "", milestone: dict | None = None,
     missing = [label for label, value in prof.get("bounds", {}).items() if not value]
     if role == "review":
         fields = f", and the verdict fields, status and findings in {done}" if done else ""
-        text = (f"Still binding: the review at {review} and its folder of captures{fields} are what you write. Leave "
+        text = (f"What you write hasn't changed: the review at {review} and its folder of captures{fields}. Leave "
                 "them uncommitted, because the script checks what you changed and merges it itself.")
     else:
-        text = (f"Still binding: the goal is every item of {mid} pass with evidence and the work merged with "
-                f"`python3 {LOOP} merge --worktree .`, with {mid}'s status left in_progress for the script to set. In "
-                f"{done}, change only {mid}'s items' builder_result and evidence, and its status only to in_progress.")
+        text = (f"The goal hasn't changed. Every item of {mid} has to pass with evidence, and the work has to be "
+                f"merged with `python3 {LOOP} merge --worktree .`, with {mid}'s status left as in_progress for the "
+                f"script to set. In {done}, change only {mid}'s items' `builder_result` and `evidence`, and its "
+                "`status` only to in_progress.")
         if not lead_spoke:
             for line in needs_rules(milestone, headless):
                 text += " " + line
@@ -5833,7 +5834,12 @@ def work_marks(worktree: Path, milestone: dict | None) -> str:
 
 def open_items(milestone: dict | None) -> str:
     ids = [i["id"] for i in (milestone or {}).get("items", []) if i.get("builder_result") != "pass"]
-    return f" Still open: {', '.join(ids)}." if ids else ""
+    return f" {and_list(ids)} {'hasn' if len(ids) == 1 else 'haven'}'t passed yet." if ids else ""
+
+
+def and_list(names: list[str]) -> str:
+    """Names as they are said in a sentence: "M2.1", "M2.1 and M2.2", "M2.1, M2.2 and M2.3"."""
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
 def checks_note(prof: dict, milestone: dict | None, checked: str | None) -> str:
@@ -5882,10 +5888,10 @@ def resume_facts(worktree: Path, milestone: dict | None, last_exit: int | None, 
         items = (milestone or {}).get("items", [])
         passed = [i["id"] for i in items if i.get("builder_result") == "pass"]
         if passed:
-            parts.append(f"Passed: {', '.join(passed)}.")
+            parts.append(f"{and_list(passed)} {'has' if len(passed) == 1 else 'have'} passed.")
     running = worktree_jobs(worktree, running_only=True)
     if running:
-        parts.append("Background jobs still running: " + "; ".join(
+        parts.append("These background jobs are still running: " + "; ".join(
             f"{j['id']} ({j['age']}) `{j['command'][:120]}`, log {j['log']}" for j in running[-5:]) +
             f". Wait for one with `python3 {LOOP} wait <id> --worktree .`.")
     return " ".join(parts)
@@ -6358,7 +6364,7 @@ def cmd_run(a: argparse.Namespace) -> None:
             facts = resume_facts(worktree, now_done, state.get("last_exit"), a.turn_timeout_hours,
                                  brief=bool(a.message), base=base_ref(prof), stop=state.get("stopped_turn"))
             prompt = (a.message + ("\n\n" + facts if facts else "")) if a.message else \
-                "Continue the objective." + open_items(now_done) + (" " + facts if facts else "")
+                f"Carry on with {mid}." + open_items(now_done) + (" " + facts if facts else "")
             a.message = None
             # A resumed turn may follow a compaction that dropped the first prompt. An active Codex goal already
             # re-sends its objective each turn, so only a thread without one gets the restatement; the human's rules

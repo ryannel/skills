@@ -12,8 +12,8 @@ This file is for the people and agents who write the set. It is not installed wi
 **Human**
 The person the project is being built for. The README speaks to the human as "you".
 Avoid: owner, user, person (in the skills)
-Stored as: `owner` in the names that keep the set's older word for the human, such as the `owner` commands,
-`--owner-rule`, `decides: owner` and the `Owner decides` line of the project settings
+Stored as: `human`, as in the `human` commands, `--human-rule`, `decides: human` and the `Human decides` line of
+the project settings. Before 2.2 each of these said `owner`, and `migrate` renames the ones kept in files
 Agreed: by the human, 2026-11-13.
 
 **Agent**
@@ -129,12 +129,13 @@ Avoid: criterion, requirement
 **Quality bar**
 The standard a milestone's work is judged against, with a real example to point at: "help text as clear as
 ripgrep's".
-Stored as: the milestone's `bar` field
+Stored as: the milestone's `quality_bar` field (`bar` before 2.2)
 
 **Record file**
-A module's `ACCEPTED.json`, which only the script writes. It records which milestones are Done.
+A module's `RECORD.json`, which only the script writes. It records which milestones are Done.
 Avoid: acceptance record
-Stored as: `ACCEPTED.json`
+Stored as: `RECORD.json` (`ACCEPTED.json` before 2.2); a milestone that is Done has `done` in its entry there
+(`accepted` before 2.2)
 
 **Worktree**
 A second working copy of the repository. Each module is built in its own, so builders don't overwrite each
@@ -206,22 +207,62 @@ Not: approving access or connecting a device. Those are done, not said, so nothi
 from the lead either, which a reviewer can't count as the human's words.
 Avoid: owner answer, owner's answers
 Stored as: `human_feedback` in the record file, each with `asked`, `said`, `items` and `at`; recorded by the
-`owner feedback` command
+`human feedback` command
 
-**Round**
-One review of a milestone. A failed round is one the milestone failed.
-Stored as: `rounds`, the count of failed rounds since the counts last started again
+**Failed review**
+A review that the milestone didn't pass. The script counts them, and the counts decide the Escalation.
+Avoid: round, as a name for one review
+Stored as: `failed_reviews`, the count since the script last started counting. It starts again after a
+Diagnosis, and after the human's `scope` or `reopen`
+Agreed: by the human, 2026-11-13.
 
 **Repeated finding**
-A Must Fix that an earlier round also raised: one with the same name, or one on an item that failed before,
+A Must Fix that an earlier review also raised: one with the same name, or one on an item that failed before,
 unless the reviewer says how it differs.
-Stored as: `repeat` on the finding; `fails` counts the failed rounds with one
+Stored as: `repeat` on the finding; `failed_reviews_with_repeat` counts the failed reviews that had one
 Avoid: recurring finding
 
+**Escalation**
+What happens after a failed review, which the script works out from the two counts of failed reviews. In order
+as the counts rise: the same builder carries on, a new builder session starts, a planner makes a Diagnosis, and
+the milestone is Blocked: Too Many Failed Reviews.
+Avoid: ladder
+Stored as: `escalation` in a result, one of `same_builder`, `new_builder_session`, `diagnosis` or
+`too_many_failed_reviews`
+Agreed: by the human, 2026-11-13.
+
 **Diagnosis**
-A planner's reading of every round of a milestone that keeps failing on new findings, to decide why. It either
-rewrites the milestone or keeps the plan and names who has to act.
-Stored as: `diagnoses`, and the `KEEP` line that ends a planner's turn
+A planner's reading of every review of a milestone that keeps failing, to decide why. A milestone is owed one
+after four failed reviews with a Repeated finding, or after six failed reviews in all, and it gets only one. A
+diagnosis ends in a Re-plan or in Plan Kept.
+Stored as: `diagnoses` on the milestone, which is 0 or 1; in a result, `escalation: diagnosis` with a `cause`,
+either "a finding keeps coming back" or "reviews keep finding something new"
+Agreed: by the human, 2026-11-13.
+
+**Re-plan**
+The end of a Diagnosis in which the planner changes the milestone's items. The milestone goes back to Not
+Started, with the new items approved.
+Avoid: rewrite, for a change to a plan
+Stored as: `replanned` in the result of the `plan` command
+Agreed: by the human, 2026-11-13.
+
+**Plan Kept**
+The end of a Diagnosis in which the planner leaves the plan as it is and names who has to act: the builder, the
+reviewer or the human.
+Stored as: the `KEEP` line that ends the planner's turn, and the `KEPT` result of the `plan` command
+Agreed: by the human, 2026-11-13.
+
+**Handoff**
+What a builder that stops before the milestone is finished writes for the session that picks it up: what is
+finished, what was tried, and what to do first.
+Stored as: `<evidence folder>/<MODULE>/<milestone>-handoff.md`, named in the milestone's `blocked` field
+Proposed: by Claude, 2026-11-13. Not yet agreed by the human.
+
+**Builder's note**
+The few sentences under a milestone in the plan file, for its builder, on what the items and the design don't
+say. Many milestones have none.
+Stored as: the text under the milestone's heading in `PLAN.md`
+Proposed: by Claude, 2026-11-13. Not yet agreed by the human.
 
 **Ready for Review record**
 The script's record that a builder finished a milestone and the script's checks passed on the merged work: the
@@ -236,21 +277,22 @@ Agreed: by the human, 2026-11-12.
 
 ## Statuses
 
-A milestone's status, in the order a milestone usually meets them. Waiting and Blocked each carry a reason, written
+A milestone's status, in the order a milestone usually meets them, stored in its `status` field in the done-when
+file (`state` before 2.2). Waiting and Blocked each carry a reason, written
 after a colon, such as "Blocked: Needs Access".
 
 | Status | Means | Stored as |
 |---|---|---|
-| Not Started | No builder has worked on it yet | `not_started` |
+| Not Started | No builder has worked on it yet | `not_started`; the `ready` command prints `can_start` when nothing stops it starting |
 | In Progress | A builder is working on it | `in_progress`, or `in_progress_elsewhere` when another lead started it |
 | Ready for Review | The builder says it is finished, the script's checks passed on the merged work, and no reviewer has judged it yet. Only the script sets it | `ready_for_review` |
 | Waiting | It isn't stuck. The next step is already lined up, and happens without anyone stepping in | `waiting`, in the script's output, with its `reason` |
 | Blocked | It can't move until someone steps in | `blocked`, with the milestone's `blocked` field giving `reason`, `items` and `what` |
-| Done | Every check and review has passed | `done`, or "accepted" |
+| Done | Every check and review has passed | `done`, in the done-when file and as the milestone's key in the record file |
 
 When a lead starts a milestone, the script marks it In Progress in the shared git remote, so that no other lead,
 in this clone or another, starts it too. The mark is a git ref, `refs/orchestrate/claims/<MODULE>/<milestone>`,
-whose path keeps its name from before 2.1.0 so that leads on older versions still see it. The `owner release`
+whose path keeps its name from before 2.1.0 so that leads on older versions still see it. The `human release`
 command takes a milestone out of In Progress when the lead that started it is gone.
 
 The reasons a milestone is Waiting:
@@ -258,24 +300,23 @@ The reasons a milestone is Waiting:
 | Reason | Means | Stored as |
 |---|---|---|
 | On Dependency | It can't start until another module's milestone, already planned, is Done | `on_dependency` |
-| For Replan | Four failed rounds had a repeated finding, so a planner rewrites it | `for_replan` |
-| For Diagnosis | Six rounds failed, mostly on new findings, so a planner finds out why | `for_diagnosis` |
+| For Diagnosis | It keeps failing review, so a planner finds out why: four failed reviews had a repeated finding, or six reviews failed in all | `for_diagnosis`, with the `cause` |
 
 The reasons a milestone is Blocked, and who steps in:
 
 | Reason | Means | Stored as |
 |---|---|---|
 | Needs Human Feedback | A builder couldn't judge an item and asked for a human eye. The lead shows the human the evidence and the question, and the human's reply is the Human Feedback | `needs_human_feedback` |
-| Needs Access | A builder or a reviewer couldn't get a permission or an approval prompt, or couldn't reach the product, usually because it ran where nobody could approve it. The next visible run, with the human at the machine, unblocks it. A reviewer's Needs Access counts no round | `needs_access`; a reviewer's `BLOCKED needs_access` ending |
+| Needs Access | A builder or a reviewer couldn't get a permission or an approval prompt, or couldn't reach the product, usually because it ran where nobody could approve it. The next visible run, with the human at the machine, unblocks it. A reviewer's Needs Access counts no failed review | `needs_access`; a reviewer's `BLOCKED needs_access` ending |
 | Needs Hardware | A device wasn't connected. The next run with the device there unblocks it | `needs_hardware` |
 | Needs Context | The builder is missing a fact. The lead supplies it | `needs_context`, from the builder's `NEEDS_CONTEXT` ending |
 | Needs Dependency | It needs something another module owns that no plan provides yet. A planner adds it | `needs_dependency` |
-| Too Many Failed Reviews | It reached For Replan or For Diagnosis again after the rewrite or the diagnosis. The human decides what happens to it, and the `owner reopen` command records it | `too_many_failed_reviews` |
+| Too Many Failed Reviews | It kept failing review after its Diagnosis, or the planner found that the decision is the human's. The human decides what happens to it, and the `human reopen` command records it | `too_many_failed_reviews` |
 
 A milestone stops only when it is finished or Blocked. Nothing should ask the human to confirm a step they have
 already taken, such as approving a prompt.
 
-Avoid: claimed, parked, attended, Waiting on Dependency, Awaiting Replan, Awaiting Diagnosis, Needs Human
+Avoid: claimed, parked, attended, Waiting on Dependency, For Replan, Awaiting Replan, Awaiting Diagnosis, Needs Human
 Feedback as a status of its own (in prose)
 
 A design has three statuses of its own: Design Ready for Review, Design Changes Requested and Design Approved.
@@ -290,9 +331,9 @@ Avoid: integrate, land (in prose)
 Stored as: the `merge` command, and the `merge` lock; the `Merge:` line of the project settings, which says
 whether to push or fast-forward
 
-**`Owner decides` list**
+**`Human decides` list**
 The line of the project settings that lists what only the human may decide, such as spending or publishing.
-Stored as: the `Owner decides` line, which keeps the older word for the human
+Stored as: the `Human decides` line (`Owner decides` before 2.2, which `migrate` renames)
 
 **Exclusive resource**
 Something only one run at a time may use, such as a simulator. The script's `lock` command holds it.
@@ -407,12 +448,12 @@ below. The lead decides what to do next from it, and the `build` skill's tables 
 | `NEEDS_REVIEW` | `run` | The module's next milestone is already Ready for Review, with its record, and needs its review |
 | `DESIGN_NOT_APPROVED` | `run` | The module's design isn't Design Approved: it is Design Ready for Review or Design Changes Requested |
 | `WAITING` | `run` | The milestone is Waiting, with the reason in `reason` |
-| `BLOCKED` | `run`, `plan`, `review` | The milestone is Blocked, or the planner ended Blocked, or the reviewer couldn't reach the product (`reason` `needs_access`), so nothing was merged and no round counted |
+| `BLOCKED` | `run`, `plan`, `review` | The milestone is Blocked, or the planner ended Blocked, or the reviewer couldn't reach the product (`reason` `needs_access`), so nothing was merged and no failed review was counted |
 | `NEEDS_CONTEXT` | `run`, `plan` | The agent is missing a fact |
 | `IN_PROGRESS_ELSEWHERE` | `run` | Another lead or run is working on the module |
 | `FINISHED` | `run` | Every milestone of the module is Done |
 | `CHECKS_FAILED` | `run` | The builder said it had finished three times, and each time the script's checks disagreed. With `--checks-only`, the checks failed once, or the work wasn't merged with every item passing |
-| `NO_PROGRESS_FOR_HOURS` | `run` | No new item passed and the builder made no commit of its own for the hours given with `--budget-hours` |
+| `NO_PROGRESS_FOR_HOURS` | `run` | No new item passed and the builder made no commit of its own for the hours given with `--no-progress-hours` |
 | `STALLED` | `run` | Three turns in a row changed nothing and reported nothing |
 | `HOST_FAILED` | `run`, `review`, `plan` | The host failed: two turns failed in a row, its program is missing, or its usage limit was reached |
 | `SCRIPT_FAILED` | any command | The script couldn't do a step of its own, such as fetching the main branch or writing a file the sandbox refused |
@@ -421,7 +462,7 @@ below. The lead decides what to do next from it, and the `build` skill's tables 
 | `INVALID` | `run`, `review`, `plan` | A done-when file can't be read, or an agent changed what isn't its to change |
 | `REVIEWED` | `review` | The review was saved, with its verdict in `verdict` |
 | `PLANNED` | `plan` | The planner's files were checked and merged |
-| `KEPT` | `plan` | A planner asked to re-plan or diagnose a milestone kept it as it is and named who has to act |
+| `KEPT` | `plan` | A planner asked to diagnose a milestone kept the plan as it is and named who has to act |
 | `UNFINISHED` | `plan` | The planner's turn ended without one of its endings, so nothing was merged |
 | `MERGED`, `FAILED` | `merge` | The work was merged, or wasn't, with the reason in `detail` |
 | `ADOPTED` | `adopt` | Plan files left uncommitted or unmerged were committed and merged |
@@ -432,6 +473,6 @@ below. The lead decides what to do next from it, and the `build` skill's tables 
 | `DONE`, `RELEASED`, `FAILED` | `human` | The human's decision was saved, or, for `human release`, a milestone another lead started was taken out of In Progress. `FAILED` says it couldn't be saved |
 
 Avoid: `FLOOR` (now `HOST_FAILED` or `SCRIPT_FAILED`), `PIN` (now `WRONG_MODEL_OR_EFFORT`), `DESIGN_OWED` (now
-`DESIGN_NOT_APPROVED`), `NOT_READY` (now `CHECKS_FAILED`), `BUDGET` (now `NO_PROGRESS_FOR_HOURS`). The script
-still reads `PIN` in the state files of runs started before 2.1.0.
-Proposed: the new names, by the set's author, 2026-11-12. Agreed by the human, 2026-11-12.
+`DESIGN_NOT_APPROVED`), `NOT_READY` (now `CHECKS_FAILED`), `BUDGET` (now `NO_PROGRESS_FOR_HOURS`), `REVIEW_OWED` (now
+`NEEDS_REVIEW`), `TAKEN` (now `IN_PROGRESS_ELSEWHERE`). The script still reads `PIN` in the state files of runs
+started before 2.1.0. Proposed: the new names, by the set's author, 2026-11-12. Agreed by the human, 2026-11-12.

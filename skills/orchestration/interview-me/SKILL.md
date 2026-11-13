@@ -240,8 +240,8 @@ agent. Run it as `python3 <the build skill's folder>/scripts/agent_loop.py`.
      `git init` first.
 2. Start a planner:
    `agent_loop.py plan --worktree <repo> --task "<the human's request, word for word>. The project brief is <path>."`
-   The command waits until the planner has finished, which can take a long time. Tell the human that planning has
-   started.
+   The command waits until the planner has finished, which can take a long time, so run it as a background
+   command and tell the human that planning has started.
 3. When it finishes, tell the human what was planned and what the planner assumed. To start the build, the human
    says "build it" or runs `/build`.
 

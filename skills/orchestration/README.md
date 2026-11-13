@@ -117,9 +117,8 @@ The example is a small money-tracking tool. It reads a file of transactions and 
     |---|---|---|
     | 1 or 2 | `run`, with the review | The same builder carries on. It is told that a review shows what one reviewer tried, so the milestone is finished when every item is true, not when the review's findings are cleared. |
     | 3 | `run`, with a new builder | A builder with no memory of the first attempts starts from the files and the review. |
-    | 4 with a repeated finding | `plan` | The milestone is Waiting: For Replan. A planner reads every review and decides why the same finding keeps coming back. It either rewrites the milestone or names who has to act: the builder, the reviewer or you. |
-    | 6, mostly on new findings | `plan` | The milestone is Waiting: For Diagnosis. A planner reads every review and either rewrites it or names who has to act: the builder, the reviewer or you. |
-    | either again, after that | nothing | The milestone is set to Blocked: Too Many Failed Reviews. The lead asks you, with what failed in each review, whether to accept it, change its scope or try again. |
+    | 4 with a repeated finding, or 6 in all | `plan` | The milestone is Waiting: For Diagnosis. A planner reads every review and decides why it keeps failing. It either changes the plan, which is a re-plan, or keeps it and names who has to act: the builder, the reviewer or you. A milestone gets one diagnosis. |
+    | either count again, after the diagnosis | nothing | The milestone is set to Blocked: Too Many Failed Reviews. The lead asks you, with what failed in each review, whether to accept it, change its scope or try again. |
 
 ### The next milestone
 
@@ -134,7 +133,7 @@ The example is a small money-tracking tool. It reads a file of transactions and 
     judge, so the planner marked it as needing human feedback. The builder does everything else, then stops, and
     `run` sets the milestone to Blocked: Needs Human Feedback and prints the question.
 24. The lead asks you in the chat and shows you the output, and you reply, such as "looks good to me".
-25. The lead runs the `owner feedback` command with the question and your words, which the script saves in the
+25. The lead runs the `human feedback` command with the question and your words, which the script saves in the
     record file as Human Feedback. Then it runs `run` again, and the builder reads your reply and carries on.
 
 An item can also need your approval for a permission, such as screen recording, or a device connected, such as a
@@ -161,7 +160,7 @@ with what each is for and how far along it is.
 ```
 docs/plans/
   STATUS.md  BRIEF.md  GLOSSARY.md  ARCHITECTURE.md
-  <MODULE>/  DESIGN.md  PLAN.md  LOG.md  DONE.json  ACCEPTED.json
+  <MODULE>/  DESIGN.md  PLAN.md  LOG.md  DONE.json  RECORD.json
 ```
 
 The files agents read for detail sit in each module's folder. `PLAN.md` holds only what is left to build, and the
@@ -262,7 +261,7 @@ comes from the same Anthropic report: a reviewer that agreed what "done" meant u
 
 An item says what will be observed when the work is right, not how to arrange it. Anthropic kept its planner at
 that level when it removed almost everything else from its harness. In our first project, long items that scripted
-their own proof were rewritten up to four times before any review had failed.
+their own proof were re-planned up to four times before any review had failed.
 
 ### One builder works on each module, and only a few builders run
 
@@ -294,10 +293,11 @@ explains these rules and their sources.
 
 Nothing published supports these. Each is here because it fixed something we saw.
 
-- After a failed review, the steps run from the same builder, to a new builder, to a rewritten plan or a planner's
-  diagnosis, to stopping for you. Each step exists because the one before it has been tried. Only a repeated
-  finding counts toward a rewrite, because one project's milestone failed eight reviews, each on something new
-  that the builder then fixed, and stopped for its human with nothing wrong in its plan.
+- After a failed review, the steps run from the same builder, to a new builder, to a planner's diagnosis, to stopping
+  for you. Each step exists because the one before it has been tried. A repeated finding brings the diagnosis after
+  four failed reviews, and new findings only after six, because one project's milestone failed eight reviews, each on
+  something new that the builder then fixed, and stopped for its human with nothing wrong in its plan. A milestone
+  gets one diagnosis, so one that keeps failing reaches you after one planner turn.
 - A milestone proved only by Automated Checks is Done without a reviewer, unless it is the module's last
   milestone, whose review reads the whole module. Anthropic's rule for when a reviewer is worth its cost was how
   hard the task is for the model, not how the work is proved, so this is a trade-off to revisit.
@@ -305,7 +305,7 @@ Nothing published supports these. Each is here because it fixed something we saw
   option you chose, or a set of reference images. It is never judged against one target image, because agents told
   to match an image copy its accidents too.
 - Subjective work starts with options you choose from. Builders get a fresh opinion on their work and improve it
-  before Ready for Review, and keep the best round rather than the last, because Anthropic's design runs sometimes
+  before Ready for Review, and keep the best attempt rather than the last, because Anthropic's design runs sometimes
   peaked in the middle.
 - Every agent is started with its model and effort named on the command line, because defaults change between
   releases. The skills and the Claude agent files name neither, because Claude lets those files override the
@@ -351,8 +351,8 @@ empty repository with one commit.
    with and whether agents may push, and shows you the project brief to approve. To skip the conversation, say
    "just plan it" or run `/plan-module`. A planner then takes the safest reading of anything you left out, and
    lists what it assumed.
-2. The lead has a reviewer read each design. Until a design is Design Approved, the plan can be revised freely.
-   After that, a milestone's items change only when a planner rewrites them or you change the scope, so nobody can
+2. The lead has a reviewer read each design. Until a design is Design Approved, the plan can be revised freely. After
+   that, a milestone's items change only when a planner re-plans the milestone or you change the scope, so nobody can
    quietly make a requirement easier to meet.
 3. Say "build it", or run `/build`, and say how many builders to run and on which hosts, such as "two Claude
    builders and one Codex". The lead keeps builders and reviewers going, and tells you when a milestone is Done or
@@ -373,7 +373,7 @@ and the report lists every decision saved in your name, so you can spot one you 
 | what the build has cost, for each milestone, split into planning, building and reviewing | `cost` |
 | whether the Codex weekly usage limit will last | `quota` |
 | for a report | `report` |
-| to save a decision of yours | `owner feedback`, `accept`, `rereview`, `reopen` or `scope` |
+| to save a decision of yours | `human feedback`, `accept`, `rereview`, `reopen` or `scope` |
 
 Each of these is a command of `python3 <where the skills are installed>/build/scripts/agent_loop.py`, and you can
 run them yourself if you would rather.
@@ -381,7 +381,7 @@ run them yourself if you would rather.
 ## What the script verifies
 
 Each command verifies an agent's work before it saves anything, and only the script can set a milestone to Done.
-It keeps a record file, `ACCEPTED.json`, beside each done-when file, holding the approved items, the
+It keeps a record file, `RECORD.json`, beside each done-when file, holding the approved items, the
 commit that was tested, the reviews, your decisions, and whether each milestone is Done. Only the script's own
 commits write to it.
 
@@ -424,14 +424,13 @@ Progress in a way every copy of the repository can see, so a second lead that ru
 A plan counts only once it is merged. If plan files are uncommitted or not yet merged, the commands name them, and
 the `adopt` command merges just those files. A new module goes through a design review. Until its design is Design
 Approved, and while nothing is built, `adopt` also approves revised items, which the design review then judges.
-After that, only a planner run or `owner scope` changes the items.
+After that, only a planner run or `human scope` changes the items.
 
 ### Your decisions
 
-The lead asks you in the chat and runs an `owner` command with your words, the script saves them, and `report`
-lists them. The `owner` commands refuse to run inside any session the script started, so a builder, reviewer or
-planner can't save a decision for you. The commands keep `owner`, the set's older word for you.
-[Known limits](#known-limits) says what this does and doesn't stop.
+The lead asks you in the chat and runs a `human` command with your words, the script saves them, and `report` lists
+them. The `human` commands refuse to run inside any session the script started, so a builder, reviewer or planner
+can't save a decision for you. [Known limits](#known-limits) says what this does and doesn't stop.
 
 ## Claude Code and Codex
 
@@ -493,11 +492,11 @@ it with the `migrate` command instead, which moves the files and the `Plans:` li
 
 ### Your decisions depend on an honest lead
 
-You work in the chat, so the lead runs the `owner` commands, and the script can't tell a decision you made from one
+You work in the chat, so the lead runs the `human` commands, and the script can't tell a decision you made from one
 a lead invented. What it does is save the words given with each decision and list every one in `report`. Read that
 list.
 
-The `owner` commands refuse to run where the `ORCHESTRATE_ROLE` environment variable is set, which the script sets
+The `human` commands refuse to run where the `ORCHESTRATE_ROLE` environment variable is set, which the script sets
 in every session it starts, so a builder, reviewer or planner can't accept its own work. The variable is confirmed
 in background Codex and Claude sessions, and unconfirmed in sessions the Codex app runs. The commands also refuse
 while a `run`, `review` or `plan` is working on the same module, though that doesn't stop a session building a

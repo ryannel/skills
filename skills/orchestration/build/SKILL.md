@@ -28,7 +28,7 @@ read its result from that file, because the command's own output mixes in other 
 Most of the time the result tells you what to do. When a command stops short of what you asked for, its `next`
 field holds the exact command to run next, with `why`, and `next.by` says who runs it: `lead` is you, and
 `planner` means the command starts a planner. Run it yourself without asking the human, unless `next` also says
-`decides: owner`. Then the decision is the human's: put the `ask` text to them in the chat, wait for their answer,
+`decides: human`. Then the decision is the human's: put the `ask` text to them in the chat, wait for their answer,
 and run the command with their words in `--text`. Give that module's builder other work while you wait.
 
 Look up the script's path from this skill each time, and read this skill again after your conversation is
@@ -46,7 +46,7 @@ true before a milestone is Done.
 The project settings are in `ORCHESTRATE.md`. Everything else is in the plans folder, `docs/plans` unless the
 settings name another: the module list `ARCHITECTURE.md`, and a folder for each module holding its design
 `DESIGN.md`, plan file `PLAN.md`, log `LOG.md`, done-when file `DONE.json`, which lists the items, and record file
-`ACCEPTED.json`.
+`RECORD.json`.
 
 `STATUS.md` in the plans folder is the human's status page: what needs them now, the choices made for them, what
 is happening now and next, what was recently done, and every module in build order. The script rewrites it after
@@ -55,9 +55,10 @@ prints the same page.
 
 ## What isn't yours to change
 
-Only the script sets a milestone to Done. It writes the record file, in its own commits only, and a milestone is
-Done when that record says so. So don't edit a done-when file or a record file, and don't revert anyone's commits.
-When something looks wrong, the result says what, and the tables below say who fixes it.
+Only the script sets a milestone to Done. It writes the record file, in its own commits only, and a milestone is Done
+when that record says so. So leave the done-when files and the record files as the script and the agents wrote them.
+Leave their commits in place too, because the record names the commits it checked. When something looks wrong, the
+result says what, and [What each result means](#what-each-result-means) says what you do.
 
 Where the work stands belongs on the status page and nowhere else, so leave it out of the project settings, the
 designs and every other document. A status line anywhere else goes stale the next time a milestone moves, and
@@ -134,10 +135,10 @@ group. A module's milestones run in order, so only its next one matters.
 
 | Group | The module's next milestone |
 |---|---|
-| `ready` | is Not Started, and a builder can start it |
-| `waiting` | is Waiting: its next step is lined up, and `next` is the command for it. `reason` is `on_dependency` (`depends_on` names the milestone in another module it waits for), `for_replan` or `for_diagnosis` (a planner has to find out why it keeps failing review) |
-| `taken` | is In Progress under another lead |
-| `review_owed` | is Ready for Review: the script's checks passed and it waits for a reviewer |
+| `can_start` | is Not Started, and a builder can start it |
+| `waiting` | is Waiting: its next step is lined up, and `next` is the command for it. `reason` is `on_dependency` (`depends_on` names the milestone in another module it waits for) or `for_diagnosis` (a planner has to find out why it keeps failing review, and `cause` says what its failed reviews have in common) |
+| `in_progress_elsewhere` | is In Progress under another lead |
+| `ready_for_review` | is Ready for Review: the script's checks passed and it waits for a reviewer |
 | `design_not_approved` | can't start until a reviewer has approved the module's design |
 | `blocked` | is Blocked until someone steps in, with the `reason` |
 | `invalid` | can't be read, or an agent changed what it may not |
@@ -150,7 +151,7 @@ lists every status and its stored name.
 The script reads plans from the main branch, not from your working copy. Plan files that are uncommitted or
 unmerged are listed under `unmerged_plans`, and `next` is `adopt --worktree <repo>`, which commits only those files
 and merges them. Use it rather than a commit of your own. Until a module's design is approved and while nothing is
-built, `adopt` also approves revised items. After that it refuses them, and `next` names `plan` and `owner scope`.
+built, `adopt` also approves revised items. After that it refuses them, and `next` names `plan` and `human scope`.
 A changed `ORCHESTRATE.md` on an existing project is listed under `settings_differ`: commit it once the human has
 agreed to the change in the chat.
 
@@ -230,34 +231,42 @@ from `ready` or `status` run in the main working copy, put the module's own work
 | The script prints | Which means | You do |
 |---|---|---|
 | `READY_FOR_REVIEW`, `review: false` | The milestone is Done: it needed no reviewer, and the script's checks passed. | Start the builder's next milestone. |
-| `READY_FOR_REVIEW`, `review: true`, or `REVIEW_OWED` | The script's checks passed and it set the milestone Ready for Review. | Run the `review` in `next`, on the review host. |
+| `READY_FOR_REVIEW`, `review: true`, or `NEEDS_REVIEW` | The script's checks passed and it set the milestone Ready for Review. | Run the `review` in `next`, on the review host. |
 | `DESIGN_NOT_APPROVED` | `run` ran the design review first, and it didn't approve the design. | Follow `design_review` and `next`, as under [After a review](#after-a-review). |
-| `WAITING` | `on_dependency`: it waits for another module's milestone. `for_replan` or `for_diagnosis`: a planner has to find out why it keeps failing review. | Give the builder other work, or run the `plan` in `next`. |
-| `TAKEN` | Another lead, or another `run` here, is working on it. `by` and `holder` say which. | Give the builder other work. |
+| `WAITING` | `on_dependency`: it waits for another module's milestone. `for_diagnosis`: a planner has to find out why it keeps failing review. | Give the builder other work, or run the `plan` in `next`. |
+| `IN_PROGRESS_ELSEWHERE` | Another lead, or another `run` here, is working on it. `by` and `holder` say which. | Give the builder other work. |
 | `BLOCKED`, `NEEDS_CONTEXT` | The milestone is Blocked, with its `reason`. | See [A milestone that stopped](#a-milestone-that-stopped). |
-| `CHECKS_FAILED`, `NO_PROGRESS_FOR_HOURS`, `STALLED` | The builder said three times it had finished and the script's checks disagreed, or it made no progress in the hours given with `--budget-hours`, or it kept ending its turns on progress notes. | Run a `review` on what exists, so the next attempt starts from an independent read of it. |
+| `CHECKS_FAILED` | The builder said three times that it had finished, and each time the script's checks disagreed. | Run a `review` on what exists, so the next attempt starts from an independent read of it. |
+| `NO_PROGRESS_FOR_HOURS` | No new item passed, and the builder made no commit of its own, for the hours given with `--no-progress-hours`. | The same: run a `review` on what exists. |
+| `STALLED` | The builder kept ending its turns on progress notes. | The same: run a `review` on what exists. |
 | `INVALID` | A done-when file is malformed, an agent changed what isn't its to change, or the items aren't the approved ones. | Send the problems to a planner, and don't resume that builder until they're fixed. |
 | `FINISHED` | Every milestone of the module is Done. | Remove its worktree once nothing is unmerged. |
-| `HOST_FAILED`, `WRONG_MODEL_OR_EFFORT`, `PAUSED` | The session can't go on as started: the host failed (two failed turns, its program missing, or its usage limit reached, as `reason` says), a turn ran on another model or effort, or the human stopped the session or opened it in the app. | Stop that builder and report it with the reason. A `HOST_FAILED` on one host doesn't stop builders on another. Leave a `PAUSED` builder to the human until they say to carry on. |
+| `HOST_FAILED` | The host failed: two failed turns, its program missing, or its usage limit reached, as `reason` says. | Stop that builder and report it with the reason. Builders on another host carry on. |
+| `WRONG_MODEL_OR_EFFORT` | A turn ran on a model or an effort other than the one asked for. | Stop that builder and report it with the reason. |
+| `PAUSED` | The human stopped the session, or opened it in the app. | Leave that builder to the human until they say to carry on. |
 | `SCRIPT_FAILED` | The script couldn't do a step of its own, such as fetching the main branch or writing a file the sandbox refused. The builder's committed work isn't lost. | Do what `reason` and `next` say, then run the command again. Report it only if you can't fix it, and don't call it quota or sign-in, which is `HOST_FAILED`. |
 
-The other commands print results of their own: `ADOPTED` from `adopt`, `MIGRATED` from `migrate`, `NOTHING` from
-either when there was nothing to do, `UNBLOCKED` from `unblock`, and `DONE` or `RELEASED` from an `owner` command. Any
-of them prints `REFUSED`, with `problems` and usually `next`, when it won't act, and `FAILED`, with `detail`, when
-it tried and couldn't. A `warnings` field names something a host wouldn't load, such as an `AGENTS.md` the Claude
-CLI won't read, with the fix: tell the human in your next report, and carry on. A `stopped_turn` field says the
-script ended a turn itself, because a tool call other than a shell command was open for more than 15 minutes or
-the turn limit was reached.
+The other commands print results of their own. `adopt` prints `ADOPTED` and `migrate` prints `MIGRATED`, and
+either prints `NOTHING` when there was nothing to do. `unblock` prints `UNBLOCKED`. A `human` command prints
+`DONE`, or `RELEASED` for `human release`.
+
+Any command prints `REFUSED`, with `problems` and usually `next`, when it won't act. It prints `FAILED`, with
+`detail`, when it tried and couldn't.
+
+Two fields can come with any result. `warnings` names something a host wouldn't load, such as an `AGENTS.md` the
+Claude CLI won't read, with the fix. Tell the human in your next report, and carry on. `stopped_turn` says the
+script ended a turn itself, because a tool call other than a shell command was open for more than 15 minutes, or
+because the turn limit was reached.
 
 ### A milestone that stopped
 
-A builder stops only when the milestone is finished or Blocked. On `BLOCKED`, `reason` says what kind of block it
-is, and `next` says who steps in and gives the command, with the question for the human when the step is theirs.
-[The done-when reference](../plan-module/references/done-when.md#statuses-and-their-stored-names) lists the
-reasons. When the builder left a handoff, the `blocked` field names it, and `next` passes it to whoever picks the
-milestone up. Whatever the reason, give that module's builder other work while you wait.
+A builder stops only when the milestone is finished or Blocked. On `BLOCKED`, `reason` says why the milestone is
+Blocked, and `next` says who steps in and gives the command, with the question for the human when the step is theirs.
+[The done-when reference](../plan-module/references/done-when.md#statuses-and-their-stored-names) lists the reasons.
+When the builder left a handoff, the `blocked` field names it, and `next` passes it to whoever picks the milestone up.
+Whatever the reason, give that module's builder other work while you wait.
 
-The human's reply to a question about an item is saved with `owner feedback`, the question in `--asked` and
+The human's reply to a question about an item is saved with `human feedback`, the question in `--asked` and
 their words in `--said`, because that is where the builder and the reviewer read it. A reviewer can't count a
 lead's `--message` as the human's words.
 
@@ -266,12 +275,16 @@ lead's `--message` as the human's words.
 A review prints `REVIEWED`, with the result in `verdict`. A reviewer marks each problem it finds as a Must Fix,
 which fails the review, or a Suggestion, which doesn't. After a `PASS`, `next` is the module's next milestone.
 
-After a `FAIL`, the script works out the next step from two counts: the failed reviews (`rounds`), and those that
-repeated an earlier finding (`fails`, with the findings in `repeated`). The `ladder` field names the step, and
-`next` is its command, with the message for the builder or the task for the planner already written. The same
-builder carries on, then a new builder session starts, then a planner decides why the milestone keeps failing,
-and last the milestone is Blocked for the human. When a planner keeps the plan, `plan` prints `KEPT`, with `who`
-has to act and the `next` for it.
+After a `FAIL`, the script works out the next step from two counts: every failed review (`failed_reviews`), and
+the failed reviews that repeated an earlier finding (`failed_reviews_with_repeat`, with the findings in
+`repeated`). The `escalation` field names the step, and `next` is its command, with the message for the builder
+or the task for the planner already written. As the counts rise, the steps come in this order. The same builder
+carries on (`same_builder`). A new builder session starts (`new_builder_session`). A planner finds out why the
+milestone keeps failing (`diagnosis`). Last, the milestone is Blocked for the human (`too_many_failed_reviews`).
+
+A planner's diagnosis ends in one of two ways. The planner changes the plan, and `plan` prints `PLANNED` with the
+milestone under `replanned`. Or the planner keeps the plan, and `plan` prints `KEPT`, where `who` names who has to
+act and `next` is the command for it.
 
 Run the `next` as it is. The counts are the record of what has been tried, and a lead that overrules them runs
 the same failing attempt again. The message it carries tells the builder what a review is and leaves the review
@@ -279,15 +292,15 @@ itself to be read from its file, so add nothing about which findings to fix.
 [The done-when reference](../plan-module/references/done-when.md#when-a-review-fails) explains each step, and
 `next --module <M> --worktree <path> --milestone <id>` works the step out again later.
 
-A review can also print `INVALID`, when the reviewer did something a reviewer doesn't, such as editing code or
-naming the wrong milestone. Nothing from it is saved, so run it again, on the other host if you can. It prints
-`BLOCKED` with `reason: needs_access` when the reviewer couldn't reach the product. That counts no round: put its
-`ask` to the human, and run its `next`, the same review in a visible session, while they are at the machine.
+A review can also print `INVALID`, when the reviewer did something a reviewer doesn't, such as editing code or naming
+the wrong milestone. Nothing from it is saved, so run it again, on the other host if you can. It prints `BLOCKED` with
+`reason: needs_access` when the reviewer couldn't reach the product. No failed review is counted for it. Put its `ask`
+to the human, and run its `next`, the same review in a visible session, while they are at the machine.
 
 A design review's `verdict` is `DESIGN OK` or `DESIGN CHANGES`. After `DESIGN OK`, `next` is the module's first
 milestone. After `DESIGN CHANGES`, `next` sends the Must Fix findings to a planner, and then you run the design
 review again. Stop and report the module only when a Must Fix comes back after the planner said it was fixed, or
-when a finding needs something on the `Owner decides` list in the project settings. A planner's result lists the
+when a finding needs something on the `Human decides` list in the project settings. A planner's result lists the
 modules whose designs need a review, and no builder starts on those until the design is approved.
 
 ## Where sessions run
@@ -347,8 +360,8 @@ against.
 
 - The human's request goes to a planner word for word, in `--task`.
 - A restriction the human gave only in conversation, such as "don't touch the schema", goes to the builder with
-  `--owner-rule`. The script saves it for the module and sends it on every turn, across sessions and milestones,
-  until you pass `--clear-owner-rules` because the human said so.
+  `--human-rule`. The script saves it for the module and sends it on every turn, across sessions and milestones,
+  until you pass `--clear-human-rules` because the human said so.
 - One-off text, such as a fact the builder is missing, goes in `--message`.
 
 ## The human's decisions
@@ -357,9 +370,8 @@ When you ask the human something, give them what they need to decide in the chat
 the finding a reviewer keeps raising, the diff. Save only words the human really gave you, for the thing they were
 answering, because the script can't tell your guess at their answer from their decision.
 
-A decision of the human's is saved with `owner <verb> --worktree <repo> --module <M> --milestone <id> --text
-"..."`, with what they said in `--text`. The command, the `--owner-rule` flag and `decides: owner` keep the
-set's older word for the human:
+A decision of the human's is saved with `human <verb> --worktree <repo> --module <M> --milestone <id> --text "..."`,
+with what they said in `--text`:
 
 | Verb | What it saves |
 |---|---|
@@ -367,10 +379,10 @@ set's older word for the human:
 | `accept` | A milestone is Done without a passing review. With `--milestone design`, the design is approved without one. |
 | `rereview` | A milestone that is Done goes back for a new review. The old review is kept. |
 | `reopen` | A milestone Blocked with `too_many_failed_reviews` gets another try. |
-| `release` | A milestone another lead started, when that lead is gone, is taken out of In Progress so you can start it. A `TAKEN` result names this command when it applies. |
+| `release` | A milestone another lead started, when that lead is gone, is taken out of In Progress so you can start it. A `IN_PROGRESS_ELSEWHERE` result names this command when it applies. |
 | `scope` | The done-when file, as edited in the worktree, is the new scope. Use it only for an edit the human dictated exactly, such as a number: make the edit, show them the diff, and run it on their yes. |
 
-The `owner` commands refuse to run inside a session the script started, and while a `run`, `review` or `plan` is
+The `human` commands refuse to run inside a session the script started, and while a `run`, `review` or `plan` is
 working on the module. In the second case, run it again once that session has stopped.
 
 With `ORCHESTRATE_VISIBLE=1`, the human can watch a session in the Codex app or Claude's Code tab, and type into a

@@ -22,4 +22,4 @@ About this session:
 From the lead:
 The human said at 08:37 they would be away until noon. The lock on gpu is held by the APPLE-PRESENTATION builder's capture; that is normal.
 
-To finish: when the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to docs/evidence/APPLE-TILE/M2-handoff.md and commit it with your work, then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, where the reason is needs_human_feedback, needs_access, needs_hardware or needs_dependency, or, when you're missing a fact, with `NEEDS_CONTEXT: <the fact you need>`.
+When the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to docs/evidence/APPLE-TILE/M2-handoff.md and commit it with your work. Then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, or with `NEEDS_CONTEXT: <the fact you need>` when what you are missing is a fact. The skill lists the reasons.

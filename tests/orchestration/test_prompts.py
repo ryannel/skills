@@ -55,7 +55,7 @@ def prompts() -> dict[str, str]:
             mock.patch.object(agent_loop, "worktree_jobs", lambda *a, **k: [
                 {"id": "20261112-071500-4242", "age": "1h05m", "command": "./dev capture valley --realtime",
                  "log": "/repo/.git/orchestrate/jobs/20261112-071500-4242.log"}]):
-        out["build-resumed-after-turn-limit"] = "Continue the objective." + agent_loop.open_items(MILESTONE) + " " + \
+        out["build-resumed-after-turn-limit"] = "Carry on with M2." + agent_loop.open_items(MILESTONE) + " " + \
             agent_loop.resume_facts(Path("/repo"), MILESTONE, 124, 2.0)
         # what a new session that takes over from a full or old one is told, in the first prompt's {earlier}
         out["build-new-session-note"] = agent_loop.earlier_session_note(Path("/repo"), MILESTONE, 124, 2.0,

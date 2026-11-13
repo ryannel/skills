@@ -1946,7 +1946,7 @@ class VisibleCodex(Repo):
         self.assertIn('the paragraph that starts "The goal:" as the objective, word for word', app.sent[0])
         self.assertTrue(app.sent[0].startswith(agent_loop.GOAL_LINE + "Build milestone M1 of module WATER,"))
         self.assertNotIn("gpt-6.1-sol", app.sent[0])
-        self.assertTrue(app.sent[-1].startswith("Use the simulator.\n\nStill binding: the goal is every item of M1 pass with evidence"))
+        self.assertTrue(app.sent[-1].startswith("Use the simulator.\n\nThe goal hasn't changed. Every item of M1 has to pass with evidence"))
 
     def test_decision_8_a_turn_on_another_effort_in_the_app_is_PIN(self):
         with FakeCodexApp(self, effort_seen="xhigh").installed():
@@ -2136,15 +2136,15 @@ class Fold(Repo):
         self.run_loop(host="claude")
         result = self.run_loop(host="claude", message="Use the simulator.")
         first, resumed = (self.prompt(c) for c in self.calls())
-        self.assertNotIn("Still binding", first)
+        self.assertNotIn("The goal hasn't changed", first)
         message, _, restated = resumed.partition("\n\n")
         self.assertEqual(message, "Use the simulator.")
-        for part in ("In docs/plans/WATER/DONE.json, change only M1's items' builder_result and evidence, and its status only to in_progress.",
+        for part in ("In docs/plans/WATER/DONE.json, change only M1's items' `builder_result` and `evidence`, and its `status` only to in_progress.",
                      f"`python3 {agent_loop.LOOP} merge --worktree .`",
                      "The project's rules are in ORCHESTRATE.md; re-read them"):
             self.assertIn(part, restated)
         self.assertNotIn("no GPL code", restated, "the rules are pointed to, not copied")
-        self.assertTrue(restated.startswith("Still binding: the goal is every item of M1 pass with evidence"))
+        self.assertTrue(restated.startswith("The goal hasn't changed. Every item of M1 has to pass with evidence"))
         self.assertLessEqual(len(restated.split()), 90, "the restatement stays terse")
         self.assertNotIn("constraints_missing", result)
 
@@ -2155,13 +2155,13 @@ class Fold(Repo):
         self.assertEqual(len(later), 2)
         for p in later:
             self.assertTrue(p.startswith("The script can't set the milestone to Ready for Review yet"), p[:200])
-            self.assertIn("Still binding: the goal is every item of M1 pass with evidence", p)
+            self.assertIn("The goal hasn't changed. Every item of M1 has to pass with evidence", p)
 
     def test_item5_codex_restates_only_when_no_goal_is_active_and_records_the_goal(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: which device?")
         self.assertEqual(self.run_loop()["goal"], "none")
         self.run_loop(message="Use the simulator.")
-        self.assertIn("\n\nStill binding: the goal is every item of M1 pass with evidence", self.prompt(self.calls()[-1]))
+        self.assertIn("\n\nThe goal hasn't changed. Every item of M1 has to pass with evidence", self.prompt(self.calls()[-1]))
         with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
             conn.execute("create table thread_goals (thread_id text, status text)")
             conn.execute("insert into thread_goals values ('t1', 'active')")
@@ -2170,7 +2170,7 @@ class Fold(Repo):
         result = self.run_loop(message="Use the simulator.")
         self.assertEqual(result["goal"], "active")
         prompts = [self.prompt(c) for c in self.calls()[before:]]
-        self.assertEqual(prompts, ["Use the simulator.", "Continue the objective. Still open: M1.1."])
+        self.assertEqual(prompts, ["Use the simulator.", "Carry on with M1. M1.1 hasn't passed yet."])
 
     def test_item5_a_generic_host_continuation_restates(self):
         host = self.root / "echo-host"
@@ -2181,10 +2181,10 @@ class Fold(Repo):
         self.run_loop(host="echo")
         self.run_loop(host="echo", message="Use the simulator.")  # the missing fact lifts the block
         first, second = (c["argv"][-1] for c in self.calls())
-        self.assertNotIn("Still binding", first)
+        self.assertNotIn("The goal hasn't changed", first)
         self.assertTrue(second.startswith("Build milestone M1 of module WATER,"), second[:200])  # the whole task again
         self.assertIn("From the lead:\nUse the simulator.", second)
-        self.assertTrue(second.endswith("`NEEDS_CONTEXT: <the fact you need>`."), second[-200:])
+        self.assertTrue(second.endswith("The skill lists the reasons."), second[-200:])
 
     def test_item5_a_missing_out_of_bounds_line_is_reported_not_guessed(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
@@ -2414,7 +2414,7 @@ class Holistic(Repo):
         prompts = [self.prompt(c) for c in self.calls()]
         self.assertEqual(len(prompts), agent_loop.STALL_TURNS)
         for p in prompts[1:]:
-            self.assertTrue(p.startswith("Continue the objective. Still open: M1.1."))
+            self.assertTrue(p.startswith("Carry on with M1. M1.1 hasn't passed yet."))
 
     def test_holistic_3_uncommitted_work_is_progress_not_a_stall(self):
         marks = agent_loop.work_marks(self.wt, None)
@@ -2483,7 +2483,7 @@ class HolisticAlone(ProfileOnly):
 
     def test_holistic_8_review_skill_and_findings_message_separate_blocking_from_advisory(self):
         review = (agent_loop.SKILLS / "review-milestone/SKILL.md").read_text()
-        self.assertIn("A Suggestion never changes the\n`state`.", review)
+        self.assertIn("A Suggestion never changes the `status`.", review)
         self.assertIn("Count Must Fix findings only.", review)
         self.assertNotIn("If you think the defect doesn't matter, say so in the finding", review)
         self.assertIn("finished when every item is true as it is written", agent_loop.FINDINGS_TEMPLATE)
@@ -2993,7 +2993,7 @@ class FirstRuns(Repo):
         prompt = self.calls()[-1]["argv"][-1]
         order = [prompt.find(part) for part in (
             "Build milestone M1 of module WATER,", "The goal: ", "Human Feedback on M1", "\nAbout this session:\n",
-            "\nFrom the lead:\nShow the ink direction first.", "\nTo finish: ")]
+            "\nFrom the lead:\nShow the ink direction first.", "\nWhen the goal is met, end with DONE")]
         self.assertTrue(all(i >= 0 for i in order) and order == sorted(order), (order, prompt))
         self.assertIn('on M1.2, M1.3: asked "Which direction do you want, A or B?"; '
                       'the human said "Direction B, the ink one."', prompt)
@@ -3164,7 +3164,7 @@ class FirstRuns(Repo):
         after = {"milestones": [milestone("M1", "not_started", ["open"]), milestone("M3", "not_started", ["open"])]}
         after["milestones"][0]["quality_bar"] = "higher"
         self.assertEqual(agent_loop.changed_items(before, after),
-                         ["M1's bar or depends_on changed", "M1.2 removed", "M3 added", "M2 removed"])
+                         ["M1's quality_bar or depends_on changed", "M1.2 removed", "M3 added", "M2 removed"])
 
 
     # Round five: the ladder's re-plan rung
@@ -3649,7 +3649,7 @@ class FirstRuns(Repo):
         self.assertNotIn("findings", self.read_done()["milestones"][0])
         # the second reviewer is told where the first round is kept, and not what it found, so it judges the items first
         prompt = self.calls()[prompt_before]["argv"][-1]
-        self.assertIn("M1 has failed review 1 time since its counts last started", prompt)
+        self.assertIn("M1 has failed review 1 time since the script last started counting", prompt)
         self.assertIn("docs/evidence/WATER/M1-review.md", prompt)
         self.assertIn("docs/plans/WATER/RECORD.json under milestones.M1.reviews", prompt)
         self.assertNotIn("the water is flat", prompt)
@@ -5282,7 +5282,7 @@ class BackgroundJobs(Clean):
             facts = agent_loop.resume_facts(Path(tmp), milestone("M1", "in_progress", ["pass", "open"]), 124, 2.0)
             self.assertIn("2-hour turn limit", facts)
             self.assertIn(started["job"], facts)
-            self.assertIn("Passed: M1.1.", facts)
+            self.assertIn("M1.1 has passed.", facts)
             os.killpg(started["pid"], signal.SIGTERM)
             self.assertNotIn("turn limit", agent_loop.resume_facts(Path(tmp), None, 0, 2.0))
 
