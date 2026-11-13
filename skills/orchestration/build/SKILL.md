@@ -390,6 +390,11 @@ Codex thread to steer it. If they press Stop on a Codex thread, or open a Claude
 builder is `PAUSED` and the session is theirs until `run` hands it back. When they ask you to stop everything,
 `pause --worktree <repo>` stops the running sessions cleanly, and `run` carries on later.
 
+The Codex app stops a thread only while its window is showing it. If the app doesn't take a stop, the result has
+`turn_not_stopped`, which names the thread, and that turn may still be working with nothing following it. Tell the
+human, who can open the thread in the app and press Stop. Wait for that before you run the module again, because
+two sessions would otherwise change the same files.
+
 ## Reports
 
 Your first report tells the human what they can ask for, which app you are running in and where the sessions run,

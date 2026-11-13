@@ -22,7 +22,8 @@ Hosts:
   own signed-in `claude -p`, imported into the Code tab. When the app can't take them (another OS, app not installed
   or not running, Claude CLI signed out), they run headless. Every result line from a turn says which: `path` is
   `visible` or `headless`, with `path_reason` when headless. Stopping a turn in the app gives PAUSED, and `run` again
-  carries on.
+  carries on. A result with `turn_not_stopped` means the script tried to stop a Codex turn, on a pause, a hung tool
+  call or the turn limit, and the app didn't take the stop, so the turn may still be working in the thread it names.
 
 Where the plans live. The settings' `Plans` line names the plans folder (default docs/plans; a project with no
 Plans line, no docs/plans and a docs/modules folder keeps docs/modules). Each module has a folder of its own there:
@@ -4762,7 +4763,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.2.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.2.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -4791,6 +4792,12 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.2.1": [
+        "`pause`, a hung tool call and the turn limit now stop a Codex turn whose thread the app's window has moved "
+        "away from. The app refused that stop before, the script took the turn as stopped, and it worked on with "
+        "nothing following it. If the app still doesn't take the stop, the result says so in `turn_not_stopped`, "
+        "with the thread to stop in the app.",
+    ],
     "2.2.0": [
         "Stored names changed, and `migrate` brings a project's files to them in one commit. Every other command "
         "stops until it has run. In the done-when file a milestone's `state` is now `status`, an item's `status` is "
@@ -5574,17 +5581,38 @@ def codex_owner(thread: str) -> dict | None:
         return None
 
 
-def codex_interrupt(thread: str) -> bool:
-    """The app's Stop button: interrupts the running turn and pauses the thread's goal."""
+def codex_interrupt_request(thread: str) -> str:
+    """Asks the app to stop the thread's turn, as its Stop button does. Returns "" when the app took the stop, and
+    otherwise why it didn't."""
     try:
         ipc = CodexIpc()
         try:
             ipc.request("thread-follower-interrupt-turn", {"conversationId": thread, "mode": "user-stop"})
-            return True
+            return ""
         finally:
             ipc.close()
-    except (OSError, RuntimeError, ValueError):
+    except (OSError, RuntimeError, ValueError) as e:
+        return f"{type(e).__name__}: {e}"
+
+
+REOPEN_TRIES = 30  # how many times, POLL_S apart, a reopened thread is asked to stop before the script gives up
+
+
+def codex_interrupt(thread: str) -> bool:
+    """The app's Stop button: interrupts the running turn and pauses the thread's goal. The app stops a thread only
+    while one of its windows holds it, and a window holds one thread at a time. The script opens the thread when its
+    turn starts, but the window may have moved to another thread since, and the app then answers `no-client-found`
+    while the turn works on. So the thread is opened again, and the stop is sent once the window holds it."""
+    why = codex_interrupt_request(thread)
+    if not why:
+        return True
+    if "no-client-found" not in why or not open_link(f"codex://threads/{thread}"):
         return False
+    for _ in range(REOPEN_TRIES):
+        time.sleep(POLL_S)
+        if codex_owner(thread) is not None and not codex_interrupt_request(thread):
+            return True
+    return False
 
 
 def codex_goal_activate(thread: str, status: str = "active") -> bool:
@@ -5688,6 +5716,14 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
     # The app runs the tools, so the script follows the calls in the rollout file, as it does for `codex exec`: a
     # visible review in Thrum waited 30 minutes on a Computer Use call that never answered.
     watch = HeadlessWatch("codex", None)
+
+    def stop_turn() -> None:
+        """Stops the turn in the app, and says so in the result when the app wouldn't, because the turn then works
+        on with nothing following it. An app that isn't running has no turn to stop."""
+        if not codex_interrupt(thread) and not visible_unavailable("codex"):
+            SESSION_PATH["turn_not_stopped"] = (f"the Codex app didn't take the stop for thread {thread}, so its "
+                                                "turn may still be running: open the thread in the app and stop it "
+                                                "there")
     while True:
         rollout = rollout or rollout_for(thread)
         events, offset = new_events(rollout, offset)
@@ -5713,14 +5749,14 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
             elif kind == "error":
                 error = str(p.get("message") or p)[:500]
         if _STOP:
-            codex_interrupt(thread)
+            stop_turn()
             return 130, thread, message, "(stopped)", None
         hung = watch.hung()
         if hung or time.time() > deadline:
             if not started:
                 codex_unqueue(thread)
             goal = goal_status(thread)
-            codex_interrupt(thread)
+            stop_turn()
             if goal == "active":  # Stop pauses the goal; a timeout isn't the human pausing it
                 codex_goal_activate(thread)
             TURN_STOP.update(stopped_turn(watch, 124, timeout_s))
@@ -6560,6 +6596,7 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
         usage = add_usage(usage, TURN_USAGE)
         spent = {"usage": usage} if usage else {}  # a stop's tokens count too
         spent.update({"stopped_turn": stop} if stop else {})
+        spent.update({k: SESSION_PATH[k] for k in ("turn_not_stopped",) if k in SESSION_PATH})
         if _STOP or code == 130:
             return {"result": "PAUSED", "session": session, **spent, **({} if _STOP else {"reason": err.strip()})}
         bad, seen_now = pin_check(host, session, seen, model, effort)

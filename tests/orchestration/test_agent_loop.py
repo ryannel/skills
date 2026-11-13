@@ -1677,9 +1677,12 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(list(agent_loop.version_change(self.wt)), ["2.2.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1"])
+        note.write_text('{"version": "2.2.0"}')
+        (line,) = agent_loop.version_change(self.wt)["2.2.1"]
+        self.assertIn("`turn_not_stopped`", line)
 
     def test_a_blocked_message_gives_paths_in_the_repository_and_names_who_acts(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY=f"BLOCKED: the seam shows in {self.wt}/docs/evidence/WATER/f.png "
@@ -1920,6 +1923,17 @@ class FakeCodexApp:
                 p.stop()
 
 
+def pause_once_a_turn_is_running(app) -> None:
+    """Sets the script's stop flag, as `pause` does, once the fake app has a turn running. A fixed delay raced the
+    loop's start-up on a busy machine."""
+    def wait_then_stop():
+        deadline = time.time() + 30
+        while time.time() < deadline and not any(t.get("running") for t in app.threads.values()):
+            time.sleep(0.01)
+        agent_loop._STOP = True
+    threading.Thread(target=wait_then_stop, daemon=True).start()
+
+
 class VisibleCodex(Repo):
     """Decision 8: the loop's Codex sessions are threads the Codex app lists and runs."""
 
@@ -1964,15 +1978,46 @@ class VisibleCodex(Repo):
 
     def test_decision_8_pause_stops_the_turn_running_in_the_app(self):
         with FakeCodexApp(self, behaviour="hang").installed() as app:
-            def stop_once_a_turn_is_running():  # a fixed delay raced the loop's start-up on a busy machine
-                deadline = time.time() + 30
-                while time.time() < deadline and not any(t.get("running") for t in app.threads.values()):
-                    time.sleep(0.01)
-                agent_loop._STOP = True
-            threading.Thread(target=stop_once_a_turn_is_running, daemon=True).start()
+            pause_once_a_turn_is_running(app)
             result = self.run_loop()
         self.assertEqual(result["result"], "PAUSED")
         self.assertEqual(len(app.interrupts), 1)
+        self.assertNotIn("turn_not_stopped", result)
+
+    def test_a_pause_the_app_doesnt_take_names_the_thread_whose_turn_may_still_be_running(self):
+        with FakeCodexApp(self, behaviour="hang").installed() as app, \
+                mock.patch.object(agent_loop, "codex_interrupt", lambda thread: False):
+            pause_once_a_turn_is_running(app)
+            result = self.run_loop()
+        self.assertEqual(result["result"], "PAUSED")
+        (thread,) = app.threads
+        self.assertIn(f"the Codex app didn't take the stop for thread {thread}", result["turn_not_stopped"])
+
+    def test_a_stop_refused_because_the_window_left_the_thread_opens_it_and_is_sent_again(self):
+        asked, links = [], []
+
+        def request(thread):  # the app stops a thread only while one of its windows holds it
+            asked.append(thread)
+            return "" if links else "RuntimeError: thread-follower-interrupt-turn: no-client-found"
+        with mock.patch.object(agent_loop, "codex_interrupt_request", request), \
+                mock.patch.object(agent_loop, "open_link", lambda url: links.append(url) or True), \
+                mock.patch.object(agent_loop, "codex_owner", lambda thread: {} if links else None), \
+                mock.patch.object(agent_loop, "POLL_S", 0.0):
+            self.assertTrue(agent_loop.codex_interrupt("t1"))
+        self.assertEqual((asked, links), (["t1", "t1"], ["codex://threads/t1"]))
+
+    def test_a_stop_gives_up_when_no_window_takes_the_thread_and_opens_nothing_for_another_failure(self):
+        links = []
+        with mock.patch.object(agent_loop, "open_link", lambda url: links.append(url) or True), \
+                mock.patch.object(agent_loop, "codex_owner", lambda thread: None), \
+                mock.patch.object(agent_loop, "POLL_S", 0.0), mock.patch.object(agent_loop, "REOPEN_TRIES", 3):
+            with mock.patch.object(agent_loop, "codex_interrupt_request",
+                                   lambda thread: "RuntimeError: thread-follower-interrupt-turn: no-client-found"):
+                self.assertFalse(agent_loop.codex_interrupt("t1"))
+            self.assertEqual(links, ["codex://threads/t1"])
+            with mock.patch.object(agent_loop, "codex_interrupt_request", lambda thread: "OSError: no socket"):
+                self.assertFalse(agent_loop.codex_interrupt("t2"))  # the app isn't running, so no turn is either
+            self.assertEqual(links, ["codex://threads/t1"])
 
     def test_decision_8_a_timeout_interrupts_the_apps_turn_and_keeps_an_active_goal(self):
         with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
@@ -2231,6 +2276,18 @@ class Fold(Repo):
         self.assertEqual(result["verdict"], "PASS")  # resumed after the stop, and told which call hung
         self.assertEqual(len(app.interrupts), 1)
         self.assertIn("the tool call mcp__cua_repl.js had been open for", app.sent[-1])
+
+    def test_a_paused_visible_review_the_app_doesnt_stop_says_so(self):
+        self.write_done([milestone("M1", "not_started", ["open"], inspect="frames"), milestone("M2", "not_started", ["open"])])
+        self.commit_all()
+        with FakeCodexApp(self).installed():
+            commit = self.run_loop()["commit"]
+        with FakeCodexApp(self, behaviour="hang").installed() as app, \
+                mock.patch.object(agent_loop, "codex_interrupt", lambda thread: False):
+            pause_once_a_turn_is_running(app)
+            result = self.review(commit=commit, host="codex")
+        self.assertEqual(result["result"], "PAUSED")
+        self.assertIn("so its turn may still be running", result["turn_not_stopped"])
 
     def test_a_resume_the_codex_app_holds_after_a_hung_call_fails_in_minutes_and_names_the_call(self):
         self.write_done([milestone("M1", "not_started", ["open"], inspect="frames"), milestone("M2", "not_started", ["open"])])
