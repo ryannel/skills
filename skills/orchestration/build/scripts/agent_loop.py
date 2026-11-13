@@ -2437,6 +2437,20 @@ def nothing_ready_next(steps: list[dict], worktree: Path, prof: dict, proj: dict
                                   "isn't done")
 
 
+NEED_FILLER = {"and", "or", "to", "of", "the", "last", "first", "module", "modules", "milestone", "milestones"}
+
+
+def unread_need(cell: str, names: list[str]) -> str:
+    """What is left of a Needs cell once its module names, milestones, numbers and joining words are taken out. In
+    Thrum, SEA needed "…, CONTENT-LOOP M1; the owner's port timing", and the human's timing isn't something the
+    script can see planned, so a row with words left over isn't listed."""
+    text = cell.upper()
+    for m in sorted(names, key=len, reverse=True):
+        text = re.sub(rf"(?<![\w-]){re.escape(m)}(?![\w-])", " ", text)
+    words = re.findall(r"[\w'’-]+", text.lower())
+    return " ".join(w for w in words if w not in NEED_FILLER and not re.fullmatch(r"m?\d+", w) and w.strip("-–"))
+
+
 def plan_ahead(worktree: Path, prof: dict, ref: str, proj: dict) -> list[dict]:
     """The modules to plan next, in build order: rows of the module table with no plan yet, whose Needs name only
     modules that are planned. Nobody plans a whole project up front, so planning keeps one step ahead of building:
@@ -2463,8 +2477,8 @@ def plan_ahead(worktree: Path, prof: dict, ref: str, proj: dict) -> list[dict]:
                 else:
                     continue
                 needs += [by_n[str(n)] for n in numbers if by_n.get(str(n)) and by_n[str(n)] not in needs]
-        if cell.strip("—–-. ").lower() not in ("", "none", "nothing") and not needs:  # it needs something, but nothing the script can name: the lead decides
-            continue
+        if cell.strip("—–-. ").lower() not in ("", "none", "nothing") and (not needs or unread_need(cell, names)):
+            continue  # it needs something the script can't name, such as the human's decision: the lead decides
         if all(m in proj for m in needs):
             task = f"Plan module {r['module']}" + (f". It needs: {plain_cell(r['needs'])}" if needs else "")
             out.append({"module": r["module"], "needs": needs,

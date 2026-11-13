@@ -1225,7 +1225,8 @@ class Leads(Repo):
     def test_ready_names_the_modules_to_plan_next(self):
         put(self.wt / "docs/plans/ARCHITECTURE.md", ARCH.replace(
             "| WATER |\n", "| WATER M1 |\n| 3 | HARBOUR | Boats dock | modules 1 to 2 |\n"
-                           "| 4 | GULLS | Birds | the human's call |\n| 5 | FISH | Fish swim | none |\n"))
+                           "| 4 | GULLS | Birds | the human's call |\n| 5 | FISH | Fish swim | none |\n"
+                           "| 6 | TIDE | Tides | WATER M1; the human's port timing |\n"))
         self.commit_all()
         ahead = self.ready()["plan_ahead"]
         self.assertEqual([(a["module"], a["needs"]) for a in ahead], [("SHIPS", ["WATER"]), ("FISH", [])])
