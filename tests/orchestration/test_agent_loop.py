@@ -1211,6 +1211,15 @@ class Leads(Repo):
         self.assertIn("CORE: design_not_approved", out.getvalue())
         self.assertIn("WATER: ready (M1)", out.getvalue())
 
+    def test_ready_names_the_modules_to_plan_next(self):
+        put(self.wt / "docs/plans/ARCHITECTURE.md", ARCH.replace(
+            "| WATER |\n", "| WATER M1 |\n| 3 | HARBOUR | Boats dock | modules 1 to 2 |\n"
+                           "| 4 | GULLS | Birds | the owner's call |\n| 5 | FISH | Fish swim | none |\n"))
+        self.commit_all()
+        ahead = self.ready()["plan_ahead"]
+        self.assertEqual([(a["module"], a["needs"]) for a in ahead], [("SHIPS", ["WATER"]), ("FISH", [])])
+        self.assertIn("--task 'Plan module SHIPS. It needs: WATER M1'", ahead[0]["next"]["command"])
+
 
 class Loops(Repo):
     """`loops` lists every live loop on the machine from the records loops keep, or from the process table for those

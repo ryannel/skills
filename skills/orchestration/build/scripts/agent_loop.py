@@ -211,7 +211,9 @@ Subcommands:
 
   ready [--worktree PATH]       What each module's next milestone is waiting for, read at the main branch's tip. When
         nothing is ready it adds `next`. A milestone Waiting for a re-plan or diagnosis, or Blocked with too many
-        failed reviews, carries its own `next` (the planner's or the owner's command), never as ready. It names unmerged plan files (`unmerged_plans`) as `run` does, and
+        failed reviews, carries its own `next` (the planner's or the owner's command), never as ready. `plan_ahead`
+        lists the module table's modules with no plan yet whose Needs are all planned, in build order, each with
+        the `plan` command in its `next`. It names unmerged plan files (`unmerged_plans`) as `run` does, and
         `settings_differ` when ORCHESTRATE.md here differs from the tip's. With no ORCHESTRATE.md it gives `unplanned`
         and `next` naming `plan`, or, when the main branch's tip does have one, `behind` and `next` naming the merge
         that brings this worktree up to it.
@@ -2399,7 +2401,7 @@ def step_key(step: dict) -> str:
     return f"{s}:{reason}" if s == "waiting" or (s == "blocked" and reason == "too_many_failed_reviews") else s
 
 
-def nothing_ready_next(steps: list[dict], worktree: Path, prof: dict, proj: dict) -> dict:
+def nothing_ready_next(steps: list[dict], worktree: Path, prof: dict, proj: dict, ahead: list[dict] = ()) -> dict:
     """For `ready` when nothing is: the most useful next command across the modules, or planning when there are
     none, or nothing when all are finished."""
     for status in NEXT_ORDER:
@@ -2409,8 +2411,49 @@ def nothing_ready_next(steps: list[dict], worktree: Path, prof: dict, proj: dict
     if not steps:
         return next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task", "Plan the project"), "lead",
                         f"no done-when files at the main branch's tip, under {prof['plans']}")
+    if ahead:
+        return ahead[0]["next"]
     return next_cmd(None, "lead", "every module is finished; plan more work with `plan` if the build order "
                                   "isn't done")
+
+
+def plan_ahead(worktree: Path, prof: dict, ref: str, proj: dict) -> list[dict]:
+    """The modules to plan next, in build order: rows of the module table with no plan yet, whose Needs name only
+    modules that are planned. Nobody plans a whole project up front, so planning keeps one step ahead of building:
+    a module becomes worth planning once what it builds on is planned, and then a planner can run while builders do.
+    Thrum, 13 Nov: `ready` held only the two milestones already building, while CONTENT-LOOP, which needs only
+    APPLE-PRESENTATION, sat Not Planned Yet."""
+    rows = module_table(show(worktree, ref, project_file(prof, "architecture"))) or []
+    names = [r["module"].upper() for r in rows]
+    by_n = {plain_cell(r["n"]): r["module"].upper() for r in rows}
+    out = []
+    for r in rows:
+        if r["module"].upper() in proj:
+            continue
+        cell = plain_cell(r["needs"])
+        needs = [m for m in names if m != r["module"].upper()
+                 and re.search(rf"(?<![\w-]){re.escape(m)}(?![\w-])", cell.upper())]
+        for listed in re.findall(r"\bmodules?\s+(\d+(?:\s*(?:,|and|to|-|–)\s*\d+)*)", cell, re.I):  # "modules 1 to 10"
+            parts = re.findall(r"\d+|to|-|–", listed)
+            for i, x in enumerate(parts):
+                if x.isdigit() and i >= 2 and parts[i - 1] in ("to", "-", "–"):
+                    numbers = range(int(parts[i - 2]) + 1, int(x) + 1)
+                elif x.isdigit():
+                    numbers = [int(x)]
+                else:
+                    continue
+                needs += [by_n[str(n)] for n in numbers if by_n.get(str(n)) and by_n[str(n)] not in needs]
+        if cell.strip("—–-. ").lower() not in ("", "none", "nothing") and not needs:  # it needs something, but nothing the script can name: the lead decides
+            continue
+        if all(m in proj for m in needs):
+            task = f"Plan module {r['module']}" + (f". It needs: {plain_cell(r['needs'])}" if needs else "")
+            out.append({"module": r["module"], "needs": needs,
+                        "next": next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task", task), "lead",
+                                         f"{r['module']} has no plan yet, and "
+                                         + (f"{', '.join(needs)}, which it needs, {'is' if len(needs) == 1 else 'are'}"
+                                            " planned" if needs else "it needs no other module")
+                                         + "; a planner can plan it while builders run")})
+    return out
 
 
 def file_at(worktree: Path, ref: str, rel: str) -> bytes | None:
@@ -7222,10 +7265,12 @@ def cmd_ready(a: argparse.Namespace) -> None:
         if step_key(step) in ("waiting:for_replan", "waiting:for_diagnosis", "blocked:too_many_failed_reviews"):
             step["next"] = next_for(step, worktree, prof, proj)  # not the builder's: say whose it is
         out[step.pop("status")].append(step)
+    if ahead := plan_ahead(worktree, prof, ref, proj):
+        out["plan_ahead"] = ahead
     drift = plan_drift(worktree, prof, ref)
     if drift["uncommitted"] or drift["unmerged"] or not out["ready"]:
         out.update(drift_fields(drift, worktree, None if out["ready"] else
-                                nothing_ready_next(steps, worktree, prof, proj)))
+                                nothing_ready_next(steps, worktree, prof, proj, ahead)))
     out.update(profile_note(drift, prof))
     if found := table_warnings(worktree, prof, ref, [e["stem"] for e in proj.values()]):
         out["module_table"] = found
