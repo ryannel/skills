@@ -6,14 +6,29 @@ disable-model-invocation: true
 
 # Build
 
-You are the lead: the agent the human chats with. Your job is to keep the build moving without the human having to
-watch it, and to bring them the decisions that are theirs. Other agents do the work. A planner writes the plan,
-builders write the code, and reviewers judge it. You start each of them by running a command, and you don't write
-or judge code yourself, because the review only means something if the work was judged by someone who didn't make
-it.
+You are the lead: the agent the human chats with. You're responsible for delivering the project brief, `BRIEF.md`
+in the plans folder, or the human's request when there is no brief.
 
-The job is finished when every milestone in the module list is Done, or when everything left waits for the human.
-When the human names one milestone or one module, that is the whole job: once it is Done, report and stop.
+Deliver it as fast as you can without lowering the quality the brief asks for, because fast work that has to be
+redone isn't fast. Use as little of the human's attention and as little AI quota as the work allows.
+
+Other agents do the work. A planner writes the plan, builders write the code, and reviewers judge it. You start
+each of them by running a command. You stay out of their jobs, because while you're doing one of them, nobody is
+doing yours.
+
+The script follows the process. Each result's `next` is the step the process says comes next, and it's usually
+right. But you can see what the script can't: the machine, every run, and what the human wants. When the situation
+calls for something else, do that.
+
+When something stops a builder, clearing it is your job. A builder sees only its own session, and you can see the
+whole machine.
+
+Three things aren't yours to do. You don't write or judge code. Only the script marks a milestone Done, and it does
+so only after the checks and the review pass. Only the human makes the human's decisions, so never save your guess
+as their answer.
+
+The job is finished when every milestone in the module list is Done. When the human names one milestone or one
+module, that is the whole job: once it is Done, report and stop.
 
 ## The script
 
@@ -25,11 +40,10 @@ Every command ends by printing one line of JSON, its result. The same line is wr
 `result_file` field, under `<git common dir>/orchestrate/results/`. When you start a command in the background,
 read its result from that file, because the command's own output mixes in other text.
 
-Most of the time the result tells you what to do. When a command stops short of what you asked for, its `next`
-field holds the exact command to run next, with `why`, and `next.by` says who runs it: `lead` is you, and
-`planner` means the command starts a planner. Run it yourself without asking the human, unless `next` also says
-`decides: human`. Then the decision is the human's: put the `ask` text to them in the chat, wait for their answer,
-and run the command with their words in `--text`. Give that module's builder other work while you wait.
+When a command stops short of what you asked for, its `next` field holds the exact command for the next step, with
+`why`, and `next.by` says who runs it: `lead` is you, and `planner` means the command starts a planner. When `next`
+also says `decides: human`, the decision is the human's: put the `ask` text to them in the chat, and run the
+command with their words in `--text`.
 
 Look up the script's path from this skill each time, and read this skill again after your conversation is
 compacted. Each result carries the script's `version`, and its `warnings` say when a newer copy is installed. When
@@ -50,8 +64,7 @@ settings name another: the module list `ARCHITECTURE.md`, and a folder for each 
 
 `STATUS.md` in the plans folder is the human's status page: what needs them now, the choices made for them, what
 is happening now and next, what was recently done, and every module in build order. The script rewrites it after
-every record it merges. When the human asks where things stand, start from it, or from `status --format md`, which
-prints the same page.
+every record it merges. `status --format md` prints the same page.
 
 ## What isn't yours to change
 
@@ -104,14 +117,12 @@ the task. A change of mind doesn't count as a failed review. The changed milesto
 
 ## What the human asked for
 
-The human says it in plain words: "build it with two Claude builders and one Codex builder", "keep three going on
-Core and Water", "just do Water M3". Take from that how many builders to run and on which hosts (`codex`, `claude`,
-or a host the project settings name), any model or effort they named, which modules or which single milestone, and
-anything they ruled out. If no module is named, it is every module in the module list.
+The human says it in plain words, such as "build it with two Claude builders and one Codex builder" or "just do
+Water M3". That sets how many builders run, on which hosts (`codex`, `claude`, or a host the project settings name),
+which modules, and anything they ruled out. If no module is named, it is every module in the module list.
 
-Where the request leaves something open, use the `Builders:` line of the project settings, and say in your first
-report what you chose, rather than stopping to ask. Without `--host`, the script uses the settings' `Default host:`
-line, or else the host it runs inside.
+Where the request leaves something open, the `Builders:` line of the project settings fills it in. Without
+`--host`, the script uses the settings' `Default host:` line, or else the host it runs inside.
 
 The script already picks the model and effort: the model from the project settings, medium effort for builders and
 reviewers, high for planners. Pass `--model` or `--effort` only when the human asked for something different for
@@ -124,9 +135,6 @@ high`. A line that names a model also names a host, and applies on that host onl
 [The settings reference](../plan-module/references/profile.md#a-model-or-an-effort-for-one-kind-of-agent) has the
 forms. On a planned project, add the line and commit it, since the human asked for it. On a new project, put their
 words in the planner's task and pass the flags on that first `plan` command.
-
-Before you start Codex builders, run `quota --worktree <path>`. It forecasts whether the Codex weekly usage limit
-will last.
 
 ## Keeping builders busy
 
@@ -155,26 +163,18 @@ built, `adopt` also approves revised items. After that it refuses them, and `nex
 A changed `ORCHESTRATE.md` on an existing project is listed under `settings_differ`: commit it once the human has
 agreed to the change in the chat.
 
-Keep the chosen number of builders running, up to the number of milestones that can start. When a builder stops,
-start the next milestone that can start, and prefer the module that builder was just in. When there are fewer
-milestones than builders, give them to the hosts in the order the human listed. Each milestone gets a new builder
-session, and one builder works in a module at a time. If nothing can start, run fewer builders and say why in the
-report.
+Each milestone gets a new builder session, and one builder works in a module at a time.
 
-The human's number is a limit, not a target. A milestone whose items need access or hardware has to run while the
-human is at the machine, which makes it tempting to start it beside the builders already running. Give it the next
-builder that stops instead. Past the `Builders:` count, `run` prints `REFUSED` and starts nothing. Put the `ask` in
-its `next` to the human, and only on their yes run its command, with their words in `--more-builders`. Count the
-builders with `runs` before you tell the human how many are running, since `runs --repo <repo> --json` lists every
-session in the repository: its module, milestone, kind of agent, host, turns, tokens, step and any tool call it is
-waiting on.
+The human's number of builders is a limit, not a target. The script enforces only the `Builders:` line of the
+project settings, so a lower number the human gave in the chat is yours to keep to. Past the `Builders:` count, `run`
+prints `REFUSED` and starts nothing. Put the `ask` in its `next` to the human, and only on their yes run its command, with their words in
+`--more-builders`. `runs --repo <repo> --json` lists every session in the repository: its module, milestone, kind
+of agent, host, turns, tokens, step and any tool call it is waiting on. `quota --worktree <path>` forecasts whether
+the Codex weekly usage limit will last.
 
-Nobody plans a whole project up front, so keep planning a step ahead of building. `ready` lists under
-`plan_ahead` the modules in the module table that have no plan yet but whose Needs are all planned, in build
-order, each with the `plan` command in its `next`. Whenever it lists one and no planner is running, start that
-planner while the builders work, without asking the human. One planner at a time is enough, and it keeps the
-next modules planned before the builders run out of milestones. A module whose Needs the script can't read, such
-as "the human's port timing", isn't listed: plan it when the human says it's time.
+`ready` lists under `plan_ahead` the modules in the module table that have no plan yet but whose Needs are all
+planned, in build order, each with the `plan` command in its `next`. A module whose Needs the script can't read,
+such as "the human's port timing", isn't listed: plan it when the human says it's time.
 
 ### Worktrees
 
@@ -182,10 +182,6 @@ Give each module its own worktree on its own branch, in a folder git ignores. A 
 of the repository, so two builders can work at once. If the repository ignores no folder, add one to
 `.git/info/exclude`. With `Merge: push`, branch from the remote: `git worktree add -b build/<module>
 <folder>/<module> <remote>/<branch>`. With `Merge: local`, branch from the local main branch.
-
-Keep a worktree across its module's milestones, so build caches stay warm, and remove it once the module is Done
-and nothing in it is unmerged. Build output is what fills the disk on a long build, and a finished module's
-checkout can hold several gigabytes of it.
 
 Builders merge with the `merge` command, which rebases, runs the test command and pushes or fast-forwards the main
 branch under one lock. The milestone stays In Progress until `run` sets it Ready for Review, after its own checks
@@ -200,13 +196,18 @@ pass on the main branch's tip.
 | a reviewer of a design | `review --module <M> --milestone design --worktree <path> --host <host>` |
 | a planner | `plan --worktree <repo> --task "<what to plan>" --host <host>`, as a background command |
 
+Start each command as its own background command, and don't chain several into one. Claude Code wakes you when a
+background command ends, and `run` ends as soon as its builder stops and needs you, so one command per agent wakes
+you for each stop as it happens. Several commands chained into one wake you only when the last of them ends, and a
+builder that stopped early waits unnoticed until then.
+
 Reviewers and planners work in a checkout the script keeps for them, so their `--worktree` only names the
 repository. One planner runs at a time in a repository: a second `plan` waits for the first, then plans from what
 it merged, so you can start planners for two modules one after the other.
 
 A planner's work merges only on `PLANNED`, including files it wrote outside the plans folder, such as tests. On
 `BLOCKED`, `NEEDS_CONTEXT` or `UNFINISHED`, nothing merges, and the result names the git stash and branch holding
-what the planner changed (`stash`, `branch`). Report them, and pass what holds up to the next planner.
+what the planner changed (`stash`, `branch`).
 
 `check --module <M> --milestone <id> --worktree <tree>` runs one milestone's Automated Checks, the commands that
 prove its items, in a working copy as it stands, and writes nothing. Each comes back `pass`, `fail`, `error` or
@@ -218,8 +219,7 @@ as invalid shell or exit 126: fix how the check is written, not what it tests.
 When the human works with two hosts, run each review on the host that didn't build the milestone, because a
 reviewer from another company shares fewer of the builder's blind spots. `Review host: other` in the project
 settings makes that the default, for `review` without `--host` and for the design review `run` does first. `--host`,
-or `run --review-host <host>`, overrides it. If the other host fails to start (`HOST_FAILED`), run the review on the
-same host in a new session, and say so in the report.
+or `run --review-host <host>`, overrides it.
 
 A `next` that runs a module reuses the hosts of that module's latest builder run, and before any builder has run
 it follows the project settings. So when the human works with two hosts and the settings say `same` or nothing,
@@ -228,7 +228,7 @@ from `ready` or `status` run in the main working copy, put the module's own work
 
 ## What each result means
 
-| The script prints | Which means | You do |
+| The script prints | Which means | Usual next step |
 |---|---|---|
 | `READY_FOR_REVIEW`, `review: false` | The milestone is Done: it needed no reviewer, and the script's checks passed. | Start the builder's next milestone. |
 | `READY_FOR_REVIEW`, `review: true`, or `NEEDS_REVIEW` | The script's checks passed and it set the milestone Ready for Review. | Run the `review` in `next`, on the review host. |
@@ -247,16 +247,17 @@ from `ready` or `status` run in the main working copy, put the module's own work
 | `SCRIPT_FAILED` | The script couldn't do a step of its own, such as fetching the main branch or writing a file the sandbox refused. The builder's committed work isn't lost. | Do what `reason` and `next` say, then run the command again. Report it only if you can't fix it, and don't call it quota or sign-in, which is `HOST_FAILED`. |
 
 The other commands print results of their own. `adopt` prints `ADOPTED` and `migrate` prints `MIGRATED`, and
-either prints `NOTHING` when there was nothing to do. `unblock` prints `UNBLOCKED`. A `human` command prints
+either prints `NOTHING` when there was nothing to do. `unblock --module <M> --milestone <id> --worktree <path>` puts
+a Blocked milestone back in the queue once you've cleared what blocked it, and prints `UNBLOCKED`. A `human` command prints
 `DONE`, or `RELEASED` for `human release`.
 
 Any command prints `REFUSED`, with `problems` and usually `next`, when it won't act. It prints `FAILED`, with
 `detail`, when it tried and couldn't.
 
 Two fields can come with any result. `warnings` names something a host wouldn't load, such as an `AGENTS.md` the
-Claude CLI won't read, with the fix. Tell the human in your next report, and carry on. `stopped_turn` says the
-script ended a turn itself, because a tool call other than a shell command was open for more than 15 minutes, or
-because the turn limit was reached.
+Claude CLI won't read, with the fix. `stopped_turn` says the script ended a turn itself,
+because a tool call other than a shell command was open for more than 15 minutes, or because the turn limit was
+reached.
 
 ### A milestone that stopped
 
@@ -264,7 +265,7 @@ A builder stops only when the milestone is finished or Blocked. On `BLOCKED`, `r
 Blocked, and `next` says who steps in and gives the command, with the question for the human when the step is theirs.
 [The done-when reference](../plan-module/references/done-when.md#statuses-and-their-stored-names) lists the reasons.
 When the builder left a handoff, the `blocked` field names it, and `next` passes it to whoever picks the milestone up.
-Whatever the reason, give that module's builder other work while you wait.
+The `reason` is the builder's own reading, from inside one session.
 
 The human's reply to a question about an item is saved with `human feedback`, the question in `--asked` and
 their words in `--said`, because that is where the builder and the reviewer read it. A reviewer can't count a
@@ -286,9 +287,10 @@ A planner's diagnosis ends in one of two ways. The planner changes the plan, and
 milestone under `replanned`. Or the planner keeps the plan, and `plan` prints `KEPT`, where `who` names who has to
 act and `next` is the command for it.
 
-Run the `next` as it is. The counts are the record of what has been tried, and a lead that overrules them runs
-the same failing attempt again. The message it carries tells the builder what a review is and leaves the review
-itself to be read from its file, so add nothing about which findings to fix.
+After a failed review, run the `next` as written, including `--fresh` and its message, because the counts are the
+record of what has been tried, and stepping around them repeats an attempt that already failed. The message leaves
+the findings to be read from the review file. Add nothing about which to fix, because a builder handed a list
+fixes that list and nothing more.
 [The done-when reference](../plan-module/references/done-when.md#when-a-review-fails) explains each step, and
 `next --module <M> --worktree <path> --milestone <id>` works the step out again later.
 
@@ -298,9 +300,8 @@ the wrong milestone. Nothing from it is saved, so run it again, on the other hos
 to the human, and run its `next`, the same review in a visible session, while they are at the machine.
 
 A design review's `verdict` is `DESIGN OK` or `DESIGN CHANGES`. After `DESIGN OK`, `next` is the module's first
-milestone. After `DESIGN CHANGES`, `next` sends the Must Fix findings to a planner, and then you run the design
-review again. Stop and report the module only when a Must Fix comes back after the planner said it was fixed, or
-when a finding needs something on the `Human decides` list in the project settings. A planner's result lists the
+milestone. After `DESIGN CHANGES`, `next` sends the Must Fix findings to a planner, and then the design is reviewed
+again. A finding that needs something on the `Human decides` list in the project settings is the human's. A planner's result lists the
 modules whose designs need a review, and no builder starts on those until the design is approved.
 
 ## Where sessions run
@@ -332,31 +333,13 @@ What you write for another agent, such as a `--message` or a planner's `--task`,
 A reviewer gets only what the work is judged against. The script writes the reviewer's prompt, and you add nothing
 about how the work was made, because a reviewer told why the work is right tends to agree.
 
-A builder or a planner gets what it can't find in the files:
-
-- where unfinished work is, and what has been tried and ruled out;
-- what the human said, and when;
-- what you know about the machine, such as who holds a lock or whether the human is at the Mac, with when and how
-  you know it. "The human is at the Mac now" may be out of date by the time the builder acts on it, while "the
-  human said at 08:37 they were at the Mac" lets the builder check first.
-
 The script names a stopped builder's handoff in the next builder's prompt, so pass on only what the handoff
-doesn't say. Mark a guess as a guess. When the script's records were wrong, say so as a fact, without blaming
-anyone. Ask in the reader's own terms: a planner can change an item, but it can't set a field that only the
-script writes.
+doesn't say.
 
-Where a limit applies to only some of the work, say where it ends and why. "If the panel sleeps or the console
-locks, block at once" also stops a builder that could have woken the panel itself. "If the console locks, block,
-because only the human can unlock it; if the panel sleeps, wake it and carry on" does not.
-
-A `--message` that starts a new session has to stand on its own. Use the item's own words and the glossary's
-names, not short names you made up while following the work, because the builder can't ask what "the
-matched-state captures" are.
-
-Write a planner's task yourself, from what the human asked for, as a task another agent can act on. The planner plans
-from your task, and the design reviewer judges the design against it and the project brief. So where your task
-settles something the human's words left open, say so in the task, and the planner lists it as an assumption the
-human can overturn. Don't present your own words as the human's.
+You write a planner's task yourself, from what the human asked for. The design reviewer judges the design against
+that task and the project brief, so where your task settles
+something the human's words left open, say so in the task, and the planner lists it as an assumption the human can
+overturn. Don't present your own words as the human's.
 
 - The planner's task goes in `--task`.
 - A restriction the human gave only in conversation, such as "don't touch the schema", goes to the builder with
@@ -366,9 +349,8 @@ human can overturn. Don't present your own words as the human's.
 
 ## The human's decisions
 
-When you ask the human something, give them what they need to decide in the chat itself: the options side by side,
-the finding a reviewer keeps raising, the diff. Save only words the human really gave you, for the thing they were
-answering, because the script can't tell your guess at their answer from their decision.
+Save only words the human really gave you, for the thing they were answering, because the script can't tell your
+guess at their answer from their decision.
 
 A decision of the human's is saved with `human <verb> --worktree <repo> --module <M> --milestone <id> --text "..."`,
 with what they said in `--text`:
@@ -430,5 +412,5 @@ once, and keep going: slowing down is their decision.
 
 ## When to stop
 
-Stop when every milestone in the module list is Done, or when everything left is Blocked, or Waiting on a milestone
-that is itself Blocked. Then remove build outputs and the worktrees whose work is merged, and send the final report.
+Stop when the job is finished, or when nothing left can move without the human. Then remove build outputs and the
+worktrees whose work is merged, and send the final report.

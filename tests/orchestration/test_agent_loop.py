@@ -1677,14 +1677,17 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')
         (line2,) = agent_loop.version_change(self.wt)["2.2.2"]
         self.assertIn("planner's task", line2)
+        note.write_text('{"version": "2.2.2"}')
+        (line3,) = agent_loop.version_change(self.wt)["2.2.3"]
+        self.assertIn("own background command", line3)
         self.assertIn("`turn_not_stopped`", line)
 
     def test_a_blocked_message_gives_paths_in_the_repository_and_names_who_acts(self):

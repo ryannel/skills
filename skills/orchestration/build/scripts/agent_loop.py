@@ -4763,7 +4763,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.2.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.2.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -4792,6 +4792,14 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.2.3": [
+        "The build skill now opens with your job: you're responsible for delivering the project brief, as fast as you "
+        "can without lowering its quality, with as little of the human's attention and quota as the work allows. A "
+        "result's `next` is the process's next step and usually right, but when what you can see calls for something "
+        "else, do that, and clearing whatever stops a builder is your job. Start each command as its own background "
+        "command and don't chain several into one, because Claude Code wakes you only when a command ends. Read the "
+        "build skill again now.",
+    ],
     "2.2.2": [
         "You write a planner's task yourself, from what the human asked for, rather than passing the human's words on "
         "unchanged. Where your task settles something the human's words left open, say so in the task, so the planner "
