@@ -267,9 +267,9 @@ their own proof were re-planned up to four times before any review had failed.
 
 Two agents writing to the same files overwrite each other, so each module has one builder, in its own worktree.
 Cognition, Cohere, Cursor and Anthropic all report that more agents writing at once cost more and helped less;
-Cohere measured results getting worse beyond two to four builders. Here one lock covers a whole merge, including the
-test command, so a slow test command limits how fast builders can merge. That is a deliberate trade for two or three
-builders.
+Cohere measured results getting worse beyond two to four builders. Merges take turns, and branches that arrive
+while one is running merge together as a batch with one run of the test command, so a slow test command still
+limits how fast builders can merge, but ten builders don't wait for ten runs of it.
 
 ### Everything is kept in files and in git
 
@@ -372,6 +372,7 @@ and the report lists every decision saved in your name, so you can spot one you 
 | to stop cleanly and carry on later | `pause`, then `run` again |
 | what the build has cost, for each milestone, split into planning, building and reviewing | `cost` |
 | how fast milestones moved, beside commits, lock queueing and failed jobs | `flow` |
+| who holds each lock, such as the GPU, and who is waiting for it | `locks` |
 | whether the Codex weekly usage limit will last | `quota` |
 | for a report | `report` |
 | to save a decision of yours | `human feedback`, `accept`, `rereview`, `reopen` or `scope` |
@@ -392,10 +393,11 @@ Before the `run` command sets a milestone to Ready for Review, three things must
 still valid, the builder changed only its own fields, and the items are the approved ones, so a builder can't
 reword an item to make it easier. The work is committed, with no stray files, and merged into the main branch. And
 the test command and every Automated Check pass when the script runs them itself, in a clean copy of the main
-branch. Those checks run in the script's own process, outside the builder's sandbox and outside the `merge`
-lock, so a check that needs the GPU or the screen can pass, and a 40-minute check doesn't hold up other builders'
-merges. A check that already passed on exactly the same files, in the builder's `check` or in `merge`, isn't run
-a third time. If a builder goes three turns in a row without changing or reporting anything, the command stops
+branch. Those checks run in the script's own process, outside the builder's sandbox and outside `merge`, so a
+check that needs the GPU or the screen can pass, and a 40-minute check doesn't hold up other builders' merges. A
+check that already passed on exactly the same files, in the builder's `check` or in `merge`, isn't run a third
+time, and an item that lists the files its check `reads` is reused while those files stay the same, whatever else
+merged. If a builder goes three turns in a row without changing or reporting anything, the command stops
 it.
 
 ### After a reviewer

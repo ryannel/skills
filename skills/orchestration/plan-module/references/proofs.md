@@ -62,12 +62,20 @@ needs something only one run at a time may use, or when it needs the human.
 
 An Automated Check runs more often than it looks from the item. The builder runs it while working. After the builder
 merges, the script runs every check again on the main branch's tip, one after another, before it sets the milestone
-Ready for Review, and that run is the proof of record. A check that holds an exclusive resource, such as a GPU, runs
-one at a time across every builder, so with ten builders a fifteen-minute check can wait two hours for its turn.
+Ready for Review, and that run is the proof of record. A check that needs a resource only one run may use at a time
+runs one after another across every builder, so with ten builders a fifteen-minute check can wait two hours for its
+turn.
 
-The project's test command costs more again, because it runs inside the merge lock. While it runs, no other builder
-can merge, so its length sets how many merges an hour the project can take. A test command that takes fifteen
-minutes allows about four merges an hour, shared by every builder.
+Two settings make that cheaper. An item's `reads` field names the files its check reads, and the script reuses the
+check's last pass while those files and the command stay the same, so a check of one module isn't run again because
+another module merged. And a resource that several runs can share, such as a GPU for renders and tests, goes on the
+`Shared resources` line with how many runs it takes at once. Its item takes `"lock": "gpu"`, and only a measurement
+that needs the machine quiet takes `"lock": "gpu.alone"`.
+
+The project's test command costs more again, because every merge waits for it. Branches that arrive together are
+merged as one batch with one run of the test command, but a batch still waits for the one before it, so the
+command's length sets how many batches an hour the project can merge. A test command that takes fifteen minutes
+allows about four, shared by every builder, and a failure costs a second run to find the branch that caused it.
 
 So for each proof, weigh four things: what it would catch, how likely that fault is here, what the fault would cost
 if it were caught later instead, and what the proof costs now, in time and in queueing for the builders who share
@@ -78,7 +86,7 @@ Where a proof runs follows from who a fault would hurt:
 
 - A fault that would stop every builder, such as a broken build or a failing test on the main branch, is worth
   catching before the merge. Put the cheap, repeatable checks that catch it in the test command, and keep that
-  command quick enough to sit inside the merge lock.
+  command quick enough that merges don't queue behind it.
 - A fault that would cost only its own module an hour or two, such as an image that moved or a slower frame, is
   cheaper to find after the merge. One run on the main branch covers everything merged since the last run, whoever
   merged it, and a failure is fixed by the module that caused it while the others carry on. Say in the project
@@ -96,9 +104,10 @@ Two more patterns make a proof's cost grow with the number of builders:
   changes the files it covers. When making it takes longer than the main branch stays still, builders can spend
   their sessions remaking it. Prefer a run after the merge. Where it must come first, draw what it covers as
   narrowly as its real inputs.
-- An exclusive resource held by work that doesn't need it to itself makes everything queue. Timing needs a quiet
-  machine, but comparing images or running a GPU test usually doesn't. Name the narrow use in the project settings,
-  as in `gpu: timing runs`, so the rest can run side by side.
+- A resource held alone by work that doesn't need it alone makes everything queue. Timing needs a quiet machine,
+  but comparing images or running a GPU test usually doesn't. List the resource under `Shared resources`, give
+  ordinary items `"lock": "gpu"`, and keep `"lock": "gpu.alone"` for the few timing and realtime items, so the
+  rest run side by side.
 
 ## How to inspect
 

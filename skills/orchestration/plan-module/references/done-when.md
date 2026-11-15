@@ -201,8 +201,11 @@ The planner writes the fields that say what a milestone asks for:
   The proofs reference, `proofs.md`, describes each.
 - `target` is one of the targets in the project settings, meaning a device or platform the product runs on. When
   the proof runs on a stand-in, it is `stand_in:<what it stands in for>`.
-- `lock` is optional. It names an exclusive resource that the item's `check` needs, such as `gpu`, and the script
-  takes that lock when it runs the check.
+- `lock` is optional. It names a resource from the `Exclusive resources` or `Shared resources` line that the item's
+  `check` needs, and the script takes that lock when it runs the check. For a shared resource, `gpu` shares it with
+  other runs, and `gpu.alone` waits to have it alone, which only a timing or realtime measurement needs. A change to
+  `lock` or `reads` alone keeps the milestone's progress and needs no design review, and the script records it in
+  `run_changes`, beside the definitions it approved.
 - `reads` is optional, and only for an item with a `check`. It lists the files the `check` reads, as git pathspecs
   relative to the top of the repository, such as `["src/render/", "models/*.json"]`. The script remembers a check
   that passed, and doesn't run it again while the command and the files those pathspecs match at HEAD stay the

@@ -126,7 +126,7 @@ that isn't the code under review. `merge` lists the files the rebase brought in,
 them could change what a capture shows, take that capture again on the merged commit. For visual work, plan one
 capture pass after your last merge rather than one after each.
 
-Hold an exclusive resource only for the command that needs it. `merge` already makes builders take turns, so a script
+Hold a lock only for the command that needs it. `merge` already makes builders take turns, so a script
 of your own that holds a lock across a rebase, a check and a merge makes everyone wait through all three, and it
 usually fails because the main branch moved while it ran. In the same way, check that the human is there and the
 screen is unlocked before you take a lock for an attended run, because a lock held while waiting for a person stops
@@ -145,8 +145,15 @@ one, or writes into one without creating it, fails there.
 
 `agent_loop.py merge --worktree .` rebases your branch onto the main branch, runs the project's test command (the
 `Test command:` line in the project settings), and then pushes or fast-forwards the main branch as the `Merge:`
-line says. It does all of this under one lock, so two builders can't merge at once. It prints `MERGED` or
-`FAILED`. The items' checks don't run here: the script runs them after your turn, so they don't hold the lock.
+line says. It prints `MERGED` or `FAILED`. The items' checks don't run here: the script runs them after your turn,
+so they don't hold up anyone's merge.
+
+When several builders merge at about the same time, `merge` puts their branches in a queue and merges them together
+as one batch, with one run of the test command for the lot. If that run fails, the script splits the batch to find
+the branch that broke it, and merges the rest. So `merge` can take a while on a busy main branch, which is normal;
+the result's `batch` field says which branches merged with yours. If your branch conflicts with one that merged
+ahead of it, the result is `FAILED` and `conflicts` names the files. Nothing of yours merged: rebase onto the main
+branch, resolve those files, commit, and merge again.
 
 If `merge` prints `FAILED` because your commits set the milestone to `ready_for_review` or `done`, which can happen
 on a branch an older builder left, set the `status` back to `in_progress`, commit that, and merge again.
@@ -224,10 +231,18 @@ On Codex, edit files with the `apply_patch` tool, which fails when the text it e
 that replaces text, such as Python's `str.replace`, changes nothing and says nothing in that case, so an edit
 can be missing without your knowing.
 
-If a run needs something listed under `Exclusive resources` in the project settings, such as a simulator, wrap it in
-`agent_loop.py lock <name> -- <command>`, so two builders don't use it at once. The lock waits until the resource is
-free, so another builder holding it is normal. Do other work while you wait, and end with `BLOCKED` only if the holder
-seems stuck, naming the process.
+If a run needs something listed under `Exclusive resources` or `Shared resources` in the project settings, such as
+a simulator or the GPU, wrap it in `agent_loop.py lock <name> -- <command>`. An exclusive resource takes one run at a
+time. A shared one takes as many runs as the settings give it, such as `gpu: 3`, because most GPU work, like a render
+or a test, runs fine beside other work. Use `lock gpu.alone` only when the measurement itself needs a quiet machine,
+such as a timing or a realtime capture: it waits until nobody else is using the GPU, and everyone else waits while
+you have it, so keep that command short.
+
+The lock waits its turn, so finding the resource busy is normal, and `agent_loop.py locks` shows who holds each lock
+and who is queued. Do other work while you wait, and end with `BLOCKED` only if the holder seems stuck, naming the
+process. A command that holds a lock longer than the project's `Lock hold limit` (30 minutes unless the settings
+say otherwise) is stopped with exit code 124 and its output is cut short. Hold the lock only for the part that needs
+the resource, or split the work into shorter commands.
 
 ## Long commands
 

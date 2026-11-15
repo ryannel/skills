@@ -261,6 +261,10 @@ runs again on every re-run and queues behind every other builder, so a proof tha
 ten. [What a proof costs](references/proofs.md#what-a-proof-costs) says how to weigh it, which faults are worth
 catching before a merge and which after it, and where timings and sittings with the human belong.
 
+An item's `lock` and `reads` fields say how its check runs, not what the milestone delivers. Changing only those on
+an approved milestone, such as moving a render from `gpu.alone` to `gpu`, keeps the builder's progress and needs no
+new design review, so fix them as soon as a queue shows they are wrong.
+
 Use only cost targets that are real, from the project brief or from the human. If nobody has set one, record the
 measurement as a baseline, and write a check that fails only when the result falls well below it.
 [Proofs](references/proofs.md) calls that a benchmark tripwire. A number you make up becomes a requirement that

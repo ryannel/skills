@@ -198,8 +198,9 @@ of the repository, so two builders can work at once. If the repository ignores n
 <folder>/<module> <remote>/<branch>`. With `Merge: local`, branch from the local main branch.
 
 Builders merge with the `merge` command, which rebases, runs the test command and pushes or fast-forwards the main
-branch under one lock. The milestone stays In Progress until `run` sets it Ready for Review, after its own checks
-pass on the main branch's tip.
+branch. Branches that arrive while another merge is running wait in a queue and merge together as one batch, with
+one run of the test command. The milestone stays In Progress until `run` sets it Ready for Review, after its own
+checks pass on the main branch's tip.
 
 ### How fast the work moves
 
@@ -218,7 +219,8 @@ daily report carries the same numbers.
 Read them against the number of builders. Ten builders finishing two milestones a day between them, while the main
 branch takes three hundred commits, means most of the effort is going somewhere other than the milestones. A lock
 that is busy most of the day, with hours queued against it, is a limit that more builders make worse. Failed holds
-of that lock cost the most, because nobody else could use the time they took.
+of that lock cost the most, because nobody else could use the time they took. `locks --worktree <repo>` shows who
+holds each lock right now and who is queued behind them.
 
 When the numbers drift apart like this, finding out why is part of delivering the brief. The cause usually sits
 above any one builder, in the process around the work: how it is split into modules and milestones, how it merges,

@@ -325,7 +325,7 @@ A design has three statuses of its own: Design Ready for Review, Design Changes 
 
 **Merge**
 Bring a builder's work into the main branch, through the script's `merge` command, which runs the test command
-first and holds a lock so two builders can't merge at once. The milestone stays In Progress: `merge` refuses a
+first. Branches that ask while another merge is running wait in a queue and merge together as a merge batch. The milestone stays In Progress: `merge` refuses a
 commit that sets it Ready for Review or Done, because only the script sets those, after its own checks.
 Avoid: integrate, land (in prose)
 Stored as: the `merge` command, and the `merge` lock; the `Merge:` line of the project settings, which says
@@ -339,6 +339,28 @@ Stored as: the `Human decides` line (`Owner decides` before 2.2, which `migrate`
 Something only one run at a time may use, such as a simulator. The script's `lock` command holds it.
 Avoid: lease, slot
 Stored as: the `Exclusive resources` line of the project settings
+
+**Shared resource**
+Something several runs may use at once, up to a number the project settings give, such as a GPU that takes three
+renders side by side. `lock gpu` takes one share. Taking it alone, as `lock gpu.alone`, waits until nobody else is
+using it and keeps everyone else out, which only a measurement that needs a quiet machine calls for.
+Avoid: slot, pool
+Stored as: the `Shared resources` line of the project settings, such as `gpu: 3`, and an item's `"lock": "gpu"` or
+`"lock": "gpu.alone"`
+Proposed: by the set's author, 2026-11-15. Not yet agreed by the human.
+
+**Hold limit**
+How long a command under `lock`, or a locked check, may hold its lock before the script stops it, so one stuck run
+can't keep everyone else waiting. It is 30 minutes unless the project settings say otherwise.
+Stored as: the `Lock hold limit` line of the project settings; a stopped command exits with 124
+Proposed: by the set's author, 2026-11-15. Not yet agreed by the human.
+
+**Merge batch**
+Branches that asked to merge while another merge was running, merged together with one run of the test command. If
+that run fails, the script splits the batch to find the branch that broke it and merges the rest.
+Avoid: train
+Stored as: the `batch` field of `merge`'s result, and the queue under `<git common dir>/orchestrate/merge-queue/`
+Proposed: by the set's author, 2026-11-15. Not yet agreed by the human.
 
 **Run**
 One `run`, `review` or `plan` command working on a module, with the agent sessions it starts. The `runs`
