@@ -7,6 +7,7 @@ handled.
 Contents:
 - [The three ways](#the-three-ways)
 - [Kinds to start from](#kinds-to-start-from)
+- [What a proof costs](#what-a-proof-costs)
 - [How to inspect](#how-to-inspect)
 - [Subjective work](#subjective-work)
 
@@ -52,6 +53,52 @@ same shape.
 | User journey | `inspect` | The steps and their states: empty, loading, error and resize for a screen; bad arguments, piped input and exit codes for a command-line tool | Only the easy path was tried |
 | Options to choose from | `inspect`, and `needs` with the type `human_feedback` | A few options for one representative piece, different in kind, for the human to pick from | The options are one idea in three colours |
 | Code or interface | `ask` | A question with a real answer, such as "does every caller handle the new error case?" | It asks for an opinion |
+
+## What a proof costs
+
+A proof is worth what it catches, set against what it costs, and both depend on how the build runs, not only on
+the item. Most proofs are cheap, so this rarely decides anything. It decides a lot when a proof is slow, when it
+needs something only one run at a time may use, or when it needs the human.
+
+An Automated Check runs more often than it looks from the item. The builder runs it while working. After the builder
+merges, the script runs every check again on the main branch's tip, one after another, before it sets the milestone
+Ready for Review, and that run is the proof of record. A check that holds an exclusive resource, such as a GPU, runs
+one at a time across every builder, so with ten builders a fifteen-minute check can wait two hours for its turn.
+
+The project's test command costs more again, because it runs inside the merge lock. While it runs, no other builder
+can merge, so its length sets how many merges an hour the project can take. A test command that takes fifteen
+minutes allows about four merges an hour, shared by every builder.
+
+So for each proof, weigh four things: what it would catch, how likely that fault is here, what the fault would cost
+if it were caught later instead, and what the proof costs now, in time and in queueing for the builders who share
+its resource. When a project has history, its past reviews show which proofs found real faults. Often most of them
+were found by reading the code or by a quick test on the CPU, and those deserve the most items.
+
+Where a proof runs follows from who a fault would hurt:
+
+- A fault that would stop every builder, such as a broken build or a failing test on the main branch, is worth
+  catching before the merge. Put the cheap, repeatable checks that catch it in the test command, and keep that
+  command quick enough to sit inside the merge lock.
+- A fault that would cost only its own module an hour or two, such as an image that moved or a slower frame, is
+  cheaper to find after the merge. One run on the main branch covers everything merged since the last run, whoever
+  merged it, and a failure is fixed by the module that caused it while the others carry on. Say in the project
+  settings how often that run happens and who acts on a failure, and give items that depend on it a check that reads
+  its latest result rather than repeating it.
+- A measurement that needs a quiet machine, such as a timing, rarely gets one while builders are working. Within
+  a milestone, use a generous benchmark tripwire that catches a collapse. Put the precise numbers in the module's
+  last milestone, measured in one sitting.
+- A proof that needs the human, such as a run on a real device, costs a sitting each time. Gather those items into
+  the module's last milestone too, so one sitting covers them.
+
+Two more patterns make a proof's cost grow with the number of builders:
+
+- A proof that has to be recorded before a merge and matched to the exact code goes stale whenever the main branch
+  changes the files it covers. When making it takes longer than the main branch stays still, builders can spend
+  their sessions remaking it. Prefer a run after the merge. Where it must come first, draw what it covers as
+  narrowly as its real inputs.
+- An exclusive resource held by work that doesn't need it to itself makes everything queue. Timing needs a quiet
+  machine, but comparing images or running a GPU test usually doesn't. Name the narrow use in the project settings,
+  as in `gpu: timing runs`, so the rest can run side by side.
 
 ## How to inspect
 

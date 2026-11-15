@@ -2907,14 +2907,40 @@ def run_proc(args, cwd: Path | None, timeout_s: float, shell: bool = False,
                     return (130 if _STOP else 124), out, err + ("\n(stopped)" if _STOP else "\n(timed out)")
 
 
+# Each hold of a shared lock adds a line to locks.jsonl: when it was asked for, when it was got and released, and the
+# exit status of the command it covered when the caller knows it. `flow` reads them, so the lead can see how long
+# work queues for an exclusive resource and how much of the holding ends in failure. In Thrum, builders spent 42% of
+# two days queued for one GPU lock, and that took a hand-run audit to find.
+LOCKS_FILE = "locks.jsonl"
+UNRECORDED_LOCKS = {"last-runs"}  # the script's own bookkeeping, held for milliseconds
+
+
 @contextmanager
 def held(name: str, worktree: Path):
-    """Holds the repository-wide lock `name` for the duration of the block."""
+    """Holds the repository-wide lock `name` for the duration of the block, and yields a dict the caller may put
+    `exit` in. The hold is recorded in locks.jsonl when it ends."""
     if not re.fullmatch(r"[\w.-]+", name):
         raise SystemExit(f"error: lock name {name!r} may only use letters, digits, '.', '_' and '-'")
+    use: dict = {}
+    asked = time.time()
     with open(Path(git_common_dir(worktree)) / f"orchestrate-{name}.lock", "w") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
-        yield
+        got = time.time()
+        try:
+            yield use
+        finally:
+            if name not in UNRECORDED_LOCKS:
+                record_lock_use(worktree, name, asked, got, time.time(), use.get("exit"))
+
+
+def record_lock_use(worktree: Path, name: str, asked: float, got: float, released: float, code) -> None:
+    row = {"lock": name, "worktree": str(worktree), "pid": os.getpid(), "asked_s": round(asked, 1),
+           "got_s": round(got, 1), "released_s": round(released, 1), **({"exit": code} if code is not None else {})}
+    try:
+        with open(loop_dir(worktree) / LOCKS_FILE, "a") as f:
+            f.write(json.dumps(row) + "\n")
+    except OSError:
+        pass  # a record that can't be written mustn't fail the command the lock covered
 
 
 LOCK_PATIENCE_S = 0.5  # how long a run waits out a lock another process holds for a moment (an older `pause`)
@@ -3727,8 +3753,9 @@ def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plan
             return {"exit": 0, "out": "", "err": "", "stdout": saved.get("stdout"), "stderr": saved.get("stderr"),
                     "reused": saved.get("at") or True}
     if lock:
-        with held(lock, tree):
+        with held(lock, tree) as use:
             code, out, err = run_proc(command, tree, timeout_s, shell=True)
+            use["exit"] = code
     else:
         code, out, err = run_proc(command, tree, timeout_s, shell=True)
     paths = {"stdout": None, "stderr": None}
@@ -4938,7 +4965,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.2.6"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.2.7"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -8040,8 +8067,9 @@ def cmd_lock(a: argparse.Namespace) -> None:
     where = Path(worktree or Path.cwd()).resolve()
     if subprocess.run(["git", "-C", str(where), "rev-parse"], capture_output=True).returncode != 0:
         raise SystemExit(f"error: {where} is not in a git repository, so there is no shared lock location")
-    with held(a.name, where):
-        sys.exit(subprocess.run(command, cwd=where if worktree else None).returncode)
+    with held(a.name, where) as use:
+        use["exit"] = subprocess.run(command, cwd=where if worktree else None).returncode
+    sys.exit(use["exit"])
 
 
 # A background job is a long command an agent starts with `background` and waits for with `wait`. In Thrum, builders
@@ -8375,9 +8403,10 @@ def cmd_merge(a: argparse.Namespace) -> None:
 
 
 def upstream_changes(worktree: Path, old_base: str, own: int) -> dict:
-    """The files the rebase brought in from the main branch, so the builder re-runs only the proofs they can affect.
-    In Thrum builders re-ran every capture after each merge, and one builder's evidence came from before a rebase
-    that changed the camera. The new base is HEAD less the builder's own commits, which the rebase kept on top."""
+    """The files the rebase brought in from the main branch, so the builder takes again only the captures they can
+    change. The script's own run of the checks on the merged tip is the proof of record for Automated Checks. In Thrum
+    builders re-ran every proof after each merge, and one builder's evidence came from before a rebase that changed
+    the camera. The new base is HEAD less the builder's own commits, which the rebase kept on top."""
     if not old_base or own <= 0:
         return {}
     new_base = git(worktree, "rev-parse", "--verify", "--quiet", f"HEAD~{own}").stdout.strip()
@@ -8386,7 +8415,8 @@ def upstream_changes(worktree: Path, old_base: str, own: int) -> dict:
     paths = git(worktree, "diff", "--name-only", old_base, new_base).stdout.split()
     shown = paths[:60]
     return {"upstream": f"the rebase brought in {len(paths)} changed files from {old_base[:12]}..{new_base[:12]}; "
-                        "re-run the proofs of items these could affect, on the merged commit",
+                        "the script runs every check on the merged tip after your turn, so take again only the "
+                        "captures for inspected items that these could change",
             "upstream_files": shown + ([f"... and {len(paths) - len(shown)} more"] if len(paths) > len(shown) else [])}
 
 
@@ -8739,11 +8769,90 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
                 "is a re-plan.", "", *assumed]
     out += ["", "## Blocked or waiting", "", *(waiting or ["- nothing"]), "",
             "## Items that need human feedback, access or hardware", "", *(needing or ["- none open"]), "",
+            "## Flow", "", "How fast the work moved, beside how busy the machine was. The lead reads the two "
+            "together.", "", *flow_text(flow_numbers(worktree, hours)), "",
             "## Cost", "", f"- build sessions: {builders}", *("- " + line for line in cost_text(c)),
             ("- [from the committed record] marks milestones this machine's ledger has nothing on: their last "
              "Ready for Review record's session and every review, as the record files keep them" if c.get("from_records") else
              "- tokens are this machine's ledger; `quota` gives the Codex forecast"), ""]
     return date, "\n".join(out)
+
+
+# How fast the work moves, for the lead. Busy builders and a rising commit count can hide a build that has nearly
+# stopped: in Thrum, commits went from about 20 a day to over 300 while milestones passing review stayed at two to six,
+# because builders spent their time queued for one GPU lock and re-running proofs. These numbers put the two side by
+# side, from files the script already keeps, so a lead can see the gap the day it opens.
+def flow_numbers(worktree: Path, hours: float) -> dict:
+    """Milestones that reached Ready for Review and Done, commits on the main branch, build sessions, each lock's
+    holding, queueing and failures, and background jobs, over the last `hours`."""
+    prof = profile(worktree)
+    ref, proj = read_project(worktree, prof)
+    start, since = time.time() - hours * 3600, since_stamp(hours) or ""
+    ready = done = 0
+    for e in proj.values():
+        for r in ((e.get("record") or {}).get("milestones") or {}).values():
+            ready += (ready_record(r).get("at") or "") >= since
+            done += ((r.get("done") or {}).get("at") or "") >= since
+    after = f"--since=@{int(start)}"
+    commits = git(worktree, "rev-list", "--count", after, ref).stdout.strip() if ref else ""
+    code = git(worktree, "rev-list", "--count", after, ref, "--", ".",
+               f":(exclude){prof['plans']}", f":(exclude){prof['evidence']}").stdout.strip() if ref else ""
+    builders = len({(r.get("module"), r.get("milestone"), r.get("session")) for r in ledger_rows(worktree)
+                    if r.get("role") == "build" and (r.get("at") or "") >= since})
+    locks: dict = {}
+    path = loop_dir(worktree) / LOCKS_FILE
+    for line in (path.read_text().splitlines() if path.exists() else []):
+        try:
+            row = json.loads(line)
+            asked, got, released = float(row["asked_s"]), float(row["got_s"]), float(row["released_s"])
+        except (ValueError, KeyError, TypeError):
+            continue
+        if released < start:
+            continue
+        s = locks.setdefault(row.get("lock") or "?", {"holds": 0, "held_h": 0.0, "queued_h": 0.0,
+                                                      "longest_wait_h": 0.0, "failed": 0, "failed_held_h": 0.0})
+        held_h = (released - max(got, start)) / 3600
+        s["holds"] += 1
+        s["held_h"] += held_h
+        s["queued_h"] += max(0.0, got - max(asked, start)) / 3600
+        s["longest_wait_h"] = max(s["longest_wait_h"], (got - asked) / 3600)
+        if row.get("exit") not in (None, 0):
+            s["failed"] += 1
+            s["failed_held_h"] += held_h
+    for s in locks.values():
+        s["busy"] = round(min(1.0, s["held_h"] / hours), 2)
+        for k in ("held_h", "queued_h", "longest_wait_h", "failed_held_h"):
+            s[k] = round(s[k], 1)
+    jobs = {"started": 0, "failed": 0, "running": 0}
+    for j in job_rows(worktree):
+        if float(j.get("started_s") or 0) < start or not j.get("log") or not j.get("pid"):
+            continue
+        state, exit_code = job_state(j)
+        jobs["started"] += 1
+        jobs["running"] += state == "running"
+        jobs["failed"] += state == "gone" or (state == "exited" and exit_code != 0)
+    return {"hours": hours, "tip": ref, "ready_for_review": ready, "done": done,
+            "commits": int(commits) if commits.isdigit() else None,
+            "code_commits": int(code) if code.isdigit() else None,
+            "build_sessions": builders, "locks": locks, "background_jobs": jobs}
+
+
+def flow_text(f: dict) -> list[str]:
+    """The flow numbers as lines for the report."""
+    out = [f"- milestones that reached Ready for Review: {f['ready_for_review']}; became Done: {f['done']}",
+           f"- commits on the main branch: {f['commits']}, of which {f['code_commits']} change files outside the "
+           f"plans and evidence; build sessions: {f['build_sessions']}"]
+    for name, s in sorted(f["locks"].items()):
+        out.append(f"- `{name}` lock: held {s['held_h']} h ({s['busy']:.0%} of the window) over {s['holds']} holds, "
+                   f"with {s['queued_h']} h spent queued for it and a longest wait of {s['longest_wait_h']} h; "
+                   f"{s['failed']} holds ended in a failed command, using {s['failed_held_h']} h of it")
+    j = f["background_jobs"]
+    out.append(f"- background jobs: {j['started']} started, {j['failed']} failed or vanished, {j['running']} still running")
+    return out
+
+
+def cmd_flow(a: argparse.Namespace) -> None:
+    print(json.dumps(flow_numbers(Path(a.worktree).resolve(), a.since)))
 
 
 def design_reviews(worktree: Path, prof: dict, ref: str, stem: str, rec: dict) -> list[dict]:
@@ -10239,6 +10348,10 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--since", type=float, default=24.0, help="hours to cover (default 24)")
     report.add_argument("--write", action="store_true", help="write <evidence>/build-reports/<date>.md for adopt")
     report.set_defaults(func=cmd_report)
+    flow = sub.add_parser("flow", help="show how fast milestones moved beside commits, lock queueing and failed jobs")
+    flow.add_argument("--worktree", default=".")
+    flow.add_argument("--since", type=float, default=24.0, help="hours to cover (default 24)")
+    flow.set_defaults(func=cmd_flow)
     runs = sub.add_parser("runs", aliases=["loops"], help="list every run, review and plan running on this machine")  # `loops` before 2.1.0
     runs.add_argument("--repo", help="only runs in the repository holding this path")
     runs.add_argument("--json", action="store_true", help="one JSON object, for a lead")

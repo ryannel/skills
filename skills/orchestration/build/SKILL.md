@@ -201,6 +201,40 @@ Builders merge with the `merge` command, which rebases, runs the test command an
 branch under one lock. The milestone stays In Progress until `run` sets it Ready for Review, after its own checks
 pass on the main branch's tip.
 
+### How fast the work moves
+
+Busy builders aren't the same as a build that is moving. A builder that is waiting for a lock, running a proof
+again or retrying a merge is doing what its session asks of it, and from inside that session each of those looks
+normal. You are the only one who sees every session at once, so you are the only one who can see them all waiting
+on the same thing.
+
+Milestones reaching Ready for Review and Done are the measure of delivery. Commits, background jobs and turns
+measure effort, and effort can climb while delivery stays flat. `flow --worktree <repo>` puts the two side by side
+for the last day, or for `--since <hours>`. It counts the milestones that reached Ready for Review and Done, the
+commits on the main branch and the build sessions. It also reports, for each lock, how long it was held, how long
+work queued for it, and how many holds ended in a failed command, as well as how many background jobs failed. The
+daily report carries the same numbers.
+
+Read them against the number of builders. Ten builders finishing two milestones a day between them, while the main
+branch takes three hundred commits, means most of the effort is going somewhere other than the milestones. A lock
+that is busy most of the day, with hours queued against it, is a limit that more builders make worse. Failed holds
+of that lock cost the most, because nobody else could use the time they took.
+
+When the numbers drift apart like this, finding out why is part of delivering the brief. The cause usually sits
+above any one builder, so clearing builders one at a time won't reach it. Often it is in how the plans prove their
+items: a slow check that every milestone repeats, a test command that a busy main branch keeps making stale, or an
+exclusive resource held by work that doesn't need it to itself. Those belong to the planners and to the project
+settings. Start a planner whose task names the pattern and the modules it spans, or bring the human a change to the
+project settings with what it would cost and what it would give back. Running fewer builders is a fix too, and
+often the quickest: when they queue for one resource, each extra builder adds waiting, not output.
+
+Some checks are too slow to run before every merge, and the project settings may list them under `Checks on the main
+branch`. One run of such a check covers everything merged since the last run. When nothing else runs it, start it
+yourself on the schedule the settings give, with the script's `background` command, so it doesn't hold up your
+other work. When it fails, give the fix to the module whose merge caused it, as its next task. If the run covered
+several merges and the cause isn't plain from the failure, start a planner to find it rather than reading the code
+yourself. The other modules carry on meanwhile, which is the point of running the check after the merge.
+
 ## Starting agents
 
 | To start | Run |
@@ -427,6 +461,7 @@ report covers:
   remove the line and merge the glossary with `adopt`;
 - every decision saved in the human's name since the last report, with the words saved, and a quote of any
   decision the script has no command for, such as a change to the project settings;
+- how fast the work moved, from `flow`, and what you make of it when delivery has fallen behind the effort;
 - how many builders ran, the Codex quota forecast, and the tokens each milestone used, which `cost` adds up.
 
 If a result's `quota` field sets `warn`, the work left won't fit before the usage limit resets. Tell the human at

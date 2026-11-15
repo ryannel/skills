@@ -113,11 +113,24 @@ Say which things you confirmed by running something and which you only suspect. 
 it is written, so a guess that reads like a fact turns into an instruction. Ask the lead for what you need. What
 other builders should do is the lead's to decide, because only the lead can see every run.
 
-Record in your evidence the commit each proof ran on. `merge` rebases your work onto the main branch, and its result
-lists the files the rebase brought in, under `upstream_files`. Before you end with `DONE`, run the proofs of the items
-those files could affect again, on the merged commit. Another module's change can alter what your proof shows, and the
-reviewer judges the merged commit. Your other proofs still hold, so running them again only costs time. Link evidence
-by its path from the repository's root, because your worktree's absolute paths stop working when it is reused.
+Record in your evidence the commit each proof ran on, and link evidence by its path from the repository's root,
+because your worktree's absolute paths stop working when it is reused.
+
+After your turn, the script runs every Automated Check and the project's test command on the main branch's tip, which
+holds your merged work. That run is the proof of record: the reviewer is told it passed and on which commit. So once
+you have merged, there is no need to run your checks again yourself, and on a busy main branch each extra run is
+time other builders wait for the same resources. If the script's run fails, it tells you which check and why.
+
+Evidence a reviewer inspects is different, because the script doesn't take it. A capture of an older build shows code
+that isn't the code under review. `merge` lists the files the rebase brought in, under `upstream_files`. If any of
+them could change what a capture shows, take that capture again on the merged commit. For visual work, plan one
+capture pass after your last merge rather than one after each.
+
+Hold an exclusive resource only for the command that needs it. `merge` already makes builders take turns, so a script
+of your own that holds a lock across a rebase, a check and a merge makes everyone wait through all three, and it
+usually fails because the main branch moved while it ran. In the same way, check that the human is there and the
+screen is unlocked before you take a lock for an attended run, because a lock held while waiting for a person stops
+every other builder that needs it.
 
 Some items need the human at the machine, for human feedback or for access. Prove those after your last merge, on a
 build of the merged commit, so that the human's time is spent once. When a new proof has to match evidence you took

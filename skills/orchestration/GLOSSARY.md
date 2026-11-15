@@ -369,6 +369,13 @@ turn ends. The agent waits for it with `wait`, which returns when the job ends, 
 Stored as: `<git common dir>/orchestrate/jobs.jsonl`, with each job's log under `orchestrate/jobs/`
 Agreed: by the human, 2026-11-12.
 
+**Flow**
+How fast the work moves: milestones reaching Ready for Review and Done, set beside the effort spent on them, such
+as commits on the main branch, time queued for and holding each lock, and failed background jobs.
+Stored as: the `flow` command, the `## Flow` part of the report, and `<git common dir>/orchestrate/locks.jsonl`,
+one line per hold of a lock
+Proposed: by the set's author, 2026-11-15. Not yet agreed by the human.
+
 **Saved check output**
 The whole stdout and stderr of each check the script runs, for the builder's `check`, for `merge`'s test command
 and for the script's own checks, kept in files that the check's failure message names. The message holds only

@@ -371,6 +371,7 @@ and the report lists every decision saved in your name, so you can spot one you 
 | what is running on this machine, in every repository | `runs` |
 | to stop cleanly and carry on later | `pause`, then `run` again |
 | what the build has cost, for each milestone, split into planning, building and reviewing | `cost` |
+| how fast milestones moved, beside commits, lock queueing and failed jobs | `flow` |
 | whether the Codex weekly usage limit will last | `quota` |
 | for a report | `report` |
 | to save a decision of yours | `human feedback`, `accept`, `rereview`, `reopen` or `scope` |

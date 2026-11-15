@@ -256,6 +256,11 @@ Write each check so that it still runs when the machine is in a state the produc
 screen or a denied permission. Have the check record that state and pass either way, unless the item's statement
 really depends on it. A check that needs an unlocked, idle machine stops whenever the human uses it.
 
+Weigh what each proof costs as well as what it catches. A slow check, or one that needs an exclusive resource,
+runs again on every re-run and queues behind every other builder, so a proof that is cheap with one builder can stall
+ten. [What a proof costs](references/proofs.md#what-a-proof-costs) says how to weigh it, which faults are worth
+catching before a merge and which after it, and where timings and sittings with the human belong.
+
 Use only cost targets that are real, from the project brief or from the human. If nobody has set one, record the
 measurement as a baseline, and write a check that fails only when the result falls well below it.
 [Proofs](references/proofs.md) calls that a benchmark tripwire. A number you make up becomes a requirement that

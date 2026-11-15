@@ -2911,6 +2911,17 @@ class FirstRuns(Repo):
         body = (self.wt / written).read_text()
         self.assertIn("- WATER M1: Done, by review", body)
         self.assertIn("fewer than about ten, so spot-check every one", body)
+        self.assertIn("## Flow", body)
+        self.assertIn("milestones that reached Ready for Review: 1; became Done: 1", body)
+        with self.assertRaises(SystemExit) as exit_:  # a hold of an exclusive resource whose command fails
+            agent_loop.cmd_lock(argparse.Namespace(name="gpu", worktree=None, command_args=[
+                "--worktree", str(self.wt), "--", "sh", "-c", "exit 4"]))
+        self.assertEqual(exit_.exception.code, 4)
+        f = json.loads(self.printed(agent_loop.cmd_flow, worktree=str(self.wt), since=24.0))
+        self.assertEqual((f["ready_for_review"], f["done"]), (1, 1))
+        self.assertEqual((f["locks"]["gpu"]["holds"], f["locks"]["gpu"]["failed"]), (1, 1))
+        self.assertIn("merge", f["locks"])  # the builder's merge held the merge lock
+        self.assertGreaterEqual(f["commits"], f["code_commits"])
         self.assertEqual(self.adopt()["result"], "ADOPTED")
 
     # 6. quota
