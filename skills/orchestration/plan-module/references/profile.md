@@ -58,7 +58,7 @@ needs, where secrets come from, and how two worktrees avoid sharing a port or a 
 
 ## Rules
 - **Exclusive resources:** <things only one run at a time may use, such as "simulator" or "gpu: timing runs"; or none>
-- **Checks on the main branch:** <slow checks that run on the main branch after merges rather than before each one, how often, and who acts on a failure; or none>
+- **Main-branch check <name>:** `<command>`; every <30m>; lock <resource names, or leave out>; timeout <2h>  *(script: optional, one line per check too slow to run before every merge; it runs on the main branch's tip after merges, and an item proves itself with `python3 "$ORCHESTRATE_SCRIPT" main-check <name>`)*
 - **Large captures:** <where frame sequences and other bulky evidence go if they aren't committed, and how a reviewer gets them>
 - **Human decides:** <for example: changing the goal; spending; publishing or deploying; anything that can't be undone>  *(script: sent again on resumed turns)*
 - **Licences and paths not to touch:** <for example: no GPL code, because the project ships under MIT; ../other-repo belongs to another team, so ask before changing it>  *(script: sent again on resumed turns)*

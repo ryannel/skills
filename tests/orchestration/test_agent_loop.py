@@ -24,8 +24,8 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import (PROFILE, SCRIPTS, Clean, Repo, agent_loop, done, item, milestone,  # noqa: E402
-                     proved, put, release, shares)
+from support import (PROFILE, SCRIPTS, Clean, Repo, agent_loop, check_next_commands, done, item,  # noqa: E402
+                     milestone, parse, proved, put, release, shares)
 
 
 def too_many(mid, statuses, **kw):
@@ -5896,6 +5896,195 @@ class CatchUp(Repo):
         self.assertEqual(out["status"], "in_progress")
         self.assertEqual([i["builder_result"] for i in out["items"]], ["pass", "open"])
         self.assertEqual(agent_loop.merged_done("{bad", json.dumps(mine)), "{bad")
+
+
+class MainBranchCheckSettings(Clean):
+    def test_the_settings_declare_main_branch_checks_one_line_each(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "ORCHESTRATE.md").write_text(PROFILE + (
+                "- **Main-branch check exact-images:** `./dev verify --exact; echo done`; every 30m; lock gpu, chrome; "
+                "timeout 40m  *(script)*\n"
+                "- **Main-branch check lint:** cargo clippy --all\n"
+                "- **Main-branch check <name>:** `<command>`; every <30m>\n"))
+            checks = agent_loop.profile(Path(tmp), strict=True)["main_checks"]
+        self.assertEqual(checks, {
+            "exact-images": {"command": "./dev verify --exact; echo done", "every_s": 1800.0, "locks": ["chrome", "gpu"],
+                             "timeout_s": 2400.0},
+            "lint": {"command": "cargo clippy --all", "every_s": 0.0, "locks": [],
+                     "timeout_s": agent_loop.MAIN_CHECK_TIMEOUT_S}})
+
+    def test_a_main_branch_check_that_cant_be_read_is_named(self):
+        problems = []
+        checks = agent_loop.main_check_lines("- **Main-branch check slow:** `x`; every soon\n"
+                                             "- **Main-branch check two words:** `y`\n"
+                                             "- **Main-branch check slow:** `z`\n", problems)
+        self.assertEqual(checks, {"slow": {"command": "x", "every_s": 0.0, "locks": [],
+                                           "timeout_s": agent_loop.MAIN_CHECK_TIMEOUT_S}})
+        self.assertEqual(len(problems), 3, problems)
+        self.assertIn("every 'soon'", problems[0])
+
+
+class MainBranchChecks(Repo):
+    """`main-check`: a slow check run once on the main branch's tip for every commit merged since its last run. In
+    Thrum the exact-image verifier took 16 minutes while the main branch moved every 20, and required before each
+    merge it stalled the build."""
+
+    def setUp(self):
+        super().setUp()
+        agent_loop.MAIN_CHECK_POLL_S = 0.1
+        self.count = self.root / "count"
+        self.addCleanup(self.settle)
+
+    def declare(self, command, extra=""):
+        path = self.wt / "ORCHESTRATE.md"
+        path.write_text(path.read_text() + f"- **Main-branch check images:** `{command}`{extra}\n")
+        self.commit_all()
+
+    def ask(self, **kw):
+        """The command's exit status and result line."""
+        args = parse(agent_loop.cmd_main_check, worktree=str(self.wt), **kw)
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()), \
+                    self.assertRaises(SystemExit) as stop:
+                agent_loop.cmd_main_check(args)
+        finally:
+            release()
+        line = json.loads(out.getvalue().splitlines()[-1])
+        check_next_commands(line)
+        return stop.exception.code, line
+
+    def folder(self):
+        return agent_loop.main_check_dir(self.wt, "images")
+
+    def runs(self):
+        return agent_loop.main_check_runs(self.folder())
+
+    def settle(self, limit=30):
+        """Waits for the runner in flight, if any, to finish."""
+        end = time.time() + limit
+        while agent_loop.main_check_flight(self.folder()) and time.time() < end:
+            time.sleep(0.05)
+
+    def in_flight(self, limit=20):
+        """Waits for a runner just started to take the check's lock."""
+        end = time.time() + limit
+        while not agent_loop.main_check_flight(self.folder()) and time.time() < end:
+            time.sleep(0.05)
+
+    def counted(self):
+        return len(self.count.read_text().splitlines()) if self.count.exists() else 0
+
+    def land(self, message, **files):
+        """Commits these files on the main branch and pushes them; returns the commit."""
+        for name, text in files.items():
+            put(self.wt / name, text)
+        self.git("add", "-A")
+        self.git("commit", "-qm", message)
+        self.git("push", "-q", "origin", "main")
+        return agent_loop.head_commit(self.wt)
+
+    def test_a_run_on_the_tip_is_recorded_and_listed(self):
+        self.declare(f"echo run >> {self.count}; test ! -f broken", "; lock gpu")
+        head = agent_loop.head_commit(self.wt)
+        code, line = self.ask(name="images")
+        self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", head), line)
+        self.settle()
+        [run] = self.runs()
+        self.assertEqual((run["kind"], run["commit"], run["result"], len(run["attempts"])), ("tip", head, "pass", 1))
+        self.assertTrue(Path(run["attempts"][0]["stdout"]).exists())
+        self.assertEqual(self.counted(), 1)
+        self.assertIn('"lock": "gpu"', (agent_loop.loop_dir(self.wt) / agent_loop.LOCKS_FILE).read_text())
+        _, listed = self.ask()
+        [check] = listed["checks"]
+        self.assertEqual((listed["result"], check["name"], check["latest"]["result"], check["due"]),
+                         ("MAIN_CHECKS", "images", "pass", False))
+        [report] = agent_loop.main_check_report_lines(self.wt)
+        self.assertIn(f"main-branch check `images`: passed on {head[:12]}", report)
+
+    def test_a_second_request_joins_the_run_in_flight(self):
+        self.declare(f"echo run >> {self.count}; sleep 2")
+        code, started = self.ask(name="images", start=True)
+        self.assertEqual((code, started["result"], started["started"]), (0, "STARTED", ["images"]))
+        self.in_flight()
+        self.assertEqual(self.ask(name="images", start=True)[1]["result"], "ALREADY_RUNNING")
+        code, line = self.ask(name="images")
+        self.assertEqual((code, line["result"]), (0, "COVERED"), line)
+        self.assertEqual(self.counted(), 1)
+
+    def test_a_pass_covers_every_commit_it_contains_and_nothing_after(self):
+        self.declare(f"echo run >> {self.count}")
+        first = agent_loop.head_commit(self.wt)
+        self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
+        later = self.land("another module's work", **{"src/a.txt": "a"})
+        code, line = self.ask(name="images", commit=first)
+        self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", first))
+        self.assertEqual(self.counted(), 1)
+        spec = agent_loop.profile(self.wt)["main_checks"]["images"]
+        self.assertTrue(agent_loop.main_check_due(spec, self.runs(), None, later))
+        code, line = self.ask(name="images")
+        self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", later))
+        self.assertEqual(self.counted(), 2)
+        self.git("commit", "-q", "--allow-empty", "-m", "a builder's own work, not merged")
+        side = agent_loop.head_commit(self.wt)
+        self.git("reset", "-q", "--hard", "HEAD~1")
+        code, line = self.ask(name="images", commit=side)
+        self.assertEqual((code, line["result"]), (1, "NOT_ON_MAIN"))
+        self.assertEqual(self.counted(), 2)
+
+    def test_a_wait_that_runs_out_says_pending_and_the_run_carries_on(self):
+        self.declare(f"sleep 1; echo run >> {self.count}")
+        code, line = self.ask(name="images", wait=0)
+        self.assertEqual((code, line["result"]), (agent_loop.MAIN_CHECK_PENDING_EXIT, "PENDING"), line)
+        self.assertIn("main-check images", line["next"]["command"])
+        self.in_flight()
+        self.settle()
+        self.assertEqual(self.counted(), 1)
+        self.assertEqual(self.ask(name="images", wait=0)[1]["result"], "COVERED")
+
+    def test_a_failure_that_passes_on_its_retry_is_a_pass(self):
+        flag = self.root / "flaked"
+        self.declare(f"test -f {flag} || {{ touch {flag}; exit 1; }}")
+        code, line = self.ask(name="images")
+        self.assertEqual((code, line["result"], line["by"]["flaky"], line["by"]["attempts"]), (0, "COVERED", True, 2))
+        self.assertIn("on its retry", line["why"])
+
+    def test_a_failure_that_holds_is_bisected_to_the_commit_that_broke_it(self):
+        self.declare("test ! -f broken")
+        self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
+        c1 = self.land("tidy the camera", **{"src/camera.txt": "1"})
+        c2 = self.land("water: foam on the shore", **{"broken": "x", "docs/evidence/WATER/foam.md": "foam"})
+        self.land("tidy the sky", **{"src/sky.txt": "1"})
+        c4 = self.land("tidy the sky again", **{"src/sky.txt": "2"})
+        code, line = self.ask(name="images")  # the tip's own answer doesn't wait for the bisect
+        self.assertEqual((code, line["result"], line["by"]["commit"]), (1, "FAILING_ON_MAIN", c4), line)
+        self.settle()
+        code, line = self.ask(name="images")
+        self.assertEqual((code, line["result"]), (1, "FAILING_ON_MAIN"), line)
+        culprit = line["by"]["culprit"]
+        self.assertEqual((culprit["commit"], culprit["subject"], culprit["modules"]),
+                         (c2, "water: foam on the shore", ["WATER"]))
+        self.assertIn(c2[:12], line["why"])
+        self.assertEqual(self.ask(name="images", commit=c1)[1]["result"], "COVERED")
+        self.assertEqual(self.ask(name="images", commit=c2)[1]["result"], "FAILING_ON_MAIN")
+        self.settle()
+        self.assertEqual([(r["kind"], r["result"]) for r in self.runs()],
+                         [("tip", "pass"), ("tip", "fail"), ("bisect", "fail"), ("bisect", "pass")])
+        self.assertIn(f"first failing commit {c2[:12]}", agent_loop.main_check_report_lines(self.wt)[0])
+
+    def test_an_item_proves_itself_from_the_shared_result_in_the_scripts_clean_checkout(self):
+        self.declare(f"echo run >> {self.count}")
+        check = 'python3 "$ORCHESTRATE_SCRIPT" main-check images --wait 60'
+        self.write_done([milestone("M1", "in_progress", ["pass"], check=check),
+                         milestone("M2", "in_progress", ["pass"], check=check)])
+        self.commit_all()
+        prof = agent_loop.profile(self.wt)
+        tree = agent_loop.verify_tree(self.wt, "WATER", agent_loop.tip(self.wt, prof))
+        doc = agent_loop.load_done(self.wt, "WATER", prof)
+        for mid in ("M1", "M2"):
+            self.assertEqual(agent_loop.check_failures(tree, prof, agent_loop.find(doc, mid)), [])
+        self.assertEqual(self.git("status", "--porcelain", where=tree).stdout, "")
+        self.assertEqual(self.counted(), 1)
 
 
 if __name__ == "__main__":
