@@ -421,6 +421,25 @@ the checks there.
 Stored as: `run --checks-only`
 Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
 
+**Main-branch check**
+A check too slow to run before every merge, which runs on the main branch's tip after merges instead. One run
+covers every commit merged since the last, whoever made them. One run at a time per check, for the whole
+repository, and a second request joins the run in flight. A failed run is tried again once, and a failure that
+holds is bisected over the main branch's commits since the last pass, to name the first failing commit, which is
+fixed forward. An item proves itself from the shared result: its check passes when a pass covers its commit.
+Avoid: trunk sentinel, sentinel (the names in the analysis that proposed it)
+Not: Test command, which runs before every merge.
+Stored as: a `Main-branch check <name>:` line of the project settings, one per check; the `main-check` command;
+`python3 "$ORCHESTRATE_SCRIPT" main-check <name>` as an item's check; runs under
+`<git common dir>/orchestrate/main-checks/<name>/`
+Proposed: by Claude, 2026-11-15. Not yet agreed by the human.
+
+**Covered**
+What a commit is when a main-branch check passed on a main-branch commit that contains it. A pass on a later commit
+covers every commit before it, so one run answers for every milestone merged since the last.
+Stored as: the `COVERED` result of `main-check`
+Proposed: by Claude, 2026-11-15. Not yet agreed by the human.
+
 **Usage ledger**
 The file where the script writes one row for each agent turn with the tokens it used, which the `cost` and
 `report` commands add up. A Codex turn's tokens are the rise in its session's running total across the turn, read
@@ -499,7 +518,14 @@ below. Its exit status is 0 when the line is the command's own result, and 1 or 
 | `MERGED`, `FAILED` | `merge` | The work was merged, or wasn't, with the reason in `detail` |
 | `ADOPTED` | `adopt` | Plan files left uncommitted or unmerged were committed and merged |
 | `MIGRATED` | `migrate` | The plans were moved to the current layout and names, or, with `--branch`, a worktree's own commits were renamed and rebased onto the main branch |
-| `NOTHING` | `adopt`, `migrate` | There was nothing to do |
+| `NOTHING` | `adopt`, `migrate`, `main-check` | There was nothing to do. From `main-check --due`, no main-branch check was due |
+| `COVERED` | `main-check` | A main-branch check passed on a main-branch commit that contains the commit asked about. Exit status 0 |
+| `FAILING_ON_MAIN` | `main-check` | A main-branch check failed twice on a main-branch commit that contains the commit asked about, and no later pass covers it. `by.culprit` names the first failing commit, its subject and its modules. Exit status 1 |
+| `NOT_ON_MAIN` | `main-check` | The commit asked about isn't on the main branch yet, so no main-branch check covers it. Exit status 1 |
+| `PENDING` | `main-check` | No run covers the commit yet, and the wait ran out while one is under way. The run carries on; asking again joins it or finds its result. Exit status 75 |
+| `STARTED`, `ALREADY_RUNNING` | `main-check` | `--start` or `--due` started a run on the main branch's tip, or one was already in flight |
+| `MAIN_CHECKS` | `main-check` | The list of main-branch checks, each with its latest run, its latest pass and what is in flight |
+| `RAN` | `main-check` | Only in a runner's log: one flight of a main-branch check finished |
 | `REFUSED` | `adopt`, `migrate`, `run` | The command wouldn't act, with the reasons in `problems`. `run` refuses a builder past the `Builders:` count, naming the others in `running`, unless `--more-builders` carries the human's words |
 | `UNBLOCKED` | `unblock` | The milestone is no longer Blocked |
 | `DONE`, `RELEASED`, `FAILED` | `human` | The human's decision was saved, or, for `human release`, a milestone another lead started was taken out of In Progress. `FAILED` says it couldn't be saved |

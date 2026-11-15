@@ -55,8 +55,8 @@ Results and exit status:
   Every command ends with one JSON line, its result, as the last line on stdout. The exit status says what kind of
   line it is: 0 for the command's own result, 2 for ERROR when the command line was refused (with `usage`, and the
   closest command or flag when one was misspelt), 1 for ERROR when a check stopped the command, or SCRIPT_FAILED
-  when the script failed (with `traceback`). `merge`, `check`, `lock` and `wait` keep their own statuses. Results
-  are also written under <git common dir>/orchestrate/results/ (`result_file`); run, review, plan and unblock first
+  when the script failed (with `traceback`). `merge`, `check`, `lock`, `wait` and `main-check` keep their own
+  statuses. Results are also written under <git common dir>/orchestrate/results/ (`result_file`); run, review, plan and unblock first
   mark the files a lead might read RUNNING, with their pid, and an ERROR replaces them too, so a file never holds an
   earlier attempt's result. A `next` names the newest installed copy of the script, and `next.argv` is the same
   command as a list of words. `run --message` and `plan --task` can be given more than once; the texts are joined.
@@ -385,6 +385,20 @@ Subcommands:
         on it, so a dead run never shows; this command removes what dead runs left there. A run
         that can't write its record (a sandboxed home) runs as usual, and is listed from the process table with what
         its command line says. --repo narrows the list to one repository; --json is for a lead.
+  main-check [NAME] [--worktree PATH] [--commit REV] [--wait 3300] [--start] [--due]
+        Main-branch checks: slow checks declared by `Main-branch check <name>:` lines in the project settings, run on
+        the main branch's tip after merges, one run covering every commit merged since the last. One run at a time per
+        check, for the whole repository; a failed run is tried again once, and a failure that holds is bisected over
+        the main branch's commits since the last pass, naming the first failing commit, its subject and the modules
+        whose plans or evidence it changed. With NAME it answers for a commit (default HEAD): COVERED (exit 0) when a
+        pass exists on a main-branch commit that contains it; FAILING_ON_MAIN (exit 1) when a failure that held does
+        and no pass does; NOT_ON_MAIN (exit 1) for a commit the main branch doesn't contain yet. Otherwise it joins the
+        run in flight or starts one, in a process of its own that outlives the request, and waits up to --wait
+        seconds, then says PENDING (exit 75) while the run carries on. An item's check proves itself with
+        `python3 "$ORCHESTRATE_SCRIPT" main-check NAME`, which the script sets for every check it runs. --start
+        starts a run on the tip now; --due starts each check whose `every` has passed since its last run, if the
+        main branch has moved (STARTED, ALREADY_RUNNING or NOTHING). With no NAME it lists each check's latest
+        result (MAIN_CHECKS). Runs are kept under <git common dir>/orchestrate/main-checks/<name>/.
 
 Per-worktree session state lives in <git dir>/orchestrate/<module>.json, so re-running the same command resumes.
 Run locks (run-<MODULE>.lock, run-_plan.lock) live in <git common dir>/orchestrate/. The kernel releases one when its
@@ -744,6 +758,7 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
     locks = lock_settings_from(text)
     out["shared_resources"], out["lock_hold_limit_s"] = locks["shared"], locks["hold_limit_s"]
     problems += locks["problems"]
+    out["main_checks"] = main_check_lines(text, problems)
     out["roots"] = [r.strip() for r in out.pop("writable roots").split(",") if r.strip()]
     out["graded_examples"] = out.pop("graded examples") or f"{out['evidence']}/graded-examples.md"
     # Prose rules the script restates on resumed turns; None when the line is missing or still a placeholder.
@@ -9512,7 +9527,7 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
     out += ["", "## Blocked or waiting", "", *(waiting or ["- nothing"]), "",
             "## Items that need human feedback, access or hardware", "", *(needing or ["- none open"]), "",
             "## Flow", "", "How fast the work moved, beside how busy the machine was. The lead reads the two "
-            "together.", "", *flow_text(flow_numbers(worktree, hours)), "",
+            "together.", "", *flow_text(flow_numbers(worktree, hours)), *main_check_report_lines(worktree), "",
             "## Cost", "", f"- build sessions: {builders}", *("- " + line for line in cost_text(c)),
             ("- [from the committed record] marks milestones this machine's ledger has nothing on: their last "
              "Ready for Review record's session and every review, as the record files keep them" if c.get("from_records") else
@@ -10950,6 +10965,495 @@ def cmd_migrate(a: argparse.Namespace) -> None:
                                              "module folders")))
 
 
+# ------------------------------------------------------------------------------------------- main-branch checks
+#
+# A main-branch check is a slow check that runs on the main branch's tip after merges, rather than on each builder's
+# work before each merge, and one run covers every commit merged since the last. In Thrum the exact-image verifier took
+# about 16 minutes on a GPU while the main branch moved about every 20, so a proof required of each builder before each
+# merge was usually out of date before it could be used, and the build stalled. Each check is declared in the project
+# settings with a `Main-branch check <name>:` line. One run at a time per check, for the whole repository: a second
+# request joins the run in flight. A failed run is tried again once before the main branch is called failing, because
+# about a quarter of Thrum's verifier runs failed with nothing changed. A failure that holds is bisected over the main
+# branch's commits since the last pass, and the result names the first failing commit. An item proves itself with
+# `python3 "$ORCHESTRATE_SCRIPT" main-check <name>`, which passes when a pass covers its commit, so the script's run of
+# the items' checks on the merged tip shares one result instead of each milestone repeating the slow check.
+#
+# Everything is kept under <git common dir>/orchestrate/main-checks/<name>/, which every worktree sees: `runs/` holds
+# one JSON file per finished run, `current.json` the run in flight, `run.lock` the lock its runner holds, `logs/` each
+# attempt's whole output, and `checkout/` the clean checkout the runs use, kept between runs so build caches stay warm.
+
+MAIN_CHECKS_DIR = "main-checks"
+MAIN_CHECK_LINE = re.compile(r"^\s*[-*]\s*\*\*Main-branch check ([^*:]+?):\*\*[ \t]*(.*)$", re.IGNORECASE | re.MULTILINE)
+DURATION = re.compile(r"([\d.]+)\s*(s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)", re.IGNORECASE)
+MAIN_CHECK_TIMEOUT_S = 2 * 3600.0  # one attempt's limit when the line gives no `timeout`
+MAIN_CHECK_WAIT_S = 3300.0  # under the hour the script gives each item's check, so a wait ends in PENDING, not a kill
+MAIN_CHECK_POLL_S = 5.0  # how often a waiting request reads the check's state
+MAIN_CHECK_GRACE_S = 30.0  # how long a request gives the runner it started to take the check's lock
+MAIN_CHECK_PENDING_EXIT = 75  # EX_TEMPFAIL: nothing has failed, the answer isn't in yet
+MAIN_CHECK_LISTED = 200  # the most recent runs read when answering whether a commit is covered
+
+# The check's own subprocesses find the script here, so an item can write `python3 "$ORCHESTRATE_SCRIPT" main-check
+# <name>` without naming the folder this copy is installed in, which changes with each version.
+os.environ["ORCHESTRATE_SCRIPT"] = str(LOOP)
+
+
+def duration_s(text: str) -> float | None:
+    """Seconds in "30m", "2h", "90 minutes" or "45s"; None when it isn't one of those."""
+    m = DURATION.fullmatch(text.strip())
+    if not m:
+        return None
+    return float(m.group(1)) * {"s": 1, "m": 60, "h": 3600}[m.group(2).lower()[0]]
+
+
+def main_check_lines(text: str, problems: list) -> dict:
+    """The project settings' main-branch checks: `{name: {"command", "every_s", "locks", "timeout_s"}}`, from lines
+    such as `- **Main-branch check exact-images:** \\`./dev verify\\`; every 30m; lock gpu`. The command is the text
+    in backticks, or else everything before the first `;`. `every` is the least time between the starts of two runs
+    (none: a run may start as soon as one is asked for), `lock` names the `lock` command's resources the run holds
+    (several with commas), and `timeout` limits one attempt (default two hours). A line still holding a placeholder
+    is the template's, and is skipped."""
+    out: dict = {}
+    for m in MAIN_CHECK_LINE.finditer(text):
+        name, raw = m.group(1).strip(), re.sub(r"\*\(.*?\)\*", "", m.group(2)).strip()
+        if not raw or PLACEHOLDER.search(name) or PLACEHOLDER.search(raw):
+            continue
+        label = f"main-branch check {name}"
+        if not re.fullmatch(r"[\w.-]+", name):
+            problems.append(f"{label}: a check's name may only use letters, digits, '.', '_' and '-'")
+            continue
+        if name in out:
+            problems.append(f"{label}: named twice")
+            continue
+        quoted = re.match(r"`([^`]+)`(.*)$", raw)
+        command, rest = (quoted.group(1), quoted.group(2)) if quoted else raw.partition(";")[::2]
+        spec = {"command": command.strip(), "every_s": 0.0, "locks": [], "timeout_s": MAIN_CHECK_TIMEOUT_S}
+        if not spec["command"]:
+            problems.append(f"{label}: no command (write it in backticks)")
+            continue
+        for key, field in (("every", "every_s"), ("timeout", "timeout_s")):
+            if found := re.search(rf"\b{key}\s+([\d.]+\s*[A-Za-z]+|[^\s;,]+)", rest, re.IGNORECASE):
+                seconds = duration_s(found.group(1))
+                if seconds is None or (key == "timeout" and seconds <= 0):
+                    problems.append(f"{label}: {key} {found.group(1)!r} (want a time such as 30m or 2h)")
+                else:
+                    spec[field] = seconds
+        if found := re.search(r"\blocks?\s+([\w.-]+(?:\s*(?:,|\band\b)\s*[\w.-]+)*)", rest, re.IGNORECASE):
+            spec["locks"] = sorted({n for n in re.split(r"\s*(?:,|\band\b)\s*", found.group(1))
+                                    if n and n.lower() not in ("every", "timeout")})
+        out[name] = spec
+    return out
+
+
+def main_check_dir(worktree: Path, name: str) -> Path:
+    path = loop_dir(worktree) / MAIN_CHECKS_DIR / name
+    (path / "runs").mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def write_atomic(path: Path, data: dict) -> None:
+    """Writes JSON through a temporary file, so a request reading it never sees half a file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.with_name(f".{path.name}.{os.getpid()}")
+    part.write_text(json.dumps(data, indent=2) + "\n")
+    part.replace(path)
+
+
+def main_check_runs(folder: Path, limit: int | None = None) -> list[dict]:
+    """The check's finished runs, oldest first: a run on the tip (`kind` tip) and each commit a bisect tried (`kind`
+    bisect), each with its `commit`, `result` (pass or fail, after its retry), `attempts` and times."""
+    rows = []
+    for path in (folder / "runs").glob("*.json"):
+        try:
+            row = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(row, dict) and row.get("commit") and row.get("result") in ("pass", "fail"):
+            rows.append({**row, "file": str(path)})
+    rows.sort(key=lambda r: r.get("finished_s") or 0)
+    return rows[-limit:] if limit else rows
+
+
+def main_check_flight(folder: Path) -> dict | None:
+    """The run in flight, or None. A run is in flight while its runner holds the check's lock; until the runner has
+    written its state, it is `starting`."""
+    lock = folder / "run.lock"
+    if not lock_held(lock):
+        return None
+    try:
+        current = json.loads((folder / "current.json").read_text())
+        holder = int(lock.read_text().strip() or 0)
+        if current.get("pid") == holder:
+            return current
+    except (OSError, ValueError, AttributeError):
+        pass
+    return {"state": "starting"}
+
+
+def main_check_cover(worktree: Path, rows: list[dict], commit: str) -> tuple[str | None, dict | None]:
+    """("pass", run) for the newest pass on a main-branch commit that contains `commit`; else ("fail", run) for the
+    newest failure that does, a run on the tip before a bisect's, since the tip's run holds the bisect's answer; else
+    (None, None). A pass anywhere after the commit covers it, a bisect's too."""
+    fails = []
+    for row in reversed(rows):
+        if row["commit"] != commit and not is_ancestor(worktree, commit, row["commit"]):
+            continue
+        if row["result"] == "pass":
+            return "pass", row
+        fails.append(row)
+    fail = next((r for r in fails if r.get("kind") == "tip"), fails[0] if fails else None)
+    return ("fail", fail) if fail else (None, None)
+
+
+def main_check_due(spec: dict, rows: list[dict], flight: dict | None, ref: str | None) -> bool:
+    """Whether the check should run now on its own: nothing in flight, the main branch has moved since its last run on
+    the tip, and `every` has passed since that run started."""
+    tips = [r for r in rows if r.get("kind") == "tip"]
+    if flight or not ref:
+        return False
+    if not tips:
+        return True
+    last = max(tips, key=lambda r: r.get("started_s") or 0)
+    return last["commit"] != ref and time.time() >= (last.get("started_s") or 0) + spec["every_s"]
+
+
+def main_check_spawn(worktree: Path, name: str, force: bool = False) -> subprocess.Popen:
+    """Starts a runner for the check in a process session of its own, so it outlives the request that started it,
+    even one the script stops at its check timeout. Its own output goes to runner.log beside its runs."""
+    folder = main_check_dir(worktree, name)
+    with open(folder / "runner.log", "a") as log:
+        return subprocess.Popen([sys.executable, str(LOOP), "main-check", name, "--worktree", str(worktree), "--runner",
+                                 *(["--force"] if force else [])], cwd=str(worktree), stdin=subprocess.DEVNULL,
+                                stdout=log, stderr=log, start_new_session=True)
+
+
+def main_check_tree(worktree: Path, name: str, ref: str) -> Path:
+    """The check's own clean checkout at `ref`, kept between runs, the way `verify_tree` keeps a module's."""
+    path = loop_dir(worktree) / MAIN_CHECKS_DIR / name / "checkout"
+    if (path / ".git").exists():
+        if git(path, "checkout", "--quiet", "--force", "--detach", ref).returncode == 0:
+            git(path, "clean", "-ffdq")
+            return path
+        shutil.rmtree(path, ignore_errors=True)
+    git(worktree, "worktree", "prune")
+    r = git(worktree, "worktree", "add", "--quiet", "--force", "--detach", str(path), ref)
+    if r.returncode != 0:
+        raise TipError(f"couldn't make a clean checkout at {path}: {r.stderr.strip()[-300:]}")
+    return path
+
+
+def main_check_attempt(tree: Path, commit: str, spec: dict, folder: Path) -> dict:
+    """One run of the check's command at `commit` in its checkout, holding its locks, with the whole output saved."""
+    from contextlib import ExitStack
+    git(tree, "checkout", "--quiet", "--force", "--detach", commit)
+    git(tree, "clean", "-ffdq")
+    started = time.time()
+    with ExitStack() as stack:
+        uses = [stack.enter_context(held(lock, tree)) for lock in spec["locks"]]
+        code, out, err = run_proc(spec["command"], tree, spec["timeout_s"], shell=True)
+        for use in uses:
+            use["exit"] = code
+    stem = folder / "logs" / f"{time.strftime('%Y%m%d-%H%M%S')}-{commit[:12]}-{os.getpid()}-{int(started * 1000) % 1000:03d}"
+    saved = {}
+    try:
+        stem.parent.mkdir(parents=True, exist_ok=True)
+        for field, text in (("stdout", out), ("stderr", err)):
+            path = stem.with_suffix(f".{field}")
+            path.write_text(text)
+            saved[field] = str(path)
+    except OSError:
+        pass
+    return {"exit": code, "seconds": round(time.time() - started, 1), "at": now(), **saved,
+            **({"timed_out": True} if code == 124 else {}), "tail": stream_end(err or out, 8)}
+
+
+def main_check_try(tree: Path, commit: str, spec: dict, folder: Path, current: dict) -> list[dict]:
+    """The attempts at one commit: one, or two when the first fails. A failure counts only when the retry fails too,
+    since a quarter of Thrum's verifier runs failed with nothing changed."""
+    attempts = [main_check_attempt(tree, commit, spec, folder)]
+    if attempts[0]["exit"] != 0:
+        write_atomic(folder / "current.json", {**current, "state": "retrying", "pid": os.getpid()})
+        attempts.append(main_check_attempt(tree, commit, spec, folder))
+    return attempts
+
+
+def main_check_row(worktree: Path, name: str, kind: str, commit: str, spec: dict, attempts: list[dict],
+                   started: float) -> dict:
+    result = "pass" if attempts[-1]["exit"] == 0 else "fail"
+    return {"check": name, "kind": kind, "commit": commit,
+            "subject": git(worktree, "log", "-1", "--format=%s", commit).stdout.strip(), "result": result,
+            "flaky": result == "pass" and len(attempts) > 1, "command": spec["command"], "attempts": attempts,
+            "started": datetime.fromtimestamp(started, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "started_s": round(started, 1), "finished": now(), "finished_s": round(time.time(), 3)}
+
+
+def commit_modules(worktree: Path, prof: dict, commit: str) -> tuple[list[str], list[str]]:
+    """(modules, files) for a commit: the files it changed, and the modules whose plans or evidence folders it changed
+    files in, which is how a commit shows whose it is."""
+    files = [f for f in git(worktree, "diff", "--name-only", f"{commit}^", commit).stdout.splitlines() if f]
+    modules = set()
+    for f in files:
+        if where := module_of(prof, f):
+            modules.add(where[0])
+        elif f.startswith(prof["evidence"] + "/") and len(f.split("/")) > len(prof["evidence"].split("/")) + 1:
+            modules.add(f[len(prof["evidence"]) + 1:].split("/")[0])
+    return sorted(modules), files
+
+
+def main_check_bisect(tree: Path, prof: dict, name: str, spec: dict, folder: Path, good: str, bad: str) -> dict:
+    """The first failing commit between `good` (a pass) and `bad` (a failure that held), by halving the main branch's
+    commits between them. Each commit tried is kept as a run of its own, so a pass found here covers the commits
+    before the culprit."""
+    commits = git(tree, "rev-list", "--first-parent", "--reverse", f"{good}..{bad}").stdout.split()
+    if not commits or commits[-1] != bad:
+        return {"bisect": "none", "bisect_why": f"{bad[:12]} isn't on the main branch after {good[:12]}"}
+    lo, hi, tried = -1, len(commits) - 1, 0
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        started = time.time()
+        current = {"state": "bisecting", "commit": commits[mid], "good": commits[lo] if lo >= 0 else good,
+                   "bad": commits[hi], "started": now(), "started_s": round(started, 1)}
+        write_atomic(folder / "current.json", {**current, "pid": os.getpid()})
+        row = main_check_row(tree, name, "bisect", commits[mid], spec,
+                             main_check_try(tree, commits[mid], spec, folder, current), started)
+        write_atomic(folder / "runs" / f"{int(started * 1000)}-{commits[mid][:12]}.json", row)
+        tried += 1
+        lo, hi = (mid, hi) if row["result"] == "pass" else (lo, mid)
+    culprit = commits[hi]
+    modules, files = commit_modules(tree, prof, culprit)
+    return {"bisect": "done", "bisect_runs": tried, "culprit": {
+        "commit": culprit, "subject": git(tree, "log", "-1", "--format=%s", culprit).stdout.strip(),
+        "modules": modules, "files": files[:20],
+        **({} if modules else {"modules_why": "the commit changed no file in a module's plans or evidence folder, "
+                                              "so its files are the guide"})}}
+
+
+def main_check_runner(worktree: Path, prof: dict, name: str, spec: dict, force: bool = False) -> dict:
+    """One flight of the check: wait out `every` since the last run on the tip started, run on the main branch's tip
+    (unless it already has a run, or `force`), retry a failure once, and bisect a failure that holds. Returns at once,
+    doing nothing, when another runner holds the check's lock."""
+    folder = main_check_dir(worktree, name)
+    handle = open(folder / "run.lock", "a+")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return {"result": "ALREADY_RUNNING", "check": name}
+    try:
+        handle.seek(0)
+        handle.truncate()
+        handle.write(str(os.getpid()))
+        handle.flush()
+        tips = [r for r in main_check_runs(folder) if r.get("kind") == "tip"]
+        start_at = 0.0 if force or not tips else max(r.get("started_s") or 0 for r in tips) + spec["every_s"]
+        while time.time() < start_at:
+            write_atomic(folder / "current.json", {"state": "scheduled", "pid": os.getpid(), "start_at_s": start_at,
+                                                   "start_at": iso(start_at)})
+            time.sleep(min(MAIN_CHECK_POLL_S, max(0.0, start_at - time.time())))
+        ref = tip(worktree, prof)
+        if not force and any(r["commit"] == ref for r in tips):
+            return {"result": "NOTHING", "check": name, "commit": ref, "why": "the tip already has a run"}
+        tree = main_check_tree(worktree, name, ref)
+        started = time.time()
+        current = {"state": "running", "commit": ref, "started": now(), "started_s": round(started, 1)}
+        write_atomic(folder / "current.json", {**current, "pid": os.getpid()})
+        row = main_check_row(tree, name, "tip", ref, spec, main_check_try(tree, ref, spec, folder, current), started)
+        last_pass = next((r for r in reversed(main_check_runs(folder)) if r["result"] == "pass" and r["commit"] != ref
+                          and is_ancestor(tree, r["commit"], ref)), None)
+        if row["result"] == "fail":
+            row.update(last_pass=last_pass["commit"] if last_pass else None,
+                       bisect="running" if last_pass else "none",
+                       **({} if last_pass else {"bisect_why": "no earlier pass on the main branch to bisect from"}))
+        path = folder / "runs" / f"{int(started * 1000)}-{ref[:12]}.json"
+        write_atomic(path, row)  # requests waiting on this run read it now; the bisect follows
+        if row["result"] == "fail" and last_pass:
+            row.update(main_check_bisect(tree, prof, name, spec, folder, last_pass["commit"], ref))
+            write_atomic(path, row)
+        return {"result": "RAN", **{k: row[k] for k in ("check", "commit", "result", "flaky")},
+                **({"culprit": row["culprit"]} if row.get("culprit") else {})}
+    finally:
+        try:
+            (folder / "current.json").unlink(missing_ok=True)
+        except OSError:
+            pass
+        handle.close()
+
+
+def main_check_view(row: dict | None) -> dict | None:
+    """A run as a result shows it: no saved output, which the run's file holds."""
+    if not row:
+        return None
+    keep = ("kind", "commit", "subject", "result", "flaky", "started", "finished", "last_pass", "bisect", "bisect_why",
+            "culprit", "file")
+    out = {k: row[k] for k in keep if row.get(k) not in (None, "")}
+    out["attempts"] = len(row.get("attempts") or [])
+    out["minutes"] = round(sum(a.get("seconds") or 0 for a in row.get("attempts") or []) / 60, 1)
+    return out
+
+
+def main_check_wait(worktree: Path, prof: dict, name: str, commit: str, wait_s: float) -> dict:
+    """Whether `commit` is covered: its result, with `code`, the exit status. COVERED when a pass exists on a
+    main-branch commit that contains it. FAILING_ON_MAIN when a failure that held does, no pass does, and either it
+    failed on this very commit or its bisect has finished, so the break is in the commit or before it. Otherwise it waits for the run in flight, or starts one on the tip, until a
+    run answers or `wait_s` has passed (PENDING). NOT_ON_MAIN for a commit the main branch doesn't contain yet."""
+    folder = main_check_dir(worktree, name)
+    try:
+        ref = tip(worktree, prof)
+    except TipError as e:
+        raise SystemExit(f"error: {e}")
+    fields = {"check": name, "commit": commit}
+    if commit != ref and not is_ancestor(worktree, commit, ref):
+        return {"result": "NOT_ON_MAIN", "code": 1, **fields, "why": (
+            f"{commit[:12]} isn't on the main branch yet. The main-branch check {name} runs on the main branch's tip, "
+            "so it covers this work after the merge, when the script runs the item's check on the merged tip. A "
+            "builder needn't run it before merging")}
+    deadline, runner, started_at, spawns, polls = time.time() + wait_s, None, 0.0, 0, 0
+    while True:
+        rows = main_check_runs(folder, MAIN_CHECK_LISTED)
+        verdict, row = main_check_cover(worktree, rows, commit)
+        flight = main_check_flight(folder)
+        if verdict == "pass":
+            return {"result": "COVERED", "code": 0, **fields, "by": main_check_view(row), "why": (
+                f"the main-branch check {name} passed on {row['commit'][:12]}, which contains {commit[:12]}" +
+                (", on its retry" if row.get("flaky") else ""))}
+        # While a bisect runs, it alone can say whether the break came after an earlier commit; for the commit that
+        # failed itself, the answer is already in.
+        bisecting = row and row.get("bisect") == "running" and flight
+        if verdict == "fail" and (row["commit"] == commit or not bisecting):
+            ref = tip(worktree, prof, fetch=False)
+            if not flight and ref != row["commit"]:
+                main_check_spawn(worktree, name)  # the main branch has moved, perhaps with the fix: prove it
+            culprit = row.get("culprit") or {}
+            where = (f" The first failing commit is {culprit['commit'][:12]} ({culprit['subject']})" +
+                     (f", in module {', '.join(culprit['modules'])}" if culprit.get("modules") else "") + "."
+                     if culprit else " A bisect is finding the first failing commit; `main-check` lists it when it's "
+                     "done." if bisecting else
+                     f" {row.get('bisect_why') or 'The bisect stopped before it named a commit'}.")
+            return {"result": "FAILING_ON_MAIN", "code": 1, **fields, "by": main_check_view(row), "why": (
+                f"the main-branch check {name} fails on {row['commit'][:12]}, which contains {commit[:12]}, and no "
+                f"later pass covers it. It was tried twice, so it isn't a one-off.{where} The fix goes forward on the "
+                "main branch; once a run passes on a commit containing this one, this check passes. Its whole "
+                f"output is in {row['file']} and the files it names"), "next": next_cmd(
+                    None, "lead", "the main branch fails this check; the module that made the first failing commit "
+                    "fixes it as its next task, or the lead reverts that commit")}
+        if flight is None:
+            if runner is None or runner.poll() is not None or time.time() - started_at > MAIN_CHECK_GRACE_S:
+                if spawns >= 5:
+                    raise SystemExit(f"error: started a runner for {name} five times and none took its lock; read "
+                                     f"{folder / 'runner.log'}")
+                runner, started_at, spawns = main_check_spawn(worktree, name), time.time(), spawns + 1
+        if time.time() >= deadline:
+            tips = [r for r in rows if r.get("kind") == "tip"]
+            took = tips[-1]["finished_s"] - tips[-1]["started_s"] if tips else None
+            return {"result": "PENDING", "code": MAIN_CHECK_PENDING_EXIT, **fields,
+                    "in_flight": flight or {"state": "starting"},
+                    **({"last_run_minutes": round(took / 60, 1)} if took else {}), "why": (
+                f"no run of the main-branch check {name} covers {commit[:12]} yet, and one is under way. It carries "
+                f"on after this wait of {wait_s:.0f} s ends; run this check again later and it joins that run or "
+                "finds its result"), "next": next_cmd(
+                    loop_cmd("main-check", name, "--worktree", str(worktree), "--commit", commit), "lead",
+                    "the run carries on in the background; this waits for its answer again")}
+        time.sleep(min(MAIN_CHECK_POLL_S, 0.2 * 2 ** min(polls, 8), max(0.0, deadline - time.time())))
+        polls += 1
+
+
+def main_check_list(worktree: Path, prof: dict) -> list[dict]:
+    """Each declared check with its settings, its latest run on the tip, its latest pass, its run in flight, and
+    whether it is due to run on its own."""
+    try:
+        ref = tip(worktree, prof, fetch=False)
+    except TipError:
+        ref = None
+    out = []
+    for name, spec in (prof.get("main_checks") or {}).items():
+        folder = main_check_dir(worktree, name)
+        rows = main_check_runs(folder)
+        tips = [r for r in rows if r.get("kind") == "tip"]
+        flight = main_check_flight(folder)
+        last_pass = next((r for r in reversed(rows) if r["result"] == "pass"), None)
+        behind = int(git(worktree, "rev-list", "--count", f"{tips[-1]['commit']}..{ref}").stdout.strip() or 0) \
+            if tips and ref else None
+        out.append({"name": name, **spec, "latest": main_check_view(tips[-1] if tips else None),
+                    "last_pass": main_check_view(last_pass), "in_flight": flight,
+                    "commits_since_latest": behind, "due": main_check_due(spec, rows, flight, ref)})
+    return out
+
+
+def main_check_report_lines(worktree: Path) -> list[str]:
+    """One line per main-branch check for the report's `## Flow` part: its latest run on the tip, the first failing
+    commit while it fails, and what is under way."""
+    try:
+        checks = main_check_list(worktree, profile(worktree))
+    except (SystemExit, OSError):
+        return []
+    lines = []
+    for c in checks:
+        latest, flight = c["latest"], c["in_flight"]
+        if not latest:
+            text = "no run yet"
+        else:
+            text = (f"{'passed' if latest['result'] == 'pass' else 'failed'} on {latest['commit'][:12]} "
+                    f"({hours_since(latest.get('finished')):.1f} h ago, {latest['minutes']} min" +
+                    (", passing on its retry" if latest.get("flaky") else "") + ")")
+            if latest["result"] == "fail" and (culprit := latest.get("culprit")):
+                text += (f"; first failing commit {culprit['commit'][:12]} ({culprit['subject']})" +
+                         (f", module {', '.join(culprit['modules'])}" if culprit.get("modules") else ""))
+            if c["commits_since_latest"]:
+                text += f"; {plural(c['commits_since_latest'], 'commit')} on the main branch since"
+        if flight:
+            text += f"; {flight.get('state', 'running')}" + (f" on {flight['commit'][:12]}" if flight.get("commit") else "")
+        elif c["due"]:
+            text += "; due to run"
+        lines.append(f"- main-branch check `{c['name']}`: {text}")
+    return lines
+
+
+def main_check_out(result: str, code: int, **fields) -> None:
+    """The result line of `main-check`, with the exit status an item's check needs: 0 only when it passes."""
+    if fields.get("why"):
+        print(fields["why"], file=sys.stderr)
+    if "next" in fields:
+        fields["next"] = fit_next(fields["next"])
+    print(json.dumps({"result": result, **fields, "version": VERSION}))
+    sys.exit(code)
+
+
+def cmd_main_check(a: argparse.Namespace) -> None:
+    worktree = Path(a.worktree).resolve()
+    prof = profile(worktree)
+    checks = prof.get("main_checks") or {}
+    if a.name and a.name not in checks:
+        raise SystemExit(f"error: the project settings declare no main-branch check named {a.name!r} (they declare "
+                         f"{', '.join(checks) or 'none'}); one is a `- **Main-branch check <name>:** `<command>`` line")
+    if a.runner:
+        main_check_out(**{"code": 0, **main_check_runner(worktree, prof, a.name, checks[a.name], a.force)})
+    if a.due or a.start:
+        names = [a.name] if a.name else list(checks)
+        try:
+            ref = tip(worktree, prof)
+        except TipError as e:
+            raise SystemExit(f"error: {e}")
+        started, running = [], []
+        for name in names:
+            folder = main_check_dir(worktree, name)
+            flight = main_check_flight(folder)
+            if flight:
+                running.append({"check": name, **flight})
+                continue
+            if a.start or main_check_due(checks[name], main_check_runs(folder), None, ref):
+                main_check_spawn(worktree, name, force=a.start)
+                started.append(name)
+        main_check_out("STARTED" if started else "ALREADY_RUNNING" if running else "NOTHING", 0,
+                       started=started, running=running, why=(
+            f"started {', '.join(started)} on the main branch's tip" if started else
+            "a run is already in flight" if running else "no main-branch check is due"))
+    if not a.name:
+        main_check_out("MAIN_CHECKS", 0, checks=main_check_list(worktree, prof))
+    commit = git(worktree, "rev-parse", "--verify", "--quiet", f"{a.commit}^{{commit}}").stdout.strip()
+    if not commit:
+        raise SystemExit(f"error: {a.commit!r} isn't a commit in {worktree}")
+    main_check_out(**main_check_wait(worktree, prof, a.name, commit, a.wait))
+
+
 USAGE = """Starts and checks the builders, reviewers and planners of the orchestrate set, and keeps each module's
 record. The lead of the build skill runs it, and you can run it by hand. Project settings come from ORCHESTRATE.md at
 the worktree root.
@@ -11137,6 +11641,22 @@ def build_parser() -> argparse.ArgumentParser:
     flow.add_argument("--worktree", default=".")
     flow.add_argument("--since", type=float, default=24.0, help="hours to cover (default 24)")
     flow.set_defaults(func=cmd_flow)
+    main_check = sub.add_parser("main-check", help="run a slow check on the main branch's tip, once for every commit "
+                                                   "merged since its last run, or say whether a commit is covered")
+    main_check.add_argument("name", nargs="?", help="the check, as a `Main-branch check <name>:` line declares it "
+                                                    "(default: list every check's latest result)")
+    main_check.add_argument("--worktree", default=".")
+    main_check.add_argument("--commit", default="HEAD", help="the commit to answer for (default: HEAD of --worktree)")
+    main_check.add_argument("--wait", type=float, default=MAIN_CHECK_WAIT_S,
+                            help=f"seconds to wait for a run that would cover it (default {MAIN_CHECK_WAIT_S:.0f}, "
+                                 "under the hour the script gives an item's check); then PENDING, exit 75")
+    main_check.add_argument("--start", action="store_true", help="start a run on the main branch's tip now, unless "
+                            "one is in flight, without waiting for it")
+    main_check.add_argument("--due", action="store_true", help="start each check (or the one named) that is due: "
+                            "the main branch has moved since its last run and its `every` has passed")
+    main_check.add_argument("--runner", action="store_true", help=argparse.SUPPRESS)
+    main_check.add_argument("--force", action="store_true", help=argparse.SUPPRESS)
+    main_check.set_defaults(func=cmd_main_check)
     runs = sub.add_parser("runs", aliases=["loops"], help="list every run, review and plan running on this machine")  # `loops` before 2.1.0
     runs.add_argument("--repo", help="only runs in the repository holding this path")
     runs.add_argument("--json", action="store_true", help="one JSON object, for a lead")
@@ -11179,8 +11699,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     """Every way a command ends leaves one JSON line last on stdout, and the exit status says which kind it is: 0
     when the line is the command's own result, 2 when the parser refused the command line (ERROR, with `usage`), 1
-    when a check stopped it (ERROR) or the script failed (SCRIPT_FAILED). `merge`, `check`, `lock` and `wait` keep
-    the statuses their usage gives."""
+    when a check stopped it (ERROR) or the script failed (SCRIPT_FAILED). `merge`, `check`, `lock`, `wait`
+    and `main-check` keep the statuses their usage gives."""
     argv = sys.argv[1:]
     parser = build_parser()
     try:
