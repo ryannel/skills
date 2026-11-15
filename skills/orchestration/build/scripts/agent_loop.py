@@ -1405,6 +1405,8 @@ def validate(done, module: str = "") -> list[str]:
                 problems.append(f"{iid}: builder_result {item.get('builder_result')!r} isn't one of {sorted(BUILDER_RESULTS)}")
             if item.get("verdict", "") not in VERDICTS:
                 problems.append(f"{iid}: verdict {item.get('verdict')!r} isn't one of {sorted(VERDICTS - {''})}")
+            if "reads" in item:
+                problems += reads_problems(iid, item)
             if "needs" in item:
                 n = item["needs"]
                 if not isinstance(n, dict) or n.get("type") not in NEEDS_TYPES or not isinstance(n.get("what"), str) \
@@ -1424,6 +1426,21 @@ def validate(done, module: str = "") -> list[str]:
             elif order.index(target) >= index:
                 problems.append(f"{mid}: depends on {target}, which comes at or after it, so it can never start "
                                 "(milestones in a module run in order)")
+    return problems
+
+
+def reads_problems(iid: str, item: dict) -> list[str]:
+    """What's wrong with an item's `reads`: the git pathspecs, relative to the repository's top, naming the files its
+    check reads, so the script can reuse the check's pass while those files stay the same."""
+    reads = item["reads"]
+    if not isinstance(reads, list) or not reads or not all(isinstance(p, str) and p.strip() for p in reads):
+        return [f"{iid}: reads {reads!r} should be a non-empty list of git pathspecs, like [\"src/render/\", "
+                "\"models/*.json\"]"]
+    problems = []
+    if not item.get("check"):
+        problems.append(f"{iid}: reads names the files a check reads, but the item has no check")
+    if bad := [p for p in reads if p.startswith("/") or ".." in Path(p).parts]:
+        problems.append(f"{iid}: reads {', '.join(map(repr, bad))} should be relative to the repository's top")
     return problems
 
 
@@ -3728,11 +3745,29 @@ CHECKS_DIR = "checks"
 CHECK_TAIL_LINES = 30
 
 
-def files_key(tree: Path, plans: str | None) -> str | None:
-    """A hash of the files checked out in `tree`, leaving out the plans folder, or None when anything outside the
-    plans folder has uncommitted or untracked changes. The plans folder is left out because a builder ticks items
-    and writes evidence paths there after its checks have run, and the script commits STATUS.md there, and none of
-    that changes what a check tests. Ignored files, such as build output, aren't part of it either."""
+def files_key(tree: Path, plans: str | None, reads: list[str] | None = None) -> str | None:
+    """A hash of the files a check runs on, or None when the hash can't account for them.
+
+    Without `reads` it is a hash of the files checked out in `tree`, leaving out the plans folder, and None when
+    anything outside the plans folder has uncommitted or untracked changes. The plans folder is left out because a
+    builder ticks items and writes evidence paths there after its checks have run, and the script commits STATUS.md
+    there, and none of that changes what a check tests. Ignored files, such as build output, aren't part of it either.
+
+    With `reads`, an item's list of git pathspecs naming the files its check reads, it is a hash of those pathspecs
+    and the files they match at HEAD, so a pass is reused while those files stay the same, however much else on the
+    main branch moves. It is None when any pathspec matches no file, since then the list is wrong and can't vouch
+    for the check, and when anything those pathspecs match has uncommitted or untracked changes."""
+    if reads is not None:
+        if not isinstance(reads, list) or not reads or not all(isinstance(p, str) and p for p in reads):
+            return None
+        if (r := git(tree, "status", "--porcelain", "-z", "--untracked-files=all", "--", *reads)).returncode != 0 \
+                or r.stdout.strip("\0"):
+            return None
+        missing = [spec for spec in reads if git(tree, "ls-files", "-z", "--error-unmatch", "--", spec).returncode != 0]
+        listing = git(tree, "ls-files", "-s", "-z", "--", *reads)
+        if missing or listing.returncode != 0 or not listing.stdout:
+            return None
+        return text_hash(json.dumps(["reads", list(reads), sorted(n for n in listing.stdout.split("\0") if n)]))
     plans = (plans or "").rstrip("/") + "/" if plans else None
     if (r := git(tree, "status", "--porcelain", "-z")).returncode != 0:
         return None
@@ -3748,12 +3783,14 @@ def files_key(tree: Path, plans: str | None) -> str | None:
 
 
 def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plans: str | None = None,
-              save: bool = True) -> dict:
+              save: bool = True, reads: list[str] | None = None) -> dict:
     """Runs one check in `tree`, under `lock` if it names one, unless the same command already passed on the same
-    files, and saves its stdout and stderr to files under `<git common dir>/orchestrate/checks/`. Returns `exit`,
+    files (the files its item `reads`, when it names them, or else the whole tree, as `files_key` says), and saves
+    its stdout and stderr to files under `<git common dir>/orchestrate/checks/`. Returns `exit`,
     `out` and `err` (empty for a reused pass), `stdout` and `stderr` (the saved files' paths, when they could be
     written) and `reused`. A pass is remembered only when the check left the files as it found them, since a check
-    that writes files fails the script's clean-checkout test. Nothing is saved for a folder outside git."""
+    that writes files fails the script's clean-checkout test. With `reads` that means the whole checkout's changes,
+    not only the named files', are the same after the run as before it. Nothing is saved for a folder outside git."""
     folder = None
     if save:
         try:
@@ -3761,7 +3798,8 @@ def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plan
             folder.mkdir(parents=True, exist_ok=True)
         except OSError:
             folder = None
-    key = files_key(tree, plans) if folder else None
+    key = files_key(tree, plans, reads) if folder else None
+    before = git(tree, "status", "--porcelain", "-z").stdout if key and reads else None
     name = text_hash(command)[:16]
     memo = folder / f"{key[:24]}-{name}.json" if key else None
     if memo and memo.exists():
@@ -3788,7 +3826,8 @@ def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plan
                 paths[field] = str(path)
         except OSError:
             pass
-    if memo and code == 0 and files_key(tree, plans) == key:
+    if memo and code == 0 and files_key(tree, plans, reads) == key and \
+            (before is None or git(tree, "status", "--porcelain", "-z").stdout == before):
         try:
             write_json(memo, {"command": command, "exit": 0, "at": now(), **paths,
                               "role": os.environ.get("ORCHESTRATE_ROLE") or "script"})
@@ -3807,12 +3846,12 @@ def check_failures(tree: Path, prof: dict, milestone: dict, timeout_s: float = 3
     own process, never under the merge lock. Returns what failed, each with the end of its stdout and its stderr
     shown apart and the files that hold them whole. A check that already passed on the same files isn't run again;
     its label goes in `reused`."""
-    runs = [("Test command", prof.get("test_command"), None)] if prof.get("test_command") else []
-    runs += [(i["id"], i["check"], i.get("lock")) for i in milestone["items"] if i.get("check")]
+    runs = [("Test command", prof.get("test_command"), None, None)] if prof.get("test_command") else []
+    runs += [(i["id"], i["check"], i.get("lock"), i.get("reads")) for i in milestone["items"] if i.get("check")]
     failed = []
-    for label, command, lock in runs:
+    for label, command, lock, reads in runs:
         loop_note(step=f"checking {milestone.get('id')}: " + ("the test command" if label == "Test command" else label))
-        r = run_check(tree, command, lock, timeout_s, prof.get("plans"))
+        r = run_check(tree, command, lock, timeout_s, prof.get("plans"), reads=reads)
         if r["reused"] and reused is not None:
             reused.append(label)
         if r["exit"] != 0:
@@ -8309,13 +8348,14 @@ def check_broken(command: str, code: int, output: str, tree: Path) -> str | None
     return None
 
 
-def try_check(tree: Path, command: str, lock: str | None, timeout_s: float, plans: str | None = None) -> dict:
+def try_check(tree: Path, command: str, lock: str | None, timeout_s: float, plans: str | None = None,
+              reads: list[str] | None = None) -> dict:
     """One check run in `tree`: `pass`, `fail` (it ran and failed: likely the work isn't there yet; read the output),
     `error` (it can't run as written, told only where certain; see check_broken) or `timeout`. A pass on the same
     files is reused, as `run_check` says, and the whole output is saved, with the files named in `stdout` and
     `stderr`."""
     in_git = subprocess.run(["git", "-C", str(tree), "rev-parse"], capture_output=True).returncode == 0
-    r = run_check(tree, command, lock if in_git else None, timeout_s, plans, save=in_git)
+    r = run_check(tree, command, lock if in_git else None, timeout_s, plans, save=in_git, reads=reads)
     code, out, err = r["exit"], r["out"], r["err"]
     saved = {k: r[k] for k in ("stdout", "stderr") if r.get(k)}
     if r["reused"]:
@@ -8352,7 +8392,7 @@ def cmd_check(a: argparse.Namespace) -> None:
             items.append({"id": i["id"], "result": "no check", "proof": proof})
             continue
         items.append({"id": i["id"], "check": i["check"], **(({"lock": i["lock"]}) if i.get("lock") else {}),
-                      **try_check(tree, i["check"], i.get("lock"), a.timeout, prof.get("plans"))})
+                      **try_check(tree, i["check"], i.get("lock"), a.timeout, prof.get("plans"), i.get("reads"))})
     # the project's test command gates every Ready for Review too; a planner trying the checks it wrote leaves it
     # out, because in Thrum it held the shared GPU builders were using, and planners skipped the dry run instead
     if prof.get("test_command") and not getattr(a, "items_only", False):
