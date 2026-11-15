@@ -570,6 +570,14 @@ skills, which were fixed and run again. No conversation has been run with a real
 person, and each request was run once or twice, so this is a first reading. The record is in
 `workbench/orchestration-review/polish-workspace/results.md`.
 
+### Main-branch checks wait inside a check
+
+An item that depends on a main-branch check waits for that check's run for up to 55 minutes, inside the script's
+own run of the item checks. A run that takes longer, or a check that isn't due yet, answers `PENDING`, which the
+script counts as a failed check, so it uses one of the milestone's tries before the result arrives. Nothing starts
+due runs on a timer either: the lead runs `main-check --due`. A pending result the script waits on without counting
+it as a failure, and a schedule of its own, are the next steps if this proves costly.
+
 ## Left out for now
 
 The rule is to start small, and add something only when its absence has caused a problem. So these are not here

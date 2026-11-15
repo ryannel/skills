@@ -132,6 +132,14 @@ usually fails because the main branch moved while it ran. In the same way, check
 screen is unlocked before you take a lock for an attended run, because a lock held while waiting for a person stops
 every other builder that needs it.
 
+An item whose check is `python3 "$ORCHESTRATE_SCRIPT" main-check <name>` is proved by a slow check that runs on
+the main branch after merges, not by you. You don't need to run it before you merge: on your branch it answers
+`NOT_ON_MAIN`. After your merge, the script's run asks it again, and it passes with `COVERED` once a run on the main
+branch includes your commit. `PENDING` means that run hadn't finished in time; the next run of the checks picks up
+its result. `FAILING_ON_MAIN` means the main branch fails the check at or before your commit, and the result names
+the commit that broke it. If that commit is yours, fix it as part of this milestone. If it isn't, the fix belongs to
+that commit's module, so say so in your report rather than working around it.
+
 Some items need the human at the machine, for human feedback or for access. Prove those after your last merge, on a
 build of the merged commit, so that the human's time is spent once. When a new proof has to match evidence you took
 earlier, take the earlier evidence again on the merged commit. A build of an older commit differs from the one under

@@ -235,11 +235,19 @@ to the project settings with what it would cost and what it would give back. Run
 and often the quickest when they are all waiting on the same thing, because each extra builder then adds waiting,
 not output.
 
-Some checks are too slow to run before every merge, and the project settings may list them under `Checks on the main
-branch`. One run of such a check covers everything merged since the last run. When nothing else runs it, start it
-yourself on the schedule the settings give, with the script's `background` command, so it doesn't hold up your
-other work. When it fails, give the fix to the module whose merge caused it, as its next task. If the run covered
-several merges and the cause isn't plain from the failure, start a planner to find it rather than reading the code
+Some checks are too slow to run before every merge, and the project settings list them as `Main-branch check`
+lines. One run of such a check, on the main branch's tip, covers everything merged since the last run, and the items
+that depend on it pass from that shared result. `main-check --worktree <repo>` lists each check with its latest
+result, what is running and whether it is due (`MAIN_CHECKS`). Nothing starts these runs on a timer, so run
+`main-check --due --worktree <repo>` when you wake, which starts each check whose interval has passed and whose
+main branch has moved (`STARTED`), or says one is already running (`ALREADY_RUNNING`) or that nothing is due
+(`NOTHING`). `main-check <name> --start` starts one now. The run itself keeps a log, `runner.log`, where each
+finished attempt shows as `RAN`.
+
+A failure is tried again once, and one that holds is traced back through the commits since the last pass to the
+first one that fails. The result names that commit and its module. Give the fix to that module as its next task, or
+revert the commit if the fix would take long, because until a later run passes, every milestone merged after it
+fails that check too. If the result names no module, start a planner to find the cause rather than reading the code
 yourself. The other modules carry on meanwhile, which is the point of running the check after the merge.
 
 ## Starting agents

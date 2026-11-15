@@ -19,8 +19,7 @@ GLOSSARY = DOMAIN / "GLOSSARY.md"
 RESULT_CALLS = ("emit", "finish", "_result", "done_with", "stop_with", "main_check_out")
 # Results whose explanation in a skill is still being written. `main-check`'s results arrived in the script before the
 # build skill's text for them; remove each name here as a SKILL.md explains it.
-SKILL_TEXT_TO_COME = {"COVERED", "FAILING_ON_MAIN", "NOT_ON_MAIN", "PENDING", "STARTED", "ALREADY_RUNNING",
-                      "MAIN_CHECKS", "RAN"}
+SKILL_TEXT_TO_COME: set[str] = set()
 # Words the glossary says to avoid, as they would appear inside a field name.
 AVOIDED_IN_FIELDS = ("land", "integrat", "park", "attend", "harness", "claim", "loop")
 # Old names the script may still read from files written by older versions, and where.

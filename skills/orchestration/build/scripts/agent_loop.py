@@ -5367,7 +5367,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.2.8"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.3.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:

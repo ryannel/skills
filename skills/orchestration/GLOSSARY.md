@@ -438,7 +438,7 @@ Proposed: by Claude, 2026-11-15. Not yet agreed by the human.
 What a commit is when a main-branch check passed on a main-branch commit that contains it. A pass on a later commit
 covers every commit before it, so one run answers for every milestone merged since the last.
 Stored as: the `COVERED` result of `main-check`
-Proposed: by Claude, 2026-11-15. Not yet agreed by the human.
+Proposed: by the set's author, 2026-11-15. Not yet agreed by the human.
 
 **Usage ledger**
 The file where the script writes one row for each agent turn with the tokens it used, which the `cost` and

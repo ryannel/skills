@@ -89,9 +89,11 @@ Where a proof runs follows from who a fault would hurt:
   command quick enough that merges don't queue behind it.
 - A fault that would cost only its own module an hour or two, such as an image that moved or a slower frame, is
   cheaper to find after the merge. One run on the main branch covers everything merged since the last run, whoever
-  merged it, and a failure is fixed by the module that caused it while the others carry on. Say in the project
-  settings how often that run happens and who acts on a failure, and give items that depend on it a check that reads
-  its latest result rather than repeating it.
+  merged it, and a failure is fixed by the module that caused it while the others carry on. Declare such a check as
+  a `Main-branch check` line in the project settings, with how often it may run and the locks it needs, and give
+  each item that depends on it the check `python3 "$ORCHESTRATE_SCRIPT" main-check <name>`, which passes from the
+  shared run. Give that item no `lock` of its own: the settings line takes the locks for the run, and an item lock
+  held while it waits would block the very run it is waiting for.
 - A measurement that needs a quiet machine, such as a timing, rarely gets one while builders are working. Within
   a milestone, use a generous benchmark tripwire that catches a collapse. Put the precise numbers in the module's
   last milestone, measured in one sitting.
