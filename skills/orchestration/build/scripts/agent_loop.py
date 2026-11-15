@@ -358,7 +358,13 @@ Subcommands:
         to run it outside and is granted it. A run says so once, on stderr before its first build turn and on its
         result line; reviews aren't warned.
   lock [--worktree PATH] NAME -- COMMAND...
-        Runs COMMAND under a named lock shared by every worktree of the repository (not the whole machine).
+        Runs COMMAND under a named lock shared by every worktree of the repository (not the whole machine), in
+        first-come order. A resource the settings' `Shared resources:` line names is shared by up to that many
+        commands at once; NAME.alone waits until it has the resource alone, and new shared requests queue behind
+        it. A command still holding the lock after the settings' `Lock hold limit` (30 minutes unless they say
+        otherwise) is stopped, with exit status 124 and a message on stderr. A locked item check is held to it too.
+  locks [--worktree PATH] [--json]
+        Who holds each lock of the repository (pid, worktree, command, for how long) and who is queued for it.
   runs [--repo PATH] [--json]   (`loops` before 2.1.0, still accepted)
         Every run, review and plan running on this machine, in any repository and from any copy of this script: its
         repository, module, milestone, role, host, model, effort, path (visible or headless), pid, start, turns, time
@@ -722,6 +728,9 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
         problems.append(f"planner host: {out['planner_host']!r} (want codex, claude or a host these settings names)")
         out["planner_host"] = ""
     out["builders"] = builders_count(text)
+    locks = lock_settings_from(text)
+    out["shared_resources"], out["lock_hold_limit_s"] = locks["shared"], locks["hold_limit_s"]
+    problems += locks["problems"]
     out["roots"] = [r.strip() for r in out.pop("writable roots").split(",") if r.strip()]
     out["graded_examples"] = out.pop("graded examples") or f"{out['evidence']}/graded-examples.md"
     # Prose rules the script restates on resumed turns; None when the line is missing or still a placeholder.
@@ -2907,40 +2916,347 @@ def run_proc(args, cwd: Path | None, timeout_s: float, shell: bool = False,
                     return (130 if _STOP else 124), out, err + ("\n(stopped)" if _STOP else "\n(timed out)")
 
 
-# Each hold of a shared lock adds a line to locks.jsonl: when it was asked for, when it was got and released, and the
+# Each hold of a lock adds a line to locks.jsonl: when it was asked for, when it was got and released, and the
 # exit status of the command it covered when the caller knows it. `flow` reads them, so the lead can see how long
-# work queues for an exclusive resource and how much of the holding ends in failure. In Thrum, builders spent 42% of
+# work queues for a resource and how much of the holding ends in failure. In Thrum, builders spent 42% of
 # two days queued for one GPU lock, and that took a hand-run audit to find.
 LOCKS_FILE = "locks.jsonl"
 UNRECORDED_LOCKS = {"last-runs"}  # the script's own bookkeeping, held for milliseconds
+SCRIPT_LOCKS = {"merge", "last-runs"}  # the script's own locks: always exclusive, never stopped by the hold limit
+
+# Shared resources and sole use. The project settings can declare a resource that several runs may use at once, up to
+# a number (`Shared resources: gpu: 3`). `lock gpu` then shares it, and `lock gpu.alone` waits until it has the
+# resource to itself, for timing and realtime captures whose result depends on load. In Thrum every GPU job went
+# through one exclusive lock, busy 92-94% of each day, though most of the work was image comparisons and tests whose
+# output doesn't depend on load and could have shared it.
+#
+# Every hold is a kernel lock (flock), so a holder that crashes lets go. The resource's own file,
+# <git common dir>/orchestrate-<name>.lock, is locked exclusively for sole use, and for every use of a resource the
+# settings don't declare shared, as before; a shared use locks it shared and also takes one of `capacity` slot files.
+# So an older copy of the script, which only knows exclusive, still excludes and is excluded correctly. Each request
+# also writes a ticket into <git common dir>/orchestrate/locks/<name>/ and holds a flock on it while it lives. The
+# tickets give first-come order: a request tries for the resource only when no live request older than it is still
+# waiting, so a waiting sole use keeps new shared uses out while the shared holders finish. The `locks` command reads
+# them. A ticket nobody holds a flock on was left by a process that died, and whoever finds it removes it.
+ALONE = ".alone"
+DEFAULT_HOLD_LIMIT_S = 30 * 60.0  # the longest a command under `lock`, or a locked check, may hold a lock
+LOCK_POLL_S = (0.05, 0.5)  # a waiting request looks again after this long, backing off to the second figure
+UNITS_S = {"s": 1, "sec": 1, "secs": 1, "second": 1, "seconds": 1, "m": 60, "min": 60, "mins": 60, "minute": 60,
+           "minutes": 60, "h": 3600, "hr": 3600, "hrs": 3600, "hour": 3600, "hours": 3600}
+
+
+def lock_settings_from(text: str) -> dict:
+    """The settings' `Shared resources:` line as {name: capacity}, the `Lock hold limit:` line in seconds (None for
+    `none`; the default when the line is missing or unfilled), and what was wrong with either."""
+    shared, problems, limit = {}, [], DEFAULT_HOLD_LIMIT_S
+    raw = profile_value(text, "shared resources")
+    if raw and not PLACEHOLDER.search(raw) and raw.lower().rstrip(".") != "none":
+        for part in re.split(r"[,;]", raw):
+            part = part.strip().rstrip(".")
+            if not part:
+                continue
+            m = re.fullmatch(r"([\w.-]+?)\s*(?:[:=]\s*|\s+)(\d+)\b.*", part)
+            if not m or m.group(1).endswith(ALONE) or int(m.group(2)) < 1:
+                problems.append(f"shared resources: {part!r} (want a name and how many runs may use it at once, "
+                                f"such as 'gpu: 3'; a name can't end in {ALONE})")
+            else:
+                shared[m.group(1)] = int(m.group(2))
+    raw = profile_value(text, "lock hold limit")
+    if raw and not PLACEHOLDER.search(raw):
+        m = re.match(r"(\d+(?:\.\d+)?)\s*([a-z]*)", raw.lower())
+        if raw.lower().rstrip(".") in ("none", "no limit", "off"):
+            limit = None
+        elif m and (m.group(2) or "minutes") in UNITS_S and float(m.group(1)) > 0:
+            limit = float(m.group(1)) * UNITS_S[m.group(2) or "minutes"]
+        else:
+            problems.append(f"lock hold limit: {raw!r} (want a time such as '30 minutes', or none)")
+    return {"shared": shared, "hold_limit_s": limit, "problems": problems}
+
+
+def lock_settings(worktree: Path) -> dict:
+    """The lock settings of the ORCHESTRATE.md at the top of the worktree holding `worktree`; the defaults if none."""
+    top = git(worktree, "rev-parse", "--show-toplevel").stdout.strip()
+    try:
+        text = (Path(top or worktree) / PROFILE_FILE).read_text()
+    except OSError:
+        text = ""
+    return lock_settings_from(text)
+
+
+def limit_text(seconds: float) -> str:
+    for unit, size in (("hour", 3600), ("minute", 60)):
+        if seconds >= size and seconds % size == 0:
+            n = int(seconds // size)
+            return f"{n} {unit}{'s' if n != 1 else ''}"
+    return f"{seconds:g} second{'s' if seconds != 1 else ''}"
+
+
+def hold_limit_note(name: str, limit_s: float, command: str) -> str:
+    return (f"`{command}` held the {name} lock for {limit_text(limit_s)}, which is this project's hold limit, so the "
+            "script stopped it before it finished, and its output is incomplete. Hold the lock only for the part "
+            f"that needs {name.removesuffix(ALONE)}, or split the work into shorter commands. If this work really "
+            "needs longer, ask the planner to raise the `Lock hold limit` line in ORCHESTRATE.md.")
+
+
+def ticket_live(path: Path) -> bool | None:
+    """Whether a live process holds the flock on a ticket: True, or False (it died, and the ticket is removed), or
+    None when the ticket is already gone."""
+    try:
+        with open(path) as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+            return False
+    except OSError:
+        return None
+
+
+def lock_tickets(queue: Path, skip: str = "") -> list[dict]:
+    """The live requests for one resource, oldest first: {key, state ("wait" or "hold"), and what the ticket says}.
+    Removes the tickets of processes that died, and half-written ones older than a minute."""
+    out = []
+    try:
+        names = sorted(os.listdir(queue))
+    except OSError:
+        return out
+    for name in names:
+        path = queue / name
+        if name.startswith("."):
+            try:
+                if time.time() - path.stat().st_mtime > 60:
+                    ticket_live(path)
+            except OSError:
+                pass
+            continue
+        key, _, state = name.rpartition(".")
+        if state not in ("wait", "hold") or key == skip or not ticket_live(path):
+            continue
+        try:
+            info = json.loads(path.read_text())
+        except (OSError, ValueError):  # caught mid-rewrite, or renamed in between
+            info = {}
+        out.append({**(info if isinstance(info, dict) else {}), "key": key, "state": state})
+    return out
+
+
+def take_resource(common: Path, queue: Path, resource: str, mode: str, capacity: int | None):
+    """Tries once, without waiting, for the resource: (main handle, slot handle or None), or (None, None)."""
+    main = open(common / f"orchestrate-{resource}.lock", "a")
+    if mode == "alone":
+        try:
+            fcntl.flock(main, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return main, None
+        except BlockingIOError:
+            main.close()
+            return None, None
+    for i in range(capacity or 1):
+        slot = open(queue / f"slot-{i}.lock", "a")
+        try:
+            fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            slot.close()
+            continue
+        try:
+            fcntl.flock(main, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            return main, slot
+        except BlockingIOError:  # a sole use holds it, or an older copy of the script does
+            slot.close()
+            break
+    main.close()
+    return None, None
 
 
 @contextmanager
-def held(name: str, worktree: Path):
+def lock_turn(common: Path, resource: str, mode: str, capacity: int | None, info: dict, waiting=None):
+    """Queues for the resource in first-come order and holds it for the block. `waiting` is called once, with a
+    sentence, if the request has to wait."""
+    queue = common / "orchestrate" / "locks" / resource
+    queue.mkdir(parents=True, exist_ok=True)
+    stamp, pid = time.time_ns(), os.getpid()
+    key = f"{stamp:020d}-{pid}"
+    info = {**info, "pid": pid, "use": mode, "asked_s": round(stamp / 1e9, 1)}
+    ticket = open(queue / f".{key}", "w")
+    fcntl.flock(ticket, fcntl.LOCK_EX)
+    ticket.write(json.dumps(info))
+    ticket.flush()
+    path = queue / f"{key}.wait"
+    os.rename(queue / f".{key}", path)
+    main = slot = None
+    try:
+        delay, told = LOCK_POLL_S[0], False
+        while True:
+            others = lock_tickets(queue, skip=key)
+            ahead = [t for t in others if t["state"] == "wait" and t["key"] < key]
+            if not ahead:
+                main, slot = take_resource(common, queue, resource, mode, capacity)
+                if main:
+                    break
+            if waiting and not told:
+                told = True
+                holders = sum(t["state"] == "hold" for t in others)
+                waiting(f"{resource} is in use" + (f" by {holders} other run{'s' if holders != 1 else ''}"
+                                                   if holders else "") +
+                        (f", and {len(ahead)} request{'s are' if len(ahead) != 1 else ' is'} queued ahead of this one"
+                         if ahead else "") +
+                        ", so this command waits its turn. That is expected, and it starts by itself when its turn "
+                        "comes. The `locks` command shows who holds it.")
+            time.sleep(delay)
+            delay = min(delay * 1.5, LOCK_POLL_S[1])
+        os.rename(path, queue / f"{key}.hold")
+        path = queue / f"{key}.hold"
+        info["got_s"] = round(time.time(), 1)
+        ticket.seek(0)
+        ticket.truncate()
+        ticket.write(json.dumps(info))
+        ticket.flush()
+        yield
+    finally:
+        for handle in (main, slot):
+            if handle:
+                handle.close()
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+        ticket.close()
+
+
+@contextmanager
+def held(name: str, worktree: Path, what: str = "", waiting=None, settings: dict | None = None):
     """Holds the repository-wide lock `name` for the duration of the block, and yields a dict the caller may put
-    `exit` in. The hold is recorded in locks.jsonl when it ends."""
+    `exit` (and `stopped`) in. A resource the settings declare shared is shared up to its capacity, and
+    `<name>.alone` asks for it alone. The dict's `limit_s` is the hold limit the caller stops its command at (None
+    for the script's own locks, or when the settings say none). The hold is recorded in locks.jsonl when it ends."""
     if not re.fullmatch(r"[\w.-]+", name):
         raise SystemExit(f"error: lock name {name!r} may only use letters, digits, '.', '_' and '-'")
     use: dict = {}
+    common = Path(git_common_dir(worktree))
+    if name in UNRECORDED_LOCKS:
+        with open(common / f"orchestrate-{name}.lock", "a") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            yield use
+        return
+    alone = name.endswith(ALONE) and len(name) > len(ALONE)
+    resource = name[:-len(ALONE)] if alone else name
+    if resource in SCRIPT_LOCKS:
+        settings = {"shared": {}, "hold_limit_s": None}
+    elif settings is None:
+        settings = lock_settings(worktree)
+    capacity = settings["shared"].get(resource)
+    mode = "shared" if capacity and not alone else "alone"
+    use["limit_s"] = settings["hold_limit_s"]
+    command = what or shlex.join([Path(sys.argv[0]).name, *sys.argv[1:]])
+    info = {"worktree": str(worktree), "command": command[:300], "role": os.environ.get("ORCHESTRATE_ROLE")}
     asked = time.time()
-    with open(Path(git_common_dir(worktree)) / f"orchestrate-{name}.lock", "w") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
+    with lock_turn(common, resource, mode, capacity, info, waiting):
         got = time.time()
         try:
             yield use
         finally:
-            if name not in UNRECORDED_LOCKS:
-                record_lock_use(worktree, name, asked, got, time.time(), use.get("exit"))
+            record_lock_use(worktree, resource, asked, got, time.time(), use.get("exit"),
+                            mode if capacity else None, use.get("stopped"))
 
 
-def record_lock_use(worktree: Path, name: str, asked: float, got: float, released: float, code) -> None:
+def record_lock_use(worktree: Path, name: str, asked: float, got: float, released: float, code,
+                    mode: str | None = None, stopped: str | None = None) -> None:
     row = {"lock": name, "worktree": str(worktree), "pid": os.getpid(), "asked_s": round(asked, 1),
-           "got_s": round(got, 1), "released_s": round(released, 1), **({"exit": code} if code is not None else {})}
+           "got_s": round(got, 1), "released_s": round(released, 1), **({"exit": code} if code is not None else {}),
+           **({"use": mode} if mode else {}), **({"stopped": stopped} if stopped else {})}
     try:
         with open(loop_dir(worktree) / LOCKS_FILE, "a") as f:
             f.write(json.dumps(row) + "\n")
     except OSError:
         pass  # a record that can't be written mustn't fail the command the lock covered
+
+
+def lock_report(worktree: Path) -> dict:
+    """Every resource with a lock in this repository: its capacity when shared, who holds it and who is queued."""
+    common = Path(git_common_dir(worktree))
+    settings = lock_settings(worktree)
+    base = common / "orchestrate" / "locks"
+    names = set(settings["shared"])
+    names |= {p.name for p in (base.iterdir() if base.is_dir() else []) if p.is_dir()}
+    names |= {p.name[len("orchestrate-"):-len(".lock")] for p in common.glob("orchestrate-*.lock")}
+    names -= UNRECORDED_LOCKS
+    now_s, out = time.time(), []
+    for name in sorted(names):
+        row = {"lock": name, "capacity": settings["shared"].get(name), "holders": [], "queued": []}
+        for t in lock_tickets(base / name):
+            holding = t["state"] == "hold"
+            since = (t.get("got_s") if holding else None) or t.get("asked_s") or int(t["key"].split("-")[0]) / 1e9
+            row["holders" if holding else "queued"].append(
+                {"pid": t.get("pid") or int(t["key"].rpartition("-")[2]), "use": t.get("use"),
+                 "worktree": t.get("worktree"), "command": t.get("command"), "role": t.get("role"),
+                 ("held_s" if holding else "waited_s"): round(now_s - since, 1)})
+        if not row["holders"] and lock_held(common / f"orchestrate-{name}.lock"):
+            row["held_by_unknown"] = True
+        out.append(row)
+    return {"hold_limit_s": settings["hold_limit_s"], "locks": out}
+
+
+def lock_report_text(report: dict) -> str:
+    limit = report["hold_limit_s"]
+    lines = [f"A command under `lock`, or a locked check, is stopped once it has held a lock for {limit_text(limit)}."
+             if limit else "This project sets no hold limit, so a command may hold a lock for as long as it runs."]
+    if not report["locks"]:
+        lines.append("No lock has been taken in this repository yet.")
+    for row in report["locks"]:
+        kind = (f"shared by up to {row['capacity']} runs at once, or held alone as {row['lock']}{ALONE}"
+                if row["capacity"] else "one run at a time")
+        if row["holders"]:
+            state = f"{len(row['holders'])} holding"
+        elif row.get("held_by_unknown"):
+            state = "held by a process the script can't name, probably an older copy of the script"
+        else:
+            state = "free"
+        lines.append(f"{row['lock']} ({kind}): {state}, {len(row['queued'])} queued.")
+        for label, key, people in (("holding", "held_s", row["holders"]), ("queued", "waited_s", row["queued"])):
+            for p in people:
+                use = f" {p.get('use')}" if row["capacity"] and p.get("use") else ""
+                lines.append(f"  {label}{use} for {ago(p[key])}: pid {p['pid']} in {p.get('worktree') or '?'}: "
+                             f"{p.get('command') or '?'}")
+    return "\n".join(lines)
+
+
+def run_under_lock(command: list[str], cwd: Path | None, use: dict, name: str) -> int:
+    """Runs the command of `lock` in its own process group, so the hold limit or a stop ends everything it
+    started. 124 means the hold limit stopped it, 130 that it was stopped, 127 that it couldn't start."""
+    stop: list = []
+    old = {}
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            old[sig] = signal.signal(sig, lambda signum, frame: stop.append(signum))
+        except ValueError:  # not the main thread
+            pass
+    try:
+        try:
+            proc = subprocess.Popen(command, cwd=cwd, start_new_session=True)
+        except OSError as e:
+            print(f"lock: couldn't start {command[0]}: {e}", file=sys.stderr)
+            return 127
+        limit = use.get("limit_s")
+        deadline = time.time() + limit if limit else None
+        while True:
+            try:
+                return proc.wait(timeout=0.25)
+            except subprocess.TimeoutExpired:
+                pass
+            if stop:
+                kill_group(proc)
+                return 130
+            if deadline and time.time() >= deadline:
+                kill_group(proc)
+                use["stopped"] = "hold limit"
+                print("lock: " + hold_limit_note(name, limit, shlex.join(command)), file=sys.stderr, flush=True)
+                return 124
+    finally:
+        for sig, handler in old.items():
+            signal.signal(sig, handler)
 
 
 LOCK_PATIENCE_S = 0.5  # how long a run waits out a lock another process holds for a moment (an older `pause`)
@@ -3753,8 +4069,12 @@ def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plan
             return {"exit": 0, "out": "", "err": "", "stdout": saved.get("stdout"), "stderr": saved.get("stderr"),
                     "reused": saved.get("at") or True}
     if lock:
-        with held(lock, tree) as use:
-            code, out, err = run_proc(command, tree, timeout_s, shell=True)
+        with held(lock, tree, what=command) as use:
+            limit = use.get("limit_s")
+            code, out, err = run_proc(command, tree, min(timeout_s, limit) if limit else timeout_s, shell=True)
+            if code == 124 and limit and limit <= timeout_s:
+                use["stopped"] = "hold limit"
+                err += "\n" + hold_limit_note(lock, limit, command)
             use["exit"] = code
     else:
         code, out, err = run_proc(command, tree, timeout_s, shell=True)
@@ -5437,10 +5757,22 @@ def resources_rule(prof: dict) -> str:
     """The project's exclusive resources, and that `lock` queues for them: in Thrum a builder that met a held lock
     reported it as a fault and asked for another builder's work to be restarted."""
     names = (prof.get("exclusive resources") or "").strip()
-    if not names or names.lower() in ("none", "none."):
-        return ""
-    return (f"- This project's exclusive resources are: {names.rstrip('.')}. Wrap a command that uses one in the "
-            "script's `lock <name> -- <command>`, which waits its turn while another builder holds the lock.\n")
+    shared = prof.get("shared_resources") or {}
+    out = ""
+    if names and names.lower() not in ("none", "none."):
+        out += (f"- This project's exclusive resources are: {names.rstrip('.')}. Wrap a command that uses one in the "
+                "script's `lock <name> -- <command>`, which waits its turn while another builder holds the lock.\n")
+    if shared:
+        listed = ", ".join(f"{n} (up to {c} runs at once)" for n, c in shared.items())
+        out += (f"- This project's shared resources are: {listed}. `lock <name> -- <command>` shares one with other "
+                "runs, which suits work whose result doesn't depend on load, such as tests and image comparisons. "
+                "A timing measurement or a realtime capture needs the resource alone: use `lock <name>.alone -- "
+                "<command>`, which waits for the shared runs to finish and keeps new ones out until it is done.\n")
+    if out and prof.get("lock_hold_limit_s"):
+        out += (f"- The script stops a command that holds a lock for longer than "
+                f"{limit_text(prof['lock_hold_limit_s'])}, so hold one only for the part of the work that needs the "
+                "resource.\n")
+    return out
 
 
 def session_rule(headless: bool, host: str) -> str:
@@ -8067,9 +8399,22 @@ def cmd_lock(a: argparse.Namespace) -> None:
     where = Path(worktree or Path.cwd()).resolve()
     if subprocess.run(["git", "-C", str(where), "rev-parse"], capture_output=True).returncode != 0:
         raise SystemExit(f"error: {where} is not in a git repository, so there is no shared lock location")
-    with held(a.name, where) as use:
-        use["exit"] = subprocess.run(command, cwd=where if worktree else None).returncode
+    settings = lock_settings(where)
+    for problem in settings["problems"]:
+        print(f"warning: ORCHESTRATE.md has an invalid line, so the script uses its default for it: {problem}",
+              file=sys.stderr)
+    with held(a.name, where, what=shlex.join(command), settings=settings,
+              waiting=lambda text: print(f"lock: {text}", file=sys.stderr, flush=True)) as use:
+        use["exit"] = run_under_lock(command, where if worktree else None, use, a.name)
     sys.exit(use["exit"])
+
+
+def cmd_locks(a: argparse.Namespace) -> None:
+    where = Path(a.worktree).resolve()
+    if subprocess.run(["git", "-C", str(where), "rev-parse"], capture_output=True).returncode != 0:
+        raise SystemExit(f"error: {where} is not in a git repository, so it has no locks")
+    report = lock_report(where)
+    print(json.dumps(report, indent=2) if a.json else lock_report_text(report))
 
 
 # A background job is a long command an agent starts with `background` and waits for with `wait`. In Thrum, builders
@@ -8800,6 +9145,7 @@ def flow_numbers(worktree: Path, hours: float) -> dict:
     builders = len({(r.get("module"), r.get("milestone"), r.get("session")) for r in ledger_rows(worktree)
                     if r.get("role") == "build" and (r.get("at") or "") >= since})
     locks: dict = {}
+    spans: dict = {}
     path = loop_dir(worktree) / LOCKS_FILE
     for line in (path.read_text().splitlines() if path.exists() else []):
         try:
@@ -8812,6 +9158,7 @@ def flow_numbers(worktree: Path, hours: float) -> dict:
         s = locks.setdefault(row.get("lock") or "?", {"holds": 0, "held_h": 0.0, "queued_h": 0.0,
                                                       "longest_wait_h": 0.0, "failed": 0, "failed_held_h": 0.0})
         held_h = (released - max(got, start)) / 3600
+        spans.setdefault(row.get("lock") or "?", []).append((max(got, start), released))
         s["holds"] += 1
         s["held_h"] += held_h
         s["queued_h"] += max(0.0, got - max(asked, start)) / 3600
@@ -8819,8 +9166,15 @@ def flow_numbers(worktree: Path, hours: float) -> dict:
         if row.get("exit") not in (None, 0):
             s["failed"] += 1
             s["failed_held_h"] += held_h
-    for s in locks.values():
-        s["busy"] = round(min(1.0, s["held_h"] / hours), 2)
+    for name, s in locks.items():
+        # busy is the share of the window anyone held it, so overlapping shared holds count once
+        busy_s, end = 0.0, None
+        for a_s, b_s in sorted(spans.get(name, [])):
+            if end is None or a_s > end:
+                busy_s, end = busy_s + max(0.0, b_s - a_s), b_s
+            elif b_s > end:
+                busy_s, end = busy_s + b_s - end, b_s
+        s["busy"] = round(min(1.0, busy_s / 3600 / hours), 2)
         for k in ("held_h", "queued_h", "longest_wait_h", "failed_held_h"):
             s[k] = round(s[k], 1)
     jobs = {"started": 0, "failed": 0, "running": 0}
@@ -10356,11 +10710,16 @@ def build_parser() -> argparse.ArgumentParser:
     runs.add_argument("--repo", help="only runs in the repository holding this path")
     runs.add_argument("--json", action="store_true", help="one JSON object, for a lead")
     runs.set_defaults(func=cmd_loops)
-    lock = sub.add_parser("lock", help="run a command under a lock shared by every worktree of the repository")
+    lock = sub.add_parser("lock", help="run a command under a lock shared by every worktree of the repository; "
+                                       "NAME.alone takes a shared resource for this command alone")
     lock.add_argument("--worktree")
     lock.add_argument("name")
     lock.add_argument("command_args", nargs=argparse.REMAINDER)
     lock.set_defaults(func=cmd_lock)
+    locks = sub.add_parser("locks", help="show who holds each lock of the repository, and who is queued for it")
+    locks.add_argument("--worktree", default=".")
+    locks.add_argument("--json", action="store_true")
+    locks.set_defaults(func=cmd_locks)
     background = sub.add_parser("background", help="start a long command as a background job, logged under the git "
                                                    "directory; `wait` waits for it")
     background.add_argument("--worktree", help="the worktree the job belongs to and runs in (default: here)")

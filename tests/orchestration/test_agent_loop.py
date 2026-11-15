@@ -2660,6 +2660,196 @@ class Locks(Clean):
                 agent_loop.cmd_lock(argparse.Namespace(name="gpu", worktree=tmp, command_args=["--", "true"]))
 
 
+HOLD = ("import sys, time; sys.path.insert(0, {scripts!r}); import agent_loop; from pathlib import Path\n"
+        "wt, name, gate = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])\n"
+        "with agent_loop.held(name, wt, what='hold ' + gate.name):\n"
+        "    print('got', flush=True)\n"
+        "    while not gate.exists(): time.sleep(0.05)\n")
+
+
+class LockClasses(Clean):
+    """Shared resources with a capacity, sole use that drains them, the hold limit and the `locks` command. Each
+    holder is a separate process, as builders are, holding its lock until the test opens its gate."""
+
+    def repo(self, settings=""):
+        self.wt = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        subprocess.run(["git", "init", "-q", str(self.wt)], check=True)
+        if settings:
+            (self.wt / "ORCHESTRATE.md").write_text(settings)
+
+    def holder(self, name, tag):
+        gate = self.wt / f"release-{tag}"
+        proc = subprocess.Popen([sys.executable, "-c", HOLD.format(scripts=str(SCRIPTS)), str(self.wt), name,
+                                 str(gate)], stdout=subprocess.PIPE, text=True)
+        self.addCleanup(lambda: (proc.kill(), proc.wait(), proc.stdout.close()))
+        return proc, gate
+
+    def got(self, proc, within):
+        import select
+        ready, _, _ = select.select([proc.stdout], [], [], within)
+        return bool(ready) and proc.stdout.readline().strip() == "got"
+
+    def queued(self, count):
+        """Waits until `count` requests are queued, so the next one is surely behind them."""
+        for _ in range(200):
+            if sum(len(r["queued"]) for r in agent_loop.lock_report(self.wt)["locks"]) >= count:
+                return
+            time.sleep(0.05)
+        self.fail(f"{count} requests never queued")
+
+    def rows(self):
+        path = Path(agent_loop.git_common_dir(self.wt)) / "orchestrate" / agent_loop.LOCKS_FILE
+        return [json.loads(line) for line in path.read_text().splitlines()]
+
+    def test_settings_lines_parse_and_bad_ones_are_named(self):
+        parse = agent_loop.lock_settings_from
+        self.assertEqual(parse(""), {"shared": {}, "hold_limit_s": agent_loop.DEFAULT_HOLD_LIMIT_S, "problems": []})
+        got = parse("- **Shared resources:** `gpu: 3`, chrome 1 runs\n- **Lock hold limit:** 45 minutes\n")
+        self.assertEqual((got["shared"], got["hold_limit_s"]), ({"gpu": 3, "chrome": 1}, 2700))
+        self.assertEqual(parse("- **Lock hold limit:** 2h\n")["hold_limit_s"], 7200)
+        self.assertIsNone(parse("- **Lock hold limit:** none\n")["hold_limit_s"])
+        self.assertEqual(parse("- **Shared resources:** none\n")["shared"], {})
+        self.assertEqual(parse("- **Shared resources:** <resources several runs may use at once>\n")["shared"], {})
+        bad = parse("- **Shared resources:** gpu, sim.alone: 2\n- **Lock hold limit:** soon\n")
+        self.assertEqual(bad["shared"], {})
+        self.assertEqual(len(bad["problems"]), 3, bad["problems"])
+        self.repo("- **Merge:** local\n- **Test command:** none\n- **Shared resources:** gpu: 2\n")
+        prof = agent_loop.profile(self.wt, strict=True)
+        self.assertEqual((prof["shared_resources"], prof["lock_hold_limit_s"]),
+                         ({"gpu": 2}, agent_loop.DEFAULT_HOLD_LIMIT_S))
+        rule = agent_loop.resources_rule(prof)
+        self.assertIn("gpu (up to 2 runs at once)", rule)
+        self.assertIn("`lock <name>.alone -- <command>`", rule)
+        self.assertIn("longer than 30 minutes", rule)
+        self.assertEqual(agent_loop.resources_rule({**prof, "shared_resources": {}}), "")
+
+    def test_a_shared_resource_lets_that_many_runs_hold_it_at_once(self):
+        self.repo("- **Shared resources:** gpu: 2\n")
+        a, gate_a = self.holder("gpu", "a")
+        b, _ = self.holder("gpu", "b")
+        self.assertTrue(self.got(a, 15) and self.got(b, 15))
+        c, _ = self.holder("gpu", "c")
+        self.assertFalse(self.got(c, 1.0))  # both places are taken
+        gate_a.touch()
+        self.assertTrue(self.got(c, 15))
+
+    def test_sole_use_drains_the_shared_holders_and_new_shared_requests_queue_behind_it(self):
+        self.repo("- **Shared resources:** gpu: 3\n")
+        a, gate_a = self.holder("gpu", "a")
+        b, gate_b = self.holder("gpu", "b")
+        self.assertTrue(self.got(a, 15) and self.got(b, 15))
+        alone, gate_alone = self.holder("gpu.alone", "alone")
+        self.queued(1)
+        late, _ = self.holder("gpu", "late")  # a place is free, but a sole use is waiting
+        self.queued(2)
+        self.assertFalse(self.got(alone, 0.5) or self.got(late, 0.5))
+        gate_a.touch()
+        self.assertFalse(self.got(alone, 0.5) or self.got(late, 0.5))  # b still shares it
+        gate_b.touch()
+        self.assertTrue(self.got(alone, 15))
+        self.assertFalse(self.got(late, 1.0))  # it waits out the sole use too
+        gate_alone.touch()
+        self.assertTrue(self.got(late, 15))
+        uses = [(r["lock"], r.get("use")) for r in self.rows()]
+        self.assertEqual(uses, [("gpu", "shared"), ("gpu", "shared"), ("gpu", "alone")])
+
+    def test_an_undeclared_resource_is_one_run_at_a_time_as_before(self):
+        self.repo()
+        a, gate_a = self.holder("gpu", "a")
+        self.assertTrue(self.got(a, 15))
+        b, _ = self.holder("gpu", "b")
+        self.assertFalse(self.got(b, 1.0))
+        common = Path(agent_loop.git_common_dir(self.wt))
+        with open(common / "orchestrate-gpu.lock") as raw:  # an older copy of the script locks this file exclusively
+            with self.assertRaises(BlockingIOError):
+                fcntl_ex(raw)
+        gate_a.touch()
+        self.assertTrue(self.got(b, 15))
+        a.wait(10)
+        self.assertEqual({k for k in self.rows()[0]}, {"lock", "worktree", "pid", "asked_s", "got_s", "released_s"})
+        self.assertEqual(self.rows()[0]["lock"], "gpu")
+
+    def test_flow_counts_overlapping_shared_holds_once_in_busy(self):
+        self.repo("- **Shared resources:** gpu: 2\n")
+        subprocess.run(["git", "-C", str(self.wt), "checkout", "-q", "-b", "main"], check=True)
+        subprocess.run(["git", "-C", str(self.wt), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", "start"], check=True)
+        now = time.time()
+        for got, released in ((now - 600, now - 300), (now - 500, now - 200)):
+            agent_loop.record_lock_use(self.wt, "gpu", got, got, released, 0, "shared")
+        with contextlib.redirect_stderr(io.StringIO()):
+            gpu = agent_loop.flow_numbers(self.wt, 1)["locks"]["gpu"]
+        self.assertEqual((gpu["holds"], gpu["held_h"], gpu["busy"]), (2, 0.2, 0.11))  # 400 s of 3600, not 600
+
+    def test_an_older_copys_exclusive_hold_keeps_shared_requests_out(self):
+        self.repo("- **Shared resources:** gpu: 2\n")
+        common = Path(agent_loop.git_common_dir(self.wt))
+        with open(common / "orchestrate-gpu.lock", "a") as raw:
+            fcntl_ex(raw)
+            a, _ = self.holder("gpu", "a")
+            self.assertFalse(self.got(a, 1.0))
+            self.assertTrue(agent_loop.lock_report(self.wt)["locks"][0]["held_by_unknown"])
+        self.assertTrue(self.got(a, 15))
+
+    def test_a_holder_that_dies_lets_go_and_its_ticket_is_cleared(self):
+        self.repo("- **Shared resources:** gpu: 1\n")
+        a, _ = self.holder("gpu", "a")
+        self.assertTrue(self.got(a, 15))
+        b, _ = self.holder("gpu.alone", "b")
+        self.assertFalse(self.got(b, 0.5))
+        a.kill()
+        a.wait()
+        self.assertTrue(self.got(b, 15))
+        (gpu,) = agent_loop.lock_report(self.wt)["locks"]
+        self.assertEqual([h["pid"] for h in gpu["holders"]], [b.pid])
+
+    def test_the_hold_limit_stops_a_command_under_lock_and_says_so(self):
+        self.repo("- **Lock hold limit:** 1 second\n")
+        err = io.StringIO()
+        started = time.time()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as stop:
+            agent_loop.cmd_lock(argparse.Namespace(name="gpu", worktree=None, command_args=[
+                "--worktree", str(self.wt), "--", "sleep", "30"]))
+        self.assertEqual(stop.exception.code, 124)
+        self.assertLess(time.time() - started, 15)
+        self.assertIn("held the gpu lock for 1 second, which is this project's hold limit", err.getvalue())
+        self.assertEqual((self.rows()[-1]["exit"], self.rows()[-1]["stopped"]), (124, "hold limit"))
+        r = agent_loop.run_check(self.wt, "sleep 30", "gpu", 3600, save=False)
+        self.assertEqual(r["exit"], 124)
+        self.assertIn("this project's hold limit", r["err"])
+
+    def test_the_hold_limit_leaves_the_merge_lock_alone(self):
+        self.repo("- **Lock hold limit:** 1 second\n")
+        with agent_loop.held("merge", self.wt) as use:
+            self.assertIsNone(use["limit_s"])
+
+    def test_locks_shows_who_holds_each_resource_and_who_is_queued(self):
+        self.repo("- **Shared resources:** gpu: 1\n- **Lock hold limit:** 20 minutes\n")
+        a, _ = self.holder("gpu", "a")
+        self.assertTrue(self.got(a, 15))
+        b, _ = self.holder("gpu.alone", "b")
+        self.queued(1)
+        text = self.printed(agent_loop.cmd_locks, worktree=str(self.wt), json=False)
+        self.assertIn("stopped once it has held a lock for 20 minutes", text)
+        self.assertIn("gpu (shared by up to 1 runs at once, or held alone as gpu.alone): 1 holding, 1 queued.", text)
+        self.assertRegex(text, rf"holding shared for \d+s: pid {a.pid} in {re.escape(str(self.wt))}: hold release-a")
+        self.assertRegex(text, rf"queued alone for \d+s: pid {b.pid} in .*: hold release-b")
+        report = json.loads(self.printed(agent_loop.cmd_locks, worktree=str(self.wt), json=True))
+        (gpu,) = report["locks"]
+        self.assertEqual(([h["pid"] for h in gpu["holders"]], [q["pid"] for q in gpu["queued"]]), ([a.pid], [b.pid]))
+
+    def printed(self, func, **kw):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            func(argparse.Namespace(**kw))
+        return out.getvalue()
+
+
+def fcntl_ex(handle):
+    import fcntl
+    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
 class CodexProject(Clean):
     PROJECTS = [{"id": "thrum", "roots": [{"path": "/w/thrum"}]},
                 {"id": "sub", "roots": [{"path": "/w/thrum/tools"}]},
