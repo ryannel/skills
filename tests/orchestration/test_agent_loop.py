@@ -205,6 +205,18 @@ class Decisions(Clean):
                     done(dict(milestone("M1", "not_started", ["open"]), items=[{"id": "a", "statement": "s", "check": 3}]))):
             self.assertTrue(agent_loop.validate(bad), bad)
 
+    def test_reads_must_be_a_list_of_relative_pathspecs_on_an_item_with_a_check(self):
+        def problems(**fields):
+            m = milestone("M1", "not_started", ["open"])
+            m["items"][0].update(fields)
+            return agent_loop.validate(done(m), "WATER")
+        self.assertEqual(problems(reads=["src/", "models/*.json", ":(exclude)src/vendor"]), [])
+        for bad in ("src/", [], [""], ["src/", 3], {"src": True}):
+            self.assertTrue(any("non-empty list of git pathspecs" in p for p in problems(reads=bad)), bad)
+        self.assertTrue(any("relative to the repository's top" in p for p in problems(reads=["/etc/passwd"])))
+        self.assertTrue(any("relative to the repository's top" in p for p in problems(reads=["src/../../x"])))
+        self.assertTrue(any("has no check" in p for p in problems(reads=["src/"], check="", inspect="captures")))
+
     def test_fable_8_forward_and_self_needs_in_a_module_are_errors(self):
         d = done(dict(milestone("M1", "not_started", ["open"]), depends_on=["M2"]), milestone("M2", "not_started", ["open"]))
         self.assertTrue(any("comes at or after it" in p for p in agent_loop.validate(d, "WATER")))
@@ -5207,6 +5219,77 @@ class OnlyTheScriptSetsReadyForReview(Repo):
         for _ in range(2):
             self.assertEqual(agent_loop.try_check(self.wt, failing, None, 30, "docs/plans")["result"], "fail")
         self.assertEqual(count.read_text().count("y"), 2)
+
+    def test_a_check_that_names_its_inputs_is_reused_until_one_of_them_changes(self):
+        count = self.root / "count"
+        command = f"echo x >> {count}"
+        put(self.wt / "render/shader.txt", "v1")
+        put(self.wt / "other/notes.txt", "a")
+        self.commit_all()
+        reads = ["render/"]
+        check = lambda: agent_loop.try_check(self.wt, command, None, 30, "docs/plans", reads)
+        self.assertFalse(check().get("reused"))
+        # a commit touching other files moves the tree, but not what this check reads
+        put(self.wt / "other/notes.txt", "b")
+        self.commit_all()
+        self.assertTrue(check()["reused"])
+        # uncommitted work elsewhere doesn't matter either
+        (self.wt / "other/notes.txt").write_text("c")
+        self.assertTrue(check()["reused"])
+        self.assertEqual(count.read_text(), "x\n")
+        # the same command without `reads` keys on the whole tree, which has moved
+        self.git("checkout", "-q", "--", "other/notes.txt")
+        self.assertFalse(agent_loop.try_check(self.wt, command, None, 30, "docs/plans").get("reused"))
+        self.assertEqual(count.read_text(), "x\nx\n")
+        # a commit touching a named path runs it again
+        put(self.wt / "render/shader.txt", "v2")
+        self.commit_all()
+        self.assertFalse(check().get("reused"))
+        self.assertTrue(check()["reused"])
+        self.assertEqual(count.read_text(), "x\nx\nx\n")
+        # the memo is in the git common directory, shared by every worktree
+        self.assertTrue(list((self.wt / ".git/orchestrate/checks").glob("*.json")))
+
+    def test_the_scripts_checks_reuse_an_items_pass_but_key_the_test_command_on_the_whole_tree(self):
+        count = self.root / "count"
+        put(self.wt / "render/shader.txt", "v1")
+        self.commit_all()
+        m = milestone("M1", "in_progress", ["pass"], check=f"echo item >> {count}", reads=["render/"])
+        prof = {"plans": "docs/plans", "test_command": f"echo tests >> {count}"}
+        for _ in range(2):
+            reused = []
+            self.assertEqual(agent_loop.check_failures(self.wt, prof, m, 30, reused), [])
+            put(self.wt / "other.txt", str(len(count.read_text())))  # another builder's merge moves the tip
+            self.commit_all()
+        self.assertEqual(reused, ["M1.1"])
+        self.assertEqual(count.read_text().split(), ["tests", "item", "tests"])
+
+    def test_a_check_whose_named_inputs_cant_be_accounted_for_runs(self):
+        count = self.root / "count"
+        command = f"echo x >> {count}"
+        put(self.wt / "render/shader.txt", "v1")
+        self.commit_all()
+        runs = lambda reads: agent_loop.try_check(self.wt, command, None, 30, "docs/plans", reads).get("reused")
+        self.assertFalse(runs(["render/"]))
+        self.assertTrue(runs(["render/"]))
+        # an uncommitted change, or an untracked file, inside a named path
+        (self.wt / "render/shader.txt").write_text("v2")
+        self.assertFalse(runs(["render/"]))
+        self.assertFalse(runs(["render/"]))
+        self.git("checkout", "-q", "--", "render/shader.txt")
+        (self.wt / "render/new.txt").write_text("new")
+        self.assertFalse(runs(["render/"]))
+        (self.wt / "render/new.txt").unlink()
+        self.assertTrue(runs(["render/"]))
+        # a named path that matches no file, even beside one that does
+        self.assertFalse(runs(["render/", "models/"]))
+        self.assertFalse(runs(["render/", "models/"]))
+        self.assertEqual(count.read_text(), "x\n" * 6)
+        # a check that changes files outside the named paths isn't remembered
+        writes = f"echo x >> {count}; echo out > {self.wt / 'stray.txt'}"
+        self.assertFalse(agent_loop.try_check(self.wt, writes, None, 30, "docs/plans", ["render/"]).get("reused"))
+        (self.wt / "stray.txt").unlink()
+        self.assertFalse(agent_loop.try_check(self.wt, writes, None, 30, "docs/plans", ["render/"]).get("reused"))
 
     def test_the_test_command_merge_ran_isnt_run_again_by_the_script(self):
         count = self.root / "count"

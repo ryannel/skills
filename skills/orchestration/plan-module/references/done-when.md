@@ -203,6 +203,12 @@ The planner writes the fields that say what a milestone asks for:
   the proof runs on a stand-in, it is `stand_in:<what it stands in for>`.
 - `lock` is optional. It names an exclusive resource that the item's `check` needs, such as `gpu`, and the script
   takes that lock when it runs the check.
+- `reads` is optional, and only for an item with a `check`. It lists the files the `check` reads, as git pathspecs
+  relative to the top of the repository, such as `["src/render/", "models/*.json"]`. The script remembers a check
+  that passed, and doesn't run it again while the command and the files those pathspecs match at HEAD stay the
+  same, whatever else changes. Without `reads`, a pass is reused only while the whole tree stays the same. The
+  check runs anyway when a pathspec matches no file, or when anything inside the named paths has uncommitted
+  changes.
 - `needs` is optional. It marks an item that a builder can't finish alone, as `{"type": ..., "what": ...}`. The
   `type` is one of three:
   - `human_feedback`: someone has to look at the result and judge it, because no agent can tell, such as whether
