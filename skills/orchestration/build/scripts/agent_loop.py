@@ -2986,9 +2986,10 @@ SCRIPT_LOCKS = {"merge", "last-runs"}  # the script's own locks: always exclusiv
 
 # Shared resources and sole use. The project settings can declare a resource that several runs may use at once, up to
 # a number (`Shared resources: gpu: 3`). `lock gpu` then shares it, and `lock gpu.alone` waits until it has the
-# resource to itself, for timing and realtime captures whose result depends on load. In Thrum every GPU job went
-# through one exclusive lock, busy 92-94% of each day, though most of the work was image comparisons and tests whose
-# output doesn't depend on load and could have shared it.
+# resource to itself, for a run that needs the whole device. A lock is about capacity, how many runs a device can
+# serve at once. It keeps out only runs that take the same lock, so it can't make the machine quiet for a timing. In
+# Thrum every GPU job went through one exclusive lock, busy 92-94% of each day, though the GPU could serve several of
+# its image comparisons and tests at once.
 #
 # Every hold is a kernel lock (flock), so a holder that crashes lets go. The resource's own file,
 # <git common dir>/orchestrate-<name>.lock, is locked exclusively for sole use, and for every use of a resource the
@@ -5367,7 +5368,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.3.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.3.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5847,9 +5848,10 @@ def resources_rule(prof: dict) -> str:
     if shared:
         listed = ", ".join(f"{n} (up to {c} runs at once)" for n, c in shared.items())
         out += (f"- This project's shared resources are: {listed}. `lock <name> -- <command>` shares one with other "
-                "runs, which suits work whose result doesn't depend on load, such as tests and image comparisons. "
-                "A timing measurement or a realtime capture needs the resource alone: use `lock <name>.alone -- "
-                "<command>`, which waits for the shared runs to finish and keeps new ones out until it is done.\n")
+                "runs up to that number. A run that needs the whole device, such as all of its memory, uses "
+                "`lock <name>.alone -- <command>`, which waits for the shared runs to finish and keeps new ones out "
+                "until it is done. A lock keeps out only runs that take it, so it doesn't make the machine quiet for "
+                "a timing.\n")
     if out and prof.get("lock_hold_limit_s"):
         out += (f"- The script stops a command that holds a lock for longer than "
                 f"{limit_text(prof['lock_hold_limit_s'])}, so hold one only for the part of the work that needs the "

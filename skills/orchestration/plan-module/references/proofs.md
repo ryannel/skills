@@ -69,8 +69,8 @@ turn.
 Two settings make that cheaper. An item's `reads` field names the files its check reads, and the script reuses the
 check's last pass while those files and the command stay the same, so a check of one module isn't run again because
 another module merged. And a resource that several runs can share, such as a GPU for renders and tests, goes on the
-`Shared resources` line with how many runs it takes at once. Its item takes `"lock": "gpu"`, and only a measurement
-that needs the machine quiet takes `"lock": "gpu.alone"`.
+`Shared resources` line with how many runs it can serve at once. Its items take `"lock": "gpu"`, and only an item
+whose run needs the whole device, such as all of its memory, takes `"lock": "gpu.alone"`.
 
 The project's test command costs more again, because every merge waits for it. Branches that arrive together are
 merged as one batch with one run of the test command, but a batch still waits for the one before it, so the
@@ -106,10 +106,11 @@ Two more patterns make a proof's cost grow with the number of builders:
   changes the files it covers. When making it takes longer than the main branch stays still, builders can spend
   their sessions remaking it. Prefer a run after the merge. Where it must come first, draw what it covers as
   narrowly as its real inputs.
-- A resource held alone by work that doesn't need it alone makes everything queue. Timing needs a quiet machine,
-  but comparing images or running a GPU test usually doesn't. List the resource under `Shared resources`, give
-  ordinary items `"lock": "gpu"`, and keep `"lock": "gpu.alone"` for the few timing and realtime items, so the
-  rest run side by side.
+- A resource held alone by work that doesn't need it alone makes everything queue. A lock is about capacity, how
+  many runs a device can serve at once, so list the resource under `Shared resources` with that number, and give
+  `.alone` only to runs that need the whole device. Don't use `.alone` to get a quiet machine for a timing: a lock
+  keeps out only runs that take it, and builders' own builds and tests take none. Timings follow the tripwire and
+  last-milestone pattern above.
 
 ## How to inspect
 

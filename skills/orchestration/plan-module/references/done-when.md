@@ -203,7 +203,8 @@ The planner writes the fields that say what a milestone asks for:
   the proof runs on a stand-in, it is `stand_in:<what it stands in for>`.
 - `lock` is optional. It names a resource from the `Exclusive resources` or `Shared resources` line that the item's
   `check` needs, and the script takes that lock when it runs the check. For a shared resource, `gpu` shares it with
-  other runs, and `gpu.alone` waits to have it alone, which only a timing or realtime measurement needs. A change to
+  other runs, and `gpu.alone` waits to have it alone, which only a run that needs the whole device, such as all of
+  its memory, calls for. A lock doesn't make the machine quiet, so it isn't how a timing is made reliable. A change to
   `lock` or `reads` alone keeps the milestone's progress and needs no design review, and the script records it in
   `run_changes`, beside the definitions it approved.
 - `reads` is optional, and only for an item with a `check`. It lists the files the `check` reads, as git pathspecs

@@ -58,7 +58,7 @@ needs, where secrets come from, and how two worktrees avoid sharing a port or a 
 
 ## Rules
 - **Exclusive resources:** <things only one run at a time may use, such as "simulator"; or none>
-- **Shared resources:** <resources several runs may use at once, each with how many, such as "gpu: 3"; or none>  *(script: `lock gpu` shares it up to that number, and `lock gpu.alone` waits to have it alone, for timing and realtime captures)*
+- **Shared resources:** <resources several runs may use at once, each with how many, such as "gpu: 3"; or none>  *(script: `lock gpu` shares it up to that number, and `lock gpu.alone` waits to have it alone, for a run that needs the whole device)*
 - **Lock hold limit:** 30 minutes  *(script: the default; a command under `lock`, or a locked check, that holds a lock longer is stopped; or none)*
 - **Main-branch check <name>:** `<command>`; every <30m>; lock <resource names, or leave out>; timeout <2h>  *(script: optional, one line per check too slow to run before every merge; it runs on the main branch's tip after merges, and an item proves itself with `python3 "$ORCHESTRATE_SCRIPT" main-check <name>`)*
 - **Large captures:** <where frame sequences and other bulky evidence go if they aren't committed, and how a reviewer gets them>

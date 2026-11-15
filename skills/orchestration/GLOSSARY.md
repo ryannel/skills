@@ -343,7 +343,8 @@ Stored as: the `Exclusive resources` line of the project settings
 **Shared resource**
 Something several runs may use at once, up to a number the project settings give, such as a GPU that takes three
 renders side by side. `lock gpu` takes one share. Taking it alone, as `lock gpu.alone`, waits until nobody else is
-using it and keeps everyone else out, which only a measurement that needs a quiet machine calls for.
+using it and keeps everyone else out, which only a run that needs the whole device calls for. A lock keeps out only
+runs that take it, so it limits how many runs share a device; it doesn't make the machine quiet for a timing.
 Avoid: slot, pool
 Stored as: the `Shared resources` line of the project settings, such as `gpu: 3`, and an item's `"lock": "gpu"` or
 `"lock": "gpu.alone"`

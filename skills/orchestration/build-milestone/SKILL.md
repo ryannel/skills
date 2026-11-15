@@ -240,11 +240,12 @@ that replaces text, such as Python's `str.replace`, changes nothing and says not
 can be missing without your knowing.
 
 If a run needs something listed under `Exclusive resources` or `Shared resources` in the project settings, such as
-a simulator or the GPU, wrap it in `agent_loop.py lock <name> -- <command>`. An exclusive resource takes one run at a
-time. A shared one takes as many runs as the settings give it, such as `gpu: 3`, because most GPU work, like a render
-or a test, runs fine beside other work. Use `lock gpu.alone` only when the measurement itself needs a quiet machine,
-such as a timing or a realtime capture: it waits until nobody else is using the GPU, and everyone else waits while
-you have it, so keep that command short.
+a simulator or the GPU, wrap it in `agent_loop.py lock <name> -- <command>`. A lock is about capacity: how many runs
+the device can serve at once. An exclusive resource takes one run at a time. A shared one takes as many as the
+settings give it, such as `gpu: 3`. Use `lock <name>.alone` only when a run needs the whole device, such as all of its
+memory: it waits until nobody else is using it, and everyone else waits while you have it, so keep that command
+short. A lock keeps out only runs that take the same lock, so it doesn't make the machine quiet; a timing taken while
+builders work is noisy whatever lock it holds, which is why the plan gives timings a loose tripwire.
 
 The lock waits its turn, so finding the resource busy is normal, and `agent_loop.py locks` shows who holds each lock
 and who is queued. Do other work while you wait, and end with `BLOCKED` only if the holder seems stuck, naming the
