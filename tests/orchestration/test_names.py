@@ -16,7 +16,7 @@ SCRIPT = DOMAIN / "build" / "scripts" / "agent_loop.py"
 GLOSSARY = DOMAIN / "GLOSSARY.md"
 
 # Calls whose first string argument, or keyword `result`, is a result name.
-RESULT_CALLS = ("emit", "finish", "_result", "done_with")
+RESULT_CALLS = ("emit", "finish", "_result", "done_with", "stop_with")
 # Words the glossary says to avoid, as they would appear inside a field name.
 AVOIDED_IN_FIELDS = ("land", "integrat", "park", "attend", "harness", "claim", "loop")
 # Old names the script may still read from files written by older versions, and where.

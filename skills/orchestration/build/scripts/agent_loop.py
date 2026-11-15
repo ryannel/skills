@@ -51,6 +51,16 @@ The script reruns checks with your own permissions, outside any host's sandbox, 
 branch's tip. It pins the check strings, but a script a check calls can still be changed by the builder, so review new check
 scripts.
 
+Results and exit status:
+  Every command ends with one JSON line, its result, as the last line on stdout. The exit status says what kind of
+  line it is: 0 for the command's own result, 2 for ERROR when the command line was refused (with `usage`, and the
+  closest command or flag when one was misspelt), 1 for ERROR when a check stopped the command, or SCRIPT_FAILED
+  when the script failed (with `traceback`). `merge`, `check`, `lock` and `wait` keep their own statuses. Results
+  are also written under <git common dir>/orchestrate/results/ (`result_file`); run, review, plan and unblock first
+  mark the files a lead might read RUNNING, with their pid, and an ERROR replaces them too, so a file never holds an
+  earlier attempt's result. A `next` names the newest installed copy of the script, and `next.argv` is the same
+  command as a list of words. `run --message` and `plan --task` can be given more than once; the texts are joined.
+
 Subcommands:
 
   run   --module CORE --worktree PATH [--host H] [--model M] [--effort E] [--milestone M2] [--fresh]
@@ -305,7 +315,9 @@ Subcommands:
   next  --module CORE --worktree PATH --milestone M2   The escalation after a failed review (see done-when.md):
         read at the main branch's tip, where the review merged. `action` is what the counts call for, `message` what to send (the builder's message, or for
         `diagnosis` the planner's task), and `next` the command.
-  unblock --module CORE --milestone M2 --worktree PATH   Puts a blocked milestone back in the queue, in_progress.
+  unblock --module CORE [--milestone M2] --worktree PATH   Puts a blocked milestone back in the queue, in_progress,
+        and prints UNBLOCKED with the `run` to start next. With no --milestone it takes the module's one blocked
+        milestone.
         Refused for Needs Human Feedback (`human feedback` unblocks it) and Too Many Failed Reviews (`human reopen`).
   pause [--module CORE] --worktree PATH   Stops the runs in this repository, and their agents, cleanly.
   human accept|rereview|reopen|scope|release --module CORE --milestone M2|design --worktree PATH --text TEXT
@@ -379,6 +391,7 @@ from datetime import datetime, timezone
 import argparse
 import atexit
 import copy
+import difflib
 import errno
 import fcntl
 import glob
@@ -963,6 +976,139 @@ def sync_worktree(worktree: Path, prof: dict) -> None:
         return
     if not git(worktree, "status", "--porcelain").stdout.strip() and is_ancestor(worktree, "HEAD", ref):
         git(worktree, "merge", "--ff-only", "--quiet", ref)
+
+
+ITEM_PROOF = ("builder_result", "evidence")  # what a builder writes on an item, as done-when.md's table says
+
+
+def merged_done(tip_text: str, builder_text: str) -> str:
+    """A done-when file that is the tip's, with the builder's proof kept: an item's `builder_result` and `evidence`
+    where the tip asks the same of that item and has no proof of its own, and a milestone the builder started still
+    In Progress. The tip's definitions, statuses and records win, because the script and the planner wrote them."""
+    try:
+        tip_doc, mine = json.loads(tip_text), json.loads(builder_text)
+        theirs = {m.get("id"): m for m in mine.get("milestones") or []}
+        for m in tip_doc.get("milestones") or []:
+            b = theirs.get(m.get("id"))
+            if not b:
+                continue
+            if m.get("status") == "not_started" and b.get("status") == "in_progress":
+                m["status"] = "in_progress"
+            items = {i.get("id"): i for i in b.get("items") or []}
+            for item in m.get("items") or []:
+                old = items.get(item.get("id"))
+                same = old and all(old.get(k) == item.get(k) for k in DEFINITION_KEYS)
+                if same and item.get("builder_result", "open") == "open" and not item.get("evidence"):
+                    item.update({k: old[k] for k in ITEM_PROOF if k in old})
+        return json.dumps(tip_doc, indent=2) + "\n"
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return tip_text
+
+
+def rebasing(tree: Path) -> bool:
+    """Whether a rebase is under way in this checkout."""
+    for name in ("rebase-merge", "rebase-apply"):
+        p = Path(git(tree, "rev-parse", "--git-path", name).stdout.strip())
+        if (p if p.is_absolute() else tree / p).exists():
+            return True
+    return False
+
+
+def catch_up(worktree: Path, prof: dict, ref: str) -> dict:
+    """Rebases a clean worktree whose branch has its own commits onto the main branch's tip, when the tip has changed
+    the plan files since they parted, so a builder never resumes against plans a planner has replaced. A conflict in
+    the plans folder is settled for the tip: its definitions and records, with the builder's proof kept on items whose
+    definitions didn't change (`merged_done`) and both sides' LOG.md entries kept. A conflict anywhere else is the
+    builder's to settle, so the rebase is undone and the worktree left as it was, except the builder's handoff, where
+    the builder's own copy wins: the tip's is the copy the script merged when the milestone was blocked, with links to
+    evidence still on this branch turned into text (`links_to_tip`). Returns what happened, for the result line: {}
+    when there was nothing to do."""
+    if git(worktree, "status", "--porcelain").stdout.strip() or is_ancestor(worktree, ref, "HEAD") \
+            or is_ancestor(worktree, "HEAD", ref):
+        return {}
+    base = git(worktree, "merge-base", "HEAD", ref).stdout.strip()
+    plans = prof["plans"].rstrip("/") + "/"
+    changed = [f for f in git(worktree, "diff", "--name-only", base, ref, "--", plans).stdout.splitlines() if f]
+    if not base or not changed:
+        return {}
+    before = head_commit(worktree)
+    env = {**os.environ, "GIT_EDITOR": "true", "LC_ALL": "C"}
+    rebase = lambda *args: subprocess.run(["git", "-C", str(worktree), *ident(worktree), "rebase", *args],
+                                          capture_output=True, text=True, env=env)
+    try:
+        return settle_rebase(worktree, prof, ref, base, before, changed, rebase)
+    except (UnicodeDecodeError, OSError, subprocess.SubprocessError) as e:  # a binary plan file, say
+        return {"result": "left", "head": before, "why": f"the script couldn't settle the rebase: {e}"[:300]}
+    finally:
+        if rebasing(worktree):  # whatever stopped it, the builder never resumes in a half-done rebase
+            rebase("--abort")
+
+
+def settle_rebase(worktree: Path, prof: dict, ref: str, base: str, before: str, changed: list[str],
+                  rebase) -> dict:
+    """The rebase `catch_up` describes, from its first step to its result. `catch_up` aborts it if this stops early."""
+    plans = prof["plans"].rstrip("/") + "/"
+    handoff = lambda f: f.startswith(prof["evidence"].rstrip("/") + "/") and f.endswith("-handoff.md")
+    r, settled = rebase(ref), set()
+    for _ in range(500):
+        if not rebasing(worktree):
+            break
+        conflicts = [f for f in git(worktree, "diff", "--name-only", "--diff-filter=U").stdout.splitlines() if f]
+        if any(not f.startswith(plans) and not handoff(f) for f in conflicts):
+            rebase("--abort")
+            return {"result": "left", "head": before, "conflicts": conflicts[:20],
+                    "why": "the builder's branch conflicts with the main branch's tip outside the plans folder, which "
+                           "is the builder's to settle; it rebases when it merges"}
+        if not conflicts:  # stopped for something other than a conflict
+            break
+        for f in conflicts:
+            stage = lambda n: git(worktree, "show", f":{n}:{f}")
+            tip_side, builder_side = stage(2), stage(3)
+            if handoff(f) and builder_side.returncode == 0:
+                text = builder_side.stdout
+            elif tip_side.returncode != 0:  # the tip deleted it
+                git(worktree, "rm", "-q", "--", f)
+                continue
+            elif f.endswith("/" + MODULE_FILES["done"]) and builder_side.returncode == 0:
+                text = merged_done(tip_side.stdout, builder_side.stdout)
+            elif f.endswith("/" + MODULE_FILES["log"]) and builder_side.returncode == 0:
+                with tempfile.TemporaryDirectory() as tmp:
+                    paths = [Path(tmp) / n for n in ("tip", "base", "builder")]
+                    for path, n in zip(paths, (2, 1, 3)):
+                        path.write_text(stage(n).stdout if stage(n).returncode == 0 else "")
+                    text = subprocess.run(["git", "merge-file", "--union", "-p", *map(str, paths)],
+                                          capture_output=True, text=True).stdout
+            else:
+                text = tip_side.stdout
+            (worktree / f).write_text(text)
+            git(worktree, "add", "--", f)
+            settled.add(f)
+        r = rebase("--continue")
+        if r.returncode != 0 and "nothing to commit" in (r.stdout + r.stderr):
+            r = rebase("--skip")
+    else:
+        rebase("--abort")
+        return {"result": "left", "head": before, "why": "the rebase didn't finish"}
+    if rebasing(worktree) or not is_ancestor(worktree, ref, "HEAD"):
+        rebase("--abort")
+        return {"result": "left", "head": before, "why": (r.stdout + r.stderr).strip()[-300:]}
+    # Git merges a definition the tip changed and proof the builder wrote a few lines apart without a conflict, so
+    # each done-when file the tip changed is set again from the tip's copy and the builder's own, as in a conflict.
+    for f in changed:
+        if f.endswith("/" + MODULE_FILES["done"]) and (worktree / f).is_file():
+            mine = git(worktree, "show", f"{before}:{f}")
+            theirs = git(worktree, "show", f"{ref}:{f}")
+            if mine.returncode == 0 and theirs.returncode == 0:
+                text = merged_done(theirs.stdout, mine.stdout)
+                if text != (worktree / f).read_text():
+                    (worktree / f).write_text(text)
+                    git(worktree, "add", "--", f)
+                    settled.add(f)
+    if git(worktree, "diff", "--cached", "--quiet").returncode != 0:
+        git(worktree, *ident(worktree), "commit", "--quiet", "-m",
+            "orchestrate: keep the builder's proof against the new plan files")
+    return {"result": "rebased", "onto": git(worktree, "rev-parse", "--short", ref).stdout.strip(),
+            "from": before[:8], "plan_files": changed[:20], **({"settled": sorted(settled)} if settled else {})}
 
 
 def own_progress(worktree: Path, seen: int, plans: str) -> tuple[bool, int]:
@@ -1801,6 +1947,15 @@ def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def hours_since(stamp: str | None) -> float:
+    """Hours since a `now()` stamp, or infinity for none or one that can't be read."""
+    try:
+        return (datetime.now(timezone.utc) - datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc)).total_seconds() / 3600
+    except (TypeError, ValueError):
+        return float("inf")
+
+
 def project(worktree: Path, prof: dict, ref: str) -> dict[str, dict]:
     """Every module at `ref`: {MODULE: {stem, doc, record, design, problems}}, with records adopted where missing
     (as they stand only in a repository that has never had a loop record)."""
@@ -1938,14 +2093,18 @@ def loop_cmd(*args) -> str:
     return shlex.join(["python3", str(LOOP), *[str(x) for x in args]])
 
 
-RUNS_FILE = "last-runs.json"  # per module: the host and review host of its latest build run
+MORE_BUILDERS_HOURS = 24  # how long the human's --more-builders words carry to the module's later runs
+RUNS_FILE = "last-runs.json"  # per module: the host, review host and --more-builders words of its latest build run
 RUN_HERE: dict = {}  # this process's own run, which outranks the file
 
 
-def note_run(worktree: Path, module: str, host: str, review: str) -> None:
-    """Records the host and review host this build run of `module` uses, so a `next` printed later, by any command
-    in any worktree of the repository, keeps them. Local to this machine; never fails."""
-    entry = {"host": host, "review_host": review, "at": now()}
+def note_run(worktree: Path, module: str, host: str, review: str, more_builders: str | None = None,
+             said_at: str | None = None) -> None:
+    """Records the host and review host this build run of `module` uses, and the human's words that let it start past
+    the Builders count, so a `next` printed later, by any command in any worktree of the repository, keeps them, and a
+    later run of the module reuses the words. Local to this machine; never fails."""
+    entry = {"host": host, "review_host": review, "at": now(),
+             **({"more_builders": more_builders, "more_builders_at": said_at or now()} if more_builders else {})}
     RUN_HERE[module.upper()] = entry
     try:
         path = loop_dir(worktree) / RUNS_FILE
@@ -2001,11 +2160,27 @@ def fit_command(command: str | None) -> str | None:
     return shlex.join(argv)
 
 
+def current_command(command: str | None) -> str | None:
+    """A command for this script, pointed at the newest copy installed beside it. A run that started before an
+    update finishes on the old copy, and in Thrum its `next` sent the lead back to the old version."""
+    prefix = shlex.join(["python3", str(LOOP)]) + " "
+    if isinstance(command, str) and command.startswith(prefix) and (newer := newer_install()):
+        return shlex.join(["python3", newer]) + " " + command[len(prefix):]
+    return command
+
+
 def fit_next(then):
-    """`fit_command` over a `next` field's commands, nested `then`s included."""
+    """`fit_command` and `current_command` over a `next` field's commands, nested `then`s included. Each command
+    also gets `argv`, the same command as a list of words, for a lead that runs it without a shell."""
     if isinstance(then, dict):
-        return {k: (fit_command(v) if k in ("command", "then", "alternative") and isinstance(v, str) else
-                    fit_next(v) if k == "then" else v) for k, v in then.items()}
+        out = {k: (current_command(fit_command(v)) if k in ("command", "then", "alternative") and isinstance(v, str)
+                   else fit_next(v) if k == "then" else v) for k, v in then.items()}
+        if isinstance(out.get("command"), str):
+            try:
+                out["argv"] = shlex.split(out["command"])
+            except ValueError:
+                pass
+        return out
     return then
 
 
@@ -4763,7 +4938,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.2.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.2.4"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -4792,6 +4967,25 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.2.4": [
+        "Every command now ends with a JSON result and an exit status: 0 for its own result, 2 for ERROR when the "
+        "command line was refused (with `usage` and a suggestion for a misspelt command or flag), 1 for ERROR when a "
+        "check stopped it, or SCRIPT_FAILED for a fault in the script. Don't send a command's output to /dev/null or "
+        "cut it with tail: read its last line and its exit status.",
+        "run, review, plan and unblock mark their result files RUNNING, with their pid, as they start, and an ERROR "
+        "replaces those files, so a result file never holds an earlier attempt's result.",
+        "`next` names the newest installed copy of the script and carries `argv`. To add your own words to a printed "
+        "command, add another --task (plan) or --message (run) in single quotes; both can be given more than once.",
+        "`unblock` takes the module's one blocked milestone when you give no --milestone, and prints UNBLOCKED with "
+        "the run to start next.",
+        "`run` rebases a builder's branch onto the main branch's tip when a planner has changed the module's plan files, "
+        "keeping main's plan files and the builder's proof on items whose definitions didn't change (`caught_up`). "
+        "A conflict outside the plans folder is left for the builder.",
+        "A blocked builder's handoff merges with its links to branch-only evidence turned into text naming the branch, "
+        "so it no longer breaks the repository's link check on main.",
+        "For a day after the human gives --more-builders words, later runs of that module reuse them, so restarting "
+        "its builder isn't refused again.",
+    ],
     "2.2.3": [
         "The build skill now opens with your job: you're responsible for delivering the project brief, as fast as you "
         "can without lowering its quality, with as little of the human's attention and quota as the work allows. A "
@@ -4907,17 +5101,151 @@ def report_due(worktree: Path) -> str | None:
         return None
 
 
+def result_name(module: str | None, milestone: str | None, command: str | None) -> str:
+    """The result file's name: <MODULE>-<milestone>-<command>.json, leaving out what the command doesn't have."""
+    name = "-".join(x for x in (module, milestone, command) if x)
+    return re.sub(r"[^A-Za-z0-9._-]", "_", name or "result") + ".json"
+
+
 def result_file(worktree: Path, fields: dict) -> Path | None:
     """Where this result is also written, so a lead that ran the command in the background reads it from a known
     file: in Thrum the lead spent 40 commands digging the JSON line out of mixed output."""
     try:
-        name = "-".join(x for x in (fields.get("module"), fields.get("milestone"),
-                                    sys.argv[1] if len(sys.argv) > 1 else "") if x)
-        path = loop_dir(worktree) / "results" / (re.sub(r"[^A-Za-z0-9._-]", "_", name or "result") + ".json")
+        path = loop_dir(worktree) / "results" / result_name(fields.get("module"), fields.get("milestone"),
+                                                            sys.argv[1] if len(sys.argv) > 1 else "")
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
     except OSError:
         return None
+
+
+# The commands whose result file a lead waits on. Each marks its file RUNNING as it starts, so a file left by an
+# earlier attempt is never read as this one's result: in Thrum an `unblock` the parser refused left the previous
+# run's result in place, and the lead read it as the new run's for an hour.
+MARKED_COMMANDS = ("run", "review", "plan", "unblock")
+MARKED: dict = {}  # result file -> its text before this command marked it (None when there was none)
+
+
+def argv_flag(argv: list[str], name: str) -> str | None:
+    """A flag's value in a command line the parser may have refused, as `--name value` or `--name=value`."""
+    for i, word in enumerate(argv):
+        if word == name and i + 1 < len(argv):
+            return argv[i + 1]
+        if word.startswith(name + "="):
+            return word.split("=", 1)[1]
+    return None
+
+
+def argv_target(argv: list[str], worktree: str | None = None) -> dict:
+    """The command, worktree, module and milestone a command line names, read without the parser."""
+    return {"command": argv[0] if argv and not argv[0].startswith("-") else None,
+            "worktree": worktree or argv_flag(argv, "--worktree"),
+            "module": argv_flag(argv, "--module"), "milestone": argv_flag(argv, "--milestone")}
+
+
+def results_to_mark(target: dict) -> list[Path]:
+    """The result files a lead could read for this command: the one its flags name, and when it names a module but no
+    milestone (a `run` finds its own), that module's latest milestone file for the same command, the one a lead
+    following the module reads. Older milestones' results are left alone. A file another live command has marked
+    RUNNING is that command's, and is left out."""
+    tree = Path(target["worktree"]).resolve()
+    if not tree.is_dir() or git(tree, "rev-parse", "--git-common-dir").returncode != 0:
+        return []  # not a repository: there is no shared place for result files
+    try:
+        folder = loop_dir(tree) / "results"
+    except Exception:
+        return []
+    module = (target.get("module") or "").upper() or None
+    paths = [folder / result_name(module, target.get("milestone"), target["command"])]
+    if module and not target.get("milestone") and folder.is_dir():
+        pattern = re.compile(rf"{re.escape(module)}-(M\d[A-Za-z0-9.]*|design)-{re.escape(target['command'])}\.json",
+                             re.IGNORECASE)
+        found = [f for f in folder.iterdir() if pattern.fullmatch(f.name)]
+        paths += [max(found, key=lambda f: f.stat().st_mtime)] if found else []
+    return [p for p in paths if not held_by_another(p)]
+
+
+def held_by_another(path: Path) -> bool:
+    """Whether the result file says RUNNING for a process other than this one that is still alive."""
+    try:
+        line = json.loads(path.read_text())
+        pid = int(line.get("pid") or 0)
+        if line.get("result") != "RUNNING" or not pid or pid == os.getpid():
+            return False
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
+def mark_running(argv: list[str], worktree: str | None) -> None:
+    """Replaces this command's result files with a RUNNING line naming this process, until its own result is
+    written. Never fails the command."""
+    target = argv_target(argv, worktree)
+    if target["command"] not in MARKED_COMMANDS or not target["worktree"]:
+        return
+    line = json.dumps({"result": "RUNNING", **{k: target[k] for k in ("module", "milestone") if target[k]},
+                       "command": shlex.join(["python3", str(LOOP), *argv]), "pid": os.getpid(), "started": now(),
+                       "why": "this command hasn't finished; its result replaces this line when it does. If its pid "
+                              "is no longer running, it was stopped before it could write one", "version": VERSION})
+    for path in results_to_mark(target):
+        try:
+            MARKED[path] = path.read_text() if path.exists() else None
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(line + "\n")
+        except OSError:
+            MARKED.pop(path, None)
+
+
+def unmark(written: Path | None) -> None:
+    """Puts back the result files this command marked but didn't write its result to: the other milestones' files of
+    a `run` that found its own milestone."""
+    for path, before in list(MARKED.items()):
+        # The marked name is upper-cased and the written one spelt as the module's folder is, which on a
+        # case-insensitive disk is the same file.
+        if written and path.parent == written.parent and path.name.lower() == written.name.lower():
+            continue
+        try:
+            if before is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_text(before)
+        except OSError:
+            pass
+    MARKED.clear()
+
+
+def stop_with(result: str, message: str, argv: list[str], code: int, worktree: str | None = None,
+              **fields) -> None:
+    """The result line for a command that stopped before it could do what it was asked: ERROR for a command line
+    the parser refused or a check that failed, SCRIPT_FAILED for a fault in the script. It goes on stdout as the last
+    line, and into every result file the command marked (or the one its flags name), and the exit status is `code`,
+    so neither a lead reading the file nor one checking the status takes an old result for this one."""
+    target = argv_target(argv, worktree)
+    message = re.sub(r"^error:\s*", "", message.strip())
+    if "next" in fields:
+        fields["next"] = fit_next(fields["next"])
+    line = {"result": result, **{k: target[k] for k in ("module", "milestone") if target[k]},
+            "error": message, **fields, "version": VERSION}
+    paths = list(MARKED) or (results_to_mark(target) if target["command"] in MARKED_COMMANDS and
+                             target["worktree"] else [])
+    if paths:
+        line["result_file"] = str(paths[0])
+    text = json.dumps(line)
+    for path in paths:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text + "\n")
+        except OSError:
+            pass
+    MARKED.clear()
+    print(f"error: {message}", file=sys.stderr)
+    print(text)
+    sys.exit(code)
 
 
 def emit(result: str, **fields) -> None:
@@ -4950,8 +5278,9 @@ def emit(result: str, **fields) -> None:
             path.write_text(text + "\n")
         except OSError:
             pass
+    unmark(path)
     print(text)
-    sys.exit(0)
+    sys.exit(1 if result in ("SCRIPT_FAILED", "ERROR") else 0)
 
 
 def finish(state_path: Path, state: dict, result: str, **extra) -> None:
@@ -5101,6 +5430,29 @@ def earlier_handoff(worktree: Path, prof: dict, stem: str, mid: str) -> str:
     if not (here or "").strip():
         return ""
     return handoff_note(rel, mid)
+
+
+LINK = re.compile(r"(!?)\[([^\]\n]*)\]\(([^)\s]+)(\s+\"[^\"]*\")?\)")
+
+
+def links_to_tip(text: str, rel: str, tree: Path, branch: str) -> str:
+    """A handoff as it can stand at the main branch's tip: each relative link whose file the tip lacks becomes the
+    link's text and the path in backticks, with the branch that holds it. The handoff merges before the builder's
+    work does, and a link to evidence still on the builder's branch would fail the repository's link check on main
+    for every builder."""
+    folder = Path(rel).parent
+
+    def fix(m):
+        target = m.group(3)
+        if re.match(r"^[a-z][a-z0-9+.-]*:|^#|^/", target, re.IGNORECASE):
+            return m.group(0)
+        path = os.path.normpath(folder / target.split("#", 1)[0])
+        if path.startswith("..") or (tree / path).exists():
+            return m.group(0)
+        where = f" on branch `{branch}`" if branch and branch != "HEAD" else " on the builder's branch"
+        label = m.group(2).strip()
+        return f"{label + ' ' if label and label != path else ''}(`{path}`{where})"
+    return LINK.sub(fix, text)
 
 
 def handoff_note(rel: str, mid: str) -> str:
@@ -6134,8 +6486,15 @@ def cmd_run(a: argparse.Namespace) -> None:
             print("warning: " + w, file=sys.stderr)
             WARNINGS.append(w)
     more = (getattr(a, "more_builders", None) or "").strip()
+    more_from = None
     if prof.get("builders") and not getattr(a, "checks_only", False):
         others = builders_running(worktree)
+        earlier = known_run(str(worktree), stem)
+        if len(others) >= prof["builders"] and not more and earlier.get("more_builders") and \
+                hours_since(earlier.get("more_builders_at")) < MORE_BUILDERS_HOURS:
+            # The human's words that let this module's last run start past the count still stand for a day: a
+            # restart after a failed review or a pause is the same builder, not one more.
+            more, more_from = earlier["more_builders"], earlier["more_builders_at"]
         if len(others) >= prof["builders"]:
             if not more:
                 names = ", ".join(f"{r['module'] or '?'} {r['milestone'] or ''}".strip() for r in others)
@@ -6149,12 +6508,19 @@ def cmd_run(a: argparse.Namespace) -> None:
                     decides="human", ask=f"{plural(len(others), 'builder')} {be} running ({names}), the number in the "
                                          f"project settings. Shall I start one more, for {stem} {mid}?"))
             # Kept with the run, so the result shows whose words started the extra builder.
-            EMIT_EXTRA["more_builders"] = {"said": more, "running": len(others), "at": now()}
+            EMIT_EXTRA["more_builders"] = {"said": more, "running": len(others), "at": now(),
+                                           **({"said_at": more_from} if more_from else {})}
     ok, holder = take_hold(worktree, prof, key, mid)
     if not ok:
         emit("IN_PROGRESS_ELSEWHERE", module=stem, milestone=mid, by=holder,
              next=next_for({**step, "status": "in_progress_elsewhere", "by": holder}, worktree, prof, proj))
 
+    # Only now is this run sure to build, so only now does it move the builder's branch.
+    try:
+        if caught := catch_up(worktree, prof, tip(worktree, prof)):
+            EMIT_EXTRA["caught_up"] = caught
+    except TipError:
+        pass
     done = load_done(worktree, stem, prof)
     if problems := validate(done, key):
         emit("INVALID", module=stem, problems=problems[:20], **unlanded(next_cmd(
@@ -6175,7 +6541,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     # with `Review host: other` only a review host the lead named is kept: otherwise each review decides its own,
     # against the builder for a milestone and the planner for a design
     note_run(worktree, stem, host, getattr(a, "review_host", None) if prof.get("review_host") == "other" else
-             review_host(prof, host, getattr(a, "review_host", None)))
+             review_host(prof, host, getattr(a, "review_host", None)), more or None, more_from)
     state = json.loads(state_path.read_text()) if state_path.exists() else {}
     # "PIN" is the name before 2.1.0, still in the state files of runs started earlier.
     fresh = (a.fresh or state.get("milestone") != mid or state.get("result") in ("WRONG_MODEL_OR_EFFORT", "PIN")
@@ -6227,9 +6593,11 @@ def cmd_run(a: argparse.Namespace) -> None:
         rel = handoff_rel(prof, stem, mid)
         source = worktree / rel
         if source.is_file() and source.read_text(errors="replace").strip():
-            text = source.read_bytes()
+            branch = git(worktree, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+            raw = source.read_text(errors="replace")
 
             def put(tree):
+                text = links_to_tip(raw, rel, tree, branch).encode()
                 target = tree / rel
                 if target.is_file() and target.read_bytes() == text:
                     return []
@@ -8039,30 +8407,52 @@ def cmd_pause(a: argparse.Namespace) -> None:
 
 
 def cmd_unblock(a: argparse.Namespace) -> None:
+    """Puts a Blocked milestone back to In Progress at the main branch's tip, and says to run the module next. With no
+    --milestone it takes the module's one Blocked milestone, since a module builds its milestones in order and
+    rarely has two."""
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, strict=True)
     stem = module_stem(worktree, prof, a.module)
+    chosen = [a.milestone]
 
     def change(t):
         path = t / done_rel(prof, stem)
         doc = json.loads(path.read_text())
-        m = find(doc, a.milestone)
+        if not chosen[0]:
+            blocked = [m["id"] for m in doc["milestones"] if m.get("status") == "blocked"]
+            if not blocked:
+                raise SystemExit(f"error: {stem} has no blocked milestone at the main branch's tip")
+            if len(blocked) > 1:
+                raise SystemExit(f"error: {stem} has {len(blocked)} blocked milestones ({', '.join(blocked)}); "
+                                 "name one with --milestone")
+            chosen[0] = blocked[0]
+        mid = chosen[0]
+        m = find(doc, mid)
         if m.get("status") != "blocked":
-            raise SystemExit(f"error: {a.milestone} is {m.get('status')}, not blocked")
+            raise SystemExit(f"error: {mid} is {m.get('status')}, not blocked")
         reason = blocked_of(m)["reason"]
         if reason == "too_many_failed_reviews":
-            raise SystemExit(f"error: {a.milestone} is Blocked with too many failed reviews, which only the human "
+            raise SystemExit(f"error: {mid} is Blocked with too many failed reviews, which only the human "
                              "decides: ask them, then run `human reopen`, `human accept` or `human scope` with their "
                              "words")
         if reason == "needs_human_feedback":
-            raise SystemExit(f"error: {a.milestone} is Blocked: Needs Human Feedback. Ask the human, then record "
+            raise SystemExit(f"error: {mid} is Blocked: Needs Human Feedback. Ask the human, then record "
                              "their reply with `human feedback`, which unblocks it")
         m["status"] = "in_progress"
         m.pop("blocked", None)
         write_json(path, doc)
         return [done_rel(prof, stem)]
-    ok, detail = loop_write(worktree, prof, stem, change, f"orchestrate: unblock {stem} {a.milestone}")
-    print(json.dumps({"result": "UNBLOCKED" if ok else "FAILED", "detail": detail}))
+    ok, detail = loop_write(worktree, prof, stem, change, f"orchestrate: unblock {stem} {a.milestone or ''}".strip())
+    mid = chosen[0]
+    if not ok:
+        emit("SCRIPT_FAILED", module=stem, **({"milestone": mid} if mid else {}),
+             reason=f"the script couldn't unblock {mid or 'the milestone'}: {detail}",
+             next=next_cmd(loop_cmd("unblock", "--module", stem, *(["--milestone", mid] if mid else []),
+                                    "--worktree", str(worktree)), "lead", "the record didn't merge; run it again"))
+    emit("UNBLOCKED", module=stem, milestone=mid, commit=detail, next=next_cmd(
+        loop_cmd("run", "--module", stem, "--worktree", str(worktree)), "lead",
+        f"{mid} is In Progress again at the main branch's tip; run the module to carry on, with --message for what "
+        "the builder should know"))
 
 
 def ledger_rows(worktree: Path) -> list[dict]:
@@ -9656,9 +10046,43 @@ examples:
 """
 
 
+class UsageError(SystemExit):
+    """A command line the parser refused: a missing or unknown flag, or a bad value. `main` turns it into an ERROR
+    result, so a lead that reads only the last line, or the result file, still sees that the command never ran. It is
+    a SystemExit with status 2, as argparse's own error is, for code that calls the parser directly."""
+
+    def __init__(self, parser: argparse.ArgumentParser, message: str):
+        super().__init__(2)
+        self.parser, self.message = parser, message
+
+
+class Parser(argparse.ArgumentParser):
+    """The script's parser: it raises UsageError instead of printing and exiting, and suggests the closest command
+    or choice for a misspelt one, where Python's argparse can."""
+
+    def __init__(self, *args, **kw):
+        kw.setdefault("allow_abbrev", False)  # `--mod` would pass, and a reader of the command line would guess
+        try:
+            super().__init__(*args, suggest_on_error=True, **kw)
+        except TypeError:  # before Python 3.14
+            super().__init__(*args, **kw)
+
+    def error(self, message):
+        raise UsageError(self, message)
+
+
+class Joined(argparse.Action):
+    """A flag that can be given more than once, its values joined into one text with a blank line between them. A lead
+    adds its own words to a printed `next` command by adding the flag again, rather than editing the quoted text."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        old = getattr(namespace, self.dest, None)
+        setattr(namespace, self.dest, f"{old}\n\n{values}" if old else values)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The command line: every command, its flags and their defaults."""
-    parser = argparse.ArgumentParser(description=USAGE, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = Parser(description=USAGE, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
 
     def host_args(p):
@@ -9676,7 +10100,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="start a new session even if one exists. Without it the script starts one anyway when the "
                           "old session is over 60%% full, another version of the script started it, or resuming it "
                           "failed, and says why in fresh_because")
-    run.add_argument("--message", help="first prompt on resume, e.g. the reviewer's findings message")
+    run.add_argument("--message", action=Joined, help="the builder's first prompt, e.g. pointing it at a review; "
+                     "give it more than once to add your own words to a printed command")
     run.add_argument("--human-rule", "--owner-rule", dest="human_rule", action="append",  # --owner-rule: its name before 2.2
                      help="a restriction the human gave in conversation; stored "
                      "with the module's run state and restated every turn, across --fresh and milestones")
@@ -9705,7 +10130,8 @@ def build_parser() -> argparse.ArgumentParser:
     review.set_defaults(func=cmd_review)
     plan = sub.add_parser("plan", help="start a planner on a task, and check and merge its plan")
     plan.add_argument("--worktree", required=True)
-    plan.add_argument("--task", required=True)
+    plan.add_argument("--task", required=True, action=Joined,
+                      help="what the planner is to do; give it more than once to add your own words to a printed command")
     host_args(plan)
     plan.set_defaults(func=cmd_plan)
     merge_p = sub.add_parser("merge", help="rebase, run the test command and merge, under the merge lock")
@@ -9736,8 +10162,9 @@ def build_parser() -> argparse.ArgumentParser:
         nxt.add_argument(flag, required=True)
     nxt.set_defaults(func=cmd_next)
     unblock = sub.add_parser("unblock", help="put a blocked milestone back in the queue")
-    for flag in ("--module", "--worktree", "--milestone"):
+    for flag in ("--module", "--worktree"):
         unblock.add_argument(flag, required=True)
+    unblock.add_argument("--milestone", help="the blocked milestone (default: the module's one blocked milestone)")
     unblock.set_defaults(func=cmd_unblock)
     adopt_p = sub.add_parser("adopt", help="commit and merge plan files, such as a changed brief or glossary")
     adopt_p.add_argument("--worktree", default=".")
@@ -9824,28 +10251,79 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    args = build_parser().parse_args()
-    if getattr(args, "worktree", None) and args.func is not cmd_quota:
-        QUOTA_WORKTREE[:] = [Path(args.worktree).resolve()]
+    """Every way a command ends leaves one JSON line last on stdout, and the exit status says which kind it is: 0
+    when the line is the command's own result, 2 when the parser refused the command line (ERROR, with `usage`), 1
+    when a check stopped it (ERROR) or the script failed (SCRIPT_FAILED). `merge`, `check`, `lock` and `wait` keep
+    the statuses their usage gives."""
+    argv = sys.argv[1:]
+    parser = build_parser()
+    try:
+        args = parser.parse_args(argv)
+    except UsageError as e:
+        command = argv_target(argv)["command"]
+        sub = parser._subparsers._group_actions[0].choices.get(command)
+        message = e.message
+        if sub:
+            # argparse suggests nothing for a misspelt flag, and reports a missing required flag before an unknown
+            # one, so the closest of the command's own flags is named for each word it doesn't know
+            flags = [o for action in sub._actions for o in action.option_strings]
+            near = {w: m[0] for w in (x.split("=", 1)[0] for x in argv[1:]) if w.startswith("--") and w not in flags
+                    and (m := difflib.get_close_matches(w, flags, n=1, cutoff=0.6))}
+            if near:
+                message += "; " + ", ".join(f"maybe you meant {m} for {w}" for w, m in near.items())
+        stop_with("ERROR", message, argv, 2, usage=(sub or e.parser).format_usage().strip(), next=next_cmd(
+            loop_cmd(*([command] if sub else []), "--help"), "lead",
+            "the command line was refused, so nothing ran; fix it from the usage and run it again"))
+    worktree = getattr(args, "worktree", None)
+    if worktree and args.func is not cmd_quota:
+        QUOTA_WORKTREE[:] = [Path(worktree).resolve()]
+    mark_running(argv, worktree)
     try:
         args.func(args)
     except WriteBlocked as e:
         stop_on_write(args, e)
     except OSError as e:  # the script's own files under .git: its locks, run state and clean checkouts
         if e.errno not in (errno.EPERM, errno.EACCES, errno.EROFS):
-            raise
+            stop_crashed(argv, worktree)
         stop_on_write(args, WriteBlocked(e.filename, e.strerror or str(e)))
+    except SystemExit as e:
+        if isinstance(e.code, str):  # a check that stopped the command, raised as SystemExit("error: ...")
+            stop_with("ERROR", e.code, argv, 1, worktree)
+        raise
+    except KeyboardInterrupt:
+        stop_with("ERROR", "the command was interrupted before it finished", argv, 130, worktree)
+    except Exception:
+        stop_crashed(argv, worktree)
+    unmark(None)
+
+
+def stop_crashed(argv: list[str], worktree: str | None) -> None:
+    """SCRIPT_FAILED for an error in the script itself, with the traceback on stderr and its last lines in the result."""
+    import traceback
+    text = traceback.format_exc()
+    print(text, file=sys.stderr)
+    stop_with("SCRIPT_FAILED", text.strip().splitlines()[-1], argv, 1, worktree,
+              traceback=text.strip().splitlines()[-6:], next=next_cmd(
+                  None, "lead", "this is a fault in the script, not in the project; run the command again once, and "
+                                "if it fails the same way, tell the human, with the traceback"))
 
 
 def stop_on_write(args: argparse.Namespace, e: WriteBlocked) -> None:
     """One result line for a write the sandbox refused or a lock someone holds, naming the path and the fix."""
     again = shlex.join(["python3", str(LOOP), *sys.argv[1:]])
     if args.func is cmd_merge:
-        print(json.dumps({"result": "FAILED", "detail": e.reason(), "blocked_write": e.fields()["blocked_write"]}))
+        line = {"result": "FAILED", "detail": e.reason(), "blocked_write": e.fields()["blocked_write"]}
     else:
-        print(json.dumps({"result": "SCRIPT_FAILED", **e.fields(), "next": next_cmd(
+        line = {"result": "SCRIPT_FAILED", **e.fields(), "next": next_cmd(
             again, "lead", "the lock is held; run the command again once it's free" if e.held else
-            "run the same command outside the sandbox, or with escalation")}))
+            "run the same command outside the sandbox, or with escalation")}
+    for path in MARKED:  # the RUNNING line this command left would otherwise outlive it
+        try:
+            path.write_text(json.dumps(line) + "\n")
+        except OSError:
+            pass
+    MARKED.clear()
+    print(json.dumps(line))
     sys.exit(1)
 
 

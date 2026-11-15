@@ -439,7 +439,8 @@ Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
 ## Results
 
 Every command of the script ends by printing one JSON line, its result, whose `result` field is one of the names
-below. The lead decides what to do next from it, and the `build` skill's tables say what to do for each. A
+below. Its exit status is 0 when the line is the command's own result, and 1 or 2 when the command stopped short
+(`ERROR`, `SCRIPT_FAILED`, or `merge`'s `FAILED`). The lead decides what to do next from it, and the `build` skill's tables say what to do for each. A
 `reason` field, where there is one, says which of a result's causes it was.
 
 | Result | Printed by | Means |
@@ -456,7 +457,9 @@ below. The lead decides what to do next from it, and the `build` skill's tables 
 | `NO_PROGRESS_FOR_HOURS` | `run` | No new item passed and the builder made no commit of its own for the hours given with `--no-progress-hours` |
 | `STALLED` | `run` | Three turns in a row changed nothing and reported nothing |
 | `HOST_FAILED` | `run`, `review`, `plan` | The host failed: two turns failed in a row, its program is missing, or its usage limit was reached |
-| `SCRIPT_FAILED` | any command | The script couldn't do a step of its own, such as fetching the main branch or writing a file the sandbox refused |
+| `SCRIPT_FAILED` | any command | The script couldn't do a step of its own, such as fetching the main branch or writing a file the sandbox refused, or it met an error in its own code (`traceback`) |
+| `ERROR` | any command | The command stopped before doing what it was asked, with the reason in `error`: the command line was refused (exit status 2, with `usage`), or a check failed, such as unblocking a milestone that isn't Blocked (exit status 1) |
+| `RUNNING` | `run`, `review`, `plan`, `unblock` | Only in a result file: the command that writes it hasn't finished. `pid` names its process, and if that process is gone, it was stopped before it could write a result |
 | `WRONG_MODEL_OR_EFFORT` | `run`, `review` | A turn ran on a model or effort other than the ones the command named |
 | `PAUSED` | `run`, `plan` | `pause` stopped it, or the human stopped it or opened the session in the app |
 | `INVALID` | `run`, `review`, `plan` | A done-when file can't be read, or an agent changed what isn't its to change |
@@ -476,3 +479,4 @@ Avoid: `FLOOR` (now `HOST_FAILED` or `SCRIPT_FAILED`), `PIN` (now `WRONG_MODEL_O
 `DESIGN_NOT_APPROVED`), `NOT_READY` (now `CHECKS_FAILED`), `BUDGET` (now `NO_PROGRESS_FOR_HOURS`), `REVIEW_OWED` (now
 `NEEDS_REVIEW`), `TAKEN` (now `IN_PROGRESS_ELSEWHERE`). The script still reads `PIN` in the state files of runs
 started before 2.1.0. Proposed: the new names, by the set's author, 2026-11-12. Agreed by the human, 2026-11-12.
+Proposed: `ERROR` and `RUNNING`, by the set's author, 2026-11-15.

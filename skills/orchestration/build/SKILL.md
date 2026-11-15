@@ -36,14 +36,27 @@ The commands all belong to one script, `scripts/agent_loop.py` in this skill's f
 means `python3 <this skill's folder>/scripts/agent_loop.py run`, and the same for every other command. The script
 is not an agent. Each command starts an agent or checks some work, and saves the records.
 
-Every command ends by printing one line of JSON, its result. The same line is written to the file named in its
-`result_file` field, under `<git common dir>/orchestrate/results/`. When you start a command in the background,
-read its result from that file, because the command's own output mixes in other text.
+Every command ends by printing one line of JSON, its result, as the last line of its output. Its exit status is 0
+when that line is the command's own result, and 1 or 2 when the command stopped short: `ERROR` means it did nothing,
+with the reason in `error` (and the usage, when the command line itself was wrong), and `SCRIPT_FAILED` means the
+script hit a fault of its own. Let the output and the exit status reach you, and don't send them to `/dev/null` or
+cut them with `tail`, because a refused command line looks like success when its error is thrown away.
+
+The same line is written to the file named in its `result_file` field, under
+`<git common dir>/orchestrate/results/`. `run`, `review`, `plan` and `unblock` mark that file `RUNNING` as they
+start, with their `pid`, so you never read an earlier attempt's result as this one's. If the file still says
+`RUNNING` and that process has gone, the command was stopped before it finished.
 
 When a command stops short of what you asked for, its `next` field holds the exact command for the next step, with
 `why`, and `next.by` says who runs it: `lead` is you, and `planner` means the command starts a planner. When `next`
 also says `decides: human`, the decision is the human's: put the `ask` text to them in the chat, and run the
 command with their words in `--text`.
+
+Run a `next` command as it is printed. It is quoted for the shell, and `next.argv` holds the same command as a list
+of words. To add your own words, add another `--task` to a `plan` command or another `--message` to a `run`
+command, in single quotes: each flag can be given more than once, and the texts are joined. Words added after the
+command without a flag, or text with brackets left unquoted, are read by the shell, and zsh stops on them before
+the script starts.
 
 Look up the script's path from this skill each time, and read this skill again after your conversation is
 compacted. Each result carries the script's `version`, and its `warnings` say when a newer copy is installed. When
@@ -168,7 +181,8 @@ Each milestone gets a new builder session, and one builder works in a module at 
 The human's number of builders is a limit, not a target. The script enforces only the `Builders:` line of the
 project settings, so a lower number the human gave in the chat is yours to keep to. Past the `Builders:` count, `run`
 prints `REFUSED` and starts nothing. Put the `ask` in its `next` to the human, and only on their yes run its command, with their words in
-`--more-builders`. `runs --repo <repo> --json` lists every session in the repository: its module, milestone, kind
+`--more-builders`. For a day after that, later runs of the same module reuse those words, so restarting its
+builder after a review or a pause isn't refused again, and the result shows them under `more_builders`. `runs --repo <repo> --json` lists every session in the repository: its module, milestone, kind
 of agent, host, turns, tokens, step and any tool call it is waiting on. `quota --worktree <path>` forecasts whether
 the Codex weekly usage limit will last.
 
@@ -244,11 +258,13 @@ from `ready` or `status` run in the main working copy, put the module's own work
 | `HOST_FAILED` | The host failed: two failed turns, its program missing, or its usage limit reached, as `reason` says. | Stop that builder and report it with the reason. Builders on another host carry on. |
 | `WRONG_MODEL_OR_EFFORT` | A turn ran on a model or an effort other than the one asked for. | Stop that builder and report it with the reason. |
 | `PAUSED` | The human stopped the session, or opened it in the app. | Leave that builder to the human until they say to carry on. |
-| `SCRIPT_FAILED` | The script couldn't do a step of its own, such as fetching the main branch or writing a file the sandbox refused. The builder's committed work isn't lost. | Do what `reason` and `next` say, then run the command again. Report it only if you can't fix it, and don't call it quota or sign-in, which is `HOST_FAILED`. |
+| `SCRIPT_FAILED` | The script couldn't do a step of its own, such as fetching the main branch or writing a file the sandbox refused, or it met an error in its own code (`traceback`). The builder's committed work isn't lost. | Do what `reason` and `next` say, then run the command again. Report it only if you can't fix it, and don't call it quota or sign-in, which is `HOST_FAILED`. |
+| `ERROR` | The command did nothing: its command line was refused, or a check stopped it, as `error` says. | Fix the command from `error` and `usage`, and run it again. |
 
 The other commands print results of their own. `adopt` prints `ADOPTED` and `migrate` prints `MIGRATED`, and
-either prints `NOTHING` when there was nothing to do. `unblock --module <M> --milestone <id> --worktree <path>` puts
-a Blocked milestone back in the queue once you've cleared what blocked it, and prints `UNBLOCKED`. A `human` command prints
+either prints `NOTHING` when there was nothing to do. `unblock --module <M> --worktree <path>` puts a Blocked
+milestone back in the queue once you've cleared what blocked it, and prints `UNBLOCKED` with the `run` to start
+next. It takes the module's one Blocked milestone, and needs `--milestone <id>` only when there are two. A `human` command prints
 `DONE`, or `RELEASED` for `human release`.
 
 Any command prints `REFUSED`, with `problems` and usually `next`, when it won't act. It prints `FAILED`, with
@@ -265,7 +281,13 @@ A builder stops only when the milestone is finished or Blocked. On `BLOCKED`, `r
 Blocked, and `next` says who steps in and gives the command, with the question for the human when the step is theirs.
 [The done-when reference](../plan-module/references/done-when.md#statuses-and-their-stored-names) lists the reasons.
 When the builder left a handoff, the `blocked` field names it, and `next` passes it to whoever picks the milestone up.
-The `reason` is the builder's own reading, from inside one session.
+The `reason` is the builder's own reading, from inside one session. The handoff merges before the builder's work,
+so the script turns its links to evidence that is only on the builder's branch into text naming that branch.
+
+When a planner changes a module's plan files while its builder's branch has work of its own, the next `run`
+rebases that branch onto the main branch's tip before the builder starts. Main's plan files win, and the builder's
+proof is kept on items whose definitions didn't change. `caught_up` in the result says what it did. If the branch
+also conflicts outside the plans folder, `run` leaves it as it was, and the builder settles that when it merges.
 
 The human's reply to a question about an item is saved with `human feedback`, the question in `--asked` and
 their words in `--said`, because that is where the builder and the reviewer read it. A reviewer can't count a
