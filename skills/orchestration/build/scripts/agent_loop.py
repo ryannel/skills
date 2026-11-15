@@ -220,7 +220,15 @@ Subcommands:
         Merges the worktree's commits under the merge lock: rebase onto the base, run the test command, then push
         (Merge: push) or fast-forward the local branch (Merge: local). Builders use this. MERGED or FAILED. It
         refuses (FAILED) commits that set a milestone's status to ready_for_review or done, which only the script
-        sets, after its checks; the items' checks don't run here, so they never hold the merge lock.
+        sets, after its checks; the items' checks don't run here, so they never hold the merge lock. Merges go
+        through a queue in the repository's loop folder: each `merge` waits for its own result, and one of the
+        waiting ones runs the queue. A branch waiting alone lands as above. Several land as one batch: each is
+        rebased, in the order they arrived, onto a checkout of the main branch's tip; one that conflicts is left out
+        (FAILED, with `conflicts` naming the files); the test command runs once on the batch; and when it fails, the
+        batch is split in halves until the branch that broke it is found (FAILED with the test output) and the rest
+        land. A landed branch's result carries `batch` (its id, the branches that landed in order, this branch's
+        place, the test runs) and moves the worktree to the landed tip. Requests outlive a `merge` that dies while
+        running the queue: the next waiting one carries on.
 
   ready [--worktree PATH]       What each module's next milestone is waiting for, read at the main branch's tip. When
         nothing is ready it adds `next`. A milestone Waiting for a re-plan or diagnosis, or Blocked with too many
@@ -8455,10 +8463,24 @@ def cmd_merge(a: argparse.Namespace) -> None:
     warnings += [f"{p} changed; the script writes it after each record it merges, so this change will be overwritten"
                  for p in touched if p == status_rel(prof)]
     own = int(git(worktree, "rev-list", "--count", f"{base}..HEAD").stdout.strip() or 0) if base else 0
-    ok, detail = land(worktree, prof, check=not a.no_check)
-    print(json.dumps({"result": "MERGED" if ok else "FAILED", "detail": detail, "commit": head_commit(worktree),
-                      **(upstream_changes(worktree, base, own) if ok else {}),
-                      **({"plan_warnings": warnings} if warnings else {})}))
+    asked = head_commit(worktree)
+    got = queue_merge(worktree, prof, check=not a.no_check, base=base)
+    ok, detail = bool(got.get("ok")), got.get("detail") or ""
+    out = {"result": "MERGED" if ok else "FAILED", "detail": detail}
+    if "batch" in got:
+        # A batch landed this branch from a checkout of its own, so the worktree still holds the commit it asked
+        # with. It moves to the landed tip, as a merge of one branch leaves it.
+        if ok and head_commit(worktree) == asked and \
+                git(worktree, "reset", "--quiet", "--keep", got["detail"]).returncode != 0:
+            warnings.append(f"your work landed, but the script couldn't move this worktree to {got['detail'][:12]}; "
+                            f"run `git reset --keep {got['detail']}` here before you start more work")
+        out.update(commit=head_commit(worktree), batch=got["batch"],
+                   **{k: got[k] for k in ("upstream", "upstream_files") if k in got})
+    else:
+        out.update(commit=head_commit(worktree), **(upstream_changes(worktree, base, own) if ok else {}))
+    if got.get("conflicts"):
+        out["conflicts"] = got["conflicts"]
+    print(json.dumps({**out, **({"plan_warnings": warnings} if warnings else {})}))
     sys.exit(0 if ok else 1)
 
 
@@ -8477,6 +8499,321 @@ def upstream_changes(worktree: Path, old_base: str, own: int) -> dict:
     return {"upstream": f"the rebase brought in {len(paths)} changed files from {old_base[:12]}..{new_base[:12]}; "
                         "the script runs every check on the merged tip after your turn, so take again only the "
                         "captures for inspected items that these could change",
+            "upstream_files": shown + ([f"... and {len(paths) - len(shown)} more"] if len(paths) > len(shown) else [])}
+
+
+# ------------------------------------------------------------------------------------------------ the merge queue
+# Each `merge` puts a request in a queue in the repository's loop folder and waits for its result. One waiting
+# `merge` at a time runs the queue: it takes every request waiting, rebases them in the order they arrived onto a
+# checkout of the main branch's tip, runs the test command once on the result and lands it. One request waiting
+# alone lands as before, by `land` in its own worktree. In Thrum about eleven builders merged one at a time, each
+# running a test command of several minutes under the merge lock, so merges queued behind each other and the test
+# command ran once per builder rather than once per landing.
+# The script's own records don't queue: they land by `land` without the test command, as before.
+MERGE_QUEUE = "merge-queue"
+QUEUE_POLL_S = 0.5  # how often a waiting `merge` looks for its result, or for the queue to run
+BATCH_TREE = "_merge-batch"  # the script's checkout a batch is built and tested in, kept warm like a module's
+MERGE_TEST_TIMEOUT_S = 3600
+
+
+def queue_folder(worktree: Path) -> Path:
+    path = loop_dir(worktree) / MERGE_QUEUE
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def write_atomically(path: Path, data: dict) -> None:
+    """Writes `data` so that a reader in another process sees all of it or none of it."""
+    part = path.with_name(f".{path.name}.{os.getpid()}.part")
+    part.write_text(json.dumps(data, indent=2) + "\n")
+    os.replace(part, path)
+
+
+def read_json_file(path: Path) -> dict | None:
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def merge_setup(prof: dict) -> dict:
+    """The project settings a landing depends on. Only requests with the same ones go in a batch together."""
+    return {k: prof.get(k) for k in ("merge", "remote", "branch", "test_command", "plans")}
+
+
+def queue_merge(worktree: Path, prof: dict, check: bool, base: str) -> dict:
+    """Puts this worktree's commits in the merge queue and waits for their result: `ok`, `detail` (the landed commit,
+    or what went wrong) and, when they landed in a batch, `batch` and the files that came in. While no other `merge`
+    runs the queue, this one runs it, until its own request has a result."""
+    folder = queue_folder(worktree)
+    rid = f"{time.time_ns():020d}-{os.getpid()}"
+    branch = git(worktree, "symbolic-ref", "--quiet", "--short", "HEAD").stdout.strip()
+    write_atomically(folder / f"{rid}.json", {
+        "id": rid, "worktree": str(worktree), "branch": branch or None, "commit": head_commit(worktree),
+        "base": base or None, "check": check, "pid": os.getpid(), "at": now(), "setup": merge_setup(prof)})
+    request, answer = folder / f"{rid}.json", folder / f"{rid}.result"
+    try:
+        while True:
+            if (got := read_json_file(answer)) is not None:
+                return got
+            if not request.exists():
+                return {"ok": False, "detail": "your merge request left the queue without a result, which happens "
+                                               "only when someone removes it by hand; run merge again"}
+            handle = take_file_lock(loop_dir(worktree) / f"{MERGE_QUEUE}.lock")
+            if handle is None:
+                time.sleep(QUEUE_POLL_S)
+                continue
+            try:
+                run_queue(worktree, until=rid)
+            finally:
+                handle.close()
+    finally:
+        request.unlink(missing_ok=True)
+        answer.unlink(missing_ok=True)
+
+
+def pid_alive(pid) -> bool:
+    try:
+        os.kill(int(pid), 0)
+    except (ProcessLookupError, ValueError, TypeError):
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def waiting_requests(folder: Path) -> list[dict]:
+    """The requests in the queue that have no result yet, oldest first. A request whose `merge` has died is
+    removed, with any result it left: nobody is waiting for it, and its builder runs `merge` again."""
+    out = []
+    for path in sorted(folder.glob("*.json")):
+        req = read_json_file(path)
+        answer = path.with_suffix(".result")
+        if req is None or not pid_alive(req.get("pid")):
+            path.unlink(missing_ok=True)
+            answer.unlink(missing_ok=True)
+            continue
+        if not answer.exists():
+            out.append(req)
+    return out
+
+
+def run_queue(worktree: Path, until: str) -> None:
+    """Runs batches from the queue until the request `until` has a result. The caller holds the queue's lock. When
+    the process running this dies, the kernel drops that lock, and the next waiting `merge` takes it and runs the
+    requests still waiting."""
+    folder = queue_folder(worktree)
+    while not (folder / f"{until}.result").exists():
+        waiting = waiting_requests(folder)
+        if not waiting or until not in [r["id"] for r in waiting]:
+            return
+        setup = waiting[0]["setup"]
+        batch = [r for r in waiting if r.get("setup") == setup]
+        try:
+            results = land_requests(worktree, setup, batch)
+        except Exception as e:  # a result for each request beats waiters that loop on the same error
+            results = {r["id"]: {"ok": False, "detail": f"the merge queue failed with {type(e).__name__}: {e}. "
+                                                        "Nothing of yours landed; run merge again"} for r in batch}
+        for r in batch:
+            write_atomically(folder / f"{r['id']}.result", results.get(r["id"]) or {
+                "ok": False, "detail": "the merge queue gave no result for this request; run merge again"})
+
+
+def request_problem(req: dict) -> str | None:
+    """Why a waiting request can't land as it was asked, or None. Its worktree must still hold the commit it asked
+    with, and nothing uncommitted, because the builder waits for the result before it does anything else."""
+    tree = Path(req["worktree"])
+    if not tree.exists():
+        return f"the worktree {tree} has gone; nothing of it landed"
+    if head_commit(tree) != req.get("commit"):
+        return ("this worktree's commit changed while the merge waited in the queue, so nothing landed; run merge "
+                "again once the worktree is as you want it merged")
+    if git(tree, "status", "--porcelain").stdout.strip():
+        return ("this worktree gained uncommitted changes while the merge waited in the queue, so nothing landed; "
+                "commit, remove or ignore them and run merge again")
+    return None
+
+
+def land_requests(worktree: Path, setup: dict, batch: list[dict]) -> dict[str, dict]:
+    """The result for each request in `batch`, all with the same project settings. One request lands by `land`, as
+    a merge always did. Several land as one batch."""
+    results, ready = {}, []
+    for r in batch:
+        if problem := request_problem(r):
+            results[r["id"]] = {"ok": False, "detail": problem}
+        else:
+            ready.append(r)
+    if len(ready) == 1 and len(batch) == 1:
+        r = ready[0]
+        tree = Path(r["worktree"])
+        if Path(git(tree, "rev-parse", "--git-path", "rebase-merge").stdout.strip() or "-").exists() or \
+                Path(git(tree, "rev-parse", "--git-path", "rebase-apply").stdout.strip() or "-").exists():
+            git(tree, "rebase", "--abort")  # left by a runner that died mid-rebase
+        ok, detail = land(tree, setup, check=r["check"])
+        results[r["id"]] = {"ok": ok, "detail": detail}
+    elif ready:
+        results.update(land_batch(worktree, setup, ready))
+    return results
+
+
+def land_batch(worktree: Path, prof: dict, batch: list[dict]) -> dict[str, dict]:
+    """Lands several branches as one batch, under the merge lock: rebases each, in the order they arrived, onto a
+    checkout of the main branch's tip, leaves out any that conflict, runs the test command once on the result, and
+    pushes it or fast-forwards the main branch. When the test command fails, the batch is split in halves to find
+    the branch that broke it, and the rest land. A push the remote refuses is tried once more from a fresh tip."""
+    batch_id = time.strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}"
+    results: dict[str, dict] = {}
+    runs: list[dict] = []
+    detail = ""
+    with held("merge", worktree) as use:
+        for _ in range(2):
+            try:
+                start = tip(worktree, prof)
+                tree = verify_tree(worktree, BATCH_TREE, start)
+            except TipError as e:
+                detail = str(e)
+                break
+            final, landed = settle_batch(tree, prof, start, batch, results, runs)
+            if not landed:
+                return results
+            ok, detail, again = publish_batch(worktree, tree, prof, start, final)
+            use["exit"] = 0 if ok else 1
+            if ok:
+                names = [r.get("branch") or Path(r["worktree"]).name for r, _, _ in landed]
+                for place, (r, prior, head) in enumerate(landed, 1):
+                    results[r["id"]] = {
+                        "ok": True, "detail": final,
+                        "batch": {"id": batch_id, "landed": names, "your_place": place, "test_runs": len(runs),
+                                  "note": batch_note(batch_id, place, names, len(runs), prof)},
+                        **batch_upstream(tree, r, prior, head, final)}
+                return results
+            for r, _, _ in landed:
+                results.pop(r["id"], None)
+            batch = [r for r, _, _ in landed]
+            if not again:
+                break
+    for r in batch:
+        results.setdefault(r["id"], {"ok": False, "detail": f"{detail}. Nothing of yours landed; run merge again"
+                                     if detail else "nothing of yours landed; run merge again"})
+    return results
+
+
+def batch_note(batch_id: str, place: int, names: list[str], test_runs: int, prof: dict) -> str:
+    others = len(names) - 1
+    tested = (f"the test command ran {plural(test_runs, 'time')} for the batch" if test_runs else
+              "the test command didn't run, because no branch in the batch asked for it" if prof.get("test_command")
+              else "the project has no test command")
+    return (f"Your work landed in batch {batch_id}, number {place} of {len(names)} in the order the branches arrived"
+            + (f", with {others} other branch{'' if others == 1 else 'es'}" if others else "") + f"; {tested}.")
+
+
+def settle_batch(tree: Path, prof: dict, base: str, group: list[dict], results: dict, runs: list,
+                 failed: dict | None = None) -> tuple[str, list[tuple[dict, str, str]]]:
+    """Builds `group` on `base` in `tree` and keeps what passes the test command. Returns the new base and, for each
+    request kept, (request, the commit before its own, its last commit). A request that conflicts, or that alone
+    fails the test command, gets its result in `results`. `failed` is the test run already known to fail on this
+    same group, which isn't run again."""
+    built = build_batch(tree, base, group, results)
+    if not built:
+        return base, []
+    if failed is not None and len(built) != len(group):
+        failed = None  # a branch dropped out on the way, so this isn't the candidate that failed
+    command = prof.get("test_command")
+    if not command or not any(r["check"] for r, _, _ in built):
+        return built[-1][2], built
+    if failed is None:
+        loop_note(step=f"testing a merge batch of {len(built)} branch{'' if len(built) == 1 else 'es'}")
+        r = run_check(tree, command, None, MERGE_TEST_TIMEOUT_S, prof.get("plans"))
+        if not r["reused"]:
+            runs.append(r)
+        if r["exit"] == 0:
+            return built[-1][2], built
+        failed = r
+    if len(built) == 1:
+        req = built[0][0]
+        whole = f" Its whole output is in {failed['stdout']} and {failed['stderr']}." if failed.get("stdout") else ""
+        results[req["id"]] = {"ok": False, "detail": (
+            f"Test command `{command}` exited {failed['exit']} with your branch on top of the main branch's tip and "
+            f"the branches ahead of it in the merge queue, and passed without it, so nothing of yours landed.{whole} "
+            f"The end of its stdout: {failed['out'][-400:]} The end of its stderr: {failed['err'][-400:]}")}
+        return base, []
+    group = [r for r, _, _ in built]
+    half = len(group) // 2
+    middle, kept_first = settle_batch(tree, prof, base, group[:half], results, runs)
+    # When the whole first half landed, the second half on top of it is the candidate that already failed.
+    after, kept_rest = settle_batch(tree, prof, middle, group[half:], results, runs,
+                                    failed if len(kept_first) == half else None)
+    return after, kept_first + kept_rest
+
+
+def build_batch(tree: Path, base: str, group: list[dict], results: dict) -> list[tuple[dict, str, str]]:
+    """Rebases each request's commits onto `base` in `tree`, one on top of the other in the order given. A request
+    that conflicts is left out, with the files it conflicts in named in its result."""
+    git(tree, "rebase", "--abort")  # a rebase left by a runner that died mid-batch; nothing to abort is harmless
+    git(tree, "checkout", "--quiet", "--force", "--detach", base)
+    git(tree, "clean", "-ffdq")
+    built = []
+    for r in group:
+        prior = head_commit(tree)
+        start = git(tree, "merge-base", prior, r["commit"]).stdout.strip()
+        rb = git(tree, *ident(tree), "rebase", "--quiet", "--onto", prior, start, r["commit"])
+        if rb.returncode != 0:
+            files = git(tree, "diff", "--name-only", "--diff-filter=U").stdout.split()
+            git(tree, "rebase", "--abort")
+            git(tree, "checkout", "--quiet", "--force", "--detach", prior)
+            git(tree, "clean", "-ffdq")
+            results[r["id"]] = {"ok": False, "conflicts": files, "detail": (
+                (f"Your branch conflicts in {', '.join(files)} with the main branch's tip and the branches ahead of "
+                 "it in the merge queue, which landed before this result was written. " if files else
+                 f"Your branch couldn't be rebased onto the main branch's tip: {(rb.stdout + rb.stderr).strip()[-400:]} ")
+                + "Nothing of yours landed. Fetch, rebase onto the main branch, resolve the conflicts, commit, and "
+                  "run merge again")}
+            continue
+        built.append((r, prior, head_commit(tree)))
+    return built
+
+
+def publish_batch(worktree: Path, tree: Path, prof: dict, start: str, final: str) -> tuple[bool, str, bool]:
+    """Pushes `final` (Merge: push) or fast-forwards the local main branch to it (Merge: local), from `start`, as
+    `land` does. Returns (ok, the problem, whether trying again from a fresh tip could help)."""
+    if prof["merge"] == "push":
+        p = git(tree, "push", "--quiet", prof["remote"], f"{final}:refs/heads/{prof['branch']}")
+        if p.returncode == 0:
+            git(worktree, "update-ref", f"refs/remotes/{prof['remote']}/{prof['branch']}", final)
+            return True, "", False
+        return False, f"push rejected: {p.stderr.strip()[-300:]}", True
+    old = git(worktree, "rev-parse", f"refs/heads/{prof['branch']}").stdout.strip()
+    if old != start:
+        return False, f"{prof['branch']} moved while the batch was tested", True
+    holder = holder_of(worktree, prof["branch"])
+    if holder is None:
+        u = git(worktree, "update-ref", f"refs/heads/{prof['branch']}", final, old)
+        return (True, "", False) if u.returncode == 0 else \
+            (False, f"{prof['branch']} moved: {u.stderr.strip()[-200:]}", True)
+    m = git(holder, "merge", "--ff-only", "--quiet", final)
+    if m.returncode == 0:
+        return True, "", False
+    return False, (f"couldn't fast-forward {prof['branch']} in {holder}, which has it checked out: "
+                   f"{(m.stdout + m.stderr).strip()[-300:]}"), False
+
+
+def batch_upstream(tree: Path, req: dict, prior: str, head: str, final: str) -> dict:
+    """What `upstream_changes` says for a branch that landed in a batch: the files that came in from others, both
+    those on the main branch since the branch's base and those of the branches that landed after it in the batch."""
+    old_base = req.get("base")
+    if not old_base or prior == head:
+        return {}
+    paths = sorted(set(git(tree, "diff", "--name-only", old_base, prior).stdout.split()) |
+                   set(git(tree, "diff", "--name-only", head, final).stdout.split()))
+    if not paths:
+        return {"upstream": "nothing came in besides your own work: the main branch hadn't moved, and the other "
+                            "branches in the batch changed no files"}
+    shown = paths[:60]
+    return {"upstream": f"{len(paths)} changed files came in with this merge, from the main branch since "
+                        f"{old_base[:12]} and from the other branches in the batch; the script runs "
+                        "every check on the merged tip after your turn, so take again only the captures for "
+                        "inspected items that these could change",
             "upstream_files": shown + ([f"... and {len(paths) - len(shown)} more"] if len(paths) > len(shown) else [])}
 
 
@@ -10359,7 +10696,8 @@ def build_parser() -> argparse.ArgumentParser:
                       help="what the planner is to do; give it more than once to add your own words to a printed command")
     host_args(plan)
     plan.set_defaults(func=cmd_plan)
-    merge_p = sub.add_parser("merge", help="rebase, run the test command and merge, under the merge lock")
+    merge_p = sub.add_parser("merge", help="queue this worktree's commits to be rebased, tested with the test "
+                                           "command and merged, alone or in a batch with other waiting branches")
     merge_p.add_argument("--worktree", default=".")
     merge_p.add_argument("--no-check", action="store_true", help="skip the test command")
     merge_p.set_defaults(func=cmd_merge)
