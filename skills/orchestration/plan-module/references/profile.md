@@ -57,7 +57,9 @@ needs, where secrets come from, and how two worktrees avoid sharing a port or a 
 | <cli> | <the built binary> | <`cargo run -- …`> | <transcript and exit code> | <bad arguments, piped input, Ctrl-C> |
 
 ## Rules
-- **Exclusive resources:** <things only one run at a time may use, such as "simulator" or "gpu: timing runs"; or none>
+- **Exclusive resources:** <things only one run at a time may use, such as "simulator"; or none>
+- **Shared resources:** <resources several runs may use at once, each with how many, such as "gpu: 3"; or none>  *(script: `lock gpu` shares it up to that number, and `lock gpu.alone` waits to have it alone, for timing and realtime captures)*
+- **Lock hold limit:** 30 minutes  *(script: the default; a command under `lock`, or a locked check, that holds a lock longer is stopped; or none)*
 - **Checks on the main branch:** <slow checks that run on the main branch after merges rather than before each one, how often, and who acts on a failure; or none>
 - **Large captures:** <where frame sequences and other bulky evidence go if they aren't committed, and how a reviewer gets them>
 - **Human decides:** <for example: changing the goal; spending; publishing or deploying; anything that can't be undone>  *(script: sent again on resumed turns)*
