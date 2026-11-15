@@ -4938,7 +4938,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.2.4"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.2.5"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -4967,6 +4967,10 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.2.5": [
+        "A planner whose LOG.md entry runs past eight lines, or whose PLAN.md fails the plan checks, is now told before "
+        "its turn ends and shortens it itself, so `plan` no longer refuses the turn and stashes the plan for that.",
+    ],
     "2.2.4": [
         "Every command now ends with a JSON result and an exit status: 0 for its own result, 2 for ERROR when the "
         "command line was refused (with `usage` and a suggestion for a misspelt command or flag), 1 for ERROR when a "
@@ -7470,7 +7474,7 @@ def cmd_review(a: argparse.Namespace) -> None:
     emit(result, **out)
 
 
-def plan_owed(worktree: Path, start: str, message: str) -> str | None:
+def plan_owed(worktree: Path, start: str, message: str, checks: bool = True) -> str | None:
     """None when the planner's turn ended with a result: BLOCKED or NEEDS_CONTEXT, or `PLANNED` after changing
     files, with a design beside every done-when file it changed. Otherwise what's missing, for the nudge. A progress
     report isn't a result. The script finds the changed files itself and prints them in its result, so the planner's
@@ -7491,6 +7495,9 @@ def plan_owed(worktree: Path, start: str, message: str) -> str | None:
     gaps += [f"{p} has no design at {design_rel(prof, where[0])}" for p in changed
              if (where := module_of(prof, p)) and where[1] == "done" and (worktree / p).exists()
              and not (worktree / design_rel(prof, where[0])).exists()]
+    # The checks `plan` runs before it merges, asked here while the planner can still fix them: a LOG.md entry over
+    # the limit used to be refused after the turn, stashed, and left for someone to shorten by hand.
+    gaps += plan_checks(worktree, prof, changed) if checks else []
     if not changed:
         gaps.insert(0, "no file has changed")
     return None if not gaps else "The plan isn't complete: " + "; ".join(gaps) + \
@@ -7666,6 +7673,11 @@ def cmd_plan(a: argparse.Namespace) -> None:
     word = report_word(out.get("report", ""))
     if result == "FINISHED" and word in ("BLOCKED", "NEEDS_CONTEXT"):
         result = word
+    if result == "UNFINISHED" and plan_owed(tree, start, out.get("report", ""), checks=False) is None:
+        # Only the plan checks were still owed after the nudges: the checks below refuse it as INVALID, with the
+        # problems and a planner's `next`, as they did before planners were nudged about them.
+        result = "FINISHED"
+        out.pop("owed", None)
     if result != "FINISHED":  # a progress report, a blocker or a host failure: nothing merges
         emit(result, **info, **out, merged=False, **leave())
     try:

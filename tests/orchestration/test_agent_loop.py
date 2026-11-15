@@ -1700,9 +1700,9 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')
@@ -5729,6 +5729,18 @@ class CommandLine(Repo):
                               "`build/water`), shot (`docs/evidence/WATER/M1-shot.png` on branch `build/water`), plan "
                               "(`docs/plans/WATER/PLAN.md` on branch `build/water`), [site](https://example.com/x) "
                               "and [top](#m1).")
+
+
+class PlannerNudges(Repo):
+    def test_a_planner_is_asked_to_shorten_a_long_log_entry_before_its_turn_ends(self):
+        start = agent_loop.head_commit(self.wt)
+        (self.wt / "docs/plans/WATER/LOG.md").write_text(
+            "# WATER log\n\n- 2026-11-15 Planner: a long entry\n" + "  more detail\n" * 9)
+        owed = agent_loop.plan_owed(self.wt, start, "Done.\n\nPLANNED")
+        self.assertIn("longer than 8 lines", owed)
+        self.assertTrue(owed.endswith("end with `PLANNED`."))
+        (self.wt / "docs/plans/WATER/LOG.md").write_text("# WATER log\n\n- 2026-11-15 Planner: short.\n")
+        self.assertIsNone(agent_loop.plan_owed(self.wt, start, "Done.\n\nPLANNED"))
 
 
 def _with_func(parser, command, func):

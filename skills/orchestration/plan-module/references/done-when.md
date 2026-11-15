@@ -142,8 +142,8 @@ file grows until no builder reads all of it.
 
 The log is the module's history: decisions, proposals to change an interface, what a failed review found, and
 what the human said. Each entry is one dated line, with at most a few lines under it, and the newest at the
-bottom. Longer detail goes in `docs/evidence/<MODULE>/` with a link. The script warns about an entry over eight
-lines. Nobody reads the log to find out where the module stands, so it may grow.
+bottom. Longer detail goes in `docs/evidence/<MODULE>/` with a link. `plan` and `adopt` refuse an entry of more than
+eight lines, counting its dated line, and a planner is told to shorten one before its turn ends. Nobody reads the log to find out where the module stands, so it may grow.
 
 ```markdown
 - 2026-11-03 M2: review failed on the empty state; fixed, and the second review passed.

@@ -60,9 +60,10 @@ keeps the project's records. Run them as `python3 <the build skill's folder>/scr
    the milestone to Ready for Review, which means your work is finished and checked and waits for a reviewer. A
    milestone that needs no reviewer goes straight to Done.
 3. `LOG.md` has an entry of a few lines saying what you did, with what you verified kept apart from what you think is
-   probably true. Longer notes go in the module's evidence folder, linked from the entry. Leave status out of the plan
-   file. The script writes the human's page, `STATUS.md`, from the done-when file, and a status line anywhere else is
-   out of date the next time a milestone moves.
+   probably true. Keep it to eight lines at most, because the script refuses a longer entry when the plan files
+   merge. Longer notes go in the module's evidence folder, linked from the entry. Leave status out of the plan file.
+   The script writes the human's page, `STATUS.md`, from the done-when file, and a status line anywhere else is out
+   of date the next time a milestone moves.
 4. Your last line is `DONE`, or `BLOCKED <reason>: <what would unblock it>`, or `NEEDS_CONTEXT: <what is
    missing>`. The reason is one of `needs_human_feedback`, `needs_access`, `needs_hardware` or `needs_dependency`,
    and the sections below say when each applies. When none of them fits, such as an approach that can't work,
