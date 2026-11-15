@@ -5901,7 +5901,8 @@ class MergeQueue(Repo):
         runner.wait()
         results = [json.loads(p.communicate(timeout=120)[0].splitlines()[-1]) for p in waiting]
         self.assertEqual([r["result"] for r in results], ["MERGED", "MERGED"], results)
-        self.assertEqual(results[0]["batch"]["landed"], ["build/b", "build/c"])
+        # b and c start a moment apart, so either may queue first
+        self.assertEqual(sorted(results[0]["batch"]["landed"]), ["build/b", "build/c"])
         self.assertFalse(self.landed("a.txt"))  # a's merge died, so its request went with it
         self.assertEqual(list(self.queue().iterdir()), [])
 
