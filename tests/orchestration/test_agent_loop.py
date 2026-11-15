@@ -5458,6 +5458,151 @@ class MergeUpstream(Clean):
             self.assertEqual(result["upstream_files"], ["camera.rs"])
 
 
+class MergeQueue(Repo):
+    """`merge` as a queue: branches waiting together land as one batch with one run of the test command. The merges
+    run as builders run them, each in its own process; the test holds the queue's lock until every request is in, so
+    the batch is the one it means to build."""
+
+    def use_test_command(self, command):
+        (self.wt / "ORCHESTRATE.md").write_text(PROFILE.replace("none", f"`{command}`"))
+        self.git("commit", "-qam", "test command")
+        self.git("push", "-q", "origin", "main")
+
+    def builder(self, name, files):
+        """A builder's worktree on its own branch from the main branch's tip, with one commit of `files`."""
+        where = self.root / f"builder-{name}"
+        self.git("worktree", "add", "-q", "-b", f"build/{name}", str(where), "origin/main")
+        for path, text in files.items():
+            put(where / path, text)
+        self.git("add", "-A", where=where)
+        self.git("commit", "-qm", f"{name}'s work", where=where)
+        return where
+
+    def queue(self):
+        return agent_loop.loop_dir(self.wt) / agent_loop.MERGE_QUEUE
+
+    def start(self, where, **popen):
+        proc = subprocess.Popen([sys.executable, str(SCRIPTS / "agent_loop.py"), "merge", "--worktree", str(where)],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **popen)
+        self.addCleanup(lambda: proc.poll() is None and (proc.kill(), proc.wait()))
+        return proc
+
+    def wait_for(self, test, what):
+        deadline = time.time() + 30
+        while not test():
+            self.assertLess(time.time(), deadline, f"timed out waiting for {what}")
+            time.sleep(0.05)
+
+    def batch_of(self, *trees):
+        """Starts a merge in each tree, in order, while the queue's lock is held, then lets them run. Returns each
+        merge's result."""
+        lock = agent_loop.take_file_lock(agent_loop.loop_dir(self.wt) / f"{agent_loop.MERGE_QUEUE}.lock")
+        procs = []
+        try:
+            for n, where in enumerate(trees, 1):
+                procs.append(self.start(where))
+                self.wait_for(lambda: len(list(self.queue().glob("*.json"))) == n, f"request {n}")
+        finally:
+            lock.close()
+        results = []
+        for p in procs:
+            out, err = p.communicate(timeout=120)
+            self.assertTrue(out.strip(), err)
+            results.append(json.loads(out.splitlines()[-1]))
+        return results
+
+    def landed(self, path):
+        self.git("fetch", "-q", "origin")
+        return subprocess.run(["git", "-C", str(self.wt), "cat-file", "-e", f"origin/main:{path}"],
+                              capture_output=True).returncode == 0
+
+    def test_three_waiting_branches_land_as_one_batch_with_one_test_run(self):
+        count = self.root / "count"
+        self.use_test_command(f"echo x >> {count}")
+        trees = [self.builder(n, {f"{n}.txt": n}) for n in ("a", "b", "c")]
+        results = self.batch_of(*trees)
+        self.assertEqual([r["result"] for r in results], ["MERGED"] * 3, results)
+        self.assertEqual(count.read_text(), "x\n")  # the test command ran once, for the batch
+        batches = {r["batch"]["id"] for r in results}
+        self.assertEqual(len(batches), 1)
+        self.assertEqual(results[0]["batch"]["landed"], ["build/a", "build/b", "build/c"])  # in arrival order
+        self.assertEqual([r["batch"]["your_place"] for r in results], [1, 2, 3])
+        self.assertEqual(results[0]["batch"]["test_runs"], 1)
+        self.assertIn("number 1 of 3", results[0]["batch"]["note"])
+        tip = self.git("ls-remote", "origin", "refs/heads/main").stdout.split()[0]
+        for r, where in zip(results, trees):
+            self.assertEqual((r["detail"], r["commit"], agent_loop.head_commit(where)), (tip, tip, tip))
+        self.assertTrue(all(self.landed(f"{n}.txt") for n in "abc"))
+        # each builder is told what came in with its merge: the branches before its own and after it
+        self.assertEqual(results[0]["upstream_files"], ["b.txt", "c.txt"])
+        self.assertEqual(results[1]["upstream_files"], ["a.txt", "c.txt"])
+        self.assertEqual(results[2]["upstream_files"], ["a.txt", "b.txt"])
+        self.assertEqual(list(self.queue().iterdir()), [])  # nothing left in the queue
+
+    def test_a_branch_that_conflicts_is_left_out_with_its_files_named(self):
+        count = self.root / "count"
+        self.use_test_command(f"echo x >> {count}")
+        trees = [self.builder("a", {"shared.txt": "a\n"}), self.builder("b", {"shared.txt": "b\n", "b.txt": "b"}),
+                 self.builder("c", {"c.txt": "c"})]
+        before_b = agent_loop.head_commit(trees[1])
+        a, b, c = self.batch_of(*trees)
+        self.assertEqual((a["result"], b["result"], c["result"]), ("MERGED", "FAILED", "MERGED"), (a, b, c))
+        self.assertEqual(b["conflicts"], ["shared.txt"])
+        self.assertIn("conflicts in shared.txt", b["detail"])
+        self.assertEqual(a["batch"]["landed"], ["build/a", "build/c"])
+        self.assertEqual(count.read_text(), "x\n")
+        self.assertEqual(agent_loop.head_commit(trees[1]), before_b)  # b's worktree is as it was
+        self.assertFalse(self.landed("b.txt"))
+        self.assertTrue(self.landed("c.txt"))
+
+    def test_a_branch_that_fails_the_test_command_is_found_by_splitting_and_the_rest_land(self):
+        self.use_test_command("if [ -f broken ]; then echo 'thread main panicked' >&2; exit 3; fi")
+        trees = [self.builder("a", {"a.txt": "a"}), self.builder("b", {"broken": "x"}),
+                 self.builder("c", {"c.txt": "c"})]
+        a, b, c = self.batch_of(*trees)
+        self.assertEqual((a["result"], b["result"], c["result"]), ("MERGED", "FAILED", "MERGED"), (a, b, c))
+        self.assertIn("exited 3", b["detail"])
+        self.assertIn("thread main panicked", b["detail"])
+        self.assertNotIn("conflicts", b)
+        self.assertEqual(a["batch"]["landed"], ["build/a", "build/c"])
+        self.assertEqual(a["batch"]["test_runs"], 4)  # all three, a alone, b on a, c on a
+        self.assertTrue(self.landed("a.txt") and self.landed("c.txt"))
+        self.assertFalse(self.landed("broken"))
+
+    def test_one_waiting_branch_lands_from_its_own_worktree_as_before(self):
+        count = self.root / "count"
+        self.use_test_command(f"pwd >> {count}")
+        where = self.builder("a", {"a.txt": "a"})
+        put(self.wt / "camera.rs", "moved")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "another module")
+        self.git("push", "-q", "origin", "main")
+        out, err = self.start(where).communicate(timeout=120)
+        result = json.loads(out.splitlines()[-1])
+        self.assertEqual(result["result"], "MERGED", err)
+        self.assertNotIn("batch", result)
+        self.assertEqual(Path(count.read_text().strip()).resolve(), where.resolve())  # tested in its own worktree
+        self.assertEqual(result["upstream_files"], ["camera.rs"])
+        self.assertEqual(result["commit"], agent_loop.head_commit(where))
+        self.assertTrue(self.landed("a.txt"))
+
+    def test_the_queue_outlives_a_merge_that_dies_while_running_it(self):
+        started = self.root / "started"
+        self.use_test_command(f"if [ -f a.txt ]; then touch {started}; sleep 60; fi")
+        a, b, c = (self.builder(n, {f"{n}.txt": n}) for n in "abc")
+        runner = self.start(a, start_new_session=True)
+        self.wait_for(started.exists, "a's test command")  # a runs the queue, and holds it while its test runs
+        waiting = [self.start(b), self.start(c)]
+        self.wait_for(lambda: len(list(self.queue().glob("*.json"))) == 3, "b's and c's requests")
+        os.killpg(runner.pid, signal.SIGKILL)
+        runner.wait()
+        results = [json.loads(p.communicate(timeout=120)[0].splitlines()[-1]) for p in waiting]
+        self.assertEqual([r["result"] for r in results], ["MERGED", "MERGED"], results)
+        self.assertEqual(results[0]["batch"]["landed"], ["build/b", "build/c"])
+        self.assertFalse(self.landed("a.txt"))  # a's merge died, so its request went with it
+        self.assertEqual(list(self.queue().iterdir()), [])
+
+
 class Versions(Clean):
     def test_the_script_version_matches_the_marketplace(self):
         market = json.loads((SCRIPTS.parents[3] / ".claude-plugin/marketplace.json").read_text())
