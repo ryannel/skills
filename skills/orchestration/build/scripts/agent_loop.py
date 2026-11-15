@@ -439,6 +439,11 @@ BLOCK_REASONS = ("needs_human_feedback", "needs_access", "needs_hardware", "need
 # What an item needs that a builder can't do alone: its `needs` object, {"type", "what"}.
 NEEDS_TYPES = ("human_feedback", "access", "hardware")
 DEFINITION_KEYS = ("statement", "check", "inspect", "ask", "target", "lock", "needs")
+# Fields that say how an item's check runs rather than what it proves. They are part of the definitions hash, so a
+# builder can't change them, but a planner or the human changing only these keeps the milestone's progress and owes no
+# design review: in Thrum, moving about 77 timing items to a quiet lock would otherwise have reset them all and sent a
+# dozen modules back for design review. `reads` is hashed only where an item has it, so older hashes still match.
+RUN_KEYS = ("lock", "reads")
 TEXT_KEYS = ("statement", "check", "inspect", "ask", "target", "lock", "evidence", "review")
 NEED = re.compile(r"^(?:([A-Za-z0-9_.-]+):)?([A-Za-z0-9_.-]+)$")  # "M2" in this module, or "CORE:M3"
 TRAILER = "Orchestrate-Script: yes"
@@ -997,7 +1002,7 @@ def merged_done(tip_text: str, builder_text: str) -> str:
             items = {i.get("id"): i for i in b.get("items") or []}
             for item in m.get("items") or []:
                 old = items.get(item.get("id"))
-                same = old and all(old.get(k) == item.get(k) for k in DEFINITION_KEYS)
+                same = old and all(old.get(k) == item.get(k) for k in DEFINITION_KEYS if k not in RUN_KEYS)
                 if same and item.get("builder_result", "open") == "open" and not item.get("evidence"):
                     item.update({k: old[k] for k in ITEM_PROOF if k in old})
         return json.dumps(tip_doc, indent=2) + "\n"
@@ -1451,9 +1456,23 @@ def definitions(milestone: dict) -> str:
     `bar` for the quality bar, renamed in 2.2), so
     a milestone that uses neither hashes as it always did, and only those that do are re-stamped by `migrate`."""
     spec = {"bar": milestone.get("quality_bar"), "needs": milestone.get("depends_on") or [],
-            "items": [{**{k: i.get(k) for k in DEFINITION_KEYS if k != "needs"}, "attended": i.get("needs")}
+            "items": [{**{k: i.get(k) for k in DEFINITION_KEYS if k != "needs"}, "attended": i.get("needs"),
+                       **({"reads": i["reads"]} if "reads" in i else {})}
                       for i in milestone["items"]]}
     return hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
+
+
+def run_free_definitions(milestone: dict) -> str:
+    """The definitions hash with the fields in RUN_KEYS left out: what the milestone asks for, whatever lock its checks
+    take or files they name."""
+    return definitions({**milestone, "items": [{k: v for k, v in i.items() if k not in RUN_KEYS}
+                                               for i in milestone.get("items") or []]})
+
+
+def relabel_only(before: dict | None, after: dict, entry: dict | None) -> bool:
+    """Whether `after` differs from the authorised `before` only in the fields in RUN_KEYS."""
+    return bool(before and entry) and entry.get("definitions") == definitions(before) and \
+        definitions(before) != definitions(after) and run_free_definitions(before) == run_free_definitions(after)
 
 
 # ------------------------------------------------------------------------------------------------- names before 2.0
@@ -1654,7 +1673,8 @@ def changed_items(before: dict, after: dict) -> list[str]:
         ms, items = {}, {}
         for m in doc.get("milestones") or []:
             ms[m.get("id")] = (m.get("quality_bar"), m.get("depends_on") or [])
-            items[m.get("id")] = {i.get("id"): {k: i.get(k) for k in DEFINITION_KEYS} for i in m.get("items") or []}
+            items[m.get("id")] = {i.get("id"): {k: i.get(k) for k in DEFINITION_KEYS if k not in RUN_KEYS}
+                                  for i in m.get("items") or []}
         return ms, items
     (old_ms, old_items), (new_ms, new_items) = index(before), index(after)
     out = []
@@ -2339,8 +2359,8 @@ def settle_replanned(before: dict | None, after: dict, stem: str) -> list[str]:
         was = old.get(m.get("id"))
         if not was or escalation_of(was) != "diagnosis":
             continue
-        if definitions(was) == definitions(m):
-            continue  # nothing re-planned yet: still owed
+        if run_free_definitions(was) == run_free_definitions(m):
+            continue  # nothing re-planned yet (a changed lock isn't a re-plan): still owed
         m.update(failed_reviews=0, failed_reviews_with_repeat=0, diagnoses=int(was.get("diagnoses", 0) or 0) + 1,
                  status="not_started")
         m.pop("blocked", None)
@@ -7828,7 +7848,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
             keep_counts(was, doc, settled, stem)
             replanned.extend(settled)
             # the stamp names the task; the whole of it is kept once, under `briefs`
-            authorise_doc(doc, record, {"by": "plan", "task": a.task.splitlines()[0][:120], "at": now()})
+            authorise_doc(doc, record, {"by": "plan", "task": a.task.splitlines()[0][:120], "at": now()}, before=was)
             # every planner task, whole, where design reviewers and later planners are pointed to read the ask
             record.setdefault("briefs", []).append({"task": a.task, "at": now()})
             record["planner"] = {"host": host, "at": now()}  # who wrote the plan, so its design review goes elsewhere
@@ -9328,12 +9348,18 @@ def land_status(worktree: Path, prof: dict, name: str, tree: Path | None = None)
     print(f"note: STATUS.md wasn't updated ({why[:300]}); the next record the script merges writes it", file=sys.stderr)
 
 
-def authorise_doc(doc: dict, record: dict, stamp: dict) -> None:
+def authorise_doc(doc: dict, record: dict, stamp: dict, before: dict | None = None) -> None:
     """Records `doc`'s definitions as authorised in `record`. A milestone whose definitions changed loses its proof,
-    since that proof proved something else, and goes back to not_started."""
+    since that proof proved something else, and goes back to not_started. One that changed from `before`, the
+    authorised document, only in how its checks run (RUN_KEYS) keeps its status and proof, and the change is noted."""
+    old = {m.get("id"): m for m in (before or {}).get("milestones") or [] if isinstance(m, dict)}
     for m in doc["milestones"]:
         e = record["milestones"].get(m["id"])
         if e and e.get("definitions") == definitions(m):
+            continue
+        if relabel_only(old.get(m["id"]), m, e):
+            e["definitions"] = definitions(m)
+            e.setdefault("run_changes", []).append(stamp)
             continue
         if e:
             reset_proof(m)
@@ -9348,9 +9374,10 @@ def authorise_doc(doc: dict, record: dict, stamp: dict) -> None:
 
 
 def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[str]) -> tuple[list[str], list[str],
-                                                                                              dict | None]:
-    """(why these files can't merge as they stand, the modules whose changed definitions adopt will authorise, and a
-    `next` for a refusal that has one). Refused: files adopt doesn't merge, a done-when file that's invalid or grants
+                                                                                              dict | None, set]:
+    """(why these files can't merge as they stand, the modules whose changed definitions adopt will authorise, a
+    `next` for a refusal that has one, and those of the modules whose only change is how checks run, which adopt
+    authorises whether or not they're still a draft). Refused: files adopt doesn't merge, a done-when file that's invalid or grants
     what a plan can't, a file the tip changed since this worktree's copy was made (merging it would undo that
     change), changed definitions on a module where building has begun, and anything `ready` would then call
     invalid. While nothing has been built on a module, adopt is how an in-chat planner's changes merge, so it
@@ -9360,7 +9387,7 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
     proj = project(worktree, prof, ref)
     sync_holds(worktree, prof)
     held = holds(worktree)
-    authorise, adopted, refusal = [], [], None
+    authorise, adopted, refusal, run_only = [], [], None, set()
     for p in paths:
         if adoptable(prof, worktree, ref, p):
             continue
@@ -9395,7 +9422,13 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
             entry_["record"] = adopt(doc, entry_["design"], unrecorded(worktree, prof, ref))  # as `ready` will
         else:
             record = json.loads(rec_text)
-            changed = [m["id"] for m in doc["milestones"] if not authorised(m, record)]
+            try:
+                was = {m.get("id"): m for m in (json.loads(before) if before else {}).get("milestones") or []}
+            except json.JSONDecodeError:
+                was = {}
+            relabelled = [m["id"] for m in doc["milestones"]
+                          if relabel_only(was.get(m["id"]), m, record.get("milestones", {}).get(m["id"]))]
+            changed = [m["id"] for m in doc["milestones"] if not authorised(m, record) and m["id"] not in relabelled]
             changed += [mid for mid in record.get("milestones", {}) if mid not in {m["id"] for m in doc["milestones"]}]
             closed = draft_closed(worktree, prof, json.loads(before) if before else {}, record, key) \
                 if changed else None
@@ -9408,9 +9441,12 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
                                    "them, or the human takes the edited file as the new scope",
                                    human=human_cmd("scope", stem, changed[0], str(worktree)))
                 continue
-            if changed:
+            if changed or relabelled:
                 authorise.append(stem)
-                authorise_doc(entry_["doc"], record, {"by": "adopt", "why": ADOPT_WHY})
+                if not changed:
+                    run_only.add(stem)
+                authorise_doc(entry_["doc"], record, {"by": "adopt", "why": ADOPT_WHY},
+                              before={"milestones": list(was.values())})
             entry_["record"] = record
         proj[key] = entry_
         adopted.append(key)
@@ -9421,7 +9457,7 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
             step = next_step(key, proj, held, me(worktree))
             if step["status"] == "invalid":
                 problems += [f"{proj[key]['stem']}: {x}" for x in step.get("problems") or []]
-    return problems, authorise, refusal
+    return problems, authorise, refusal, run_only
 
 
 def cmd_adopt(a: argparse.Namespace) -> None:
@@ -9460,7 +9496,7 @@ def cmd_adopt(a: argparse.Namespace) -> None:
                   **profile_note(drift, prof),
                   next=next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", "see what's ready"))
     base = git(worktree, "merge-base", "HEAD", ref).stdout.strip()
-    found, authorise, refusal = adopt_problems(worktree, prof, ref, base, paths)
+    found, authorise, refusal, run_only = adopt_problems(worktree, prof, ref, base, paths)
     problems += found
     # Hold each module whose definitions adopt will authorise, so no run here starts on it while this merges; the
     # merging re-checks the records too, for a milestone set Ready for Review from another clone meanwhile.
@@ -9479,7 +9515,7 @@ def cmd_adopt(a: argparse.Namespace) -> None:
             rec_path, doc_path = tree / record_rel(prof, stem), tree / done_rel(prof, stem)
             record = json.loads(rec_path.read_text()) if rec_path.exists() else {}
             doc = json.loads(doc_path.read_text()) if doc_path.exists() else {}
-            if why := draft_closed(worktree, prof, doc, record, stem.upper()):
+            if stem not in run_only and (why := draft_closed(worktree, prof, doc, record, stem.upper())):
                 raise AdoptRace(f"{stem}: {why} since adopt checked it")
 
     # The files as they are here, merged through a clean checkout of the tip, as the script merges its own records,
@@ -9521,7 +9557,12 @@ def cmd_adopt(a: argparse.Namespace) -> None:
         for stem in authorise:
             doc = json.loads((tree / done_rel(prof, stem)).read_text())
             record = json.loads((tree / record_rel(prof, stem)).read_text())
-            authorise_doc(doc, record, {"by": "adopt", "why": ADOPT_WHY, "files": paths[:20], "at": now()})
+            try:
+                tip_doc = json.loads(file_at(worktree, ref, done_rel(prof, stem)) or "null")
+            except json.JSONDecodeError:
+                tip_doc = None
+            authorise_doc(doc, record, {"by": "adopt", "why": ADOPT_WHY, "files": paths[:20], "at": now()},
+                          before=tip_doc)
             record.pop("planner", None)  # these definitions came from outside a planner turn
             write_json(tree / done_rel(prof, stem), doc)
             write_json(tree / record_rel(prof, stem), record)
@@ -9700,6 +9741,18 @@ def cmd_human(a: argparse.Namespace) -> None:
                 was = old.get(m["id"])
                 if was is not None and definitions(was) == definitions(m):
                     merged.append(was)  # unchanged: keep the progress recorded at the tip
+                    continue
+                e = record["milestones"].get(m["id"]) or {}
+                if relabel_only(was, m, e):  # only how its checks run changed: keep the progress, take the new fields
+                    kept = copy.deepcopy(was)
+                    for item, new in zip(kept["items"], m["items"]):
+                        for k in RUN_KEYS:
+                            item.pop(k, None)
+                            if k in new:
+                                item[k] = new[k]
+                    e["definitions"] = definitions(kept)
+                    e.setdefault("run_changes", []).append(stamp)
+                    merged.append(kept)
                     continue
                 m = copy.deepcopy(m)
                 reset_proof(m)

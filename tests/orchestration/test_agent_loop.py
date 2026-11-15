@@ -3898,6 +3898,36 @@ class FirstRuns(Repo):
         self.assertEqual(refused["result"], "REFUSED", refused)
         self.assertIn("a design review of it has passed, so they're no longer a draft", refused["problems"][0])
 
+    def test_a_lock_change_keeps_progress_and_owes_no_design_review(self):
+        self.write_done([milestone("M1", "in_progress", ["pass", "open"]), milestone("M2", "not_started", ["open"])])
+        self.commit_all()
+        rec = self.read_record()
+        self.assertTrue(agent_loop.design_passed(rec))
+        doc = self.read_done("HEAD")
+        doc["milestones"][0]["items"][0]["lock"] = "gpu"
+        doc["milestones"][0]["items"][1]["reads"] = ["src/"]
+        put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
+        result = self.adopt()
+        self.assertEqual(result["result"], "ADOPTED", result)
+        after, rec = self.read_done(), self.read_record()
+        m1 = after["milestones"][0]
+        self.assertEqual((m1["status"], m1["items"][0]["builder_result"]), ("in_progress", "pass"))
+        self.assertEqual(rec["milestones"]["M1"]["definitions"], agent_loop.definitions(m1))
+        self.assertEqual(rec["milestones"]["M1"]["run_changes"][0]["by"], "adopt")
+        self.assertEqual(agent_loop.changed_items(self.read_done("HEAD~1"), after), [])
+        # a change to what an item proves is still refused once the design has passed
+        self.edit_m2()
+        self.assertEqual(self.adopt()["result"], "REFUSED")
+
+    def test_reads_leaves_older_definition_hashes_unchanged(self):
+        m = milestone("M1", "not_started", ["open"])
+        before = agent_loop.definitions(m)
+        self.assertEqual(agent_loop.definitions(json.loads(json.dumps(m))), before)
+        m["items"][0]["reads"] = ["src/"]
+        self.assertNotEqual(agent_loop.definitions(m), before)
+        self.assertEqual(agent_loop.run_free_definitions(m),
+                         agent_loop.run_free_definitions(milestone("M1", "not_started", ["open"])))
+
     def test_r9_a_design_review_counts_only_for_what_it_read(self):
         self.draft()
         other = self.root / "other"
