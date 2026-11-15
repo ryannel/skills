@@ -954,6 +954,38 @@ class Building(Repo):
         self.assertEqual(self.run_loop()["result"], "PAUSED")
         self.assertEqual(len(self.calls()), 1)
 
+    def set_goal(self, status):
+        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
+            conn.execute("create table if not exists thread_goals (thread_id text, status text)")
+            conn.execute("delete from thread_goals")
+            conn.execute("insert into thread_goals values ('t1', ?)", (status,))
+
+    def test_a_headless_run_sets_a_paused_goal_active_again_and_resumes(self):
+        """A block or `pause` leaves the goal paused; `run` again must resume the session, not report PAUSED."""
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="working")
+        self.set_goal("paused")
+        self.assertEqual(self.run_loop()["result"], "PAUSED")
+        with mock.patch.object(agent_loop, "codex_goal_activate",
+                               lambda t, status="active": self.set_goal(status) or True):
+            os.environ.update(FAKE_REPLY="NEEDS_CONTEXT: which device?")
+            result = self.run_loop()
+        self.assertEqual(result["result"], "BLOCKED", result)
+        self.assertEqual(result["goal"], "paused")  # read when the run ended, after the block paused it
+        self.assertEqual(len(self.calls()), 2)
+        self.assertIn("resume", self.calls()[-1]["argv"])
+
+    def test_a_goal_that_cant_be_set_active_again_gets_a_new_session(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="working")
+        self.set_goal("paused")
+        self.assertEqual(self.run_loop()["result"], "PAUSED")
+        os.environ.update(FAKE_REPLY="NEEDS_CONTEXT: which device?", FAKE_THREAD="t2")
+        self.addCleanup(os.environ.pop, "FAKE_THREAD")
+        with mock.patch.object(agent_loop, "codex_goal_activate", lambda t, status="active": False):
+            result = self.run_loop()
+        self.assertEqual(result["result"], "BLOCKED", result)
+        self.assertIn("couldn't be set active again", result["fresh_because"][0])
+        self.assertNotIn("resume", self.calls()[-1]["argv"])
+
     def test_a_changed_pin_starts_a_fresh_session(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
         self.run_loop()
@@ -1700,9 +1732,9 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')

@@ -4938,7 +4938,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.2.5"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.2.6"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -4967,6 +4967,11 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.2.6": [
+        "`run` on a Codex builder whose goal a block or `pause` left paused now sets the goal active again on the "
+        "headless path too, and resumes the session, where it used to report PAUSED before any turn. If the goal "
+        "can't be set active, the run starts a new session. A result's `goal` is read when the run ends.",
+    ],
     "2.2.5": [
         "A planner whose LOG.md entry runs past eight lines, or whose PLAN.md fails the plan checks, is now told before "
         "its turn ends and shortens it itself, so `plan` no longer refuses the turn and stashes the plan for that.",
@@ -5288,6 +5293,8 @@ def emit(result: str, **fields) -> None:
 
 
 def finish(state_path: Path, state: dict, result: str, **extra) -> None:
+    if state.get("host") == "codex" and state.get("thread"):
+        state["goal"] = goal_status(state["thread"]) or "none"  # read now, so the result doesn't carry an old one
     state.update(result=result, finished=time.time(), **extra)
     state_path.write_text(json.dumps(state, indent=2))
     noted = {k: state[k] for k in ("goal", "constraints_missing", "usage", "fresh_because", "stopped_turn")
@@ -6562,7 +6569,9 @@ def cmd_run(a: argparse.Namespace) -> None:
     state.update(failed_turns=0, reports=0, not_ready_turns=0, idle=0, progress_at=time.time(), passing=passing(milestone),
                  reflog=reflog, host=host, model=model, effort=effort, start_tip=start_tip,
                  marks=work_marks(worktree, milestone))
-    state.pop("result", None)
+    # What the last run ended with stays in the file only until this run ends with its own.
+    for k in ("result", "reason", "blocked", "report", "next", "goal"):
+        state.pop(k, None)
     state.pop("fresh_because", None)  # the result names only the new sessions this run started
     restate, missing = binding(prof, "build", mid, milestone, done_rel(prof, stem), rules=rules, headless=headless)
     state["constraints_missing"] = missing
@@ -6571,12 +6580,6 @@ def cmd_run(a: argparse.Namespace) -> None:
               " line, so the agents have no such rule", file=sys.stderr)
     timeout_s = a.turn_timeout_hours * 3600
     resumable = host in ("codex", "claude")
-
-    # `run` again carries on, as the app's play button would: after a pause, and after a block the lead has cleared
-    # (the milestone is runnable again, so a goal left `blocked` would only end every resumed turn as BLOCKED).
-    if host == "codex" and state.get("thread") and goal_status(state["thread"]) in ("paused", "blocked") \
-            and not visible_unavailable("codex"):
-        codex_goal_activate(state["thread"])
 
     def floor_next() -> dict:
         return next_cmd(again, "lead", f"the {host} host failed or ran out (quota, sign-in or outage); run it again "
@@ -6756,6 +6759,14 @@ def cmd_run(a: argparse.Namespace) -> None:
         # nothing passed: the checks failed, or the work isn't merged with every item passing yet
         finish(state_path, state, "CHECKS_FAILED", reasons=reasons)
 
+    # `run` again carries on, as the app's play button would: after a pause, and after a block the lead has cleared
+    # (the milestone is runnable again, so a goal left `blocked` would only end every resumed turn as BLOCKED). This
+    # holds on the headless path too: the script pauses the goal itself when a builder stops Blocked, and `pause`
+    # stops the turn, so a goal left paused would end the run as PAUSED before its first turn. If the goal can't be
+    # set active again, the run carries on in a new session rather than report a pause nobody asked for.
+    if host == "codex" and state.get("thread") and goal_status(state["thread"]) in ("paused", "blocked") \
+            and not codex_goal_activate(state["thread"]):
+        new_session(f"the goal of session {state['thread']} was paused and couldn't be set active again")
     lead_pending = bool(a.message)  # the lead's own --message, not one the script writes after a turn
     resume_retried = False
     while True:
