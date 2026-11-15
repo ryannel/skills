@@ -221,12 +221,17 @@ that is busy most of the day, with hours queued against it, is a limit that more
 of that lock cost the most, because nobody else could use the time they took.
 
 When the numbers drift apart like this, finding out why is part of delivering the brief. The cause usually sits
-above any one builder, so clearing builders one at a time won't reach it. Often it is in how the plans prove their
-items: a slow check that every milestone repeats, a test command that a busy main branch keeps making stale, or an
-exclusive resource held by work that doesn't need it to itself. Those belong to the planners and to the project
-settings. Start a planner whose task names the pattern and the modules it spans, or bring the human a change to the
-project settings with what it would cost and what it would give back. Running fewer builders is a fix too, and
-often the quickest: when they queue for one resource, each extra builder adds waiting, not output.
+above any one builder, in the process around the work: how it is split into modules and milestones, how it merges,
+what a milestone has to show before it counts, and what builders wait for. Clearing builders one at a time won't
+reach it, because each of them is doing what the process asks of it.
+
+Follow the effort to where it goes. Merges that keep conflicting point at how the work is split. Milestones that
+fail review again and again point at how they are defined. Builders that queue for one resource, or repeat work
+each time the main branch moves, point at the steps around building. Most of these belong to the planners and to the
+project settings. Start a planner whose task names the pattern and the modules it spans, or bring the human a change
+to the project settings with what it would cost and what it would give back. Running fewer builders is a fix too,
+and often the quickest when they are all waiting on the same thing, because each extra builder then adds waiting,
+not output.
 
 Some checks are too slow to run before every merge, and the project settings may list them under `Checks on the main
 branch`. One run of such a check covers everything merged since the last run. When nothing else runs it, start it
