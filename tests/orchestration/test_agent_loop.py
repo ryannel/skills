@@ -738,6 +738,14 @@ class Building(Repo):
         self.assertNotIn(str(old), self.git("worktree", "list").stdout)
         again = agent_loop.verify_tree(self.wt, "WATER", "origin/main")  # made again when next needed
         self.assertEqual(agent_loop.head_commit(again), self.git("rev-parse", "origin/main").stdout.strip())
+        # A checkout from an older version has no mark of the script's; a hand-cleared build folder makes its own
+        # time fresh, so only the mark counts
+        unmarked = agent_loop.verify_tree(self.wt, "SNOW", "origin/main")
+        agent_loop._TREE_HOLDS.pop(str(unmarked)).close()
+        agent_loop.tree_marks(unmarked)[1].unlink()
+        (unmarked / "target").mkdir()
+        shutil.rmtree(unmarked / "target")
+        self.assertEqual(agent_loop.prune_idle_trees(self.wt), ["SNOW"])
 
     def ready_problems(self, m1, test_command="none", leave=None):
         """Why the script won't set M1 to Ready for Review, once a builder has merged it as given. `leave` changes

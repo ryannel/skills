@@ -593,7 +593,7 @@ covers that failure:
 
 - a check for free disk space before a build: the script now removes a finished module's checkout, and any of its
   checkouts that no live process is using and nobody has used for six hours, or for half an hour when less than
-  30 GB is free;
+  30 GB is free, checked before every builder turn and on `status`;
 - a check that rejects status written into plan files: `STATUS.md` is generated, and the skills say not to write
   status anywhere else;
 - letting your approval of a design survive an edit to its header: status no longer belongs in the header,

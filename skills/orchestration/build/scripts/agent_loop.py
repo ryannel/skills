@@ -3840,7 +3840,10 @@ def loop_line(v: dict) -> str:
 # 24 of them held 148 GB, 3-13 GB each, some untouched for two days, and builders stalled when the disk ran low. So a
 # checkout nobody has used for a while is removed, sooner when the disk is low, and made again when it is next needed,
 # at the price of one cold build. A process that is using a checkout holds a shared kernel lock on it until it exits,
-# so a checkout in use is never removed, however long ago it was made.
+# so a checkout in use is never removed, however long ago it was made. Only the script's own last-used mark counts:
+# a checkout without one wasn't used by this version, and its folder's time moves whenever someone deletes its build
+# output by hand, which in Thrum kept five stale checkouts looking fresh. Pruning runs before every builder turn and
+# on `status`, as well as whenever a checkout is made or reused, because one turn can fill gigabytes.
 TREE_IDLE_S = 6 * 3600.0
 TREE_IDLE_LOW_DISK_S = 1800.0
 LOW_DISK_BYTES = 30 * 1024 ** 3
@@ -3882,7 +3885,7 @@ def prune_idle_trees(worktree: Path, keep: Path | None = None, now: float | None
             continue
         inuse, used = tree_marks(path)
         try:
-            last = (used if used.exists() else path).stat().st_mtime
+            last = used.stat().st_mtime if used.exists() else 0.0
         except OSError:
             continue
         if now - last < idle:
@@ -5433,7 +5436,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.3.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.3.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -7278,6 +7281,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     lead_pending = bool(a.message)  # the lead's own --message, not one the script writes after a turn
     resume_retried = False
     while True:
+        prune_idle_trees(worktree)
         # Checked before every turn, because a long run fills its session turn by turn.
         if resumable and state.get("thread") and (why := stale_session(state)):
             new_session(why)
@@ -8406,6 +8410,7 @@ def cmd_status(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, missing_ok=True)
     folder = Path(git_common_dir(worktree)) / "orchestrate"
+    prune_idle_trees(worktree)
     records = {r["pid"]: r for r in live_loops(clean=False, processes=False)[0] if r.get("registered")}
 
     def running(name: str) -> str:
