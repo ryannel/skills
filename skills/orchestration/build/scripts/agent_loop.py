@@ -466,6 +466,8 @@ BLOCK_REASONS = ("needs_human_feedback", "needs_access", "needs_hardware", "need
                  "too_many_failed_reviews")
 # What an item needs that a builder can't do alone: its `needs` object, {"type", "what"}.
 NEEDS_TYPES = ("human_feedback", "access", "hardware")
+# Blocks a planner answers by changing the milestone, so a change to its definitions lifts them (authorise_doc).
+REPLAN_LIFTS = ("needs_dependency", "needs_context")
 DEFINITION_KEYS = ("statement", "check", "inspect", "ask", "target", "lock", "needs")
 # Fields that say how an item's check runs rather than what it proves. They are part of the definitions hash, so a
 # builder can't change them, but a planner or the human changing only these keeps the milestone's progress and owes no
@@ -5436,7 +5438,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.3.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.3.4"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -10183,6 +10185,11 @@ def authorise_doc(doc: dict, record: dict, stamp: dict, before: dict | None = No
             reset_proof(m)
             if m.get("status") in ("in_progress", "ready_for_review", "done"):
                 m["status"] = "not_started"
+            elif m.get("status") == "blocked" and blocked_of(m)["reason"] in REPLAN_LIFTS:
+                # a planner changed what the milestone asks for, which is how it answers these blocks. In Thrum
+                # CULLING M3 stayed Blocked after its re-plan and design review, and `next` asked for a plan again
+                m["status"] = "not_started"
+                m.pop("blocked", None)
         record["milestones"][m["id"]] = {"definitions": definitions(m), "reviews": (e or {}).get("reviews", []),
                                          "authorised": stamp,
                                          **({"human_feedback": e["human_feedback"]} if (e or {}).get("human_feedback")

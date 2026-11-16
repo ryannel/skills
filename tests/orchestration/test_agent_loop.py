@@ -4150,6 +4150,19 @@ class FirstRuns(Repo):
         self.edit_m2()
         self.assertEqual(self.adopt()["result"], "REFUSED")
 
+    def test_a_replan_that_changes_a_blocked_milestone_lifts_a_block_a_planner_answers(self):
+        stamp = {"by": "plan"}
+        for reason, lifted in (("needs_dependency", True), ("needs_context", True), ("needs_access", False)):
+            m = milestone("M1", "blocked", ["open"])
+            m["blocked"] = {"reason": reason, "what": "the cooker publishes edits"}
+            record = {"milestones": {"M1": {"definitions": agent_loop.definitions(m), "reviews": []}}}
+            before = {"milestones": [json.loads(json.dumps(m))]}
+            m["depends_on"] = ["CONTENT-LOOP:M2"]  # the planner put the missing part where it belongs
+            agent_loop.authorise_doc({"milestones": [m]}, record, stamp, before=before)
+            self.assertEqual((m["status"], "blocked" in m), ("not_started", False) if lifted else ("blocked", True),
+                             reason)
+            self.assertEqual(record["milestones"]["M1"]["definitions"], agent_loop.definitions(m))
+
     def test_reads_leaves_older_definition_hashes_unchanged(self):
         m = milestone("M1", "not_started", ["open"])
         before = agent_loop.definitions(m)

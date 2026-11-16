@@ -170,6 +170,10 @@ really this module's work, add it to this module's plan. If the module list was 
 first. Plan the missing part in the module that owns it, and not inside the blocked builder's module, because then two
 modules would own the same thing.
 
+When your plan changes the blocked milestone itself, such as its `depends_on` or an item, the script lifts the block
+and the milestone starts again once its design review passes. If the milestone doesn't change, say in your report
+that the block is answered, so the lead can run `unblock`.
+
 ## What makes a plan work
 
 ### The design
