@@ -97,6 +97,8 @@ def release():
 def reset():
     """Puts the environment, the script's settings and its state back to what every test starts from."""
     release()
+    while agent_loop._TREE_HOLDS:  # the script's checkouts a test used, held until its process would have exited
+        agent_loop._TREE_HOLDS.popitem()[1].close()
     os.environ.clear()
     os.environ.update(ENVIRONMENT)
     for module, values in SETTINGS.items():

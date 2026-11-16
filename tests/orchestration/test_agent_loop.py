@@ -718,6 +718,27 @@ class Building(Repo):
         self.assertTrue((again / "later.txt").exists())
         self.assertEqual(self.git("status", "--porcelain", where=again).stdout, "")
 
+    def test_an_idle_script_checkout_is_removed_and_one_in_use_is_kept(self):
+        old = agent_loop.verify_tree(self.wt, "WATER", "origin/main")
+        busy = agent_loop.verify_tree(self.wt, "SKY", "origin/main")
+        for path in (old, busy):  # as if this process had exited after using them, two days ago
+            agent_loop._TREE_HOLDS.pop(str(path)).close()
+            stamp = time.time() - 2 * 86400
+            os.utime(agent_loop.tree_marks(path)[1], (stamp, stamp))
+        holder = subprocess.Popen([sys.executable, "-c", (
+            "import fcntl, sys, time; h = open(sys.argv[1], 'a'); fcntl.flock(h, fcntl.LOCK_SH); "
+            "print('held', flush=True); time.sleep(60)"), str(agent_loop.tree_marks(busy)[0])],
+            stdout=subprocess.PIPE, text=True)
+        self.addCleanup(holder.kill)
+        self.assertEqual(holder.stdout.readline().strip(), "held")  # another live process is using SKY
+        fresh = agent_loop.verify_tree(self.wt, "RAIN", "origin/main")
+        self.assertFalse(old.exists())
+        self.assertTrue((busy / ".git").exists())
+        self.assertTrue((fresh / ".git").exists())
+        self.assertNotIn(str(old), self.git("worktree", "list").stdout)
+        again = agent_loop.verify_tree(self.wt, "WATER", "origin/main")  # made again when next needed
+        self.assertEqual(agent_loop.head_commit(again), self.git("rev-parse", "origin/main").stdout.strip())
+
     def ready_problems(self, m1, test_command="none", leave=None):
         """Why the script won't set M1 to Ready for Review, once a builder has merged it as given. `leave` changes
         the worktree after the merge."""

@@ -3836,9 +3836,74 @@ def loop_line(v: dict) -> str:
 
 # --------------------------------------------------------------------------------------- merging, as the script
 
+# A checkout is kept between uses so its ignored build output stays warm, and each costs that output's size: in Thrum
+# 24 of them held 148 GB, 3-13 GB each, some untouched for two days, and builders stalled when the disk ran low. So a
+# checkout nobody has used for a while is removed, sooner when the disk is low, and made again when it is next needed,
+# at the price of one cold build. A process that is using a checkout holds a shared kernel lock on it until it exits,
+# so a checkout in use is never removed, however long ago it was made.
+TREE_IDLE_S = 6 * 3600.0
+TREE_IDLE_LOW_DISK_S = 1800.0
+LOW_DISK_BYTES = 30 * 1024 ** 3
+_TREE_HOLDS: dict = {}  # checkout path -> the open handle of its shared use lock, for this process's lifetime
+
+
+def tree_marks(path: Path) -> tuple[Path, Path]:
+    """The use lock and the last-used mark of the script's checkout at `path`, beside it, not in it."""
+    return path.parent / f".{path.name}.inuse", path.parent / f".{path.name}.used"
+
+
+def hold_tree(path: Path) -> None:
+    """Marks the checkout at `path` as used now and in use by this process, which waits while another process is
+    removing it."""
+    inuse, used = tree_marks(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if str(path) not in _TREE_HOLDS:
+        handle = open(inuse, "a")
+        fcntl.flock(handle, fcntl.LOCK_SH)
+        _TREE_HOLDS[str(path)] = handle
+    used.touch()
+
+
+def prune_idle_trees(worktree: Path, keep: Path | None = None, now: float | None = None) -> list[str]:
+    """Removes the script's checkouts that no live process is using and nobody has used for TREE_IDLE_S, or for
+    TREE_IDLE_LOW_DISK_S when the disk has less than LOW_DISK_BYTES free. Returns the names removed."""
+    root = loop_dir(worktree) / "verify"
+    if not root.is_dir():
+        return []
+    now = time.time() if now is None else now
+    try:
+        low = shutil.disk_usage(root).free < LOW_DISK_BYTES
+    except OSError:
+        low = False
+    idle = TREE_IDLE_LOW_DISK_S if low else TREE_IDLE_S
+    removed = []
+    for path in sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")):
+        if keep is not None and path == keep or str(path) in _TREE_HOLDS:
+            continue
+        inuse, used = tree_marks(path)
+        try:
+            last = (used if used.exists() else path).stat().st_mtime
+        except OSError:
+            continue
+        if now - last < idle:
+            continue
+        with open(inuse, "a") as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue  # a live process is using it
+            if drop_tree(worktree, path.name):
+                removed.append(path.name)
+            used.unlink(missing_ok=True)
+    return removed
+
+
 def verify_tree(worktree: Path, name: str, ref: str) -> Path:
-    """A loop-owned checkout at `ref`, one per module, kept between uses so ignored build caches stay warm."""
+    """A loop-owned checkout at `ref`, one per module, kept between uses so ignored build caches stay warm. Making or
+    reusing one also removes the other checkouts that have sat idle (see TREE_IDLE_S)."""
     path = loop_dir(worktree) / "verify" / name.upper()
+    hold_tree(path)
+    prune_idle_trees(worktree, keep=path)
     if (path / ".git").exists():
         if git(path, "checkout", "--quiet", "--force", "--detach", ref).returncode == 0:
             git(path, "clean", "-ffdq")
@@ -5368,7 +5433,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.3.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.3.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
