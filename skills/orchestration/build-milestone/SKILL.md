@@ -126,7 +126,9 @@ that isn't the code under review. `merge` lists the files the rebase brought in,
 them could change what a capture shows, take that capture again on the merged commit. For visual work, plan one
 capture pass after your last merge rather than one after each.
 
-Hold a lock only for the command that needs it. `merge` already makes builders take turns, so a script
+Hold a lock only for the command that needs it. Don't wrap the script's own `check` or `merge` in `lock`: `check`
+takes each item's lock just for that item, and `merge` waits in the merge queue, so `lock` refuses them. `merge`
+already makes builders take turns, so a script
 of your own that holds a lock across a rebase, a check and a merge makes everyone wait through all three, and it
 usually fails because the main branch moved while it ran. In the same way, check that the human is there and the
 screen is unlocked before you take a lock for an attended run, because a lock held while waiting for a person stops

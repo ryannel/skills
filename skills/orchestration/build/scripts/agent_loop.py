@@ -5438,7 +5438,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.3.4"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.3.5"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -8559,6 +8559,12 @@ def cmd_lock(a: argparse.Namespace) -> None:
     for problem in settings["problems"]:
         print(f"warning: ORCHESTRATE.md has an invalid line, so the script uses its default for it: {problem}",
               file=sys.stderr)
+    if script_answer(shlex.join(command)):
+        raise SystemExit(
+            "error: don't run the script's own commands under `lock`. `check` takes each item's lock for that item's "
+            "command only, and `merge` waits its turn in the merge queue, so wrapping either holds the resource "
+            "through work that doesn't need it, and through the queue, while every other run waits. Run them "
+            "without `lock`.")
     with held(a.name, where, what=shlex.join(command), settings=settings,
               waiting=lambda text: print(f"lock: {text}", file=sys.stderr, flush=True)) as use:
         use["exit"] = run_under_lock(command, where if worktree else None, use, a.name)
@@ -8610,6 +8616,22 @@ def job_alive(pid: int) -> bool:
     except PermissionError:  # it exists, under a sandbox that won't let this process signal it
         return True
     return True
+
+
+STOPPED_EXITS = {130, 137, 143, -15, -9, -2}  # SIGINT, SIGKILL, SIGTERM, as a shell or Python reports them
+SCRIPT_VERBS = {"check", "merge", "main-check", "run", "review", "plan"}
+
+
+def script_answer(command: str) -> bool:
+    """Whether `command` is this script's own check or merge (perhaps under `lock`), whose exit 1 is an answer."""
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return False
+    for i, w in enumerate(words[:-1]):
+        if w.endswith("agent_loop.py") and words[i + 1] in SCRIPT_VERBS:
+            return True
+    return False
 
 
 def job_state(job: dict) -> tuple[str, int | None]:
@@ -9663,14 +9685,24 @@ def flow_numbers(worktree: Path, hours: float) -> dict:
         s["busy"] = round(min(1.0, busy_s / 3600 / hours), 2)
         for k in ("held_h", "queued_h", "longest_wait_h", "failed_held_h"):
             s[k] = round(s[k], 1)
-    jobs = {"started": 0, "failed": 0, "running": 0}
+    # A failed job isn't always waste. In Thrum 60% of jobs "failed", but a third of those were the script's own
+    # `check` or `merge` saying the work wasn't finished or conflicted, which is their job, and a fifth were stopped
+    # by a pause or a relaunch. So the failures are split: stopped, the script's answer, and errors in the command.
+    jobs = {"started": 0, "failed": 0, "running": 0, "stopped": 0, "script_said_no": 0, "errors": 0}
     for j in job_rows(worktree):
         if float(j.get("started_s") or 0) < start or not j.get("log") or not j.get("pid"):
             continue
         state, exit_code = job_state(j)
         jobs["started"] += 1
         jobs["running"] += state == "running"
-        jobs["failed"] += state == "gone" or (state == "exited" and exit_code != 0)
+        if state == "gone" or (state == "exited" and exit_code != 0):
+            jobs["failed"] += 1
+            if state == "gone" or exit_code in STOPPED_EXITS:
+                jobs["stopped"] += 1
+            elif exit_code == 1 and script_answer(j.get("command") or ""):
+                jobs["script_said_no"] += 1
+            else:
+                jobs["errors"] += 1
     return {"hours": hours, "tip": ref, "ready_for_review": ready, "done": done,
             "commits": int(commits) if commits.isdigit() else None,
             "code_commits": int(code) if code.isdigit() else None,
@@ -9687,7 +9719,10 @@ def flow_text(f: dict) -> list[str]:
                    f"with {s['queued_h']} h spent queued for it and a longest wait of {s['longest_wait_h']} h; "
                    f"{s['failed']} holds ended in a failed command, using {s['failed_held_h']} h of it")
     j = f["background_jobs"]
-    out.append(f"- background jobs: {j['started']} started, {j['failed']} failed or vanished, {j['running']} still running")
+    out.append(f"- background jobs: {j['started']} started, {j['running']} still running, {j['failed']} failed or "
+               f"vanished: {j.get('stopped', 0)} stopped by a pause, a relaunch or a signal; "
+               f"{j.get('script_said_no', 0)} were the script's `check` or `merge` reporting unfinished work or a "
+               f"conflict; {j.get('errors', 0)} errors in the command itself")
     return out
 
 

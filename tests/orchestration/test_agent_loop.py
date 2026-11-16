@@ -2822,6 +2822,35 @@ class LockClasses(Clean):
             gpu = agent_loop.flow_numbers(self.wt, 1)["locks"]["gpu"]
         self.assertEqual((gpu["holds"], gpu["held_h"], gpu["busy"]), (2, 0.2, 0.11))  # 400 s of 3600, not 600
 
+    def test_flow_splits_failed_jobs_into_stopped_answers_and_errors(self):
+        self.repo()
+        subprocess.run(["git", "-C", str(self.wt), "checkout", "-q", "-b", "main"], check=True)
+        subprocess.run(["git", "-C", str(self.wt), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", "start"], check=True)
+        folder = agent_loop.loop_dir(self.wt)
+        rows = []
+        for n, (command, code) in enumerate((("python3 /x/agent_loop.py check --module A --worktree .", "1"),
+                                             ("python3 /x/agent_loop.py merge --worktree .", "1"),
+                                             ("./dev check", "143"), ("python3 tools/broken.py", "1"),
+                                             ("./dev check", "0"))):
+            log = folder / f"job{n}.log"
+            log.write_text("")
+            Path(str(log) + ".exit").write_text(code)
+            rows.append({"id": f"j{n}", "pid": 1, "command": command, "log": str(log), "started_s": time.time()})
+        (folder / agent_loop.JOBS_FILE).write_text("".join(json.dumps(r) + "\n" for r in rows))
+        with contextlib.redirect_stderr(io.StringIO()):
+            jobs = agent_loop.flow_numbers(self.wt, 1)["background_jobs"]
+        self.assertEqual({k: jobs[k] for k in ("started", "failed", "stopped", "script_said_no", "errors")},
+                         {"started": 5, "failed": 4, "stopped": 1, "script_said_no": 2, "errors": 1})
+
+    def test_lock_refuses_to_wrap_the_scripts_own_commands(self):
+        self.repo()
+        out = subprocess.run([sys.executable, str(SCRIPTS / "agent_loop.py"), "lock", "gpu", "--", "python3",
+                              str(SCRIPTS / "agent_loop.py"), "merge", "--worktree", "."], cwd=self.wt,
+                             capture_output=True, text=True)
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("merge queue", out.stderr)
+
     def test_an_older_copys_exclusive_hold_keeps_shared_requests_out(self):
         self.repo("- **Shared resources:** gpu: 2\n")
         common = Path(agent_loop.git_common_dir(self.wt))
