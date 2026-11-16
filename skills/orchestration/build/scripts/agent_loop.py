@@ -389,7 +389,9 @@ Subcommands:
         Main-branch checks: slow checks declared by `Main-branch check <name>:` lines in the project settings, run on
         the main branch's tip after merges, one run covering every commit merged since the last. One run at a time per
         check, for the whole repository; a failed run is tried again once, and a failure that holds is bisected over
-        the main branch's commits since the last pass, naming the first failing commit, its subject and the modules
+        the main branch's commits since the last pass (a command exits 75 when it couldn't judge the commit, such as a
+        capture that dropped frames: it is tried up to three times, and a run it still can't judge fails nothing and
+        starts no bisect), naming the first failing commit, its subject and the modules
         whose plans or evidence it changed. With NAME it answers for a commit (default HEAD): COVERED (exit 0) when a
         pass exists on a main-branch commit that contains it; FAILING_ON_MAIN (exit 1) when a failure that held does
         and no pass does; NOT_ON_MAIN (exit 1) for a commit the main branch doesn't contain yet. Otherwise it joins the
@@ -5438,7 +5440,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.3.5"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.3.6"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -11105,6 +11107,13 @@ MAIN_CHECK_POLL_S = 5.0  # how often a waiting request reads the check's state
 MAIN_CHECK_GRACE_S = 30.0  # how long a request gives the runner it started to take the check's lock
 MAIN_CHECK_PENDING_EXIT = 75  # EX_TEMPFAIL: nothing has failed, the answer isn't in yet
 MAIN_CHECK_LISTED = 200  # the most recent runs read when answering whether a commit is covered
+# A check's command exits 75 (EX_TEMPFAIL) when it couldn't judge the commit at all: a capture that dropped frames on a
+# busy machine, say, which says nothing about the code. Counted as a failure, such a run would fail the main branch and
+# start a bisect that names whichever commit happened to run under load. So the script tries it again, up to three
+# attempts, and a run it still can't judge is kept as `unjudged`: it covers nothing, fails nothing, and the check runs
+# again once `every` has passed.
+MAIN_CHECK_UNJUDGED_EXIT = 75
+MAIN_CHECK_TRIES = 3
 
 # The check's own subprocesses find the script here, so an item can write `python3 "$ORCHESTRATE_SCRIPT" main-check
 # <name>` without naming the folder this copy is installed in, which changes with each version.
@@ -11172,16 +11181,17 @@ def write_atomic(path: Path, data: dict) -> None:
     part.replace(path)
 
 
-def main_check_runs(folder: Path, limit: int | None = None) -> list[dict]:
+def main_check_runs(folder: Path, limit: int | None = None, unjudged: bool = False) -> list[dict]:
     """The check's finished runs, oldest first: a run on the tip (`kind` tip) and each commit a bisect tried (`kind`
-    bisect), each with its `commit`, `result` (pass or fail, after its retry), `attempts` and times."""
+    bisect), each with its `commit`, `result` (pass or fail, after its retry), `attempts` and times. With `unjudged`,
+    the runs the check couldn't judge too, which space out its runs but answer nothing."""
     rows = []
     for path in (folder / "runs").glob("*.json"):
         try:
             row = json.loads(path.read_text())
         except (OSError, ValueError):
             continue
-        if isinstance(row, dict) and row.get("commit") and row.get("result") in ("pass", "fail"):
+        if isinstance(row, dict) and row.get("commit") and row.get("result") in ("pass", "fail", *(("unjudged",) if unjudged else ())):
             rows.append({**row, "file": str(path)})
     rows.sort(key=lambda r: r.get("finished_s") or 0)
     return rows[-limit:] if limit else rows
@@ -11220,14 +11230,15 @@ def main_check_cover(worktree: Path, rows: list[dict], commit: str) -> tuple[str
 
 def main_check_due(spec: dict, rows: list[dict], flight: dict | None, ref: str | None) -> bool:
     """Whether the check should run now on its own: nothing in flight, the main branch has moved since its last run on
-    the tip, and `every` has passed since that run started."""
+    the tip or that run couldn't judge it, and `every` has passed since that run started. `rows` holds the unjudged
+    runs too."""
     tips = [r for r in rows if r.get("kind") == "tip"]
     if flight or not ref:
         return False
     if not tips:
         return True
     last = max(tips, key=lambda r: r.get("started_s") or 0)
-    return last["commit"] != ref and time.time() >= (last.get("started_s") or 0) + spec["every_s"]
+    return (last["commit"] != ref or last["result"] == "unjudged") and time.time() >= (last.get("started_s") or 0) + spec["every_s"]
 
 
 def main_check_spawn(worktree: Path, name: str, force: bool = False) -> subprocess.Popen:
@@ -11281,18 +11292,28 @@ def main_check_attempt(tree: Path, commit: str, spec: dict, folder: Path) -> dic
 
 
 def main_check_try(tree: Path, commit: str, spec: dict, folder: Path, current: dict) -> list[dict]:
-    """The attempts at one commit: one, or two when the first fails. A failure counts only when the retry fails too,
-    since a quarter of Thrum's verifier runs failed with nothing changed."""
+    """The attempts at one commit, until one passes, two fail, or there have been three. A failure counts only when a
+    retry fails too, since a quarter of Thrum's verifier runs failed with nothing changed; an attempt that couldn't
+    judge the commit is tried again without counting either way."""
     attempts = [main_check_attempt(tree, commit, spec, folder)]
-    if attempts[0]["exit"] != 0:
+    while main_check_result(attempts) == "unjudged" and len(attempts) < MAIN_CHECK_TRIES:
         write_atomic(folder / "current.json", {**current, "state": "retrying", "pid": os.getpid()})
         attempts.append(main_check_attempt(tree, commit, spec, folder))
     return attempts
 
 
+def main_check_result(attempts: list[dict]) -> str:
+    """pass when the last attempt passed, fail when two failed, else unjudged: one failure not yet retried, or
+    attempts that exited 75 because they couldn't judge the commit."""
+    if attempts[-1]["exit"] == 0:
+        return "pass"
+    fails = sum(a["exit"] not in (0, MAIN_CHECK_UNJUDGED_EXIT) for a in attempts)
+    return "fail" if fails >= 2 else "unjudged"
+
+
 def main_check_row(worktree: Path, name: str, kind: str, commit: str, spec: dict, attempts: list[dict],
                    started: float) -> dict:
-    result = "pass" if attempts[-1]["exit"] == 0 else "fail"
+    result = main_check_result(attempts)
     return {"check": name, "kind": kind, "commit": commit,
             "subject": git(worktree, "log", "-1", "--format=%s", commit).stdout.strip(), "result": result,
             "flaky": result == "pass" and len(attempts) > 1, "command": spec["command"], "attempts": attempts,
@@ -11331,6 +11352,10 @@ def main_check_bisect(tree: Path, prof: dict, name: str, spec: dict, folder: Pat
                              main_check_try(tree, commits[mid], spec, folder, current), started)
         write_atomic(folder / "runs" / f"{int(started * 1000)}-{commits[mid][:12]}.json", row)
         tried += 1
+        if row["result"] == "unjudged":
+            return {"bisect": "stopped", "bisect_runs": tried, "bisect_why": (
+                f"the check couldn't judge {commits[mid][:12]} in {len(row['attempts'])} attempts (it exited "
+                f"{MAIN_CHECK_UNJUDGED_EXIT}), so the first failing commit isn't known")}
         lo, hi = (mid, hi) if row["result"] == "pass" else (lo, mid)
     culprit = commits[hi]
     modules, files = commit_modules(tree, prof, culprit)
@@ -11357,14 +11382,14 @@ def main_check_runner(worktree: Path, prof: dict, name: str, spec: dict, force: 
         handle.truncate()
         handle.write(str(os.getpid()))
         handle.flush()
-        tips = [r for r in main_check_runs(folder) if r.get("kind") == "tip"]
+        tips = [r for r in main_check_runs(folder, unjudged=True) if r.get("kind") == "tip"]
         start_at = 0.0 if force or not tips else max(r.get("started_s") or 0 for r in tips) + spec["every_s"]
         while time.time() < start_at:
             write_atomic(folder / "current.json", {"state": "scheduled", "pid": os.getpid(), "start_at_s": start_at,
                                                    "start_at": iso(start_at)})
             time.sleep(min(MAIN_CHECK_POLL_S, max(0.0, start_at - time.time())))
         ref = tip(worktree, prof)
-        if not force and any(r["commit"] == ref for r in tips):
+        if not force and any(r["commit"] == ref and r["result"] != "unjudged" for r in tips):
             return {"result": "NOTHING", "check": name, "commit": ref, "why": "the tip already has a run"}
         tree = main_check_tree(worktree, name, ref)
         started = time.time()
@@ -11480,7 +11505,7 @@ def main_check_list(worktree: Path, prof: dict) -> list[dict]:
     out = []
     for name, spec in (prof.get("main_checks") or {}).items():
         folder = main_check_dir(worktree, name)
-        rows = main_check_runs(folder)
+        rows = main_check_runs(folder, unjudged=True)
         tips = [r for r in rows if r.get("kind") == "tip"]
         flight = main_check_flight(folder)
         last_pass = next((r for r in reversed(rows) if r["result"] == "pass"), None)
@@ -11505,7 +11530,8 @@ def main_check_report_lines(worktree: Path) -> list[str]:
         if not latest:
             text = "no run yet"
         else:
-            text = (f"{'passed' if latest['result'] == 'pass' else 'failed'} on {latest['commit'][:12]} "
+            said = {"pass": "passed on", "fail": "failed on"}.get(latest["result"], "couldn't judge")
+            text = (f"{said} {latest['commit'][:12]} "
                     f"({hours_since(latest.get('finished')):.1f} h ago, {latest['minutes']} min" +
                     (", passing on its retry" if latest.get("flaky") else "") + ")")
             if latest["result"] == "fail" and (culprit := latest.get("culprit")):
@@ -11553,7 +11579,7 @@ def cmd_main_check(a: argparse.Namespace) -> None:
             if flight:
                 running.append({"check": name, **flight})
                 continue
-            if a.start or main_check_due(checks[name], main_check_runs(folder), None, ref):
+            if a.start or main_check_due(checks[name], main_check_runs(folder, unjudged=True), None, ref):
                 main_check_spawn(worktree, name, force=a.start)
                 started.append(name)
         main_check_out("STARTED" if started else "ALREADY_RUNNING" if running else "NOTHING", 0,

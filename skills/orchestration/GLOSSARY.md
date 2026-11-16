@@ -427,7 +427,9 @@ A check too slow to run before every merge, which runs on the main branch's tip 
 covers every commit merged since the last, whoever made them. One run at a time per check, for the whole
 repository, and a second request joins the run in flight. A failed run is tried again once, and a failure that
 holds is bisected over the main branch's commits since the last pass, to name the first failing commit, which is
-fixed forward. An item proves itself from the shared result: its check passes when a pass covers its commit.
+fixed forward. A run that exits 75 couldn't judge the commit, such as a capture a busy machine spoiled. It is tried up
+to three times, and if it still can't judge, it is kept as unjudged, which covers nothing and fails nothing. An item
+proves itself from the shared result: its check passes when a pass covers its commit.
 Avoid: trunk sentinel, sentinel (the names in the analysis that proposed it)
 Not: Test command, which runs before every merge.
 Stored as: a `Main-branch check <name>:` line of the project settings, one per check; the `main-check` command;
@@ -521,7 +523,7 @@ below. Its exit status is 0 when the line is the command's own result, and 1 or 
 | `MIGRATED` | `migrate` | The plans were moved to the current layout and names, or, with `--branch`, a worktree's own commits were renamed and rebased onto the main branch |
 | `NOTHING` | `adopt`, `migrate`, `main-check` | There was nothing to do. From `main-check --due`, no main-branch check was due |
 | `COVERED` | `main-check` | A main-branch check passed on a main-branch commit that contains the commit asked about. Exit status 0 |
-| `FAILING_ON_MAIN` | `main-check` | A main-branch check failed twice on a main-branch commit that contains the commit asked about, and no later pass covers it. `by.culprit` names the first failing commit, its subject and its modules. Exit status 1 |
+| `FAILING_ON_MAIN` | `main-check` | A main-branch check failed twice on a main-branch commit that contains the commit asked about, and no later pass covers it. `by.culprit` names the first failing commit, its subject and its modules; a bisect that reached a commit it couldn't judge says so in `by.bisect_why` instead. Exit status 1 |
 | `NOT_ON_MAIN` | `main-check` | The commit asked about isn't on the main branch yet, so no main-branch check covers it. Exit status 1 |
 | `PENDING` | `main-check` | No run covers the commit yet, and the wait ran out while one is under way. The run carries on; asking again joins it or finds its result. Exit status 75 |
 | `STARTED`, `ALREADY_RUNNING` | `main-check` | `--start` or `--due` started a run on the main branch's tip, or one was already in flight |

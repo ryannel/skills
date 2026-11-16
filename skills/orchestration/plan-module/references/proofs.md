@@ -93,7 +93,10 @@ Where a proof runs follows from who a fault would hurt:
   a `Main-branch check` line in the project settings, with how often it may run and the locks it needs, and give
   each item that depends on it the check `python3 "$ORCHESTRATE_SCRIPT" main-check <name>`, which passes from the
   shared run. Give that item no `lock` of its own: the settings line takes the locks for the run, and an item lock
-  held while it waits would block the very run it is waiting for.
+  held while it waits would block the very run it is waiting for. Such a check runs while builders are busy, so
+  if load can spoil a run without saying anything about the code, as when a capture drops frames, have the check
+  notice and exit 75. That tells the script the run couldn't judge the commit, so it tries again and doesn't blame
+  whichever commit happened to run on a busy machine.
 - A measurement that needs a quiet machine, such as a timing, rarely gets one while builders are working. Within
   a milestone, use a generous benchmark tripwire that catches a collapse. Put the precise numbers in the module's
   last milestone, measured in one sitting.

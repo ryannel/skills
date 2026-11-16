@@ -6592,6 +6592,42 @@ class MainBranchChecks(Repo):
                          [("tip", "pass"), ("tip", "fail"), ("bisect", "fail"), ("bisect", "pass")])
         self.assertIn(f"first failing commit {c2[:12]}", agent_loop.main_check_report_lines(self.wt)[0])
 
+    def test_a_run_that_cant_judge_the_commit_fails_nothing_and_runs_again(self):
+        # A capture that dropped frames on a busy machine says nothing about the code; it exits 75.
+        busy = self.root / "busy"
+        busy.touch()
+        self.declare(f"echo run >> {self.count}; test -f {busy} && exit 75; true")
+        head = agent_loop.head_commit(self.wt)
+        code, line = self.ask(name="images", wait=0)
+        self.assertEqual((code, line["result"]), (agent_loop.MAIN_CHECK_PENDING_EXIT, "PENDING"), line)
+        self.in_flight()
+        self.settle()
+        self.assertEqual(self.runs(), [])
+        [run] = agent_loop.main_check_runs(self.folder(), unjudged=True)
+        self.assertEqual((run["commit"], run["result"], len(run["attempts"])), (head, "unjudged", 3))
+        self.assertNotIn("bisect", run)
+        self.assertIn(f"couldn't judge {head[:12]}", agent_loop.main_check_report_lines(self.wt)[0])
+        _, listed = self.ask()
+        self.assertTrue(listed["checks"][0]["due"])
+        busy.unlink()
+        code, line = self.ask(name="images")
+        self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", head), line)
+        self.assertEqual(self.counted(), 4)
+
+    def test_a_bisect_stops_at_a_commit_it_cant_judge_rather_than_guess(self):
+        self.declare("test -f loaded && exit 75; test ! -f broken")
+        self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
+        self.land("a busy hour", **{"loaded": "x"})
+        (self.wt / "loaded").unlink()
+        self.land("water: foam on the shore", **{"broken": "x"})
+        self.land("tidy the sky", **{"src/sky.txt": "1"})
+        self.ask(name="images")
+        self.settle()
+        code, line = self.ask(name="images")
+        self.assertEqual((code, line["result"], line["by"]["bisect"]), (1, "FAILING_ON_MAIN", "stopped"), line)
+        self.assertNotIn("culprit", line["by"])
+        self.assertIn("couldn't judge", line["why"])
+
     def test_an_item_proves_itself_from_the_shared_result_in_the_scripts_clean_checkout(self):
         self.declare(f"echo run >> {self.count}")
         check = 'python3 "$ORCHESTRATE_SCRIPT" main-check images --wait 60'

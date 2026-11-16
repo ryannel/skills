@@ -245,7 +245,10 @@ main branch has moved (`STARTED`), or says one is already running (`ALREADY_RUNN
 finished attempt shows as `RAN`.
 
 A failure is tried again once, and one that holds is traced back through the commits since the last pass to the
-first one that fails. The result names that commit and its module. Give the fix to that module as its next task, or
+first one that fails. A run that exits 75 couldn't judge its commit, perhaps because a busy machine spoiled a
+capture. It is tried up to three times, and if it still can't judge, it fails nothing and blames no commit. It shows
+as `unjudged`, and the next run tries again. If runs keep coming back unjudged, the check itself needs to hold up
+under load, which is work for the module that owns it. A failure's result names its commit and module. Give the fix to that module as its next task, or
 revert the commit if the fix would take long, because until a later run passes, every milestone merged after it
 fails that check too. If the result names no module, start a planner to find the cause rather than reading the code
 yourself. The other modules carry on meanwhile, which is the point of running the check after the merge.
