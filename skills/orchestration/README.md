@@ -28,7 +28,7 @@ Each kind of agent has a skill that tells it how to do its job:
 | [`interview-me`](interview-me/) | the lead | the lead's | Talking with you to find out what you want and why, and writing the project brief |
 | [`domain-language`](domain-language/) | the lead, or any agent asked to sort out the project's names | that agent's | Agreeing one name for each thing in the project, and keeping the glossary |
 | [`plan-module`](plan-module/) | the planner | Opus 5.5, high | Splitting a project into modules, and writing each module's design, milestones and done-when file |
-| [`build-milestone`](build-milestone/) | a builder | Codex `gpt-6.1-sol` or Opus 5.5, medium | Building one milestone, proving it, and merging it |
+| [`build-milestone`](build-milestone/) | a builder | Codex `gpt-6.2-sol` or Opus 5.5, medium | Building one milestone, proving it, and merging it |
 | [`review-milestone`](review-milestone/) | a reviewer | Opus 5.5, medium | Judging a design, or a milestone that is Ready for Review |
 | [`build`](build/) | the lead | Opus 5.5, medium (either host can lead) | Running the whole build: which commands to run, and when to come to you |
 

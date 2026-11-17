@@ -61,7 +61,7 @@ class Rollout:
         self.event(t, "token_count", info={"total_token_usage": usage, "last_token_usage": usage},
                    rate_limits=limits)
 
-    def turn(self, turn: str, start: float, end: float | None, calls, model="gpt-6.1-sol", effort="medium") -> None:
+    def turn(self, turn: str, start: float, end: float | None, calls, model="gpt-6.2-sol", effort="medium") -> None:
         """calls: [(time, uncached tokens, used percent)]"""
         self.event(start, "task_started", turn_id=turn, started_at=int(start))
         self.write(start, "turn_context", {"turn_id": turn, "model": model, "effort": effort})
@@ -171,7 +171,7 @@ class Analysis(Base):
         reading = self.read()
         burn = codex_quota.account(reading)["burn"]
         self.assertAlmostEqual(burn["active_hours"], 2.0, delta=0.05)
-        self.assertAlmostEqual(burn["per_builder_hour"]["gpt-6.1-sol/medium"]["hours"], 4.0, delta=0.05)
+        self.assertAlmostEqual(burn["per_builder_hour"]["gpt-6.2-sol/medium"]["hours"], 4.0, delta=0.05)
 
     def test_fit_recovers_the_rate_and_its_range_holds_it(self):
         self.steady(k=0.5, turns=6, calls=30)  # 180 M tokens, 90 %

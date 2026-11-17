@@ -447,7 +447,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_quota  # noqa: E402  (beside this file)
 
-DEFAULT_MODELS = {"codex": "gpt-6.1-sol", "claude": "claude-opus-5-5"}
+DEFAULT_MODELS = {"codex": "gpt-6.2-sol", "claude": "claude-opus-5-5"}
 DEFAULT_MODEL = DEFAULT_MODELS["codex"]
 # The settings' word for each kind of agent -> the role a launch resolves. A settings line names a kind, with or
 # without a host in front: "- **Claude planner:** claude-fable-5-2 high" or "- **Reviewer:** high".
@@ -5440,7 +5440,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.3.6"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.3.7"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:

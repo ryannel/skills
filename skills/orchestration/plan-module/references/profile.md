@@ -34,7 +34,7 @@ Contents:
 - **Default host:** codex  *(script: optional; the host used when the lead names none; otherwise the host the script runs inside)*
 - **Review host:** same  *(script: optional; see below)*
 - **Planner host:** claude  *(script: optional; the host planners run on when the lead names none; otherwise the `Default host`)*
-- **Codex model:** gpt-6.1-sol  *(script: any `<host> model:` line sets that host's model)*
+- **Codex model:** gpt-6.2-sol  *(script: any `<host> model:` line sets that host's model)*
 - **Claude model:** claude-opus-5-5  *(script)*
 - **Claude planner:** <model> <effort>  *(script: optional, and only when the human asked; a model, an effort or both for one kind of agent on one host; see the last section)*
 - **Reviewer:** <effort>  *(script: optional, and only when the human asked; an effort for one kind of agent on every host)*
@@ -111,7 +111,7 @@ can't run a GPT model and Codex can't run a Claude one. So a line that names a m
 | Line | What it sets |
 |---|---|
 | `Claude planner: claude-fable-5-2 high` | The model and effort of planners that run on Claude Code |
-| `Codex planner: gpt-6-astra` | The model of planners that run on Codex. Their effort stays as it was |
+| `Codex planner: gpt-6.2-astra` | The model of planners that run on Codex. Their effort stays as it was |
 | `Codex design reviewer: high` | The effort of design reviewers on Codex. Their model stays the host's |
 | `Reviewer: high` | The effort of reviewers on every host. A line with no host can't name a model |
 

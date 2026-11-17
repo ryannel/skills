@@ -172,10 +172,10 @@ class Decisions(Clean):
         with tempfile.TemporaryDirectory() as tmp:
             rollout = Path(tmp) / "rollout.jsonl"
             rollout.write_text("\n".join([
-                json.dumps({"type": "turn_context", "payload": {"turn_id": "a", "model": "gpt-6.1-sol", "effort": "medium"}}),
-                json.dumps({"type": "turn_context", "payload": {"turn_id": "b", "model": "gpt-6.1-sol", "effort": "xhigh"}}),
+                json.dumps({"type": "turn_context", "payload": {"turn_id": "a", "model": "gpt-6.2-sol", "effort": "medium"}}),
+                json.dumps({"type": "turn_context", "payload": {"turn_id": "b", "model": "gpt-6.2-sol", "effort": "xhigh"}}),
                 '{"type": "turn_context", "payload": {"turn_id": "c", "mod']))
-            self.assertEqual(agent_loop.pin_mismatches(rollout), ["b: gpt-6.1-sol/xhigh"])
+            self.assertEqual(agent_loop.pin_mismatches(rollout), ["b: gpt-6.2-sol/xhigh"])
 
     def test_definitions_ignore_claims_but_not_checks_or_needs(self):
         m = milestone("M1", "not_started", ["open"])
@@ -355,10 +355,10 @@ class Profiles(Clean):
                 "- **Merge:** local  *(loop)*\n"
                 "- **Branch:** trunk  *(loop: integrate here)*\n"
                 "- **Codex sandbox:** danger-full-access  *(loop)*\n"
-                "- **Codex generator:** gpt-6.1-sol, high\n- **Writable roots:** ~/.cargo, ~/.npm\n")
+                "- **Codex generator:** gpt-6.2-sol, high\n- **Writable roots:** ~/.cargo, ~/.npm\n")
             p = agent_loop.profile(Path(tmp), strict=True)
             self.assertEqual((p["plans"], p["branch"], p["model"], p["effort"], p["evidence"], p["test_command"], p["sandbox"]),
-                             ("docs/design/modules", "trunk", "gpt-6.1-sol", "high", "docs/my evidence",
+                             ("docs/design/modules", "trunk", "gpt-6.2-sol", "high", "docs/my evidence",
                               "npm run check < /dev/null", "danger-full-access"))
             self.assertEqual(p["roots"], ["~/.cargo", "~/.npm"])
             self.assertEqual(p["graded_examples"], "docs/my evidence/graded-examples.md")
@@ -382,7 +382,7 @@ class Profiles(Clean):
                 agent_loop.profile(Path(tmp), strict=True)
             good = "- **Merge:** push\n- **Test command:** none\n"
             for bad in ("- **Evidence:** <where review files go>\n", "- **Codex sandbox:** open\n",
-                        "- **Codex generator:** gpt-6.1-sol turbo\n", "- **Merge:** pull-request\n- **Test command:** none\n"):
+                        "- **Codex generator:** gpt-6.2-sol turbo\n", "- **Merge:** pull-request\n- **Test command:** none\n"):
                 Path(tmp, "ORCHESTRATE.md").write_text(good + bad if "Merge" not in bad else bad)
                 with self.assertRaises(SystemExit, msg=bad):
                     agent_loop.profile(Path(tmp), strict=True)
@@ -395,7 +395,7 @@ class Profiles(Clean):
             with contextlib.redirect_stderr(io.StringIO()):
                 p = agent_loop.profile(Path(tmp))
             self.assertEqual((p["models"]["codex"], p["models"]["claude"], p["models"]["gemini"], p["effort"]),
-                             ("gpt-6.1-sol", "claude-opus-5-5", "g-2", "high"))
+                             ("gpt-6.2-sol", "claude-opus-5-5", "g-2", "high"))
             self.assertEqual(p["hosts"], {"gemini": "gemini -p {prompt} -m {model}"})
             args, env = agent_loop.host_command("gemini", p, "g-2", "medium", Path(tmp), "do it now", None)
             self.assertEqual(args, ["gemini", "-p", "do it now", "-m", "g-2"])
@@ -417,7 +417,7 @@ class Profiles(Clean):
         ns = lambda host=None: argparse.Namespace(host=host, model=None, effort=None)
         self.assertEqual(agent_loop.resolve(ns(), p, "plan"), ("claude", "claude-fable-5-2", "high"))
         self.assertEqual(agent_loop.resolve(ns(), p, "build")[0], "codex", "only planners move")
-        self.assertEqual(agent_loop.resolve(ns("codex"), p, "plan"), ("codex", "gpt-6.1-sol", "high"))
+        self.assertEqual(agent_loop.resolve(ns("codex"), p, "plan"), ("codex", "gpt-6.2-sol", "high"))
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "ORCHESTRATE.md").write_text(base + "- **Planner host:** other\n")
             with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
@@ -428,7 +428,7 @@ class Profiles(Clean):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "ORCHESTRATE.md").write_text(
                 base + "- **Claude model:** claude-opus-5-5\n- **Effort:** low\n"
-                "- **Claude planner:** `claude-fable-5-2` xhigh  *(script)*\n- **Codex planner:** gpt-6-astra\n"
+                "- **Claude planner:** `claude-fable-5-2` xhigh  *(script)*\n- **Codex planner:** gpt-6.2-astra\n"
                 "- **Codex reviewer:** high\n- **Claude design reviewer:** claude-fable-5-2\n"
                 "- **Builder:** medium\n- **Claude builder:** <model>\n"
                 "- **Host gemini:** gemini -p {prompt} -m {model}\n- **Gemini model:** g-3\n"
@@ -441,18 +441,18 @@ class Profiles(Clean):
             return agent_loop.resolve(ns, p, role)[1:]
         # a line with a host gives that host's model, effort or both; a planner's effort is high unless a line says
         self.assertEqual(launch("plan", "claude"), ("claude-fable-5-2", "xhigh"))
-        self.assertEqual(launch("plan", "codex"), ("gpt-6-astra", "high"))
+        self.assertEqual(launch("plan", "codex"), ("gpt-6.2-astra", "high"))
         self.assertEqual(launch("plan", "gemini"), ("g-3", "high"), "another host's model never crosses over")
         # a line with no host gives an effort on every host
         self.assertEqual(launch("build", "claude"), ("claude-opus-5-5", "medium"))
-        self.assertEqual(launch("build", "codex"), ("gpt-6.1-sol", "medium"))
+        self.assertEqual(launch("build", "codex"), ("gpt-6.2-sol", "medium"))
         # an effort alone keeps the host's model
-        self.assertEqual(launch("review", "codex"), ("gpt-6.1-sol", "high"))
+        self.assertEqual(launch("review", "codex"), ("gpt-6.2-sol", "high"))
         self.assertEqual(launch("review", "claude"), ("claude-opus-5-5", "low"))
         self.assertEqual(launch("review", "gemini"), ("g-3-ultra", "max"))
         # a design review uses its own line, then the reviewer's
         self.assertEqual(launch("design", "claude"), ("claude-fable-5-2", "low"))
-        self.assertEqual(launch("design", "codex"), ("gpt-6.1-sol", "high"))
+        self.assertEqual(launch("design", "codex"), ("gpt-6.2-sol", "high"))
         # what the lead passes still wins
         self.assertEqual(launch("plan", "claude", model="claude-haiku-5-5", effort="low"), ("claude-haiku-5-5", "low"))
         for bad in ("- **Planner:** claude-fable-5-2\n",          # a model with no host
@@ -1030,7 +1030,7 @@ class Building(Repo):
     def test_a_changed_pin_starts_a_fresh_session(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
         self.run_loop()
-        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Codex generator:** gpt-6.1-sol high\n")
+        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Codex generator:** gpt-6.2-sol high\n")
         self.commit_all()
         self.run_loop()
         self.assertNotIn("resume", self.calls()[-1]["argv"])
@@ -2045,10 +2045,10 @@ class VisibleCodex(Repo):
         with FakeCodexApp(self).installed() as app:
             result = self.run_loop()
         self.assertEqual((result["result"], result["path"], result["app_settings"]),
-                         ("READY_FOR_REVIEW", "visible", "gpt-6.1-sol medium"))
+                         ("READY_FOR_REVIEW", "visible", "gpt-6.2-sol medium"))
         (t, info), = app.threads.items()
         self.assertEqual((info["model"], info["effort"], info["role"], info["title"], info["cwd"]),
-                         ("gpt-6.1-sol", "medium", "build", agent_loop.session_title(self.wt, "WATER", "M1 build"),
+                         ("gpt-6.2-sol", "medium", "build", agent_loop.session_title(self.wt, "WATER", "M1 build"),
                           self.wt.resolve()))
         self.assertIn(f"codex://threads/wake/{t}", app.links)
         self.assertEqual((self.state()["thread"], self.state()["path"]), (t, "visible"))
@@ -2064,14 +2064,14 @@ class VisibleCodex(Repo):
         self.assertEqual(len(app.threads), 1)
         self.assertIn('the paragraph that starts "The goal:" as the objective, word for word', app.sent[0])
         self.assertTrue(app.sent[0].startswith(agent_loop.GOAL_LINE + "Build milestone M1 of module WATER,"))
-        self.assertNotIn("gpt-6.1-sol", app.sent[0])
+        self.assertNotIn("gpt-6.2-sol", app.sent[0])
         self.assertTrue(app.sent[-1].startswith("Use the simulator.\n\nThe goal hasn't changed. Every item of M1 has to pass with evidence"))
 
     def test_decision_8_a_turn_on_another_effort_in_the_app_is_PIN(self):
         with FakeCodexApp(self, effort_seen="xhigh").installed():
             result = self.run_loop()
         self.assertEqual(result["result"], "WRONG_MODEL_OR_EFFORT")
-        self.assertIn("gpt-6.1-sol/xhigh", result["mismatches"][0])
+        self.assertIn("gpt-6.2-sol/xhigh", result["mismatches"][0])
 
     def test_decision_8_the_human_pressing_stop_in_the_app_is_PAUSED_not_a_failure(self):
         with FakeCodexApp(self, behaviour="owner_stop").installed() as app:
@@ -2357,11 +2357,11 @@ class Fold(Repo):
             commit = self.run_loop()["commit"]
             self.assertEqual(self.review(commit=commit, effort="high")["verdict"], "PASS")
         rec = self.read_record()["milestones"]["M1"]
-        self.assertEqual(rec["ready_for_review"]["observed"], {"model": "gpt-6.1-sol", "effort": "medium"})
+        self.assertEqual(rec["ready_for_review"]["observed"], {"model": "gpt-6.2-sol", "effort": "medium"})
         review = rec["reviews"][-1]
         self.assertEqual({k: review[k] for k in ("model", "effort", "observed", "cli", "path")},
-                         {"model": "gpt-6.1-sol", "effort": "high", "cli": "codex-cli 0.167.0", "path": "visible",
-                          "observed": {"model": "gpt-6.1-sol", "effort": "high"}})
+                         {"model": "gpt-6.2-sol", "effort": "high", "cli": "codex-cli 0.167.0", "path": "visible",
+                          "observed": {"model": "gpt-6.2-sol", "effort": "high"}})
 
 
     def test_a_visible_review_stops_a_hung_tool_call_and_a_timeout_is_named(self):
