@@ -12,7 +12,7 @@ two of description, and it opens the rest only when a task seems to match. Use t
 improve one or test one.
 
 This skill calls the agent that loads the finished skill the reader. The reader is a capable model, such as
-Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra or GPT-6.1 Sol, and on most tasks it plans as well as you do. But
+Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra or GPT-6.2 Sol, and on most tasks it plans as well as you do. But
 it loads the skill in a session you will never see, so it can't ask what you meant. That gives a skill three ways
 to fail:
 

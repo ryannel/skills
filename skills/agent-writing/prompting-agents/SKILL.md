@@ -1,6 +1,6 @@
 ---
 name: prompting-agents
-description: Helps you write text that another AI agent will act on, such as a brief for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt, or a CLAUDE.md or AGENTS.md. Use before you write or send one, when you move instructions to a newer model, or when an agent stopped early, asked for approval it didn't need or ignored an instruction. Covers Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol. Not for writing or testing a skill (skill-creator).
+description: Helps you write text that another AI agent will act on, such as a brief for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt, or a CLAUDE.md or AGENTS.md. Use before you write or send one, when you move instructions to a newer model, or when an agent stopped early, asked for approval it didn't need or ignored an instruction. Covers Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra and GPT-6.2 Sol. Not for writing or testing a skill (skill-creator).
 ---
 
 # Prompting agents
@@ -129,7 +129,7 @@ its file:
 
 - Claude Opus 5.5: [claude-opus-5-5.md](references/models/claude-opus-5-5.md)
 - Claude Fable 5.2: [claude-fable-5-2.md](references/models/claude-fable-5-2.md)
-- GPT-6 Astra and GPT-6.1 Sol: [gpt-6.md](references/models/gpt-6.md)
+- GPT-6.2 Astra and GPT-6.2 Sol: [gpt-6-2.md](references/models/gpt-6-2.md)
 
 If the model is newer than these, read its vendor's prompting guide instead. These files go out of date faster
 than anything else in this skill.

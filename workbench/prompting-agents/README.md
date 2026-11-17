@@ -29,6 +29,11 @@ Some words used below:
 - **Effort** is a setting, outside the prompt, for how much a model thinks before it answers. Its levels are
   `low`, `medium`, `high`, `xhigh` and `max`.
 
+**Update, 17 November 2026.** OpenAI released GPT-6.2 Astra and GPT-6.2 Sol, and the skill's OpenAI file now
+covers them in place of GPT-6 Astra and GPT-6.1 Sol. The pages read for that update are in
+[note 18](references/18-openai-gpt-6-2.md). This summary still describes the GPT-6 models as researched on
+10 November; the skill's `gpt-6-2.md` marks which lines are new in 6.2 and which are carried over.
+
 ## How the research was done
 
 I read 16 pages in Chrome on 10 November 2026, starting from each vendor's own documentation menus. After each
@@ -257,3 +262,4 @@ Within that scope:
 | [15](references/15-openai-maintaining-software-gpt-6-family.md) | [Maintaining software with the GPT-6 family](https://developers.openai.com/blog/maintaining-software-with-the-gpt-6-family) | OpenAI |
 | [16](references/16-randall-munroe-style.md) | [Relativistic Baseball](https://what-if.xkcd.com/1/), and the owner's corrections | Randall Munroe |
 | [17](references/17-anthropic-skill-creator.md) | The `skill-creator` skill synced from claude.ai | Anthropic |
+| [18](references/18-openai-gpt-6-2.md) | [Using GPT-6.2](https://developers.openai.com/api/docs/guides/latest-model/gpt-6.2-astra.md), [Prompting GPT-6.2 in Codex](https://learn.chatgpt.com/guides/prompting-gpt-6-2-astra) and the [release announcement](https://community.openai.com/t/gpt-6-2-astra-and-sol-are-now-available/1417531) | OpenAI |

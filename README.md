@@ -101,7 +101,7 @@ orchestrate doesn't bring skill-creator.
 for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt, or an
 AGENTS.md or CLAUDE.md file. It says what such a text must carry, what to leave out, and how to write it plainly,
 with one reference file per model. It is built from Anthropic's and OpenAI's guidance for Claude Opus 5.5, Claude
-Fable 5.2, GPT-6 Astra and GPT-6.1 Sol; the research behind it is in
+Fable 5.2, GPT-6.2 Astra and GPT-6.2 Sol; the research behind it is in
 [workbench/prompting-agents](./workbench/prompting-agents/README.md). It replaced `instructing-agents` on
 10 November 2026, and relies on its description to trigger, with no hook.
 

@@ -2219,17 +2219,17 @@
       "path": "skills/agent-writing/prompting-agents",
       "tier": "active",
       "cadence_days": 7,
-      "last_checked": "2026-11-10",
+      "last_checked": "2026-11-17",
       "last_drift_found": null,
       "quiet_streak": 0,
-      "why_tier": "Registered 2026-11-10, replacing instructing-agents. Names four current models (Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra, GPT-6.1 Sol) and gives per-model prompting advice from vendor pages that change with each release.",
+      "why_tier": "Registered 2026-11-10, replacing instructing-agents. Names four current models (Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra, GPT-6.2 Sol) and gives per-model prompting advice from vendor pages that change with each release.",
       "watchlist": [
         {
           "id": "prompting-agents-models",
           "type": "model-names",
-          "claim": "Per-model behaviour and the prompt change for each symptom, for Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol; and host facts about instruction files (the 200-line and 32 KiB limits, how nested instruction files load).",
-          "where": "skills/agent-writing/prompting-agents/references/models/*.md (one file per model, GPT-6 Astra and Sol share one) and instruction-files.md; the model list in SKILL.md",
-          "check": "Re-read the vendor pages listed in workbench/prompting-agents/README.md (Anthropic's prompting pages for the current Fable and Opus models, OpenAI's Using GPT-6 guide and Astra blog post, the Claude Code memory page, OpenAI's AGENTS.md page). If a newer top model has shipped, add a file for it under references/models/, drop the oldest, and update the list in SKILL.md. Update the checked date at the top of each file you re-checked."
+          "claim": "Per-model behaviour and the prompt change for each symptom, for Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra and GPT-6.2 Sol (the GPT-6.2 file marks each line New in 6.2 or carried over from GPT-6 Astra / GPT-6.1 Sol); and host facts about instruction files (the 200-line and 32 KiB limits, how nested instruction files load).",
+          "where": "skills/agent-writing/prompting-agents/references/models/*.md (one file per model; GPT-6.2 Astra and Sol share gpt-6-2.md) and instruction-files.md; the model list in SKILL.md",
+          "check": "Re-read the vendor pages listed in workbench/prompting-agents/README.md (Anthropic's prompting pages for the current Fable and Opus models, OpenAI's Using GPT-6.2 guide (developers.openai.com/api/docs/guides/latest-model/gpt-6.2-astra.md), the Prompting GPT-6.2 in Codex guide (learn.chatgpt.com/guides/prompting-gpt-6-2-astra), the GPT-6 Astra skills blog post, the Claude Code memory page, OpenAI's AGENTS.md page). If a newer top model has shipped, add a file for it under references/models/, drop the oldest, and update the list in SKILL.md. Update the checked date at the top of each file you re-checked. In gpt-6-2.md, re-test or drop lines marked From GPT-6 Astra / From GPT-6.1 Sol once OpenAI publishes 6.2 guidance that covers them."
         }
       ]
     },
@@ -2252,7 +2252,7 @@
         {
           "id": "skill-creator-models",
           "type": "model-behaviour",
-          "claim": "SKILL.md names Claude Opus 5.5, Claude Fable 5.2, GPT-6 Astra and GPT-6.1 Sol as the current models, and says OpenAI's models take a skill's text as something the user said. Per-model habits live in prompting-agents.",
+          "claim": "SKILL.md names Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra and GPT-6.2 Sol as the current models, and says OpenAI's models take a skill's text as something the user said. Per-model habits live in prompting-agents.",
           "where": "skills/agent-writing/skill-creator/SKILL.md",
           "check": "When a newer model ships, update the model names here with prompting-agents, and re-run workbench/skill-creator/evals on it. Check OpenAI's skills docs for how skill text is passed to the model."
         }

@@ -19,21 +19,24 @@ It doesn't cover writing or testing skills, which is the job of [skill-creator](
   each need beyond that.
 - `references/instruction-files.md`: what belongs in a `CLAUDE.md` or `AGENTS.md`, and what doesn't.
 - `references/writing-style.md`: each writing habit shown on a real sentence.
-- `references/models/`: one file each for Claude Opus 5.5 and Claude Fable 5.2, and one shared by GPT-6 Astra
-  and GPT-6.1 Sol. Each says what that model tends to do and what to write to correct for it.
+- `references/models/`: one file each for Claude Opus 5.5 and Claude Fable 5.2, and one shared by GPT-6.2 Astra
+  and GPT-6.2 Sol. Each says what that model tends to do and what to write to correct for it.
 
 ## Where the guidance comes from
 
 The guidance comes from what Anthropic and OpenAI published about prompting their current models, read on 10
-November 2026. The research summary, with a note on every page read, is in
-[workbench/prompting-agents](../../../workbench/prompting-agents/README.md). The main sources are these:
+November 2026. The OpenAI file was re-checked on 17 November 2026, when GPT-6.2 Astra and GPT-6.2 Sol shipped.
+The research summary, with a note on every page read, is in [workbench/prompting-agents](../../../workbench/prompting-agents/README.md). The main sources are these:
 
 - **Anthropic:** [Prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices),
   the model pages for [Claude Fable 5.2](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-2)
   and [Claude Opus 5.5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5),
   and Claude Code's pages on [instruction files](https://code.claude.com/docs/en/memory) and
   [best practices](https://code.claude.com/docs/en/best-practices).
-- **OpenAI:** [Using GPT-6](https://developers.openai.com/api/docs/guides/latest-model),
+- **OpenAI:** [Using GPT-6.2](https://developers.openai.com/api/docs/guides/latest-model/gpt-6.2-astra.md),
+  [Prompting GPT-6.2 in Codex](https://learn.chatgpt.com/guides/prompting-gpt-6-2-astra), the
+  [GPT-6.2 release announcement](https://community.openai.com/t/gpt-6-2-astra-and-sol-are-now-available/1417531),
+  and, for advice carried over from the earlier models,
   [Rethinking skills and prompts for GPT-6 Astra](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra),
   [Maintaining software with the GPT-6 family](https://developers.openai.com/blog/maintaining-software-with-the-gpt-6-family),
   and Codex's pages on [prompting](https://developers.openai.com/codex/prompting) and
@@ -46,9 +49,9 @@ Where the two vendors disagreed, the research summary says which side we took an
 ## How far to trust it
 
 Every number in the skill is the vendor's own measurement on the vendor's own tasks; none was checked here.
-OpenAI has published no prompting advice specific to GPT-6.1 Sol, so its section rests on one blog post. The
-model files will go out of date first, which is why each carries the date it was checked, and why
-`freshness.json` at the root of this repository tracks them.
+OpenAI's GPT-6.2 guides describe Astra and say the same advice applies to Sol, and the GPT-6.2 file marks which
+lines are new and which are carried over from GPT-6 Astra without being re-confirmed. The model files will go out of date first, which is
+why each carries the date it was checked, and why `freshness.json` at the root of this repository tracks them.
 
 The first version of the skill was tested on three tasks, each run once with the skill and once without. The
 current version has been rewritten since and hasn't been tested yet.
