@@ -426,8 +426,8 @@ Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
 **Routine steps**
 The steps a `run` or `plan` command carries on through by itself, because the process settles them without
 judgement: the review of a milestone that reached Ready for Review, the builder again after a failed review that
-the counts send back to it, the module's next milestone after a pass, a plan's design reviews, and one planner
-revision when a design review asks for changes. The command stops at anything else and wakes the lead.
+the counts send back to it, the module's next milestone after a pass, a plan's design reviews, and a planner
+revision each time a design review asks for changes. The command stops at anything else and wakes the lead.
 Not: Step, which is what one run is doing now.
 Stored as: `steps_run` and `stopped_because` in the result of `run` and `plan`, and `run --one-step` or
 `plan --one-step` for one step only

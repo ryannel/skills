@@ -80,8 +80,9 @@ The example is a small money-tracking tool. It reads a file of transactions and 
 11. The same `plan` command goes on to review each module's design. Each review is a new reviewer, which reads
     your request and the design and writes a review. The command saves it and sets the design to Design Approved or
     Design Changes Requested.
-12. After Design Changes Requested, a planner fixes the design from the review, and it is reviewed again. The
-    command does that once by itself, and stops for the lead if the second review still asks for changes. No
+12. After Design Changes Requested, a planner fixes the design from the review, and it is reviewed again. When
+    the second review in a row also asks for changes, the planner fixes the design once more and the script
+    approves that revision without a third review. No
     builder starts on a module until its design is Design Approved. If the lead runs `run` on a module whose design
     has had no review, `run` does that review first.
 

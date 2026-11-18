@@ -156,18 +156,17 @@ the human the change has taken effect.
 
 ## How the build runs
 
-`run --module <M> --worktree <path>` starts a builder on the module's next milestone and carries on through the
-steps that need no judgement. When the milestone reaches Ready for Review, it runs the review. After a failed review
-that the counts send back to the builder, it starts the builder again. After a pass, it starts the module's next
-milestone. When a design review asks for changes, it runs one planner revision and goes on. `plan` does the same for
-a plan: it runs the design review of each module the plan left owed one, and one planner revision if a review asks
-for changes.
+`run --module <M> --worktree <path>` starts a builder on the module's next milestone and carries on through the steps
+that need no judgement. When the milestone reaches Ready for Review, it runs the review. After a failed review that
+the counts send back to the builder, it starts the builder again. After a pass, it starts the module's next
+milestone. When a design review asks for changes, it runs a planner revision and goes on. `plan` does the same for a
+plan: it runs each design review the plan left owed, and a planner revision if a review asks for changes.
 
 Each command stops when it reaches something that needs your judgement or the human's, such as a decision for the
-human, a Blocked milestone, a milestone that needs a planner's diagnosis, a second request for design changes, a
-finished module, a broken main branch or a newer copy of the script. Its result is the last step's result, with
-`steps_run`, each step and how it ended, and `stopped_because`, which says in a sentence why it stopped there. Read
-`stopped_because` first, because it is the reason you were woken. `--one-step` runs just one step.
+human, a Blocked milestone, a milestone that needs a planner's diagnosis, a finished module, a broken main branch or
+a newer copy of the script. Its result is the last step's result, with `steps_run`, each step and how it ended, and
+`stopped_because`, which says in a sentence why it stopped there. Read `stopped_because` first, because it is the
+reason you were woken. `--one-step` runs just one step.
 
 Start each `run` and `plan` as its own background command, and don't chain several into one. Your host wakes you
 when a background command ends, so one command per module wakes you for each stop as it happens, while a chain
@@ -393,8 +392,9 @@ it. Put its `ask` to the human, and run its `next`, the same review in a visible
 machine.
 
 A design review's `verdict` is `DESIGN OK` or `DESIGN CHANGES`. After `DESIGN CHANGES`, a planner revises the design
-from the Must Fix findings, and the design is reviewed again. A finding that needs something on the `Human decides`
-list in the project settings is the human's. No builder starts on a module until its design is approved.
+from the Must Fix findings, and the design is reviewed again. After two in a row, the script approves the planner's
+next revision without another. A finding that needs something on the `Human decides` list in the project settings is
+the human's. No builder starts on a module until its design is approved.
 
 ## Where sessions run
 

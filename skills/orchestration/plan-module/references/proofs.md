@@ -26,7 +26,8 @@ one:
 An item passes only when every proof it names passes.
 The done-when file's format, in `done-when.md`, says which milestones need a reviewer.
 
-Choose the proof that would catch a convincing fake. Often one proof isn't enough, because each kind misses
+Choose the proof that would catch a convincing fake, and that would still pass work that meets the bar by another
+route, such as a cheaper method that looks the same. Often one proof isn't enough, because each kind misses
 different things. Take a ball bouncing in a physics game. A test that the energy never grows catches a slow drift
 that nobody would notice by eye. A sequence of frames of the ball rolling down a steep slope catches motion that is
 perfectly stable and still looks wrong. So that item gets both.

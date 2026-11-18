@@ -98,7 +98,7 @@ class RoutineSteps(Clean):
         self.assertIsNone(words)
         self.assertIn("main branch is broken", why)
 
-    def test_a_run_whose_design_review_asks_for_changes_gets_one_revision_then_runs_again(self):
+    def test_a_run_whose_design_review_asks_for_changes_gets_a_revision_per_round_then_runs_again(self):
         state = steps("run")
         revise = run_cmd("plan", "--worktree", WT, "--task", "resolve the findings")
         changes = result("DESIGN_NOT_APPROVED", revise, by="planner", module="WATER",
@@ -108,9 +108,11 @@ class RoutineSteps(Clean):
         words, _ = self.follows(result("PLANNED", run_cmd("ready", "--worktree", WT), merged=True,
                                        design_review_owed=["WATER"]), state)
         self.assertEqual(words, state["last_run"])
+        words, _ = self.follows(changes, state)  # the second round: the script approves this revision
+        self.assertEqual(words[0], "plan")
         words, why = self.follows(changes, state)
         self.assertIsNone(words)
-        self.assertIn("second time", why)
+        self.assertIn("at the limit", why)
 
     def test_a_plan_goes_on_to_each_design_review_it_left_owed(self):
         state = steps("plan")
@@ -125,7 +127,8 @@ class RoutineSteps(Clean):
         changes = result("REVIEWED", run_cmd("plan", "--worktree", WT, "--task", "resolve them"), by="planner",
                          module="PAY", milestone="design", verdict="DESIGN CHANGES")
         self.assertEqual(self.follows(changes, state)[0][0], "plan")
-        self.assertIsNone(self.follows(changes, state)[0])  # the second DESIGN CHANGES is the lead's to look at
+        self.assertEqual(self.follows(changes, state)[0][0], "plan")  # the second round's revision is approved
+        self.assertIsNone(self.follows(changes, state)[0])  # changes after that are the lead's to look at
         words, why = self.follows(dict(ok, module="PAY"), state)
         self.assertIsNone(words)
         self.assertIn("design is approved", why)

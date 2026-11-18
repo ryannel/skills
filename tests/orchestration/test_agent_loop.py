@@ -1773,9 +1773,9 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')
@@ -5779,6 +5779,32 @@ class DesignReReview(Repo):
         self.assertEqual(again["result"], "INVALID", again)
         self.assertIn("the planner hasn't acted yet", again["problems"][0])
         self.assertIn(" plan --worktree ", again["next"]["command"])
+
+    def test_the_planners_answer_to_the_second_design_changes_is_approved_without_another_review(self):
+        self.write_done([milestone("M1", "not_started", ["open"], inspect="frames")], design_ok=False)
+        self.commit_all()
+        os.environ.update(FAKE_REVIEW="design_changes")
+        first = self.review("design", commit=None)
+        self.assertIn("review the design again", first["next"]["why"])
+        put(self.wt / "docs/plans/WATER/DESIGN.md", "# Water design, revised once")
+        self.commit_all()
+        second = self.review("design", commit=None)
+        self.assertEqual(second["result"], "REVIEWED", second)
+        self.assertIn("without another review", second["next"]["command"])
+        self.assertIn("approves its revision", second["next"]["why"])
+        os.environ.update(FAKE_PLAN="replan")
+        planned = self.plan(task="resolve the findings")
+        self.assertEqual(planned["design_approved_at_limit"], ["WATER"], planned)
+        self.assertNotIn("WATER", planned["design_review_owed"])
+        design = self.read_record()["design"]
+        self.assertEqual((design["verdict"], design["by"], len(design["after"])), ("ok", "review_limit", 2))
+        self.assertNotIn({"module": "WATER"}, self.ready()["design_not_approved"])
+
+    def test_only_design_changes_since_the_last_approval_count_towards_the_limit(self):
+        rec = {"design_history": [{"verdict": "changes", "at": "1"}, {"verdict": "ok", "at": "2"},
+                                  {"verdict": "changes", "at": "3", "not_counted": "the plan changed"}],
+               "design": {"verdict": "changes", "at": "4"}}
+        self.assertEqual([d["at"] for d in agent_loop.design_changes_in_a_row(rec)], ["4"])
 
 
 class BackgroundJobs(Clean):

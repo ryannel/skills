@@ -443,10 +443,12 @@ Routine steps. Without --one-step, `run` and `plan` carry on through the steps t
 as a command of its own with --one-step, and end with the last one's result plus `steps_run` (each step and its
 result) and `stopped_because`. After `run`: the review of a milestone that reached Ready for Review, a builder
 again after a failed review that the counts send back to the builder, the module's next milestone after a pass,
-and one planner revision when the design review asks for changes, then the run again. After `plan`: the design
-review of each module the plan left owed one, and one planner revision when a design review asks for changes. They
+and a planner revision each time the design review asks for changes, then the run again. After `plan`: the design
+review of each module the plan left owed one, and a planner revision each time a design review asks for changes.
+After two design reviews in a row ask for changes, the script approves the planner's revision without another
+review (DESIGN_REVIEW_ROUNDS; PLANNED says so under `design_approved_at_limit`). They
 stop at anything else: a `next` the human decides or with an `ask`, Blocked, a diagnosis or another escalation,
-HOST_FAILED, KEPT, PAUSED or a stop signal, a second DESIGN CHANGES, a finished module, a next milestone that can't
+HOST_FAILED, KEPT, PAUSED or a stop signal, a finished module, a next milestone that can't
 start, a failing main-branch check, a newer copy of the script, or any `next` that isn't a plain command for the
 step.
 
@@ -2304,6 +2306,24 @@ def authorised(m: dict, rec: dict) -> bool:
 def design_ok(rec: dict, design: str) -> bool:
     d = rec.get("design") or {}
     return d.get("verdict") == "ok" and d.get("hash") == design
+
+
+# How many design reviews in a row may ask for changes. The planner's revision after the last of them is approved
+# without another review. In Thrum each later round mostly found holes in the planner's newest fix, at the price of
+# a planner session and hours with the module unbuilt, and a milestone's own review still catches a proof too weak to
+# catch a fake.
+DESIGN_REVIEW_ROUNDS = 2
+
+
+def design_changes_in_a_row(rec: dict) -> list[dict]:
+    """The counted design reviews that asked for changes since the design was last approved, oldest first. A review
+    that judged a plan which changed while it ran (`not_counted`) is skipped, as everywhere."""
+    entries = sorted((d for d in [*(rec.get("design_history") or []), rec.get("design") or {}]
+                      if d and not d.get("not_counted")), key=lambda d: d.get("at") or "")
+    run: list[dict] = []
+    for d in entries:
+        run = run + [d] if d.get("verdict") == "changes" else []
+    return run
 
 
 def now() -> str:
@@ -5941,7 +5961,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.6.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.7.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5970,6 +5990,16 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.7.0": [
+        "A design gets at most two design reviews in a row that ask for changes. The planner's revision after the "
+        "second is approved by the script without a third review (stored as `by: review_limit` in the record), "
+        "and `PLANNED` names the module under `design_approved_at_limit`. `run` and `plan` now carry on through "
+        "that second planner revision instead of stopping, so building starts without you.",
+        "Planners and design reviewers now treat a proof as right in both directions: it fails what the human "
+        "would see as wrong and passes work that meets the bar by another route, such as a cheaper method that "
+        "looks the same. A design review raises a proof that would fail such work as a Must Fix, and treats what "
+        "is left of an earlier Must Fix, when nothing visible or shared depends on it, as a Suggestion.",
+    ],
     "2.6.0": [
         "Evidence is no longer committed. Reviews, captures, handoffs, builders' proof and graded examples go in "
         "one working folder per repository, <git common dir>/orchestrate/evidence/, which opens in every worktree "
@@ -8761,6 +8791,19 @@ def design_review_next(out: dict, stem: str, worktree: Path, prof: dict) -> dict
         found = f"its {m.group(1)} Must Fix findings" if m else "its Must Fix findings"
         task = (f"The design review of {stem} at {out.get('review')} asked for changes. Resolve {found} in the "
                 "design and the plan. Its Suggestions are yours to take or leave; say which you took and why.")
+        try:
+            text = show(worktree, tip(worktree, prof, fetch=False), record_rel(prof, stem))
+            rounds = len(design_changes_in_a_row(json.loads(text))) if text else 0
+        except (TipError, ValueError, KeyError, OSError, SystemExit):  # no record to read: count none
+            rounds = 0
+        if rounds >= DESIGN_REVIEW_ROUNDS:
+            task += (f" This is the last of {DESIGN_REVIEW_ROUNDS} design review rounds: the script approves the "
+                     "design you leave without another review, and building starts from it.")
+            return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", task), "planner",
+                            f"{DESIGN_REVIEW_ROUNDS} design reviews in a row found Must Fix findings; send these to "
+                            "the planner. The script approves its revision without another review, "
+                            "and the module can be built after that. Report the module only if a finding needs a "
+                            "human decision", findings=out.get("review"))
         return next_cmd(loop_cmd("plan", "--worktree", wt, "--task", task), "planner",
                         "the design review found Must Fix findings; send them to the planner, then review the design "
                         "again. Report the module only if a Must Fix finding returns after the planner fixed it, or "
@@ -9248,6 +9291,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
 
     def change(t):
         written = []
+        at_limit.clear()  # loop_write can run this again on a fresh tip
         extra = [diagnosed[0]] if diagnosed and diagnosed[0] not in modules and \
             (t / done_rel(prof, diagnosed[0])).exists() and (t / record_rel(prof, diagnosed[0])).exists() else []
         for stem in modules + extra:
@@ -9284,12 +9328,22 @@ def cmd_plan(a: argparse.Namespace) -> None:
             record.setdefault("briefs", []).append({"task": a.task, "at": now()})
             if stem in modules:  # who wrote the plan, so its design review goes elsewhere
                 record["planner"] = {"host": host, "at": now()}
+            reviews = design_changes_in_a_row(record)
+            if stem in modules and len(reviews) >= DESIGN_REVIEW_ROUNDS:
+                # the planner's answer to the last design review the limit allows: approved as it stands
+                design = t / design_rel(prof, stem)
+                record.setdefault("design_history", []).append(record["design"])
+                record["design"] = {"verdict": "ok", "by": "review_limit",
+                                    "hash": text_hash(design.read_text() if design.exists() else None),
+                                    "after": [d.get("review") for d in reviews], "at": now()}
+                at_limit.append(stem)
             write_json(path, doc)
             write_json(rec_path, record)
             written += [done_rel(prof, stem), record_rel(prof, stem)]
         return written
 
     replanned: list[str] = []
+    at_limit: list[str] = []
 
     ok, detail = loop_write(worktree, prof, "_plan", change, "orchestrate: authorise the plan")
     if not ok:
@@ -9310,6 +9364,9 @@ def cmd_plan(a: argparse.Namespace) -> None:
     found = {stem: len(assumptions(show(worktree, ref, plan_rel(prof, stem)))) for stem in modules}
     emit("PLANNED", **info, **out, merged=True, commit=detail, modules=modules, design_review_owed=owed,
          files=changed,
+         **({"design_approved_at_limit": at_limit,
+             "design_approved_why": f"{DESIGN_REVIEW_ROUNDS} design reviews in a row asked for changes, so the "
+                                    "script approved this revision without another review"} if at_limit else {}),
          **({"assumptions": {k: n for k, n in found.items() if n},
              "assumptions_where": "lines starting `Assumption:` in each module's PLAN.md; `report` lists them for "
                                   "the human to overturn"} if any(found.values()) else {}),
@@ -13616,12 +13673,14 @@ def routine_next(line: dict, steps: dict) -> tuple[list[str] | None, str]:
         return None, f"{ended}. The decision is the human's" if then.get("decides") else ended
 
     def design_changes(module: str) -> tuple[list[str] | None, str]:
-        if steps["changes"].get(module.upper()):
-            return None, (f"{module}'s design review asked for changes a second time, after a planner had revised it "
-                          "once; the findings need a look before another round")
+        # the script approves the planner's answer to the last round the limit allows, so a revision per round
+        # ends either in another review or in building
+        if steps["changes"].get(module.upper(), 0) >= DESIGN_REVIEW_ROUNDS:
+            return None, (f"{module}'s design review asked for changes again after the script approved a revision "
+                          "at the limit; the findings need a look")
         if verb != "plan":
             return None, ended
-        steps["changes"][module.upper()] = 1
+        steps["changes"][module.upper()] = steps["changes"].get(module.upper(), 0) + 1
         if steps["origin"] == "run":
             steps["then_run"] = steps["last_run"]  # the run does the design review again before it builds
         return words, ""

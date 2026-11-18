@@ -111,7 +111,9 @@ These files are prompts: a builder and a reviewer act on them with nothing else 
    the module's entry in the module list.
 2. A reviewer has read the design, and the result is Design Approved. The review gives a new reviewer only the
    planner's tasks, the brief and the design. The done-when items are part of what it approves, because they are
-   what the builder will be held to, and no builder starts on the module before then. When the `plan` command
+   what the builder will be held to, and no builder starts on the module before then. After two design reviews in a
+   row ask for changes, the script approves your answer to the second without another review, so that revision
+   goes to a builder as you leave it. When the `plan` command
    started you, the review is started after your turn, and you have nothing to do for it. When you are planning in a
    chat with the human, run it yourself with `agent_loop.py review --module <M> --milestone design --worktree .`,
    act on what it finds, and note the review in the log.
@@ -238,6 +240,11 @@ of the same effect, is a tool for finding out why something looks wrong rather t
 within a tolerance costs builds and reviews over differences nobody would see. Keep exact proofs for faults that stay hidden
 until they do damage, such as wrong money, a broken saved format or two modules disagreeing about an interface.
 Words such as "top quality" point at the shipped example, not at an exactness the human didn't ask for.
+
+A proof has to be right in both directions. It fails what the human would see as wrong, and it passes anything that
+meets the bar, however the builder got there, such as a cheaper method that looks the same. Asking only whether a
+fake would pass pushes a proof past the bar, until it fails work the human would accept, and each such proof costs
+a review round to loosen.
 
 ### Milestones and items
 

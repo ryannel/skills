@@ -195,8 +195,9 @@ building starts is what makes the later review fair.
 Write the review to `<evidence>/<MODULE>/design-review.md`, with the worst finding first and each marked Must Fix or
 Suggestion. A finding is a Must Fix when building as designed would go wrong: a mechanism that can't produce the
 behaviour, a gap against the request or an interface, or an item that no reviewer could judge, that its milestone
-can't prove, or that a convincing fake would pass. A sharper proof, an extra edge case or clearer wording is a
-Suggestion. Suggestions don't hold up the build. They stay in the review for the planner's next turn on the module.
+can't prove, that a convincing fake would pass, or that would fail work meeting the quality bar, such as a cheaper
+method that looks the same. A sharper proof, an extra edge case or clearer wording is a Suggestion. Suggestions
+don't hold up the build. They stay in the review for the planner's next turn on the module.
 
 A proof that scripts how the builder must test, step by step, is a Suggestion to shorten it, not a reason to add
 more steps. The item should say what has to be true and how it is shown, and leave the route to the builder.
@@ -206,10 +207,14 @@ turns into a procedure each builder has to untangle.
 If a `design-review.md` is already there, it is the previous review of this design. Go through its Must Fix findings
 first and say whether each is resolved. Then read every item that has changed since, because a revision can make a
 proof easier to pass as well as sharper. Raise a new Must Fix only for something the revision broke, or something
-missed last time that really is one. Reviews that each find one more refinement never let the build start.
+missed last time that really is one. What is left of an earlier Must Fix, when it changes nothing the human would
+see and nothing another module relies on, is a Suggestion. Reviews that each find one more refinement never let
+the build start.
 
 Leave the done-when file as it is, because no milestone is being judged. Your last line is `DESIGN OK`, which sets
 the design to Design Approved and may come with Suggestions, or `DESIGN CHANGES: <n> must_fix findings`, which
 sets it to Design Changes Requested and counts the Must Fix findings. The script saves the result against the
 design as it stands. No milestone of the module is built until its design is Design Approved, and a later change
-to the design needs another review.
+to the design needs another review. A design gets at most two reviews in a row that ask for changes: the script
+approves the planner's answer to the second without another review. So put every Must Fix you find in the review
+you are writing, because a later round may not come.

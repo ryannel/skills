@@ -258,7 +258,9 @@ elif role == "review":
         (ev / "design-review.md").write_text("design is fine")
         reply = "DESIGN OK"
     elif mode == "design_changes":
-        (ev / "design-review.md").write_text("the design needs a second pass")
+        rounds = sum(json.loads(l)["role"] == "review" for l in open(os.environ["FAKE_LOG"]))
+        (ev / "design-review.md").write_text("the design needs a second pass" +
+                                            (f" (review {rounds})" if rounds > 1 else ""))
         reply = "DESIGN CHANGES: the water surface has no LOD plan"
     elif mode == "nothing":
         reply = "PASS M999"

@@ -312,7 +312,8 @@ that may not change it.
 
 A design has three statuses of its own. Design Ready for Review and Design Changes Requested are both printed as
 `design_not_approved`. The reviewer's last line sets the status: `DESIGN OK` sets Design Approved, and `DESIGN CHANGES`
-sets Design Changes Requested.
+sets Design Changes Requested. After two `DESIGN CHANGES` in a row, the script sets Design Approved itself when a
+planner's revision merges, without a third review. The record file stores that approval with `by: review_limit`.
 
 ## The record file
 
@@ -412,7 +413,8 @@ on something already ruled out.
 ## What makes a good item
 
 This section is for the planner. A good item is something you would refuse to call the milestone Done without. Its
-proof would catch a convincing fake, and it depends only on this module and on what exists when its milestone ends. An
+proof would catch a convincing fake and would pass work that meets the bar by a route you didn't expect, and it
+depends only on this module and on what exists when its milestone ends. An
 item whose proof needs a later milestone's work can't pass until then, and it holds up the milestone it sits in. Put
 it in the later milestone. Keep an inspected item small, with one quality in each, so a failure points at something
 specific. A milestone may have many items, as long as it delivers one outcome.
