@@ -32,6 +32,8 @@ Files, in `$ORCHESTRATE_HISTORY_DIR/<project>/` (default `~/.orchestrate/history
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import hashlib
 import json
 import os
@@ -661,7 +663,7 @@ def ledger_events(rows: list[dict]) -> list[dict]:
 
 
 def result_events(orchestrate: Path) -> list[dict]:
-    """Every result the script printed: the full list in results.jsonl where it exists (2.4.0 on), and the latest
+    """Every result the script printed: the full list in results.jsonl where it exists (2.5.0 on), and the latest
     one per milestone and command from results/ for older runs. Refusals are marked as errors."""
     rows = read_jsonl(orchestrate / "results.jsonl")
     seen = {(r.get("result"), r.get("at")) for r in rows}
@@ -788,9 +790,43 @@ def model_matches(pinned: str, seen: str) -> bool:
     return a == b or a.startswith(b) or b.startswith(a)
 
 
+class Busy(Exception):
+    """Another process is writing this history folder."""
+
+
+@contextlib.contextmanager
+def locked(folder: Path, wait_s: float):
+    """Holds the folder's lock while a sweep reads and rewrites its files. Several builders end turns at once, and
+    without it one sweep's rows would overwrite another's. Raises Busy after `wait_s`."""
+    folder.mkdir(parents=True, exist_ok=True)
+    with open(folder / ".lock", "w") as handle:
+        deadline = time.time() + wait_s
+        while True:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.time() >= deadline:
+                    raise Busy(str(folder))
+                time.sleep(0.2)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=None, budget_s: float = 600.0,
             full: bool = False, only: set[str] | None = None, codex_fit: dict | None = None,
-            cost_of=None, modules: list[str] | None = None) -> dict:
+            cost_of=None, modules: list[str] | None = None, wait_s: float = 60.0) -> dict:
+    """Reads every session of this repository that has grown since the last run into the history folder, under its
+    lock (waiting up to `wait_s`, then raising Busy). See _extract."""
+    with locked(project_dir(repo), wait_s):
+        return _extract(repo, orchestrate, worktrees, title_parts, budget_s, full, only, codex_fit, cost_of, modules)
+
+
+def _extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=None, budget_s: float = 600.0,
+             full: bool = False, only: set[str] | None = None, codex_fit: dict | None = None,
+             cost_of=None, modules: list[str] | None = None) -> dict:
     """Reads every session of this repository that has grown since the last run into the history folder, tags it
     from the ledgers, and returns a summary of what changed. `only` limits the read to those session ids (the
     script passes the session a turn just ran). `title_parts` is the script's parser for its session titles.
@@ -993,8 +1029,42 @@ def extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=Non
             "bytes": sum((folder / f"{k}.jsonl").stat().st_size for k in FILES if (folder / f"{k}.jsonl").exists())}
 
 
-def write_milestones(repo: Path, rows: list[dict]) -> None:
+def milestone_rows(proj: dict) -> list[dict]:
+    """One row per milestone from the plan at the main branch's tip, as agent_loop.project() reads it: status, size,
+    when it was authorised, Ready for Review and Done, and each review with the items it failed. An item that failed
+    an earlier review of the same milestone too is marked `repeat`."""
+    out = []
+    for key, e in sorted(proj.items()):
+        rec = (e.get("record") or {}).get("milestones") or {}
+        for m in (e.get("doc") or {}).get("milestones") or []:
+            if not isinstance(m, dict) or not m.get("id"):
+                continue
+            r = rec.get(m["id"]) or {}
+            failed_before: set = set()
+            reviews = []
+            for rv in sorted(r.get("reviews") or [], key=lambda x: x.get("at") or ""):
+                fails = sorted(i for i, v in (rv.get("items") or {}).items() if v != "pass")
+                reviews.append({"verdict": rv.get("verdict"), "at": rv.get("at"), "host": rv.get("host"),
+                                "model": rv.get("model"), "review": rv.get("review"),
+                                "findings": [{"name": i, **({"repeat": True} if i in failed_before else {})}
+                                             for i in fails]})
+                failed_before.update(fails)
+            at = lambda k: (r.get(k) or {}).get("at") if isinstance(r.get(k), dict) else None
+            row = {"module": key, "milestone": m["id"], "name": (m.get("name") or "")[:160], "status": m.get("status"),
+                   "size": len(m.get("items") or []), "failed_reviews": m.get("failed_reviews"),
+                   "diagnoses": m.get("diagnoses"), "authorised": at("authorised"),
+                   "ready_for_review": at("ready_for_review"), "done": at("done"), "reviews": reviews}
+            out.append({k: v for k, v in row.items() if v not in (None, "", [])})
+    return out
+
+
+def write_milestones(repo: Path, rows: list[dict], wait_s: float = 60.0) -> None:
     folder = project_dir(repo)
+    with locked(folder, wait_s):
+        _write_milestones(folder, rows)
+
+
+def _write_milestones(folder: Path, rows: list[dict]) -> None:
     data = load(folder)
     data["milestones"] = {key_of("milestones", r): r for r in rows}
     for r in rows:

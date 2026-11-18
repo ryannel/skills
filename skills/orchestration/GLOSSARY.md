@@ -39,6 +39,12 @@ An agent that judges a design or a milestone. Always a new session, so it has se
 Avoid: evaluator
 Stored as: `orchestrate-reviewer`, the agent file's name
 
+**Design reviewer**
+A reviewer judging a module's design, with its done-when items, before any of the module is built. It is the same
+agent file as any other reviewer, but the project settings can give it an effort of its own.
+Stored as: `design reviewer` in a settings line, such as `Codex design reviewer: high`
+Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+
 **Subagent**
 A helper agent that an agent starts from inside its own session. The lead doesn't use them to build or review.
 
@@ -61,6 +67,13 @@ The facts about one project that every agent reads first, in `ORCHESTRATE.md`: w
 command, the targets, the project's rules.
 Avoid: profile
 Stored as: `ORCHESTRATE.md`
+
+**Project guidance**
+The project's own guidance for each kind of work, such as a skill on how this project is built, which the project
+settings link to and each agent reads before it starts.
+Avoid: building guidance
+Stored as: the `## Project guidance` section of `ORCHESTRATE.md`
+Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
 
 **Target**
 A device or platform the product runs on, such as Chrome on a desktop or an iPhone. The project settings list
@@ -196,7 +209,7 @@ result and judge it, because the builder can't tell. Needs access: someone has t
 prompt, so the builder runs in a visible session while the human is at the machine, and asks for access as soon
 as it starts. Needs hardware: a device has to be connected, so the builder runs the same way.
 Avoid: attended, needs a person, person or hardware
-Stored as: the item's `needs` field, such as `{"type": "access", "what": "approve Computer Use for IINA"}`,
+Stored as: the item's `needs` field, such as `{"type": "access", "what": "approve screen recording for the app"}`,
 with `type` one of `human_feedback`, `access` or `hardware`
 
 **Human Feedback**
@@ -335,6 +348,28 @@ whether to push or fast-forward
 The line of the project settings that lists what only the human may decide, such as spending or publishing.
 Stored as: the `Human decides` line (`Owner decides` before 2.2, which `migrate` renames)
 
+**Delivery history**
+The figures the script copies out of the hosts' session files for one repository: each session and turn with its
+tokens, model, timing and how it ended, and the errors and signals between them, such as failed turns, refused
+results and compactions. It keeps no message text. Each host deletes or moves its own files, and the history
+outlives them.
+Avoid: telemetry, analytics, usage log (the script's `usage.jsonl` is the ledger, which the history is tagged from)
+Stored as: `~/.orchestrate/history/<repository>-<hash>/` (or `$ORCHESTRATE_HISTORY_DIR`), with `sessions.jsonl`,
+`turns.jsonl`, `events.jsonl`, `milestones.jsonl` and `checks.jsonl`; the `history` command
+Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+
+**Dashboard**
+The page drawn from the delivery history, for the human's review and the lead's diagnosis.
+Stored as: the `dashboard` command, which writes `dashboard.html` in the history folder
+Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+
+**Weighted tokens**
+Tokens counted at their price relative to a fresh input token, so a cached re-read counts a tenth and an output
+token five or eight times. The one measure that compares a Claude turn's cost with a Codex turn's.
+Avoid: cost (alone), which could mean dollars or the Codex weekly limit
+Stored as: `weighted` on a turn or session
+Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+
 **Exclusive resource**
 Something only one run at a time may use, such as a simulator. The script's `lock` command holds it.
 Avoid: lease, slot
@@ -376,6 +411,37 @@ What a run is doing now, such as `builder turn 3`, `checking M2: the test comman
 an agent's turn runs, `runs` also names the tool call the agent is waiting on and for how long.
 Stored as: `step` and `open_tool_call` in each run's note and in `runs --json`
 Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
+
+**Routine steps**
+The steps a `run` or `plan` command carries on through by itself, because the process settles them without
+judgement: the review of a milestone that reached Ready for Review, the builder again after a failed review that
+the counts send back to it, the module's next milestone after a pass, a plan's design reviews, and one planner
+revision when a design review asks for changes. The command stops at anything else and wakes the lead.
+Not: Step, which is what one run is doing now.
+Stored as: `steps_run` and `stopped_because` in the result of `run` and `plan`, and `run --one-step` or
+`plan --one-step` for one step only
+Proposed: by the set's author, 2026-11-18. Not yet agreed by the human.
+
+**Watch**
+The command the lead keeps running in the background through a build. It ends to wake the lead at the lead
+check-in, or when it sees a warning sign it hasn't named before, with a summary of what moved and what didn't.
+Stored as: the `watch` command; `<git common dir>/orchestrate/watch.json` keeps when it last woke the lead and the
+signs it named
+Proposed: by the set's author, 2026-11-18. Not yet agreed by the human.
+
+**Lead check-in**
+How long `watch` waits for a warning sign before it wakes the lead anyway, so the lead looks at delivery even when
+nothing has gone wrong. Three hours unless the project settings say otherwise.
+Stored as: the `Lead check-in` line of the project settings, such as `3h` or `90m`
+Proposed: by the set's author, 2026-11-18. Not yet agreed by the human.
+
+**Warning sign**
+Something in the script's records that usually means delivery has slowed: a builder with no progress for two
+hours, a milestone that failed its last two reviews on the same items, ready work waiting half an hour beside a
+free builder slot, a planner queued for an hour, a disk running low, or a main-branch check failing on the tip.
+Each wakes the lead once, until it changes or goes away.
+Stored as: `warning_signs` in `watch`'s result
+Proposed: by the set's author, 2026-11-18. Not yet agreed by the human.
 
 **Builders count**
 How many builders the human wants running at once in the project, read from the number in the project settings'
@@ -512,7 +578,7 @@ below. Its exit status is 0 when the line is the command's own result, and 1 or 
 | `ERROR` | any command | The command stopped before doing what it was asked, with the reason in `error`: the command line was refused (exit status 2, with `usage`), or a check failed, such as unblocking a milestone that isn't Blocked (exit status 1) |
 | `RUNNING` | `run`, `review`, `plan`, `unblock` | Only in a result file: the command that writes it hasn't finished. `pid` names its process, and if that process is gone, it was stopped before it could write a result |
 | `WRONG_MODEL_OR_EFFORT` | `run`, `review` | A turn ran on a model or effort other than the ones the command named |
-| `PAUSED` | `run`, `plan` | `pause` stopped it, or the human stopped it or opened the session in the app |
+| `PAUSED` | `run`, `plan`, `pause` | `pause` stopped it, or the human stopped it or opened the session in the app. From `pause`, the runs it stopped, in `paused` |
 | `INVALID` | `run`, `review`, `plan` | A done-when file can't be read, or an agent changed what isn't its to change |
 | `REVIEWED` | `review` | The review was saved, with its verdict in `verdict` |
 | `PLANNED` | `plan` | The planner's files were checked and merged |
@@ -522,7 +588,7 @@ below. Its exit status is 0 when the line is the command's own result, and 1 or 
 | `MERGED`, `FAILED` | `merge` | The work was merged, or wasn't, with the reason in `detail` |
 | `ADOPTED` | `adopt` | Plan files left uncommitted or unmerged were committed and merged |
 | `MIGRATED` | `migrate` | The plans were moved to the current layout and names, or, with `--branch`, a worktree's own commits were renamed and rebased onto the main branch |
-| `NOTHING` | `adopt`, `migrate`, `main-check` | There was nothing to do. From `main-check --due`, no main-branch check was due |
+| `NOTHING` | `adopt`, `migrate`, `main-check`, `pause` | There was nothing to do. From `main-check --due`, no main-branch check was due. From `pause`, no run was going |
 | `COVERED` | `main-check` | A main-branch check passed on a main-branch commit that contains the commit asked about. Exit status 0 |
 | `FAILING_ON_MAIN` | `main-check` | A main-branch check failed twice on a main-branch commit that contains the commit asked about, and no later pass covers it. `by.culprit` names the first failing commit, its subject and its modules; a bisect that reached a commit it couldn't judge says so in `by.bisect_why` instead. Exit status 1 |
 | `NOT_ON_MAIN` | `main-check` | The commit asked about isn't on the main branch yet, so no main-branch check covers it. Exit status 1 |
@@ -540,6 +606,8 @@ below. Its exit status is 0 when the line is the command's own result, and 1 or 
 Avoid: `FLOOR` (now `HOST_FAILED` or `SCRIPT_FAILED`), `PIN` (now `WRONG_MODEL_OR_EFFORT`), `DESIGN_OWED` (now
 `DESIGN_NOT_APPROVED`), `NOT_READY` (now `CHECKS_FAILED`), `BUDGET` (now `NO_PROGRESS_FOR_HOURS`), `REVIEW_OWED` (now
 `NEEDS_REVIEW`), `TAKEN` (now `IN_PROGRESS_ELSEWHERE`). The script still reads `PIN` in the state files of runs
-started before 2.1.0. Proposed: the new names, by the set's author, 2026-11-12. Agreed by the human, 2026-11-12.
-Proposed: `ERROR` and `RUNNING`, by the set's author, 2026-11-15.
-Proposed: `CHECK_IN`, `WARNING_SIGNS`, `RUN_ENDED` and `PLAN_NOT_MERGED`, by the set's author, 2026-11-18.
+started before 2.1.0.
+Agreed: the new names, by the human, 2026-11-12.
+Proposed: `ERROR` and `RUNNING`, by the set's author, 2026-11-15. Not yet agreed by the human.
+Proposed: `CHECK_IN`, `WARNING_SIGNS`, `RUN_ENDED` and `PLAN_NOT_MERGED`, by the set's author, 2026-11-18. Not yet
+agreed by the human.

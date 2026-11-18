@@ -45,6 +45,8 @@ os.environ.update(
     XDG_STATE_HOME=str(PROCESS / "state"), XDG_CACHE_HOME=str(PROCESS / "cache"),
     ORCHESTRATE_LOOPS_DIR=str(PROCESS / "loops"), ORCHESTRATE_CODEX="/no/such/host",
     ORCHESTRATE_CLAUDE="/no/such/host",
+    # The delivery history is read after every turn; only test_history turns it on, with its own folders.
+    ORCHESTRATE_NO_HISTORY="1", ORCHESTRATE_HISTORY_DIR=str(PROCESS / "history"),
     # The human's git settings (pull.rebase, the LFS filters) never reach the test repositories. The file here
     # gives commits an author, as CI's global settings do.
     GIT_CONFIG_GLOBAL=str(PROCESS / "gitconfig"), GIT_CONFIG_NOSYSTEM="1")

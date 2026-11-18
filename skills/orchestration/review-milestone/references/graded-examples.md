@@ -33,15 +33,14 @@ code showed there was nothing behind them.
 
 ## Works on the easy path only
 
-The milestone: a boat's wake develops, turns and fades across the speed range. The builder's frames showed the
-boat at cruising speed in a straight line.
+The milestone: a chart's labels stay readable from one data point to ten thousand. The builder's screenshots
+showed the chart with fifty points.
 
-The reviewer wrote an inspection list (the wake at rest, at low speed, at full speed, in a hard turn, and as it
-fades) and recorded each one. At full speed, the wake was a texture scrolling with the boat. It didn't develop or
-fade, and in the turn it bent with the hull instead of trailing behind. The item got a Fail, with the frames for
-each entry on the list.
+The reviewer wrote an inspection list (no data, one point, fifty, ten thousand, negative values, and a label forty
+characters long) and captured each one. At ten thousand points the labels overlapped into a solid bar, and the long
+label ran off the edge. The item got a Fail, with the screenshot for each entry on the list.
 
-Why it is here: the builder's recording was honest, but it showed only the one case that worked.
+Why it is here: the builder's screenshots were honest, but they showed only the one case that worked.
 
 ## Couldn't reach the target
 

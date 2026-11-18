@@ -32,6 +32,7 @@ Contents:
 - **Branch:** main  *(script: the main branch)*
 - **Remote:** origin  *(script)*
 - **Builders:** <how many builders, on which hosts, as the human said: "one Claude builder", say>  *(script: `run` adds up the counts and refuses a builder past them unless `--more-builders` carries the human's words)*
+- **Lead check-in:** 3h  *(script: optional; how long the lead's `watch` waits for a warning sign before it wakes the lead anyway, such as 3h or 90m; left out, 3 hours)*
 - **Default host:** <host>  *(script: optional; codex, claude or a `Host` line's name, for when the lead names none; left out, the host the script runs inside)*
 - **Review host:** <same|other|host>  *(script: optional; see below)*
 - **Planner host:** <host>  *(script: optional, and only if the human wants planners on another host; left out, the `Default host`)*

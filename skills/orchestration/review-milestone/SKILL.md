@@ -48,7 +48,7 @@ read the builder's `evidence` and its entries in `LOG.md`.
 Reviewers are lenient. A reviewer finds a real problem, reasons its way to "this is fine", and passes the work.
 It also tries the obvious paths and skips the edges. Being a separate agent from the builder doesn't cure either.
 
-So your sense of whether a defect matters doesn't decide the result; the written items do. A defect is a Must Fix
+So your sense of whether a defect matters doesn't decide the result. The written items do. A defect is a Must Fix
 when it breaks an item's statement or the quality bar. Outside the items, a defect is a Must Fix when it breaks
 something that worked before, breaks the design or an interface (what one module provides to the others), loses
 data, opens a security hole, or shows the work was faked. A Must Fix in an item fails that item. Every other
@@ -59,7 +59,9 @@ recordings, because the builder's show what the builder wanted you to see. Run t
 settings list for each item's target, and say which ones you ran. Watch for work judged only in favourable conditions,
 such as slowed down, close up, or on a faster machine than the people who use the product have. Watch too for work
 that is correct but too subtle for anyone to notice from where those people really are. If you have seen something
-work only on the easy path, you don't know that it works, so give it Could Not Judge.
+work only on the easy path, you don't know yet that it works, so try the edges before you give a result. Could Not
+Judge is for something you had no way to see. Given to something you could have tried, it sends the builder off to
+make evidence of what you were able to check yourself.
 
 Judge a recording from a few still frames taken from it, and read the end of a log rather than the whole file.
 Everything you look at stays in your session and is read again at every later step, and a session that fills up
@@ -92,11 +94,9 @@ less than many short looks with `sleep` and `tail`. Your task gives the script's
      when. Check the work against what the human said there, and check any claim about what the human chose against
      that record. A lead's message or a builder's summary doesn't count as the human's words.
 
-   If you couldn't see or reach something, give it `could_not_judge` and say what evidence would settle it. Do the
-   same for an item that needs a reader who hasn't seen what you have already read, such as the design: say who
-   could give that proof, so a planner can give the item to them. If you
-   can't reach the product at all, because the screen is locked, a permission needs the human's approval or a device
-   isn't connected, judge nothing. End with `BLOCKED needs_access: <what the human has to do>` instead of a result
+   If you couldn't see or reach something, give it `could_not_judge` and say what evidence would settle it. If
+   you can't reach the product at all, because the screen is locked, a permission needs the human's approval or a
+   device isn't connected, judge nothing. End with `BLOCKED needs_access: <what the human has to do>` instead of a result
    line. The script merges nothing and counts no failed review, and the lead runs the same review again in a visible
    session while the human is at the machine.
 2. You have read every changed line of the milestone, not only the files the items mention, and on a module's
@@ -118,24 +118,30 @@ less than many short looks with `sleep` and `tail`. Your task gives the script's
    - The full review, with your inspection lists, goes in `<evidence>/<MODULE>/<milestone>-review.md`.
    - Screenshots and recordings go in the folder `<evidence>/<MODULE>/<milestone>-review/`. Link them from the
      review rather than embedding them, because whoever reads the review loads everything embedded in it. Link only
-     files in that folder. The `review` command commits only these files, so a link to anything else is broken once
-     the review is on the main branch.
-   - In the done-when file, set each item's `verdict`, and point its `review` field at the review file. Then set
-     the milestone's `status`. If every result is `pass` and no Must Fix lies outside the items, set it to `done`.
-     Otherwise set it back to `in_progress`, and list every Must Fix in the milestone's `findings`, one entry
-     each: a short `name`, and the `item` it fails, which you leave out for a finding outside the items. Every
-     item that didn't pass needs a finding.
+     files in that folder or files already on the main branch. The `review` command commits only these files, so a
+     link to anything else is broken once the review is on the main branch.
+   - In the done-when file, set each item's `verdict`. If any result isn't `pass`, or a Must Fix lies outside the
+     items, list every Must Fix in the milestone's `findings`, one entry each: a short `name`, and the `item` it
+     fails, which you leave out for a finding outside the items. Every item that didn't pass needs a finding.
 
-     Leave every other field alone. The script clears `findings` after a pass, sets the builder's `builder_result`
-     back to `open` on the items that didn't pass, and keeps the counts.
-     [Who changes what](../plan-module/references/done-when.md#who-changes-what-and-when) has the whole table.
-5. Your last line is `PASS <milestone>`, or
-   `FAIL <milestone>: <n> fail, <n> could_not_judge, <n> outside the items`. Count Must Fix findings only. The script
-   reads this line. The review file carries the findings, so your reply can be short: the result, the worst
-   finding, and anything the lead must act on. The script keeps only the end of a long reply.
+     Leave every other field alone. The script works out the rest from your verdicts and findings when it saves the
+     review: the milestone's `status`, each item's `review` link to the review file, and the counts of failed
+     reviews. [Who changes what](../plan-module/references/done-when.md#who-changes-what-and-when) has the whole
+     table.
+5. Your last line is `PASS <milestone>` or `FAIL <milestone>`, and the script reads it. The review file carries the
+   findings, so your reply can be short: the result, the worst finding, and anything the lead must act on. The
+   script keeps only the end of a long reply.
+
+Most findings go back to the builder, who fixes the work. A few can't be fixed by any builder, because the fault is
+in the items themselves. An item may name a proof that can't show what it claims, such as an item about what a new
+user can follow alone, given to a reviewer who has already read the design. Or two items may contradict each other,
+so that meeting one breaks the other. For a finding like that, add a `planner` field saying why only a planner can
+settle it. The script then sends the milestone straight to a planner, who diagnoses it, instead of giving the
+builder a turn it can't use. A milestone gets one diagnosis, and after it a finding marked this way goes to the
+human, so keep the field for faults in the items, and leave work that falls short of an item to the builder.
 
 A `could_not_judge` counts as a fail, because nobody could check the item. A Must Fix outside the items fails the
-milestone too, and the review then proposes an item that would have caught it. A Suggestion never changes the `status`.
+milestone too, and the review then proposes an item that would have caught it. A Suggestion never fails it.
 
 Change only those two files and that folder, and leave them uncommitted, because the `review` command commits
 and merges them itself. Leave the code as you found it: if you fixed what you found, nothing independent would
@@ -153,7 +159,7 @@ first ends up checking that the places it named are fixed, which is a narrower j
 
 Then read them, and say in your review whether each Must Fix in the latest one is still there. The script counts a
 finding as a repeat when its name matches one from an earlier review, or when it fails an item that failed before.
-Four failed reviews with a repeat send the milestone to a planner, so the names have to be truthful:
+Repeated findings send a milestone to a planner sooner than new ones, so the names have to be truthful:
 
 - A Must Fix that is still there, or is back, keeps its earlier `name` exactly.
 - A new defect gets a new name.
@@ -202,9 +208,3 @@ the design to Design Approved and may come with Suggestions, or `DESIGN CHANGES:
 sets it to Design Changes Requested and counts the Must Fix findings. The script saves the result against the
 design as it stands. No milestone of the module is built until its design is Design Approved, and a later change
 to the design needs another review.
-
-## When the human disagrees
-
-When the human overturns one of your results, add it to the project's graded examples: what was judged, each
-item's result and your reason, and what the human said instead. Add the results the human confirmed too,
-especially close calls, so the examples show where the line is from both sides.

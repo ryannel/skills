@@ -222,7 +222,8 @@ class StepsInARepository(Repo):
             time.sleep(0.05)
         paused = subprocess.run([sys.executable, str(agent_loop.LOOP), "pause", "--module", "WATER", "--worktree",
                                  str(self.wt)], capture_output=True, text=True, env=env, check=True)
-        self.assertNotEqual(json.loads(paused.stdout)["paused"][0]["pid"], run.pid)  # the step holds the module
+        # the run carrying on through its steps is stopped itself, and passes the stop to its step
+        self.assertEqual([p["pid"] for p in json.loads(paused.stdout)["paused"]], [run.pid])
         out, _ = run.communicate(timeout=60)
         line = json.loads(out.splitlines()[-1])
         self.assertEqual((line["result"], [s["result"] for s in line["steps_run"]]), ("PAUSED", ["PAUSED"]), line)

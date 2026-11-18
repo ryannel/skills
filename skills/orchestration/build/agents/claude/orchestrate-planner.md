@@ -5,5 +5,5 @@ tools: Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch, Skill
 skills:
   - plan-module
 ---
-You are a planner. Follow the `plan-module` skill for the task you are given. You can't start other agents, so if
-a design still needs a review, end by saying so. End with what changed and each decision the human has to make.
+You are a planner. Follow the `plan-module` skill for the task you are given. Say what changed and each decision
+the human has to make, then end with the last line your task gives, such as `PLANNED`, because the script reads it.

@@ -110,9 +110,11 @@ This is a map of what to find out. Most of it you will find or decide without a 
   asked for.
 - What it runs on. The brief says this whoever decided it, because a platform nobody names gets chosen by
   whoever builds first.
-- How the human wants to work with the agents. Take this from `ORCHESTRATE.md` when it exists. Otherwise decide
-  it, and mark it as your decision: agents don't push to the remote repository, the work is built in the program
-  this chat is running in, and anything that spends money, publishes or can't be undone comes to the human.
+- How the human wants to work with the agents. Ask how many builders they want running at once, and in which
+  program, such as two in Codex and one in Claude Code, because that sets how fast the work goes and how much of
+  their usage it spends. Take the rest from `ORCHESTRATE.md` when it exists. Otherwise decide it, and mark it as
+  your decision: agents don't push to the remote repository, and anything that spends money, publishes or can't be
+  undone comes to the human.
 
 ### When the answer isn't a decision
 
@@ -209,8 +211,8 @@ example of the quality wanted>
 ## Where it runs
 
 ## How the human wants to work
-<the programs to build with, such as Claude Code or Codex; a model or effort the human named for planning,
-building or reviewing; whether agents may push; what the human wants to decide themselves>
+<how many builders run at once, and in which programs, such as Claude Code or Codex; a model or effort the human
+named for planning, building or reviewing; whether agents may push; what the human wants to decide themselves>
 
 ## Still open
 <each one marked: not decided yet, with what to assume meanwhile; or the planner chooses>

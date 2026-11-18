@@ -1,6 +1,6 @@
 ---
 name: build-milestone
-description: Builds one milestone of a module from its plan and done-when file, proves it and merges it, as part of the orchestrate set in Claude Code or Codex. Use when implementing, fixing or refactoring in a repository that has an ORCHESTRATE.md. Not for planning (plan-module) or judging a milestone (review-milestone).
+description: Builds one milestone of a module from its plan and done-when file, proves it and merges it, as part of the orchestrate set in Claude Code or Codex. Use when a lead or the human gives you a milestone to build, or asks for a change small enough to build in this session, in a repository that has an ORCHESTRATE.md. Not for planning (plan-module) or judging a milestone (review-milestone).
 ---
 
 # Build a milestone
@@ -18,16 +18,20 @@ is the agent the human chats with, and when a lead is running the build, it star
 
 The project settings are in `ORCHESTRATE.md`. They say where the plans are kept, which command runs the tests,
 and what the project's rules are. They also list the devices and platforms the product runs on, and the files
-call each of these a target. The settings link to the project's building guidance, and you read both before you
-start.
+call each of these a target. Their `Project guidance` section links to the project's own guidance for each kind
+of work. Read the settings and the guidance for building before you start.
 
 If the plans folder has a `GLOSSARY.md`, read it as well. It holds the agreed name for each thing in the project.
 Use those names in anything new you write and in your report, but keep to the code's own word inside existing
 code.
 
-The module's files are in its folder, `<plans folder>/<MODULE>/`. Your milestone is the first one in `PLAN.md`
-that isn't marked done. Under its heading the planner may have left a note on what the items and the design
-don't say, such as what already exists or what another module owns. How to break the work down is yours to
+The module's files are in its folder, `<plans folder>/<MODULE>/`. Your milestone is the one your task names. A
+task that names a module and no milestone means that module's first milestone that isn't Done, because milestones
+are built in order. A task that names neither, such as a fix the human asked for in the chat, is that change and
+nothing more, and [a change no milestone covers](#a-change-no-milestone-covers) says how to merge it. The plan's
+milestones are left for their builders, because a lead may already be running one. Under your milestone's heading
+the planner may have left a note on what the items and the design don't say, such as what already exists or what
+another module owns. How to break the work down is yours to
 decide. A plan written by an older version of this set may have a list of steps to tick and a list of stop rules
 there instead. The steps are the planner's suggestion, and the stop rules are limits to keep. `DESIGN.md` holds
 the design, and `LOG.md` the module's history, which you need only when you pick up unfinished work.
@@ -65,8 +69,8 @@ keeps the project's records. Run them as `python3 <the build skill's folder>/scr
    The script writes the human's page, `STATUS.md`, from the done-when file, and a status line anywhere else is out
    of date the next time a milestone moves.
 4. Your last line is `DONE`, or `BLOCKED <reason>: <what would unblock it>`, or `NEEDS_CONTEXT: <what is
-   missing>`. The reason is one of `needs_human_feedback`, `needs_access`, `needs_hardware` or `needs_dependency`,
-   and the sections below say when each applies. When none of them fits, such as an approach that can't work,
+   missing>`. The reason is one of `needs_human_feedback`, `needs_access`, `needs_hardware`, `needs_dependency` or
+   `main_broken`, and the sections below say when each applies. When none of them fits, such as an approach that can't work,
    write `BLOCKED:` with no reason. The script and the lead read this line to decide what happens next, so keep
    to these forms.
 
@@ -116,10 +120,9 @@ other builders should do is the lead's to decide, because only the lead can see 
 Record in your evidence the commit each proof ran on, and link evidence by its path from the repository's root,
 because your worktree's absolute paths stop working when it is reused.
 
-After your turn, the script runs every Automated Check and the project's test command on the main branch's tip, which
-holds your merged work. That run is the proof of record: the reviewer is told it passed and on which commit. So once
-you have merged, there is no need to run your checks again yourself, and on a busy main branch each extra run is
-time other builders wait for the same resources. If the script's run fails, it tells you which check and why.
+The script's run of the checks after your turn is the proof of record, and the reviewer is told it passed and on
+which commit. So once you have merged, there is no need to run your checks again yourself, and on a busy main branch
+each extra run is time other builders wait for the same resources.
 
 Evidence a reviewer inspects is different, because the script doesn't take it. A capture of an older build shows code
 that isn't the code under review. `merge` lists the files the rebase brought in, under `upstream_files`. If any of
@@ -128,16 +131,16 @@ capture pass after your last merge rather than one after each.
 
 Hold a lock only for the command that needs it. Don't wrap the script's own `check` or `merge` in `lock`: `check`
 takes each item's lock just for that item, and `merge` waits in the merge queue, so `lock` refuses them. `merge`
-already makes builders take turns, so a script
-of your own that holds a lock across a rebase, a check and a merge makes everyone wait through all three, and it
-usually fails because the main branch moved while it ran. In the same way, check that the human is there and the
-screen is unlocked before you take a lock for an attended run, because a lock held while waiting for a person stops
+already makes builders take turns, so a script of your own that holds a lock across a rebase, a check and a merge
+makes everyone wait through all three, and it usually fails because the main branch moved while it ran. In the same
+way, check that the human is there and the screen is unlocked before you take a lock for a run that needs them,
+because a lock held while waiting for a person stops
 every other builder that needs it.
 
 An item whose check is `python3 "$ORCHESTRATE_SCRIPT" main-check <name>` is proved by a slow check that runs on
 the main branch after merges, not by you. You don't need to run it before you merge: on your branch it answers
 `NOT_ON_MAIN`. After your merge, the script's run asks it again, and it passes with `COVERED` once a run on the main
-branch includes your commit. `PENDING` means that run hadn't finished in time; the next run of the checks picks up
+branch includes your commit. `PENDING` means that run hadn't finished in time, and the next run of the checks picks up
 its result. `FAILING_ON_MAIN` means the main branch fails the check at or before your commit, and the result names
 the commit that broke it. If that commit is yours, fix it as part of this milestone. If it isn't, the fix belongs to
 that commit's module, so say so in your report rather than working around it.
@@ -160,16 +163,27 @@ so they don't hold up anyone's merge.
 
 When several builders merge at about the same time, `merge` puts their branches in a queue and merges them together
 as one batch, with one run of the test command for the lot. If that run fails, the script splits the batch to find
-the branch that broke it, and merges the rest. So `merge` can take a while on a busy main branch, which is normal;
-the result's `batch` field says which branches merged with yours. If your branch conflicts with one that merged
+the branch that broke it, and merges the rest. So `merge` can take a while on a busy main branch, which is normal.
+The result's `batch` field says which branches merged with yours. If your branch conflicts with one that merged
 ahead of it, the result is `FAILED` and `conflicts` names the files. Nothing of yours merged: rebase onto the main
 branch, resolve those files, commit, and merge again.
 
-If `merge` prints `FAILED` because your commits set the milestone to `ready_for_review` or `done`, which can happen
-on a branch an older builder left, set the `status` back to `in_progress`, commit that, and merge again.
+A `FAILED` for any other reason says in its `detail` what was wrong and what to do. Two of them change what you do
+next. If a planner has changed your milestone's items since your branch started, `merge` refuses the branch,
+because the work was built against items that no longer stand. Take the main branch's copy of the plan files, read
+the items again, and change your work to meet them before you merge. If the result has `main_broken`, the main
+branch fails the test command without your branch, so the fault isn't yours and nothing of yours landed. Stop
+there, write your handoff, and end with `BLOCKED main_broken:` and what `main_broken` names. The result's `next` gives the fix
+to whoever owns the commit that broke it, and every builder's merge waits on that fix, so a fix of your own would
+race theirs.
 
-An ordinary fix that has no plan is merged the same way. Make the fix, add a test if one would catch the fault
-coming back, and run `merge`. Then a quick fix can't collide with a builder's merge or skip the tests.
+## A change no milestone covers
+
+When the human asks for a change that no milestone covers, such as a small fix, merge it the same way: make the
+change, add a test if one would catch the fault coming back, and run `merge`. Then the fix can't collide with a
+builder's merge or skip the tests. Change only what you were asked to change. Something else you notice on the way
+goes in your reply, because it may belong to a module another builder is working on, or to a milestone not yet
+built.
 
 ## Before you finish
 
@@ -180,11 +194,13 @@ same files after your merge it doesn't run that check again.
 
 Then judge each `inspect` and `ask` item yourself, the way a reviewer will, on the exact build and the real target.
 [How to inspect](../plan-module/references/proofs.md#how-to-inspect) says how. For an item judged by taste, first
-get the fresh opinions described under [subjective work](../plan-module/references/proofs.md#subjective-work), and keep the best attempt.
+get the fresh opinions described under [subjective work](../plan-module/references/proofs.md#subjective-work),
+and keep the best attempt.
 
 ## The review
 
-When a lead is running the build, it starts the reviewer too, once the script's checks have passed on your merged work.
+When a lead is running the build, a reviewer is started for you once the script's checks have passed on your merged
+work.
 
 In a single chat with no lead, nobody else runs the script's checks, so after you merge, run
 `agent_loop.py run --module <M> --worktree . --checks-only`. It starts no agent: it runs the checks on the merged
@@ -192,33 +208,17 @@ work and prints `READY_FOR_REVIEW` once it has set the milestone Ready for Revie
 failed, for you to fix and merge again. A `READY_FOR_REVIEW` with `review: false` means the milestone is Done and
 needs no reviewer. Otherwise you start the reviewer, with
 `agent_loop.py review --module <M> --milestone <id> --commit <sha> --worktree .`, where the commit is the one that
-result names. If the human uses both Claude Code
-and Codex, add `--host` with the one you are not running in. Pass the command nothing else, so the reviewer forms
-its own view. Only a review started by that command is saved, and only a saved review can set the milestone to
-Done. Without one, the human has to accept the milestone by hand. If you can't start a review, end with `DONE` and
-say the milestone still needs one.
+result names. If the human uses both Claude Code and Codex, add `--host` with the one you are not running in. Pass
+the command nothing else, so the reviewer forms its own view. Only a review started by that command is saved, and
+only a saved review can set the milestone to Done. Without one, the human has to accept the milestone by hand. If
+you can't start a review, end with `DONE` and say the milestone still needs one.
 
 ## When a review fails
 
-A failed review is easy to take for the list of what is wrong with the milestone. It is narrower than that. A
-reviewer can't try everything, so a review describes what one reviewer happened to try. Where it says an item
-failed, it shows one thing that makes the item's statement untrue, and there may be others like it that the
-reviewer never reached. The next review is done by a new reviewer, who starts again from the items and chooses
-what to try. So the milestone is finished when every item is true as it is written, which is what finished meant
-before the review.
-
-The script sets the items that didn't pass back to `open`, and each needs new evidence. An item marked
-`could_not_judge` is one the reviewer couldn't see for itself, so it needs evidence a reviewer can reach. The
-Suggestions in a review are yours to take or leave.
-
-The milestone's `findings`, in the done-when file, names each Must Fix, and the script marks with `repeat` any that an
-earlier review also found. After four failed reviews with a repeat, or six failed reviews in all, the script sends the
-milestone to a planner instead of a builder.
-
-When a lead is running the build, it sends you a message that says where the review is. In a single chat with no lead,
-run `agent_loop.py next --module <M> --milestone <id> --worktree .` after a failed review. It prints the step that the
-counts of failed reviews call for: carry on in this session, hand over to a new session, or send the milestone to a
-planner. [The escalation steps](../plan-module/references/done-when.md#when-a-review-fails) explain each one.
+When a lead is running the build, the script sends you a message after a failed review, saying where the review is
+and how to read it. In a single chat with no lead, run `agent_loop.py next --module <M> --milestone <id> --worktree .`
+after a failed review. It prints the same message, and the step the milestone's failed reviews call for: carry on in
+this session, hand over to a new session, or send the milestone to a planner.
 
 ## When a behaviour won't come
 
@@ -246,7 +246,7 @@ a simulator or the GPU, wrap it in `agent_loop.py lock <name> -- <command>`. A l
 the device can serve at once. An exclusive resource takes one run at a time. A shared one takes as many as the
 settings give it, such as `gpu: 3`. Use `lock <name>.alone` only when a run needs the whole device, such as all of its
 memory: it waits until nobody else is using it, and everyone else waits while you have it, so keep that command
-short. A lock keeps out only runs that take the same lock, so it doesn't make the machine quiet; a timing taken while
+short. A lock keeps out only runs that take the same lock, so it doesn't make the machine quiet. A timing taken while
 builders work is noisy whatever lock it holds, which is why the plan gives timings a loose tripwire.
 
 The lock waits its turn, so finding the resource busy is normal, and `agent_loop.py locks` shows who holds each lock
@@ -290,7 +290,7 @@ Some things belong to someone else, and each has a way to ask for a change.
   the decision.
 
 When you need a name for something new and the glossary has none, add an entry in the same commit, with the line
-`Proposed: by builder, <date>. Not yet agreed by the human.` Mention it in your report and carry on. If your merge
+`Proposed: by a builder, <date>. Not yet agreed by the human.` Mention it in your report and carry on. If your merge
 then fails because another builder added an entry to the same file, keep both.
 
 This skill covers one milestone. To keep going past it, or to run with no one watching, the human uses `/build`.

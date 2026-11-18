@@ -62,7 +62,8 @@ The aim is a name the human understands on sight, without having it explained.
   them a meaning of its own.
 
 The names most likely to need replacing are the ones an agent made up in the middle of a task and then kept
-using, such as "the loop", "the ladder" and "parked". Nobody told the human what they meant.
+using, such as "the sweep" for a nightly cleanup or "the shelf" for orders waiting on stock. Nobody told the
+human what they meant.
 
 ## An entry
 
@@ -72,7 +73,7 @@ A book that a member has asked for, and that is waiting on the shelf for them to
 Not: On Loan. A book on hold has not left the library.
 Avoid: reserved, claimed
 Stored as: `claimed`, in the `status` column of the `loans` table
-Proposed: by a builder, 12 March 2027. Not yet agreed by the human.
+Proposed: by a builder, 2027-03-12. Not yet agreed by the human.
 ```
 
 - The first line after the name says what the thing is, in one or two sentences.
@@ -92,7 +93,7 @@ disagrees with the first.
 
 1. Collect the names before you ask anything. Take them from the human's words in the chat, and from the
    repository: identifiers, text on screen, documents, table and column names. Finding these is your job, not
-   the human's. The code shows which names are in use; it doesn't decide which name is right.
+   the human's. The code shows which names are in use, but it doesn't decide which name is right.
 2. Get the human's own words before you propose any. If the chat doesn't already hold them, ask the human to
    say what the product does from start to finish. That one question gives you their word for most things at
    once. A name that appears only in the code or the documents is not the human's word until they use it. A
@@ -151,11 +152,13 @@ When the human does change a name, put the old one under `Avoid`, and leave logs
 records of the past as they were written. Then update the documents still in use, changing the names and keeping
 every fact. A step or a thing that has no agreed name yet stays in, described in plain words.
 
-In a project built with the orchestrate set, only a planner, the agent that writes the plans, changes the plan
-files. So the lead, the agent the human chats with, gives a planner the human's words. The set also keeps each
-piece of work's checks and results in JSON files beside the plans. Leave those as they are when a name changes,
-because the set's script checks who changed them, and a planner changes an item whose words have to change. In
-any other project, update the documents yourself.
+In a project built with the orchestrate set, when the human agrees a proposed name, the lead, the agent the human
+chats with, removes the `Proposed:` line and merges the glossary with the script's `adopt` command, because nothing
+else changes. A rename changes the plan files too, and only a planner, the agent that writes the plans, changes
+those, so for a rename the lead gives a planner the human's words. The set also keeps each piece of work's checks
+and results in JSON files beside the plans. Leave those as they are when a name changes, because the set's script
+checks who changed them, and a planner changes an item whose words have to change. In any other project, update the
+documents yourself.
 
 Entries have to leave the glossary as well as arrive, or it grows until nobody reads it. Propose removing an
 entry when the thing it names is gone.

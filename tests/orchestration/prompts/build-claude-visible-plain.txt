@@ -4,7 +4,7 @@ The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has builder_result
 
 About this session:
 - This worktree is yours for the milestone. Other builders are working in their own, so keep your changes inside this one.
-- A lead is running this build, and starts the reviewer once the script's checks pass on your merged work.
+- A lead is running this build. Once the script's checks pass on your merged work, a reviewer in a new session judges the milestone.
 - The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`.
 - This session is visible in the Claude app, so an approval prompt can appear in it if someone is there to answer it.
 - M2.2 (does the tile animation read as smooth) needs human feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the human to look at, then end with `BLOCKED needs_human_feedback: <the question for the human>`.

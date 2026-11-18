@@ -30,7 +30,7 @@ Each kind of agent has a skill that tells it how to do its job:
 | [`plan-module`](plan-module/) | the planner | Opus 5.5, high | Splitting a project into modules, and writing each module's design, milestones and done-when file |
 | [`build-milestone`](build-milestone/) | a builder | Codex `gpt-6.2-sol` or Opus 5.5, medium | Building one milestone, proving it, and merging it |
 | [`review-milestone`](review-milestone/) | a reviewer | Opus 5.5, medium | Judging a design, or a milestone that is Ready for Review |
-| [`build`](build/) | the lead | Opus 5.5, medium (either host can lead) | Running the whole build: which commands to run, and when to come to you |
+| [`build`](build/) | the lead | Opus 5.5, medium (either host can lead) | Running the whole build: keeping the work moving, and when to come to you |
 
 ## How a project runs
 
@@ -71,18 +71,19 @@ The example is a small money-tracking tool. It reads a file of transactions and 
    fails. A Reviewer Inspection means a reviewer runs the product and looks at it. A Reviewer Question is a
    question a reviewer answers by reading the code. The planner also records when a milestone depends on one in
    another module: the second `report` milestone depends on the `core` milestone, because it needs real balances.
-10. The `plan` command confirms the planner changed no record of finished work, merges the plan into your main
-    branch, and prints one line saying what happened and which command to run next. The `run` and `review`
-    commands end the same way.
+10. The `plan` command confirms the planner changed no record of finished work and merges the plan into your main
+    branch. Every command ends by printing one line saying what happened and, when it stopped short, which command
+    comes next.
 
 ### Reviewing the designs
 
-11. The lead runs the `review` command on each module's design. Each run starts a new reviewer, which reads your
-    request and the design and writes a review. The command saves it and sets the design to Design Approved or
+11. The same `plan` command goes on to review each module's design. Each review is a new reviewer, which reads
+    your request and the design and writes a review. The command saves it and sets the design to Design Approved or
     Design Changes Requested.
-12. After Design Changes Requested, the lead runs `plan` again with the review, a planner fixes the design, and it
-    is reviewed again. No builder starts on a module until its design is Design Approved. If the lead runs `run` on
-    a module whose design has had no review, `run` does that review first.
+12. After Design Changes Requested, a planner fixes the design from the review, and it is reviewed again. The
+    command does that once by itself, and stops for the lead if the second review still asks for changes. No
+    builder starts on a module until its design is Design Approved. If the lead runs `run` on a module whose design
+    has had no review, `run` does that review first.
 
 ### Building
 
@@ -105,15 +106,15 @@ The example is a small money-tracking tool. It reads a file of transactions and 
 
 ### Reviewing a milestone
 
-18. The lead runs the `review` command on the milestone, which starts a new reviewer. The reviewer runs the tool,
+18. The same `run` command goes on to review the milestone, with a new reviewer. The reviewer runs the tool,
     tries it on its own files, reads the changed code, and gives each item a Pass, a Fail or a Could Not Judge.
 19. The command confirms the reviewer changed no code and saves the review. If every item passed, it sets the
     milestone to Done.
-20. If the review failed, the milestone goes back to In Progress, and the lead runs the command the script printed.
-    That depends on how many reviews the milestone has failed, and how many of those repeated a finding an earlier
-    review had raised:
+20. If the review failed, the milestone goes back to In Progress. What happens next depends on how many reviews
+    the milestone has failed, and how many of those repeated a finding an earlier review had raised. `run` carries
+    on by itself through the first two rows, and stops for the lead at the third:
 
-    | Failed reviews | What the lead runs | What happens |
+    | Failed reviews | What runs | What happens |
     |---|---|---|
     | 1 or 2 | `run`, with the review | The same builder carries on. It is told that a review shows what one reviewer tried, so the milestone is finished when every item is true, not when the review's findings are cleared. |
     | 3 | `run`, with a new builder | A builder with no memory of the first attempts starts from the files and the review. |
@@ -122,10 +123,14 @@ The example is a small money-tracking tool. It reads a file of transactions and 
 
 ### The next milestone
 
-21. The lead runs `run` again for the module, and the command starts a builder on the next milestone. A milestone
-    that depends on another module doesn't start early: if the lead runs `run` for `report` before the `core`
-    milestone is Done, the command prints that the milestone is Waiting: On Dependency and starts nothing.
-22. Steps 14 to 21 repeat until every milestone in every module is Done.
+21. After a pass, `run` starts a builder on the module's next milestone. A milestone that depends on another
+    module doesn't start early: if `report` reaches a milestone before the `core` milestone it needs is Done, the
+    command stops and says the milestone is Waiting: On Dependency.
+22. Steps 14 to 21 repeat until every milestone in every module is Done. The lead isn't needed for any of them. It
+    is woken when a command stops at something that needs judgement, and every three hours or so by its `watch`
+    command, which also wakes it sooner on a warning sign, such as a builder that has made no progress for two hours.
+    Each time, it looks at whether the work is moving as fast as it could, and steers: it starts a builder on ready
+    work, sends a builder a message, starts a planner on a re-plan, changes the order of the work, or asks you.
 
 ### When it needs you
 
@@ -139,22 +144,28 @@ The example is a small money-tracking tool. It reads a file of transactions and 
 An item can also need your approval for a permission, such as screen recording, or a device connected, such as a
 phone. The planner marks those as needing access or hardware. The lead runs that milestone in a session you can
 see, at a time you are at the machine, and the builder asks for the access as soon as it starts. Approving the
-prompt is all you do; nobody asks you to confirm it in the chat.
+prompt is all you do. Nobody asks you to confirm it in the chat.
 
 A milestone can also stop because something it needs is missing, such as a login the builder doesn't have. It is
 then Blocked, with a reason, and the command prints what would unblock it.
 
 ### The report
 
-26. The lead runs the `report` command. It prints what is Done, what each review said, what waits for you, every
-    decision saved in your name, and what the build cost. The lead sends you that with its own notes.
+26. When you ask how it's going, and when it stops, the lead runs the `report` command. It prints what waits for
+    you, every decision saved in your name, what is Done, what each review said, what has slowed down, and what the
+    build cost. The lead sends you that with its own reading on top.
+27. The lead runs `dashboard --open` when you want the longer view: a page showing what each kind of agent and
+    each model cost per day, which milestones took the most, every failed turn and review, how each version of the
+    script compared with the last, and a retro. The script copies the figures out of the Claude and Codex session
+    files after every turn, into `~/.orchestrate/history/`, so the page still works after the hosts delete their
+    sessions. It keeps numbers, names and times, never what was said.
 
 ### Where things stand
 
 Every project keeps its plans in the same place, `docs/plans/`, with one folder per module. The page to open is
 `docs/plans/STATUS.md`. The script writes it after every change it records, so it is never out of date and nobody
-edits it. It opens with an overview: how many modules are done, what is waiting on you, what is happening now and
-next, and what was recently done. Below that it lists every module in build order, finished and still to come,
+edits it. It opens with an overview: how many modules are done, Needs you now, Choices made for you, Now and next,
+and Recently done. Below that it lists every module in build order, finished and still to come,
 with what each is for and how far along it is.
 
 ```
@@ -246,9 +257,25 @@ the script, because:
 5. The script names the model and effort for every session on the command line, and saves what was used.
 6. You can watch a session the script starts in the Codex app or in Claude desktop, and step in.
 
-The cost is a script of about 6,100 lines that depends on how each host's command line behaves, which changes
+The cost is a script of about 13,500 lines that depends on how each host's command line behaves, which changes
 between releases. And both companies advise starting with one agent and adding more only for a problem you can
 name, so these skills also work in a single chat with no lead, and a small job should be done that way.
+
+### The script runs the routine steps, and the lead watches delivery
+
+Most steps of a build need no judgement: a milestone that is Ready for Review gets its review, a failed review goes
+back to its builder, and a pass moves on to the next milestone. Until 2.4 the script stopped after each one, so the
+lead could look between steps. In practice it ran each printed command unchanged. One 36-hour build ran about 170
+agent sessions, each costing the lead a turn to start it and another to read its result, and that load got the
+lead's conversation shortened four times. So `run` and `plan` now carry on through those steps, and stop at
+anything that needs judgement: a decision of yours, a block, a diagnosis, a failing main branch.
+
+That frees the lead for the part only it can do. It sees every run at once, so it is the one that can notice
+builders all waiting on the same thing, or milestones failing review over and over for the same reason. The `watch`
+command wakes it every few hours, and sooner on a warning sign read from the script's records, with a summary of
+what moved and what didn't. These signs and their thresholds are our own practice, and they are set where a sign
+would have caught a stall we saw, not from any measurement. `--one-step` keeps the old way, one step per command,
+for anyone who wants to look between steps.
 
 ### A reviewer is a new session, and it uses the product
 
@@ -266,7 +293,7 @@ their own proof were re-planned up to four times before any review had failed.
 ### One builder works on each module, and only a few builders run
 
 Two agents writing to the same files overwrite each other, so each module has one builder, in its own worktree.
-Cognition, Cohere, Cursor and Anthropic all report that more agents writing at once cost more and helped less;
+Cognition, Cohere, Cursor and Anthropic all report that more agents writing at once cost more and helped less.
 Cohere measured results getting worse beyond two to four builders. Merges take turns, and branches that arrive
 while one is running merge together as a batch with one run of the test command, so a slow test command still
 limits how fast builders can merge, but ten builders don't wait for ten runs of it.
@@ -294,9 +321,9 @@ explains these rules and their sources.
 Nothing published supports these. Each is here because it fixed something we saw.
 
 - After a failed review, the steps run from the same builder, to a new builder, to a planner's diagnosis, to stopping
-  for you. Each step exists because the one before it has been tried. A repeated finding brings the diagnosis after
-  four failed reviews, and new findings only after six, because one project's milestone failed eight reviews, each on
-  something new that the builder then fixed, and stopped for its human with nothing wrong in its plan. A milestone
+  for you. Each step exists because the one before it has been tried. A repeated finding brings the diagnosis sooner
+  than new findings do, because one project's milestone failed eight reviews, each on something new that the builder
+  then fixed, and stopped for its human with nothing wrong in its plan. A milestone
   gets one diagnosis, so one that keeps failing reaches you after one planner turn.
 - A milestone proved only by Automated Checks is Done without a reviewer, unless it is the module's last
   milestone, whose review reads the whole module. Anthropic's rule for when a reviewer is worth its cost was how
@@ -374,7 +401,7 @@ and the report lists every decision saved in your name, so you can spot one you 
 | how fast milestones moved, beside commits, lock queueing and failed jobs | `flow` |
 | who holds each lock, such as the GPU, and who is waiting for it | `locks` |
 | whether the Codex weekly usage limit will last | `quota` |
-| for a report | `report` |
+| how the build is going | `report`, with its own reading on top |
 | to save a decision of yours | `human feedback`, `accept`, `rereview`, `reopen` or `scope` |
 
 Each of these is a command of `python3 <where the skills are installed>/build/scripts/agent_loop.py`, and you can
@@ -404,8 +431,9 @@ it.
 
 A reviewer works in a clean copy of the commit it judges. The `review` command confirms that the reviewer changed
 only its review, its folder of screenshots and its own fields in the done-when file, that each item's result agrees
-with the review's last line, and that a failed review lists its findings. It counts the review itself. Then it merges the
-review itself. If any of that is wrong, nothing is saved.
+with the review's last line, and that a failed review lists its findings. If any of that is wrong, nothing is saved.
+Otherwise the script works out the milestone's status and the counts from the reviewer's verdicts, and merges the
+review itself.
 
 ### After a planner
 
@@ -534,7 +562,8 @@ interfaces and can change with an update. They were proven with the Codex app 26
 4.23118.0. Each command's output says whether its session ran in the app or in the background.
 
 With `ORCHESTRATE_VISIBLE=1`, a new Codex thread opens in the app's window, which brings the app to the front, and
-starts with a one-line setup turn. A Claude session runs in the script's own copy of the Claude CLI, so the CLI must be signed in.
+starts with a one-line setup turn. A Claude session runs in the script's own copy of the Claude CLI, so the CLI
+must be signed in.
 
 ### Smaller limits
 
@@ -548,7 +577,9 @@ starts with a one-line setup turn. A Claude session runs in the script's own cop
 
 ### How much this has been tested
 
-One engine project has run full milestones under version 1.5, with sessions in the app.
+One engine project has run full milestones since 9 November 2026, from version 1.5 to 2.3, with sessions in the
+app, and a second project has run with a Codex lead. Neither has yet run under 2.4, where `run` and `plan` carry on
+through the routine steps and the lead keeps `watch` running.
 
 Before that, nine test runs took five small made-up projects from an empty repository to the end, with every
 session in the background, using Claude, Codex, and the two mixed. The projects were a text tool (three runs), the
@@ -557,7 +588,7 @@ browser game (one run). Seven ended with every milestone Done and a product that
 tool that dropped the letter `Ø`, which the planning skill now guards against. The game stopped at its first
 milestone, for reasons that have been fixed but not run again.
 
-Those runs were short; the longest took 97 minutes. Each was run once, no person graded a review, and in each the
+Those runs were short. The longest took 97 minutes. Each was run once, no person graded a review, and in each the
 lead also played the human. Only the last had the lead save a human's decisions the way it does now. Accepting a
 milestone by hand, asking for a new review and editing the scope are covered by automated tests only.
 
@@ -573,32 +604,42 @@ person, and each request was run once or twice, so this is a first reading. The 
 ### Main-branch checks wait inside a check
 
 An item that depends on a main-branch check waits for that check's run for up to 55 minutes, inside the script's
-own run of the item checks. A run that takes longer, or a check that isn't due yet, answers `PENDING`, which the
-script counts as a failed check, so it uses one of the milestone's tries before the result arrives. Nothing starts
-due runs on a timer either: the lead runs `main-check --due`. A pending result the script waits on without counting
-it as a failure, and a schedule of its own, are the next steps if this proves costly.
+own run of the item checks. A run that takes longer, or a check that isn't due yet, answers `PENDING`, and the
+script asks again without spending a builder's turn on it. `watch`, which the lead keeps running, starts the runs
+that are due, so they start without the lead and without a scheduler of their own.
 
 ## Left out for now
 
 The rule is to start small, and add something only when its absence has caused a problem. So these are not here
 yet:
 
-- merging through pull requests;
-- agents dedicated to research;
-- a second agent that confirms each finding;
-- running Automated Checks in a container.
+- Agents dedicated to research.
+- A second agent that confirms each finding.
+- Running Automated Checks in a container.
+
+Four larger ideas came out of the review of a 36-hour build, and each is worth doing. Each needs a design of its
+own, so they wait:
+
+- Merging through pull requests. The merge queue, its batches and the search for the branch that broke a batch all
+  assume the script merges straight into the main branch. A pull request adds a second place where the merge can
+  wait, fail or be changed by someone else, and the record would have to follow it.
+- A spending budget. The token figures the script keeps aren't charges. Claude's is a list-price estimate, not
+  what a plan is charged, and a turn that ran in the Codex app reports none. A budget that stops a build on those
+  numbers would stop it on the wrong ones. `quota` forecasts Codex's weekly limit in the meantime.
+- A planner lock per module. Two planners at once could each change the module list or an interface the other
+  module reads. Planners run one at a time, in the order they were started, until there is a way to merge plan
+  changes that touch the same shared files.
+- Support for a Codex lead. The build skill is written around a host that runs commands in the background and
+  wakes the lead when one ends, as Claude Code does. A Codex lead has run a build, and `watch --runs` gives a lead
+  without that wake-up something to wait on, but the skill hasn't been worked through for how Codex runs long
+  commands.
 
 Some things were considered after a real failure and left out on purpose, because a smaller change already
 covers that failure:
 
-- a check for free disk space before a build: the script now removes a finished module's checkout, and any of its
+- A check for free disk space before a build. The script now removes a finished module's checkout, and any of its
   checkouts that no live process is using and nobody has used for six hours, or for half an hour when less than
-  30 GB is free, checked before every builder turn and on `status`;
-- a check that rejects status written into plan files: `STATUS.md` is generated, and the skills say not to write
-  status anywhere else;
-- letting your approval of a design survive an edit to its header: status no longer belongs in the header,
-  so there is nothing to edit there;
-- one planner lock per module: a second planner now waits for the first instead of being turned away;
-- chaining build, review and the next milestone, or a plan and its design review, inside one command: each step
-  still costs the lead a turn, but the lead now reads each result from a file the script writes, which was the
-  larger cost.
+  30 GB is free, checked before every builder turn and on `status`, and `watch` warns the lead when the disk runs
+  low.
+- Letting your approval of a design survive an edit to its header. Status no longer belongs in the header, so
+  there is nothing to edit there.

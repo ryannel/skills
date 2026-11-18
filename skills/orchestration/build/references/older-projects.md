@@ -46,3 +46,17 @@ human. They need no change, because the script doesn't read those words.
 Before 2.1.0 a builder set its own milestone Ready for Review. A milestone in that state on the main branch, with no
 record of the script's checks, is listed under `can_start`, not `ready_for_review`, and a `review` of it prints
 `INVALID` with `next` naming the `run` that checks it first. Follow that `next`.
+
+## A report a day
+
+Before 2.4 the lead wrote a report each day to `<evidence>/build-reports/<date>.md`. Those files can stay where they
+are, and `adopt` still merges one left unmerged. Nothing new is written there: `report` now prints the facts when
+the human asks, as [the report](report.md) describes.
+
+## No `Graded examples:` line
+
+A project planned before the settings had a `Graded examples:` line still gives reviewers
+`<evidence>/graded-examples.md` to read, but `human accept` and `human rereview` add nothing to it, because the
+script adds the human's overturned reviews only to a file the settings name. Suggest to the human that you add the
+line, naming the file the project already uses, so their corrections reach later reviewers. A settings change is
+committed with git on the main branch, as the build skill says.

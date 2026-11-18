@@ -33,14 +33,20 @@ and you treat each differently:
 - Under "Still open", a question not yet decided is yours to settle with an `Assumption:` line. One marked "the
   planner chooses" is yours to settle without one.
 
-Take the `Builders:`, `Merge:` and `Human decides` lines of the project settings from the brief's section "How the
-human wants to work". A brief written by an older version of this set says "the owner" for the human, and calls that
-section "How the owner wants to work". If the human named a model or an effort for one kind of agent there, write the
-line for it, as [the settings reference](references/profile.md#a-model-or-an-effort-for-one-kind-of-agent) describes.
+Take the host, `Builders:`, `Merge:` and `Human decides` lines of the project settings from the brief's section
+"How the human wants to work". A brief written by an older version of this set says "the owner" for the human, and
+calls that section "How the owner wants to work". If the human named a model or an effort for one kind of agent
+there, write the line for it, as [the settings reference](references/profile.md#a-model-or-an-effort-for-one-kind-of-agent)
+describes. When you write the settings in a chat and the brief doesn't say, ask the human which programs they build
+with, how many builders they want on each, and whether they want a particular model. Those are their choices, and a
+guess costs them: a Codex builder line in a project that only uses Claude Code fails on its first run. Write the
+`Setup command:` line too, from what a fresh copy of the repository needs before its tests can run, such as `npm ci`,
+and ask the human when the repository doesn't make it clear. The script tests every merge in a clean copy where
+nothing has been installed, so without that line a project with dependencies fails its first merge.
 
 `GLOSSARY.md` holds the agreed name for each thing in the project. Use those names in the design, the items and
 the interfaces. When you need a name for something new, add an entry with the line
-`Proposed: by planner, <date>. Not yet agreed by the human.`, and mention it in your report.
+`Proposed: by a planner, <date>. Not yet agreed by the human.`, and mention it in your report.
 
 ## What you write
 
@@ -87,7 +93,7 @@ existed, and a builder handed steps to tick tends to tick them and stop there. I
 some piece of work and no item asks for it, an item is what is missing, so add the item.
 
 A limit on what a builder may do goes where it holds, with its reason. Put it in the project settings, or the
-building guidance they link to, when it is true of every module, and in the design when it is about this module.
+guidance their `Project guidance` section links to, when it is true of every module, and in the design when it is about this module.
 Only a limit on one milestone goes in that milestone's note.
 
 If a module already has a plan in another shape or another place, such as a checklist in prose or a file called
@@ -106,10 +112,9 @@ These files are prompts: a builder and a reviewer act on them with nothing else 
 2. A reviewer has read the design, and the result is Design Approved. The review gives a new reviewer only the
    planner's tasks, the brief and the design. The done-when items are part of what it approves, because they are
    what the builder will be held to, and no builder starts on the module before then. When the `plan` command
-   started you, the lead runs the review after your turn, so say in your report that the design still needs one.
-   When you are planning in a chat with the human, run it yourself with
-   `agent_loop.py review --module <M> --milestone design --worktree .`, act on what it finds, and note the review
-   in the log.
+   started you, the review is started after your turn, and you have nothing to do for it. When you are planning in a
+   chat with the human, run it yourself with `agent_loop.py review --module <M> --milestone design --worktree .`,
+   act on what it finds, and note the review in the log.
 3. Every `check` runs as written. `agent_loop.py check --module <M> --milestone <id> --worktree . --items-only` tries
    a milestone's item checks and saves nothing. It leaves out the project's test command and waits for each item's
    lock, so it doesn't disturb builders that are working. Before the work exists, each check should come back `fail`.
@@ -117,8 +122,10 @@ These files are prompts: a builder and a reviewer act on them with nothing else 
    session finding that out.
 4. The module table in `ARCHITECTURE.md` lists the module, and every milestone is named for what someone can see
    or do.
-5. Your report ends with what is left for the human: each decision on the `Human decides` list in the project
-   settings, and each assumption. Put them last, because the lead is shown the end of a long report.
+5. Your report says what changed, then what is left for the human: each decision on the `Human decides` list in
+   the project settings, and each assumption. Put those just before your last line, because the lead is shown the
+   end of a long report. The last line itself is the one your task gives, such as `PLANNED`, and the script reads
+   it.
 
 The `Human decides` list says what has to go to the human. Every other decision about the plan is yours.
 
@@ -175,8 +182,14 @@ first. Plan the missing part in the module that owns it, and not inside the bloc
 modules would own the same thing.
 
 When your plan changes the blocked milestone itself, such as its `depends_on` or an item, the script lifts the block
-and the milestone starts again once its design review passes. If the milestone doesn't change, say in your report
-that the block is answered, so the lead can run `unblock`.
+and the milestone starts again once its design review passes. When the plan already answers the block, change no
+file and end with `KEEP <MODULE> <milestone>: builder: <where the plan answers it>`. The script lifts the block, and
+the builder carries on with your reasons.
+
+A run whose builder isn't getting anywhere can stop and send you the script's reasons, when the builder says an item
+can't be met as written. If an item can't, change it and end with `PLANNED`. If every item can be met, change no file
+and end with `KEEP <MODULE> <milestone>: builder: <how the items can be met>`, and a new builder session starts with
+your reasons.
 
 ## What makes a plan work
 
@@ -187,10 +200,10 @@ out how before you invent something, and prefer current practice. Old code in th
 tried, not what to copy.
 
 Settle the mechanisms, and leave the details to the builder. A mechanism is the core idea that produces the
-behaviour, such as "the wake is a simulated height field, not a scrolling texture". Left open, a builder may pick
-one that can't work. A detail is anything that can change without changing the behaviour, such as the data layout
-or which file a function lives in. A wrong detail in a plan gets copied faithfully through the whole build, so
-leave details out.
+behaviour, such as "a long list scrolls by reusing a fixed set of rows, not by drawing every row". Left open, a
+builder may pick one that can't work. A detail is anything that can change without changing the behaviour, such as
+the data layout or which file a function lives in. A wrong detail in a plan gets copied faithfully through the whole
+build, so leave details out.
 
 Check that each mechanism can produce the behaviour across the whole range before anyone builds on it, because a
 lot of effort goes into tuning mechanisms that could never have worked. Where the product promises exactness, as
@@ -207,7 +220,8 @@ detect.
 When the wider reading costs a lot, write the reading you chose in the plan's `## Open for the human` section, as
 one line that starts `Assumption:`, so the human can overturn it in a line. A question you would have asked the
 human goes there too, with the answer you assumed. The script counts those lines and lists them in the human's
-report. When the human answers, delete the line and note the answer in the log.
+report. The human's answer comes back to a planner as its task, because only a planner changes the plan files.
+Then delete the line, note the answer in the log, and change whatever the answer reaches.
 
 A narrow reading that nobody wrote down can't be caught later, because reviewers judge the work against the plan.
 Read "accents" as only the letters that decompose in Unicode, and a tool that turns Ørsted into "rsted" passes
@@ -301,19 +315,27 @@ guess. Measure it while you plan, or make measuring it the milestone's first ite
 result. A wrong bound is found only when a builder can't meet it, and by then it has cost a builder session and
 a new plan.
 
+A check that is meant to fail until its milestone is built stays out of the project's test command (the `Test
+command:` line of the project settings) until then. The test command runs on every merge, so a check that fails by
+design there stops every builder's merge, not only the one building that milestone. Give it to the milestone as an
+item's `check`, and add it to the test command once the milestone is Done, if it should guard the work from then on.
+
 When you plan a module's next piece, or re-plan one, look through its reviews. A finding that came up twice becomes a
-command in the project's test command (the `Test command:` line of the project settings) or an item's `check`, so from
-then on it is caught without a review.
+check, so from then on it is caught without a review. Put it where it costs least for what it catches, as
+[what a proof costs](references/proofs.md#what-a-proof-costs) describes. That is the test command when the check is
+quick and the fault would stop every builder, a main-branch check when the check is slow and the fault would cost only
+its own module, and otherwise an item's `check` in the milestone that could break it.
 
 ## When a milestone keeps failing review
 
 A milestone that keeps failing review is Waiting, with the reason For Diagnosis (the script prints `waiting` with
-`reason: for_diagnosis`). No builder works on it until a planner has found out why. It gets there in one of two
-ways, and your task says which. Either four failed reviews each repeated a finding that an earlier review had
-raised, which means the fixes aren't holding. Or six reviews failed, mostly on findings no earlier review had
-raised, which means each fix held and the milestone still came no closer to passing. Each review is kept beside
-the latest one, as `<id>-review-1.md` and so on. Read every review and the code, and decide why the milestone
-keeps failing.
+`reason: for_diagnosis`). No builder works on it until a planner has found out why. It gets there in one of three
+ways, and your task says which. The same finding may keep coming back, which means the fixes aren't holding. Each
+review may find something new, which means each fix held and the milestone still came no closer to passing. Or a
+reviewer may have marked a finding as one only a planner can settle, such as an item whose proof can't show what it
+claims, or two items that contradict each other. [When a review fails](references/done-when.md#when-a-review-fails)
+gives the counts behind the first two. Each review is kept beside the latest one, as `<id>-review-1.md` and so on.
+Read every review and the code, and decide why the milestone keeps failing.
 
 The cause may be in the plan. The milestone may be too big for one session, and should be split. It may depend
 on something outside this module, so that what it covers has to change. It may use a mechanism that can't produce
@@ -322,10 +344,11 @@ also be outside the plan. A builder can fix the one place each review names whil
 no reviewer has tried yet, and a reviewer's findings can go beyond what the items ask. Changing the plan cures
 neither of those, and it costs a design review and a rebuild.
 
-When the plan is at fault, change the items, write the reason in `LOG.md`, and end with `PLANNED` as usual. This
-is a re-plan. Write each changed item again from what it claims, as if it were new, and move the history to
-`LOG.md`. Patching an item by adding a clause each time turns it into a procedure, full of steps and prohibitions
-left over from old fixes, and each builder has to work out which still apply.
+When the plan is at fault, change what is at fault, whether that is the items, the split into milestones or the
+design. Write the reason in `LOG.md`, and end with `PLANNED` as usual. This is a re-plan. Write each changed item
+again from what it claims, as if it were new, and move the history to `LOG.md`. Patching an item by adding a clause
+each time turns it into a procedure, full of steps and prohibitions left over from old fixes, and each builder has
+to work out which still apply.
 
 When the plan is sound, change no file, and make your last line
 `KEEP <MODULE> <milestone>: builder|reviewer|human: <why>`, naming who has to act. `builder` is for a builder who
@@ -333,12 +356,12 @@ keeps breaking something, and it starts a new builder session with your reasons.
 go beyond the items, and the next reviewer is told to judge the items as written. `human` is for a decision only
 the human can make, and it sets the milestone to Blocked: Too Many Failed Reviews, with your reasons.
 
-A milestone gets one diagnosis, whichever way it ends. When your turn is merged, the script sets the milestone's
-`failed_reviews` and `failed_reviews_with_repeat` to 0 and adds 1 to `diagnoses`, whatever you wrote in those
-fields. After a re-plan it also sets the `status` to `not_started`, saves the new items as the approved ones and
-clears the old proof, because that proved something else. If the milestone then reaches four repeated failures
-or six failed reviews again, it is Blocked, with the reason Too Many Failed Reviews (`too_many_failed_reviews`),
-and waits for the human.
+A milestone gets one diagnosis, whichever way it ends, and a `PLANNED` settles it whatever you changed, even when
+that is only the design. When your turn is merged, the script sets the milestone's `failed_reviews` and
+`failed_reviews_with_repeat` to 0 and adds 1 to `diagnoses`, whatever you wrote in those fields. After a re-plan it
+also sets the `status` to `not_started`, saves the new items as the approved ones and clears the old proof, because
+that proved something else. If the milestone then keeps failing review again, it is Blocked, with the reason Too
+Many Failed Reviews (`too_many_failed_reviews`), and waits for the human.
 
 Give each milestone you split off the same `diagnoses` count as the one it came from. The script can't tell which
 new milestone came from which, so you set it. Leave the other counts and `findings` alone, because the script

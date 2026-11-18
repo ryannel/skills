@@ -494,6 +494,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_quota  # noqa: E402  (beside this file)
+import delivery_history  # noqa: E402  (beside this file)
 
 DEFAULT_MODELS = {"codex": "gpt-6.2-sol", "claude": "claude-opus-5-5"}
 DEFAULT_MODEL = DEFAULT_MODELS["codex"]
@@ -553,7 +554,8 @@ merged work and sets the status itself.
 About this session:
 - This worktree is yours for the milestone. Other builders are working in their own, so keep your changes inside \
 this one.
-- A lead is running this build, and starts the reviewer once the script's checks pass on your merged work.
+- A lead is running this build. Once the script's checks pass on your merged work, a reviewer in a new session \
+judges the milestone.
 - The script is `python3 {loop}`.
 - {session}
 {resources}{needs}{rules}{lead}
@@ -563,10 +565,8 @@ commit it with your work. Then end with `BLOCKED <reason>: <one sentence on what
 
 REVIEW_TEMPLATE = """Review milestone {milestone} of module {module}, using the review-milestone skill ({skill}).
 
-The goal: a review at {review} that judges every item of {milestone} in {done}, with the verdict fields, status and \
-findings set as the skill says. A finding only a planner can settle, such as an item that the proof it names can't \
-prove, or two items that contradict each other, also gets a `planner` field saying why. The script then sends the \
-review to a planner rather than the builder.
+The goal: a review at {review} that judges every item of {milestone} in {done}, with the verdicts and findings \
+set as the skill says.
 {answers}
 About this session:
 - This folder is a clean checkout of commit {commit}, which the script made for you. Build and run the product \
@@ -593,7 +593,7 @@ Use the plan-module skill ({skill}) for this task.
 
 About this session:
 - The `plan` command started this session, and it commits and merges the files you leave uncommitted when you end \
-with `PLANNED`. The lead runs the design review after that.
+with `PLANNED`. A reviewer in a new session then reviews the design of each module that is owed one.
 - The script is `python3 {loop}`. Its `check --module <M> --milestone <id> --worktree . --items-only` command \
 tries a milestone's item checks without recording anything. It leaves out the project's test command, and runs \
 each check under the item's lock, waiting while a builder holds it.
@@ -620,9 +620,7 @@ broken, has to be gone as well. The script has set the items that didn't pass ba
 evidence. An item marked could_not_judge is one the reviewer couldn't see for itself, so it needs evidence a \
 reviewer can reach. The Suggestions in the review are yours to take or leave.
 
-The `findings` list in the done-when file marks with `repeat` anything an earlier review also found. After four \
-failed reviews with a repeat, or six failed reviews in all, the script sends the milestone to a planner instead of a \
-builder."""
+The `findings` list in the done-when file marks with `repeat` anything an earlier review also found."""
 
 
 class TipError(Exception):
@@ -730,9 +728,9 @@ NUMBER_WORDS = {w: n for n, w in enumerate(("one", "two", "three", "four", "five
 def builders_count(text: str) -> int | None:
     """How many builders the settings' `Builders:` line allows, read as a person would, which `run` keeps to; None
     when the line has no number, which sets no limit. Each number, as a digit or a word, that comes a few words before
-    "builder" is a count, and the counts add up: "two Claude builders and one Codex builder" is three. A count followed
-    by a colon or a bracket is a total with its breakdown after it ("three builders: two Codex and one Claude"), and
-    is taken alone. A line with numbers but no "builder" after any of them takes its first number. In Thrum four to six
+    "builder", or a few words before a host's name, is a count, and the counts add up: "two Claude builders and one
+    Codex builder" and "2 Codex, 1 Claude" are three. A count with no host's name followed by a colon or a bracket is a
+    total with its breakdown after it ("three builders: two Codex and one Claude"), and is taken alone. A line with numbers but no "builder" after any of them takes its first number. In Thrum four to six
     builders ran against "two Codex builders", once right after the lead had told the human the setting was in force."""
     value = profile_value(text, "builders")
     if not value or PLACEHOLDER.search(value):
@@ -743,8 +741,24 @@ def builders_count(text: str) -> int | None:
         return int(word) if word.isdigit() else NUMBER_WORDS[word.lower()]
     found = list(re.finditer(number + r"((?:\s+(?!(?:and|or|\d+|" + "|".join(NUMBER_WORDS) +
                              r")\b)[\w.-]+){0,3}?\s+builders?\b)(\s*[:(\u2014])?", value, re.IGNORECASE))
-    if found and found[0].group(3):
+    hosts = r"(?:codex|claude)"
+    if found and found[0].group(3) and not re.search(rf"\b{hosts}\b", found[0].group(2), re.IGNORECASE):
         return count(found[0].group(1)) or None
+    # A number with a host's name within the three words after it counts builders on that host ("2 Codex, 1 Claude",
+    # "3 on Codex, one on Claude"), whether or not "builder" follows it.
+    words = re.findall(r"[\w.-]+", value)
+    on_hosts = []
+    for n, w in enumerate(words):
+        if re.fullmatch(number, w, re.IGNORECASE):
+            after = []
+            for x in words[n + 1:n + 4]:
+                if re.fullmatch(number, x, re.IGNORECASE):
+                    break
+                after.append(x)
+            if any(re.fullmatch(hosts, x, re.IGNORECASE) for x in after):
+                on_hosts.append(count(w))
+    if on_hosts:
+        return sum(on_hosts) or None
     if found:
         return sum(count(m.group(1)) for m in found) or None
     m = re.search(number, value, re.IGNORECASE)
@@ -1920,14 +1934,21 @@ NEW_SESSION_AFTER_FAILED_REVIEWS = 3
 REPEATS_TO_DIAGNOSE = 4
 FAILED_REVIEWS_TO_DIAGNOSE = 6
 COUNTS = ("failed_reviews", "failed_reviews_with_repeat", "diagnoses")  # a milestone's counts, kept by the script
+# Set by the script on a milestone whose last diagnosis answered a finding only a planner could settle.
+PLANNER_DIAGNOSED = "diagnosed_for_planner_finding"
 
 
-def escalation(failed_reviews: int, with_repeat: int = 0, diagnoses: int = 0, for_planner: bool = False) -> str:
+def escalation(failed_reviews: int, with_repeat: int = 0, diagnoses: int = 0, for_planner: bool = False,
+               planner_diagnosed: bool = False) -> str:
     """What a milestone's counts call for after a failed review. The first two start again at a re-plan, a kept plan
     or a decision of the human's. A milestone gets one diagnosis, so the same counts after it block the milestone.
     `for_planner` means the last review has a finding only a planner can settle, such as an item its named proof
-    can't prove, or items that contradict each other; another builder turn can't, so it goes to the diagnosis now."""
-    if for_planner or with_repeat >= REPEATS_TO_DIAGNOSE or failed_reviews >= FAILED_REVIEWS_TO_DIAGNOSE:
+    can't prove, or items that contradict each other; another builder turn can't, so it goes to the diagnosis now.
+    Such a finding after a diagnosis for something else is new to the planner, so it gets a diagnosis of its own;
+    after a diagnosis that answered one too (`planner_diagnosed`), the human decides."""
+    if for_planner:
+        return "diagnosis" if diagnoses == 0 or not planner_diagnosed else "too_many_failed_reviews"
+    if with_repeat >= REPEATS_TO_DIAGNOSE or failed_reviews >= FAILED_REVIEWS_TO_DIAGNOSE:
         return "diagnosis" if diagnoses == 0 else "too_many_failed_reviews"
     if with_repeat <= 0 and failed_reviews <= 0:
         return "none"
@@ -1950,7 +1971,8 @@ def planner_findings(m: dict) -> list[dict]:
 
 def escalation_of(m: dict) -> str:
     """`escalation` for a milestone of a done-when file."""
-    return escalation(*counts_of(m).values(), for_planner=bool(planner_findings(m)))
+    return escalation(*counts_of(m).values(), for_planner=bool(planner_findings(m)),
+                      planner_diagnosed=bool(m.get(PLANNER_DIAGNOSED)))
 
 
 def diagnosis_cause(counts: dict) -> str:
@@ -2487,7 +2509,8 @@ def diagnosis_task(module: str, mid: str, counts: dict, prof: dict, worktree: Pa
                 "raised, so each fix held and the milestone still doesn't pass")
     return (f"Diagnose {module} {mid}. {what}. {where}.{each} Read every review and decide why it keeps failing, as "
             "the plan-module skill's section \"When a milestone keeps failing review\" describes. If the plan is at "
-            f"fault, change {mid}'s items so that they can be met, and end with PLANNED. If the plan is "
+            "fault, change what is at fault, write each item you change again from what it claims, and end with "
+            "PLANNED. If the plan is "
             f"sound, change no file and end with `KEEP {module} {mid}: builder: <why>`, `... reviewer: <why>` or "
             "`... human: <why>`, naming who has to act.")
 
@@ -2521,22 +2544,30 @@ def keep_review(tree: Path, current: Path) -> tuple[str, list[str]]:
     return touched[0], touched
 
 
-def settle_replanned(before: dict | None, after: dict, stem: str) -> list[str]:
+def settle_replanned(before: dict | None, after: dict, stem: str, diagnosed: str | None = None) -> list[str]:
     """The bookkeeping of a re-plan, done by the script: each milestone that was owed a diagnosis in `before` and whose
     definitions `after` changes gets its failed reviews counted from 0, one more in diagnoses, and status not_started,
     whatever the planner or the human wrote there (so a forgotten count doesn't send the lead back to the planner,
-    and a done one isn't counted twice). Returns the milestones it settled, as `STEM Mn`."""
+    and a done one isn't counted twice). `diagnosed` is the milestone this planner was asked to diagnose: a diagnosis
+    that fixed something other than its items, such as its design or another module, settles it too, keeping its
+    status and progress. Returns the milestones it settled, as `STEM Mn`."""
     old = {m.get("id"): m for m in (before or {}).get("milestones") or [] if isinstance(m, dict)}
     out = []
     for m in after.get("milestones") or []:
         was = old.get(m.get("id"))
         if not was or escalation_of(was) != "diagnosis":
             continue
-        if run_free_definitions(was) == run_free_definitions(m):
+        same = run_free_definitions(was) == run_free_definitions(m)
+        if same and m.get("id") != diagnosed:
             continue  # nothing re-planned yet (a changed lock isn't a re-plan): still owed
-        m.update(failed_reviews=0, failed_reviews_with_repeat=0, diagnoses=int(was.get("diagnoses", 0) or 0) + 1,
-                 status="not_started")
-        m.pop("blocked", None)
+        m.update(failed_reviews=0, failed_reviews_with_repeat=0, diagnoses=int(was.get("diagnoses", 0) or 0) + 1)
+        if planner_findings(was):
+            m[PLANNER_DIAGNOSED] = True
+        else:
+            m.pop(PLANNER_DIAGNOSED, None)
+        if not same:
+            m["status"] = "not_started"
+            m.pop("blocked", None)
         m.pop("findings", None)
         out.append(f"{stem} {m['id']}")
     return out
@@ -2553,7 +2584,7 @@ def keep_counts(before: dict | None, after: dict, settled: list[str], stem: str)
             m.update(failed_reviews=0, failed_reviews_with_repeat=0)
             m.pop("findings", None)
             continue
-        for k in COUNTS + ("findings",):
+        for k in COUNTS + ("findings", PLANNER_DIAGNOSED):
             if k in was:
                 m[k] = was[k]
             else:
@@ -3717,6 +3748,7 @@ def note_usage(worktree: Path, host: str, model: str, effort: str, session: str 
             handle.write(json.dumps(line) + "\n")
     except Exception:
         pass
+    sweep_history(worktree, budget_s=20, wait_s=0)
 
 
 def repository_of(common_dir: str) -> str:
@@ -5712,14 +5744,16 @@ def report_word(message: str) -> str | None:
 
 def blocked_report(line: str) -> tuple[str | None, str]:
     """(the reason a BLOCKED or NEEDS_CONTEXT line names, or None; what it says would unblock it). A builder writes
-    `BLOCKED needs_access: approve Computer Use`, or plain `BLOCKED: ...` when no reason fits."""
+    `BLOCKED needs_access: approve Computer Use`, or plain `BLOCKED: ...` when no reason fits. `main_broken`, which
+    `merge` asks for when the main branch fails without the builder's branch, is a reason too, though not one a
+    milestone is recorded Blocked with."""
     m = re.match(r"^(BLOCKED|NEEDS_CONTEXT)\b\s*([a-z_]+)?\s*:?\s*(.*)$", line.strip("`* "), re.S)
     if not m:
         return None, line
     word, reason, what = m.groups()
     if word == "NEEDS_CONTEXT":
         return "needs_context", ((reason or "") + " " + what).strip() if reason not in BLOCK_REASONS else what
-    if reason in BLOCK_REASONS and reason != "too_many_failed_reviews":
+    if reason in BLOCK_REASONS and reason != "too_many_failed_reviews" or reason == "main_broken":
         return reason, what.strip()
     return None, ((reason or "") + " " + what).strip()
 
@@ -5740,7 +5774,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.4.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.5.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5769,6 +5803,13 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.5.0": [
+        "New delivery history: after every turn the script copies that session's tokens, model, timing, compactions "
+        "and errors out of the Claude or Codex session file into ~/.orchestrate/history/, so they outlive the "
+        "hosts' files. `history --json` prints spend by kind of agent, model and version, and every kind of error "
+        "with the latest. `dashboard --open` draws the same records as a page for the human. Read the build skill's "
+        "references/delivery-history.md.",
+    ],
     "2.4.0": [
         "`run` and `plan` now carry on through the routine steps themselves: a milestone Ready for Review is "
         "reviewed, a failed review goes back to the builder, a pass moves on to the module's next milestone, and a "
@@ -5791,6 +5832,16 @@ CHANGES = {
         "out a review's status, pointers and counts from its verdicts and findings. `human accept` and `human "
         "rereview` add a graded example when the `Graded examples:` line is set. Builder sessions restart only when "
         "the prompts they were given change. The Builders line's counts add up, and `pause` ends with a result.",
+        "A builder stopped by a broken main branch ends BLOCKED with reason `main_broken`, and the run's result "
+        "carries `main_broken` and its `next`; the milestone stays In Progress. A planner sent from a stuck run can "
+        "end `KEEP <module> <milestone>: builder: <why>` when every item can be met, and a refused KEEP gives the "
+        "planner the task again. A diagnosis that fixes something other than the milestone's items still settles it, "
+        "and a finding marked `planner` after a diagnosis for something else gets a diagnosis of its own.",
+        "`watch` starts the main-branch checks that are due, so you needn't run `main-check --due` when woken. A run "
+        "that waited out its hours on a main-branch check points you at `main-check`. A failed setup command counts "
+        "as a check that couldn't judge, not as a failure. A `run` carrying on through its steps counts as a builder "
+        "while it reviews, and `pause` stops it between steps too. A plan step's report stays in `steps_run`, and "
+        "`--host` carries to later run steps.",
     ],
     "2.3.9": [
         "A builder's branch with its own proof and log entries, or with copies of plan files the main branch has "
@@ -6149,6 +6200,7 @@ def emit(result: str, **fields) -> None:
             path.write_text(text + "\n")
         except OSError:
             pass
+        note_result(path.parent.parent, line)
     if STEPS_RUN:  # a command that ran several steps: every file it marked RUNNING gets its last result
         for marked in list(MARKED):
             try:
@@ -6159,6 +6211,22 @@ def emit(result: str, **fields) -> None:
     unmark(path)
     print(text)
     sys.exit(1 if result in ("SCRIPT_FAILED", "ERROR") else 0)
+
+
+RESULT_KEPT = ("result", "module", "milestone", "host", "model", "verdict", "version", "reason", "why", "blocked")
+
+
+def note_result(folder: Path, line: dict) -> None:
+    """Appends a short copy of every result to <git common dir>/orchestrate/results.jsonl, with its time and command,
+    because each file under results/ keeps only the latest result for its milestone and command, and the delivery
+    history counts refusals and failures from the whole list. Never fails the caller."""
+    try:
+        row = {"at": now(), "command": sys.argv[1] if len(sys.argv) > 1 else "",
+               **{k: (v[:400] if isinstance(v, str) else v) for k in RESULT_KEPT if (v := line.get(k)) is not None}}
+        with open(folder / "results.jsonl", "a") as handle:
+            handle.write(json.dumps(row) + "\n")
+    except Exception:
+        pass
 
 
 def finish(state_path: Path, state: dict, result: str, **extra) -> None:
@@ -7261,15 +7329,25 @@ def earlier_session_note(worktree: Path, milestone: dict | None, last_exit: int 
             + (" " + facts if facts else "") + "\n")
 
 
+def builder_runs(loops: list[dict]) -> list[dict]:
+    """The runs among `loops` that each hold a builder slot: a `run` carrying on through its steps, counted once
+    whichever step it is on, since its builder goes back to work after a review; and a run with no such parent,
+    less `run --checks-only`, which starts no agent."""
+    parents = {r.get("pid") for r in loops if r.get("role") == "steps" and r.get("module")}
+    return [r for r in loops if r.get("role") == "steps" and r.get("module") or
+            r.get("role") == "build" and not r.get("checks_only") and r.get("steps_parent") not in parents]
+
+
 def builders_running(worktree: Path) -> list[dict]:
-    """The other builder runs in this repository, each as module, milestone and process id: the runs that `runs`
-    lists, less this one, reviews, planners and `run --checks-only`, which starts no agent."""
+    """The other builder runs in this repository, each as module, milestone and process id: `builder_runs`, less this
+    one and the `run` running this process as one of its steps."""
     try:
         loops, _ = live_loops(repository_of(git_common_dir(worktree)), clean=False)
     except Exception:
         return []
-    return [{"module": r.get("module"), "milestone": r.get("milestone"), "pid": r.get("pid")} for r in loops
-            if r.get("role") == "build" and r.get("pid") != os.getpid() and not r.get("checks_only")]
+    mine = {os.getpid(), int(STEPS_PARENT) if STEPS_PARENT else None}
+    return [{"module": r.get("module"), "milestone": r.get("milestone"), "pid": r.get("pid")}
+            for r in builder_runs(loops) if r.get("pid") not in mine]
 
 
 def run_again(a: argparse.Namespace, stem: str, worktree: Path, host: str | None = None) -> str:
@@ -7322,6 +7400,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     state_dir = Path(git_dir) / "orchestrate"
     state_dir.mkdir(parents=True, exist_ok=True)
     state_path = state_dir / f"{stem}.json"
+    run_started = time.time()  # a refusal `merge` saved for a broken main branch counts only from this run on
 
     sync_worktree(worktree, prof)
 
@@ -7545,7 +7624,8 @@ def cmd_run(a: argparse.Namespace) -> None:
                         f"written. The script's reasons: {why}" + (f"\nThe builder's last words: {tail(said, 600)}"
                                                                   if said.strip() else "") +
                         f"\nIf an item can't be met as written, change it and end with PLANNED. If every item can be "
-                        f"met, change no file and say so.")
+                        f"met as written, change no file and end with `KEEP {stem} {mid}: builder: <how it can be "
+                        "met>`.")
         if re.search(r"\bcan(?:'|’|no)?t be met\b|\bcannot be met\b", said + " " + why, re.IGNORECASE):
             return next_cmd(plan, "lead", f"{stem} {mid} stopped ({ended}), and the builder says an item can't be "
                                           "met as written; a planner decides, and only then does a builder resume",
@@ -7590,7 +7670,27 @@ def cmd_run(a: argparse.Namespace) -> None:
         drop_hold(worktree, prof, key, mid)
         return blocked
 
+    def broken_main_seen() -> dict | None:
+        """What the builder's `merge` saved in this run when it found the main branch failing without the branch."""
+        try:
+            saved = json.loads((state_dir / MAIN_BROKEN_FILE).read_text())
+            return saved if saved.get("at", 0) >= run_started and saved.get("main_broken") else None
+        except (OSError, ValueError, AttributeError):
+            return None
+
     def stop_blocked(named: str | None, what: str, message: str) -> None:
+        saved = broken_main_seen()
+        if named == "main_broken" or saved and named in (None, "needs_context"):
+            # Not the milestone's block: the main branch fails without the builder's branch, so whoever broke it
+            # fixes it, and the milestone stays In Progress for this builder to merge once it passes.
+            if host == "codex" and state.get("thread") and goal_status(state["thread"]) == "active":
+                codex_goal_activate(state["thread"], "paused")  # `run` sets it active again
+            then = saved["next"] if saved else next_cmd(None, "lead", (
+                f"the builder says the main branch fails the test command without its branch: {what}. Find the "
+                "commit that broke it and give the fix to whoever owns that work"))
+            finish(state_path, state, "BLOCKED", reason="main_broken", report=tail(message, 1500),
+                   **({"main_broken": saved["main_broken"]} if saved else {}),
+                   next={**then, "alternative": run_again(a, stem, worktree)})
         reason, items, what = block_for(current, named, what)
         blocked = record_block(reason, items, what)
         if host == "codex" and state.get("thread") and goal_status(state["thread"]) == "active":
@@ -7678,9 +7778,14 @@ def cmd_run(a: argparse.Namespace) -> None:
             state["waiting_on_main_check"] = reasons
             state_path.write_text(json.dumps(state, indent=2))
             if time.time() - state["progress_at"] > a.no_progress_hours * 3600:
-                finish(state_path, state, "NO_PROGRESS_FOR_HOURS", hours=a.no_progress_hours, next=stuck_next(
-                    f"a main-branch check didn't judge the merged work within {a.no_progress_hours:g} hours",
-                    reasons))
+                # The builder can't make a main-branch check judge, and a new run would only wait again.
+                finish(state_path, state, "NO_PROGRESS_FOR_HOURS", hours=a.no_progress_hours, next=next_cmd(
+                    loop_cmd("main-check", "--worktree", str(worktree)), "lead",
+                    f"{stem} {mid}'s merged work is waiting on a main-branch check that hasn't judged it in "
+                    f"{a.no_progress_hours:g} hours ({'; '.join(reasons)[:600]}). This lists each check with its "
+                    "latest run and what is running; read the check's runner.log for why it isn't judging, start it "
+                    "with `main-check <name> --start` if nothing runs, and once it has judged the work, run the "
+                    "module with --checks-only", alternative=run_again(a, stem, worktree) + " --checks-only"))
             loop_note(step="waiting for a main-branch check to judge the merged work")
             for _ in range(max(1, int(PENDING_CHECK_POLL_S / RUN_POLL_S))):
                 if _STOP:
@@ -7935,7 +8040,7 @@ def cmd_run(a: argparse.Namespace) -> None:
             # A block with a reason (or a missing fact) is one no further build turn can change, so the run stops on
             # the first report. A plain BLOCKED keeps one more turn while the goal is active: in Thrum that turn
             # sometimes found a way round.
-            if named or status != "active" or state["reports"] >= 2:
+            if named or broken_main_seen() or status != "active" or state["reports"] >= 2:
                 stop_blocked(named, what or "see the builder's report", message)
         else:
             state["reports"] = 0
@@ -8378,6 +8483,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                     target["blocked"] = {"reason": "too_many_failed_reviews", "what": why}
                     e["too_many_failed_reviews"] = {"why": why, "after": e.get("counted_after", 0), "at": now()}
             counts.update({k: int(target.get(k, 0) or 0) for k in COUNTS},
+                          **({PLANNER_DIAGNOSED: True} if target.get(PLANNER_DIAGNOSED) else {}),
                           repeated=again, status=target["status"],
                           **({"findings": planner_findings(target)} if planner_findings(target) else {}))
             write_json(t / done_path, doc)
@@ -8416,7 +8522,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                        next=next_cmd(loop_cmd("review", "--module", stem, "--milestone", "design", "--worktree",
                                               str(worktree), "--host", host), "lead", why))
     if not passed and not design:
-        word = escalation(*(counts.get(k, 0) for k in COUNTS), for_planner=bool(planner_findings(counts)))
+        word = escalation_of(counts)
         action = escalation_next(word, stem, mid, counts, worktree, prof)
     elif not passed:
         action = design_review_next({"verdict": verdict, "review": review_path, "line": out["last_line"]}, stem,
@@ -8589,29 +8695,43 @@ def plan_owed(worktree: Path, start: str, message: str, checks: bool = True) -> 
 
 
 def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str, info: dict, out: dict,
-              tree: Path | None = None) -> None:
+              tree: Path | None = None, again=None) -> None:
     """A planner asked to diagnose a milestone kept its plan and named who has to act. The script records that,
     starts the milestone's counts again, and says what follows; a planner naming the human blocks it with too many
-    failed reviews, for the human to decide. `tree` is the checkout the planner worked in, when that isn't
-    `worktree`."""
+    failed reviews, for the human to decide. A planner asked about a run that stopped, on a milestone owed no
+    diagnosis, can keep the plan for the builder too. `tree` is the checkout the planner worked in, when that isn't
+    `worktree`. `again(note)` is the `plan` command with the same task and a note, for a KEEP the script refuses."""
     module, mid, who, why = keep.group(1), keep.group(2), keep.group(3).lower(), keep.group(4).strip()
     who = "human" if who == "owner" else who  # a planner following a skill from before 2.2
+
+    def refuse(problem: str, **kept) -> None:
+        emit("INVALID", **info, **out, merged=False, **kept, problems=[problem], **({"next": next_cmd(
+            again(f"Your last turn on this ended with a KEEP line the script refused: {problem}."), "lead",
+            f"the planner's KEEP was refused ({problem}); give it the task again with the reason")} if again else {}))
     if changed := changed_paths(tree or worktree, start):
-        emit("INVALID", **info, **out, merged=False,
-             **(keep_leftovers(tree, prof, "diagnosis that kept the plan") if tree and tree != worktree else {}), problems=[
-            f"the last line keeps the plan, but the turn changed {', '.join(changed[:5])}; end with PLANNED to merge a "
-            "changed plan, or leave every file as it was"])
+        refuse(f"the last line keeps the plan, but the turn changed {', '.join(changed[:5])}; end with PLANNED to "
+               "merge a changed plan, or leave every file as it was",
+               **(keep_leftovers(tree, prof, "diagnosis that kept the plan") if tree and tree != worktree else {}))
     try:
         stem = module_stem(worktree, prof, module)
         doc = json.loads(show(worktree, tip(worktree, prof), done_rel(prof, stem)) or "")
         m = find(doc, mid)
     except (TipError, SystemExit, json.JSONDecodeError, KeyError) as e:
-        emit("INVALID", **info, **out, merged=False, problems=[f"KEEP names {module} {mid}, which can't be read: {e}"])
+        refuse(f"KEEP names {module} {mid}, which can't be read: {e}")
     if m.get("status") == "blocked" and blocked_of(m)["reason"] in REPLAN_LIFTS:
-        answered_block(worktree, prof, stem, mid, who, why, info, out)
+        answered_block(worktree, prof, stem, mid, who, why, info, out, refuse)
     if (step := escalation_of(m)) != "diagnosis":
-        emit("INVALID", **info, **out, merged=False, problems=[
-            f"KEEP is the answer to a diagnosis, and {stem} {mid} isn't owed one (its counts call for {step})"])
+        if who == "builder" and m.get("status") in ("not_started", "in_progress"):
+            # A run that stopped: the planner found every item can be met as written, so nothing is recorded.
+            emit("KEPT", **info, **out, merged=False, module=stem, milestone=mid, who=who, why=why, next=next_cmd(
+                loop_cmd("run", "--module", stem, "--worktree", str(worktree), "--fresh", "--message",
+                         f"A planner read why the last run on {mid} stopped and kept the plan: every item can be met "
+                         f"as written. {why}"), "lead",
+                f"the planner found {stem} {mid}'s items can be met as written; start the builder again in a new "
+                "session with its reasons"))
+        refuse(f"KEEP is the answer to a diagnosis or to a run that stopped, and {stem} {mid} isn't owed a diagnosis "
+               f"(its counts call for {step}); for a run that stopped, a KEEP names the builder: `KEEP {stem} {mid}: "
+               "builder: <why every item can be met>`")
     try:  # the reviews the planner diagnosed, which the human sees if it's theirs to decide
         diagnosed = ((json.loads(show(worktree, tip(worktree, prof), record_rel(prof, stem)) or "{}")
                       .get("milestones") or {}).get(mid) or {}).get("counted_after", 0)
@@ -8623,6 +8743,10 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
         doc = json.loads((t / done_rel(prof, stem)).read_text())
         target = find(doc, mid)
         target.update(failed_reviews=0, failed_reviews_with_repeat=0, diagnoses=int(target.get("diagnoses", 0) or 0) + 1)
+        if planner_findings(target):
+            target[PLANNER_DIAGNOSED] = True
+        else:
+            target.pop(PLANNER_DIAGNOSED, None)
         for f in target.get("findings") or []:  # settled by this diagnosis
             if isinstance(f, dict):
                 f.pop("planner", None)
@@ -8642,7 +8766,7 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
     ok, landed = loop_write(worktree, prof, "_plan", change,
                             f"orchestrate: diagnosis of {stem} {mid} kept the plan: {who}")
     if not ok:
-        emit("INVALID", **info, **out, merged=False, problems=[f"couldn't record the diagnosis: {landed}"])
+        refuse(f"couldn't record the diagnosis: {landed}")
     wt = str(worktree)
     findings = FINDINGS_TEMPLATE.format(milestone=mid, module=stem, evidence=prof["evidence"])
     if who == "builder":
@@ -8664,14 +8788,14 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
     emit("KEPT", **info, **out, merged=True, commit=landed, module=stem, milestone=mid, who=who, why=why, next=then)
 
 
-def answered_block(worktree: Path, prof: dict, stem: str, mid: str, who: str, why: str, info: dict, out: dict) -> None:
+def answered_block(worktree: Path, prof: dict, stem: str, mid: str, who: str, why: str, info: dict, out: dict,
+                   refuse) -> None:
     """A planner asked about a Blocked milestone (Needs Dependency or Needs Context) found that the plan already
     answers it, so nothing changes: the script lifts the block, and the builder carries on with the planner's
-    reasons."""
+    reasons. `refuse(problem)` ends the command INVALID."""
     if who != "builder":
-        emit("INVALID", **info, **out, merged=False, problems=[
-            f"{stem} {mid} is Blocked (Needs Dependency or Needs Context), and a KEEP for a block the plan already "
-            f"answers names the builder, who carries on: `KEEP {stem} {mid}: builder: <where the plan answers it>`"])
+        refuse(f"{stem} {mid} is Blocked (Needs Dependency or Needs Context), and a KEEP for a block the plan already "
+               f"answers names the builder, who carries on: `KEEP {stem} {mid}: builder: <where the plan answers it>`")
 
     def change(t):
         path = t / done_rel(prof, stem)
@@ -8686,7 +8810,7 @@ def answered_block(worktree: Path, prof: dict, stem: str, mid: str, who: str, wh
     ok, landed = loop_write(worktree, prof, "_plan", change,
                             f"orchestrate: unblock {stem} {mid}: a planner found the plan answers its block")
     if not ok:
-        emit("INVALID", **info, **out, merged=False, problems=[f"couldn't lift the block: {landed}"])
+        refuse(f"couldn't lift the block: {landed}")
     wt = str(worktree)
     emit("KEPT", **info, **out, merged=True, commit=landed, module=stem, milestone=mid, who=who, why=why,
          unblocked=True, next=next_cmd(
@@ -8864,7 +8988,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
     except SystemExit as e:
         not_merged(str(e))
     if keep := KEEP_LINE.match(report_line(out.get("report", ""))):
-        keep_plan(worktree, prof, start, keep, host, info, out, tree=tree)
+        keep_plan(worktree, prof, start, keep, host, info, out, tree=tree, again=plan_again)
 
     # What a turn wrote is what it left uncommitted; that is all the script commits and merges. Its HEAD may have moved
     # along the tip (a `merge` elsewhere fast-forwards the checkout holding the base branch), never off it.
@@ -8946,9 +9070,19 @@ def cmd_plan(a: argparse.Namespace) -> None:
             git(tree, "reset", "--quiet", "--mixed", "HEAD~1")
         not_merged(f"couldn't merge the plan: {landed}")
 
+    # A diagnosis can fix what is at fault without changing the milestone's items (its design, a prover, another
+    # module), and still settles the milestone it was given.
+    diagnosis = re.match(r"Diagnose ([A-Za-z0-9_.-]+) ([A-Za-z0-9_.-]+)\.", a.task)
+    try:
+        diagnosed = (module_stem(worktree, prof, diagnosis.group(1)), diagnosis.group(2)) if diagnosis else None
+    except SystemExit:
+        diagnosed = None
+
     def change(t):
         written = []
-        for stem in modules:
+        extra = [diagnosed[0]] if diagnosed and diagnosed[0] not in modules and \
+            (t / done_rel(prof, diagnosed[0])).exists() and (t / record_rel(prof, diagnosed[0])).exists() else []
+        for stem in modules + extra:
             path = t / done_rel(prof, stem)
             doc = json.loads(path.read_text())
             rec_path = t / record_rel(prof, stem)
@@ -8967,14 +9101,21 @@ def cmd_plan(a: argparse.Namespace) -> None:
             except json.JSONDecodeError:
                 prior = None
             was = prior or before.get(stem)
-            settled = settle_replanned(was, doc, stem)
+            settled = settle_replanned(was, doc, stem, diagnosed[1] if diagnosed and diagnosed[0] == stem else None)
+            if stem in extra and not settled:
+                continue  # it wasn't owed the diagnosis after all, and nothing else of it changed
             keep_counts(was, doc, settled, stem)
             replanned.extend(settled)
+            for name in settled:  # the reviews before this diagnosis no longer count towards the next one
+                e = record["milestones"].get(name.split(" ", 1)[1])
+                if e is not None:
+                    e["counted_from"], e["counted_after"] = now(), len(e.get("reviews") or [])
             # the stamp names the task; the whole of it is kept once, under `briefs`
             authorise_doc(doc, record, {"by": "plan", "task": a.task.splitlines()[0][:120], "at": now()}, before=was)
             # every planner task, whole, where design reviewers and later planners are pointed to read the ask
             record.setdefault("briefs", []).append({"task": a.task, "at": now()})
-            record["planner"] = {"host": host, "at": now()}  # who wrote the plan, so its design review goes elsewhere
+            if stem in modules:  # who wrote the plan, so its design review goes elsewhere
+                record["planner"] = {"host": host, "at": now()}
             write_json(path, doc)
             write_json(rec_path, record)
             written += [done_rel(prof, stem), record_rel(prof, stem)]
@@ -9606,16 +9747,35 @@ def cmd_merge(a: argparse.Namespace) -> None:
         out["conflicts"] = got["conflicts"]
     if got.get("main_broken"):
         out.update(main_broken=got["main_broken"], next=fit_next(main_broken_next(worktree, prof, got["main_broken"])))
+    # The run this builder works in reads the last refusal for a broken main branch when the builder stops on it, so
+    # the lead gets the culprit and its `next` rather than the builder's paraphrase.
+    saved = Path(git(worktree, "rev-parse", "--absolute-git-dir").stdout.strip() or ".") / "orchestrate" / MAIN_BROKEN_FILE
+    try:
+        if got.get("main_broken"):
+            saved.parent.mkdir(parents=True, exist_ok=True)
+            write_json(saved, {"main_broken": out["main_broken"], "next": out["next"], "at": time.time()})
+        elif ok:
+            saved.unlink(missing_ok=True)
+    except OSError:
+        pass
     print(json.dumps({**out, **({"plan_warnings": warnings} if warnings else {})}))
     sys.exit(0 if ok else 1)
+
+
+MAIN_BROKEN_FILE = "main_broken.json"  # under a worktree's own git dir/orchestrate: its last merge's main_broken
 
 
 def stale_definitions(worktree: Path, prof: dict, ref: str) -> list[str]:
     """`MODULE Mn` for each milestone in progress on this branch whose definitions aren't the ones the record at
     `ref` authorises, while the done-when file at `ref` has the authorised ones: a planner changed the milestone
-    after the branch started, and work built to the old items shouldn't land as if it met the new ones."""
+    after the branch started, and work built to the old items shouldn't land as if it met the new ones. A done-when
+    file the branch hasn't changed since it left `ref` is skipped: the rebase takes the main branch's copy, and the
+    work on the branch is another module's."""
     stale = []
+    base = git(worktree, "merge-base", "HEAD", ref).stdout.strip()
     for stem in modules_here(worktree, prof):
+        if base and not git(worktree, "diff", "--name-only", base, "--", done_rel(prof, stem)).stdout.strip():
+            continue
         try:
             mine = json.loads((worktree / done_rel(prof, stem)).read_text())
             theirs = json.loads(show(worktree, ref, done_rel(prof, stem)) or "")
@@ -9930,19 +10090,21 @@ def broken_base(tree: Path, prof: dict, base: str, runs: list | None = None) -> 
     on the same files counts, as everywhere), or {commit, exit, culprit?}. The script lands its own commits (plans,
     reviews, adopted files, the human's decisions) without the test command, so the main branch can break with no
     builder's merge to blame. The culprit is the latest commit on `base` that changed files outside the plans folder,
-    when its parent passes."""
+    when its parent passes. A commit whose setup command fails can't be told either way, so it counts as neither."""
     command = prof["test_command"]
 
-    def passes(commit: str) -> dict:
+    def passes(commit: str) -> dict | None:
         git(tree, "checkout", "--quiet", "--force", "--detach", commit)
         git(tree, "clean", "-ffdq")
+        if run_setup(tree, prof):  # the tests would fail for want of the setup, not because the commit breaks them
+            return None
         loop_note(step=f"testing the main branch at {commit[:12]} without the branches")
         r = run_check(tree, command, None, MERGE_TEST_TIMEOUT_S, prof.get("plans"))
         if runs is not None and not r["reused"]:
             runs.append(r)
         return r
     r = passes(base)
-    if r["exit"] == 0:
+    if r is None or r["exit"] == 0:
         return None
     out = {"commit": base, "exit": r["exit"], **({"stdout": r["stdout"], "stderr": r["stderr"]} if r.get("stdout")
                                                  else {}), "err": r["err"][-400:]}
@@ -9951,7 +10113,7 @@ def broken_base(tree: Path, prof: dict, base: str, runs: list | None = None) -> 
         files = git(tree, "diff-tree", "--no-commit-id", "--name-only", "-r", c).stdout.split()
         if any(not f.startswith(plans) for f in files):
             parent = git(tree, "rev-parse", "--verify", "--quiet", f"{c}^").stdout.strip()
-            if parent and passes(parent)["exit"] == 0:
+            if parent and (p := passes(parent)) and p["exit"] == 0:
                 try:
                     modules = commit_modules(tree, profile(tree, missing_ok=True), c)[0]
                 except (SystemExit, KeyError):
@@ -9968,8 +10130,9 @@ def main_broken_result(command: str, broken: dict) -> dict:
     return {"ok": False, "main_broken": broken, "detail": (
         f"Test command `{command}` fails on the main branch at {broken['commit'][:12]} without your branch "
         f"(exit {broken['exit']})" + (f", since commit {who['commit'][:12]} ({who['subject']})" if who else "") +
-        ", so this isn't your branch's doing and nothing of yours landed. Stop and report `main_broken` to the lead; "
-        "its `next` gives the fix to whoever owns it. Merge again once the main branch passes. The end of its stderr: "
+        ", so this isn't your branch's doing and nothing of yours landed. Stop, and end your turn with "
+        "`BLOCKED main_broken: <this commit and the test that fails>`; the lead gives the fix to whoever owns it, and "
+        "starts you again once the main branch passes. The end of its stderr: "
         + broken.get("err", ""))}
 
 
@@ -10088,13 +10251,25 @@ def cmd_loops(a: argparse.Namespace) -> None:
 
 
 def cmd_pause(a: argparse.Namespace) -> None:
-    folder = Path(git_common_dir(Path(a.worktree).resolve())) / "orchestrate"
+    common = git_common_dir(Path(a.worktree).resolve())
+    folder = Path(common) / "orchestrate"
     names = [a.module.upper()] if a.module else [p.name[len("run-"):-len(".lock")] for p in folder.glob("run-*.lock")]
-    paused = []
+    # A `run` or `plan` running its steps holds no run lock between steps, nor while its planner or reviewer works, so
+    # it is stopped itself; it passes the stop on to the step it is running, and starts no other.
+    try:
+        loops = live_loops(repository_of(common), clean=False, processes=False)[0]
+    except Exception:
+        loops = []
+    parents = {r["pid"]: (r.get("module") or "plan").upper() for r in loops if r.get("role") == "steps"
+               and (not a.module or (r.get("module") or "").upper() == a.module.upper())}
+    stepping = {r["pid"]: r.get("steps_parent") for r in loops}
+    targets = [(name, pid) for pid, name in parents.items()]
     for name in names:
         pid = run_holder(folder, name)  # reads only, so a run starting now isn't turned away
-        if pid is None:
-            continue  # nobody holds it, so nothing is running
+        if pid is not None and stepping.get(pid) not in parents and pid not in parents:
+            targets.append((name, pid))
+    paused = []
+    for name, pid in targets:
         try:
             os.kill(pid, signal.SIGTERM)
             paused.append({"run": name, "pid": pid})
@@ -10721,11 +10896,107 @@ def design_reviews(worktree: Path, prof: dict, ref: str, stem: str, rec: dict) -
     return sorted(older + out, key=lambda d: d.get("at") or "")
 
 
+# ----------------------------------------------------------------------------------------------- delivery history
+# The hosts delete or move their session files (Claude after 30 days), so after each turn the script copies the
+# figures it needs out of them: tokens, models, timings, compactions and errors, never the conversation. The copy
+# lives in ~/.orchestrate/history/<project>/ (or $ORCHESTRATE_HISTORY_DIR), outside the hosts' folders and the
+# clone. delivery_history.py does the reading; these functions give it the script's view of the repository.
+
+def history_inputs(worktree: Path, quota_budget_s: float = 3.0) -> dict:
+    """The arguments delivery_history.extract needs: the repository, the script's ledger folder, every worktree,
+    the plan's modules and the Codex weekly-limit fit."""
+    common = Path(git_common_dir(worktree))
+    trees = [line[9:] for line in git(worktree, "worktree", "list", "--porcelain").stdout.splitlines()
+             if line.startswith("worktree ")]
+    try:
+        modules = modules_here(worktree, profile(worktree, missing_ok=True))
+    except (Exception, SystemExit):
+        modules = []
+    try:
+        fit = codex_quota.fit(codex_quota.read(budget_s=quota_budget_s))
+    except Exception:
+        fit = None
+    return {"repo": Path(repository_of(str(common))), "orchestrate": common / "orchestrate", "worktrees": trees,
+            "title_parts": title_parts, "modules": modules, "codex_fit": fit, "cost_of": codex_quota.cost}
+
+
+def sweep_history(worktree: Path, budget_s: float = 60.0, wait_s: float = 60.0, full: bool = False) -> dict | None:
+    """Copies every session of this repository that grew since the last sweep into the delivery history. After a
+    turn it runs with no wait, so a builder never queues behind another's sweep; the next sweep picks up what it
+    skipped. Never fails the caller. ORCHESTRATE_NO_HISTORY=1 turns it off."""
+    if os.environ.get("ORCHESTRATE_NO_HISTORY"):
+        return None
+    try:
+        return delivery_history.extract(**history_inputs(worktree), budget_s=budget_s, wait_s=wait_s, full=full)
+    except Exception:
+        return None
+
+
+def history_milestones(worktree: Path) -> int:
+    """Writes the plan's milestones, with their reviews, into the delivery history. Returns how many."""
+    try:
+        prof = profile(worktree, missing_ok=True)
+        ref = tip(worktree, prof)
+        proj = project(worktree, prof, ref)
+    except (Exception, SystemExit):
+        return 0
+    rows = delivery_history.milestone_rows(proj)
+    delivery_history.write_milestones(Path(repository_of(git_common_dir(worktree))), rows)
+    return len(rows)
+
+
+def history_meta(worktree: Path) -> dict:
+    return {"project": repository_name(worktree), "version": VERSION, "script": str(LOOP)}
+
+
+def cmd_history(a: argparse.Namespace) -> None:
+    """Brings the delivery history up to date and prints what it holds: totals by host, kind of agent, role, model
+    and version, the errors by kind with the latest, and the costliest milestones."""
+    worktree = Path(a.worktree).resolve()
+    if os.environ.get("ORCHESTRATE_NO_HISTORY"):
+        raise SystemExit("error: ORCHESTRATE_NO_HISTORY is set, so the delivery history is off")
+    try:
+        swept = delivery_history.extract(**history_inputs(worktree, 30), budget_s=a.budget, wait_s=120, full=a.full)
+    except delivery_history.Busy:
+        raise SystemExit("error: another process is updating the delivery history; try again in a minute")
+    milestones = history_milestones(worktree)
+    folder = Path(swept["folder"])
+    if a.json:
+        print(json.dumps({**delivery_history.summary(folder), "swept": swept, "milestones": milestones}, indent=1))
+        return
+    print(json.dumps({"folder": str(folder), "sessions": swept["sessions"], "turns": swept["turns"],
+                      "events": swept["events"], "milestones": milestones, "files_read": swept["files_read"],
+                      "files_left": swept["files_left"], "bytes": swept["bytes"],
+                      "next": "run `history --json` for the summary, or `dashboard --open` to look"
+                      + (f"; {swept['files_left']} files are still unread, so run `history` again"
+                         if swept["files_left"] else "")}))
+
+
+def cmd_dashboard(a: argparse.Namespace) -> None:
+    """Writes the delivery dashboard, one HTML file with the history embedded, and opens it with --open. --json
+    prints the same records for an agent instead."""
+    worktree = Path(a.worktree).resolve()
+    repo = Path(repository_of(git_common_dir(worktree)))
+    if not a.no_sweep:
+        sweep_history(worktree, budget_s=a.budget, wait_s=120)
+        history_milestones(worktree)
+    folder = delivery_history.project_dir(repo)
+    if a.json:
+        print(json.dumps(delivery_history.dashboard_model(folder, history_meta(worktree))))
+        return
+    out = delivery_history.render(folder, Path(a.out).expanduser().resolve() if a.out else None, history_meta(worktree))
+    if a.open:
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
+        subprocess.run([opener, str(out)], capture_output=True)
+    print(json.dumps({"written": str(out), "bytes": out.stat().st_size}))
+
+
 def cmd_report(a: argparse.Namespace) -> None:
     """Prints the report as markdown, with links as paths from the repository root, for the lead to send or sum up.
     `--write` puts it in a file the human can open instead, with its links made relative to that file: by default
     under <git common dir>/orchestrate/reports/, which no checkout shows and no commit sweeps up."""
     worktree = Path(a.worktree).resolve()
+    sweep_history(worktree, budget_s=30, wait_s=5)  # the app's turns and auto-review threads end without a script turn
     start, text = report_text(worktree, a.since)
     note_report_time(worktree)
     write = getattr(a, "write", None)
@@ -12313,7 +12584,9 @@ def main_check_attempt(tree: Path, commit: str, spec: dict, folder: Path) -> dic
     git(tree, "clean", "-ffdq")
     started = time.time()
     if setup := run_setup(tree, {"setup_command": spec.get("setup")}):
-        code, out, err = setup["exit"], setup["out"], setup["err"] + "\n" + setup["problem"]
+        # A failed setup says nothing about the commit, so the attempt is one that couldn't judge it, and is tried
+        # again rather than counted as a failure and bisected.
+        code, out, err = MAIN_CHECK_UNJUDGED_EXIT, setup["out"], setup["err"] + "\n" + setup["problem"]
     else:
         with ExitStack() as stack:
             uses = [stack.enter_context(held(lock, tree)) for lock in spec["locks"]]
@@ -12601,6 +12874,25 @@ def main_check_out(result: str, code: int, **fields) -> None:
     sys.exit(code)
 
 
+def start_due_checks(worktree: Path, prof: dict, ref: str, names: list[str] | None = None,
+                     force: bool = False) -> tuple[list[str], list[dict]]:
+    """Starts each main-branch check (of `names`, or all) whose interval has passed and whose main branch has moved,
+    or each one not already running when `force`. Returns (the checks started, the runs already in flight). `watch`
+    calls it each time it fetches, so the checks run while the lead waits."""
+    checks = prof.get("main_checks") or {}
+    started, running = [], []
+    for name in names or list(checks):
+        folder = main_check_dir(worktree, name)
+        flight = main_check_flight(folder)
+        if flight:
+            running.append({"check": name, **flight})
+            continue
+        if force or main_check_due(checks[name], main_check_runs(folder, unjudged=True), None, ref):
+            main_check_spawn(worktree, name, force=force)
+            started.append(name)
+    return started, running
+
+
 def cmd_main_check(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree)
@@ -12611,21 +12903,11 @@ def cmd_main_check(a: argparse.Namespace) -> None:
     if a.runner:
         main_check_out(**{"code": 0, **main_check_runner(worktree, prof, a.name, checks[a.name], a.force)})
     if a.due or a.start:
-        names = [a.name] if a.name else list(checks)
         try:
             ref = tip(worktree, prof)
         except TipError as e:
             raise SystemExit(f"error: {e}")
-        started, running = [], []
-        for name in names:
-            folder = main_check_dir(worktree, name)
-            flight = main_check_flight(folder)
-            if flight:
-                running.append({"check": name, **flight})
-                continue
-            if a.start or main_check_due(checks[name], main_check_runs(folder, unjudged=True), None, ref):
-                main_check_spawn(worktree, name, force=a.start)
-                started.append(name)
+        started, running = start_due_checks(worktree, prof, ref, [a.name] if a.name else None, a.start)
         main_check_out("STARTED" if started else "ALREADY_RUNNING" if running else "NOTHING", 0,
                        started=started, running=running, why=(
             f"started {', '.join(started)} on the main branch's tip" if started else
@@ -12755,7 +13037,7 @@ def routine_next(line: dict, steps: dict) -> tuple[list[str] | None, str]:
 
 def carried(words: list[str], a: argparse.Namespace, origin: str) -> list[str]:
     """A step's words with what the lead gave the first command and the step needs too: the turn limit for every step;
-    the builder's model, effort, review host and no-progress hours for a later run; the planner's host, model and
+    the builder's host, model, effort, review host and no-progress hours for a later run; the planner's host, model and
     effort for a planner revision after a plan. `--one-step` goes on every run and plan, so it doesn't chain."""
     out = list(words)
 
@@ -12765,7 +13047,8 @@ def carried(words: list[str], a: argparse.Namespace, origin: str) -> list[str]:
         out.extend([flag] if value is True else [flag, str(value)])
     add("--turn-timeout-hours", getattr(a, "turn_timeout_hours", None))
     if out[0] == "run" and origin == "run":
-        for flag, dest in (("--model", "model"), ("--effort", "effort"), ("--review-host", "review_host"),
+        for flag, dest in (("--host", "host"), ("--model", "model"), ("--effort", "effort"),
+                           ("--review-host", "review_host"),
                            ("--no-progress-hours", "no_progress_hours"), ("--no-design-review", "no_design_review")):
             add(flag, getattr(a, dest, None))
     if out[0] == "plan" and origin == "plan":
@@ -12810,6 +13093,8 @@ def step_entry(words: list[str], line: dict, seconds: float) -> dict:
                                 line.get("milestone") or argv_flag(words, "--milestone")) if x)
     out = {"step": what, "result": line.get("result")}
     out.update({k: line[k] for k in STEP_FIELDS if line.get(k) not in (None, "", [], {})})
+    if words[0] == "plan" and line.get("report"):  # what the planner said, such as a decision that is the human's
+        out["report"] = line["report"]
     if isinstance(line.get("design_review"), dict) and line["design_review"].get("verdict"):
         out["design_review"] = line["design_review"]["verdict"]
     out["minutes"] = round(seconds / 60, 1)
@@ -12895,9 +13180,10 @@ WATCH_FETCH_S = 300.0  # how often it fetches the main branch while it reads the
 NO_PROGRESS_WARN_H = 2.0  # half the hours a run gives a builder by default before it stops it (--no-progress-hours)
 READY_IDLE_WARN_S = 30 * 60.0  # how long ready work may wait with a builder slot free
 PLANNER_QUEUE_WARN_S = 3600.0  # how long a planner may wait for the one before it
-WATCH_WHY = ("Read this for delivery problems and act on them: message a builder (`run --message`), start a planner "
-             "on a re-plan, change the order of the work, start a builder on ready work, or ask the human. Then start "
-             "this command again in the background, so the next check-in or warning sign wakes you")
+WATCH_WHY = ("Read this for delivery problems and act on them: message a builder (stop its run with `pause --module "
+             "<M>`, then start it again with `run --message`), start a planner on a re-plan, change the order of the "
+             "work, start a builder on ready work, or ask the human. Then start this command again in the background, "
+             "so the next check-in or warning sign wakes you")
 
 
 def check_in_s(value: str | None, problems: list) -> float:
@@ -12955,12 +13241,17 @@ def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
         ref, proj = None, {}
     if fetch:
         sync_holds(worktree, prof)
+        try:  # the main-branch checks that are due, so the lead needn't start them when woken
+            if ref:
+                start_due_checks(worktree, prof, ref)
+        except (Exception, SystemExit):
+            pass
     held, mine = holds(worktree), me(worktree)
     steps = {key: next_step(key, proj, held, mine) for key in sorted(proj)}
     running = {key for key in steps if run_holder(folder, key) is not None}
     waiting = [s for key, s in steps.items() if s["status"] == "can_start" and key not in running]
     limit = prof.get("builders")
-    free = (limit - len(builds)) if limit else len(waiting)
+    free = (limit - len(builder_runs(loops))) if limit else len(waiting)
     if waiting and free > 0:
         since.setdefault("ready_waiting", stamp)
     else:
@@ -13005,8 +13296,11 @@ def watch_signs(look: dict) -> dict:
     first = look["since"].get("ready_waiting")
     if first and stamp - first >= READY_IDLE_WARN_S:
         names = ", ".join(f"{s['module']} {s.get('milestone') or ''}".strip() for s in look["waiting"])
-        signs["ready_waiting"] = {"seen": str(first), "text": f"ready work has waited {ago(stamp - first)} with a "
-                                                              f"builder slot free: {names}"}
+        slots = (f"fewer than the {look['limit']} builders the settings' Builders line allows are running"
+                 if look["limit"] else "the settings have no Builders line to limit the builders")
+        signs["ready_waiting"] = {"seen": str(first), "text": f"ready work has waited {ago(stamp - first)}, and "
+                                                              f"{slots}: {names}. If you agreed a lower number with "
+                                                              "the human in chat, that number stands"}
     for r in look["loops"]:
         if r.get("role") == "plan" and r.get("waiting_for") and stamp - (r.get("started_at") or stamp) > \
                 PLANNER_QUEUE_WARN_S:
@@ -13046,7 +13340,7 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dic
             counts = counts_of(m)
             back_and_forth.append(f"{stem} {m['id']}: failed review {plural(counts['failed_reviews'], 'time')}, "
                                   f"{counts['failed_reviews_with_repeat']} on a finding an earlier review raised; "
-                                  f"the counts now call for {escalation(*counts.values())}")
+                                  f"the counts now call for {escalation_of(m)}")
         step = look["steps"].get(key) or {}
         name, status = f"{stem} {step.get('milestone') or ''}".strip(), step.get("status")
         if key in look["running"]:
@@ -13079,7 +13373,7 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dic
            "not_moving": not_moving, "back_and_forth": back_and_forth,
            "runs": [" ".join(x for x in (r.get("role"), r.get("module"), r.get("milestone"), r.get("step")) if x)
                     for r in look["loops"] if not r.get("steps_parent")],
-           "builders": {"running": len(look["builds"]), "limit": look["limit"], "free": look["free"],
+           "builders": {"running": len(builder_runs(look["loops"])), "limit": look["limit"], "free": look["free"],
                         "ready_waiting": [f"{s['module']} {s.get('milestone') or ''}".strip() for s in look["waiting"]]},
            "planners": {"running": [r.get("task") or "a planner" for r in planners if not r.get("waiting_for")],
                         "waiting": [f"{r.get('task') or 'a planner'} ({ago(stamp - r['started_at'])})"
@@ -13374,6 +13668,25 @@ def build_parser() -> argparse.ArgumentParser:
                         help="write it to a file the human can open instead (default <git common dir>/orchestrate/"
                              "reports/<date>-<time>.md), with links relative to that file")
     report.set_defaults(func=cmd_report)
+    hist = sub.add_parser("history", help="copy this repository's Claude and Codex sessions into the delivery "
+                                          "history, and print what it holds")
+    hist.add_argument("--worktree", default=".")
+    hist.add_argument("--json", action="store_true", help="the summary: totals, errors by kind, the latest errors and "
+                                                          "the costliest milestones")
+    hist.add_argument("--full", action="store_true", help="read every session file again from the start")
+    hist.add_argument("--budget", type=float, default=600.0, help="seconds to spend reading (default 600); a "
+                                                                  "later run carries on")
+    hist.set_defaults(func=cmd_history)
+    dash = sub.add_parser("dashboard", help="write the delivery dashboard: cost, agents, milestones, errors and "
+                                            "versions, as one HTML file")
+    dash.add_argument("--worktree", default=".")
+    dash.add_argument("--out", help="where to write it (default: dashboard.html in the history folder)")
+    dash.add_argument("--open", action="store_true", help="open it in the browser")
+    dash.add_argument("--json", action="store_true", help="print the records the page draws, for an agent")
+    dash.add_argument("--no-sweep", action="store_true", help="draw what the history holds, without reading new "
+                                                              "sessions first")
+    dash.add_argument("--budget", type=float, default=120.0, help="seconds to spend reading new sessions")
+    dash.set_defaults(func=cmd_dashboard)
     flow = sub.add_parser("flow", help="show how fast milestones moved beside commits, lock queueing and failed jobs")
     flow.add_argument("--worktree", default=".")
     flow.add_argument("--since", type=float, default=24.0, help="hours to cover (default 24)")

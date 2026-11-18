@@ -45,7 +45,7 @@ header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srg
   backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); border-bottom: 1px solid var(--ring); }
 .top-in { max-width: 1320px; margin: 0 auto; padding: 14px 24px 0; }
 .brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.mark { width: 28px; height: 28px; border-radius: 8px; background: conic-gradient(from 210deg, var(--s1), var(--s3), var(--s4), var(--s2), var(--s7), var(--s1));
+.logo { width: 28px; height: 28px; border-radius: 8px; background: conic-gradient(from 210deg, var(--s1), var(--s3), var(--s4), var(--s2), var(--s7), var(--s1));
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--surface) 70%, transparent); flex: none; }
 .brand h1 { font-size: 17px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
 .brand .sub { color: var(--muted); font-size: 12.5px; }
@@ -129,7 +129,7 @@ th[aria-sort="descending"]::after { content: " ↓"; color: var(--accent); }
 td { padding: 8px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
 tr.click { cursor: pointer; }
 tr.click:hover td { background: var(--wash); }
-.scroll { max-height: 560px; overflow: auto; margin: 0 -20px -18px; padding: 0 20px 6px; }
+.scroll { max-height: 72vh; overflow: auto; margin: 0 -20px -18px; padding: 0 20px 6px; }
 .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 600; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
 .pill.crit { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
 .pill.warn { background: color-mix(in srgb, var(--warning) 22%, transparent); color: color-mix(in srgb, var(--warning) 45%, var(--ink)); }
@@ -180,7 +180,7 @@ tr.click:hover td { background: var(--wash); }
 <header class="top">
   <div class="top-in">
     <div class="brand">
-      <div class="mark" aria-hidden="true"></div>
+      <div class="logo" aria-hidden="true"></div>
       <div>
         <h1 id="title">Delivery history</h1>
         <div class="sub" id="subtitle"></div>
@@ -217,6 +217,21 @@ tr.click:hover td { background: var(--wash); }
 <script>
 "use strict";
 const RAW = JSON.parse(document.getElementById("history-data").textContent) || {sessions: [], turns: [], events: [], milestones: [], checks: [], meta: {}};
+// Turns arrive as columns, with the session as an index into RAW.sessions and tokens as a list in token_order.
+(() => {
+  const tt = RAW.turns, order = RAW.meta.token_order || ["prompt", "cache_read", "cache_write", "cache_write_1h", "output", "reasoning"];
+  if (Array.isArray(tt)) return;
+  RAW.turns = tt.rows.map(r => {
+    const o = {};
+    tt.columns.forEach((c, i) => { if (r[i] != null) o[c] = r[i]; });
+    const s = RAW.sessions[o.s] || {};
+    o.host = s.host; o.session = s.session; o.kind = s.kind; o.parent_kind = s.parent_kind; o.title = s.title;
+    if (Array.isArray(o.tokens)) o.tokens = Object.fromEntries(order.map((k, i) => [k, o.tokens[i] || 0]));
+    if (o.start && o.duration_ms) o.end = new Date(Date.parse(o.start) + o.duration_ms).toISOString();
+    o.ended = o.ended || "complete";
+    return o;
+  });
+})();
 const $ = (s, el = document) => el.querySelector(s);
 const el = (tag, attrs = {}, ...kids) => {
   const n = document.createElement(tag);
@@ -375,7 +390,7 @@ const roundRight = (x, y, w, h, r) => {
 
 // Stacked columns over days. series: [{key, name, color}], rows: [{label, values: {key: n}, title}]
 function stackedColumns(host, rows, series, fmt, markers = []) {
-  const W = measure(host), H = 240, L = 46, R = 8, Tp = 14, B = 26;
+  const W = measure(host), H = 252, L = 46, R = 8, Tp = 26, B = 26;
   const pw = W - L - R, ph = H - Tp - B;
   const totals = rows.map(r => sum(series, s => r.values[s.key]));
   const max = niceMax(Math.max(...totals, 0));
@@ -412,11 +427,21 @@ function stackedColumns(host, rows, series, fmt, markers = []) {
     if (i % every === 0) svg.append(sv("text", {x: L + band * i + band / 2, y: H - 8, "text-anchor": "middle"}, r.label));
   });
   svg.append(sv("line", {class: "base", x1: L, x2: W - R, y1: Tp + ph, y2: Tp + ph}));
+  // Versions that first ran on the same day share one marker, labelled with the last and a count.
+  const atDay = new Map();
   for (const m of markers) {
     const i = rows.findIndex(r => r.key >= m.key);
-    if (i < 0) continue;
+    if (i >= 0) atDay.set(i, [...(atDay.get(i) || []), m.label]);
+  }
+  let lastX = -1e9, lift = 0;
+  for (const [i, labels] of [...atDay.entries()].sort((a, b) => a[0] - b[0])) {
     const x = L + band * i + 1;
-    svg.append(sv("g", {class: "version"}, sv("line", {x1: x, x2: x, y1: Tp - 6, y2: Tp + ph}), sv("text", {x: x + 4, y: Tp - 1}, m.label)));
+    const text = labels[labels.length - 1] + (labels.length > 1 ? ` +${labels.length - 1}` : "");
+    lift = x - lastX < 54 ? (lift ? 0 : 12) : 0;
+    lastX = x;
+    const g = sv("g", {class: "version"}, sv("title", {}, "Versions first run this day: " + labels.join(", ")),
+      sv("line", {x1: x, x2: x, y1: Tp - 6 - lift, y2: Tp + ph}), sv("text", {x: x + 4, y: Tp - 1 - lift}, text));
+    svg.append(g);
   }
   host.replaceChildren(svg);
 }
@@ -437,13 +462,17 @@ function lines(host, labels, series, fmt) {
   const n = labels.length, X = i => L + (n <= 1 ? pw / 2 : pw * i / (n - 1)), Y = v => Tp + ph - ph * v / max;
   const every = Math.ceil(n / Math.max(1, Math.floor(pw / 64)));
   labels.forEach((l, i) => { if (i % every === 0 || i === n - 1) svg.append(sv("text", {x: X(i), y: H - 8, "text-anchor": "middle"}, l)); });
+  const placed = [];
   for (const s of series) {
     const d = s.values.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(v).toFixed(1)).join("");
     svg.append(sv("path", {d: d + `L${X(n - 1)},${Tp + ph}L${X(0)},${Tp + ph}Z`, fill: s.color, opacity: 0.08}));
     svg.append(sv("path", {d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}));
     const lv = s.values[n - 1];
+    let ly = Y(lv) + 4;
+    for (const prev of placed) if (Math.abs(prev - ly) < 12) ly = prev + (ly >= prev ? 12 : -12);
+    placed.push(ly);
     svg.append(sv("circle", {cx: X(n - 1), cy: Y(lv), r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2}));
-    svg.append(sv("text", {x: X(n - 1) + 8, y: Y(lv) + 4, fill: "var(--ink-2)", style: "fill:var(--ink-2);font-weight:600"}, fmt(lv)));
+    svg.append(sv("text", {x: X(n - 1) + 8, y: ly, style: "fill:var(--ink-2);font-weight:600"}, fmt(lv)));
   }
   svg.append(sv("line", {class: "base", x1: L, x2: W - R, y1: Tp + ph, y2: Tp + ph}));
   const cross = sv("line", {x1: 0, x2: 0, y1: Tp, y2: Tp + ph, stroke: "var(--axis)", "stroke-width": 1, opacity: 0});
@@ -461,8 +490,9 @@ function lines(host, labels, series, fmt) {
 }
 
 // Ranked horizontal bars. rows: [{name, value, color?, sub?, onclick?}]
-function rankedBars(host, rows, fmt, limit = 12) {
-  rows = rows.filter(r => r.value > 0).sort((a, b) => b.value - a.value);
+function rankedBars(host, rows, fmt, limit = 12, keepOrder = false) {
+  rows = rows.filter(r => r.value > 0);
+  if (!keepOrder) rows.sort((a, b) => b.value - a.value);
   const shown = rows.slice(0, limit);
   if (rows.length > limit) shown.push({name: `${rows.length - limit} more`, value: sum(rows.slice(limit), r => r.value), color: "var(--axis)"});
   if (!shown.length) { host.replaceChildren(el("div", {class: "empty"}, "Nothing in this slice.")); return; }
@@ -519,7 +549,9 @@ function heat(host, turns) {
   }
   const allDays = []; for (let d = new Date(days[0] + "T00:00"); dayKey(+d) <= days[days.length - 1]; d.setDate(d.getDate() + 1)) allDays.push(dayKey(+d));
   const W = measure(host), L = 52, Tp = 16, cw = (W - L - 4) / 24, ch = Math.min(20, Math.max(12, cw * 0.8)), H = Tp + allDays.length * (ch + 2) + 4;
-  const vals = [...cells.values()], max = Math.max(...vals, 1);
+  // Steps by rank, so a few busy hours don't wash every other hour into one shade.
+  const ranked = [...cells.values()].filter(v => v > 0).sort((a, b) => a - b), max = ranked[ranked.length - 1] || 1;
+  const stepOf = v => { if (!v) return 0; let lo = 0, hi = ranked.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ranked[m] < v) lo = m + 1; else hi = m; } return 1 + Math.min(6, Math.floor(7 * lo / ranked.length)); };
   const svg = sv("svg", {class: "chart", viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": "agent hours by day and hour"});
   for (let h = 0; h < 24; h += 3) svg.append(sv("text", {x: L + h * cw + cw / 2, y: 10, "text-anchor": "middle"}, String(h).padStart(2, "0")));
   allDays.forEach((d, i) => {
@@ -527,7 +559,7 @@ function heat(host, turns) {
     svg.append(sv("text", {x: L - 8, y: y + ch / 2 + 4, "text-anchor": "end"}, dayLabel(d)));
     for (let h = 0; h < 24; h++) {
       const v = cells.get(d + "|" + h) || 0;
-      const step = v ? Math.min(7, 1 + Math.floor(6.999 * Math.sqrt(v / max))) : 0;
+      const step = stepOf(v);
       const r = sv("rect", {x: L + h * cw + 1, y, width: cw - 2, height: ch, rx: 3, fill: `var(--seq-${step})`, class: "mark"});
       r.addEventListener("pointermove", ev => showTip(ev, `${dayLabel(d)}, ${String(h).padStart(2, "0")}:00`, [["Agent time", hours(v)], ["Agents at once, average", (v / 3.6e6).toFixed(1)]]));
       r.addEventListener("pointerleave", hideTip);
@@ -621,7 +653,7 @@ function laneStats(turns, sessions, events) {
     const tok = ts.reduce((a, t) => { const k = t.tokens || {}; a.p += k.prompt || 0; a.c += k.cache_read || 0; return a; }, {p: 0, c: 0});
     const errs = events.filter(e => isErr(e) && ss.has(e.host + ":" + e.session)).length;
     return {lane: l, name: LANE_NAME[l], sessions: ss.size, turns: ts.length, cost: sum(ts, U().f), agentMs: sum(ts, t => t.duration_ms),
-      turnMs: median(ts.map(t => t.duration_ms || 0)), perTurn: median(ts.map(U().f)), cache: tok.p ? tok.c / tok.p : 0,
+      turnMs: median(ts.map(t => t.duration_ms).filter(x => x > 0)), perTurn: median(ts.map(U().f)), cache: tok.p ? tok.c / tok.p : 0,
       compactions: sum(ts, t => t.compactions), errors: errs, errRate: errs / ts.length,
       models: [...groupBy(ts, t => t.model || "?").entries()].sort((a, b) => b[1].length - a[1].length).map(([m]) => m).slice(0, 2).join(", ")};
   }).filter(Boolean);
@@ -634,7 +666,7 @@ function milestoneRows(F) {
     const reviews = m.reviews || [];
     const fails = reviews.filter(r => r.verdict === "fail").length;
     const start = T(m.authorised), end = T(m.done);
-    return {...m, key, cost: sum(ts, U().f), turns: ts.length, builds: ts.filter(t => t.lane === "build").length,
+    return {...m, key, reviews_list: reviews, cost: sum(ts, U().f), turns: ts.length, builds: ts.filter(t => t.lane === "build").length,
       reviewTurns: ts.filter(t => t.lane === "review").length, reviews: reviews.length, fails,
       repeats: sum(reviews, r => (r.findings || []).filter(f => f.repeat).length), size: m.size || 0,
       days: isFinite(start) && isFinite(end) ? (end - start) / 864e5 : null, agentMs: sum(ts, t => t.duration_ms), _turns: ts};
@@ -650,7 +682,7 @@ function versionRows(F) {
     const done = ms.filter(m => isFinite(T(m.done)) && T(m.done) >= lo && T(m.done) <= hi);
     const reviews = F.milestones.flatMap(m => m.reviews || []).filter(r => T(r.at) >= lo && T(r.at) <= hi);
     return {version: v, first: new Date(lo).toISOString(), turns: ts.length, sessions: ss.size, cost: sum(ts, U().f),
-      perTurn: sum(ts, U().f) / ts.length, turnMs: median(ts.map(t => t.duration_ms || 0)),
+      perTurn: sum(ts, U().f) / ts.length, turnMs: median(ts.map(t => t.duration_ms).filter(x => x > 0)),
       errRate: errs.length / ts.length * 100, timeouts: errs.filter(e => e.kind === "turn_timed_out").length / ts.length * 100,
       compactions: sum(ts, t => t.compactions) / ts.length * 100, done: done.length,
       failRate: reviews.length ? reviews.filter(r => r.verdict === "fail").length / reviews.length : NaN, reviews: reviews.length};
@@ -777,7 +809,7 @@ V.overview = f => {
     el("div", {class: "grid g-tiles", style: "margin-top:16px"},
       tile("Builders", compact(new Set(f.turns.filter(t => t.lane === "build").map(t => t.session)).size), "sessions"),
       tile("Reviewers", compact(new Set(f.turns.filter(t => t.lane === "review").map(t => t.session)).size), "sessions"),
-      tile("Reviews failed", compact(sum(ms, m => (m.reviews_list || []).filter(r => r.verdict === "fail").length)), `of ${compact(sum(ms, m => (m.reviews_list || []).length))} reviews`),
+      tile("Reviews failed", compact(sum(ms, m => (m.reviews || []).filter(r => r.verdict === "fail").length)), `of ${compact(sum(ms, m => (m.reviews || []).length))} reviews`),
       tile("Codex weekly limit", UNITS.limit.fmt(sum(f.turns, t => t.limit_pct)), "used by these turns"),
       tile("Claude list price", usd(sum(f.turns, t => t.usd)), "not what the plan charges"),
       tile("Errors", compact(errs.length), errs.length ? `${f.events.filter(e => e.kind === "turn_failed").length} failed turns` : "none", errs.length > 0)),
@@ -791,7 +823,7 @@ V.overview = f => {
     el("div", {class: "grid g-2"},
       card("Milestones over time", "Each day's running total.", legend([["Ready for Review", "var(--s1)"], ["Done", "var(--s3)"]], true),
         chartHost(h => lines(h, ds.map(dayLabel), [{name: "Ready for Review", color: "var(--s1)", values: cum("ready_for_review")}, {name: "Done", color: "var(--s3)", values: cum("done")}], compact))),
-      card("When agents worked", "Agent time in each hour. Darker means more agents running at once.", chartHost(h => heat(h, f.turns)))),
+      card("When agents worked", "Agent time in each hour of the day. A stronger blue means more agents running at once.", chartHost(h => heat(h, f.turns)))),
     el("div", {style: "height:16px"}),
     insightCards(insights(f)),
   ];
@@ -906,7 +938,10 @@ V.errors = f => {
 
 V.versions = f => {
   const rows = versionRows(f);
-  const metric = (key, name, fmt, desc) => card(name, desc, chartHost(h => rankedBars(h, rows.map(r => ({name: r.version, value: r[key], sub: `${r.turns} turns`})), fmt, 20)));
+  // Oldest first, and only versions that ran enough turns for a rate to mean something.
+  const steady = rows.filter(r => r.turns >= 20);
+  const metric = (key, name, fmt, desc) => card(name, desc + ` Versions with 20 or more turns, oldest first.`,
+    chartHost(h => rankedBars(h, steady.map(r => ({name: `${r.version} · ${r.turns} turns`, value: r[key], sub: `${r.turns} turns`})), fmt, 30, true)));
   return [
     card("Each version of the script", "Measured over the turns each version ran. Projects and milestones differ between versions, so read differences beside the turn and milestone counts.",
       table("versions", rows, [

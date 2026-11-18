@@ -27,9 +27,9 @@ An item passes only when every proof it names passes.
 The done-when file's format, in `done-when.md`, says which milestones need a reviewer.
 
 Choose the proof that would catch a convincing fake. Often one proof isn't enough, because each kind misses
-different things. Take a boat bobbing in waves. A test that the energy never grows catches a slow drift that
-nobody would notice by eye. A sequence of frames of the boat in a storm catches motion that is perfectly stable
-and still looks wrong. So that item gets both.
+different things. Take a ball bouncing in a physics game. A test that the energy never grows catches a slow drift
+that nobody would notice by eye. A sequence of frames of the ball rolling down a steep slope catches motion that is
+perfectly stable and still looks wrong. So that item gets both.
 
 A quality bar needs a real example to point at, whether or not the work is visual. "Help text as clear as
 ripgrep's" gives a reviewer something to judge against. "Clear help text" doesn't.
@@ -122,8 +122,8 @@ anything, write down what you are going to look at.
 
 A reader without a list looks at whatever catches its eye, decides it looks fine, and misses the broken parts. So
 break the thing into pieces first. For a command-line tool, the pieces might be its subcommands, its flags, its output
-and its failure messages. A picture or a 3D model breaks into pieces the same way: a boat into the bow, the stern,
-where the mast sits, and the guns.
+and its failure messages. A picture or a 3D model breaks into pieces the same way: a chair into the legs, the seat,
+the back, and the places where they join.
 
 Then decide how you need to see each piece. A 3D model needs a few angles. An image needs close crops as well as
 the whole frame, so use a crop or zoom tool, and don't judge a scaled-down copy. Most things need a few
