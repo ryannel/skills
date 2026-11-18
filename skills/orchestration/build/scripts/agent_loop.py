@@ -5809,6 +5809,9 @@ CHANGES = {
         "hosts' files. `history --json` prints spend by kind of agent, model and version, and every kind of error "
         "with the latest. `dashboard --open` draws the same records as a page for the human. Read the build skill's "
         "references/delivery-history.md.",
+        "A finding only a planner can settle, met after a diagnosis that answered something else, now gets a "
+        "diagnosis of its own; only a second one after a planner already answered such a finding goes to the human. "
+        "`Builders:` in the settings also reads counts like \"2 Codex, 1 Claude\".",
     ],
     "2.4.0": [
         "`run` and `plan` now carry on through the routine steps themselves: a milestone Ready for Review is "
