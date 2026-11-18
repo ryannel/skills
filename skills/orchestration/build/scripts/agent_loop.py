@@ -88,7 +88,11 @@ Subcommands:
                       BLOCKED needs_access or needs_hardware by itself once only such items are open, and its `next`
                       is the same `run` with ORCHESTRATE_VISIBLE=1, for when the human is at the machine; a visible
                       run on a milestone blocked that way unblocks it and builds.
-        CHECKS_FAILED the agent said DONE (or its goal completed) three times without the work holding up
+        CHECKS_FAILED the agent said DONE (or its goal completed) three times without the work holding up. Its
+                      `next`, as STALLED's and NO_PROGRESS_FOR_HOURS's, starts the builder again with --fresh and the
+                      reasons in --message, with a planner's task as `alternative`; when the builder said an item
+                      can't be met, the planner's task comes first. A check that exits 75 (a main-branch check that
+                      hasn't judged the commit yet) isn't a failure: the run asks again, with no builder turn
         INVALID       the done-when file is malformed, or something outside the builder's fields changed
         NEEDS_REVIEW   the module's next milestone is Ready for Review, with the script's record, and waiting for its
                       review. One that is Ready for Review without the record is checked by `run` instead
@@ -195,7 +199,12 @@ Subcommands:
         definitions (resetting proof on milestones whose definitions changed). PLANNED lists the modules whose
         design review is now owed. BLOCKED or NEEDS_CONTEXT from the planner, or UNFINISHED, merges nothing; the
         files it changed are listed under `set_aside` and kept in a stash (`stash`), and any commits on a branch
-        (`branch`), since the planner's checkout is reset for the next plan. Its `report` keeps the end of the planner's message (where the human's decisions go),
+        (`branch`), since the planner's checkout is reset for the next plan. Their `next` gives a planner the same
+        task again, with how the last turn ended (and, after BLOCKED or NEEDS_CONTEXT, a placeholder for the
+        answer). PLAN_NOT_MERGED: the planner finished but its files couldn't merge (a conflict with a commit that
+        landed meanwhile, say); they are set aside the same way, and `next` gives a planner the task again. A KEEP
+        naming the builder for a milestone Blocked with Needs Dependency or Needs Context lifts the block
+        (`unblocked`), with `run` as `next`. Its `report` keeps the end of the planner's message (where the human's decisions go),
         up to 6000 characters. PLANNED's `next` is the owed design review on the review host, or `ready`;
         `assumptions` counts, per module, the `Assumption:` lines in its PLAN.md. The whole task is kept in the plan
         commit's body and in each module's record file under `briefs` (the authorisation stamps name only its
@@ -227,7 +236,12 @@ Subcommands:
         rebased, in the order they arrived, onto a checkout of the main branch's tip; one that conflicts is left out
         (FAILED, with `conflicts` naming the files); the test command runs once on the batch; and when it fails, the
         batch is split in halves until the branch that broke it is found (FAILED with the test output) and the rest
-        land. A landed branch's result carries `batch` (its id, the branches that landed in order, this branch's
+        land. A branch that fails the test command alone is told so only when the main branch passes without it;
+        when the main branch fails on its own, the result carries `main_broken` (the commit, and under `culprit` the
+        latest commit that changed files outside the plans folder when its parent passes, with its modules) and a
+        `next` that gives the fix to a planner for those modules, or to the lead. A branch whose milestone in
+        progress has definitions other than the ones authorised at the tip is refused (FAILED): a planner has
+        changed them since it started. A landed branch's result carries `batch` (its id, the branches that landed in order, this branch's
         place, the test runs) and moves the worktree to the landed tip. Requests outlive a `merge` that dies while
         running the queue: the next waiting one carries on.
 
@@ -517,7 +531,9 @@ commit it with your work. Then end with `BLOCKED <reason>: <one sentence on what
 REVIEW_TEMPLATE = """Review milestone {milestone} of module {module}, using the review-milestone skill ({skill}).
 
 The goal: a review at {review} that judges every item of {milestone} in {done}, with the verdict fields, status and \
-findings set as the skill says.
+findings set as the skill says. A finding only a planner can settle, such as an item that the proof it names can't \
+prove, or two items that contradict each other, also gets a `planner` field saying why. The script then sends the \
+review to a planner rather than the builder.
 {answers}
 About this session:
 - This folder is a clean checkout of commit {commit}, which the script made for you. Build and run the product \
@@ -550,8 +566,9 @@ tries a milestone's item checks without recording anything. It leaves out the pr
 each check under the item's lock, waiting while a builder holds it.
 
 To finish: say what changed and any decision the human must make, then end with `PLANNED` once the files are \
-written. The script lists the files you changed itself. If nothing should change, or you can't go on, end with \
-`BLOCKED: ...` or `NEEDS_CONTEXT: ...`, and the script merges nothing."""
+written. The script lists the files you changed itself. If the plan should stay as it is, change no file and end \
+with the `KEEP` line your task gives. If you can't go on, end with `BLOCKED: ...` or `NEEDS_CONTEXT: ...`. On \
+`KEEP`, `BLOCKED` or `NEEDS_CONTEXT` the script merges no file of yours."""
 
 # What a builder is sent after a failed review. It says what a review is, and leaves the review itself to be read
 # from its file, because a list of findings to clear gets cleared and nothing more: the next reviewer starts again
@@ -1510,7 +1527,8 @@ def reads_problems(iid: str, item: dict) -> list[str]:
 def findings_problems(m: dict, mid: str, items: list) -> list[str]:
     """What's wrong with a milestone's `findings`: the reviewer's list of the Must Fix findings of its last review,
     each with a short `name` kept the same from review to review, the `item` it fails (none for a defect outside the
-    items), and `different` saying how a new failure of an item that failed before isn't the same defect."""
+    items), `different` saying how a new failure of an item that failed before isn't the same defect, and `planner`
+    saying why only a planner can settle it."""
     found = m.get("findings", [])
     if not isinstance(found, list):
         return [f"{mid}: findings should be a list"]
@@ -1527,6 +1545,8 @@ def findings_problems(m: dict, mid: str, items: list) -> list[str]:
             problems.append(f"{mid}: finding {f['name']!r} names item {f['item']!r}, which isn't one of {mid}'s")
         if "different" in f and not isinstance(f["different"], str):
             problems.append(f"{mid}: finding {f['name']!r}: different should be text")
+        if "planner" in f and not (isinstance(f["planner"], str) and f["planner"].strip()):
+            problems.append(f"{mid}: finding {f['name']!r}: planner should say why only a planner can settle it")
     return problems
 
 
@@ -1853,10 +1873,12 @@ FAILED_REVIEWS_TO_DIAGNOSE = 6
 COUNTS = ("failed_reviews", "failed_reviews_with_repeat", "diagnoses")  # a milestone's counts, kept by the script
 
 
-def escalation(failed_reviews: int, with_repeat: int = 0, diagnoses: int = 0) -> str:
+def escalation(failed_reviews: int, with_repeat: int = 0, diagnoses: int = 0, for_planner: bool = False) -> str:
     """What a milestone's counts call for after a failed review. The first two start again at a re-plan, a kept plan
-    or a decision of the human's. A milestone gets one diagnosis, so the same counts after it block the milestone."""
-    if with_repeat >= REPEATS_TO_DIAGNOSE or failed_reviews >= FAILED_REVIEWS_TO_DIAGNOSE:
+    or a decision of the human's. A milestone gets one diagnosis, so the same counts after it block the milestone.
+    `for_planner` means the last review has a finding only a planner can settle, such as an item its named proof
+    can't prove, or items that contradict each other; another builder turn can't, so it goes to the diagnosis now."""
+    if for_planner or with_repeat >= REPEATS_TO_DIAGNOSE or failed_reviews >= FAILED_REVIEWS_TO_DIAGNOSE:
         return "diagnosis" if diagnoses == 0 else "too_many_failed_reviews"
     if with_repeat <= 0 and failed_reviews <= 0:
         return "none"
@@ -1870,19 +1892,30 @@ def counts_of(m: dict) -> dict:
     return {k: int(m.get(k, 0) or 0) for k in COUNTS}
 
 
+def planner_findings(m: dict) -> list[dict]:
+    """The findings of a milestone's last review that the reviewer marked for a planner, with a `planner` field
+    saying why only a planner can settle them. `m` is a milestone, or counts carrying its `findings`."""
+    return [f for f in m.get("findings") or [] if isinstance(f, dict) and isinstance(f.get("planner"), str)
+            and f["planner"].strip()]
+
+
 def escalation_of(m: dict) -> str:
     """`escalation` for a milestone of a done-when file."""
-    return escalation(*counts_of(m).values())
+    return escalation(*counts_of(m).values(), for_planner=bool(planner_findings(m)))
 
 
 def diagnosis_cause(counts: dict) -> str:
     """Why a milestone is owed a diagnosis, in the words the lead and the human read."""
+    if planner_findings(counts):
+        return "a reviewer found something only a planner can settle"
     return ("a finding keeps coming back" if int(counts.get("failed_reviews_with_repeat", 0) or 0) >= REPEATS_TO_DIAGNOSE
             else "reviews keep finding something new")
 
 
 def blocked_after_diagnosis(counts: dict) -> str:
     """Why the script blocked a milestone that reached the same counts again after its diagnosis."""
+    if planner_findings(counts):
+        return "a reviewer found something only a planner can settle again, after its diagnosis"
     return ("a finding kept coming back after its diagnosis"
             if int(counts.get("failed_reviews_with_repeat", 0) or 0) >= REPEATS_TO_DIAGNOSE
             else "its reviews kept finding something new after its diagnosis")
@@ -2151,6 +2184,7 @@ def next_step(key: str, proj: dict, holds: dict | None = None, me: str = "") -> 
         if escalation_of(m) == "diagnosis":
             # repeated failures, or many new ones: another build would only repeat them until a planner looks
             return {**out, "status": "waiting", "reason": "for_diagnosis", "cause": diagnosis_cause(m),
+                    **({"findings": planner_findings(m)} if planner_findings(m) else {}),
                     "escalation": "diagnosis", "failed_reviews": int(m.get("failed_reviews", 0) or 0),
                     "failed_reviews_with_repeat": int(m.get("failed_reviews_with_repeat", 0) or 0)}
         # Ready for Review with no record of the script's checks was set by a builder before 2.1.0. It isn't owed a
@@ -2392,7 +2426,11 @@ def diagnosis_task(module: str, mid: str, counts: dict, prof: dict, worktree: Pa
         (f" (earlier ones are only in git history: git log -p -- {latest})" if lost or not files else "")
     history = review_history(worktree, prof, module, mid)
     each = f" What failed in each review: {' | '.join(history)}." if history else ""
-    if repeated >= REPEATS_TO_DIAGNOSE:
+    if marked := planner_findings(counts):
+        what = ("Its last review found something only a planner can settle: " +
+                " | ".join(f"{f['name']}" + (f" ({f['item']})" if f.get("item") else "") + f": {f['planner']}"
+                           for f in marked)[:1200])
+    elif repeated >= REPEATS_TO_DIAGNOSE:
         what = (f"It has failed review {plural(failed, 'time')}, and {repeated} of those reviews repeated a finding "
                 "that an earlier review had raised, so the fixes aren't holding")
     else:
@@ -2683,6 +2721,28 @@ def block_gone(worktree: Path, prof: dict, step: dict, ref: str) -> str | None:
     return None
 
 
+def answered_line(mod: str, mid: str) -> str:
+    """The end of a planner's task about a block: how to end when the plan already answers it."""
+    return (f" If the plan already provides it, change no file and end with `KEEP {mod} {mid}: builder: <where the "
+            "plan provides it>`, and the script lifts the block.")
+
+
+def planned_since_block(worktree: Path, prof: dict, mod: str, mid: str) -> str | None:
+    """The subject of the latest plan merged on the main branch since the milestone was blocked, or None: once a
+    planner has answered a Needs Dependency, by planning the missing part in the module that owns it, the block
+    itself is what's left to lift."""
+    try:
+        ref = tip(worktree, prof, fetch=False)
+    except TipError:
+        return None
+    marked = git(worktree, "log", "-1", "--format=%H", "--fixed-strings", f"--grep=orchestrate: {mod} {mid} blocked:",
+                 ref, "--", done_rel(prof, mod)).stdout.strip()
+    if not marked:
+        return None
+    return git(worktree, "log", "-1", "--format=%s", "--grep=^Plan: ",
+               f"{marked}..{ref}").stdout.strip() or None
+
+
 def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, seen: set | None = None) -> dict | None:
     """What to run after a step that isn't ready, from the same facts `next_step` read. A step Waiting On Dependency
     follows its first dependency to the module that has to move first."""
@@ -2743,19 +2803,26 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
                             + work,
                             ask=f"Are you at the machine to {kind} for {mod} {mid}? {what}")
         if reason == "needs_dependency":
-            return next_cmd(loop_cmd("plan", "--worktree", wt, "--task",
-                                     f"{mod} {mid} needs something no plan provides yet. The builder wrote: "
-                                     f"{sentence(what)}" + work), "lead",
+            plan = loop_cmd("plan", "--worktree", wt, "--task",
+                            f"{mod} {mid} needs something no plan provides yet. The builder wrote: {sentence(what)}"
+                            + work + answered_line(mod, mid))
+            unblock = loop_cmd("unblock", "--module", mod, "--milestone", mid, "--worktree", wt)
+            if planned := planned_since_block(worktree, prof, mod, mid):
+                return next_cmd(unblock, "lead",
+                                f"{mod} {mid} is Blocked: Needs Dependency ({what}), and a plan has merged since it "
+                                f"stopped ({planned}). If that plan provides what it needs, unblock it and run the "
+                                "builder; if not, give it to a planner." + work, alternative=plan)
+            return next_cmd(plan, "lead",
                             f"{mod} {mid} is Blocked: Needs Dependency ({what}). A planner adds it to the module "
-                            "that owns it." + work,
-                            alternative=loop_cmd("unblock", "--module", mod, "--milestone", mid, "--worktree", wt))
+                            "that owns it." + work, alternative=unblock)
         return next_cmd(loop_cmd("run", "--module", mod, "--worktree", wt) + " --message '<the missing fact>'", "lead",
                         f"{mod} {mid} is Blocked: Needs Context ({what}). The lead finds the missing fact, or asks the "
                         "human when only they know it, and resumes the builder with it in `run --message`, which "
                         "unblocks it. If another module owns it, or it's a design problem, a planner plans it "
                         "instead." + work,
                         alternative=loop_cmd("plan", "--worktree", wt, "--task",
-                                             f"Unblock {mod} {mid}. The builder wrote: {sentence(what)}" + work))
+                                             f"Unblock {mod} {mid}. The builder wrote: {sentence(what)}" + work
+                                             + answered_line(mod, mid)))
     if status == "invalid":
         problems = step.get("problems") or []
         if any("aren't the ones last authorised" in p for p in problems):
@@ -4345,6 +4412,15 @@ def stream_end(text: str, lines: int = CHECK_TAIL_LINES) -> str:
     return "\n".join(text.rstrip().splitlines()[-lines:]) or "(nothing)"
 
 
+PENDING_CHECK = f"exited {75}: a main-branch check hasn't judged this commit yet"  # MAIN_CHECK_PENDING_EXIT
+PENDING_CHECK_POLL_S = 60.0  # how often a run whose only failing checks are waiting on a main-branch check asks again
+
+
+def pending_only(reasons: list[str]) -> bool:
+    """Whether every reason the checks failed is a check still waiting for a main-branch check's answer."""
+    return bool(reasons) and all(PENDING_CHECK in r for r in reasons)
+
+
 def check_failures(tree: Path, prof: dict, milestone: dict, timeout_s: float = 3600,
                    reused: list | None = None) -> list[str]:
     """Runs the project's test command, then each item's check (under its lock, if it names one), in the script's
@@ -4359,7 +4435,11 @@ def check_failures(tree: Path, prof: dict, milestone: dict, timeout_s: float = 3
         r = run_check(tree, command, lock, timeout_s, prof.get("plans"), reads=reads)
         if r["reused"] and reused is not None:
             reused.append(label)
-        if r["exit"] != 0:
+        if r["exit"] == MAIN_CHECK_PENDING_EXIT:
+            # `main-check` exits 75 when the main-branch check hasn't judged this commit yet: nothing has failed, so
+            # the run asks again later, without a builder turn
+            failed.append(f"{label} `{command}` {PENDING_CHECK}.")
+        elif r["exit"] != 0:
             whole = (f" Its whole output is in {r['stdout']} (stdout) and {r['stderr']} (stderr)."
                      if r["stdout"] and r["stderr"] else "")
             failed.append(f"{label} `{command}` " + ("timed out" if r["exit"] == 124 else f"exited {r['exit']}") +
@@ -4405,6 +4485,18 @@ def state_refusal(found: list[tuple[str, str, str]], old_branch: bool = False) -
             if old_branch else f"Your commits set {what}. ")
     return (said + SCRIPT_SETS_STATE.format(
         what="the status" if len(found) == 1 else "each status", done=" and ".join(rels)))
+
+
+def authorised_at_tip(worktree: Path, prof: dict, stem: str, mid: str) -> str | None:
+    """The definitions the record at the main branch's tip authorises for `mid`: "" when the record no longer has
+    the milestone, None when the tip or the record can't be read."""
+    try:
+        rec = json.loads(show(worktree, tip(worktree, prof), record_rel(prof, stem)) or "")
+    except (TipError, SystemExit, json.JSONDecodeError):
+        return None
+    if not isinstance(rec, dict):
+        return None
+    return ((rec.get("milestones") or {}).get(mid) or {}).get("definitions") or ""
 
 
 def ready_problems(worktree: Path, prof: dict, stem: str, milestone: dict, done: dict, authorised_hash: str,
@@ -7252,6 +7344,32 @@ def cmd_run(a: argparse.Namespace) -> None:
                         "lead", "send the problems to the planner, and don't resume this builder until a planner "
                                 "turn has fixed them")
 
+    def stuck_next(ended: str, reasons: list[str], said: str = "") -> dict:
+        """`next` for a run that stops because the builder isn't getting anywhere (CHECKS_FAILED, STALLED,
+        NO_PROGRESS_FOR_HOURS). A review would refuse the milestone, which isn't Ready for Review, so the builder
+        starts again in a new session with the reasons. When the builder says an item can't be met as written, the
+        reasons go to a planner first, because only a planner changes an item."""
+        why = "; ".join(r.strip() for r in reasons if r.strip()) or "none recorded"
+        why = why if len(why) <= 1500 else why[:1500] + " [cut]"
+        fresh = run_again(a, stem, worktree) + " " + shlex.join([
+            "--fresh", "--message", f"The last run on {mid} stopped: {ended}. The script's reasons: {why}\n\nWork "
+                                    "from the milestone's files and these reasons. If an item can't be met as "
+                                    "written, leave it as it is and say so."])
+        plan = loop_cmd("plan", "--worktree", str(worktree), "--task",
+                        f"{stem} {mid}: its run stopped ({ended}), and the builder may be unable to meet an item as "
+                        f"written. The script's reasons: {why}" + (f"\nThe builder's last words: {tail(said, 600)}"
+                                                                  if said.strip() else "") +
+                        f"\nIf an item can't be met as written, change it and end with PLANNED. If every item can be "
+                        f"met, change no file and say so.")
+        if re.search(r"\bcan(?:'|’|no)?t be met\b|\bcannot be met\b", said + " " + why, re.IGNORECASE):
+            return next_cmd(plan, "lead", f"{stem} {mid} stopped ({ended}), and the builder says an item can't be "
+                                          "met as written; a planner decides, and only then does a builder resume",
+                            alternative=fresh)
+        return next_cmd(fresh, "lead", f"{stem} {mid} stopped ({ended}). It isn't Ready for Review, so a review would "
+                                       "refuse it: start the builder again in a new session with the reasons. If they "
+                                       "show an item can't be met as written, give them to a planner instead",
+                        alternative=plan)
+
     def record_block(reason: str, items: list[str], what: str) -> dict:
         what = repo_relative(what, worktree_roots(worktree))
         blocked = {"reason": reason, **({"items": items} if items else {}), "what": what[:2000],
@@ -7363,6 +7481,27 @@ def cmd_run(a: argparse.Namespace) -> None:
         finish(state_path, state, "READY_FOR_REVIEW", review=review, commit=head, checked=checked,
                **({"reused_checks": reused} if reused else {}), next=then)
 
+    def judged_checks(current: dict, done: dict) -> list[str]:
+        """`check_and_record`, asked again while the only checks that fail are waiting on a main-branch check's
+        answer (exit 75). Nothing has failed then, so the builder gets no turn and the run counts no strike; the wait
+        ends when the answer comes, or with NO_PROGRESS_FOR_HOURS."""
+        while True:
+            state.pop("waiting_on_main_check", None)  # check_and_record ends the run itself when the checks pass
+            reasons = check_and_record(current, done)
+            if not pending_only(reasons):
+                return reasons
+            state["waiting_on_main_check"] = reasons
+            state_path.write_text(json.dumps(state, indent=2))
+            if time.time() - state["progress_at"] > a.no_progress_hours * 3600:
+                finish(state_path, state, "NO_PROGRESS_FOR_HOURS", hours=a.no_progress_hours, next=stuck_next(
+                    f"a main-branch check didn't judge the merged work within {a.no_progress_hours:g} hours",
+                    reasons))
+            loop_note(step="waiting for a main-branch check to judge the merged work")
+            for _ in range(max(1, int(PENDING_CHECK_POLL_S / RUN_POLL_S))):
+                if _STOP:
+                    finish(state_path, state, "PAUSED")
+                time.sleep(min(RUN_POLL_S, PENDING_CHECK_POLL_S))
+
     def reopen_unchecked(checked: str) -> None:
         """Sets the milestone back to in_progress on the main branch when the tip says Ready for Review or Done
         without the script's record, and the script's checks have just failed it. A builder set that status before
@@ -7396,7 +7535,8 @@ def cmd_run(a: argparse.Namespace) -> None:
     script_note, reasons = "", []
     if passing(milestone) == len(milestone["items"]) and is_ancestor(worktree, "HEAD", start_tip) and \
             not git(worktree, "status", "--porcelain").stdout.strip():
-        reasons = check_and_record(milestone, done)
+        reasons = check_and_record(milestone, done) if getattr(a, "checks_only", False) else \
+            judged_checks(milestone, done)
         state["not_ready_reasons"] = "; ".join(reasons)
         ran = any("` exited " in r or "` timed out" in r for r in reasons)
         script_note = not_ready_message(state["not_ready_reasons"],
@@ -7418,7 +7558,9 @@ def cmd_run(a: argparse.Namespace) -> None:
             state["not_ready_reasons"] = "; ".join(reasons)
     if getattr(a, "checks_only", False):
         # nothing passed: the checks failed, or the work isn't merged with every item passing yet
-        finish(state_path, state, "CHECKS_FAILED", reasons=reasons)
+        finish(state_path, state, "CHECKS_FAILED", reasons=reasons, next=next_cmd(
+            run_again(a, stem, worktree) + " --checks-only", "lead",
+            "the builder fixes what `reasons` names and merges, then runs the checks again"))
     if behind:
         script_note = behind + ("\n\n" + script_note if script_note else "")
 
@@ -7544,6 +7686,18 @@ def cmd_run(a: argparse.Namespace) -> None:
             state["waited_for_merge"] = waited
         if _STOP:
             finish(state_path, state, "PAUSED")
+        # A planner may have re-planned this milestone while the builder worked. Its checks would then never pass,
+        # since they compare the tip with the definitions this run started from, so the run stops for a new one.
+        if (now_authorised := authorised_at_tip(worktree, prof, stem, mid)) not in (None, authorised_hash):
+            finish(state_path, state, "INVALID", problems=[
+                f"a planner changed {mid}'s definitions on {base_ref(prof)} while this run was building it, so the "
+                "work can't be checked against the ones this run started from"], next=next_cmd(
+                    run_again(a, stem, worktree) + " " + shlex.join([
+                        "--message", f"A planner changed {mid}'s items on {base_ref(prof)} while you were building "
+                                     f"it. Read {done_rel(prof, stem)} again and build to the items as they now "
+                                     "stand."]), "lead",
+                    f"`run` again brings the builder's branch onto the new plan files and builds {mid} as it now "
+                    "stands; nothing is wrong with the builder's work"))
 
         done = load_done(worktree, stem, prof)
         if behind and asks(done) != authorised_hash:  # the builder hasn't brought its branch onto the tip yet
@@ -7574,7 +7728,7 @@ def cmd_run(a: argparse.Namespace) -> None:
 
         word = report_word(message)
         if now_passing == len(current["items"]):
-            reasons = check_and_record(current, done)
+            reasons = judged_checks(current, done)
         else:
             reasons = ["items not yet pass: " + ", ".join(i["id"] for i in current["items"]
                                                            if i.get("builder_result") != "pass")]
@@ -7582,7 +7736,9 @@ def cmd_run(a: argparse.Namespace) -> None:
         if word == "DONE" or status == "complete":
             state["not_ready_turns"] += 1
             if state["not_ready_turns"] >= 3:
-                finish(state_path, state, "CHECKS_FAILED", reasons=reasons)
+                finish(state_path, state, "CHECKS_FAILED", reasons=reasons, next=stuck_next(
+                    "the builder said it had finished three times, and the script's checks disagreed", reasons,
+                    message))
         if word == "DONE" or now_passing == len(current["items"]):
             ran = any("` exited " in r or "` timed out" in r for r in reasons)
             a.message = not_ready_message(state["not_ready_reasons"],
@@ -7607,13 +7763,17 @@ def cmd_run(a: argparse.Namespace) -> None:
         # them in a row (each answered with the open items), the script stops rather than nudging forever.
         state["idle"] = 0 if (changed_anything or word) else state.get("idle", 0) + 1
         if state["idle"] >= STALL_TURNS:
-            finish(state_path, state, "STALLED", turns=state["idle"], open=[
-                i["id"] for i in current["items"] if i.get("builder_result") != "pass"], report=tail(message, 1500))
+            still = [i["id"] for i in current["items"] if i.get("builder_result") != "pass"]
+            finish(state_path, state, "STALLED", turns=state["idle"], open=still, report=tail(message, 1500),
+                   next=stuck_next(f"{state['idle']} turns in a row changed nothing and reported nothing",
+                                   reasons, message))
         if status == "blocked":
             named, what = blocked_report(report_line(message))
             stop_blocked(named, what or "the Codex goal is blocked", message)
         if time.time() - state["progress_at"] > a.no_progress_hours * 3600:
-            finish(state_path, state, "NO_PROGRESS_FOR_HOURS", hours=a.no_progress_hours)
+            finish(state_path, state, "NO_PROGRESS_FOR_HOURS", hours=a.no_progress_hours, next=stuck_next(
+                f"no new item passed and the builder made no commit of its own for {a.no_progress_hours:g} hours",
+                reasons, message))
 
 
 # ------------------------------------------------------------------------------------------ reviewing and planning
@@ -8029,7 +8189,8 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                     target["blocked"] = {"reason": "too_many_failed_reviews", "what": why}
                     e["too_many_failed_reviews"] = {"why": why, "after": e.get("counted_after", 0), "at": now()}
             counts.update({k: int(target.get(k, 0) or 0) for k in COUNTS},
-                          repeated=again, status=target["status"])
+                          repeated=again, status=target["status"],
+                          **({"findings": planner_findings(target)} if planner_findings(target) else {}))
             write_json(t / done_path, doc)
             write.append(done_path)
             if kept:  # the earlier review's file moved; its record entry follows it
@@ -8066,7 +8227,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                        next=next_cmd(loop_cmd("review", "--module", stem, "--milestone", "design", "--worktree",
                                               str(worktree), "--host", host), "lead", why))
     if not passed and not design:
-        word = escalation(*(counts.get(k, 0) for k in COUNTS))
+        word = escalation(*(counts.get(k, 0) for k in COUNTS), for_planner=bool(planner_findings(counts)))
         action = escalation_next(word, stem, mid, counts, worktree, prof)
     elif not passed:
         action = design_review_next({"verdict": verdict, "review": review_path, "line": out["last_line"]}, stem,
@@ -8141,6 +8302,23 @@ def review_prompt(host: str, prof: dict, stem: str, mid: str, commit: str, done:
                                judged))
 
 
+def module_next(worktree: Path, module: str, why: str) -> dict:
+    """`next` for a command that was refused before it started anything: the module's next step at the main branch's
+    tip, as `ready` works it out, or `ready` itself when that can't be read."""
+    try:
+        prof = profile(worktree, strict=True)
+        ref = tip(worktree, prof)
+        proj = project(worktree, prof, ref)
+        key = stem_at_tip(worktree, prof, module).upper()
+        step = next_step(key, proj, holds(worktree), me(worktree))
+        then = next_for(step, worktree, prof, proj)
+    except (TipError, SystemExit, KeyError, ValueError):
+        then = None
+    if then is None:
+        return next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", f"{why}; `ready` says what comes next")
+    return {**then, "why": f"{why}; {then['why']}"}
+
+
 def cmd_review(a: argparse.Namespace) -> None:
     new_command()
     out = review_once(a)
@@ -8149,9 +8327,14 @@ def cmd_review(a: argparse.Namespace) -> None:
         again = ["review", "--module", out.get("module") or a.module, "--milestone", a.milestone]
         again += [] if a.milestone == "design" else ["--commit", a.commit]
         again += ["--worktree", str(Path(a.worktree).resolve())]
-        if result == "INVALID":  # the request was wrong, not the host: another host would refuse it the same way
-            out["next"] = next_cmd(loop_cmd(*again), "lead", "nothing merged; fix what `problems` names, then run "
-                                   "the review again. Without --host, the settings' Review host picks the reviewer")
+        if result == "INVALID" and "merged" not in out:
+            # The review was refused before any reviewer started, so the same review would be refused again: the
+            # module's own next step is what to run, such as `run` for a milestone that isn't Ready for Review.
+            out["next"] = module_next(Path(a.worktree).resolve(), out.get("module") or a.module,
+                                      "nothing merged, and the same review would be refused again")
+        elif result == "INVALID":  # the reviewer did what a reviewer doesn't: another reviewer may not
+            out["next"] = next_cmd(loop_cmd(*again, "--host", other_host(out.get("host") or "codex")), "lead",
+                                   "nothing merged; run the review again, on the other host if you can")
         elif a.milestone == "design":
             out["next"] = next_cmd(loop_cmd(*again, "--host", other_host(out.get("host") or "codex")), "lead",
                                    "nothing merged; run the review again, on the other host if you can")
@@ -8210,6 +8393,8 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
         m = find(doc, mid)
     except (TipError, SystemExit, json.JSONDecodeError, KeyError) as e:
         emit("INVALID", **info, **out, merged=False, problems=[f"KEEP names {module} {mid}, which can't be read: {e}"])
+    if m.get("status") == "blocked" and blocked_of(m)["reason"] in REPLAN_LIFTS:
+        answered_block(worktree, prof, stem, mid, who, why, info, out)
     if (step := escalation_of(m)) != "diagnosis":
         emit("INVALID", **info, **out, merged=False, problems=[
             f"KEEP is the answer to a diagnosis, and {stem} {mid} isn't owed one (its counts call for {step})"])
@@ -8224,6 +8409,9 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
         doc = json.loads((t / done_rel(prof, stem)).read_text())
         target = find(doc, mid)
         target.update(failed_reviews=0, failed_reviews_with_repeat=0, diagnoses=int(target.get("diagnoses", 0) or 0) + 1)
+        for f in target.get("findings") or []:  # settled by this diagnosis
+            if isinstance(f, dict):
+                f.pop("planner", None)
         record = record_in(t, prof, stem, doc)
         e = entry(record, mid)
         if who == "human":
@@ -8262,6 +8450,38 @@ def keep_plan(worktree: Path, prof: dict, start: str, keep: re.Match, host: str,
     emit("KEPT", **info, **out, merged=True, commit=landed, module=stem, milestone=mid, who=who, why=why, next=then)
 
 
+def answered_block(worktree: Path, prof: dict, stem: str, mid: str, who: str, why: str, info: dict, out: dict) -> None:
+    """A planner asked about a Blocked milestone (Needs Dependency or Needs Context) found that the plan already
+    answers it, so nothing changes: the script lifts the block, and the builder carries on with the planner's
+    reasons."""
+    if who != "builder":
+        emit("INVALID", **info, **out, merged=False, problems=[
+            f"{stem} {mid} is Blocked (Needs Dependency or Needs Context), and a KEEP for a block the plan already "
+            f"answers names the builder, who carries on: `KEEP {stem} {mid}: builder: <where the plan answers it>`"])
+
+    def change(t):
+        path = t / done_rel(prof, stem)
+        doc = json.loads(path.read_text())
+        target = find(doc, mid)
+        if target.get("status") != "blocked":
+            return []
+        target["status"] = "in_progress"
+        target.pop("blocked", None)
+        write_json(path, doc)
+        return [done_rel(prof, stem)]
+    ok, landed = loop_write(worktree, prof, "_plan", change,
+                            f"orchestrate: unblock {stem} {mid}: a planner found the plan answers its block")
+    if not ok:
+        emit("INVALID", **info, **out, merged=False, problems=[f"couldn't lift the block: {landed}"])
+    wt = str(worktree)
+    emit("KEPT", **info, **out, merged=True, commit=landed, module=stem, milestone=mid, who=who, why=why,
+         unblocked=True, next=next_cmd(
+             loop_cmd("run", "--module", stem, "--worktree", wt, "--message",
+                      f"A planner looked at what blocked {mid} and found the plan already answers it: {why}"), "lead",
+             f"a planner found {stem} {mid}'s block answered by the plan as it stands, and the script lifted it; run "
+             "the builder with the planner's reasons"))
+
+
 def done_docs_at(worktree: Path, prof: dict, ref: str) -> dict:
     """The done-when files at `ref`, by module, parsed (ones that don't parse are left out)."""
     out = {}
@@ -8291,6 +8511,14 @@ def keep_leftovers(tree: Path, prof: dict, task: str) -> dict:
         if git(tree, "stash", "push", "--include-untracked", "-m", label).returncode == 0:
             kept["stash"] = f"the latest stash, '{label}'"
     return kept
+
+
+def kept_where(kept: dict) -> str:
+    """Where a planner's unmerged work was kept, for a task that asks the next planner to reuse it, or ""."""
+    if "left_uncommitted" in kept:
+        return "the worktree, uncommitted" if kept["left_uncommitted"] else ""
+    return " and ".join(([kept["stash"]] if "stash" in kept else []) +
+                        ([f"the branch {kept['branch']}"] if "branch" in kept else []))
 
 
 def kept_text(kept: dict) -> str:
@@ -8352,6 +8580,50 @@ def cmd_plan(a: argparse.Namespace) -> None:
             return {"left_uncommitted": paths}
         return {"set_aside": paths, **keep_leftovers(tree, prof, a.task)}
 
+    def plan_again(note: str, on: str | None = None) -> str:
+        """This `plan` with the same task and a note on how the last turn on it ended, optionally on another host."""
+        return loop_cmd("plan", "--worktree", str(worktree), "--task", f"{a.task}\n\n{note}",
+                        *(["--host", on] if on else []))
+
+    def planner_stopped(result: str, out: dict, kept: dict) -> dict:
+        """`next` for a planner turn that ended without merging, so the lead isn't sent the same task as before."""
+        line = report_line(out.get("report", ""))[:400]
+        where = kept_where(kept)
+        if result in ("BLOCKED", "NEEDS_CONTEXT"):
+            return {"next": next_cmd(plan_again(
+                f"Your last turn on this ended: {line} The answer: <the answer, from the files or the human>. "
+                + (f"What you wrote then is kept in {where}; reuse what holds up." if where else "")), "lead",
+                f"the planner stopped ({line}). Nothing merged{kept_text(kept)}. Find the answer, from the files or "
+                "from the human when only they know it, put it in place of the placeholder, and give the planner the "
+                "task again")}
+        if result == "UNFINISHED":
+            return {"next": next_cmd(plan_again(
+                "Your last turn on this ended before its last line" + (f", and what you wrote is kept in {where}; "
+                                                                        "reuse what holds up" if where else "") +
+                ". Finish the task and end with the line it asks for."), "lead",
+                f"the planner's turn ended without PLANNED, KEEP, BLOCKED or NEEDS_CONTEXT, so nothing merged"
+                f"{kept_text(kept)}; give it the task again")}
+        if result in ("HOST_FAILED", "WRONG_MODEL_OR_EFFORT"):
+            return {"next": next_cmd(plan_again(
+                "An earlier turn on this stopped on the host" + (f"; what it wrote is kept in {where}" if where
+                                                                  else "") + ".", other_host(host)), "lead",
+                f"the planner's host failed ({out.get('reason') or result}), so nothing merged{kept_text(kept)}; "
+                "run it again, on the other host if you can")}
+        return {}
+
+    def not_merged(why: str) -> None:
+        """A finished planner turn whose files couldn't merge: they are set aside, and a planner does the task again
+        on the main branch's new tip, where the cause (such as a conflict with a commit that landed meanwhile) can
+        be settled."""
+        kept = leave()
+        where = kept_where(kept)
+        emit("PLAN_NOT_MERGED", **info, **out, merged=False, problems=[why], **kept, next=next_cmd(
+            plan_again(f"Your last turn on this finished, but its files couldn't merge: {why[:400]}. "
+                       + (f"They are kept in {where}; " if where else "") +
+                       "start from the main branch's tip and reuse what holds up."), "lead",
+            f"the planner finished, but its files couldn't merge ({why[:300]}){kept_text(kept)}; give a planner the "
+            "task again, on the main branch's new tip"))
+
     start = head_commit(tree)
     seen = reflog_size(tree)
     before = done_docs_at(tree, prof, start)
@@ -8371,11 +8643,12 @@ def cmd_plan(a: argparse.Namespace) -> None:
         result = "FINISHED"
         out.pop("owed", None)
     if result != "FINISHED":  # a progress report, a blocker or a host failure: nothing merges
-        emit(result, **info, **out, merged=False, **leave())
+        kept = leave()
+        emit(result, **info, **out, merged=False, **kept, **planner_stopped(result, out, kept))
     try:
         prof = profile(tree, strict=True)
     except SystemExit as e:
-        emit("PLANNED", **info, **out, merged=False, problems=[str(e)], **leave())
+        not_merged(str(e))
     if keep := KEEP_LINE.match(report_line(out.get("report", ""))):
         keep_plan(worktree, prof, start, keep, host, info, out, tree=tree)
 
@@ -8384,8 +8657,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
     try:
         fresh = tip(tree, prof)
     except TipError as e:
-        emit("PLANNED", **info, **out, merged=False, problems=[f"the turn can't be checked, so nothing merged: {e}"],
-             **leave())
+        not_merged(f"the turn can't be checked, so nothing merged: {e}")
     if forged := record_tampering(tree, prof, start, fresh):
         kept = leave()
         emit("INVALID", **info, **out, merged=False, **kept, problems=[
@@ -8445,7 +8717,8 @@ def cmd_plan(a: argparse.Namespace) -> None:
                                "<stash>`); reuse what holds up."),
             "lead", "the plan didn't merge and its files are set aside in a stash (nothing is lost). This gives a "
                     "planner the task again with the problems, since only a planner turn may fix them"))
-    if git(tree, "status", "--porcelain").stdout.strip():
+    committed = bool(git(tree, "status", "--porcelain").stdout.strip())
+    if committed:
         git(tree, "add", "-A")
         git(tree, *ident(tree), "commit", "--quiet", "-m", f"Plan: {a.task.splitlines()[0][:60]}",
             "-m", a.task)  # the subject is short; the body keeps the whole task
@@ -8455,7 +8728,9 @@ def cmd_plan(a: argparse.Namespace) -> None:
         prior_ref = None
     ok, landed = land(tree, prof)
     if not ok:
-        emit("PLANNED", **info, **out, merged=False, problems=[f"couldn't merge the plan: {landed}"], **leave())
+        if committed:  # the plan's own commit goes back to files, which leave() keeps as the planner left them
+            git(tree, "reset", "--quiet", "--mixed", "HEAD~1")
+        not_merged(f"couldn't merge the plan: {landed}")
 
     def change(t):
         written = []
@@ -8672,6 +8947,8 @@ def cmd_next(a: argparse.Namespace) -> None:
         doc = load_done(worktree, stem, prof)
     milestone = find(doc, a.milestone)
     counts = {k: int(milestone.get(k, 0) or 0) for k in COUNTS}
+    if marked := planner_findings(milestone):
+        counts["findings"] = marked
     action = "too_many_failed_reviews" if milestone.get("status") == "blocked" and \
         blocked_of(milestone)["reason"] == "too_many_failed_reviews" else escalation_of(milestone)
     if action in ("diagnosis", "too_many_failed_reviews"):  # for the planner or the human, rather than the builder's findings
@@ -9084,6 +9361,13 @@ def cmd_merge(a: argparse.Namespace) -> None:
     if base and (found := states_set(worktree, prof, base)):
         print(json.dumps({"result": "FAILED", "detail": state_refusal(found), "commit": head_commit(worktree)}))
         sys.exit(1)
+    if stale := stale_definitions(worktree, prof, upstream):
+        print(json.dumps({"result": "FAILED", "commit": head_commit(worktree), "detail": (
+            f"{' and '.join(stale)} on this branch {'isn' if len(stale) == 1 else 'aren'}'t what the record at "
+            f"{base_ref(prof)} authorises: a planner has changed {'it' if len(stale) == 1 else 'them'} since this "
+            f"branch started. Nothing landed. Rebase onto {base_ref(prof)}, taking its copy of the plan files, read "
+            "the items again, change your work to meet them as they now stand, then merge")}))
+        sys.exit(1)
     touched = git(worktree, "diff", "--name-only", base, "HEAD").stdout.split() if base else []
     warnings = plan_checks(worktree, prof, touched)
     warnings += [f"{p} changed; the script writes it after each record it merges, so this change will be overwritten"
@@ -9106,8 +9390,38 @@ def cmd_merge(a: argparse.Namespace) -> None:
         out.update(commit=head_commit(worktree), **(upstream_changes(worktree, base, own) if ok else {}))
     if got.get("conflicts"):
         out["conflicts"] = got["conflicts"]
+    if got.get("main_broken"):
+        out.update(main_broken=got["main_broken"], next=fit_next(main_broken_next(worktree, prof, got["main_broken"])))
     print(json.dumps({**out, **({"plan_warnings": warnings} if warnings else {})}))
     sys.exit(0 if ok else 1)
+
+
+def stale_definitions(worktree: Path, prof: dict, ref: str) -> list[str]:
+    """`MODULE Mn` for each milestone in progress on this branch whose definitions aren't the ones the record at
+    `ref` authorises, while the done-when file at `ref` has the authorised ones: a planner changed the milestone
+    after the branch started, and work built to the old items shouldn't land as if it met the new ones."""
+    stale = []
+    for stem in modules_here(worktree, prof):
+        try:
+            mine = json.loads((worktree / done_rel(prof, stem)).read_text())
+            theirs = json.loads(show(worktree, ref, done_rel(prof, stem)) or "")
+            rec = json.loads(show(worktree, ref, record_rel(prof, stem)) or "")
+        except (OSError, SystemExit, json.JSONDecodeError):
+            continue
+        if not all(isinstance(x, dict) for x in (mine, theirs, rec)):
+            continue
+        for m in mine.get("milestones") or []:
+            if not isinstance(m, dict) or m.get("status") != "in_progress" or not isinstance(m.get("items"), list):
+                continue
+            want = ((rec.get("milestones") or {}).get(m.get("id")) or {}).get("definitions")
+            there = next((x for x in theirs.get("milestones") or [] if isinstance(x, dict) and x.get("id") == m["id"]),
+                         None)
+            try:
+                if want and there and definitions(there) == want and definitions(m) != want:
+                    stale.append(f"{stem} {m['id']}")
+            except (KeyError, TypeError, AttributeError):
+                continue
+    return stale
 
 
 def upstream_changes(worktree: Path, old_base: str, own: int) -> dict:
@@ -9278,6 +9592,14 @@ def land_requests(worktree: Path, setup: dict, batch: list[dict]) -> dict[str, d
             git(tree, "rebase", "--abort")  # left by a runner that died mid-rebase
         ok, detail = land(tree, setup, check=r["check"])
         results[r["id"]] = {"ok": ok, "detail": detail}
+        if not ok and detail.startswith("Test command `"):  # alone on the tip: was the tip already broken?
+            try:
+                base = tip(worktree, setup)
+                broken = broken_base(verify_tree(worktree, BATCH_TREE, base), setup, base)
+            except TipError:
+                broken = None
+            if broken:
+                results[r["id"]] = main_broken_result(setup["test_command"], broken)
     elif ready:
         results.update(land_batch(worktree, setup, ready))
     return results
@@ -9300,7 +9622,7 @@ def land_batch(worktree: Path, prof: dict, batch: list[dict]) -> dict[str, dict]
             except TipError as e:
                 detail = str(e)
                 break
-            final, landed = settle_batch(tree, prof, start, batch, results, runs)
+            final, landed = settle_batch(tree, prof, start, batch, results, runs, bases={})
             if not landed:
                 return results
             ok, detail, again = publish_batch(worktree, tree, prof, start, final)
@@ -9335,11 +9657,13 @@ def batch_note(batch_id: str, place: int, names: list[str], test_runs: int, prof
 
 
 def settle_batch(tree: Path, prof: dict, base: str, group: list[dict], results: dict, runs: list,
-                 failed: dict | None = None) -> tuple[str, list[tuple[dict, str, str]]]:
+                 failed: dict | None = None, bases: dict | None = None) -> tuple[str, list[tuple[dict, str, str]]]:
     """Builds `group` on `base` in `tree` and keeps what passes the test command. Returns the new base and, for each
     request kept, (request, the commit before its own, its last commit). A request that conflicts, or that alone
     fails the test command, gets its result in `results`. `failed` is the test run already known to fail on this
-    same group, which isn't run again."""
+    same group, which isn't run again. `bases` holds what is known of each base this batch has tested: None for one
+    that passes, or `broken_base`'s answer for one that fails without any branch on it."""
+    bases = {} if bases is None else bases
     built = build_batch(tree, base, group, results)
     if not built:
         return base, []
@@ -9348,16 +9672,26 @@ def settle_batch(tree: Path, prof: dict, base: str, group: list[dict], results: 
     command = prof.get("test_command")
     if not command or not any(r["check"] for r, _, _ in built):
         return built[-1][2], built
+    if bases.get(base):  # the main branch fails on its own, so no branch on it can pass
+        for r, _, _ in built:
+            results[r["id"]] = main_broken_result(command, bases[base])
+        return base, []
     if failed is None:
         loop_note(step=f"testing a merge batch of {len(built)} branch{'' if len(built) == 1 else 'es'}")
         r = run_check(tree, command, None, MERGE_TEST_TIMEOUT_S, prof.get("plans"))
         if not r["reused"]:
             runs.append(r)
         if r["exit"] == 0:
+            bases[built[-1][2]] = None
             return built[-1][2], built
         failed = r
     if len(built) == 1:
         req = built[0][0]
+        if base not in bases:  # whether the branch broke it, or the main branch was already broken
+            bases[base] = broken_base(tree, prof, base, runs)
+        if bases[base]:
+            results[req["id"]] = main_broken_result(command, bases[base])
+            return base, []
         whole = f" Its whole output is in {failed['stdout']} and {failed['stderr']}." if failed.get("stdout") else ""
         results[req["id"]] = {"ok": False, "detail": (
             f"Test command `{command}` exited {failed['exit']} with your branch on top of the main branch's tip and "
@@ -9366,11 +9700,80 @@ def settle_batch(tree: Path, prof: dict, base: str, group: list[dict], results: 
         return base, []
     group = [r for r, _, _ in built]
     half = len(group) // 2
-    middle, kept_first = settle_batch(tree, prof, base, group[:half], results, runs)
+    middle, kept_first = settle_batch(tree, prof, base, group[:half], results, runs, bases=bases)
     # When the whole first half landed, the second half on top of it is the candidate that already failed.
     after, kept_rest = settle_batch(tree, prof, middle, group[half:], results, runs,
-                                    failed if len(kept_first) == half else None)
+                                    failed if len(kept_first) == half else None, bases=bases)
     return after, kept_first + kept_rest
+
+
+def broken_base(tree: Path, prof: dict, base: str, runs: list | None = None) -> dict | None:
+    """Whether the main branch at `base` fails the test command with no branch on it: None when it passes (a pass
+    on the same files counts, as everywhere), or {commit, exit, culprit?}. The script lands its own commits (plans,
+    reviews, adopted files, the human's decisions) without the test command, so the main branch can break with no
+    builder's merge to blame. The culprit is the latest commit on `base` that changed files outside the plans folder,
+    when its parent passes."""
+    command = prof["test_command"]
+
+    def passes(commit: str) -> dict:
+        git(tree, "checkout", "--quiet", "--force", "--detach", commit)
+        git(tree, "clean", "-ffdq")
+        loop_note(step=f"testing the main branch at {commit[:12]} without the branches")
+        r = run_check(tree, command, None, MERGE_TEST_TIMEOUT_S, prof.get("plans"))
+        if runs is not None and not r["reused"]:
+            runs.append(r)
+        return r
+    r = passes(base)
+    if r["exit"] == 0:
+        return None
+    out = {"commit": base, "exit": r["exit"], **({"stdout": r["stdout"], "stderr": r["stderr"]} if r.get("stdout")
+                                                 else {}), "err": r["err"][-400:]}
+    plans = prof["plans"].rstrip("/") + "/"
+    for c in git(tree, "rev-list", "--first-parent", "--max-count=50", base).stdout.split():
+        files = git(tree, "diff-tree", "--no-commit-id", "--name-only", "-r", c).stdout.split()
+        if any(not f.startswith(plans) for f in files):
+            parent = git(tree, "rev-parse", "--verify", "--quiet", f"{c}^").stdout.strip()
+            if parent and passes(parent)["exit"] == 0:
+                try:
+                    modules = commit_modules(tree, profile(tree, missing_ok=True), c)[0]
+                except (SystemExit, KeyError):
+                    modules = []
+                out["culprit"] = {"commit": c, "subject": git(tree, "log", "-1", "--format=%s", c).stdout.strip(),
+                                  "modules": modules}
+            break
+    return out
+
+
+def main_broken_result(command: str, broken: dict) -> dict:
+    """A merge request's result when the main branch fails the test command without it."""
+    who = broken.get("culprit")
+    return {"ok": False, "main_broken": broken, "detail": (
+        f"Test command `{command}` fails on the main branch at {broken['commit'][:12]} without your branch "
+        f"(exit {broken['exit']})" + (f", since commit {who['commit'][:12]} ({who['subject']})" if who else "") +
+        ", so this isn't your branch's doing and nothing of yours landed. Stop and report `main_broken` to the lead; "
+        "its `next` gives the fix to whoever owns it. Merge again once the main branch passes. The end of its stderr: "
+        + broken.get("err", ""))}
+
+
+def main_broken_next(worktree: Path, prof: dict, broken: dict) -> dict:
+    """`next` when the main branch fails its test command on its own: a planner for the module whose commit broke
+    it, when that commit is known and changed a module's plans or evidence, or else the lead."""
+    who = broken.get("culprit") or {}
+    command = prof.get("test_command")
+    if who.get("modules"):
+        mods = " and ".join(who["modules"])
+        return next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task",
+                                 f"The main branch fails its test command `{command}` since commit "
+                                 f"{who['commit'][:12]} ({who['subject']}), which changed {mods}'s files, and no "
+                                 "builder can merge until it passes. Find what in that commit breaks it, and fix it "
+                                 f"in {mods}'s plan, or plan the fix as {mods}'s next milestone."), "lead",
+                        f"the main branch fails its test command on its own since {who['commit'][:12]}, which "
+                        f"changed {mods}'s files; a planner fixes it, and builders merge again once it passes")
+    return next_cmd(None, "lead", f"the main branch fails its test command `{command}` at {broken['commit'][:12]} on "
+                                  "its own" + (f", since {who['commit'][:12]} ({who['subject']})" if who else
+                                               ", and the script couldn't tell which commit broke it") +
+                    ". Find the commit that broke it and give the fix to whoever owns that work; builders merge again "
+                    "once it passes")
 
 
 def build_batch(tree: Path, base: str, group: list[dict], results: dict) -> list[tuple[dict, str, str]]:
@@ -10691,18 +11094,18 @@ def settle_scoped(worktree: Path, prof: dict, rel: str) -> str:
 
 def human_guard(worktree: Path, stem: str, verb: str) -> None:
     """What stands between a human decision and a session that would record one itself: refused inside any session
-    the script started (ORCHESTRATE_ROLE), and while a run, review or plan holds the module or the planner. These stop
-    mistakes and casual shortcuts, not a determined agent."""
+    the script started (ORCHESTRATE_ROLE), and while a run, review or design review holds the module. A planner
+    elsewhere in the repository doesn't hold the decision up, since its session is refused by the first check and
+    its work lands beside the decision. These stop mistakes and casual shortcuts, not a determined agent."""
     if os.environ.get("ORCHESTRATE_ROLE"):
         raise SystemExit(f"error: human {verb} can't run inside a session the script started; the lead records the "
                          "human's decisions, from what the human told it")
     folder = Path(git_common_dir(worktree)) / "orchestrate"
-    for name, what in ((stem.upper(), f"a run, review or design review holds {stem}"), ("_plan", "a planner is running")):
-        if (pid := run_holder(folder, name)) is not None:
-            raise SystemExit(f"error: human {verb} is refused while {what} (pid {pid}), so no session the script started "
-                             "can record a decision in the human's name. Nothing more is needed from the human: you "
-                             "have their words, so run this same command again once that has stopped (`runs` shows "
-                             "when)")
+    if (pid := run_holder(folder, stem.upper())) is not None:
+        raise SystemExit(f"error: human {verb} is refused while a run, review or design review holds {stem} (pid "
+                         f"{pid}), so no session the script started can record a decision in the human's name. "
+                         "Nothing more is needed from the human: you have their words, so run this same command again "
+                         "once that has stopped (`runs` shows when)")
 
 
 def cmd_human(a: argparse.Namespace) -> None:

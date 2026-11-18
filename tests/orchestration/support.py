@@ -278,6 +278,9 @@ elif role == "review":
             if os.environ.get("FAKE_DIFFERENT"):
                 for f in target["findings"]:
                     f["different"] = os.environ["FAKE_DIFFERENT"]
+            if os.environ.get("FAKE_FOR_PLANNER"):  # a finding only a planner can settle
+                for f in target["findings"]:
+                    f["planner"] = os.environ["FAKE_FOR_PLANNER"]
             if os.environ.get("FAKE_NO_FINDINGS"):
                 target.pop("findings")
         if mode == "delete":

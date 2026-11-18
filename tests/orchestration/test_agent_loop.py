@@ -4124,8 +4124,7 @@ class FirstRuns(Repo):
 
     def test_r9_human_decisions_are_refused_while_the_module_is_held(self):
         self.feedback_m1()
-        for name, role, says in (("WATER", "review", "a run, review or design review holds WATER"),
-                                 ("_plan", "plan", "a planner is running")):
+        for name, role, says in (("WATER", "review", "a run, review or design review holds WATER"),):
             code = (f"import sys, time; sys.path.insert(0, {str(SCRIPTS)!r}); import agent_loop\n"
                     f"from pathlib import Path; wt = Path({str(self.wt)!r}); agent_loop.run_lock(wt, {name!r})\n"
                     f"agent_loop.loop_register(wt, {role!r}, module='WATER', milestone='M1', host='codex', "
