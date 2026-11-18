@@ -2972,7 +2972,7 @@ class FirstRuns(Repo):
         stamp = self.read_record()["milestones"]["M2"]["authorised"]
         self.assertEqual(stamp["by"], "adopt")
         self.assertIn("before the module's design review passed", stamp["why"])
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         self.assertIn("## Definitions changed through adopt", report)
         self.assertIn("WATER M2: definitions authorised by adopt", report)
         os.environ.update(FAKE_REVIEW="design")
@@ -3165,10 +3165,7 @@ class FirstRuns(Repo):
         self.assertEqual(c["total"]["output"], 21)
         text = self.printed(agent_loop.cmd_cost, worktree=str(self.wt), module=None, since=None, json=False)
         self.assertIn("WATER M1: build 1 turn, tokens 60 in, 40 cached, 7 out on codex; review 1 turn", text)
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=True)
-        written = json.loads(report)["written"]
-        self.assertTrue(written.startswith("docs/evidence/build-reports/"))
-        body = (self.wt / written).read_text()
+        body = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         self.assertIn("- WATER M1: Done, by review", body)
         self.assertIn("fewer than about ten, so spot-check every one", body)
         self.assertIn("## Flow", body)
@@ -3182,7 +3179,6 @@ class FirstRuns(Repo):
         self.assertEqual((f["locks"]["gpu"]["holds"], f["locks"]["gpu"]["failed"]), (1, 1))
         self.assertIn("merge", f["locks"])  # the builder's merge held the merge lock
         self.assertGreaterEqual(f["commits"], f["code_commits"])
-        self.assertEqual(self.adopt()["result"], "ADOPTED")
 
     # 6. quota
 
@@ -3481,7 +3477,7 @@ class FirstRuns(Repo):
         self.assertNotIn("no turns recorded", text)
         self.assertIn("WATER M1: build 1 turn", text)
         self.assertIn("[from the committed record]", text)
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         self.assertIn("[from the committed record]", report)
         # where the ledger has a milestone, it wins and isn't marked
         ledger.write_text(json.dumps({"at": agent_loop.now(), "role": "build", "module": "WATER", "milestone": "M2",
@@ -3613,7 +3609,7 @@ class FirstRuns(Repo):
         self.assertEqual((stopped["result"], stopped["reason"]), ("WAITING", "for_diagnosis"), stopped)
         self.assertEqual(stopped["next"]["command"], failed["next"]["command"])
         self.assertEqual(len(self.calls()), before)
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         self.assertIn("WATER M1: waiting: for diagnosis", report)
         # once the planner has re-planned (its counts at 0, diagnoses 1), it's the builder's again
         doc = self.read_done()
@@ -3655,7 +3651,7 @@ class FirstRuns(Repo):
                                                                                 "Direction B, the ink one."))
         self.assertNotIn("by", d)
         self.assertNotIn("by", rec["milestones"]["M1"]["human_feedback"][0])
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         section = report.split("## Decisions recorded in your name (check each is one you made)")[1]
         self.assertIn('- WATER M1 M1.2: feedback, ', section.split("\n## ")[0])
         self.assertIn('"Direction B, the ink one."', section.split("\n## ")[0])
@@ -3681,7 +3677,7 @@ class FirstRuns(Repo):
                           ("release", "M2", "that lead's machine is gone")])
         self.assertEqual(rec["design"]["by"], "human decision")
         self.git("pull", "-q", "--rebase", "origin", "main")
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         section = report.split("## Decisions recorded in your name")[1].split("\n## ")[0]
         for line in ('- WATER M1: reopen, ', '"give it one more go"', '- WATER design: accept, ',
                      '- WATER M2: release, '):
@@ -3699,7 +3695,7 @@ class FirstRuns(Repo):
     def test_r19_report_lists_planner_turns_with_their_tasks(self):
         self.plan(task="Plan PAY. The human said: \"card payments only, no PayPal\"")
         self.git("pull", "-q", "--rebase", "origin", "main")
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         section = report.split("## Planner turns (with the task each was given)")[1].split("\n## ")[0]
         self.assertIn(', PAY: Plan PAY. The human said: "card payments only, no PayPal"', section)
 
@@ -3716,7 +3712,7 @@ class FirstRuns(Repo):
         self.commit_all()
         self.assertEqual(self.migrate()["result"], "MIGRATED")
         self.git("pull", "-q", "--rebase", "origin", "main")
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         section = report.split("## Decisions recorded in your name")[1].split("\n## ")[0]
         self.assertIn('- WATER M1: accept, ', section)
         self.assertIn('"typo fix"', section)
@@ -3756,7 +3752,7 @@ class FirstRuns(Repo):
         os.environ.update(FAKE_REVIEW="design")
         self.review("design", commit=None)
         self.git("pull", "-q", "--rebase", "origin", "main")
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         lines = [line for line in report.split("## Verdicts")[1].split("##")[0].splitlines()
                  if line.startswith("- WATER design:")]
         self.assertEqual(len(lines), 2, report)
@@ -3786,8 +3782,8 @@ class FirstRuns(Repo):
         self.assertIn(" --message '<the missing fact>'", blocked["next"]["command"])  # the builder's cause leads
         r = self.ready()
         self.assertEqual(r["blocked"][0]["blocked"]["reason"], "needs_context")
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
-        section = report.split("## Items that need human feedback, access or hardware")[1].split("\n## ")[0]
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
+        section = report.split("## Needs you now")[1].split("\n## ")[0]
         self.assertIn("- WATER M1 M1.2 (needs human feedback: the human plays both and picks a direction)", section)
         self.assertIn("Ask the human in chat; their reply goes in `", section)
         self.assertIn(" human feedback --module WATER --milestone M1 --item M1.2 ", section)
@@ -3868,7 +3864,7 @@ class FirstRuns(Repo):
         self.assertIn("Its reviews, oldest first: docs/evidence/WATER/M1-review-1.md, "
                       "docs/evidence/WATER/M1-review.md", task)
         self.assertNotIn("git log", task)
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         self.assertIn("[docs/evidence/WATER/M1-review-1.md]", report)
 
     @shares("four-fails")
@@ -4733,9 +4729,9 @@ class FirstRuns(Repo):
         planned = self.plan()
         self.assertEqual(planned["assumptions"], {"PAY": 2}, planned)
         self.git("pull", "-q", "--rebase", "origin", "main")
-        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=False)
-        section = report.split("## Assumptions the planners made (for you to overturn)")[1].split("\n## ")[0]
-        self.assertIn("- PAY ([plan](docs/plans/PAY/PLAN.md)):", section)
+        report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
+        section = report.split("## Choices made for you")[1].split("\n## ")[0]
+        self.assertIn("- PAY ([plan](docs/plans/PAY/PLAN.md)) assumes:", section)
         self.assertIn("  - accents means any letter with a Latin base", section)
         self.assertIn("  - the size limit is in bytes", section)
         self.assertNotIn("this line", section)
@@ -4748,12 +4744,6 @@ class FirstRuns(Repo):
                          "[r](../WATER/M1-review.md) [p](../../plans/PAY/PLAN.md) " + quoted)
         self.assertEqual(agent_loop.relink(text, None),
                          "[r](docs/evidence/WATER/M1-review.md) [p](docs/plans/PAY/PLAN.md) " + quoted)
-        os.environ.update(FAKE_ASSUME="\n- Assumption: one\n")
-        self.plan()
-        self.git("pull", "-q", "--rebase", "origin", "main")
-        written = json.loads(self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0, write=True))
-        body = (self.wt / written["written"]).read_text()
-        self.assertIn("([plan](../../plans/PAY/PLAN.md))", body)
 
     def test_r13_a_run_that_builds_nothing_isnt_recorded_as_the_modules_run(self):
         self.write_done([milestone("M1", "ready_for_review", ["pass"], inspect="frames"), milestone("M2", "not_started", ["open"])],

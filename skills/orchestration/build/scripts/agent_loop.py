@@ -241,7 +241,8 @@ Subcommands:
   adopt [--worktree PATH] [--message TEXT] [PLAN FILE]...
         Commits plan files that are uncommitted, or committed here but not merged, and merges them through a
         clean checkout of the tip, as the script merges its own records, so nothing else in the worktree goes with them.
-        Also merges a first ORCHESTRATE.md (one the tip doesn't have yet) and reports under <evidence>/build-reports/.
+        Also merges a first ORCHESTRATE.md (one the tip doesn't have yet) and files under <evidence>/build-reports/, where
+        older projects kept a report a day.
         A module's definitions are a draft until a design review of it passes. While they are, and nothing has been
         built (no Ready for Review record, review or acceptance, no milestone past not_started, no run holding the module), adopt authorises
         changed definitions (`authorised` lists the modules; the record's stamp says why), because the owed design
@@ -312,14 +313,25 @@ Subcommands:
         (a design review under milestone `design`), with totals and how many turns showed no tokens or only some.
         A milestone the ledger has nothing on (a clone, or a project built before the ledger) is read from the
         `usage` its Ready for Review records and reviews carry in the committed record file, and marked as from the record.
-  report [--since 24] --worktree PATH [--write]
-        The factual half of the lead's report: what closed, the verdicts with links (every design review in the
-        window, DESIGN CHANGES ones included), every decision recorded in the human's name with their words (for the
-        human to spot one they didn't make), the planner turns that authorised definitions with the task each
-        was given (where the lead puts the human's words), the planners'
-        assumptions (lines starting `Assumption:` in each <plans>/<MODULE>/PLAN.md) for the human to overturn, what is
-        blocked or waiting, the open items that need human feedback, access or hardware, and cost (as `cost` reads it). --write puts it in
-        <evidence>/build-reports/<date>.md for `adopt`, with its links relative to that file.
+  report [--since HOURS|TIME] --worktree PATH [--write [PATH]]
+        The facts for the lead's answer when the human asks how the build is going, as markdown, read from the
+        records at the main branch's tip, this machine's usage ledger and lock log, the result files and the runs
+        going now. In order: what needs the human now (items that need human feedback, access or hardware, and
+        milestones Blocked with too many failed reviews, each with who acts); every decision recorded in the human's
+        name with their words (for the human to spot one they didn't make); what became Done or reached Ready for
+        Review; the verdicts with links (every design review in the window, DESIGN CHANGES ones included); the planner
+        turns with the task each was given; what is under way and how far along (each module's next milestone, its
+        items passing and failed reviews, and each run going now with its turns and step); what has slowed down,
+        with the cause the records show (repeated failed reviews and diagnoses, Waiting and Blocked milestones, runs
+        that ended STALLED, NO_PROGRESS_FOR_HOURS, HOST_FAILED, SCRIPT_FAILED or WRONG_MODEL_OR_EFFORT, merges that
+        failed, runs with no sign of activity for 30 minutes, time queued for a lock, a failing main-branch check);
+        the `flow` numbers; the planners' assumptions in plans changed in the window and the glossary's proposed
+        names; and cost (as `cost` reads it). --since is hours, or a time such as 2026-11-17 or 2026-11-17T09:00
+        (this machine's time zone); by default it covers the time since the last report at least an hour old, else
+        the last 24 hours. Each report's time is kept in <git common dir>/orchestrate/report-times.json. Links are
+        paths from the repository root. --write puts it in a file instead, by default
+        <git common dir>/orchestrate/reports/<date>-<time>.md, with its links relative to that file, and prints
+        `written`.
   next  --module CORE --worktree PATH --milestone M2   The escalation after a failed review (see done-when.md):
         read at the main branch's tip, where the review merged. `action` is what the counts call for, `message` what to send (the builder's message, or for
         `diagnosis` the planner's task), and `next` the command.
@@ -5598,20 +5610,6 @@ def version_change(worktree: Path) -> dict | None:
         return None
 
 
-def report_due(worktree: Path) -> str | None:
-    """Whether today's report is missing from the main branch, for a `run`, `review` or `plan` result. The lead is
-    asked for one a day; in Thrum it wrote none in two days, and answered the human's questions about speed from
-    `git log`."""
-    try:
-        prof = profile(worktree, missing_ok=True)
-        rel = f"{reports_dir(prof)}/{datetime.now().strftime('%Y-%m-%d')}.md"
-        if git(worktree, "cat-file", "-e", f"{base_ref(prof)}:{rel}").returncode == 0:
-            return None
-        return f"no report for today at {rel} yet; write one with `report --worktree <repo> --write`"
-    except (Exception, SystemExit):
-        return None
-
-
 def result_name(module: str | None, milestone: str | None, command: str | None) -> str:
     """The result file's name: <MODULE>-<milestone>-<command>.json, leaving out what the command doesn't have."""
     name = "-".join(x for x in (module, milestone, command) if x)
@@ -5774,12 +5772,10 @@ def emit(result: str, **fields) -> None:
     more = {k: v for k, v in EMIT_EXTRA.items() if k not in fields}
     codex = "codex" in HOSTS_USED or "codex" in LAUNCH_HOSTS
     worktree = QUOTA_WORKTREE[0] if QUOTA_WORKTREE else None
-    due = report_due(worktree) if worktree and len(sys.argv) > 1 and sys.argv[1] in ("run", "review", "plan") \
-        else None
     changed = version_change(worktree) if worktree else None
     line = {"result": result, **fields, **more, **SESSION_PATH, **extra, "version": VERSION,
             **({"changed": changed} if changed else {}),
-            **({"report_due": due} if due else {}), **({"quota": quota_now()} if codex else {})}
+            **({"quota": quota_now()} if codex else {})}
     path = result_file(worktree, fields) if worktree else None
     if path:
         line["result_file"] = str(path)
@@ -9517,120 +9513,290 @@ def cost_header(worktree: Path, c: dict, since: float | None) -> str:
     return text + ":"
 
 
-def report_text(worktree: Path, hours: float) -> tuple[str, str]:
-    """(date, markdown): the factual half of the lead's report for the last `hours`, read from the records at the
-    main branch's tip and this machine's usage ledger. The lead adds the judgement: what it means, what to do next."""
+# The report the lead runs when the human asks how things are going. It answers four questions from records the
+# script already keeps: what is done, what is moving and how far along, what needs the human, and what has slowed
+# down with the likely cause. It holds facts only; the lead adds what they mean and what comes next. It replaced a
+# report the lead was asked to write and merge once a day, which leads skipped while the human asked in chat anyway.
+REPORT_TIMES = "report-times.json"  # when `report` ran, in <git common dir>/orchestrate, for the default window
+REPORT_REPEAT_S = 3600  # a report within this long of the last one covers the same window again
+REPORT_DEFAULT_H = 24.0
+REPORT_IDLE_S = 1800  # a live run with no sign of activity for this long is named under what has slowed down
+SLOW_RESULTS = ("STALLED", "NO_PROGRESS_FOR_HOURS", "HOST_FAILED", "SCRIPT_FAILED", "WRONG_MODEL_OR_EFFORT")
+
+
+def local_time(stamp: float) -> str:
+    """A time for the human, in this machine's time zone, such as `17 Nov 09:05`."""
+    d = datetime.fromtimestamp(stamp)
+    return f"{d.day} {d.strftime('%b %H:%M')}"
+
+
+def report_times(worktree: Path) -> list[float]:
+    try:
+        return [float(x) for x in json.loads((loop_dir(worktree) / REPORT_TIMES).read_text()).get("at", [])]
+    except (OSError, ValueError, TypeError, AttributeError):
+        return []
+
+
+def report_window(worktree: Path, since) -> tuple[float, str]:
+    """(the window's start, as a Unix time, and how the report names it). `since` is hours (a number, or a string
+    of one), a time such as `2026-11-17` or `2026-11-17T09:00` (this machine's time zone unless it names another),
+    or None for the default: since the last report at least an hour old, else the last 24 hours. The hour lets a
+    lead print a report and then write it without the second one covering only the minutes between."""
+    stamp = time.time()
+    if since is None:
+        earlier = [t for t in report_times(worktree) if t <= stamp - REPORT_REPEAT_S]
+        if earlier:
+            return max(earlier), f"since the last report, at {local_time(max(earlier))}"
+        return stamp - REPORT_DEFAULT_H * 3600, f"the last {REPORT_DEFAULT_H:g} hours (no earlier report)"
+    try:
+        hours = float(since)
+        return stamp - hours * 3600, f"the last {hours:g} hours"
+    except (TypeError, ValueError):
+        pass
+    try:
+        when = datetime.fromisoformat(str(since).strip().replace("Z", "+00:00"))
+    except ValueError:
+        raise SystemExit(f"error: --since takes hours, such as 24, or a time, such as 2026-11-17 or "
+                         f"2026-11-17T09:00, not {since!r}")
+    start = when.timestamp()  # a time with no zone is read as this machine's
+    if start > stamp:
+        raise SystemExit(f"error: --since {since} is in the future")
+    return start, f"since {local_time(start)}"
+
+
+def note_report_time(worktree: Path) -> None:
+    """Keeps when this report ran, for the next one's default window. A report never fails on it."""
+    try:
+        write_json(loop_dir(worktree) / REPORT_TIMES, {"at": (report_times(worktree) + [time.time()])[-20:]})
+    except (OSError, SystemExit):
+        pass
+
+
+def result_files_since(worktree: Path, start: float) -> list[tuple[float, str, dict]]:
+    """(when, command, result) for each result file written since `start`, oldest first. Each file holds the latest
+    result of one command on one module and milestone."""
+    out = []
+    try:
+        files = list((loop_dir(worktree) / "results").glob("*.json"))
+    except OSError:
+        return out
+    for path in files:
+        try:
+            at = path.stat().st_mtime
+            if at < start:
+                continue
+            line = json.loads(path.read_text().splitlines()[0])
+        except (OSError, ValueError, IndexError):
+            continue
+        if isinstance(line, dict):
+            out.append((at, path.stem.rsplit("-", 1)[-1], line))
+    return sorted(out, key=lambda x: x[0])
+
+
+def report_text(worktree: Path, since=None) -> tuple[float, str]:
+    """(the window's start, markdown): the factual half of the lead's report, read from the records at the main
+    branch's tip, this machine's usage ledger and lock log, the result files and the runs going now. The lead adds
+    the judgement: what it means, what to do next."""
     prof = profile(worktree)
     ref, proj = read_project(worktree, prof)
-    since = since_stamp(hours) or ""
-    date = datetime.now().strftime("%Y-%m-%d")
+    start, window = report_window(worktree, since)
+    hours = max((time.time() - start) / 3600, 1 / 60)
+    stamp = datetime.fromtimestamp(start, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     graded = worktree / prof["graded_examples"]
     graded_n = sum(1 for line in graded.read_text().splitlines() if line.startswith(("## ", "### "))) \
         if graded.exists() else 0
-    closed, verdicts, waiting, needing, adopted, decided, assumed = [], [], [], [], [], [], []
+    live = [loop_view(r) for r in live_loops(repository_of(git_common_dir(worktree)), clean=False)[0]]
+    rows = module_table(show(worktree, ref, project_file(prof, "architecture"))) or []
+    order = {r["module"].upper(): n for n, r in enumerate(rows)}
+    held, mine = holds(worktree), me(worktree)
+    needs_you, done, ready, verdicts, decided, adopted, moving, slowed, chosen = [], [], [], [], [], [], [], [], []
     planned: dict = {}  # (minute, task) -> modules: one planner turn writes the same brief to each module it changed
-    for key, e in sorted(proj.items()):
+    quiet_plans: list[str] = []
+    finished = 0
+    for key in sorted(proj, key=lambda k: (order.get(k, len(order)), k)):
+        e = proj[key]
         stem, rec = e["stem"], e["record"]
         for b in rec.get("briefs") or []:
-            if (b.get("at") or "") >= since:
+            if (b.get("at") or "") >= stamp:
                 planned.setdefault(((b.get("at") or "")[:16], b.get("task") or ""), []).append(stem)
-        decided += [line for at, line in sorted(human_decisions(stem, rec)) if at >= since]
-        if chosen := assumptions(show(worktree, ref, plan_rel(prof, stem))):
-            assumed += [f"- {stem} ({md_link('plan', plan_rel(prof, stem))}):"] + [f"  - {x}" for x in chosen]
+        decided += [line for at, line in sorted(human_decisions(stem, rec)) if at >= stamp]
+        if picked := assumptions(show(worktree, ref, plan_rel(prof, stem))):
+            if ref and git(worktree, "log", "-1", "--format=%H", f"--since=@{int(start)}", ref, "--",
+                           plan_rel(prof, stem)).stdout.strip():
+                chosen += [f"- {stem} ({md_link('plan', plan_rel(prof, stem))}) assumes:"] + \
+                    [f"  - {x}" for x in picked]
+            else:
+                quiet_plans.append(f"{stem} ({len(picked)})")
         for d in design_reviews(worktree, prof, ref, stem, rec):
-            if (d.get("at") or "") >= since:
+            if (d.get("at") or "") >= stamp:
                 verdicts.append(f"- {stem} design: {d.get('verdict')} ({d.get('at')}" +
                                 (f", {d['host']}" if d.get("host") else "") +
                                 (f", by {d['by']}" if d.get("by") not in (None, "review") else "") + ")" +
                                 (f", {md_link(d['review'], d['review'])}" if d.get("review") else "") +
                                 (f"; not counted: {d['not_counted']}" if d.get("not_counted") else ""))
         if e["problems"]:
-            waiting.append(f"- {stem}: invalid: {'; '.join(e['problems'])}")
+            slowed.append(f"- {stem}: its plan files are invalid, so nothing in it starts until a planner fixes "
+                          f"them: {'; '.join(e['problems'][:3])}")
             continue
-        step = next_step(key, proj, holds(worktree), me(worktree))
-        for m in e["doc"].get("milestones") or []:
+        milestones = e["doc"].get("milestones") or []
+        step = next_step(key, proj, held, mine)
+        finished += step["status"] == "finished"
+        for m in milestones:
             r = rec.get("milestones", {}).get(m["id"]) or {}
             acc = r.get("done") or {}
+            name = m.get("name") if m.get("name") not in (None, "", m["id"]) else ""
             auth = r.get("authorised") or {}
-            if auth.get("by") == "adopt" and auth.get("at", "") >= since:
+            if auth.get("by") == "adopt" and auth.get("at", "") >= stamp:
                 adopted.append(f"- {stem} {m['id']}: definitions authorised by adopt {auth.get('at')}, before the "
                                f"design review passed (files: {', '.join(auth.get('files') or [])})")
-            if recorded_done(m, rec) and acc.get("at", "") >= since:
+            if recorded_done(m, rec) and acc.get("at", "") >= stamp:
                 link = f", {md_link(acc['review'], acc['review'])}" if acc.get("review") else ""
-                name = m.get("name") if m.get("name") not in (None, "", m["id"]) else ""
-                closed.append(f"- {stem} {m['id']} {name}".rstrip() + f": Done, by {acc.get('by')} "
-                              f"{acc.get('at')}{link}")
+                done.append(f"- {stem} {m['id']} {name}".rstrip() + f": Done, by {acc.get('by')} "
+                            f"{acc.get('at')}{link}")
+            elif not recorded_done(m, rec) and (ready_record(r).get("at") or "") >= stamp:
+                ready.append(f"- {stem} {m['id']} {name}".rstrip() + f": Ready for Review, {ready_record(r)['at']}")
             for v in r.get("reviews") or []:
-                if v.get("at", "") >= since:
+                if v.get("at", "") >= stamp:
                     verdicts.append(f"- {stem} {m['id']}: {v.get('verdict')} ({v.get('at')}, {v.get('host') or 'host?'})"
                                     + (f", {md_link(v['review'], v['review'])}" if v.get("review") else
                                        f", overwritten before reviews were kept (git log -p -- {v['review_in_history']})"
                                        if v.get("review_in_history") else ""))
+            if recorded_done(m, rec):
+                continue
             if m.get("status") == "blocked":
                 b = blocked_of(m)
                 if b["reason"] == "too_many_failed_reviews":
-                    why = ((rec.get("milestones") or {}).get(m["id"]) or {}).get("too_many_failed_reviews", {}) \
-                        .get("why") or b.get("what") or "it failed review too many times"
-                    waiting.append(f"- {stem} {m['id']}: Blocked: Too Many Failed Reviews, because {why}. The human "
-                                   "accepts it (`human accept`), re-scopes it (`human scope`) or reopens it "
-                                   "(`human reopen`)")
-                else:
-                    waiting.append(f"- {stem} {m['id']}: Blocked: {b['reason'].replace('_', ' ').capitalize()}" +
-                                   (f": {b['what']}" if b.get("what") else ""))
-            if not recorded_done(m, rec):
-                for i in m.get("items") or []:
-                    n = i.get("needs")
-                    if not isinstance(n, dict) or i.get("builder_result") == "pass":
-                        continue
-                    how = (f"Ask the human in chat; their reply goes in "
-                           f"`{human_cmd('feedback', stem, m['id'], str(worktree), i['id'])}`"
-                           if n.get("type") == "human_feedback" else
-                           f"Done at the machine, not said: run the builder visibly while the human is there, with "
-                           f"`{visible_run(stem, str(worktree))}`")
-                    needing.append(f"- {stem} {m['id']} {i['id']} (needs {n.get('type', '').replace('_', ' ')}: "
-                                   f"{n.get('what', '')}): {i.get('statement', '')}\n  {how}")
-        if step["status"] in ("waiting", "design_not_approved", "ready_for_review") and step.get("milestone"):
+                    why = (r.get("too_many_failed_reviews") or {}).get("why") or b.get("what") or \
+                        "it failed review too many times"
+                    needs_you.append(f"- {stem} {m['id']}: Blocked: Too Many Failed Reviews, because {why}. You "
+                                     "decide: accept it as it is (`human accept`), change its scope (`human scope`) "
+                                     "or give it another try (`human reopen`)")
+                elif b["reason"] not in ("needs_human_feedback", "needs_access", "needs_hardware"):
+                    slowed.append(f"- {stem} {m['id']}: Blocked: {b['reason'].replace('_', ' ').capitalize()}" +
+                                  (f": {b['what']}" if b.get("what") else ""))
+            for i in m.get("items") or []:
+                n = i.get("needs")
+                if not isinstance(n, dict) or i.get("builder_result") == "pass":
+                    continue
+                how = (f"Ask the human in chat; their reply goes in "
+                       f"`{human_cmd('feedback', stem, m['id'], str(worktree), i['id'])}`"
+                       if n.get("type") == "human_feedback" else
+                       f"Done at the machine, not said: run the builder visibly while the human is there, with "
+                       f"`{visible_run(stem, str(worktree))}`")
+                needs_you.append(f"- {stem} {m['id']} {i['id']} (needs {n.get('type', '').replace('_', ' ')}: "
+                                 f"{n.get('what', '')}): {i.get('statement', '')}\n  {how}")
+            c = counts_of(m)
+            if c["failed_reviews"] >= 2 or c["diagnoses"]:
+                latest = next((v["review"] for v in reversed(r.get("reviews") or []) if v.get("review")), None)
+                slowed.append(f"- {stem} {m['id']} has failed review {plural(c['failed_reviews'], 'time')} since its "
+                              "definitions last changed" +
+                              (f", {c['failed_reviews_with_repeat']} of them with a finding that came back"
+                               if c["failed_reviews_with_repeat"] else "") +
+                              (f", and has had {plural(c['diagnoses'], 'diagnosis')}" if c["diagnoses"] else "") +
+                              (f"; the latest review: {md_link(latest, latest)}" if latest else ""))
+        mid = step.get("milestone")
+        m = next((x for x in milestones if x["id"] == mid), None)
+        if step["status"] == "design_not_approved" or (step["status"] == "waiting" and mid):
             why = (step.get("reason") or "").replace("_", " ") + \
-                (f": {', '.join(step['depends_on'])}" if step.get("depends_on") else "")
-            waiting.append(f"- {stem} {step['milestone']}: {step['status'].replace('_', ' ')}" + (f": {why}" if why else ""))
-    c = cost_of(ledger_rows(worktree), since=since, records=record_rows(worktree))
-    builders = len({(r.get("module"), r.get("milestone"), r.get("session")) for r in ledger_rows(worktree)
-                    if r.get("role") == "build" and (r.get("at") or "") >= since})
-    flag = (f" The project's graded examples hold {graded_n} verdicts, fewer than about ten, so spot-check every one."
+                (f": {', '.join(step['depends_on'])}" if step.get("depends_on") else "") + \
+                (f", because {step['cause']}" if step.get("cause") else "")
+            slowed.append(f"- {stem} {mid or 'design'}: {step['status'].replace('_', ' ')}" + (f": {why}" if why else ""))
+        if m is not None and step["status"] in ("can_start", "in_progress_elsewhere", "ready_for_review"):
+            items = m.get("items") or []
+            passing = sum(i.get("builder_result") == "pass" for i in items)
+            place = [x["id"] for x in milestones].index(mid) + 1
+            failed = counts_of(m)["failed_reviews"]
+            moving.append(f"- {stem} {mid} {m.get('name') if m.get('name') != mid else ''}".rstrip() +
+                          f" (milestone {place} of {len(milestones)}): {status_word(step, rec)}, "
+                          f"{passing} of {plural(len(items), 'item')} passing" +
+                          (f", {plural(failed, 'failed review')} so far" if failed else "") +
+                          f" · {md_link('done-when file', done_rel(prof, stem))}")
+    for v in live:
+        what = (f"{v['module'] or '?'} {v['milestone'] or ''}".strip() if v["role"] != "plan" else
+                "a planner" + (f" ({v['task'][:120]})" if v.get("task") else ""))
+        run = " ".join(x for x in (v["host"], v["model"], v["effort"]) if x) or "host not known"
+        turns = f"{plural(v['turns'] or 0, 'turn')} done" if v.get("registered") else "turns not known"
+        if v.get("turn_running_s") is not None:
+            turns += f", one running for {ago(v['turn_running_s'])}"
+        moving.append(f"- Running now: {what}, {v['role']} on {run}, started {ago(v['running_s'])} ago, {turns}" +
+                      (f"; now {v['step']}" if v.get("step") else ""))
+        if v.get("idle_s") is not None and v["idle_s"] >= REPORT_IDLE_S:
+            call = v.get("open_tool_call") or {}
+            slowed.append(f"- {what} ({v['role']}): no sign of activity for {ago(v['idle_s'])}" +
+                          (f", waiting on the tool call {call['name']} for {ago(call.get('open_s'))}"
+                           if call.get("name") else ""))
+    for at, command, line in result_files_since(worktree, start):
+        word = line.get("result")
+        if word in SLOW_RESULTS or (command == "merge" and word == "FAILED"):
+            who = " ".join(x for x in (line.get("module"), line.get("milestone")) if x) or "a branch"
+            why = line.get("reason") or line.get("detail") or (
+                f"open items: {', '.join(map(str, line['open']))}" if isinstance(line.get("open"), list) else "")
+            slowed.append(f"- {who}: `{command}` ended {word} at {local_time(at)}" +
+                          (f": {tail(str(why), 300)}" if why else ""))
+    flow = flow_numbers(worktree, hours)
+    for name, s in sorted(flow["locks"].items()):
+        if s["queued_h"] >= 0.5 or s["failed_held_h"] >= 0.5:
+            slowed.append(f"- Work queued {s['queued_h']} h in all for the `{name}` lock, which was held "
+                          f"{s['busy']:.0%} of the time; {plural(s['failed'], 'hold')} ended in a failed command, "
+                          f"using {s['failed_held_h']} h of it")
+    try:
+        checks = main_check_list(worktree, prof)
+    except (SystemExit, OSError):
+        checks = []
+    for ch in checks:
+        latest = ch["latest"]
+        if latest and latest["result"] == "fail":
+            culprit = latest.get("culprit") or {}
+            slowed.append(f"- The main-branch check `{ch['name']}` fails on {latest['commit'][:12]}" +
+                          (f"; the first failing commit is {culprit['commit'][:12]} ({culprit.get('subject')})"
+                           if culprit.get("commit") else ""))
+    chosen += [f"- A name in the glossary waits for your agreement: {x}"
+               for x in proposed_names(show(worktree, ref, project_file(prof, "glossary")))]
+    if quiet_plans:
+        chosen.append(f"- Assumptions in plans that didn't change in this window: {', '.join(quiet_plans)}. The "
+                      f"{md_link('status page', status_rel(prof))} lists them all")
+    c = cost_of(ledger_rows(worktree), since=stamp, records=record_rows(worktree))
+    flag = (f"The project's graded examples hold {graded_n} verdicts, fewer than about ten, so spot-check every one."
             if graded_n < 10 else "")
-    out = [f"# Build report {date}", "",
-           f"The last {hours:g} h, from the records at {ref} and this machine's usage ledger. The lead adds what it "
-           "means and what comes next.", "",
-           "## Closed", "", *(closed or ["- nothing became Done in this window"]), "",
-           "## Verdicts", "", *(verdicts or ["- no reviews in this window"])]
-    if verdicts and flag:
-        out += ["", flag.strip()]
-    if adopted:
-        out += ["", "## Definitions changed through adopt", "",
-                "Revised outside a planner turn while the module was a draft; its design review judges them.", "",
-                *adopted]
+    total = len(proj) + sum(1 for r in rows if r["module"].upper() not in proj)
+    out = [f"# Build report, {window}", "",
+           f"From the records at {(ref or '')[:12]}, this machine's usage ledger and the runs going on it, up to "
+           f"{local_time(time.time())}. {finished} of {plural(total, 'module')} Done. These are the facts; the lead "
+           "adds what they mean and what comes next.", "",
+           "## Needs you now", "", *(needs_you or ["- Nothing."])]
     if decided:
         out += ["", "## Decisions recorded in your name (check each is one you made)", "",
                 "Every `human` command in this window, with the words recorded as yours. The script can't tell "
                 "who ran one, so a decision here that you didn't make is the thing to look for.", "", *decided]
+    out += ["", "## Done", "", *(done or ["- Nothing became Done in this window."])]
+    if ready:
+        out += ["", "Reached Ready for Review, and waiting for a review:", "", *ready]
+    out += ["", "## Verdicts", "", *(verdicts or ["- No reviews in this window."])]
+    if verdicts and flag:
+        out += ["", flag]
     if planned:
         out += ["", "## Planner turns (with the task each was given)", "",
                 *[f"- {at.replace('T', ' ')}, {', '.join(mods)}: " + task.replace("\n", "\n  ")
                   for (at, task), mods in sorted(planned.items())]]
-    if assumed:
-        out += ["", "## Assumptions the planners made (for you to overturn)", "",
-                "Readings of the request a planner chose where it could be read more than one way, from the lines "
-                "starting `Assumption:` in each module's PLAN.md. Each stands until you overturn it; overturning one "
-                "is a re-plan.", "", *assumed]
-    out += ["", "## Blocked or waiting", "", *(waiting or ["- nothing"]), "",
-            "## Items that need human feedback, access or hardware", "", *(needing or ["- none open"]), "",
-            "## Flow", "", "How fast the work moved, beside how busy the machine was. The lead reads the two "
-            "together.", "", *flow_text(flow_numbers(worktree, hours)), *main_check_report_lines(worktree), "",
-            "## Cost", "", f"- build sessions: {builders}", *("- " + line for line in cost_text(c)),
+    if adopted:
+        out += ["", "## Definitions changed through adopt", "",
+                "Revised outside a planner turn while the module was a draft; its design review judges them.", "",
+                *adopted]
+    out += ["", "## Now and next", "", *(moving or ["- Nothing is under way."]), "",
+            "## What has slowed down", "",
+            "Each line is something the records show, with its cause where they show one.", "",
+            *(slowed or ["- Nothing the records show."]), "",
+            "## Flow", "", "How fast the work moved, beside how busy the machine was.", "", *flow_text(flow),
+            *main_check_report_lines(worktree)]
+    if chosen:
+        out += ["", "## Choices made for you", "",
+                "A planner or the lead chose each of these where your words left it open. Each stands until you say "
+                "otherwise. Overturning an assumption is a re-plan.", "", *chosen]
+    out += ["", "## Cost", "", f"- build sessions: {flow['build_sessions']}", *("- " + line for line in cost_text(c)),
             ("- [from the committed record] marks milestones this machine's ledger has nothing on: their last "
              "Ready for Review record's session and every review, as the record files keep them" if c.get("from_records") else
              "- tokens are this machine's ledger; `quota` gives the Codex forecast"), ""]
-    return date, "\n".join(out)
+    return start, "\n".join(out)
 
 
 # How fast the work moves, for the lead. Busy builders and a rising commit count can hide a build that has nearly
@@ -9760,16 +9926,20 @@ def design_reviews(worktree: Path, prof: dict, ref: str, stem: str, rec: dict) -
 
 
 def cmd_report(a: argparse.Namespace) -> None:
+    """Prints the report as markdown, with links as paths from the repository root, for the lead to send or sum up.
+    `--write` puts it in a file the human can open instead, with its links made relative to that file: by default
+    under <git common dir>/orchestrate/reports/, which no checkout shows and no commit sweeps up."""
     worktree = Path(a.worktree).resolve()
-    date, text = report_text(worktree, a.since)
-    if a.write:
-        prof = profile(worktree)
-        path = worktree / reports_dir(prof) / f"{date}.md"
+    start, text = report_text(worktree, a.since)
+    note_report_time(worktree)
+    write = getattr(a, "write", None)
+    if write:
+        path = Path(write).expanduser().resolve() if isinstance(write, str) else \
+            loop_dir(worktree) / "reports" / f"{datetime.now().strftime('%Y-%m-%d-%H%M')}.md"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(relink(text, reports_dir(prof)))
-        print(json.dumps({"written": str(path.relative_to(worktree)),
-                          "next": next_cmd(loop_cmd("adopt", "--worktree", str(worktree)), "lead",
-                                           "add the judgement, then merge it")}))
+        path.write_text(relink(text, str(path.parent), root=str(worktree)))
+        print(json.dumps({"written": str(path), "since": datetime.fromtimestamp(start, timezone.utc)
+                          .strftime("%Y-%m-%dT%H:%M:%SZ")}))
         return
     print(relink(text, None), end="")
 
@@ -9781,12 +9951,15 @@ def md_link(text: str, target: str) -> str:
     return f"[{text}]({LINK_MARK}{target})"
 
 
-def relink(text: str, folder: str | None) -> str:
+def relink(text: str, folder: str | None, root: str | None = None) -> str:
     """The report's own links (from `md_link`), with targets written from the repository root made relative to a
-    file in `folder`, so they resolve where the file is opened; with no folder, left as they are. Links in quoted
-    text (a human's words, an assumption) aren't the report's, and stay as written."""
+    file in `folder`, so they resolve where the file is opened; with no folder, left as they are. `folder` is from
+    the repository root too, unless `root`, the repository's folder, is given, when it can be anywhere. Links in
+    quoted text (a human's words, an assumption) aren't the report's, and stay as written."""
     def fix(m: re.Match) -> str:
-        return f"]({os.path.relpath(m.group(1), folder) if folder else m.group(1)})"
+        if not folder:
+            return f"]({m.group(1)})"
+        return f"]({os.path.relpath(os.path.join(root, m.group(1)) if root else m.group(1), folder)})"
     return re.sub(r"\]\(" + LINK_MARK + r"([^)\s]+)\)", fix, text)
 
 
@@ -10128,12 +10301,7 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
                for x in proposed_names(show(worktree, ref, project_file(prof, "glossary")))]
     if unlanded:
         waiting.append(f"- Plan files that haven't been merged, so the script can't see them: {', '.join(unlanded[:10])}")
-    reports = [n for n in git(worktree, "ls-tree", "--name-only", f"{ref}:{reports_dir(prof)}").stdout.split()
-               if re.fullmatch(r"\d{4}-\d{2}-\d{2}\.md", n)]
     recent_lines = [line for _, line in sorted(recent, reverse=True)]
-    if reports:
-        latest = max(reports)
-        recent_lines.append(f"- The latest build report: {md_link(latest[:-3], reports_dir(prof) + '/' + latest)}")
     out = ["# Status", "",
            "The orchestrate script writes this page from the plan files and record files after each record it "
            "merges. Don't edit it, because the next merge overwrites it. `status --format md` prints the same page.", "",
@@ -11772,10 +11940,14 @@ def build_parser() -> argparse.ArgumentParser:
     cost.add_argument("--since", type=float, help="only the last this many hours")
     cost.add_argument("--json", action="store_true")
     cost.set_defaults(func=cmd_cost)
-    report = sub.add_parser("report", help="write the factual half of the lead's report to the human")
+    report = sub.add_parser("report", help="print the facts for the lead's answer when the human asks how the build "
+                                           "is going")
     report.add_argument("--worktree", default=".")
-    report.add_argument("--since", type=float, default=24.0, help="hours to cover (default 24)")
-    report.add_argument("--write", action="store_true", help="write <evidence>/build-reports/<date>.md for adopt")
+    report.add_argument("--since", default=None, help="hours, such as 24, or a time, such as 2026-11-17T09:00 "
+                                                      "(default: since the last report, else the last 24 hours)")
+    report.add_argument("--write", nargs="?", const=True, default=None, metavar="PATH",
+                        help="write it to a file the human can open instead (default <git common dir>/orchestrate/"
+                             "reports/<date>-<time>.md), with links relative to that file")
     report.set_defaults(func=cmd_report)
     flow = sub.add_parser("flow", help="show how fast milestones moved beside commits, lock queueing and failed jobs")
     flow.add_argument("--worktree", default=".")
