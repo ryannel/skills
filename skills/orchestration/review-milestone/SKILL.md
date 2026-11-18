@@ -92,7 +92,9 @@ less than many short looks with `sleep` and `tail`. Your task gives the script's
      when. Check the work against what the human said there, and check any claim about what the human chose against
      that record. A lead's message or a builder's summary doesn't count as the human's words.
 
-   If you couldn't see or reach something, give it `could_not_judge` and say what evidence would settle it. If you
+   If you couldn't see or reach something, give it `could_not_judge` and say what evidence would settle it. Do the
+   same for an item that needs a reader who hasn't seen what you have already read, such as the design: say who
+   could give that proof, so a planner can give the item to them. If you
    can't reach the product at all, because the screen is locked, a permission needs the human's approval or a device
    isn't connected, judge nothing. End with `BLOCKED needs_access: <what the human has to do>` instead of a result
    line. The script merges nothing and counts no failed review, and the lead runs the same review again in a visible
@@ -115,7 +117,9 @@ less than many short looks with `sleep` and `tail`. Your task gives the script's
 4. The review is written down, in two files and one folder:
    - The full review, with your inspection lists, goes in `<evidence>/<MODULE>/<milestone>-review.md`.
    - Screenshots and recordings go in the folder `<evidence>/<MODULE>/<milestone>-review/`. Link them from the
-     review rather than embedding them, because whoever reads the review loads everything embedded in it.
+     review rather than embedding them, because whoever reads the review loads everything embedded in it. Link only
+     files in that folder. The `review` command commits only these files, so a link to anything else is broken once
+     the review is on the main branch.
    - In the done-when file, set each item's `verdict`, and point its `review` field at the review file. Then set
      the milestone's `status`. If every result is `pass` and no Must Fix lies outside the items, set it to `done`.
      Otherwise set it back to `in_progress`, and list every Must Fix in the milestone's `findings`, one entry

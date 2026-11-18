@@ -149,6 +149,10 @@ Draw the lines between modules around state, so that each kind of state has exac
 Most bugs between modules come from two of them editing the same thing. Put first the riskiest modules and the
 ones most others depend on, because they are the most likely to force everything else to change.
 
+Below the table, list the work the brief puts after the first release, such as a tuning phase, and say which module
+will own each piece. The script reads only the table, so the list doesn't start any planning, and the human can see
+that the work is waiting rather than forgotten.
+
 A module doesn't change an interface by itself. A builder who needs a change writes a proposal in its module's log,
 and you settle it here, with every module that provides or uses that interface.
 
@@ -213,6 +217,14 @@ Add a requirement only when the human's words or the design need it, because rev
 requirement you add. A limit that seemed sensible to you, such as output that fits 80 columns, can cost several
 failed reviews over something the human didn't ask for.
 
+Make each item as strict as the way the human will judge the result, and no stricter. The brief's "How it will be
+judged" says how, with a shipped example of the quality wanted. Work that people will judge by eye or by feel, such
+as an app's animations, passes when it matches that example. An exact reference for it, such as a high-precision model
+of the same effect, is a tool for finding out why something looks wrong rather than an item, because matching it
+within a tolerance costs builds and reviews over differences nobody would see. Keep exact proofs for faults that stay hidden
+until they do damage, such as wrong money, a broken saved format or two modules disagreeing about an interface.
+Words such as "top quality" point at the shipped example, not at an exactness the human didn't ask for.
+
 ### Milestones and items
 
 Make each milestone one outcome that a reviewer can judge, and put the riskiest first. Usually the outcome is
@@ -225,6 +237,10 @@ milestone costs a builder run, a run of the checks and usually a review, so a fi
 without making the work better. A milestone may have as many items as it needs, but keep each item short and choose
 its proof on purpose. [What makes a good item](references/done-when.md#what-makes-a-good-item) says how, and why a
 long item ends in a re-plan.
+
+Read a milestone's items together before you finish, the way its builder will. Two items can each make sense alone
+and still contradict each other, such as a limit in one that another rules out, and a builder finds that out only
+after a session spent trying to pass both.
 
 Work judged by taste, such as a game's look, a set of 3D assets or a visual design, starts with options the human
 chooses from, because no reviewer can settle taste for them. Read
@@ -255,6 +271,12 @@ screenshots can't stand in for the reviewer's own, because they show only what t
 that drives a browser throughout shouldn't depend on every one of those requests being granted. Say so in the design,
 and either list `Codex sandbox: danger-full-access` as a decision for the human, who is the one giving up the sandbox,
 or name a Claude builder for that module.
+
+Check too that whoever you name can give the proof. A reviewer reads the project settings and the design before it
+judges any item, so an item that needs a reader new to something, such as "a new user can follow the setup guide
+alone", can't be proved by the reviewer. Have the builder start a new agent for it, given only what that reader would
+have, as with [the fresh opinion](references/proofs.md#the-builder-gets-a-fresh-opinion-before-a-review), and have
+the reviewer read what that agent was given and what it reported.
 
 Write each check so that it still runs when the machine is in a state the product has to cope with, such as a locked
 screen or a denied permission. Have the check record that state and pass either way, unless the item's statement
@@ -329,3 +351,10 @@ the plan to match, and quote their words in `LOG.md`. Write each item their word
 you would in a re-plan. This doesn't count as the milestone's diagnosis, unless the milestone was already Waiting: For
 Diagnosis. Then your change is the re-plan, and the script counts it. A milestone whose items you change is built and
 reviewed again, so change only what their words reach.
+
+Some changes reach many modules, such as a looser quality bar for all visual work. Each module whose design you
+change needs a new design review before its builder can go on, so changing every module in one turn holds up the
+ones that matter most behind the rest. Change first the modules the lead's task names, including milestones being
+built or Blocked on an item the change makes pointless, because those are where the old wording is costing now. Apply
+the whole change in each module you touch, and list the modules you left for later in your report, so the lead can
+start a planner for them.

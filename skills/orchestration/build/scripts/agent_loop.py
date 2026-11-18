@@ -204,7 +204,8 @@ Subcommands:
         and failed_reviews_with_repeat 0, adds 1 to diagnoses and sets it not_started, in its own commit, whatever the planner wrote there (`replanned` lists them). In a
         repository with no commits (or origin with no main branch), SCRIPT_FAILED before any planner turn, with `next`
         giving the first commit and push. One planner runs per repository at a time: another waits for it (listed in
-        `runs` with `waiting_for`), then plans from the tip the first one merged; `pause` doesn't reach a waiting
+        `runs` with `waiting_for`, and by `status` in line), then plans from the tip the first one merged. Waiting
+        planners go in the order they were started; `pause` doesn't reach a waiting
         planner, but stopping its process does (PAUSED). The script merges only what the planner leaves uncommitted: a
         turn whose checkout's reflog shows a commit made during it, or whose HEAD the tip lacks, is INVALID (`next` by lead, no
         command), and so is one during which a commit
@@ -698,10 +699,13 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
     file that doesn't exist yet, where the caller says so itself (an unplanned project) or a planner is about to
     write it. A plans folder still in the old flat layout (<MODULE>-DONE.json directly in it) stops the command with
     the `migrate` command to run, unless `flat_ok`; so does a project still using the names from before 2.0, unless
-    `old_ok`."""
+    `old_ok`. When this working copy's settings are only behind the main branch's tip (it hasn't changed them itself),
+    the tip's are read instead, unless `old_ok` (migrate rewrites the file here)."""
     path = worktree / "ORCHESTRATE.md"
     problems = [] if path.exists() else [f"no ORCHESTRATE.md in {worktree}"]
     text = path.read_text() if path.exists() else ""
+    if text and not old_ok:
+        text = settings_at_tip(worktree, text)
     out = {}
     for key, default in PROFILE_FIELDS.items():
         value = profile_value(text, key)
@@ -781,6 +785,29 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
         if not (missing_ok and not path.exists()):
             print("warning: " + message, file=sys.stderr)
     return out
+
+
+def settings_at_tip(worktree: Path, text: str) -> str:
+    """The settings text to read: the main branch tip's when this working copy's is merely behind it, so a worktree or
+    module branch that left main before a settings change (a new model, say) doesn't keep running on the old one. A
+    copy this branch changed, committed or not, is the lead's or a planner's on its way to main, and is read as it is.
+    The tip is the local ref of the main branch, as the last fetch left it; no fetch happens here."""
+    def value(label: str, default: str) -> str:
+        v = profile_value(text, label)
+        return v.split()[0] if v else default
+    merge, remote, branch = value("merge", "local"), value("remote", "origin"), value("branch", "main")
+    ref = f"{remote}/{branch}" if merge == "push" else branch
+    here = text.encode()
+    there = file_at(worktree, ref, PROFILE_FILE)
+    if there is None or there == here:
+        return text
+    committed = file_at(worktree, "HEAD", PROFILE_FILE)
+    base = git(worktree, "merge-base", "HEAD", ref).stdout.strip()
+    if committed != here or not base or file_at(worktree, base, PROFILE_FILE) != committed:
+        return text
+    EMIT_EXTRA["settings_read_from"] = (f"{ref}: the {PROFILE_FILE} in {worktree} is behind it, so the script read "
+                                        "the main branch's")
+    return there.decode()
 
 
 def planned_elsewhere(worktree: Path) -> str | None:
@@ -2237,8 +2264,11 @@ def current_command(command: str | None) -> str | None:
     """A command for this script, pointed at the newest copy installed beside it. A run that started before an
     update finishes on the old copy, and in Thrum its `next` sent the lead back to the old version."""
     prefix = shlex.join(["python3", str(LOOP)]) + " "
-    if isinstance(command, str) and command.startswith(prefix) and (newer := newer_install()):
-        return shlex.join(["python3", newer]) + " " + command[len(prefix):]
+    if not isinstance(command, str):
+        return command
+    env, rest = re.match(r"((?:[A-Z_][A-Z0-9_]*=\S*\s+)*)(.*)", command, re.DOTALL).groups()  # ORCHESTRATE_VISIBLE=1 …
+    if rest.startswith(prefix) and (newer := newer_install()):
+        return env + shlex.join(["python3", newer]) + " " + rest[len(prefix):]
     return command
 
 
@@ -2253,6 +2283,9 @@ def fit_next(then):
                 out["argv"] = shlex.split(out["command"])
             except ValueError:
                 pass
+            else:  # a leading VAR=value is the shell's; as a list of words it runs through `env`
+                if out["argv"] and re.match(r"[A-Z_][A-Z0-9_]*=", out["argv"][0]):
+                    out["argv"] = ["env", *out["argv"]]
         return out
     return then
 
@@ -3751,6 +3784,14 @@ def live_loops(repo: str | None = None, clean: bool = True, processes: bool = Tr
     if repo:
         loops = [r for r in loops if r.get("repository") == repo]
     return sorted(loops, key=lambda r: (r.get("repository") or "~", r.get("module") or "", r["pid"])), removed
+
+
+def planners_waiting(worktree: Path) -> list[dict]:
+    """The live planners in this repository that are waiting for the planner lock, oldest first: the order they run in."""
+    common = git_common_dir(worktree)
+    loops = live_loops(clean=False, processes=False)[0]
+    return sorted((r for r in loops if r.get("registered") and r.get("role") == "plan" and r.get("waiting_for")
+                   and r.get("git_dir") == common), key=lambda r: (r.get("started_at") or 0, r["pid"]))
 
 
 def iso(stamp: float | None) -> str | None:
@@ -5440,7 +5481,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.3.7"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.3.8"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5469,6 +5510,19 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.3.8": [
+        "A worktree or module branch whose ORCHESTRATE.md is only behind the main branch now runs on the main branch's "
+        "settings, such as a new model, and the result says so in `settings_read_from`. A copy the branch changed "
+        "itself is still read as it is.",
+        "Planners waiting for the planner lock now go in the order they were started, and `status` lists them in "
+        "that order. Start the most needed planner first.",
+        "A `next` that starts with ORCHESTRATE_VISIBLE=1 now names the newest installed copy too, and its `argv` "
+        "starts with `env`, so it runs without a shell.",
+        "While the Codex app hasn't started a queued turn, `runs` says so in the run's `now:` line, with how to "
+        "restart a stuck thread.",
+        "A review's links to files it doesn't commit become plain text when it lands, and a planner's links in an "
+        "`Assumption:` line now resolve on STATUS.md and in the daily report.",
+    ],
     "2.2.6": [
         "`run` on a Codex builder whose goal a block or `pause` left paused now sets the goal active again on the "
         "headless path too, and resumes the session, where it used to report PAUSED before any turn. If the goal "
@@ -5961,7 +6015,7 @@ def earlier_handoff(worktree: Path, prof: dict, stem: str, mid: str) -> str:
 LINK = re.compile(r"(!?)\[([^\]\n]*)\]\(([^)\s]+)(\s+\"[^\"]*\")?\)")
 
 
-def links_to_tip(text: str, rel: str, tree: Path, branch: str) -> str:
+def links_to_tip(text: str, rel: str, tree: Path, branch: str, where: str | None = None) -> str:
     """A handoff as it can stand at the main branch's tip: each relative link whose file the tip lacks becomes the
     link's text and the path in backticks, with the branch that holds it. The handoff merges before the builder's
     work does, and a link to evidence still on the builder's branch would fail the repository's link check on main
@@ -5975,9 +6029,10 @@ def links_to_tip(text: str, rel: str, tree: Path, branch: str) -> str:
         path = os.path.normpath(folder / target.split("#", 1)[0])
         if path.startswith("..") or (tree / path).exists():
             return m.group(0)
-        where = f" on branch `{branch}`" if branch and branch != "HEAD" else " on the builder's branch"
+        place = where if where is not None else \
+            f" on branch `{branch}`" if branch and branch != "HEAD" else " on the builder's branch"
         label = m.group(2).strip()
-        return f"{label + ' ' if label and label != path else ''}(`{path}`{where})"
+        return f"{label + ' ' if label and label != path else ''}(`{path}`{place})"
     return LINK.sub(fix, text)
 
 
@@ -6605,6 +6660,7 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
     deadline, running, started, quiet, woken = began + timeout_s, set(), False, began, 0
     message, error, aborted = "", "", False
     hung_before = HUNG_THREADS.pop(thread, None)
+    step_before = LIVE.get("step")
     # The app runs the tools, so the script follows the calls in the rollout file, as it does for `codex exec`: a
     # visible review in Thrum waited 30 minutes on a Computer Use call that never answered.
     watch = HeadlessWatch("codex", None)
@@ -6640,6 +6696,8 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
                     watch.closed(call_id)
             elif kind == "error":
                 error = str(p.get("message") or p)[:500]
+        if started and LIVE and LIVE.get("step") != step_before:
+            loop_note(step=step_before)  # the turn started after all
         if _STOP:
             stop_turn()
             return 130, thread, message, "(stopped)", None
@@ -6672,6 +6730,10 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
                                        "its queued message was removed"), None
             if waited > START_S * (woken + 1):
                 woken += 1 if open_link(f"codex://threads/wake/{thread}") else 0
+                # `runs` shows this, so the lead can see a thread the app no longer serves (cut off by a restart, say)
+                # instead of waiting out the hours a sleeping app is allowed
+                loop_note(step=f"{step_before or 'a turn'}: the Codex app hasn't started it after {ago(waited)}; if "
+                               f"the thread is stuck, `pause --module` this run and start it again with --fresh")
         elif not running and time.time() - quiet >= SETTLE_S and not codex_queued(thread):
             if aborted:
                 return 130, thread, message, "the turn was stopped in the Codex app", None
@@ -7805,6 +7867,11 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
             elif (t / p).exists():
                 (t / p).unlink()
                 write.append(p)
+        # A link to a file this commit doesn't carry, such as a capture saved outside the review's folder, would be
+        # broken on the main branch and fail a link check there for every builder, so it becomes plain text.
+        landed_text = links_to_tip(review_text, review_path, t, "", where=", not committed with the review")
+        if landed_text != review_text:
+            (t / review_path).write_text(landed_text)
         doc = json.loads((t / done_path).read_text())
         record = record_in(t, prof, stem, doc)
         if design:
@@ -8153,12 +8220,17 @@ def cmd_plan(a: argparse.Namespace) -> None:
     preflight(host, worktree, "plan")
     info = dict(host=host, model=model, effort=effort)
     task_line = a.task.splitlines()[0][:80] if a.task.strip() else ""
-    if not run_lock(worktree, "_plan"):  # one planner per repository: wait for it, then plan on the tip it merged
+    # One planner per repository: wait for it, then plan on the tip it merged. Waiting planners go in the order they
+    # were started, so the lead decides which goes first by starting it first.
+    if planners_waiting(worktree) or not run_lock(worktree, "_plan"):
         install_stop()
         who = run_holder_info(worktree, "_plan")
         loop_register(worktree, "plan", task=task_line, waiting_for="another planner" + holder_text(who), **info)
         print(f"waiting for another planner on this repository{holder_text(who)}", file=sys.stderr, flush=True)
-        while not run_lock(worktree, "_plan"):
+        while True:
+            queue = planners_waiting(worktree)
+            if (not queue or queue[0]["pid"] == os.getpid()) and run_lock(worktree, "_plan"):
+                break
             if _STOP:
                 emit("PAUSED", **info, merged=False, reason="stopped while waiting for another planner to finish")
             time.sleep(PLANNER_POLL_S)
@@ -8433,6 +8505,9 @@ def cmd_status(a: argparse.Namespace) -> None:
 
     if planner := running("_plan"):
         print("planner" + planner)
+    for n, rec in enumerate(planners_waiting(worktree), 1):
+        print(f"planner waiting, {n} in line: {rec.get('task') or 'no task'}, pid {rec['pid']}, waiting "
+              f"{ago(round(time.time() - (rec.get('started_at') or time.time())))}")
     if not_yet := unplanned(worktree):
         lead = "Bring it up with" if not_yet.get("behind") else "Plan it with"
         reason = f"{not_yet['reason'][0].upper()}{not_yet['reason'][1:]}."
@@ -9535,7 +9610,7 @@ def report_text(worktree: Path, hours: float) -> tuple[str, str]:
             if (b.get("at") or "") >= since:
                 planned.setdefault(((b.get("at") or "")[:16], b.get("task") or ""), []).append(stem)
         decided += [line for at, line in sorted(human_decisions(stem, rec)) if at >= since]
-        if chosen := assumptions(show(worktree, ref, plan_rel(prof, stem))):
+        if chosen := assumptions(show(worktree, ref, plan_rel(prof, stem)), plan_rel(prof, stem)):
             assumed += [f"- {stem} ({md_link('plan', plan_rel(prof, stem))}):"] + [f"  - {x}" for x in chosen]
         for d in design_reviews(worktree, prof, ref, stem, rec):
             if (d.get("at") or "") >= since:
@@ -9784,7 +9859,8 @@ def md_link(text: str, target: str) -> str:
 def relink(text: str, folder: str | None) -> str:
     """The report's own links (from `md_link`), with targets written from the repository root made relative to a
     file in `folder`, so they resolve where the file is opened; with no folder, left as they are. Links in quoted
-    text (a human's words, an assumption) aren't the report's, and stay as written."""
+    text (a human's words) aren't the report's, and stay as written; an assumption's are made the report's by
+    `assumptions`."""
     def fix(m: re.Match) -> str:
         return f"]({os.path.relpath(m.group(1), folder) if folder else m.group(1)})"
     return re.sub(r"\]\(" + LINK_MARK + r"([^)\s]+)\)", fix, text)
@@ -9856,10 +9932,26 @@ ADOPT_WHY = "revised before the module's design review passed; that review judge
 ASSUMPTION = re.compile(r"^\s*(?:[-*]\s+)?(?:\*\*)?Assumption:(?:\*\*)?\s*(.+?)\s*$", re.MULTILINE)
 
 
-def assumptions(text: str | None) -> list[str]:
+def assumptions(text: str | None, rel: str | None = None) -> list[str]:
     """The readings a planner chose for the human to overturn: each line of a module's PLAN.md that starts `Assumption:`
-    (a list bullet or bold marker before it is fine). One line each; a reading continued on the next line is cut."""
-    return [m.group(1) for m in ASSUMPTION.finditer(text or "")]
+    (a list bullet or bold marker before it is fine). One line each; a reading continued on the next line is cut.
+    Given the plan's path `rel`, a relative link in a line is rewritten as a report link (`md_link`), so it still
+    resolves on the page the line is copied to."""
+    found = [m.group(1) for m in ASSUMPTION.finditer(text or "")]
+    if not rel:
+        return found
+    folder = os.path.dirname(rel)
+
+    def root(m: re.Match) -> str:
+        target = m.group(3)
+        if re.match(r"^[a-z][a-z0-9+.-]*:|^#|^/", target, re.IGNORECASE) or target.startswith(LINK_MARK):
+            return m.group(0)
+        path, _, anchor = target.partition("#")
+        rooted = os.path.normpath(os.path.join(folder, path))
+        if rooted.startswith(".."):
+            return m.group(0)
+        return f"{m.group(1)}[{m.group(2)}]({LINK_MARK}{rooted}{'#' + anchor if anchor else ''}{m.group(4) or ''})"
+    return [LINK.sub(root, line) for line in found]
 
 
 PLAN_WORDS = 1500  # a plan holds the present only; past this it has started to collect history or design
@@ -10075,7 +10167,8 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
         e, step = proj[key], steps[key]
         stem, rec = e["stem"], e["record"]
         plan = md_link("plan", plan_rel(prof, stem))
-        chosen += [f"- {stem} assumes: {x} ({plan})" for x in assumptions(show(worktree, ref, plan_rel(prof, stem)))]
+        chosen += [f"- {stem} assumes: {x} ({plan})"
+                   for x in assumptions(show(worktree, ref, plan_rel(prof, stem)), plan_rel(prof, stem))]
         if e["problems"]:
             continue
         ms = {m["id"]: m for m in e["doc"]["milestones"]}

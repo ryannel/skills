@@ -1,5 +1,12 @@
 # Kinds of prompt
 
+Contents:
+- [A brief for a subagent or another session](#a-brief-for-a-subagent-or-another-session)
+- [A goal for a long unattended run](#a-goal-for-a-long-unattended-run)
+- [A review request](#a-review-request)
+- [A steer](#a-steer)
+- [A system prompt](#a-system-prompt)
+
 ## A brief for a subagent or another session
 
 A subagent is a second agent you start to do part of your task, and the brief is the prompt you give it. The
@@ -11,6 +18,10 @@ write for what it will have.
 Two things matter more in a brief than elsewhere. Say what you have already ruled out, or the subagent will
 start by checking it again. And say how long a reply you want, because the reply lands in your own context:
 twenty long reports fill it as surely as doing the work yourself.
+
+When the brief asks whether something is true, make "no" as easy to report as "yes". Say what would count against
+it, and that dropping the idea is a finished answer. A reply format with a field for the claim, such as "What makes
+it novel:", gets that field filled in every time, whether or not the claim holds.
 
 > The export job writes the wrong totals for accounts with refunds. I've confirmed the totals are right in the
 > database and wrong in the CSV, so the fault is between `export/query.py` and `export/write.py`. I have not
@@ -36,6 +47,10 @@ the result when the run is finished, so the reader doesn't stop partway to ask w
 
 Last, say where progress is recorded, such as a notes file the reader keeps up to date. A long run outlives its
 context, and that file is what the next context reads.
+
+A check-in you schedule for yourself during a long run is a prompt too. By the time it fires, your conversation may
+have been compacted, so write it for a reader who has lost the context. Name the outcome the run is for, and ask what is holding it back, as well as whether anything broke. A
+check-in that asks only for errors reports "all clear" while the work sits waiting.
 
 > Goal: every stale feature flag in `services/checkout` is removed, with no change in production behaviour.
 >
@@ -71,7 +86,9 @@ A steer is a message to an agent that is already working. It arrives in the midd
 it has to say exactly what changes and leave the rest of the plan standing.
 
 - Say what changes and what stays: "Keep the schema change. Drop the migration script; we'll run it by hand."
-- Give new facts as facts: "The staging database was reset at 14:00, so the seed data is gone."
+- Give new facts as facts: "The staging database was reset at 14:00, so the seed data is gone." Give a guess as a
+  guess, with how to check it: "The run may have stopped because the database was reset; check its log before you
+  change anything." A guess stated as fact sends the agent after the wrong fix.
 - When you approve something, name it. "Yes, run the migration on the staging database" is clearer than
   "continue".
 - If you undid one of its edits, tell it, or it may make the edit again.

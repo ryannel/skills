@@ -1773,9 +1773,9 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.8"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.8"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')
@@ -2161,10 +2161,17 @@ class VisibleCodex(Repo):
         self.assertIn("orchestrate/verify", str(review["cwd"]))
 
     def test_decision_8_a_turn_the_app_starts_late_is_waited_for_not_given_up_on(self):
-        with FakeCodexApp(self, behaviour="late").installed() as app:
+        steps, note = [], agent_loop.loop_note
+        with FakeCodexApp(self, behaviour="late").installed() as app, mock.patch.object(
+                agent_loop, "loop_note", lambda **f: (steps.append(f["step"]) if "step" in f else None, note(**f))):
             result = self.run_loop()
         self.assertEqual(result["result"], "READY_FOR_REVIEW")
         self.assertEqual(app.unqueued, [])
+        waiting = [s for s in steps if s and "hasn't started it" in s]
+        self.assertTrue(waiting)  # `runs` shows the wait while it lasts, with what to do if the thread is stuck
+        self.assertIn("--fresh", waiting[0])
+        last = max(i for i, s in enumerate(steps) if s and "hasn't started it" in s)
+        self.assertNotIn("hasn't started it", steps[last + 1] or "")  # and drops it once the turn starts
 
     def test_decision_8_a_turn_the_app_never_starts_is_unqueued_so_it_cant_run_unwatched(self):
         with FakeCodexApp(self, behaviour="never").installed() as app:
@@ -4274,6 +4281,39 @@ class FirstRuns(Repo):
         (behind / "ORCHESTRATE.md").write_text(PROFILE + "- **Effort:** low\n")
         self.assertTrue(agent_loop.plan_drift(behind, prof, "origin/main")["settings_differ"])
 
+    def test_r9_waiting_planners_go_in_the_order_they_were_started(self):
+        common = agent_loop.git_common_dir(self.wt)
+        self.loops.mkdir(parents=True, exist_ok=True)
+        held = []
+        for pid, started, task in ((90002, 200.0, "Plan the later module"), (90001, 100.0, "Plan the first module"),
+                                   (90003, 50.0, None)):
+            held.append(agent_loop.take_file_lock(self.loops / f"{pid}.lock"))
+            record = {"pid": pid, "role": "plan", "git_dir": common, "started_at": started, "task": task,
+                      "waiting_for": "another planner" if task else None}  # 90003 holds the lock, it isn't waiting
+            (self.loops / f"{pid}.json").write_text(json.dumps(record))
+        self.addCleanup(lambda: [h.close() for h in held])
+        self.assertEqual([r["pid"] for r in agent_loop.planners_waiting(self.wt)], [90001, 90002])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            agent_loop.cmd_status(argparse.Namespace(module=None, worktree=str(self.wt)))
+        status = out.getvalue()
+        self.assertLess(status.index("1 in line: Plan the first module"), status.index("2 in line: Plan the later module"))
+
+    def test_r9_settings_merely_behind_the_tip_are_read_from_the_tip(self):
+        behind = self.root / "behind"
+        self.sh("git", "clone", "-q", str(self.origin), str(behind))
+        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Effort:** high\n")
+        self.commit_all()
+        self.git("fetch", "-q", "origin", where=behind)
+        agent_loop.EMIT_EXTRA.clear()
+        self.assertEqual(agent_loop.profile(behind)["effort"], "high")  # the tip's, though this copy is older
+        self.assertIn("origin/main", agent_loop.EMIT_EXTRA["settings_read_from"])
+        self.assertNotIn("high", (behind / "ORCHESTRATE.md").read_text())  # nothing here is rewritten
+        (behind / "ORCHESTRATE.md").write_text(PROFILE + "- **Effort:** low\n")
+        self.assertEqual(agent_loop.profile(behind)["effort"], "low")  # an edit of its own is read as it is
+        self.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "mine", where=behind)
+        self.assertEqual(agent_loop.profile(behind)["effort"], "low")  # and so is a commit of its own
+
 
     # Round ten: two modules built at once
 
@@ -6280,6 +6320,28 @@ class CommandLine(Repo):
             fitted = agent_loop.fit_next(agent_loop.next_cmd(command, "lead", "why"))
         self.assertEqual(fitted["argv"][:3], ["python3", newer, "run"])
         self.assertTrue(fitted["command"].startswith(f"python3 {newer} run "))
+        with mock.patch.object(agent_loop, "newer_install", return_value=newer):
+            visible = agent_loop.fit_next(agent_loop.next_cmd("ORCHESTRATE_VISIBLE=1 " + command, "lead", "why"))
+        self.assertTrue(visible["command"].startswith(f"ORCHESTRATE_VISIBLE=1 python3 {newer} run "))
+        self.assertEqual(visible["argv"][:4], ["env", "ORCHESTRATE_VISIBLE=1", "python3", newer])  # runs without a shell
+
+    def test_an_assumptions_links_resolve_where_it_is_copied(self):
+        plan = "Assumption: waves follow [the sea study](../../research/sea.md#swell), as [noted](#m2) at [site](https://x.y)\n"
+        line, = agent_loop.assumptions(plan, "docs/plans/WATER/PLAN.md")
+        on_status = agent_loop.relink(f"- WATER assumes: {line}", "docs/plans")
+        self.assertIn("[the sea study](../research/sea.md#swell)", on_status)
+        self.assertIn("[noted](#m2)", on_status)  # an anchor or a web link is left alone
+        self.assertIn("[site](https://x.y)", on_status)
+
+    def test_a_review_link_to_a_file_it_doesnt_commit_becomes_text(self):
+        tree = self.root / "tip"
+        (tree / "docs/evidence/WATER/M1-review").mkdir(parents=True)
+        (tree / "docs/evidence/WATER/M1-review/frame.png").write_text("png")
+        text = "See ![frame](M1-review/frame.png) and [the capture](../../../tmp/capture.mov)."
+        out = agent_loop.links_to_tip(text, "docs/evidence/WATER/M1-review.md", tree, "",
+                                      where=", not committed with the review")
+        self.assertIn("![frame](M1-review/frame.png)", out)
+        self.assertIn("the capture (`tmp/capture.mov`, not committed with the review)", out)
 
     def test_a_handoff_on_main_names_the_branch_for_evidence_only_on_the_builders(self):
         tree = self.root / "tip"

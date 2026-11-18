@@ -107,6 +107,10 @@ on purpose when the `Merge:` or `Test command:` line is missing, because the scr
 or which command runs the tests. If the plans folder has a `GLOSSARY.md`, read it. It holds the agreed name for
 each thing in the project, and you use those names with the human and the agents.
 
+When your host restarts, your background commands end with it, though the agents they started may have finished
+first. Read `runs`, the results and `ready` before you start anything again, because a second review of a milestone
+that was already reviewed holds the module and stops its builder.
+
 A command that stops with a message naming `migrate` has met a project from an older version of this set. Read
 [older projects](references/older-projects.md) before you go on.
 
@@ -148,6 +152,10 @@ high`. A line that names a model also names a host, and applies on that host onl
 [The settings reference](../plan-module/references/profile.md#a-model-or-an-effort-for-one-kind-of-agent) has the
 forms. On a planned project, add the line and commit it, since the human asked for it. On a new project, put their
 words in the planner's task and pass the flags on that first `plan` command.
+
+Commit a settings change to the main branch. A run reads the settings in its own working copy, so a worktree or a
+module branch that is behind the main branch keeps the old line. Check `ran_on` in the next result before you tell the
+human the change has taken effect.
 
 ## Keeping builders busy
 
@@ -231,7 +239,16 @@ Follow the effort to where it goes. Merges that keep conflicting point at how th
 fail review again and again point at how they are defined. Builders that queue for one resource, or repeat work
 each time the main branch moves, point at the steps around building. Most of these belong to the planners and to the
 project settings. Start a planner whose task names the pattern and the modules it spans, or bring the human a change
-to the project settings with what it would cost and what it would give back. Running fewer builders is a fix too,
+to the project settings with what it would cost and what it would give back.
+
+The quality bar can be the cause too. When most milestones fail their first review over differences the human would
+never notice, the items are stricter than the way the human will judge the work, and each of those milestones costs
+another build and review. Bring that to the human once the pattern shows, with what the bar costs and what a looser one would give up.
+Only you see the cost across every module, and only the human can say what the work is for.
+
+When a change like that reaches many modules, say in the planner's task which modules come first: the ones the human's
+next release needs, and those with a milestone stuck on something the change removes. Each changed
+design is reviewed again before its builder goes on, so that order decides what moves first. Running fewer builders is a fix too,
 and often the quickest when they are all waiting on the same thing, because each extra builder then adds waiting,
 not output.
 
@@ -269,7 +286,9 @@ builder that stopped early waits unnoticed until then.
 
 Reviewers and planners work in a checkout the script keeps for them, so their `--worktree` only names the
 repository. One planner runs at a time in a repository: a second `plan` waits for the first, then plans from what
-it merged, so you can start planners for two modules one after the other.
+it merged, so you can start planners for two modules one after the other. Waiting planners go in the order you started
+them, and `status` lists them in that order, so start first the planner for the modules the human's next release
+needs.
 
 A planner's work merges only on `PLANNED`, including files it wrote outside the plans folder, such as tests. On
 `BLOCKED`, `NEEDS_CONTEXT` or `UNFINISHED`, nothing merges, and the result names the git stash and branch holding
@@ -392,6 +411,9 @@ a Mac, Codex sessions run as threads in the Codex app when it is running, and Cl
 script's own `claude -p`, are also listed in Claude desktop's Code tab. The script names each session
 `<repository> · <MODULE> · <step>`, such as `shop · CHECKOUT · M1 review`.
 
+Every worktree keeps its own build outputs, so a long build can fill the disk. Clear those in worktrees nothing is
+using. Anything outside the repository, such as a cache shared with other projects, is the human's to clear.
+
 An item whose `needs` type is `access` needs the human to approve a permission or a prompt, and one whose type is
 `hardware` needs a device connected. A builder can finish either only in a visible session while the human is at
 the machine, because an approval prompt can't appear in a background one. Start that builder with
@@ -444,7 +466,9 @@ working on the module. In the second case, run it again once that session has st
 With `ORCHESTRATE_VISIBLE=1`, the human can watch a session in the Codex app or Claude's Code tab, and type into a
 Codex thread to steer it. If they press Stop on a Codex thread, or open a Claude session to work in it, that
 builder is `PAUSED` and the session is theirs until `run` hands it back. When they ask you to stop everything,
-`pause --worktree <repo>` stops the running sessions cleanly, and `run` carries on later.
+`pause --worktree <repo>` stops the running sessions cleanly, and `run` carries on later. To stop one module's
+sessions, add `--module <M>`. Stopping processes by matching their names stops every builder that matches, with its
+unsaved work.
 
 The Codex app stops a thread only while its window is showing it. If the app doesn't take a stop, the result has
 `turn_not_stopped`, which names the thread, and that turn may still be working with nothing following it. Tell the
@@ -456,31 +480,16 @@ two sessions would otherwise change the same files.
 Your first report tells the human what they can ask for, which app you are running in and where the sessions run,
 what you chose where their request left something open, and the `quota` forecast if Codex builders are running.
 
-After that, once a day and when you stop, write the human one screen in `<evidence>/build-reports/<date>.md`, and
-send it however the human follows this session. `report --worktree <repo> --write` writes the factual half: what
-is Done, each review's result, the planners' assumptions, what is Waiting or Blocked, the items that need the human,
-the decisions saved in the human's name and the tokens each milestone used. Add the rest with links, and merge the
-file with `adopt`. Until today's report is on the main branch, results carry a `report_due` field.
+After that, once a day and when you stop, write the human one screen in `<evidence>/build-reports/<date>.md`.
+[The daily report](references/daily-report.md) says what it covers and how `report` writes half of it. Until today's
+report is on the main branch, results carry a `report_due` field.
 
-The human reads the report to catch what an unattended build would otherwise settle without them, so the whole
-report covers:
+Between reports, write to the human when something needs them or changes what they expect, such as a date that
+slips. A message for every result buries the one decision they need to see.
 
-- what is now Done, with links to the evidence;
-- each review's result, linked. While the project's graded examples hold fewer than about ten reviews, flag every
-  one, because the human's corrections are how the reviewer learns how strict to be;
-- new Reviewer Inspection items, the ones a reviewer judges by running the product, so the human can adjust the
-  milestone's quality bar;
-- each reading of the human's words that a planner chose (the `Assumption:` lines, which a `PLANNED` result counts
-  under `assumptions`);
-- anything Blocked or Waiting, with its reason and what would move it on;
-- every item that needs the human, in one list they can settle in one sitting, with the question for human
-  feedback, or what to approve or connect and when to be at the machine;
-- each glossary entry with a `Proposed:` line, so the human can agree the name or pick another. When they agree,
-  remove the line and merge the glossary with `adopt`;
-- every decision saved in the human's name since the last report, with the words saved, and a quote of any
-  decision the script has no command for, such as a change to the project settings;
-- how fast the work moved, from `flow`, and what you make of it when delivery has fallen behind the effort;
-- how many builders ran, the Codex quota forecast, and the tokens each milestone used, which `cost` adds up.
+When the human says they're going away, ask now about anything that will need them before they're back, because one
+unanswered question holds back every module behind it. While they're away, look at what is keeping milestones from
+moving, such as the planner queue or builders the quota would allow, and not only at whether something broke.
 
 If a result's `quota` field sets `warn`, the work left won't fit before the usage limit resets. Tell the human at
 once, and keep going: slowing down is their decision.

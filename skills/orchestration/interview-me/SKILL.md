@@ -104,7 +104,10 @@ This is a map of what to find out. Most of it you will find or decide without a 
 - Who will use it, and what they will be able to do.
 - What is left out, and what would make the result a failure even if it works.
 - What exists today that must not change.
-- How the human will judge that it is finished, and which judgements only they can make.
+- How the human will judge that it is finished, and which judgements only they can make. Find out whether they
+  will judge by eye, by a measurement or by an exact result, and get a shipped example of the quality they want.
+  Planners set how strict each item is from this, and without it "top quality" tends to become exactness nobody
+  asked for.
 - What it runs on. The brief says this whoever decided it, because a platform nobody names gets chosen by
   whoever builds first.
 - How the human wants to work with the agents. Take this from `ORCHESTRATE.md` when it exists. Otherwise decide
