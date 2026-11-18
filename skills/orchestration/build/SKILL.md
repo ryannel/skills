@@ -357,8 +357,8 @@ so the script turns its links to evidence that is only on the builder's branch i
 
 When a planner changes a module's plan files while its builder's branch has work of its own, the next `run`
 rebases that branch onto the main branch's tip before the builder starts. Main's plan files win, and the builder's
-proof is kept on items whose definitions didn't change. `caught_up` in the result says what it did. If the branch
-also conflicts outside the plans folder, `run` leaves it as it was, and the builder settles that when it merges.
+proof is kept on items whose definitions didn't change (`caught_up` says what it did). A conflict outside the plans
+folder is the builder's to settle, first if its milestone changed. A block lifts once the builder's work has merged.
 
 The human's reply to a question about an item is saved with `human feedback`, the question in `--asked` and
 their words in `--said`, because that is where the builder and the reviewer read it. A reviewer can't count a

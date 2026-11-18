@@ -1773,9 +1773,9 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.8"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.8", "2.3.9"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.8"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.8", "2.3.9"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')
@@ -6478,6 +6478,110 @@ class CatchUp(Repo):
         self.assertEqual(out["status"], "in_progress")
         self.assertEqual([i["builder_result"] for i in out["items"]], ["pass", "open"])
         self.assertEqual(agent_loop.merged_done("{bad", json.dumps(mine)), "{bad")
+
+
+class Recovery(Repo):
+    """After a failed merge or a block, the command a result prints moves the work on: no hand rebase, no `unblock`
+    the script could have done, and no `adopt` of a builder's own progress or of stale plan files."""
+
+    def blocked_builder(self):
+        """A builder worktree whose own commit passes M1.1, adds a log entry, does work and carries a copy of another
+        module's plan, stopped Blocked by a run; then the main branch changes that other plan file."""
+        put(self.wt / "docs/plans/PAY/PLAN.md", "# Pay plan v1\n")
+        (self.wt / "docs/plans/WATER/LOG.md").write_text("# WATER log\n")
+        self.commit_all()
+        builder = self.root / "builder"
+        self.git("worktree", "add", "-q", "-b", "build/water", str(builder), "origin/main")
+        mine = json.loads((builder / "docs/plans/WATER/DONE.json").read_text())
+        mine["milestones"][0]["status"] = "in_progress"
+        mine["milestones"][0]["items"][0].update(builder_result="pass", evidence="run log")
+        (builder / "docs/plans/WATER/DONE.json").write_text(json.dumps(mine, indent=2) + "\n")
+        with (builder / "docs/plans/WATER/LOG.md").open("a") as f:
+            f.write("- Builder: M1.1 passes; merge failed on main's tests.\n")
+        (builder / "docs/plans/PAY/PLAN.md").write_text("# Pay plan v2\n")
+        (builder / "src.txt").write_text("the builder's work\n")
+        self.git("add", "-A", where=builder)
+        self.git("commit", "-qm", "build: M1.1", where=builder)
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: merge failed: main's test command fails")
+        blocked = self.run_loop(worktree=str(builder))
+        self.assertEqual((blocked["result"], blocked["reason"]), ("BLOCKED", "needs_context"), blocked)
+        put(self.wt / "docs/plans/PAY/PLAN.md", "# Pay plan v3\n")
+        self.commit_all()
+        return builder
+
+    def test_a_blocked_builders_own_plan_files_and_stale_copies_never_send_the_lead_to_adopt(self):
+        builder = self.blocked_builder()
+        again = self.run_loop(worktree=str(builder))
+        self.assertEqual(again["result"], "BLOCKED", again)
+        self.assertNotIn("unmerged_plans", again)
+        self.assertIn(" run --module WATER ", again["next"]["command"])
+        self.assertIn("--message", again["next"]["command"])
+        nothing = self.call(agent_loop.cmd_adopt, worktree=str(builder), paths=[])
+        self.assertEqual(nothing["result"], "NOTHING", nothing)
+        self.assertEqual(self.git("show", "origin/main:docs/plans/PAY/PLAN.md").stdout, "# Pay plan v3\n")
+        drift = agent_loop.plan_drift(builder, agent_loop.profile(builder), "origin/main")
+        self.assertEqual((drift["uncommitted"], drift["unmerged"]), ([], []))
+        # a plan file the branch changed and the tip didn't is still the lead's to adopt, with its log entry
+        put(builder / "docs/plans/WATER/DESIGN.md", "# Water design, revised in chat\n")
+        self.git("add", "-A", where=builder)
+        self.git("commit", "-qm", "design", where=builder)
+        drift = agent_loop.plan_drift(builder, agent_loop.profile(builder), "origin/main")
+        self.assertEqual(drift["unmerged"], ["docs/plans/WATER/DESIGN.md", "docs/plans/WATER/LOG.md"])
+
+    def test_a_run_lifts_a_block_once_the_builders_work_has_merged_by_hand(self):
+        builder = self.blocked_builder()
+        # the lead merges the work by hand: the branch, rebased, is now on the main branch with its proof
+        self.git("reset", "-q", "--hard", "origin/main", where=builder)
+        doc = json.loads((builder / "docs/plans/WATER/DONE.json").read_text())
+        doc["milestones"][0]["items"][0].update(builder_result="pass", evidence="run log")
+        (builder / "docs/plans/WATER/DONE.json").write_text(json.dumps(doc, indent=2) + "\n")
+        (builder / "src.txt").write_text("the builder's work\n")
+        self.git("add", "-A", where=builder)
+        self.git("commit", "-qm", "build: M1.1, merged by hand", where=builder)
+        self.git("push", "-q", "origin", "HEAD:main", where=builder)
+        told = self.ready()["next"]
+        self.assertIn(" run --module WATER ", told["command"])
+        self.assertNotIn("--message", told["command"])
+        self.assertIn("has merged since it stopped", told["why"])
+        calls = len(self.calls())
+        ran = self.run_loop(worktree=str(builder))
+        self.assertEqual(ran["result"], "READY_FOR_REVIEW", ran)
+        self.assertEqual(len(self.calls()), calls)  # no builder turn: the work had merged with every item passing
+        self.assertEqual(self.read_done()["milestones"][0]["status"], "done")  # a check item needs no reviewer
+
+    def test_a_block_whose_work_never_left_the_main_branch_stays(self):
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: no device attached")
+        self.assertEqual(self.run_loop()["result"], "BLOCKED")
+        again = self.run_loop()
+        self.assertEqual(again["result"], "BLOCKED", again)
+
+    def test_a_builder_whose_code_conflicts_with_a_replanned_tip_is_started_to_rebase(self):
+        (self.wt / "src.txt").write_text("main\n")
+        self.commit_all()
+        builder = self.root / "builder"
+        self.git("worktree", "add", "-q", "-b", "build/water", str(builder), "origin/main")
+        mine = json.loads((builder / "docs/plans/WATER/DONE.json").read_text())
+        mine["milestones"][0]["status"] = "in_progress"
+        (builder / "docs/plans/WATER/DONE.json").write_text(json.dumps(mine, indent=2) + "\n")
+        (builder / "src.txt").write_text("builder\n")
+        self.git("commit", "-qam", "builder's change", where=builder)
+        (self.wt / "src.txt").write_text("main again\n")
+        self.write_done([milestone("M1", "not_started", ["open"]), milestone("M2", "not_started", ["open"])])
+        doc = json.loads((self.wt / "docs/plans/WATER/DONE.json").read_text())
+        doc["milestones"][0]["items"][0]["statement"] = "M1.1 works, re-planned"
+        self.write_done(doc["milestones"])
+        self.commit_all()
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="DONE")
+        ran = self.run_loop(worktree=str(builder))
+        self.assertIn("src.txt", ran["caught_up"]["conflicts"], ran)
+        self.assertEqual(len(self.calls()), 1)
+        prompt = self.prompt(self.calls()[-1])
+        self.assertIn("conflicts with the main branch in src.txt", prompt)
+        self.assertIn("`git rebase origin/main`", prompt)
+        # the fake builder didn't rebase, so the run stops and its next starts the builder again
+        self.assertEqual(ran["result"], "INVALID", ran)
+        self.assertNotIn("unmerged_plans", ran)
+        self.assertIn(" run --module WATER ", ran["next"]["command"])
 
 
 class MainBranchCheckSettings(Clean):

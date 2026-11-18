@@ -2665,6 +2665,24 @@ def work_note(blocked: dict) -> str:
     return out
 
 
+def block_gone(worktree: Path, prof: dict, step: dict, ref: str) -> str | None:
+    """Why a Blocked milestone can carry on without `unblock`, or None. A block that waits on a change at the main
+    branch (Needs Context or Needs Dependency) and recorded the builder's work unmerged is answered once that work is
+    on `ref`: the lead merged it by hand, say, after a merge failed. Blocks the human or a visible run answers stay."""
+    w = (step.get("blocked") or {}).get("work") or {}
+    if step.get("status") != "blocked" or step.get("reason") not in REPLAN_LIFTS or not w.get("commit"):
+        return None
+    mod, mid = step["module"], step.get("milestone")
+    marked = git(worktree, "log", "-1", "--format=%H", "--fixed-strings",
+                 f"--grep=orchestrate: {mod} {mid} blocked:", ref, "--", done_rel(prof, mod)).stdout.strip()
+    if not marked or is_ancestor(worktree, w["commit"], marked):
+        return None  # the work was already on the main branch when it blocked, so its merging answers nothing
+    heads = [w["commit"]] + ([f"refs/heads/{w['branch']}"] if w.get("branch") else [])
+    if any(is_ancestor(worktree, h, ref) for h in heads):
+        return f"the builder's work{' on ' + w['branch'] if w.get('branch') else ''} has merged since it stopped"
+    return None
+
+
 def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, seen: set | None = None) -> dict | None:
     """What to run after a step that isn't ready, from the same facts `next_step` read. A step Waiting On Dependency
     follows its first dependency to the module that has to move first."""
@@ -2702,6 +2720,10 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
         work = work_note(b)
         if reason == "too_many_failed_reviews":
             return reopen_next(mod, mid, wt, worktree, prof)
+        if gone := block_gone(worktree, prof, step, base_ref(prof)):
+            return next_cmd(loop_cmd("run", "--module", mod, "--worktree", wt), "lead",
+                            f"{mod} {mid} is Blocked ({what}), but {gone}, so `run` lifts the block itself and "
+                            "carries on")
         if reason == "needs_human_feedback":
             return human_next("feedback", mod, mid, wt, needs_ask(worktree, prof, proj, mod, mid, items, what),
                               f"{mod} {mid} is Blocked: Needs Human Feedback on {', '.join(items) or 'its items'}. The "
@@ -2874,21 +2896,47 @@ def folder_drift(worktree: Path, folder: str, ref: str) -> dict[str, list[str]]:
             "unmerged": sorted(p for p in committed - uncommitted if differs(p))}
 
 
+def proof_only(worktree: Path, prof: dict, ref: str, rel: str) -> bool:
+    """Whether `rel` is a done-when file whose milestones ask exactly what the tip's copy asks, so that it differs
+    only in what a builder or the script writes: proof and statuses, which no planner merges."""
+    if not ((where := module_of(prof, rel)) and where[1] == "done"):
+        return False
+    try:
+        here = json.loads(file_here(worktree, rel) or b"null")
+        there = json.loads(file_at(worktree, ref, rel) or b"null")
+        ask = lambda doc: [(m.get("id"), definitions(m)) for m in doc["milestones"]]
+        return ask(here) == ask(there)
+    except (json.JSONDecodeError, TypeError, KeyError, AttributeError):
+        return False
+
+
 def plan_drift(worktree: Path, prof: dict, ref: str) -> dict:
     """Plan files in this worktree that the main branch's tip doesn't have: uncommitted (edited, staged or untracked) or
-    committed but not merged. `run` and `ready` read plans at the tip, so these are invisible to them. A settings file
+    committed but not merged. `run` and `ready` read plans at the tip, so these are invisible to them. Committed files
+    that merge with a builder's work instead are under `with_work`. A settings file
     the tip doesn't have at all is part of a first plan, so it counts too. One the tip has in another form is only
     named, under `settings_differ`: the lead commits it once the human has agreed."""
     out = folder_drift(worktree, prof["plans"], ref)
     for key in ("uncommitted", "unmerged"):  # the script writes STATUS.md itself; it never waits to be merged
         out[key] = [p for p in out[key] if p != status_rel(prof)]
+    base = git(worktree, "merge-base", "HEAD", ref).stdout.strip()
+    # Committed plan files that aren't the lead's to merge, listed under `with_work`. A copy the tip has changed
+    # since this branch parted is stale: merging it would undo that change, and a rebase takes the tip's copy. A
+    # done-when file whose definitions match the tip's holds only a builder's proof, and a module's LOG.md goes with
+    # whatever it describes. Both merge with the builder's work. In Thrum a blocked builder's branch held its own
+    # proof and log and stale copies of two other modules' plans, and `next` sent the lead to `adopt`, which refused.
+    stale = lambda p: bool(base) and file_at(worktree, ref, p) != file_at(worktree, base, p)
+    keep = [p for p in out["unmerged"] if not stale(p) and not proof_only(worktree, prof, ref, p)]
+    edited = {w[0] for p in keep + out["uncommitted"] if (w := module_of(prof, p)) and w[1] != "log"}
+    keep = [p for p in keep if not ((w := module_of(prof, p)) and w[1] == "log" and w[0] not in edited)]
+    out["with_work"] = sorted(set(out["unmerged"]) - set(keep))
+    out["unmerged"] = keep
     here, there = file_here(worktree, PROFILE_FILE), file_at(worktree, ref, PROFILE_FILE)
     if here is not None and there is None:
         key = "unmerged" if file_at(worktree, "HEAD", PROFILE_FILE) == here else "uncommitted"
         out[key] = sorted(out[key] + [PROFILE_FILE])
     # merely behind isn't a difference to commit: the project settings here must differ from this branch's own commit of it,
     # or that commit must have changed it since the branch left the tip (folder_drift's merge-base guard)
-    base = git(worktree, "merge-base", "HEAD", ref).stdout.strip()
     committed = file_at(worktree, "HEAD", PROFILE_FILE)
     out["settings_differ"] = (here is not None and there is not None and here != there
                               and (here != committed or not base or committed != file_at(worktree, base, PROFILE_FILE)))
@@ -5481,7 +5529,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.3.8"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.3.9"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5510,6 +5558,16 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.3.9": [
+        "A builder's branch with its own proof and log entries, or with copies of plan files the main branch has "
+        "since changed, no longer sends you to `adopt`, which refused them. Those files merge with the builder's "
+        "work, and the result's `next` is the command for the milestone itself.",
+        "When `run` can't rebase a builder's branch onto new plan files, because the branch conflicts outside the "
+        "plans folder or has uncommitted work, it now starts the builder to rebase first, instead of stopping "
+        "INVALID and asking for a rebase by hand.",
+        "A milestone Blocked with Needs Context or Needs Dependency, whose builder's work has since merged (by "
+        "hand, say, after its merge failed), is now unblocked by the next `run`, so it needs no `unblock`.",
+    ],
     "2.3.8": [
         "A worktree or module branch whose ORCHESTRATE.md is only behind the main branch now runs on the main branch's "
         "settings, such as a new model, and the result says so in `settings_read_from`. A copy the branch changed "
@@ -7016,9 +7074,10 @@ def cmd_run(a: argparse.Namespace) -> None:
         step = next_step(key, proj, holds(worktree), me(worktree))
         lifts = (("needs_access", "needs_hardware") if not headless else ()) + \
             (("needs_context",) if getattr(a, "message", None) else ())
-        if step["status"] == "blocked" and step.get("reason") in lifts:
-            # what this block waits for is here: a visible run with the human at the machine, or the missing fact in
-            # the lead's --message. The run unblocks it itself
+        gone = block_gone(worktree, prof, step, start_tip)
+        if step["status"] == "blocked" and (step.get("reason") in lifts or gone):
+            # what this block waits for is here: a visible run with the human at the machine, the missing fact in
+            # the lead's --message, or the builder's work merged since it stopped. The run unblocks it itself
             def reopen(tree, mid=step["milestone"]):
                 path = tree / done_rel(prof, stem)
                 doc = json.loads(path.read_text())
@@ -7028,7 +7087,10 @@ def cmd_run(a: argparse.Namespace) -> None:
                 write_json(path, doc)
                 return [done_rel(prof, stem)]
             ok, detail = loop_write(worktree, prof, key, reopen,
-                                    f"orchestrate: {stem} {step['milestone']} unblocked by a run: {step['reason']}")
+                                    f"orchestrate: {stem} {step['milestone']} unblocked by a run: "
+                                    f"{gone or step['reason']}")
+            if ok and gone:
+                EMIT_EXTRA["unblocked"] = gone
             if not ok:
                 emit("SCRIPT_FAILED", module=stem, reason=f"the script couldn't unblock {step['milestone']}: {detail}",
                      next=next_cmd(again, "lead", "run it again"))
@@ -7104,18 +7166,40 @@ def cmd_run(a: argparse.Namespace) -> None:
              next=next_for({**step, "status": "in_progress_elsewhere", "by": holder}, worktree, prof, proj))
 
     # Only now is this run sure to build, so only now does it move the builder's branch.
+    caught = {}
     try:
         if caught := catch_up(worktree, prof, tip(worktree, prof)):
             EMIT_EXTRA["caught_up"] = caught
     except TipError:
         pass
     done = load_done(worktree, stem, prof)
+    authorised_hash = proj[key]["record"]["milestones"][mid]["definitions"]
+    asks = lambda doc: next((definitions(m) for m in doc.get("milestones") or [] if m.get("id") == mid), None)
+    behind = ""  # what the builder settles first, when the script couldn't rebase its branch onto new plan files
+    if asks(done) != authorised_hash and not is_ancestor(worktree, start_tip, "HEAD") and \
+            (at_tip := show(worktree, start_tip, done_rel(prof, stem))) is not None:
+        # The branch's plan files are from before a planner's change, and the script couldn't rebase it: a conflict
+        # outside the plans folder, or uncommitted work. Only the builder can settle that, so it starts from the
+        # tip's done-when file, with its proof kept where the definitions held, and rebases first. In Thrum `run`
+        # stopped INVALID here and sent the lead to `adopt` and a hand rebase.
+        mine = json.dumps(done) if "milestones" in done else at_tip
+        if asks(tip_done := json.loads(merged_done(at_tip, mine))) == authorised_hash:
+            done = tip_done
+            conflicts = [f for f in caught.get("conflicts") or [] if not f.startswith(prof["plans"].rstrip("/") + "/")]
+            behind = (f"Before anything else, bring this branch onto {base_ref(prof)}. A planner has changed {mid} "
+                      "there, and the script couldn't rebase the branch for you"
+                      + (f": it conflicts with the main branch in {', '.join(conflicts[:10])}" if conflicts else
+                         ", because the worktree has uncommitted work" if git(worktree, "status", "--porcelain").stdout.strip()
+                         else "") +
+                      f". Commit your work, run `git rebase {base_ref(prof)}`, and settle each conflict. In the plans "
+                      "folder take the main branch's copy of each file, keep your own LOG.md entries, and keep your "
+                      f"proof only on items whose definitions didn't change. Then read {done_rel(prof, stem)} again, "
+                      f"because {mid} as the main branch has it is the one to build.")
     if problems := validate(done, key):
         emit("INVALID", module=stem, problems=problems[:20], **unlanded(next_cmd(
             loop_cmd("plan", "--worktree", str(worktree), "--task", plan_task(stem, problems[:5])), "lead",
             f"this worktree's copy of {stem}'s done-when file is invalid")))
     milestone = find(done, mid)
-    authorised_hash = proj[key]["record"]["milestones"][mid]["definitions"]
     if definitions(milestone) != authorised_hash:
         emit("INVALID", module=stem, milestone=mid, problems=[
             f"this worktree's copy of {mid}'s definitions isn't the authorised one at the main branch's tip; "
@@ -7335,6 +7419,8 @@ def cmd_run(a: argparse.Namespace) -> None:
     if getattr(a, "checks_only", False):
         # nothing passed: the checks failed, or the work isn't merged with every item passing yet
         finish(state_path, state, "CHECKS_FAILED", reasons=reasons)
+    if behind:
+        script_note = behind + ("\n\n" + script_note if script_note else "")
 
     # `run` again carries on, as the app's play button would: after a pause, and after a block the lead has cleared
     # (the milestone is runnable again, so a goal left `blocked` would only end every resumed turn as BLOCKED). This
@@ -7460,6 +7546,13 @@ def cmd_run(a: argparse.Namespace) -> None:
             finish(state_path, state, "PAUSED")
 
         done = load_done(worktree, stem, prof)
+        if behind and asks(done) != authorised_hash:  # the builder hasn't brought its branch onto the tip yet
+            finish(state_path, state, "INVALID", problems=[
+                f"this worktree's copy of {mid}'s definitions still isn't the authorised one at {base_ref(prof)}: "
+                "the builder hasn't rebased its branch onto the new plan files"], next=next_cmd(
+                    again, "lead", "only the builder can settle that rebase, because it conflicts outside the plans "
+                                   "folder or has uncommitted work; `run` starts it again with the same instructions"))
+        behind = ""
         if problems := validate(done, key):
             finish(state_path, state, "INVALID", problems=problems[:20], next=planner_next(problems))
         try:
@@ -10441,13 +10534,18 @@ def cmd_adopt(a: argparse.Namespace) -> None:
         for p in a.paths:
             full = Path(p) if Path(p).is_absolute() else worktree / p
             paths.append(os.path.relpath(os.path.abspath(full), worktree))
-        problems = [f"{p} has no change here that the main branch's tip lacks" for p in paths
+        problems = [f"{p} has no change here that the main branch's tip lacks" + (
+                        ", only a builder's proof or log, or a copy the tip has since changed; it merges with the "
+                        "builder's work when the builder merges" if p in drift["with_work"] else "") for p in paths
                     if p not in unlanded and not adoptable(prof, worktree, ref, p)]
     else:
         paths, problems = unlanded, []
     if not paths:
         done_with("NOTHING", detail=f"no plan file under {prof['plans']}, and no report under {reports_dir(prof)}, "
-                                    f"differs from {base_ref(prof)}",
+                                    f"differs from {base_ref(prof)}" + (
+                                        f", other than {', '.join(drift['with_work'][:10])}, which merge with the "
+                                        "builder's work: a builder's proof and log, and copies the tip has since "
+                                        "changed, which a rebase replaces" if drift["with_work"] else ""),
                   **profile_note(drift, prof),
                   next=next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", "see what's ready"))
     base = git(worktree, "merge-base", "HEAD", ref).stdout.strip()
