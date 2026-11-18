@@ -401,6 +401,27 @@ Subcommands:
         starts a run on the tip now; --due starts each check whose `every` has passed since its last run, if the
         main branch has moved (STARTED, ALREADY_RUNNING or NOTHING). With no NAME it lists each check's latest
         result (MAIN_CHECKS). Runs are kept under <git common dir>/orchestrate/main-checks/<name>/.
+  watch --worktree PATH [--runs]
+        Kept running in the background by the lead, and ends to wake it: at its check-in (the settings' `Lead
+        check-in`, 3 hours by default, counted from when a watch last ended), at a new warning sign, or with --runs
+        when a run, review or plan of the repository ends. The signs are read from the script's own records: a
+        builder with no progress for 2 hours, a milestone failing its last two reviews on the same items, ready work
+        with a free builder slot for 30 minutes, a planner queued for an hour, a low disk, and a main-branch check
+        failing on the tip. Each sign wakes the lead once, until it changes or goes; <git common dir>/orchestrate/
+        watch.json keeps what it has said. The result (WARNING_SIGNS, RUN_ENDED or CHECK_IN) sums up the build for a
+        lead with no other context: what moved since the last watch, what hasn't, milestones going back and forth
+        between building and review, builder slots, planners, disk, the main branch and the flow numbers.
+
+Routine steps. Without --one-step, `run` and `plan` carry on through the steps the process makes routine, each run
+as a command of its own with --one-step, and end with the last one's result plus `steps_run` (each step and its
+result) and `stopped_because`. After `run`: the review of a milestone that reached Ready for Review, a builder
+again after a failed review that the counts send back to the builder, the module's next milestone after a pass,
+and one planner revision when the design review asks for changes, then the run again. After `plan`: the design
+review of each module the plan left owed one, and one planner revision when a design review asks for changes. They
+stop at anything else: a `next` the human decides or with an `ask`, Blocked, a diagnosis or another escalation,
+HOST_FAILED, KEPT, PAUSED or a stop signal, a second DESIGN CHANGES, a finished module, a next milestone that can't
+start, a failing main-branch check, a newer copy of the script, or any `next` that isn't a plain command for the
+step.
 
 Per-worktree session state lives in <git dir>/orchestrate/<module>.json, so re-running the same command resumes.
 Run locks (run-<MODULE>.lock, run-_plan.lock) live in <git common dir>/orchestrate/. The kernel releases one when its
@@ -583,7 +604,7 @@ class TipError(Exception):
 PROFILE_FIELDS = {"plans": "docs/plans", "evidence": "docs/evidence", "test command": None, "branch": "main",
                   "remote": "origin", "merge": None, "codex sandbox": "workspace-write", "writable roots": "",
                   "graded examples": "", "effort": "", "claude permissions": "auto", "default host": "",
-                  "review host": "", "planner host": "", "exclusive resources": ""}
+                  "review host": "", "planner host": "", "exclusive resources": "", "lead check-in": ""}
 REQUIRED = {"test command": "the command that must pass before merging, or `none`",
             "merge": "push (standing permission to push) or local"}
 ONE_WORD = {"branch", "remote", "merge", "codex sandbox", "effort", "claude permissions", "default host",
@@ -759,7 +780,8 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
         problems.append(f"planner host: {out['planner_host']!r} (want codex, claude or a host these settings names)")
         out["planner_host"] = ""
     out["builders"] = builders_count(text)
-    locks = lock_settings_from(text)
+    out["check_in_s"] = check_in_s(out.pop("lead check-in"), problems)
+    locks =lock_settings_from(text)
     out["shared_resources"], out["lock_hold_limit_s"] = locks["shared"], locks["hold_limit_s"]
     problems += locks["problems"]
     out["main_checks"] = main_check_lines(text, problems)
@@ -3540,7 +3562,8 @@ def loop_register(worktree: Path, role: str, **fields) -> None:
                   "worktree": str(worktree), "module": None, "milestone": None, "host": None, "model": None,
                   "effort": None, "path": None, "started_at": stamp, "turns": 0, "activity_at": stamp,
                   "session": None, "transcript": None, "usage": {}, "script": str(LOOP),
-                  "run_lock": str(_RUN_LOCKS[-1][0]) if _RUN_LOCKS else None, **fields}
+                  "run_lock": str(_RUN_LOCKS[-1][0]) if _RUN_LOCKS else None,
+                  **({"steps_parent": int(STEPS_PARENT)} if STEPS_PARENT else {}), **fields}
         LOOPS_DIR.mkdir(parents=True, exist_ok=True)
         handle = take_file_lock(LOOPS_DIR / f"{os.getpid()}.lock")
         if handle is None:
@@ -5780,7 +5803,7 @@ def emit(result: str, **fields) -> None:
     line = {"result": result, **fields, **more, **SESSION_PATH, **extra, "version": VERSION,
             **({"changed": changed} if changed else {}),
             **({"report_due": due} if due else {}), **({"quota": quota_now()} if codex else {})}
-    path = result_file(worktree, fields) if worktree else None
+    path = result_file(worktree, fields) if worktree and not STEPS_PARENT else None  # a step's parent writes the file
     if path:
         line["result_file"] = str(path)
     text = json.dumps(line)
@@ -5789,6 +5812,13 @@ def emit(result: str, **fields) -> None:
             path.write_text(text + "\n")
         except OSError:
             pass
+    if STEPS_RUN:  # a command that ran several steps: every file it marked RUNNING gets its last result
+        for marked in list(MARKED):
+            try:
+                marked.write_text(text + "\n")
+            except OSError:
+                pass
+        MARKED.clear()
     unmark(path)
     print(text)
     sys.exit(1 if result in ("SCRIPT_FAILED", "ERROR") else 0)
@@ -11594,6 +11624,543 @@ def cmd_main_check(a: argparse.Namespace) -> None:
     main_check_out(**main_check_wait(worktree, prof, a.name, commit, a.wait))
 
 
+# ------------------------------------------------------------------------------------ routine steps, and watching
+
+# A `run` or `plan` carries on through the steps the process makes routine, so the lead is woken for judgement and
+# not to pass commands along. In Thrum about 170 agent sessions in 36 hours each cost the lead two turns, one to start
+# the session and one to read its result; the lead was compacted four times, and wrote its own scripts to run `next`.
+# Each step runs as a command of its own, `--one-step`, in a child process, so it takes the same locks, writes the
+# same records and prints the same result as when the lead ran it. This process reads each result and decides whether
+# the next step is routine. A step's process doesn't write result files: the lead reads this command's.
+STEPS_ENV = "ORCHESTRATE_STEPS_PARENT"
+STEPS_PARENT = os.environ.pop(STEPS_ENV, None)  # in a step's process, the pid of the command running the steps
+STEPS_RUN: list = []  # the steps this process ran, each with its result, for its own result line
+STEPS_MAX = 40  # a stop for safety: a milestone takes two steps, and each failed review two more
+ROUTINE_ESCALATIONS = ("same_builder", "new_builder_session")  # the counts send the milestone back to its builder
+STEP_FIELDS = ("verdict", "escalation", "failed_reviews", "reason", "review", "commit", "modules",
+               "design_review_owed", "replanned", "assumptions")  # what `steps_run` keeps of each step's result
+
+
+def step_words(then: dict | None) -> list[str] | None:
+    """The words after the script's path in a `next` that is a plain command of this copy of the script, or None: no
+    command, another program, an environment setting or a shell chain in front, another copy, or a placeholder."""
+    then = then or {}
+    argv = then.get("argv")
+    if not isinstance(argv, list):
+        try:
+            argv = shlex.split(then["command"]) if isinstance(then.get("command"), str) else None
+        except ValueError:
+            argv = None
+    if not argv or len(argv) < 3 or argv[0] != "python3" or argv[1] != str(LOOP):
+        return None
+    words = [str(w) for w in argv[2:]]
+    if any(w in ("&&", "||", ";", "|") or PLACEHOLDER.search(w) for w in words):
+        return None
+    return words
+
+
+def routine_next(line: dict, steps: dict) -> tuple[list[str] | None, str]:
+    """(the words of the next routine step, or None; when None, why the steps stop here). `line` is the last step's
+    result. `steps` is what the steps have done so far: `origin` (run or plan), `worktree`, the design reviews a plan
+    left `owed`, the modules whose design review has asked for `changes`, and the `last_run`."""
+    result, then = line.get("result"), line.get("next") or {}
+    words = step_words(then)
+    asks = bool(then.get("decides") or then.get("ask"))
+    verb = words[0] if words and not asks else None
+    stem = line.get("module") or ""
+    same = verb is not None and (argv_flag(words, "--module") or "").upper() == stem.upper()
+    why = then.get("why") or ""
+    plain = f"{stem} {line.get('milestone') or ''}".strip()
+    ended = f"{plain + ' ' if plain else ''}ended {result}" + (f": {why}" if why else "")
+    if line.get("main_broken"):
+        return None, f"the main branch is broken: {line['main_broken']}"
+    if asks:
+        return None, f"{ended}. The decision is the human's" if then.get("decides") else ended
+
+    def design_changes(module: str) -> tuple[list[str] | None, str]:
+        if steps["changes"].get(module.upper()):
+            return None, (f"{module}'s design review asked for changes a second time, after a planner had revised it "
+                          "once; the findings need a look before another round")
+        if verb != "plan":
+            return None, ended
+        steps["changes"][module.upper()] = 1
+        if steps["origin"] == "run":
+            steps["then_run"] = steps["last_run"]  # the run does the design review again before it builds
+        return words, ""
+
+    if result in ("READY_FOR_REVIEW", "NEEDS_REVIEW"):
+        if same and verb == "review" and argv_flag(words, "--milestone") != "design":
+            return words, ""
+        if same and verb == "run" and steps["origin"] == "run":
+            return words, ""
+        return None, ended
+    if result == "REVIEWED":
+        verdict = line.get("verdict")
+        if line.get("counted") is False:
+            return None, f"{ended}. The review judged a plan that changed while it ran, so it didn't count"
+        if line.get("milestone") == "design":
+            if verdict == "DESIGN OK":
+                if steps["owed"]:
+                    return ["review", "--module", steps["owed"].pop(0), "--milestone", "design", "--worktree",
+                            steps["worktree"]], ""
+                return None, (f"{stem}'s design is approved. Which builders to start, and where, is yours to "
+                              "decide")
+            if verdict == "DESIGN CHANGES":
+                return design_changes(stem)
+            return None, ended
+        if verdict == "PASS":
+            if not then.get("command"):
+                return None, why or f"{stem} is finished"
+            if same and verb in ("run", "review") and steps["origin"] == "run":
+                return words, ""
+            return None, f"{stem}'s next milestone can't start here: {why}"
+        if verdict == "FAIL" and line.get("escalation") in ROUTINE_ESCALATIONS and same and verb == "run":
+            return words, ""
+        return None, ended
+    if result == "DESIGN_NOT_APPROVED":
+        review = line.get("design_review") or {}
+        if review.get("verdict") == "DESIGN CHANGES" and review.get("counted") is not False:
+            return design_changes(stem)
+        return None, ended
+    if result == "PLANNED":
+        if line.get("merged") is False or line.get("problems"):
+            return None, f"{ended}. The plan didn't merge" + (f": {'; '.join(line['problems'][:3])}"
+                                                              if line.get("problems") else "")
+        if steps.get("then_run"):
+            return steps.pop("then_run"), ""
+        owed = list(line.get("design_review_owed") or [])
+        if steps["origin"] == "plan" and owed:
+            steps["owed"] = owed[1:]
+            if verb == "review" and (argv_flag(words, "--module") or "").upper() == owed[0].upper():
+                return words, ""
+            return ["review", "--module", owed[0], "--milestone", "design", "--worktree", steps["worktree"]], ""
+        return None, "the plan merged" + ("" if owed else ", and no design review is owed") + \
+            (f". {why}" if why else "")
+    return None, ended
+
+
+def carried(words: list[str], a: argparse.Namespace, origin: str) -> list[str]:
+    """A step's words with what the lead gave the first command and the step needs too: the turn limit for every step;
+    the builder's model, effort, review host and no-progress hours for a later run; the planner's host, model and
+    effort for a planner revision after a plan. `--one-step` goes on every run and plan, so it doesn't chain."""
+    out = list(words)
+
+    def add(flag: str, value) -> None:
+        if value in (None, False) or flag in out or argv_flag(out, flag) is not None:
+            return
+        out.extend([flag] if value is True else [flag, str(value)])
+    add("--turn-timeout-hours", getattr(a, "turn_timeout_hours", None))
+    if out[0] == "run" and origin == "run":
+        for flag, dest in (("--model", "model"), ("--effort", "effort"), ("--review-host", "review_host"),
+                           ("--no-progress-hours", "no_progress_hours"), ("--no-design-review", "no_design_review")):
+            add(flag, getattr(a, dest, None))
+    if out[0] == "plan" and origin == "plan":
+        for flag in ("--host", "--model", "--effort"):
+            add(flag, getattr(a, flag[2:], None))
+    if out[0] in ("run", "plan") and "--one-step" not in out:
+        out.append("--one-step")
+    return out
+
+
+def run_step(words: list[str]) -> dict:
+    """Runs one step as a command of its own and returns its result line. A stop signal this process gets is passed
+    on to the step, which stops its agent cleanly and ends PAUSED."""
+    env = dict(os.environ, **{STEPS_ENV: str(os.getpid())})
+    proc = subprocess.Popen([sys.executable, str(LOOP), *words], stdout=subprocess.PIPE, text=True, env=env)
+    passed_on = False
+    while True:
+        try:
+            out, _ = proc.communicate(timeout=RUN_POLL_S)
+            break
+        except subprocess.TimeoutExpired:
+            if _STOP and not passed_on:
+                proc.send_signal(signal.SIGTERM)
+                passed_on = True
+    lines = [l for l in out.splitlines() if l.strip()]
+    for extra in lines[:-1]:  # a step prints only its result on stdout; anything else goes where its warnings go
+        print(extra, file=sys.stderr)
+    try:
+        line = json.loads(lines[-1]) if lines else None
+    except ValueError:
+        line = None
+    if isinstance(line, dict) and line.get("result"):
+        return line
+    return {"result": "SCRIPT_FAILED", "reason": f"the step `{shlex.join(words[:5])}` ended (exit {proc.returncode}) "
+                                                 "without printing a result",
+            "next": next_cmd(loop_cmd(*words), "lead", "run the step again; if it fails the same way, tell the human")}
+
+
+def step_entry(words: list[str], line: dict, seconds: float) -> dict:
+    """One step as `steps_run` lists it: what ran, its result, and the few fields that say how it went."""
+    what = " ".join(x for x in (words[0], line.get("module") or argv_flag(words, "--module"),
+                                line.get("milestone") or argv_flag(words, "--milestone")) if x)
+    out = {"step": what, "result": line.get("result")}
+    out.update({k: line[k] for k in STEP_FIELDS if line.get(k) not in (None, "", [], {})})
+    if isinstance(line.get("design_review"), dict) and line["design_review"].get("verdict"):
+        out["design_review"] = line["design_review"]["verdict"]
+    out["minutes"] = round(seconds / 60, 1)
+    return out
+
+
+def main_broken(worktree: Path, prof: dict | None = None) -> list[dict]:
+    """The main-branch checks whose latest run on the tip failed, each with the commit it failed on and, once a
+    bisect has found it, the first failing commit."""
+    try:
+        prof = prof or profile(worktree)
+        if not prof.get("main_checks"):
+            return []
+        out = []
+        for c in main_check_list(worktree, prof):
+            latest = c.get("latest") or {}
+            if latest.get("result") == "fail":
+                culprit = latest.get("culprit") or {}
+                out.append({"check": c["name"], "commit": latest.get("commit"),
+                            "text": f"main-branch check `{c['name']}` failed on {(latest.get('commit') or '?')[:12]}"
+                                    + (f"; the first failing commit is {culprit['commit'][:12]} ({culprit.get('subject')})"
+                                       if culprit.get("commit") else "")})
+        return out
+    except (Exception, SystemExit):
+        return []
+
+
+def run_steps(a: argparse.Namespace, argv: list[str]) -> None:
+    """`run` or `plan` without --one-step: runs the first step, then each routine step after it, and ends with the
+    last step's result, `steps_run` and `stopped_because`."""
+    worktree = Path(a.worktree).resolve()
+    origin = "run" if a.func is cmd_run else "plan"
+    install_stop()
+    loop_register(worktree, "steps", module=getattr(a, "module", None),
+                  task=(a.task.splitlines()[0][:80] if origin == "plan" and a.task.strip() else None))
+    steps = {"origin": origin, "worktree": str(worktree), "owed": [], "changes": {}, "last_run": None}
+    STEPS_RUN.clear()
+    lines: list[dict] = []
+    words = list(argv)
+    stop = ""
+    while True:
+        words = carried(words, a, origin)
+        if words[0] == "run":
+            steps["last_run"] = words
+        named = [w for w in (argv_flag(words, "--module"), argv_flag(words, "--milestone")) if w]
+        loop_note(step=f"step {len(STEPS_RUN) + 1}: {' '.join([words[0], *named])}")
+        started = time.time()
+        line = run_step(words)
+        STEPS_RUN.append(step_entry(words, line, time.time() - started))
+        lines.append(line)
+        words, stop = routine_next(line, steps)
+        if words is None:
+            break
+        if _STOP:
+            words, stop = None, "a stop signal reached this command between steps"
+        elif len(STEPS_RUN) >= STEPS_MAX:
+            words, stop = None, f"it has run {STEPS_MAX} steps, the most one command runs"
+        elif newer_install():
+            words, stop = None, "a newer copy of the script is installed; run the next step from it"
+        elif broken := main_broken(worktree):
+            words, stop = None, "the main branch is broken: " + "; ".join(b["text"] for b in broken)
+        if words is None:
+            break
+    final = dict(lines[-1])
+    result = final.pop("result")
+    for key in ("version", "result_file"):
+        final.pop(key, None)
+    for line in lines:  # a step's warnings stay with the result the lead reads
+        WARNINGS.extend(w for w in line.get("warnings") or [] if w not in WARNINGS)
+    final.pop("warnings", None)
+    if changed := next((l["changed"] for l in lines if l.get("changed")), None):
+        final["changed"] = changed
+    if quota := next((l["quota"] for l in reversed(lines) if l.get("quota")), None):
+        final["quota"] = quota
+    emit(result, **final, steps_run=list(STEPS_RUN), stopped_because=stop)
+
+
+LEAD_CHECK_IN_S = 3 * 3600.0  # how long `watch` waits for a warning sign before it wakes the lead anyway
+WATCH_FILE = "watch.json"  # under <git common dir>/orchestrate: when a watch last woke the lead, and the signs it named
+WATCH_POLL_S = 5.0  # how often `watch` looks at the runs
+WATCH_SIGNS_S = 60.0  # how often it reads the records for warning signs
+WATCH_FETCH_S = 300.0  # how often it fetches the main branch while it reads them
+NO_PROGRESS_WARN_H = 2.0  # half the hours a run gives a builder by default before it stops it (--no-progress-hours)
+READY_IDLE_WARN_S = 30 * 60.0  # how long ready work may wait with a builder slot free
+PLANNER_QUEUE_WARN_S = 3600.0  # how long a planner may wait for the one before it
+WATCH_WHY = ("Read this for delivery problems and act on them: message a builder (`run --message`), start a planner "
+             "on a re-plan, change the order of the work, start a builder on ready work, or ask the human. Then start "
+             "this command again in the background, so the next check-in or warning sign wakes you")
+
+
+def check_in_s(value: str | None, problems: list) -> float:
+    """The settings' `Lead check-in` in seconds: a time such as "3h", "90 minutes" or "2" (hours)."""
+    if not value:
+        return LEAD_CHECK_IN_S
+    seconds = duration_s(value) or (float(value) * 3600 if re.fullmatch(r"\d+(\.\d+)?", value.strip()) else None)
+    if not seconds:
+        problems.append(f"lead check-in: {value!r} (want a time, such as 3h or 90m)")
+        return LEAD_CHECK_IN_S
+    return seconds
+
+
+def run_progress(rec: dict) -> dict | None:
+    """The run state a live build has written since it started: its milestone and `progress_at`, when an item last
+    passed or the builder last made a commit of its own."""
+    tree, module = rec.get("worktree"), rec.get("module") or ""
+    if not tree or not module or not Path(tree).is_dir():
+        return None
+    found = git(Path(tree), "rev-parse", "--absolute-git-dir")
+    if found.returncode != 0:
+        return None
+    for name in dict.fromkeys((module, module.upper())):
+        path = Path(found.stdout.strip()) / "orchestrate" / f"{name}.json"
+        try:
+            if path.stat().st_mtime < (rec.get("started_at") or 0) - 2:
+                continue
+            state = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(state, dict) and state.get("progress_at"):
+            return state
+    return None
+
+
+def failed_items(review: dict) -> set:
+    """The items a failed review didn't pass, from its verdicts and its findings."""
+    items = {i for i, v in (review.get("items") or {}).items() if v != "pass"}
+    return items | {f.get("item") for f in review.get("findings") or [] if isinstance(f, dict) and f.get("item")}
+
+
+def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
+    """What `watch` reads each time it looks, from the records the script already keeps: the live runs, each
+    module's next step at the main branch's tip, ready work with no builder, the disk and the main-branch checks.
+    `since` holds when each condition that has to last was first seen, and is updated here."""
+    stamp = time.time()
+    common = Path(git_common_dir(worktree))
+    folder = common / "orchestrate"
+    loops, _ = live_loops(repository_of(str(common)), clean=False)
+    builds = [r for r in loops if r.get("role") == "build" and not r.get("checks_only")]
+    try:
+        ref = tip(worktree, prof, fetch=fetch)
+        proj = project(worktree, prof, ref)
+    except (TipError, SystemExit):
+        ref, proj = None, {}
+    if fetch:
+        sync_holds(worktree, prof)
+    held, mine = holds(worktree), me(worktree)
+    steps = {key: next_step(key, proj, held, mine) for key in sorted(proj)}
+    running = {key for key in steps if run_holder(folder, key) is not None}
+    waiting = [s for key, s in steps.items() if s["status"] == "can_start" and key not in running]
+    limit = prof.get("builders")
+    free = (limit - len(builds)) if limit else len(waiting)
+    if waiting and free > 0:
+        since.setdefault("ready_waiting", stamp)
+    else:
+        since.pop("ready_waiting", None)
+    try:
+        disk = shutil.disk_usage(folder if folder.is_dir() else common).free
+    except OSError:
+        disk = None
+    return {"stamp": stamp, "tip": ref, "loops": loops, "builds": builds, "proj": proj, "steps": steps,
+            "running": running, "waiting": waiting, "limit": limit, "free": max(free, 0), "disk": disk,
+            "broken": main_broken(worktree, prof), "since": since,
+            "progress": {r["pid"]: run_progress(r) for r in builds}}
+
+
+def watch_signs(look: dict) -> dict:
+    """The warning signs in what `watch` read, as {key: {"seen": what makes this sign new, "text": ...}}. The same key
+    with the same `seen` is the same sign, which wakes the lead once."""
+    signs, stamp = {}, look["stamp"]
+    for r in look["builds"]:
+        state = look["progress"].get(r["pid"])
+        if state and stamp - float(state["progress_at"]) > NO_PROGRESS_WARN_H * 3600:
+            mid = state.get("milestone") or r.get("milestone") or ""
+            signs[f"no_progress {r.get('module')} {mid}"] = {
+                "seen": str(state["progress_at"]),
+                "text": f"{r.get('module')} {mid}: no item has newly passed and the builder has made no commit of its "
+                        f"own for {ago(stamp - float(state['progress_at']))}. The run stops itself after the hours "
+                        "its --no-progress-hours gives, 4 by default"}
+    for key, e in look["proj"].items():
+        if e["problems"]:
+            continue
+        m = next((m for m in e["doc"]["milestones"] if not recorded_done(m, e["record"])), None)
+        if not m:
+            continue
+        reviews = counted_reviews((e["record"].get("milestones") or {}).get(m["id"]) or {})
+        if len(reviews) >= 2 and all(r.get("verdict") == "fail" for r in reviews[-2:]):
+            same = failed_items(reviews[-2]) & failed_items(reviews[-1])
+            if same:
+                signs[f"same_items {e['stem']} {m['id']}"] = {
+                    "seen": str(reviews[-1].get("at")),
+                    "text": f"{e['stem']} {m['id']} failed its last two reviews on the same items "
+                            f"({', '.join(sorted(same))})"}
+    first = look["since"].get("ready_waiting")
+    if first and stamp - first >= READY_IDLE_WARN_S:
+        names = ", ".join(f"{s['module']} {s.get('milestone') or ''}".strip() for s in look["waiting"])
+        signs["ready_waiting"] = {"seen": str(first), "text": f"ready work has waited {ago(stamp - first)} with a "
+                                                              f"builder slot free: {names}"}
+    for r in look["loops"]:
+        if r.get("role") == "plan" and r.get("waiting_for") and stamp - (r.get("started_at") or stamp) > \
+                PLANNER_QUEUE_WARN_S:
+            signs[f"planner_waiting {r['pid']}"] = {
+                "seen": str(r["pid"]), "text": f"a planner has waited {ago(stamp - r['started_at'])} for "
+                                               f"{r['waiting_for']}" + (f", with the task: {r['task']}" if r.get("task")
+                                                                        else "")}
+    if look["disk"] is not None and look["disk"] < LOW_DISK_BYTES:
+        signs["low_disk"] = {"seen": "low", "text": f"the disk holding the repository has {look['disk'] / 1e9:.0f} GB "
+                                                    "free; builds stall when it fills"}
+    for b in look["broken"]:
+        signs[f"main_broken {b['check']}"] = {"seen": str(b["commit"]), "text": b["text"]}
+    return signs
+
+
+def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dict:
+    """What a lead woken by `watch` needs to act without other context, from `look` and the flow numbers."""
+    since, stamp = iso(since_s), look["stamp"]
+    moved = {"done": [], "ready_for_review": [], "reviews_passed": [], "reviews_failed": []}
+    not_moving, back_and_forth = [], []
+    for key, e in look["proj"].items():
+        stem = e["stem"]
+        if e["problems"]:
+            not_moving.append(f"{stem}: can't be read: {e['problems'][0]}")
+            continue
+        for mid, r in (e["record"].get("milestones") or {}).items():
+            if ((r.get("done") or {}).get("at") or "") >= since:
+                moved["done"].append(f"{stem} {mid}")
+            if (ready_record(r).get("at") or "") >= since:
+                moved["ready_for_review"].append(f"{stem} {mid}")
+            for review in r.get("reviews") or []:
+                if (review.get("at") or "") >= since:
+                    moved["reviews_passed" if review.get("verdict") == "pass" else "reviews_failed"].append(
+                        f"{stem} {mid}")
+        m = next((m for m in e["doc"]["milestones"] if not recorded_done(m, e["record"])), None)
+        if m and int(m.get("failed_reviews", 0) or 0) >= 2:
+            counts = counts_of(m)
+            back_and_forth.append(f"{stem} {m['id']}: failed review {plural(counts['failed_reviews'], 'time')}, "
+                                  f"{counts['failed_reviews_with_repeat']} on a finding an earlier review raised; "
+                                  f"the counts now call for {escalation(*counts.values())}")
+        step = look["steps"].get(key) or {}
+        name, status = f"{stem} {step.get('milestone') or ''}".strip(), step.get("status")
+        if key in look["running"]:
+            continue
+        if status == "can_start":
+            first = look["since"].get("ready_waiting")
+            not_moving.append(f"{name}: ready to build, with no builder" + (f", for {ago(stamp - first)}" if first
+                                                                             else ""))
+        elif status == "ready_for_review":
+            at = ready_record((e["record"].get("milestones") or {}).get(step.get("milestone")) or {}).get("at")
+            not_moving.append(f"{name}: Ready for Review with no review running" +
+                              (f", for {ago(hours_since(at) * 3600)}" if at else ""))
+        elif status == "blocked":
+            not_moving.append(f"{name}: Blocked, {step.get('reason')}")
+        elif status == "waiting":
+            not_moving.append(f"{name}: Waiting, " + ("for a planner's diagnosis" if step.get("reason") == "for_diagnosis"
+                                                      else "on " + ", ".join(step.get("depends_on") or [])))
+        elif status in ("design_not_approved", "invalid", "in_progress_elsewhere"):
+            not_moving.append(f"{name}: {status.replace('_', ' ')}")
+    for r in look["builds"]:
+        state = look["progress"].get(r["pid"]) or {}
+        started = r.get("started_at")
+        not_moving.insert(0, f"{r.get('module')} {state.get('milestone') or r.get('milestone') or ''}: building "
+                             f"for {ago(stamp - started) if started else '?'}" +
+                          (f", last progress {ago(stamp - float(state['progress_at']))} ago" if state.get("progress_at")
+                           else "") + f", {plural(int(r.get('turns') or 0), 'turn')} done")
+    planners = [r for r in look["loops"] if r.get("role") == "plan"]
+    out = {"since": since, "moved": {k: v for k, v in moved.items() if v} or "nothing reached Ready for Review, "
+                                                                            "Done or a review",
+           "not_moving": not_moving, "back_and_forth": back_and_forth,
+           "runs": [" ".join(x for x in (r.get("role"), r.get("module"), r.get("milestone"), r.get("step")) if x)
+                    for r in look["loops"] if not r.get("steps_parent")],
+           "builders": {"running": len(look["builds"]), "limit": look["limit"], "free": look["free"],
+                        "ready_waiting": [f"{s['module']} {s.get('milestone') or ''}".strip() for s in look["waiting"]]},
+           "planners": {"running": [r.get("task") or "a planner" for r in planners if not r.get("waiting_for")],
+                        "waiting": [f"{r.get('task') or 'a planner'} ({ago(stamp - r['started_at'])})"
+                                    for r in planners if r.get("waiting_for") and r.get("started_at")]},
+           "disk": {"free_gb": round(look["disk"] / 1e9, 1) if look["disk"] is not None else None,
+                    "low": look["disk"] is not None and look["disk"] < LOW_DISK_BYTES},
+           "main_branch": [b["text"] for b in look["broken"]] or "no main-branch check is failing"}
+    try:
+        f = flow_numbers(worktree, max(0.1, (stamp - since_s) / 3600))
+        out["flow"] = {k: f[k] for k in ("hours", "ready_for_review", "done", "commits", "code_commits",
+                                         "build_sessions")}
+        out["flow"]["hours"] = round(out["flow"]["hours"], 1)
+    except (Exception, SystemExit):
+        pass
+    codex = prof.get("default_host") == "codex" or any(
+        (r.get("host") or "") == "codex" for r in look["loops"]) or any(
+        r.get("host") == "codex" and (r.get("at") or "") >= since for r in ledger_rows(worktree)[-500:])
+    if codex and (quota := quota_now()):
+        out["quota"] = quota
+    return out
+
+
+def top_runs(worktree: Path) -> dict:
+    """The runs, reviews and plans of the repository the lead started, by pid: not the steps a `run` or `plan`
+    runs for itself."""
+    loops, _ = live_loops(repository_of(git_common_dir(worktree)), clean=False)
+    return {r["pid"]: r for r in loops if r.get("role") in ("build", "review", "plan", "steps")
+            and not r.get("steps_parent")}
+
+
+def results_since(worktree: Path, stamp: float) -> list[dict]:
+    """The result files written since `stamp`, newest first, each with its result and `next` command."""
+    out = []
+    try:
+        files = sorted((loop_dir(worktree) / "results").glob("*.json"), key=lambda p: -p.stat().st_mtime)
+    except OSError:
+        return out
+    for path in files:
+        try:
+            if path.stat().st_mtime < stamp:
+                break
+            line = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(line, dict) and line.get("result") != "RUNNING":
+            out.append({"result_file": str(path), "result": line.get("result"),
+                        **{k: line[k] for k in ("module", "milestone", "stopped_because") if line.get(k)},
+                        **({"next": (line.get("next") or {}).get("command")} if isinstance(line.get("next"), dict)
+                           else {})})
+    return out[:10]
+
+
+def cmd_watch(a: argparse.Namespace) -> None:
+    worktree = Path(a.worktree).resolve()
+    if not_yet := unplanned(worktree):
+        emit("INVALID", problems=[not_yet["reason"]], next=not_yet["next"])
+    prof = profile(worktree)
+    path = loop_dir(worktree) / WATCH_FILE
+    state = read_json_file(path) or {}
+    started = time.time()
+    woke_at = float(state.get("woke_at") or started)  # the check-in counts from when a watch last woke the lead
+    told = state.get("signs") or {}
+    since = state.get("since") or {}
+    runs, ended = top_runs(worktree) if a.runs else {}, []
+    look, signs, new, looked, fetched = None, {}, {}, 0.0, 0.0
+    while True:
+        stamp = time.time()
+        if a.runs:
+            now_running = top_runs(worktree)
+            ended += [r for pid, r in runs.items() if pid not in now_running]
+            runs = now_running
+        if look is None or stamp - looked >= WATCH_SIGNS_S:
+            fetch = stamp - fetched >= WATCH_FETCH_S
+            fetched = stamp if fetch else fetched
+            look, looked = watch_look(worktree, prof, since, fetch), stamp
+            signs = watch_signs(look)
+            new = {k: s for k, s in signs.items() if told.get(k) != s["seen"]}
+            write_atomically(path, {**state, "since": since})
+        if new or ended or stamp >= woke_at + prof["check_in_s"]:
+            break
+        time.sleep(WATCH_POLL_S)
+    woke = [s["text"] for s in new.values()]
+    woke += [f"{' '.join(x for x in (r.get('role'), r.get('module'), r.get('milestone')) if x)} ended" for r in ended]
+    if not new and not ended:
+        woke.append(f"check-in: {ago(stamp - woke_at)} since " + ("a watch last woke you" if state.get("woke_at")
+                                                                    else "this watch started"))
+    write_atomically(path, {"woke_at": stamp, "signs": {k: s["seen"] for k, s in signs.items()}, "since": since})
+    emit("WARNING_SIGNS" if new else "RUN_ENDED" if ended else "CHECK_IN", woke_for=woke,
+         warning_signs=[s["text"] for s in signs.values()],
+         **({"results": results_since(worktree, started)} if ended else {}),
+         **watch_summary(worktree, prof, look, float(state.get("woke_at") or started - prof["check_in_s"])),
+         next=next_cmd(loop_cmd("watch", "--worktree", str(worktree), *(["--runs"] if a.runs else [])), "lead",
+                       WATCH_WHY))
+
+
 USAGE = """Starts and checks the builders, reviewers and planners of the orchestrate set, and keeps each module's
 record. The lead of the build skill runs it, and you can run it by hand. Project settings come from ORCHESTRATE.md at
 the worktree root.
@@ -11680,6 +12247,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--review-host", help="the host for the owed design review run starts itself (default: the "
                      "settings' Review host, `other` meaning the host the planner turn that wrote the plan isn't on, "
                      "or the builder isn't on when the script doesn't know the planner; else the builder's host)")
+    run.add_argument("--one-step", action="store_true", help="build this one milestone and stop, as each step of a run "
+                     "does. Without it, run carries on through the routine steps (the review, the builder again after "
+                     "a failed review, the module's next milestone) until one needs the lead")
     host_args(run)
     run.set_defaults(func=cmd_run)
     review = sub.add_parser("review", help="review a milestone that is Ready for Review, or a module's design")
@@ -11692,8 +12262,17 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--worktree", required=True)
     plan.add_argument("--task", required=True, action=Joined,
                       help="what the planner is to do; give it more than once to add your own words to a printed command")
+    plan.add_argument("--one-step", action="store_true", help="run this one planner and stop. Without it, plan "
+                      "carries on into the design review of each module it left owed one, and one planner revision if a "
+                      "design review asks for changes")
     host_args(plan)
     plan.set_defaults(func=cmd_plan)
+    watch = sub.add_parser("watch", help="wait in the background, and end to wake the lead at its check-in or at a "
+                                         "warning sign, with a summary of the build")
+    watch.add_argument("--worktree", default=".")
+    watch.add_argument("--runs", action="store_true", help="also end when a run, review or plan of this repository "
+                       "ends, for a lead whose host doesn't wake it when a background command ends")
+    watch.set_defaults(func=cmd_watch)
     merge_p = sub.add_parser("merge", help="queue this worktree's commits to be rebased, tested with the test "
                                            "command and merged, alone or in a batch with other waiting branches")
     merge_p.add_argument("--worktree", default=".")
@@ -11863,9 +12442,14 @@ def main() -> None:
     worktree = getattr(args, "worktree", None)
     if worktree and args.func is not cmd_quota:
         QUOTA_WORKTREE[:] = [Path(worktree).resolve()]
-    mark_running(argv, worktree)
+    if not STEPS_PARENT:
+        mark_running(argv, worktree)
     try:
-        args.func(args)
+        if args.func in (cmd_run, cmd_plan) and not args.one_step and not STEPS_PARENT and \
+                not getattr(args, "checks_only", False):
+            run_steps(args, argv)
+        else:
+            args.func(args)
     except WriteBlocked as e:
         stop_on_write(args, e)
     except OSError as e:  # the script's own files under .git: its locks, run state and clean checkouts

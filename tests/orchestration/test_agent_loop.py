@@ -1854,7 +1854,8 @@ class PausingARun(Repo):
         env = dict(os.environ, ORCHESTRATE_CODEX=agent_loop.CODEX, CODEX_HOME=str(self.home), FAKE_PASS="0",
                    FAKE_SLEEP="30")
         run = subprocess.Popen([sys.executable, str(agent_loop.LOOP), "run", "--module", "WATER", "--worktree",
-                                str(self.wt)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env)
+                                str(self.wt), "--one-step"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                               text=True, env=env)
         self.addCleanup(lambda: (run.kill(), run.wait(), run.stdout.close()))
         deadline = time.time() + 30
         while time.time() < deadline and not (self.log.exists() and self.log.read_text().strip()):

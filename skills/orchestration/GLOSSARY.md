@@ -532,9 +532,13 @@ below. Its exit status is 0 when the line is the command's own result, and 1 or 
 | `REFUSED` | `adopt`, `migrate`, `run` | The command wouldn't act, with the reasons in `problems`. `run` refuses a builder past the `Builders:` count, naming the others in `running`, unless `--more-builders` carries the human's words |
 | `UNBLOCKED` | `unblock` | The milestone is no longer Blocked |
 | `DONE`, `RELEASED`, `FAILED` | `human` | The human's decision was saved, or, for `human release`, a milestone another lead started was taken out of In Progress. `FAILED` says it couldn't be saved |
+| `CHECK_IN` | `watch` | The lead's check-in time from the project settings passed with no warning sign, so the lead looks at how delivery is going and starts `watch` again |
+| `WARNING_SIGNS` | `watch` | A warning sign appeared that the lead hasn't been told about, such as a milestone with no progress or ready work waiting beside a free builder slot, named in `warning_signs` |
+| `RUN_ENDED` | `watch` | With `--runs`, a top-level `run`, `review` or `plan` on the repository ended, with its result in `results` |
 
 Avoid: `FLOOR` (now `HOST_FAILED` or `SCRIPT_FAILED`), `PIN` (now `WRONG_MODEL_OR_EFFORT`), `DESIGN_OWED` (now
 `DESIGN_NOT_APPROVED`), `NOT_READY` (now `CHECKS_FAILED`), `BUDGET` (now `NO_PROGRESS_FOR_HOURS`), `REVIEW_OWED` (now
 `NEEDS_REVIEW`), `TAKEN` (now `IN_PROGRESS_ELSEWHERE`). The script still reads `PIN` in the state files of runs
 started before 2.1.0. Proposed: the new names, by the set's author, 2026-11-12. Agreed by the human, 2026-11-12.
 Proposed: `ERROR` and `RUNNING`, by the set's author, 2026-11-15.
+Proposed: `CHECK_IN`, `WARNING_SIGNS` and `RUN_ENDED`, by Claude, 2026-11-18. Not yet agreed by the human.
