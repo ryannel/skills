@@ -1287,7 +1287,7 @@ class Leads(Repo):
         proc = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
         self.assertEqual(proc.stdout.readline().strip(), "up")
         out = io.StringIO()
-        with contextlib.redirect_stdout(out):
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             agent_loop.cmd_pause(argparse.Namespace(module=None, worktree=str(self.wt)))
         self.assertEqual(json.loads(out.getvalue())["paused"][0]["run"], "WATER")
         self.assertEqual(proc.stdout.readline().strip(), "paused")
@@ -3327,7 +3327,7 @@ class FirstRuns(Repo):
                 touched.append((name, op))
             return real(handle, op)
         with mock.patch.object(fcntl, "flock", flock):
-            self.printed(agent_loop.cmd_pause, module=None, worktree=str(self.wt))
+            self.printed(agent_loop.cmd_pause, code=0, module=None, worktree=str(self.wt))
             self.printed(agent_loop.cmd_status, module=None, worktree=str(self.wt))
             self.printed(agent_loop.cmd_loops, repo=str(self.wt), json=True)
             agent_loop.run_holder_info(self.wt, "WATER")
@@ -6182,8 +6182,8 @@ class TokensAndSessions(Repo):
     def test_a_session_from_a_state_file_2_0_0_wrote_is_not_resumed(self):
         self.assertEqual(self.stalled_run()["result"], "STALLED")
         state = self.state()
-        for key in ("version", "context", "window"):  # 2.0.0 wrote none of these
-            state.pop(key)
+        for key in ("version", "context", "window", "basis"):  # 2.0.0 wrote none of these
+            state.pop(key, None)
         (self.wt / ".git/orchestrate/WATER.json").write_text(json.dumps(state))
         result = self.run_loop()
         self.assertEqual(self.resumed(self.calls()[3:]), [False, True, True])

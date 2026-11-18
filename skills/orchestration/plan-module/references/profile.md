@@ -25,17 +25,17 @@ Contents:
 - **Anchors:** <for subjective work, where the option the human chose and the reference sets are kept; or none>
 - **Plans:** docs/plans  *(script: leave it out for the standard place; an older project may name another folder)*
 - **Evidence:** docs/evidence  *(script: review files and saved proof)*
-- **Graded examples:** docs/evidence/graded-examples.md  *(past reviews the human agreed with or overturned)*
+- **Graded examples:** docs/evidence/graded-examples.md  *(script: past reviews the human agreed with or overturned; `human accept` and `human rereview` add the reviews they overturn)*
 - **Test command:** npm run check  *(script: required; the project's test command, which must pass before a merge, or `none`)*
+- **Setup command:** npm ci  *(script: optional; installs what the tests and checks need in a fresh checkout, or `none`)*
 - **Merge:** local  *(script: required; `push` rebases onto Remote/Branch and pushes without force; `local` fast-forwards the local Branch only)*
 - **Branch:** main  *(script: the main branch)*
 - **Remote:** origin  *(script)*
-- **Builders:** one Codex builder  *(script: how many builders, on which hosts, when the human doesn't say; `run` reads the first number and refuses a builder past it unless `--more-builders` carries the human's words)*
-- **Default host:** codex  *(script: optional; the host used when the lead names none; otherwise the host the script runs inside)*
-- **Review host:** same  *(script: optional; see below)*
-- **Planner host:** claude  *(script: optional; the host planners run on when the lead names none; otherwise the `Default host`)*
-- **Codex model:** gpt-6.2-sol  *(script: any `<host> model:` line sets that host's model)*
-- **Claude model:** claude-opus-5-5  *(script)*
+- **Builders:** <how many builders, on which hosts, as the human said: "one Claude builder", say>  *(script: `run` adds up the counts and refuses a builder past them unless `--more-builders` carries the human's words)*
+- **Default host:** <host>  *(script: optional; codex, claude or a `Host` line's name, for when the lead names none; left out, the host the script runs inside)*
+- **Review host:** <same|other|host>  *(script: optional; see below)*
+- **Planner host:** <host>  *(script: optional, and only if the human wants planners on another host; left out, the `Default host`)*
+- **<Host> model:** <model>  *(script: optional, and only when the human named a model; any `<host> model:` line, such as `Claude model:`, sets that host's model)*
 - **Claude planner:** <model> <effort>  *(script: optional, and only when the human asked; a model, an effort or both for one kind of agent on one host; see the last section)*
 - **Reviewer:** <effort>  *(script: optional, and only when the human asked; an effort for one kind of agent on every host)*
 - **Effort:** medium  *(script: optional; for builders and reviewers, default medium; planners run at high unless `--effort` says otherwise)*
@@ -70,6 +70,21 @@ needs, where secrets come from, and how two worktrees avoid sharing a port or a 
 ```
 
 ## Lines that need care
+
+The host, builder and model lines are the human's choices, so fill them from what the human said about how they
+want to work: which program they use, how many builders, and whether a second company's model should review. A
+project that uses only Claude Code has `Default host: claude` and Claude builders, and a Codex line there fails on
+the first run if Codex isn't installed. Leave out each line the human said nothing about, and the script uses the
+host it runs inside. Leave the model lines out unless the human named a model, because each host already has a
+default, and a model written here stays fixed after a newer one ships.
+
+`Setup command` runs in each of the script's own clean checkouts before the test command and the items' checks,
+because a fresh checkout has no installed dependencies: `npm ci`, `uv sync` or `pip install -r requirements.txt`,
+say. A project whose test command fetches what it needs, as `cargo test` does, leaves it out. The script runs it
+again in a checkout only when a tracked manifest or lockfile there has changed, such as `package.json`,
+`package-lock.json`, `pyproject.toml` or `uv.lock`, or a file the command names, so a warm checkout costs nothing.
+It should install into ignored folders and leave tracked files as they were, which is why `npm ci` is better here
+than `npm install`.
 
 `Merge: push` is standing permission to push verified work to the main branch, so set it only if the human has
 given that permission. Without it, use `local`, and the human merges. If the project's `AGENTS.md` or `CLAUDE.md`

@@ -584,7 +584,7 @@ class TipError(Exception):
 PROFILE_FIELDS = {"plans": "docs/plans", "evidence": "docs/evidence", "test command": None, "branch": "main",
                   "remote": "origin", "merge": None, "codex sandbox": "workspace-write", "writable roots": "",
                   "graded examples": "", "effort": "", "claude permissions": "auto", "default host": "",
-                  "review host": "", "planner host": "", "exclusive resources": ""}
+                  "review host": "", "planner host": "", "exclusive resources": "", "setup command": ""}
 REQUIRED = {"test command": "the command that must pass before merging, or `none`",
             "merge": "push (standing permission to push) or local"}
 ONE_WORD = {"branch", "remote", "merge", "codex sandbox", "effort", "claude permissions", "default host",
@@ -677,17 +677,27 @@ NUMBER_WORDS = {w: n for n, w in enumerate(("one", "two", "three", "four", "five
 
 
 def builders_count(text: str) -> int | None:
-    """The first number in the settings' `Builders:` line, as a digit or a word ("two Codex builders"), which `run`
-    keeps to; None when the line has no number, which sets no limit. In Thrum four to six builders ran against "two
-    Codex builders", once right after the lead had told the human the setting was in force."""
+    """How many builders the settings' `Builders:` line allows, read as a person would, which `run` keeps to; None
+    when the line has no number, which sets no limit. Each number, as a digit or a word, that comes a few words before
+    "builder" is a count, and the counts add up: "two Claude builders and one Codex builder" is three. A count followed
+    by a colon or a bracket is a total with its breakdown after it ("three builders: two Codex and one Claude"), and
+    is taken alone. A line with numbers but no "builder" after any of them takes its first number. In Thrum four to six
+    builders ran against "two Codex builders", once right after the lead had told the human the setting was in force."""
     value = profile_value(text, "builders")
     if not value or PLACEHOLDER.search(value):
         return None
-    m = re.search(r"\b(\d+|" + "|".join(NUMBER_WORDS) + r")\b", value, re.IGNORECASE)
-    if not m:
-        return None
-    n = int(m.group(1)) if m.group(1).isdigit() else NUMBER_WORDS[m.group(1).lower()]
-    return n or None
+    number = r"\b(\d+|" + "|".join(NUMBER_WORDS) + r")\b"
+
+    def count(word: str) -> int:
+        return int(word) if word.isdigit() else NUMBER_WORDS[word.lower()]
+    found = list(re.finditer(number + r"((?:\s+(?!(?:and|or|\d+|" + "|".join(NUMBER_WORDS) +
+                             r")\b)[\w.-]+){0,3}?\s+builders?\b)(\s*[:(\u2014])?", value, re.IGNORECASE))
+    if found and found[0].group(3):
+        return count(found[0].group(1)) or None
+    if found:
+        return sum(count(m.group(1)) for m in found) or None
+    m = re.search(number, value, re.IGNORECASE)
+    return (count(m.group(1)) or None) if m else None
 
 
 def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat_ok: bool = False,
@@ -727,6 +737,8 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
     out["merge"] = out["merge"] or "local"
     test = out.pop("test command")
     out["test_command"] = "" if (test or "none").lower() == "none" else test
+    setup = out.pop("setup command")
+    out["setup_command"] = "" if (setup or "none").lower() == "none" else setup
     out["effort"] = out["effort"] or DEFAULT_EFFORT
     out["models"] = dict(DEFAULT_MODELS)
     for m in re.finditer(r"^\s*[-*]\s*\*\*([\w.-]+) model:\*\*[ \t]*(.*)$", text, re.IGNORECASE | re.MULTILINE):
@@ -768,7 +780,9 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
     problems += locks["problems"]
     out["main_checks"] = main_check_lines(text, problems)
     out["roots"] = [r.strip() for r in out.pop("writable roots").split(",") if r.strip()]
-    out["graded_examples"] = out.pop("graded examples") or f"{out['evidence']}/graded-examples.md"
+    graded = out.pop("graded examples")
+    out["graded_examples"] = graded or f"{out['evidence']}/graded-examples.md"
+    out["graded_examples_named"] = bool(graded)  # only a named file gains the human's overturned reviews
     # Prose rules the script restates on resumed turns; None when the line is missing or still a placeholder.
     out["bounds"] = {}
     for label in BOUNDS:
@@ -4053,6 +4067,8 @@ def land(tree: Path, prof: dict, check: bool = False) -> tuple[bool, str]:
             if r.returncode != 0:
                 git(tree, "rebase", "--abort")
                 return False, f"rebase onto {base} failed: {(r.stdout + r.stderr).strip()[-400:]}"
+            if check and prof["test_command"] and (setup := run_setup(tree, prof)):
+                return False, " ".join(setup["problem"].split("\n"))
             if check and prof["test_command"]:
                 # Only the test command runs here, under the merge lock. The items' checks run later in the script's
                 # own process, outside the builder's sandbox and outside this lock: in Thrum they took 35 to 49
@@ -4341,6 +4357,71 @@ def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plan
     return {"exit": code, "out": out, "err": err, **paths, "reused": False}
 
 
+# The files whose change means a checkout's dependencies may have changed: manifests and lockfiles, by name,
+# anywhere in the checkout. The setup command runs again in a checkout when one of these, or a tracked file the
+# command itself names (such as scripts/bootstrap.sh), differs from what that checkout was last set up from.
+SETUP_FILES = {
+    "package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "pnpm-workspace.yaml",
+    "bun.lock", "bun.lockb", ".nvmrc", ".node-version", "pyproject.toml", "poetry.lock", "uv.lock", "Pipfile",
+    "Pipfile.lock", "setup.py", "setup.cfg", "requirements.txt", ".python-version", ".tool-versions", "Gemfile",
+    "Gemfile.lock", "go.mod", "go.sum", "Cargo.toml", "Cargo.lock", "composer.json", "composer.lock", "mix.exs",
+    "mix.lock", "pubspec.yaml", "pubspec.lock", "Podfile", "Podfile.lock", "build.gradle", "build.gradle.kts",
+    "settings.gradle", "settings.gradle.kts", "gradle.lockfile", "pom.xml", "Package.swift", "Package.resolved",
+    "flake.nix", "flake.lock", "deno.json", "deno.lock"}
+SETUP_MARK = "orchestrate-setup.json"  # in the checkout's own git folder, so a new checkout starts without one
+SETUP_TIMEOUT_S = 3600.0
+
+
+def setup_key(tree: Path, command: str) -> str | None:
+    """A hash of the setup command and the tracked files it depends on in `tree` (see SETUP_FILES): their paths,
+    their blob ids and any uncommitted change to them. None when git can't list the files."""
+    listing = git(tree, "ls-files", "-s", "-z")
+    if listing.returncode != 0:
+        return None
+    try:
+        named = {w for w in shlex.split(command) if (tree / w).is_file()}
+    except ValueError:
+        named = set()
+    rows = sorted(e for e in listing.stdout.split("\0")
+                  if e and (Path(e.partition("\t")[2]).name in SETUP_FILES or e.partition("\t")[2] in named))
+    paths = [e.partition("\t")[2] for e in rows]
+    changed = git(tree, "status", "--porcelain", "-z", "--", *paths).stdout if paths else ""
+    return text_hash(json.dumps([command, rows, changed]))
+
+
+def run_setup(tree: Path, prof: dict) -> dict | None:
+    """Runs the project's setup command in a checkout before its tests and checks, when that checkout hasn't been
+    set up yet or the files the setup depends on have changed since it last was (see `setup_key`). A checkout whose
+    last setup matches is left alone, so a warm checkout costs nothing. Returns None when nothing failed, or the
+    failure: `exit`, `out`, `err` and a `problem` to show."""
+    command = prof.get("setup_command")
+    if not command:
+        return None
+    where = git(tree, "rev-parse", "--absolute-git-dir").stdout.strip()
+    mark = Path(where) / SETUP_MARK if where else None
+    key = setup_key(tree, command)
+    try:
+        if key and mark and json.loads(mark.read_text()).get("key") == key:
+            return None
+    except (OSError, ValueError, AttributeError):
+        pass
+    loop_note(step="running the setup command")
+    code, out, err = run_proc(command, tree, SETUP_TIMEOUT_S, shell=True)
+    if code != 0:
+        if mark:
+            mark.unlink(missing_ok=True)
+        return {"exit": code, "out": out, "err": err,
+                "problem": (f"Setup command `{command}` " + ("timed out" if code == 124 else f"exited {code}") +
+                            f" in {tree}, so the checks couldn't run there.\nThe end of its stdout:\n"
+                            f"{stream_end(out)}\nThe end of its stderr:\n{stream_end(err)}\n")}
+    if mark and key:
+        try:
+            write_json(mark, {"command": command, "key": setup_key(tree, command) or key, "at": now()})
+        except OSError:
+            pass
+    return None
+
+
 def stream_end(text: str, lines: int = CHECK_TAIL_LINES) -> str:
     return "\n".join(text.rstrip().splitlines()[-lines:]) or "(nothing)"
 
@@ -4353,6 +4434,8 @@ def check_failures(tree: Path, prof: dict, milestone: dict, timeout_s: float = 3
     its label goes in `reused`."""
     runs = [("Test command", prof.get("test_command"), None, None)] if prof.get("test_command") else []
     runs += [(i["id"], i["check"], i.get("lock"), i.get("reads")) for i in milestone["items"] if i.get("check")]
+    if runs and (setup := run_setup(tree, prof)):
+        return [setup["problem"]]
     failed = []
     for label, command, lock, reads in runs:
         loop_note(step=f"checking {milestone.get('id')}: " + ("the test command" if label == "Test command" else label))
@@ -6959,12 +7042,34 @@ def resume_facts(worktree: Path, milestone: dict | None, last_exit: int | None, 
 NEW_SESSION_AT = 0.6  # how full a session may be before the next turn starts a new one; the human chose 60%
 
 
+# What a builder's session is given that a new version of the script can change: these prompt texts, and the
+# build-milestone skill it is told to read. `session_basis` hashes them.
+BUILD_SESSION_TEXTS = ("GOAL_LINE", "BUILD_TEMPLATE", "FINDINGS_TEMPLATE", "SCRIPT_SETS_STATE")
+
+
+def session_basis() -> str:
+    """A hash of what a builder's session was given at its start: the script's builder prompt texts and the
+    build-milestone skill, as this copy of the script has them."""
+    skill = SKILLS / "build-milestone" / "SKILL.md"
+    try:
+        skill_text = skill.read_text()
+    except OSError:
+        skill_text = ""
+    return text_hash(json.dumps([[globals()[n] for n in BUILD_SESSION_TEXTS], skill_text]))[:16]
+
+
 def stale_session(state: dict) -> str | None:
     """Why the run's session shouldn't be resumed, or None. A session more than 60% full re-reads all of it on every
     step: in Thrum a builder resumed at 322,000 tokens used 16 million input tokens in 42 minutes. And a session
-    another version of the script started may hold instructions that version gave, such as a goal naming `land`,
-    a command 2.0.0 renamed to `merge`. A state file from before 2.1.0 has no `version`."""
-    if state.get("version") != VERSION:
+    given instructions that have since changed may act on the old ones, such as a goal naming `land`, a command 2.0.0
+    renamed to `merge`. So a session whose recorded `basis` (see `session_basis`) differs from this script's starts
+    again, and one with the same basis is resumed across versions, because a fix inside the script changes nothing
+    the session was told. A state file with no `basis`, from before it was recorded, goes by `version` as it did."""
+    if state.get("basis"):
+        if state["basis"] != session_basis():
+            return (f"the build prompt or the build-milestone skill has changed since the session started (it was "
+                    f"started by version {state.get('version') or 'unknown'} of the script, and this is {VERSION})")
+    elif state.get("version") != VERSION:
         return (f"the session was started by {'version ' + str(state['version']) if state.get('version') else 'a version before 2.1.0'} "
                 f"of the script, and this is {VERSION}")
     used, window = state.get("context"), state.get("window")
@@ -7497,6 +7602,7 @@ def cmd_run(a: argparse.Namespace) -> None:
         if resumable:
             if first:
                 state["version"] = VERSION  # the version that started this session
+                state["basis"] = session_basis()  # what it was given, which decides when it must start again
             state["thread"] = session
             note_thread(worktree, host, session, "build", session_title(worktree, stem, f"{mid} build"))
         state.update(TURN_SIZE)
@@ -7904,6 +8010,8 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     m = REVIEW_LINE.match(out["last_line"].strip("`* "))
     verdict = (m.group(1) or m.group(3)) if m else ""
     after = None
+    filled: list[str] = []  # the bookkeeping fields the script worked out for the reviewer
+    tally: dict = {}  # the failed review's counts, worked out from its verdicts and findings
     if not design:
         if m and m.group(2) != mid:
             problems.append(f"the last line names {m.group(2)}, but the review was of {mid}")
@@ -7912,6 +8020,8 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
         except json.JSONDecodeError as e:
             after = None
             problems.append(f"{done_path} isn't valid JSON after the review: {e}")
+        if after is not None and verdict in ("PASS", "FAIL"):
+            filled = derive_review_fields(after, mid, verdict, review_path)
         if after is not None:
             problems += validate(after, key) or delta_problems(before_doc, after, "review", mid)
             reviewed = find(after, mid) if not validate(after, key) else None
@@ -7919,12 +8029,11 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                 verdicts = [i.get("verdict", "") for i in reviewed["items"]]
                 if "" in verdicts:
                     problems.append("every item needs a verdict")
-                if any(not i.get("review") for i in reviewed["items"]):
-                    problems.append(f"every item's review field should point at {review_path}")
-                if verdict == "PASS" and (reviewed.get("status") != "done" or set(verdicts) != {"pass"}):
-                    problems.append("the last line says PASS, but not every verdict is pass with status done")
-                if verdict == "FAIL" and reviewed.get("status") != "in_progress":
-                    problems.append("the last line says FAIL, but the status isn't back to in_progress")
+                if verdict == "PASS" and set(verdicts) != {"pass"}:
+                    problems.append("the last line says PASS, but not every verdict is pass")
+                tally = {"fail": verdicts.count("fail"), "could_not_judge": verdicts.count("could_not_judge"),
+                         "outside_the_items": sum(1 for f in reviewed.get("findings") or []
+                                                  if isinstance(f, dict) and not f.get("item"))}
                 found = reviewed.get("findings") or []
                 if verdict == "FAIL":
                     named = {f.get("item") for f in found if isinstance(f, dict)}
@@ -8075,8 +8184,9 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
         action = after_pass(worktree, prof, key)
     return _result("REVIEWED", **info, verdict=verdict, commit=start, review=review_path, review_commit=landed,
                    failed_reviews_with_repeat=with_repeat,
-                   **({"failed_reviews": counts["failed_reviews"], "repeated": counts["repeated"], "escalation": word}
-                                   if not passed and not design else {}),
+                   **({"failed_reviews": counts["failed_reviews"], "repeated": counts["repeated"], "escalation": word,
+                       "found": tally} if not passed and not design else {}),
+                   **({"filled": filled} if filled else {}),
                    next=action, last_line=out["last_line"],
                    session=out.get("session"),
                    **({"usage": out["usage"]} if out.get("usage") else {}))
@@ -8084,6 +8194,30 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
 
 def _result(result: str, **fields) -> dict:
     return {"result": result, **fields}
+
+
+def derive_review_fields(after: dict, mid: str, verdict: str, review_path: str) -> list[str]:
+    """Writes the review's bookkeeping into the done-when file as the reviewer left it, from what the reviewer
+    judged: the milestone's status (done for PASS, in_progress for FAIL) and each item's `review` pointer, where it
+    has none. A reviewer used to write these too, and one slip in them threw the whole review away, though nothing
+    it judged was wrong. A reviewer that still writes them gets the same values back. Returns what was filled in."""
+    try:
+        reviewed = find(after, mid)
+    except (KeyError, TypeError, SystemExit):
+        return []
+    if not isinstance(reviewed, dict) or not isinstance(reviewed.get("items"), list):
+        return []
+    filled = []
+    status = "done" if verdict == "PASS" else "in_progress"
+    if reviewed.get("status") != status:
+        filled.append(f"status {status}")
+        reviewed["status"] = status
+    missing = [i for i in reviewed["items"] if isinstance(i, dict) and not i.get("review")]
+    for i in missing:
+        i["review"] = review_path
+    if missing:
+        filled.append(f"the review field of {', '.join(str(i.get('id')) for i in missing)}")
+    return filled
 
 
 def after_pass(worktree: Path, prof: dict, key: str) -> dict:
@@ -9165,7 +9299,7 @@ def read_json_file(path: Path) -> dict | None:
 
 def merge_setup(prof: dict) -> dict:
     """The project settings a landing depends on. Only requests with the same ones go in a batch together."""
-    return {k: prof.get(k) for k in ("merge", "remote", "branch", "test_command", "plans")}
+    return {k: prof.get(k) for k in ("merge", "remote", "branch", "test_command", "setup_command", "plans")}
 
 
 def queue_merge(worktree: Path, prof: dict, check: bool, base: str) -> dict:
@@ -9350,7 +9484,9 @@ def settle_batch(tree: Path, prof: dict, base: str, group: list[dict], results: 
         return built[-1][2], built
     if failed is None:
         loop_note(step=f"testing a merge batch of {len(built)} branch{'' if len(built) == 1 else 'es'}")
-        r = run_check(tree, command, None, MERGE_TEST_TIMEOUT_S, prof.get("plans"))
+        setup = run_setup(tree, prof)
+        r = {**setup, "stdout": None, "stderr": None, "reused": False} if setup else \
+            run_check(tree, command, None, MERGE_TEST_TIMEOUT_S, prof.get("plans"))
         if not r["reused"]:
             runs.append(r)
         if r["exit"] == 0:
@@ -9360,7 +9496,9 @@ def settle_batch(tree: Path, prof: dict, base: str, group: list[dict], results: 
         req = built[0][0]
         whole = f" Its whole output is in {failed['stdout']} and {failed['stderr']}." if failed.get("stdout") else ""
         results[req["id"]] = {"ok": False, "detail": (
-            f"Test command `{command}` exited {failed['exit']} with your branch on top of the main branch's tip and "
+            f"{'Setup' if failed.get('problem') else 'Test'} command "
+            f"`{prof['setup_command'] if failed.get('problem') else command}` exited {failed['exit']} with your branch "
+            f"on top of the main branch's tip and "
             f"the branches ahead of it in the merge queue, and passed without it, so nothing of yours landed.{whole} "
             f"The end of its stdout: {failed['out'][-400:]} The end of its stderr: {failed['err'][-400:]}")}
         return base, []
@@ -9479,7 +9617,10 @@ def cmd_pause(a: argparse.Namespace) -> None:
             paused.append({"run": name, "pid": pid})
         except ProcessLookupError:
             continue
-    print(json.dumps({"paused": paused}))
+    if paused:
+        emit("PAUSED", paused=paused, note="each run named stops its turn and ends with its own PAUSED result")
+    emit("NOTHING", paused=[], note=f"no run of {a.module.upper()} was going" if a.module else
+         "no run was going in this repository")
 
 
 def cmd_unblock(a: argparse.Namespace) -> None:
@@ -10843,6 +10984,13 @@ def cmd_human(a: argparse.Namespace) -> None:
             e = entry(record, mid)
             if e.get("definitions") != definitions(m):
                 raise SystemExit(f"error: {mid}'s definitions aren't authorised; settle them with `human scope` first")
+            if verb in ("accept", "rereview") and (example := graded_example(prof, stem, m, e, verb, words, decision["at"])):
+                graded = t / prof["graded_examples"]
+                text = graded.read_text() if graded.exists() else "# Graded examples\n"
+                graded.parent.mkdir(parents=True, exist_ok=True)
+                graded.write_text(text.rstrip("\n") + "\n\n" + example)
+                written.append(prof["graded_examples"])
+                out["graded_example"] = prof["graded_examples"]
             if verb == "accept":
                 m["status"] = "done"
                 m.pop("blocked", None)
@@ -10890,6 +11038,52 @@ def cmd_human(a: argparse.Namespace) -> None:
     print(json.dumps({"result": ("RELEASED" if verb == "release" else "DONE") if ok else "FAILED", "action": verb,
                       "module": stem, "milestone": mid, "detail": detail, **out}))
     sys.exit(0 if ok else 1)
+
+
+RESULT_NAMES = {"pass": "Pass", "fail": "Fail", "could_not_judge": "Could Not Judge"}
+
+
+def graded_example(prof: dict, stem: str, m: dict, e: dict, verb: str, words: str, at: str) -> str | None:
+    """The graded example a human decision adds when it overturns a review, in the shape of
+    review-milestone/references/graded-examples.md: what was judged, each item's result and the review's findings,
+    what the human said instead, and why it is kept. `human accept` overturns a failed review, and `human rereview`
+    a passed one. None when the settings name no graded examples file, the file named is outside the repository, or
+    the decision overturns no review (an accept with no failed review behind it, or a re-review of work the human
+    accepted)."""
+    rel = prof.get("graded_examples") or ""
+    if not prof.get("graded_examples_named") or Path(rel).is_absolute() or ".." in Path(rel).parts:
+        return None
+    reviews = e.get("reviews") or []
+    last = reviews[-1] if reviews else {}
+    if verb == "accept" and last.get("verdict") != "fail":
+        return None
+    if verb == "rereview" and ((e.get("done") or {}).get("by") != "review" or last.get("verdict") != "pass"):
+        return None
+    results = last.get("items") or {i["id"]: i.get("verdict", "") for i in m.get("items") or []}
+    statements = {i["id"]: i.get("statement", "") for i in m.get("items") or []}
+    items = "\n".join(f"- {iid} ({RESULT_NAMES.get(v, v or 'no result')}): {statements.get(iid) or '(no statement)'}"
+                       for iid, v in results.items())
+    findings = "; ".join(f"{f.get('name')}" + (f" ({f['item']})" if f.get("item") else " (outside the items)")
+                         for f in last.get("findings") or [] if isinstance(f, dict))
+    said = "\n".join("> " + line for line in words.strip().splitlines())
+    if verb == "accept":
+        did, why = ("failed it", "the reviewer failed work the human then accepted as done. Before failing a "
+                    "milestone like this one, check whether the human would see the same defect, and judge by what "
+                    "they said here")
+        human = "accepted the milestone as done"
+    else:
+        did, why = ("passed it", "the reviewer passed work the human then sent back for another review. Before "
+                    "passing a milestone like this one, look for what the human saw, and judge by what they said "
+                    "here")
+        human = "sent it back for another review"
+    return (f"## {stem} {m['id']}: the human overturned a review ({at[:10]})\n\n"
+            f"The milestone: {m['id']} of {stem}, {m.get('name') or 'unnamed'}. Its items, with the review's "
+            f"result for each:\n\n{items}\n\n"
+            f"The review ({last.get('review') or 'no review file recorded'}, of commit "
+            f"{(last.get('commit') or '?')[:12]}) {did}" + (f", with these Must Fix findings: {findings}." if findings
+                                                               else ".") +
+            f" The human {human}, and said:\n\n{said}\n\n"
+            f"Why it is here: {why}.\n")
 
 
 # ------------------------------------------------------------------------------------------------- migrate
@@ -11463,11 +11657,14 @@ def main_check_attempt(tree: Path, commit: str, spec: dict, folder: Path) -> dic
     git(tree, "checkout", "--quiet", "--force", "--detach", commit)
     git(tree, "clean", "-ffdq")
     started = time.time()
-    with ExitStack() as stack:
-        uses = [stack.enter_context(held(lock, tree)) for lock in spec["locks"]]
-        code, out, err = run_proc(spec["command"], tree, spec["timeout_s"], shell=True)
-        for use in uses:
-            use["exit"] = code
+    if setup := run_setup(tree, {"setup_command": spec.get("setup")}):
+        code, out, err = setup["exit"], setup["out"], setup["err"] + "\n" + setup["problem"]
+    else:
+        with ExitStack() as stack:
+            uses = [stack.enter_context(held(lock, tree)) for lock in spec["locks"]]
+            code, out, err = run_proc(spec["command"], tree, spec["timeout_s"], shell=True)
+            for use in uses:
+                use["exit"] = code
     stem = folder / "logs" / f"{time.strftime('%Y%m%d-%H%M%S')}-{commit[:12]}-{os.getpid()}-{int(started * 1000) % 1000:03d}"
     saved = {}
     try:
@@ -11561,6 +11758,7 @@ def main_check_runner(worktree: Path, prof: dict, name: str, spec: dict, force: 
     """One flight of the check: wait out `every` since the last run on the tip started, run on the main branch's tip
     (unless it already has a run, or `force`), retry a failure once, and bisect a failure that holds. Returns at once,
     doing nothing, when another runner holds the check's lock."""
+    spec = {**spec, "setup": prof.get("setup_command") or ""}
     folder = main_check_dir(worktree, name)
     handle = open(folder / "run.lock", "a+")
     try:
