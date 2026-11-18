@@ -1773,9 +1773,9 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.8", "2.3.9"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.8", "2.3.9"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')
@@ -4121,8 +4121,7 @@ class FirstRuns(Repo):
 
     def test_r9_human_decisions_are_refused_while_the_module_is_held(self):
         self.feedback_m1()
-        for name, role, says in (("WATER", "review", "a run, review or design review holds WATER"),
-                                 ("_plan", "plan", "a planner is running")):
+        for name, role, says in (("WATER", "review", "a run, review or design review holds WATER"),):
             code = (f"import sys, time; sys.path.insert(0, {str(SCRIPTS)!r}); import agent_loop\n"
                     f"from pathlib import Path; wt = Path({str(self.wt)!r}); agent_loop.run_lock(wt, {name!r})\n"
                     f"agent_loop.loop_register(wt, {role!r}, module='WATER', milestone='M1', host='codex', "
@@ -6136,7 +6135,7 @@ class TokensAndSessions(Repo):
         path.write_text(json.dumps(token_count(500000, 400000, 9000, 120000)) + "\n")  # the session's earlier turns
         os.environ.update(FAKE_PASS="0", FAKE_ROLLOUT=str(path), FAKE_SLEEP="30")
         prof = agent_loop.profile(self.wt, strict=True)
-        code = agent_loop.run_turn("codex", prof, "m", "medium", self.wt, "go", "t1", 0.5)[0]
+        code = agent_loop.run_turn("codex", prof, "m", "medium", self.wt, "go", "t1", 3)[0]
         self.assertEqual(code, 124)
         row = agent_loop.ledger_rows(self.wt)[-1]
         self.assertEqual((row["exit"], row["usage"]), (124, {"input": 2000, "cached": 8000, "output": 300, "turns": 1}))

@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delivery history</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f6f6f3; --surface: #fcfcfb; --surface-2: #f1f0ec; --raise: #ffffff;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10); --wash: rgba(11,11,11,0.04);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  --seq-0: #f0efec; --seq-1: #cde2fb; --seq-2: #9ec5f4; --seq-3: #6da7ec; --seq-4: #3987e5; --seq-5: #256abf; --seq-6: #184f95; --seq-7: #0d366b;
+  --good: #0ca30c; --good-ink: #006300; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --accent: #2a78d6; --shadow: 0 1px 2px rgba(11,11,11,.04), 0 8px 24px rgba(11,11,11,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321; --raise: #20201f;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.05);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+    --seq-0: #232321; --seq-1: #0d366b; --seq-2: #104281; --seq-3: #184f95; --seq-4: #1c5cab; --seq-5: #2a78d6; --seq-6: #5598e7; --seq-7: #9ec5f4;
+    --good-ink: #0ca30c; --accent: #3987e5; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321; --raise: #20201f;
+  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.05);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+  --seq-0: #232321; --seq-1: #0d366b; --seq-2: #104281; --seq-3: #184f95; --seq-4: #1c5cab; --seq-5: #2a78d6; --seq-6: #5598e7; --seq-7: #9ec5f4;
+  --good-ink: #0ca30c; --accent: #3987e5; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+button, select, input { font: inherit; color: inherit; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
+header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--page) 86%, transparent);
+  backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); border-bottom: 1px solid var(--ring); }
+.top-in { max-width: 1320px; margin: 0 auto; padding: 14px 24px 0; }
+.brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mark { width: 28px; height: 28px; border-radius: 8px; background: conic-gradient(from 210deg, var(--s1), var(--s3), var(--s4), var(--s2), var(--s7), var(--s1));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--surface) 70%, transparent); flex: none; }
+.brand h1 { font-size: 17px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+.brand .sub { color: var(--muted); font-size: 12.5px; }
+.spacer { flex: 1; }
+.iconbtn { border: 1px solid var(--ring); background: var(--surface); border-radius: 9px; height: 32px; padding: 0 11px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.iconbtn:hover { background: var(--surface-2); color: var(--ink); }
+nav.tabs { display: flex; gap: 2px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
+nav.tabs::-webkit-scrollbar { display: none; }
+nav.tabs a { padding: 9px 12px 11px; color: var(--ink-2); text-decoration: none; font-weight: 550; font-size: 13.5px;
+  border-bottom: 2px solid transparent; white-space: nowrap; }
+nav.tabs a:hover { color: var(--ink); }
+nav.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+nav.tabs .count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; font-size: 11px; line-height: 17px;
+  text-align: center; background: var(--surface-2); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+nav.tabs .count.hot { background: color-mix(in srgb, var(--critical) 16%, transparent); color: var(--critical); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 16px 0 6px; }
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 5px 10px; border-radius: 7px; cursor: pointer; color: var(--ink-2); font-size: 13px; font-weight: 550; }
+.seg button[aria-pressed="true"] { background: var(--raise); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 1px var(--ring); }
+.select { position: relative; }
+.select select { appearance: none; -webkit-appearance: none; border: 1px solid var(--ring); background: var(--surface); border-radius: 10px;
+  height: 32px; padding: 0 30px 0 11px; font-size: 13px; cursor: pointer; }
+.select::after { content: ""; position: absolute; right: 12px; top: 13px; width: 6px; height: 6px; border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); pointer-events: none; }
+.check { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); cursor: pointer; padding: 0 4px; }
+.check input { accent-color: var(--accent); }
+.unit-note { color: var(--muted); font-size: 12px; margin-left: auto; }
+section.view { display: none; padding-top: 10px; }
+section.view.on { display: block; animation: rise .25s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { section.view.on { animation: none; } }
+.grid { display: grid; gap: 16px; }
+.g-tiles { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.g-2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.g-3 { grid-template-columns: 2fr 1fr; }
+@media (max-width: 900px) { .g-2, .g-3 { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow), 0 0 0 1px var(--ring); padding: 18px 20px; min-width: 0; }
+.card h2 { font-size: 14.5px; font-weight: 650; margin: 0; letter-spacing: -0.005em; }
+.card .desc { color: var(--muted); font-size: 12.5px; margin: 3px 0 12px; }
+.card-head { display: flex; align-items: flex-start; gap: 12px; }
+.card-head .seg { margin-left: auto; flex: none; }
+.hero { padding: 22px 24px; display: flex; flex-wrap: wrap; gap: 28px 40px; align-items: flex-end; }
+.hero .big { font-size: 56px; font-weight: 650; letter-spacing: -0.03em; line-height: 1; }
+.hero .lbl { color: var(--ink-2); font-size: 13px; margin-bottom: 8px; font-weight: 550; }
+.hero .foot { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+.tile { padding: 16px 18px; }
+.tile .lbl { color: var(--ink-2); font-size: 12.5px; font-weight: 550; }
+.tile .val { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; margin-top: 4px; }
+.tile .note { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.tile.alert .val { color: var(--critical); }
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 550; }
+.status i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 2px 0 10px; font-size: 12.5px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.legend i.line { height: 2px; width: 14px; border-radius: 2px; }
+svg.chart { display: block; width: 100%; overflow: visible; }
+svg.chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+svg.chart .grid line { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
+svg.chart .base { stroke: var(--axis); stroke-width: 1; shape-rendering: crispEdges; }
+svg.chart .hit { fill: transparent; cursor: pointer; }
+svg.chart .hit:hover + .mark, svg.chart .mark:hover { filter: brightness(1.12); }
+svg.chart .version line { stroke: var(--ink-2); stroke-width: 1; opacity: .45; }
+svg.chart .version text { fill: var(--ink-2); font-size: 10.5px; font-weight: 600; }
+.tip { position: fixed; z-index: 50; pointer-events: none; background: var(--raise); color: var(--ink); border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.18), 0 0 0 1px var(--ring); padding: 9px 11px; font-size: 12.5px; min-width: 140px; max-width: 320px;
+  opacity: 0; transform: translateY(2px); transition: opacity .08s, transform .08s; }
+.tip.on { opacity: 1; transform: none; }
+.tip .t { color: var(--muted); font-size: 11.5px; margin-bottom: 5px; }
+.tip .r { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.tip .r b { font-weight: 650; font-variant-numeric: tabular-nums; }
+.tip .r span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.tip .r i { width: 12px; height: 2px; border-radius: 2px; display: inline-block; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--grid);
+  cursor: pointer; white-space: nowrap; user-select: none; position: sticky; top: 0; background: var(--surface); }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+th[aria-sort="ascending"]::after { content: " ↑"; color: var(--accent); }
+th[aria-sort="descending"]::after { content: " ↓"; color: var(--accent); }
+td { padding: 8px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--wash); }
+.scroll { max-height: 560px; overflow: auto; margin: 0 -20px -18px; padding: 0 20px 6px; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 600; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
+.pill.crit { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
+.pill.warn { background: color-mix(in srgb, var(--warning) 22%, transparent); color: color-mix(in srgb, var(--warning) 45%, var(--ink)); }
+.pill.good { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good-ink); }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+.dim { color: var(--muted); }
+.bar-cell { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+.bar-cell .b { height: 6px; border-radius: 3px; background: var(--s1); min-width: 2px; }
+.insights { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.insight { padding: 16px 18px; border-radius: 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--ring); }
+.insight .k { font-size: 11.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+.insight .k i { width: 7px; height: 7px; border-radius: 50%; }
+.insight p { margin: 6px 0 0; color: var(--ink); }
+.insight p b { font-weight: 650; }
+.empty { color: var(--muted); padding: 28px 0; text-align: center; }
+.drawer-bg { position: fixed; inset: 0; background: rgba(0,0,0,.28); opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 60; }
+.drawer-bg.on { opacity: 1; pointer-events: auto; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); background: var(--surface); z-index: 61; transform: translateX(102%);
+  transition: transform .2s ease; box-shadow: -12px 0 40px rgba(0,0,0,.18); display: flex; flex-direction: column; }
+.drawer.on { transform: none; }
+.drawer header { padding: 18px 20px 12px; border-bottom: 1px solid var(--grid); display: flex; gap: 10px; align-items: flex-start; }
+.drawer header h3 { margin: 0; font-size: 16px; }
+.drawer header .dim { font-size: 12.5px; }
+.drawer .body { padding: 16px 20px 40px; overflow: auto; flex: 1; }
+.drawer pre { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); padding: 12px; border-radius: 10px; font-size: 12px; }
+.kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 13px; margin-bottom: 14px; }
+.kv div:nth-child(odd) { color: var(--muted); }
+.timeline { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--grid); margin-left: 6px; }
+.timeline li { position: relative; padding: 0 0 12px 16px; font-size: 13px; }
+.timeline li::before { content: ""; position: absolute; left: -5px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--dot, var(--axis));
+  box-shadow: 0 0 0 2px var(--surface); }
+.searchbox { border: 1px solid var(--ring); background: var(--surface); border-radius: 10px; height: 32px; padding: 0 11px; min-width: 220px; font-size: 13px; }
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 20px); background: var(--ink); color: var(--page); padding: 8px 14px;
+  border-radius: 10px; font-size: 13px; opacity: 0; transition: .2s; z-index: 80; }
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+.foot-note { color: var(--muted); font-size: 12px; margin-top: 28px; line-height: 1.6; }
+.foot-note code { font-size: 11.5px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.table-toggle { border: 0; background: none; color: var(--accent); cursor: pointer; font-size: 12.5px; padding: 0; margin-top: 10px; font-weight: 550; }
+.prose { max-width: 820px; }
+.prose h3 { font-size: 15px; margin: 24px 0 6px; }
+.prose p, .prose li { color: var(--ink); }
+.prose li { margin: 4px 0; }
+@media (max-width: 640px) { .wrap, .top-in { padding-left: 16px; padding-right: 16px; } .hero .big { font-size: 44px; } .unit-note { margin-left: 0; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"></div>
+      <div>
+        <h1 id="title">Delivery history</h1>
+        <div class="sub" id="subtitle"></div>
+      </div>
+      <div class="spacer"></div>
+      <button class="iconbtn" id="copyAll" title="Copy the filtered summary as JSON, for an agent">Copy summary JSON</button>
+      <button class="iconbtn" id="theme" aria-label="Switch light or dark theme">◐</button>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Views"></nav>
+  </div>
+</header>
+<div class="wrap">
+  <div class="filters" role="group" aria-label="Filters">
+    <div class="seg" id="range" aria-label="Time range"></div>
+    <div class="select"><select id="fHost" aria-label="Host"></select></div>
+    <div class="select"><select id="fLane" aria-label="Kind of agent"></select></div>
+    <div class="select"><select id="fModule" aria-label="Module"></select></div>
+    <label class="check"><input type="checkbox" id="fInteractive"> Include interactive sessions</label>
+    <div class="seg" id="unit" aria-label="Cost measure"></div>
+    <span class="unit-note" id="unitNote"></span>
+  </div>
+  <main id="views"></main>
+  <p class="foot-note" id="footnote"></p>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="drawer-bg" id="drawerBg"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <header><div style="flex:1"><h3 id="dTitle"></h3><div class="dim" id="dSub"></div></div>
+    <button class="iconbtn" id="dCopy">Copy JSON</button><button class="iconbtn" id="dClose" aria-label="Close">✕</button></header>
+  <div class="body" id="dBody"></div>
+</aside>
+<div class="toast" id="toast"></div>
+<script id="history-data" type="application/json">/*__DATA__*/null</script>
+<script>
+"use strict";
+const RAW = JSON.parse(document.getElementById("history-data").textContent) || {sessions: [], turns: [], events: [], milestones: [], checks: [], meta: {}};
+const $ = (s, el = document) => el.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v; else if (k === "style") n.style.cssText = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return n;
+};
+const SVGNS = "http://www.w3.org/2000/svg";
+const sv = (tag, attrs = {}, ...kids) => {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) n.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null) n.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return n;
+};
+
+// ---------------------------------------------------------------------------------------------- theme
+const THEME_KEY = "orchestrate-history-theme";
+try { const t = localStorage.getItem(THEME_KEY); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+$("#theme").onclick = () => {
+  const dark = getComputedStyle(document.documentElement).colorScheme === "dark";
+  const next = dark ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+  render();
+};
+
+// ---------------------------------------------------------------------------------------------- formatting
+const NF = new Intl.NumberFormat("en");
+const compact = n => {
+  n = +n || 0; const a = Math.abs(n);
+  if (a >= 1e9) return (n / 1e9).toFixed(a >= 1e10 ? 0 : 1).replace(/\.0$/, "") + "B";
+  if (a >= 1e6) return (n / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, "") + "M";
+  if (a >= 1e4) return (n / 1e3).toFixed(0) + "K";
+  if (a >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+  return a < 10 && a % 1 ? n.toFixed(1) : NF.format(Math.round(n));
+};
+const pct = (x, d = 0) => isFinite(x) ? (x * 100).toFixed(d) + "%" : "–";
+const usd = x => "$" + (x >= 100 ? NF.format(Math.round(x)) : (x || 0).toFixed(2));
+const hours = ms => { const h = (ms || 0) / 3.6e6; return h >= 100 ? NF.format(Math.round(h)) + " h" : h >= 1 ? h.toFixed(1) + " h" : Math.round(h * 60) + " min"; };
+const mins = ms => { const m = (ms || 0) / 6e4; return m >= 90 ? (m / 60).toFixed(1) + " h" : m >= 1 ? Math.round(m) + " min" : Math.round((ms || 0) / 1000) + " s"; };
+const T = s => s ? Date.parse(s) : NaN;
+const dayKey = t => { const d = new Date(t); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+const dayLabel = k => { const d = new Date(k + "T00:00"); return d.toLocaleDateString("en", {month: "short", day: "numeric"}); };
+const when = s => { if (!s) return "–"; const d = new Date(s); return d.toLocaleString("en", {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"}); };
+const median = a => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const sum = (a, f = x => x) => a.reduce((s, x) => s + (+f(x) || 0), 0);
+const groupBy = (a, f) => { const m = new Map(); for (const x of a) { const k = f(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); } return m; };
+
+// ---------------------------------------------------------------------------------------------- vocabulary
+// Lanes: what kind of agent a turn belongs to. Fixed order, so a lane keeps its colour whatever is filtered.
+const LANES = ["build", "review", "plan", "auto-review", "subagent", "interactive"];
+const LANE_NAME = {build: "Builders", review: "Reviewers", plan: "Planners", "auto-review": "Auto-review", subagent: "Subagents", interactive: "Interactive", other: "Other script"};
+const laneVar = l => { const i = LANES.indexOf(l); return i < 0 ? "var(--muted)" : `var(--s${i + 1})`; };
+const laneOf = t => t.kind === "auto-review" ? "auto-review" : t.kind === "subagent" ? "subagent" : t.kind === "interactive" ? "interactive"
+  : (LANES.includes(t.role) ? t.role : "other");
+const ERR = {
+  turn_failed: ["Turn failed", "crit"], turn_timed_out: ["Turn hit the time limit", "warn"], turn_stopped: ["Turn stopped", ""],
+  host_error: ["Host error", "crit"], turn_aborted: ["Turn aborted", "warn"], script_refused: ["Script refused", "crit"],
+  check_failed: ["Check failed", "warn"], off_pinned_model: ["Ran off the pinned model", "warn"], goal_limited: ["Goal limited", "crit"],
+  review_failed: ["Review failed", "warn"],
+};
+const SIGNALS = {compaction: "Compaction", limit_changed: "Weekly limit moved", version_seen: "Version first ran", result: "Result"};
+
+// ---------------------------------------------------------------------------------------------- state
+const S = {view: "overview", range: "all", host: "all", lane: "all", module: "all", interactive: false, unit: "weighted",
+  sort: {}, errKind: "all", errSearch: "", overviewMeasure: "cost"};
+try { Object.assign(S, JSON.parse(sessionStorage.getItem("orchestrate-history-state") || "{}")); } catch (e) {}
+const hash = location.hash.slice(1); if (hash) S.view = hash;
+const save = () => { try { sessionStorage.setItem("orchestrate-history-state", JSON.stringify({...S, view: undefined})); } catch (e) {} };
+
+const UNITS = {
+  weighted: {name: "Weighted tokens", f: t => t.weighted || 0, fmt: compact,
+    note: "Tokens weighted by price relative to fresh input, so cached re-reads count at a tenth. Compares across hosts."},
+  limit: {name: "Codex weekly limit", f: t => t.limit_pct || 0, fmt: x => (x || 0).toFixed(x >= 10 ? 0 : 1) + "%",
+    note: "Share of the Codex weekly limit, from the script's fitted tokens-to-percent figure. Codex turns only."},
+  usd: {name: "Claude list price", f: t => t.usd || 0, fmt: usd,
+    note: "What Claude turns would cost at list price. The plan isn't charged this. Claude turns only."},
+};
+const U = () => UNITS[S.unit];
+
+// ---------------------------------------------------------------------------------------------- data
+const turnsAll = RAW.turns.map(t => ({...t, _t: T(t.start || t.end), _e: T(t.end || t.start), lane: laneOf(t)}));
+const evAll = RAW.events.map(e => ({...e, _t: T(e.at)}));
+const tMax = Math.max(...turnsAll.map(t => t._e).filter(isFinite), ...evAll.map(e => e._t).filter(isFinite), 0) || Date.now();
+const tMin = Math.min(...turnsAll.map(t => t._t).filter(isFinite)) || tMax - 864e5;
+const RANGES = [["all", "All"], ["7d", "7 days"], ["3d", "3 days"], ["24h", "24 h"]];
+const rangeStart = () => ({all: -Infinity, "7d": tMax - 7 * 864e5, "3d": tMax - 3 * 864e5, "24h": tMax - 864e5})[S.range];
+
+function F() {
+  const lo = rangeStart();
+  const keep = x => (x.lane !== "interactive" || S.interactive || S.lane === "interactive")
+    && (S.host === "all" || x.host === S.host) && (S.lane === "all" || x.lane === S.lane)
+    && (S.module === "all" || (x.module || "").toUpperCase() === S.module);
+  const turns = turnsAll.filter(t => (!isFinite(t._t) || t._t >= lo) && keep(t));
+  const sessionsOf = new Set(turns.map(t => t.host + ":" + t.session));
+  const events = evAll.filter(e => (!isFinite(e._t) || e._t >= lo)
+    && (S.host === "all" || !e.host || e.host === S.host)
+    && (S.module === "all" || (e.module || "").toUpperCase() === S.module)
+    && (S.interactive || e.session_kind !== "interactive" || S.lane === "interactive")
+    && (S.lane === "all" || !e.session || sessionsOf.has(e.host + ":" + e.session) || (e.role === S.lane)));
+  const milestones = RAW.milestones.filter(m => S.module === "all" || (m.module || "").toUpperCase() === S.module);
+  return {turns, events, milestones, sessions: RAW.sessions.filter(s => sessionsOf.has(s.host + ":" + s.session))};
+}
+
+// ---------------------------------------------------------------------------------------------- tooltip & drawer
+const tip = $("#tip");
+function showTip(ev, title, rows) {
+  tip.replaceChildren(el("div", {class: "t"}, title), ...rows.map(([name, val, color]) =>
+    el("div", {class: "r"}, el("span", {}, color ? el("i", {style: `background:${color}`}) : null, name), el("b", {}, val))));
+  tip.classList.add("on");
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = ev.clientX + pad, y = ev.clientY + pad;
+  if (x + w > innerWidth - 8) x = ev.clientX - w - pad;
+  if (y + h > innerHeight - 8) y = ev.clientY - h - pad;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+const hideTip = () => tip.classList.remove("on");
+let drawerData = null;
+function openDrawer(title, sub, body, data) {
+  $("#dTitle").textContent = title; $("#dSub").textContent = sub || "";
+  $("#dBody").replaceChildren(...[body].flat());
+  drawerData = data;
+  $("#drawer").classList.add("on"); $("#drawerBg").classList.add("on"); $("#drawer").setAttribute("aria-hidden", "false");
+}
+const closeDrawer = () => { $("#drawer").classList.remove("on"); $("#drawerBg").classList.remove("on"); $("#drawer").setAttribute("aria-hidden", "true"); };
+$("#dClose").onclick = closeDrawer; $("#drawerBg").onclick = closeDrawer;
+addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 1600); }
+async function copy(obj) {
+  const text = JSON.stringify(obj, null, 1);
+  try { await navigator.clipboard.writeText(text); toast("Copied as JSON"); }
+  catch (e) { const a = el("textarea", {}, text); document.body.append(a); a.select(); document.execCommand("copy"); a.remove(); toast("Copied as JSON"); }
+}
+$("#dCopy").onclick = () => drawerData && copy(drawerData);
+
+// ---------------------------------------------------------------------------------------------- charts
+function measure(node) { return Math.max(280, (node.clientWidth || node.parentElement?.clientWidth || 600)); }
+function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+function legend(items, line = false) {
+  return el("div", {class: "legend"}, items.map(([name, color]) => el("span", {}, el("i", {class: line ? "line" : "", style: `background:${color}`}), name)));
+}
+const roundTop = (x, y, w, h, r) => {
+  if (h <= 0) return "";
+  r = Math.min(r, w / 2, h);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+};
+const roundRight = (x, y, w, h, r) => {
+  if (w <= 0) return "";
+  r = Math.min(r, h / 2, w);
+  return `M${x},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h - r}Q${x + w},${y + h} ${x + w - r},${y + h}H${x}Z`;
+};
+
+// Stacked columns over days. series: [{key, name, color}], rows: [{label, values: {key: n}, title}]
+function stackedColumns(host, rows, series, fmt, markers = []) {
+  const W = measure(host), H = 240, L = 46, R = 8, Tp = 14, B = 26;
+  const pw = W - L - R, ph = H - Tp - B;
+  const totals = rows.map(r => sum(series, s => r.values[s.key]));
+  const max = niceMax(Math.max(...totals, 0));
+  const svg = sv("svg", {class: "chart", viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": "stacked columns"});
+  const g = sv("g", {class: "grid"});
+  for (let i = 0; i <= 4; i++) {
+    const y = Tp + ph - ph * i / 4;
+    g.append(sv("line", {x1: L, x2: W - R, y1: y, y2: y}));
+    svg.append(sv("text", {x: L - 8, y: y + 3.5, "text-anchor": "end"}, fmt(max * i / 4)));
+  }
+  svg.prepend(g);
+  const n = rows.length || 1, band = pw / n, bw = Math.max(3, Math.min(24, band * 0.62));
+  const every = Math.ceil(n / Math.max(1, Math.floor(pw / 64)));
+  rows.forEach((r, i) => {
+    const x = L + band * i + (band - bw) / 2;
+    let y = Tp + ph;
+    const visible = series.filter(s => r.values[s.key] > 0);
+    visible.forEach((s, j) => {
+      const h = ph * r.values[s.key] / max;
+      const top = j === visible.length - 1;
+      const gap = j > 0 ? 2 : 0;
+      const hh = Math.max(0, h - gap);
+      svg.append(top ? sv("path", {d: roundTop(x, y - h, bw, hh, 4), fill: s.color, class: "mark"})
+        : sv("rect", {x, y: y - h, width: bw, height: hh, fill: s.color, class: "mark"}));
+      y -= h;
+    });
+    const hit = sv("rect", {x: L + band * i, y: Tp, width: band, height: ph, class: "hit", tabindex: 0});
+    const show = ev => showTip(ev, r.title || r.label, [...series.filter(s => r.values[s.key] > 0).reverse().map(s => [s.name, fmt(r.values[s.key]), s.color]), ["Total", fmt(totals[i])]]);
+    hit.addEventListener("pointermove", show); hit.addEventListener("pointerleave", hideTip);
+    hit.addEventListener("focus", e => { const b = hit.getBoundingClientRect(); show({clientX: b.left + b.width / 2, clientY: b.top + 20}); });
+    hit.addEventListener("blur", hideTip);
+    if (r.onclick) hit.addEventListener("click", r.onclick);
+    svg.append(hit);
+    if (i % every === 0) svg.append(sv("text", {x: L + band * i + band / 2, y: H - 8, "text-anchor": "middle"}, r.label));
+  });
+  svg.append(sv("line", {class: "base", x1: L, x2: W - R, y1: Tp + ph, y2: Tp + ph}));
+  for (const m of markers) {
+    const i = rows.findIndex(r => r.key >= m.key);
+    if (i < 0) continue;
+    const x = L + band * i + 1;
+    svg.append(sv("g", {class: "version"}, sv("line", {x1: x, x2: x, y1: Tp - 6, y2: Tp + ph}), sv("text", {x: x + 4, y: Tp - 1}, m.label)));
+  }
+  host.replaceChildren(svg);
+}
+
+// Lines over days on one axis. series: [{key, name, color, values: [n per row]}]
+function lines(host, labels, series, fmt) {
+  const W = measure(host), H = 220, L = 46, R = 44, Tp = 12, B = 26;
+  const pw = W - L - R, ph = H - Tp - B;
+  const max = niceMax(Math.max(...series.flatMap(s => s.values), 0));
+  const svg = sv("svg", {class: "chart", viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": "lines"});
+  const g = sv("g", {class: "grid"});
+  for (let i = 0; i <= 4; i++) {
+    const y = Tp + ph - ph * i / 4;
+    g.append(sv("line", {x1: L, x2: W - R, y1: y, y2: y}));
+    svg.append(sv("text", {x: L - 8, y: y + 3.5, "text-anchor": "end"}, fmt(max * i / 4)));
+  }
+  svg.append(g);
+  const n = labels.length, X = i => L + (n <= 1 ? pw / 2 : pw * i / (n - 1)), Y = v => Tp + ph - ph * v / max;
+  const every = Math.ceil(n / Math.max(1, Math.floor(pw / 64)));
+  labels.forEach((l, i) => { if (i % every === 0 || i === n - 1) svg.append(sv("text", {x: X(i), y: H - 8, "text-anchor": "middle"}, l)); });
+  for (const s of series) {
+    const d = s.values.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(v).toFixed(1)).join("");
+    svg.append(sv("path", {d: d + `L${X(n - 1)},${Tp + ph}L${X(0)},${Tp + ph}Z`, fill: s.color, opacity: 0.08}));
+    svg.append(sv("path", {d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}));
+    const lv = s.values[n - 1];
+    svg.append(sv("circle", {cx: X(n - 1), cy: Y(lv), r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2}));
+    svg.append(sv("text", {x: X(n - 1) + 8, y: Y(lv) + 4, fill: "var(--ink-2)", style: "fill:var(--ink-2);font-weight:600"}, fmt(lv)));
+  }
+  svg.append(sv("line", {class: "base", x1: L, x2: W - R, y1: Tp + ph, y2: Tp + ph}));
+  const cross = sv("line", {x1: 0, x2: 0, y1: Tp, y2: Tp + ph, stroke: "var(--axis)", "stroke-width": 1, opacity: 0});
+  svg.append(cross);
+  const hit = sv("rect", {x: L, y: Tp, width: pw, height: ph, class: "hit"});
+  hit.addEventListener("pointermove", ev => {
+    const b = svg.getBoundingClientRect(), x = (ev.clientX - b.left) * W / b.width;
+    const i = Math.max(0, Math.min(n - 1, Math.round((x - L) / (pw / Math.max(1, n - 1)))));
+    cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("opacity", 1);
+    showTip(ev, labels[i], series.map(s => [s.name, fmt(s.values[i]), s.color]));
+  });
+  hit.addEventListener("pointerleave", () => { cross.setAttribute("opacity", 0); hideTip(); });
+  svg.append(hit);
+  host.replaceChildren(svg);
+}
+
+// Ranked horizontal bars. rows: [{name, value, color?, sub?, onclick?}]
+function rankedBars(host, rows, fmt, limit = 12) {
+  rows = rows.filter(r => r.value > 0).sort((a, b) => b.value - a.value);
+  const shown = rows.slice(0, limit);
+  if (rows.length > limit) shown.push({name: `${rows.length - limit} more`, value: sum(rows.slice(limit), r => r.value), color: "var(--axis)"});
+  if (!shown.length) { host.replaceChildren(el("div", {class: "empty"}, "Nothing in this slice.")); return; }
+  const W = measure(host), rowH = 30, labelW = Math.min(190, W * 0.34), valW = 64, H = shown.length * rowH + 4;
+  const max = Math.max(...shown.map(r => r.value));
+  const svg = sv("svg", {class: "chart", viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": "ranked bars"});
+  const pw = W - labelW - valW - 8;
+  shown.forEach((r, i) => {
+    const y = i * rowH + 6, w = Math.max(2, pw * r.value / max);
+    const name = r.name.length > 28 ? r.name.slice(0, 27) + "…" : r.name;
+    svg.append(sv("text", {x: 0, y: y + 12, style: "fill:var(--ink);font-size:12.5px"}, name));
+    svg.append(sv("path", {d: roundRight(labelW, y + 2, w, 14, 4), fill: r.color || "var(--s1)", class: "mark"}));
+    svg.append(sv("text", {x: labelW + w + 6, y: y + 13, style: "fill:var(--ink-2);font-weight:600"}, fmt(r.value)));
+    const hit = sv("rect", {x: 0, y: y - 4, width: W, height: rowH, class: "hit", tabindex: r.onclick ? 0 : null});
+    hit.addEventListener("pointermove", ev => showTip(ev, r.name, [[r.sub || "Value", fmt(r.value)], ["Share", pct(r.value / sum(rows, x => x.value), 1)]]));
+    hit.addEventListener("pointerleave", hideTip);
+    if (r.onclick) { hit.addEventListener("click", r.onclick); hit.addEventListener("keydown", e => e.key === "Enter" && r.onclick()); }
+    svg.append(hit);
+  });
+  host.replaceChildren(svg);
+}
+
+// One whole in parts: the tall segmented bar.
+function segmented(host, parts, fmt) {
+  const total = sum(parts, p => p.value);
+  const bar = el("div", {style: "display:flex;gap:2px;height:28px;margin:6px 0 10px"});
+  for (const p of parts) {
+    if (!(p.value > 0)) continue;
+    const share = p.value / total;
+    const b = el("div", {style: `flex:${share} 1 0;background:${p.color};border-radius:4px;min-width:3px;display:flex;align-items:center;padding:0 8px;
+      color:${p.dark ? "#0b0b0b" : "#fff"};font-size:12px;font-weight:650;overflow:hidden;white-space:nowrap;cursor:default`},
+      share > 0.07 ? pct(share) : "");
+    b.addEventListener("pointermove", ev => showTip(ev, p.name, [[fmt(p.value), pct(share, 1)]]));
+    b.addEventListener("pointerleave", hideTip);
+    bar.append(b);
+  }
+  host.replaceChildren(bar, legend(parts.filter(p => p.value > 0).map(p => [`${p.name} · ${fmt(p.value)}`, p.color])));
+}
+
+// Day × hour heat grid of agent time.
+function heat(host, turns) {
+  const days = [...new Set(turns.map(t => dayKey(t._t)).filter(Boolean))].sort();
+  if (!days.length) { host.replaceChildren(el("div", {class: "empty"}, "No turns in this slice.")); return; }
+  const cells = new Map();
+  for (const t of turns) {
+    if (!isFinite(t._t)) continue;
+    let a = t._t; const b = Math.max(a + 1, isFinite(t._e) ? t._e : a);
+    while (a < b) {
+      const d = new Date(a), next = new Date(d); next.setMinutes(0, 0, 0); next.setHours(d.getHours() + 1);
+      const k = dayKey(a) + "|" + d.getHours();
+      cells.set(k, (cells.get(k) || 0) + Math.min(b, +next) - a);
+      a = +next;
+    }
+  }
+  const allDays = []; for (let d = new Date(days[0] + "T00:00"); dayKey(+d) <= days[days.length - 1]; d.setDate(d.getDate() + 1)) allDays.push(dayKey(+d));
+  const W = measure(host), L = 52, Tp = 16, cw = (W - L - 4) / 24, ch = Math.min(20, Math.max(12, cw * 0.8)), H = Tp + allDays.length * (ch + 2) + 4;
+  const vals = [...cells.values()], max = Math.max(...vals, 1);
+  const svg = sv("svg", {class: "chart", viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": "agent hours by day and hour"});
+  for (let h = 0; h < 24; h += 3) svg.append(sv("text", {x: L + h * cw + cw / 2, y: 10, "text-anchor": "middle"}, String(h).padStart(2, "0")));
+  allDays.forEach((d, i) => {
+    const y = Tp + i * (ch + 2);
+    svg.append(sv("text", {x: L - 8, y: y + ch / 2 + 4, "text-anchor": "end"}, dayLabel(d)));
+    for (let h = 0; h < 24; h++) {
+      const v = cells.get(d + "|" + h) || 0;
+      const step = v ? Math.min(7, 1 + Math.floor(6.999 * Math.sqrt(v / max))) : 0;
+      const r = sv("rect", {x: L + h * cw + 1, y, width: cw - 2, height: ch, rx: 3, fill: `var(--seq-${step})`, class: "mark"});
+      r.addEventListener("pointermove", ev => showTip(ev, `${dayLabel(d)}, ${String(h).padStart(2, "0")}:00`, [["Agent time", hours(v)], ["Agents at once, average", (v / 3.6e6).toFixed(1)]]));
+      r.addEventListener("pointerleave", hideTip);
+      svg.append(r);
+    }
+  });
+  host.replaceChildren(svg);
+}
+
+// Error strip: one row per kind, a dot at each time.
+function strip(host, events, kinds) {
+  if (!events.length) { host.replaceChildren(el("div", {class: "empty"}, "No errors in this slice.")); return; }
+  const lo = Math.min(...events.map(e => e._t).filter(isFinite)), hi = Math.max(...events.map(e => e._t).filter(isFinite), lo + 36e5);
+  const W = measure(host), L = 170, R = 10, rowH = 26, H = kinds.length * rowH + 24, pw = W - L - R;
+  const svg = sv("svg", {class: "chart", viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": "errors over time"});
+  kinds.forEach((k, i) => {
+    const y = i * rowH + 13;
+    svg.append(sv("line", {x1: L, x2: W - R, y1: y, y2: y, stroke: "var(--grid)"}));
+    svg.append(sv("text", {x: L - 10, y: y + 4, "text-anchor": "end", style: "fill:var(--ink-2);font-size:12px"}, (ERR[k] || [k])[0]));
+    const color = (ERR[k] || [])[1] === "crit" ? "var(--critical)" : (ERR[k] || [])[1] === "warn" ? "var(--serious)" : "var(--muted)";
+    for (const e of events.filter(e => e.kind === k && isFinite(e._t))) {
+      const x = L + pw * (e._t - lo) / (hi - lo);
+      const c = sv("circle", {cx: x, cy: y, r: 4, fill: color, stroke: "var(--surface)", "stroke-width": 2, class: "mark", style: "cursor:pointer"});
+      c.addEventListener("pointermove", ev => showTip(ev, when(e.at), [[(ERR[k] || [k])[0], [e.module, e.milestone].filter(Boolean).join(" ") || e.result || ""], ["", (e.detail || "").slice(0, 90)]]));
+      c.addEventListener("pointerleave", hideTip);
+      c.addEventListener("click", () => eventDrawer(e));
+      svg.append(c);
+    }
+  });
+  const days = Math.max(1, Math.round((hi - lo) / 864e5));
+  for (let i = 0; i <= Math.min(days, 8); i++) {
+    const t = lo + (hi - lo) * i / Math.min(days, 8);
+    svg.append(sv("text", {x: L + pw * i / Math.min(days, 8), y: H - 4, "text-anchor": "middle"}, new Date(t).toLocaleDateString("en", {month: "short", day: "numeric"})));
+  }
+  host.replaceChildren(svg);
+}
+
+// Sortable table. cols: [{key, name, num?, fmt?, get?, render?}]
+function table(id, rows, cols, onRow, defaultSort) {
+  const st = S.sort[id] || defaultSort || {key: cols[0].key, dir: -1};
+  const get = (r, c) => c.get ? c.get(r) : r[c.key];
+  const sorted = [...rows].sort((a, b) => {
+    const c = cols.find(c => c.key === st.key) || cols[0];
+    const x = get(a, c), y = get(b, c);
+    return (typeof x === "number" || typeof y === "number" ? (+x || 0) - (+y || 0) : String(x ?? "").localeCompare(String(y ?? ""))) * st.dir;
+  });
+  const thead = el("tr", {}, cols.map(c => el("th", {class: c.num ? "num" : "", "aria-sort": c.key === st.key ? (st.dir > 0 ? "ascending" : "descending") : null,
+    onclick: () => { S.sort[id] = {key: c.key, dir: c.key === st.key ? -st.dir : (c.num ? -1 : 1)}; save(); render(); }}, c.name)));
+  const body = sorted.map(r => el("tr", {class: onRow ? "click" : "", onclick: onRow ? () => onRow(r) : null},
+    cols.map(c => el("td", {class: c.num ? "num" : ""}, c.render ? c.render(r) : (c.fmt ? c.fmt(get(r, c)) : (get(r, c) ?? "–"))))));
+  return el("div", {class: "scroll"}, el("table", {}, el("thead", {}, thead), el("tbody", {}, body.length ? body : el("tr", {}, el("td", {colspan: cols.length, class: "empty"}, "Nothing in this slice.")))));
+}
+
+function card(title, desc, ...body) {
+  return el("div", {class: "card"}, el("div", {class: "card-head"}, el("div", {}, el("h2", {}, title), desc ? el("div", {class: "desc"}, desc) : null)), ...body);
+}
+function cardWith(title, desc, control, ...body) {
+  return el("div", {class: "card"}, el("div", {class: "card-head"}, el("div", {}, el("h2", {}, title), desc ? el("div", {class: "desc"}, desc) : null), control), ...body);
+}
+function seg(options, value, onpick) {
+  return el("div", {class: "seg"}, options.map(([k, name]) => el("button", {"aria-pressed": String(k === value), onclick: () => onpick(k)}, name)));
+}
+function tile(label, value, note, alert) {
+  return el("div", {class: "card tile" + (alert ? " alert" : "")}, el("div", {class: "lbl"}, label), el("div", {class: "val"}, value), note ? el("div", {class: "note"}, note) : null);
+}
+function withTable(chartHost, rows, cols) {
+  const wrap = el("div");
+  let open = false;
+  const btn = el("button", {class: "table-toggle"}, "Show as table");
+  btn.onclick = () => { open = !open; btn.textContent = open ? "Hide table" : "Show as table";
+    wrap.replaceChildren(open ? el("table", {style: "margin-top:8px"}, el("thead", {}, el("tr", {}, cols.map(c => el("th", {class: c.num ? "num" : ""}, c.name)))),
+      el("tbody", {}, rows.map(r => el("tr", {}, cols.map(c => el("td", {class: c.num ? "num" : ""}, c.fmt ? c.fmt(r[c.key]) : r[c.key])))))) : ""); };
+  return [chartHost, btn, wrap];
+}
+const later = [];
+const chartHost = draw => { const h = el("div", {style: "min-height:40px"}); later.push(() => draw(h)); return h; };
+
+// ---------------------------------------------------------------------------------------------- aggregates
+function days(turns) {
+  if (!turns.length) return [];
+  const lo = Math.min(...turns.map(t => t._t).filter(isFinite)), hi = Math.max(...turns.map(t => t._t).filter(isFinite));
+  const out = []; for (let d = new Date(dayKey(lo) + "T00:00"); dayKey(+d) <= dayKey(hi); d.setDate(d.getDate() + 1)) out.push(dayKey(+d));
+  return out;
+}
+const isErr = e => e.kind in ERR;
+function laneStats(turns, sessions, events) {
+  return LANES.concat(["other"]).map(l => {
+    const ts = turns.filter(t => t.lane === l);
+    if (!ts.length) return null;
+    const ss = new Set(ts.map(t => t.host + ":" + t.session));
+    const tok = ts.reduce((a, t) => { const k = t.tokens || {}; a.p += k.prompt || 0; a.c += k.cache_read || 0; return a; }, {p: 0, c: 0});
+    const errs = events.filter(e => isErr(e) && ss.has(e.host + ":" + e.session)).length;
+    return {lane: l, name: LANE_NAME[l], sessions: ss.size, turns: ts.length, cost: sum(ts, U().f), agentMs: sum(ts, t => t.duration_ms),
+      turnMs: median(ts.map(t => t.duration_ms || 0)), perTurn: median(ts.map(U().f)), cache: tok.p ? tok.c / tok.p : 0,
+      compactions: sum(ts, t => t.compactions), errors: errs, errRate: errs / ts.length,
+      models: [...groupBy(ts, t => t.model || "?").entries()].sort((a, b) => b[1].length - a[1].length).map(([m]) => m).slice(0, 2).join(", ")};
+  }).filter(Boolean);
+}
+function milestoneRows(F) {
+  const byMs = groupBy(F.turns.filter(t => t.module && t.milestone), t => (t.module || "").toUpperCase() + " " + t.milestone);
+  return F.milestones.map(m => {
+    const key = (m.module || "").toUpperCase() + " " + m.milestone;
+    const ts = byMs.get(key) || [];
+    const reviews = m.reviews || [];
+    const fails = reviews.filter(r => r.verdict === "fail").length;
+    const start = T(m.authorised), end = T(m.done);
+    return {...m, key, cost: sum(ts, U().f), turns: ts.length, builds: ts.filter(t => t.lane === "build").length,
+      reviewTurns: ts.filter(t => t.lane === "review").length, reviews: reviews.length, fails,
+      repeats: sum(reviews, r => (r.findings || []).filter(f => f.repeat).length), size: m.size || 0,
+      days: isFinite(start) && isFinite(end) ? (end - start) / 864e5 : null, agentMs: sum(ts, t => t.duration_ms), _turns: ts};
+  });
+}
+function versionRows(F) {
+  const byV = groupBy(F.turns.filter(t => t.version), t => t.version);
+  const ms = milestoneRows(F);
+  return [...byV.entries()].map(([v, ts]) => {
+    const ss = new Set(ts.map(t => t.host + ":" + t.session));
+    const errs = F.events.filter(e => isErr(e) && (e.version === v || ss.has(e.host + ":" + e.session)));
+    const lo = Math.min(...ts.map(t => t._t)), hi = Math.max(...ts.map(t => t._t));
+    const done = ms.filter(m => isFinite(T(m.done)) && T(m.done) >= lo && T(m.done) <= hi);
+    const reviews = F.milestones.flatMap(m => m.reviews || []).filter(r => T(r.at) >= lo && T(r.at) <= hi);
+    return {version: v, first: new Date(lo).toISOString(), turns: ts.length, sessions: ss.size, cost: sum(ts, U().f),
+      perTurn: sum(ts, U().f) / ts.length, turnMs: median(ts.map(t => t.duration_ms || 0)),
+      errRate: errs.length / ts.length * 100, timeouts: errs.filter(e => e.kind === "turn_timed_out").length / ts.length * 100,
+      compactions: sum(ts, t => t.compactions) / ts.length * 100, done: done.length,
+      failRate: reviews.length ? reviews.filter(r => r.verdict === "fail").length / reviews.length : NaN, reviews: reviews.length};
+  }).sort((a, b) => a.first.localeCompare(b.first, "en", {numeric: true}));
+}
+
+// ---------------------------------------------------------------------------------------------- drawers
+function kv(pairs) { return el("div", {class: "kv"}, pairs.filter(p => p[1] != null && p[1] !== "").flatMap(([k, v]) => [el("div", {}, k), el("div", {}, v)])); }
+function eventDrawer(e) {
+  const clean = Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith("_")));
+  openDrawer((ERR[e.kind] || [SIGNALS[e.kind] || e.kind])[0], when(e.at), [
+    kv([["Module", e.module], ["Milestone", e.milestone], ["Role", e.role], ["Host", e.host], ["Model", e.model], ["Session", e.session && el("span", {class: "mono"}, e.session)],
+      ["Turn", e.turn && el("span", {class: "mono"}, e.turn)], ["Exit", e.exit], ["Class", e.class], ["Result", e.result], ["Version", e.version]]),
+    e.detail ? el("pre", {}, e.detail) : null,
+    el("h4", {}, "Record"), el("pre", {class: "mono"}, JSON.stringify(clean, null, 1))], clean);
+}
+function milestoneDrawer(m) {
+  const evs = evAll.filter(e => (e.module || "").toUpperCase() === (m.module || "").toUpperCase() && e.milestone === m.milestone);
+  const tl = [];
+  if (m.authorised) tl.push([m.authorised, "Authorised to build", "var(--s3)"]);
+  if (m.ready_for_review) tl.push([m.ready_for_review, "Ready for Review", "var(--s1)"]);
+  for (const r of m.reviews_list || []) tl.push([r.at, `Review ${r.verdict === "pass" ? "passed" : "failed"} · ${r.model || r.host || ""}` +
+    ((r.findings || []).length ? ` · ${(r.findings || []).map(f => f.name + (f.repeat ? " (repeated)" : "")).join(", ")}` : ""), r.verdict === "pass" ? "var(--good)" : "var(--critical)"]);
+  if (m.done) tl.push([m.done, "Done", "var(--good)"]);
+  for (const e of evs.filter(isErr)) if (e.kind !== "review_failed") tl.push([e.at, (ERR[e.kind] || [e.kind])[0] + (e.detail ? " · " + e.detail.slice(0, 80) : ""), "var(--serious)"]);
+  tl.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  const byLane = groupBy(m._turns, t => t.lane);
+  openDrawer(`${m.module} ${m.milestone}`, m.name || "", [
+    kv([["Status", m.status], ["Size", m.size ? m.size + " done-when items" : null], ["Cost", U().fmt(m.cost) + " " + U().name.toLowerCase()],
+      ["Agent time", hours(m.agentMs)], ["Reviews", `${m.reviews} (${m.fails} failed)`], ["Took", m.days != null ? m.days.toFixed(1) + " days" : null]]),
+    el("h4", {}, "Spend by kind of agent"),
+    el("div", {}, [...byLane.entries()].map(([l, ts]) => el("div", {class: "bar-cell", style: "margin:4px 0"},
+      el("span", {style: "width:100px"}, LANE_NAME[l] || l), el("div", {class: "b", style: `width:${Math.max(2, 220 * sum(ts, U().f) / Math.max(1, m.cost))}px;background:${laneVar(l)}`}),
+      el("span", {class: "dim"}, `${U().fmt(sum(ts, U().f))} · ${ts.length} turns`)))),
+    el("h4", {}, "Timeline"),
+    el("ul", {class: "timeline"}, tl.map(([at, text, c]) => el("li", {style: `--dot:${c}`}, el("div", {class: "dim"}, when(at)), text)))],
+    {...Object.fromEntries(Object.entries(m).filter(([k]) => !k.startsWith("_"))), turns_detail: m._turns.map(t => ({lane: t.lane, model: t.model, start: t.start,
+      duration_ms: t.duration_ms, weighted: t.weighted, ended: t.ended, compactions: t.compactions}))});
+}
+function laneDrawer(r, F) {
+  const ts = F.turns.filter(t => t.lane === r.lane);
+  const tools = {};
+  for (const t of ts) for (const [k, v] of Object.entries(t.tools || {})) { tools[k] = tools[k] || [0, 0, 0]; tools[k][0] += v[0]; tools[k][1] += v[1]; tools[k][2] += v[2]; }
+  const top = Object.entries(tools).sort((a, b) => b[1][1] - a[1][1]).slice(0, 14);
+  openDrawer(r.name, `${r.sessions} sessions · ${r.turns} turns`, [
+    kv([["Spend", U().fmt(r.cost)], ["Agent time", hours(r.agentMs)], ["Median turn", mins(r.turnMs)], ["Cache hits", pct(r.cache)], ["Compactions", r.compactions], ["Models", r.models]]),
+    el("h4", {}, "Where tool time went"),
+    table("tools-" + r.lane, top.map(([k, v]) => ({tool: k, calls: v[0], ms: v[1], errors: v[2]})), [
+      {key: "tool", name: "Tool", render: x => el("span", {class: "mono"}, x.tool)}, {key: "calls", name: "Calls", num: true, fmt: compact},
+      {key: "ms", name: "Time", num: true, fmt: hours}, {key: "errors", name: "Errors", num: true}], null, {key: "ms", dir: -1})], {lane: r.lane, tools});
+}
+
+// ---------------------------------------------------------------------------------------------- insights (shared with the Retro view)
+function insights(F) {
+  const out = [];
+  const total = sum(F.turns, U().f) || 1;
+  const lanes = laneStats(F.turns, F.sessions, F.events);
+  const auto = lanes.find(l => l.lane === "auto-review");
+  if (auto && auto.cost / total > 0.04) out.push(["warning", "Auto-review", `Auto-review threads used <b>${pct(auto.cost / total)}</b> of spend in this slice, across ${auto.sessions} threads.`]);
+  const timeouts = F.events.filter(e => e.kind === "turn_timed_out").length, scriptTurns = F.turns.filter(t => t.kind === "script").length;
+  if (scriptTurns && timeouts / scriptTurns > 0.1) out.push(["serious", "Time limit", `<b>${pct(timeouts / scriptTurns)}</b> of the script's turns ended at the turn time limit (${timeouts} of ${scriptTurns}).`]);
+  const fails = F.events.filter(e => e.kind === "turn_failed");
+  if (fails.length) {
+    const cls = [...groupBy(fails, e => e.class || "other").entries()].sort((a, b) => b[1].length - a[1].length)[0];
+    out.push(["critical", "Failed turns", `<b>${fails.length}</b> turns failed. The commonest cause was <b>${cls[0].replace("_", " ")}</b> (${cls[1].length}).`]);
+  }
+  const ms = milestoneRows(F).filter(m => m.cost > 0).sort((a, b) => b.cost - a.cost);
+  if (ms.length) {
+    const top = ms.slice(0, 3), share = sum(top, m => m.cost) / sum(ms, m => m.cost);
+    out.push(["info", "Concentration", `The three costliest milestones (<b>${top.map(m => m.key).join(", ")}</b>) took <b>${pct(share)}</b> of milestone spend.`]);
+    const failed = ms.filter(m => m.fails > 0);
+    if (failed.length) out.push(["warning", "Rework", `<b>${failed.length}</b> milestones failed review at least once; they hold <b>${pct(sum(failed, m => m.cost) / sum(ms, m => m.cost))}</b> of milestone spend.`]);
+  }
+  const comp = sum(F.turns, t => t.compactions);
+  if (comp) {
+    const heavy = [...groupBy(F.turns.filter(t => t.compactions), t => t.lane).entries()].sort((a, b) => sum(b[1], t => t.compactions) - sum(a[1], t => t.compactions))[0];
+    out.push(["info", "Compactions", `<b>${comp}</b> compactions; most in <b>${LANE_NAME[heavy[0]] || heavy[0]}</b> sessions (${sum(heavy[1], t => t.compactions)}).`]);
+  }
+  const off = F.events.filter(e => e.kind === "off_pinned_model").length;
+  if (off) out.push(["warning", "Model pins", `<b>${off}</b> turns ran on a model other than the one the script pinned.`]);
+  const tok = F.turns.reduce((a, t) => { const k = t.tokens || {}; a.p += k.prompt || 0; a.c += k.cache_read || 0; return a; }, {p: 0, c: 0});
+  if (tok.p) out.push(["good", "Cache", `<b>${pct(tok.c / tok.p)}</b> of prompt tokens were cache reads.`]);
+  return out;
+}
+const SEV = {critical: "var(--critical)", serious: "var(--serious)", warning: "var(--warning)", good: "var(--good)", info: "var(--s1)"};
+function insightCards(list) {
+  return el("div", {class: "insights"}, list.map(([sev, k, html]) => {
+    const p = el("p"); p.innerHTML = html; // built from numbers and the record's own module names, escaped below
+    p.querySelectorAll("b").forEach(b => { b.textContent = b.textContent; });
+    return el("div", {class: "insight"}, el("div", {class: "k"}, el("i", {style: `background:${SEV[sev]}`}), k), p);
+  }));
+}
+
+// ---------------------------------------------------------------------------------------------- views
+const VIEWS = [
+  ["overview", "Overview"], ["agents", "Agents"], ["spend", "Spend"], ["milestones", "Milestones"], ["errors", "Errors"], ["versions", "Versions"], ["retro", "Retro"], ["data", "Data"],
+];
+const V = {};
+
+V.overview = f => {
+  const ms = f.milestones, done = ms.filter(m => m.status === "done" || m.done).length;
+  const errs = f.events.filter(isErr);
+  const total = sum(f.turns, U().f);
+  const ds = days(f.turns);
+  const measures = {cost: [U().name, U().f, U().fmt], time: ["Agent time", t => t.duration_ms || 0, hours], turns: ["Turns", () => 1, compact]};
+  const [mName, mF, mFmt] = measures[S.overviewMeasure];
+  const lanesHere = LANES.concat(["other"]).filter(l => f.turns.some(t => t.lane === l));
+  const series = lanesHere.map(l => ({key: l, name: LANE_NAME[l], color: laneVar(l)}));
+  const byDay = groupBy(f.turns, t => dayKey(t._t));
+  const rows = ds.map(d => ({key: d, label: dayLabel(d), title: new Date(d + "T00:00").toLocaleDateString("en", {weekday: "long", month: "long", day: "numeric"}),
+    values: Object.fromEntries(lanesHere.map(l => [l, sum((byDay.get(d) || []).filter(t => t.lane === l), mF)]))}));
+  const vers = f.events.filter(e => e.kind === "version_seen").map(e => ({key: dayKey(e._t), label: e.version})).sort((a, b) => a.key.localeCompare(b.key));
+  const cum = (key) => ds.map(d => ms.filter(m => m[key] && dayKey(T(m[key])) <= d).length);
+  const hero = el("div", {class: "card hero"},
+    el("div", {}, el("div", {class: "lbl"}, "Milestones Done"), el("div", {class: "big"}, `${done}`, el("span", {style: "font-size:24px;color:var(--muted);font-weight:550"}, ` of ${ms.length}`)),
+      el("div", {class: "foot"}, ms.length ? `${pct(done / ms.length)} of the plan · ${ms.filter(m => m.status === "blocked").length} blocked` : "No plan read yet")),
+    el("div", {style: "flex:1"}),
+    el("div", {}, el("div", {class: "lbl"}, U().name), el("div", {style: "font-size:32px;font-weight:650;letter-spacing:-.02em"}, U().fmt(total)),
+      el("div", {class: "foot"}, `${compact(f.turns.length)} turns · ${compact(f.sessions.length)} sessions`)),
+    el("div", {}, el("div", {class: "lbl"}, "Agent time"), el("div", {style: "font-size:32px;font-weight:650;letter-spacing:-.02em"}, hours(sum(f.turns, t => t.duration_ms))),
+      el("div", {class: "foot"}, ds.length ? `over ${ds.length} days` : "")));
+  return [
+    hero,
+    el("div", {class: "grid g-tiles", style: "margin-top:16px"},
+      tile("Builders", compact(new Set(f.turns.filter(t => t.lane === "build").map(t => t.session)).size), "sessions"),
+      tile("Reviewers", compact(new Set(f.turns.filter(t => t.lane === "review").map(t => t.session)).size), "sessions"),
+      tile("Reviews failed", compact(sum(ms, m => (m.reviews_list || []).filter(r => r.verdict === "fail").length)), `of ${compact(sum(ms, m => (m.reviews_list || []).length))} reviews`),
+      tile("Codex weekly limit", UNITS.limit.fmt(sum(f.turns, t => t.limit_pct)), "used by these turns"),
+      tile("Claude list price", usd(sum(f.turns, t => t.usd)), "not what the plan charges"),
+      tile("Errors", compact(errs.length), errs.length ? `${f.events.filter(e => e.kind === "turn_failed").length} failed turns` : "none", errs.length > 0)),
+    el("div", {style: "height:16px"}),
+    cardWith(`${mName} per day`, "Stacked by the kind of agent. A labelled line marks the day a version of the script first ran.",
+      seg([["cost", "Spend"], ["time", "Agent time"], ["turns", "Turns"]], S.overviewMeasure, k => { S.overviewMeasure = k; save(); render(); }),
+      legend(series.map(s => [s.name, s.color])),
+      ...withTable(chartHost(h => stackedColumns(h, rows, series, mFmt, vers)), rows.map(r => ({day: r.label, ...Object.fromEntries(lanesHere.map(l => [l, r.values[l]]))})),
+        [{key: "day", name: "Day"}, ...lanesHere.map(l => ({key: l, name: LANE_NAME[l], num: true, fmt: mFmt}))])),
+    el("div", {style: "height:16px"}),
+    el("div", {class: "grid g-2"},
+      card("Milestones over time", "Each day's running total.", legend([["Ready for Review", "var(--s1)"], ["Done", "var(--s3)"]], true),
+        chartHost(h => lines(h, ds.map(dayLabel), [{name: "Ready for Review", color: "var(--s1)", values: cum("ready_for_review")}, {name: "Done", color: "var(--s3)", values: cum("done")}], compact))),
+      card("When agents worked", "Agent time in each hour. Darker means more agents running at once.", chartHost(h => heat(h, f.turns)))),
+    el("div", {style: "height:16px"}),
+    insightCards(insights(f)),
+  ];
+};
+
+V.agents = f => {
+  const rows = laneStats(f.turns, f.sessions, f.events);
+  const byModel = groupBy(f.turns, t => t.model || "unknown");
+  const modelRows = [...byModel.entries()].map(([m, ts]) => ({name: m, value: sum(ts, U().f), color: ts[0].host === "claude" ? "var(--s2)" : "var(--s1)", sub: `${ts[0].host} · ${ts.length} turns`}));
+  const durBuckets = [[0, 1, "< 1 min"], [1, 5, "1–5 min"], [5, 15, "5–15 min"], [15, 30, "15–30 min"], [30, 60, "30–60 min"], [60, 120, "1–2 h"], [120, 1e9, "2 h +"]];
+  const script = f.turns.filter(t => ["build", "review", "plan"].includes(t.lane));
+  const hist = durBuckets.map(([a, b, label]) => ({key: label, label, values: Object.fromEntries(["build", "review", "plan"].map(l => [l, script.filter(t => t.lane === l && (t.duration_ms || 0) / 6e4 >= a && (t.duration_ms || 0) / 6e4 < b).length]))}));
+  const ctx = f.turns.filter(t => t.peak_context && t.window);
+  const ctxRows = [[0, .25, "under 25%"], [.25, .5, "25–50%"], [.5, .75, "50–75%"], [.75, .9, "75–90%"], [.9, 9, "90% +"]].map(([a, b, label]) =>
+    ({key: label, label, values: Object.fromEntries(["build", "review", "plan"].map(l => [l, ctx.filter(t => t.lane === l && t.peak_context / t.window >= a && t.peak_context / t.window < b).length]))}));
+  const three = ["build", "review", "plan"].map(l => ({key: l, name: LANE_NAME[l], color: laneVar(l)}));
+  return [
+    card("Each kind of agent", "Click a row for where its tool time went.", table("lanes", rows, [
+      {key: "name", name: "Agent", render: r => el("span", {class: "status"}, el("i", {style: `background:${laneVar(r.lane)}`}), r.name)},
+      {key: "sessions", name: "Sessions", num: true, fmt: compact}, {key: "turns", name: "Turns", num: true, fmt: compact},
+      {key: "cost", name: U().name, num: true, fmt: U().fmt}, {key: "perTurn", name: "Per turn, median", num: true, fmt: U().fmt},
+      {key: "turnMs", name: "Turn length, median", num: true, fmt: mins}, {key: "agentMs", name: "Agent time", num: true, fmt: hours},
+      {key: "cache", name: "Cache hits", num: true, fmt: x => pct(x)}, {key: "compactions", name: "Compactions", num: true},
+      {key: "errRate", name: "Errors per turn", num: true, fmt: x => x.toFixed(2)}, {key: "models", name: "Models", render: r => el("span", {class: "dim"}, r.models)}],
+      r => laneDrawer(r, f), {key: "cost", dir: -1})),
+    el("div", {style: "height:16px"}),
+    el("div", {class: "grid g-2"},
+      card("Models", "Spend by model. Blue for Codex, orange for Claude.", legend([["Codex", "var(--s1)"], ["Claude", "var(--s2)"]]), chartHost(h => rankedBars(h, modelRows, U().fmt))),
+      card("How long turns run", "The script's turns by length.", legend(three.map(s => [s.name, s.color])), chartHost(h => stackedColumns(h, hist, three, compact)))),
+    el("div", {style: "height:16px"}),
+    card("How full the context got", "Each turn's peak context as a share of its window. Turns near the top are where compactions start.", legend(three.map(s => [s.name, s.color])),
+      chartHost(h => stackedColumns(h, ctxRows, three, compact))),
+  ];
+};
+
+V.spend = f => {
+  const byMod = groupBy(f.turns.filter(t => t.module), t => (t.module || "").toUpperCase());
+  const modRows = [...byMod.entries()].map(([m, ts]) => ({name: m, value: sum(ts, U().f), sub: `${ts.length} turns`, onclick: () => { S.module = m; save(); go("milestones"); }}));
+  const ms = milestoneRows(f);
+  const failedKeys = new Set(ms.filter(m => m.fails).map(m => m.key));
+  const parts = [
+    {name: "Milestones that passed first time", value: sum(f.turns.filter(t => t.module && t.milestone && !failedKeys.has((t.module || "").toUpperCase() + " " + t.milestone) && t.kind === "script"), U().f), color: "var(--s3)"},
+    {name: "Milestones with a failed review", value: sum(f.turns.filter(t => failedKeys.has((t.module || "").toUpperCase() + " " + t.milestone) && t.kind === "script"), U().f), color: "var(--s4)", dark: true},
+    {name: "Planning not tied to a milestone", value: sum(f.turns.filter(t => t.kind === "script" && !t.milestone), U().f), color: "var(--s1)"},
+    {name: "Auto-review", value: sum(f.turns.filter(t => t.lane === "auto-review"), U().f), color: "var(--s2)"},
+    {name: "Subagents", value: sum(f.turns.filter(t => t.lane === "subagent"), U().f), color: "var(--s5)"},
+    {name: "Interactive", value: sum(f.turns.filter(t => t.lane === "interactive"), U().f), color: "var(--s6)"},
+  ];
+  const wasted = f.turns.filter(t => t.ended === "aborted" || t.ended === "failed");
+  const tok = {}; for (const t of f.turns) for (const [k, v] of Object.entries(t.tokens || {})) tok[k] = (tok[k] || 0) + v;
+  const fresh = Math.max(0, (tok.prompt || 0) - (tok.cache_read || 0) - (tok.cache_write || 0));
+  return [
+    card("Where the spend went", "The whole slice in parts.", chartHost(h => segmented(h, parts, U().fmt))),
+    el("div", {style: "height:16px"}),
+    el("div", {class: "grid g-2"},
+      card("By module", "Click a module to see its milestones.", chartHost(h => rankedBars(h, modRows, U().fmt, 14))),
+      card("Tokens by kind", "Raw tokens across both hosts. Cache reads dominate the count but cost a tenth as much.",
+        chartHost(h => rankedBars(h, [
+          {name: "Cache reads", value: tok.cache_read || 0, color: "var(--s1)"}, {name: "Fresh input", value: fresh, color: "var(--s2)"},
+          {name: "Cache writes", value: tok.cache_write || 0, color: "var(--s3)"}, {name: "Output", value: tok.output || 0, color: "var(--s4)"},
+          {name: "of which reasoning", value: tok.reasoning || 0, color: "var(--s7)"}], compact)),
+        el("div", {class: "desc", style: "margin-top:12px"}, `${compact(wasted.length)} turns were aborted or failed, costing ${U().fmt(sum(wasted, U().f))}.`))),
+  ];
+};
+
+V.milestones = f => {
+  const rows = milestoneRows(f);
+  const statusPill = s => el("span", {class: "pill " + (s === "done" ? "good" : s === "blocked" ? "crit" : s === "ready_for_review" ? "warn" : "")}, (s || "–").replace(/_/g, " "));
+  const max = Math.max(...rows.map(r => r.cost), 1);
+  return [card("Milestones", "Every milestone in the plan at the main branch's tip. Click one for its timeline.", table("milestones", rows, [
+    {key: "key", name: "Milestone", render: r => el("span", {}, el("b", {}, r.key), el("div", {class: "dim", style: "font-size:12px;max-width:340px"}, r.name || ""))},
+    {key: "status", name: "Status", render: r => statusPill(r.status)}, {key: "size", name: "Items", num: true},
+    {key: "cost", name: U().name, num: true, render: r => el("div", {class: "bar-cell", style: "justify-content:flex-end"}, el("div", {class: "b", style: `width:${Math.round(80 * r.cost / max)}px`}), U().fmt(r.cost))},
+    {key: "turns", name: "Turns", num: true}, {key: "reviews", name: "Reviews", num: true},
+    {key: "fails", name: "Failed", num: true, render: r => r.fails ? el("span", {class: "pill crit"}, r.fails) : "0"},
+    {key: "repeats", name: "Repeated findings", num: true}, {key: "agentMs", name: "Agent time", num: true, fmt: hours},
+    {key: "days", name: "Days to Done", num: true, fmt: x => x == null ? "–" : x.toFixed(1)}],
+    milestoneDrawer, {key: "cost", dir: -1}))];
+};
+
+V.errors = f => {
+  const errs = f.events.filter(isErr);
+  const kinds = Object.keys(ERR).filter(k => errs.some(e => e.kind === k));
+  const shown = errs.filter(e => (S.errKind === "all" || e.kind === S.errKind) &&
+    (!S.errSearch || JSON.stringify(e).toLowerCase().includes(S.errSearch.toLowerCase())));
+  const byKind = kinds.map(k => ({name: ERR[k][0], value: errs.filter(e => e.kind === k).length, color: ERR[k][1] === "crit" ? "var(--critical)" : ERR[k][1] === "warn" ? "var(--serious)" : "var(--muted)",
+    onclick: () => { S.errKind = k; save(); render(); }}));
+  const classes = [...groupBy(errs.filter(e => e.kind === "turn_failed"), e => e.class || "other").entries()].map(([c, a]) => ({name: c.replace("_", " "), value: a.length, color: "var(--critical)"}));
+  const search = el("input", {class: "searchbox", type: "search", placeholder: "Search errors", value: S.errSearch});
+  search.addEventListener("change", () => { S.errSearch = search.value; save(); render(); });
+  const kindSel = el("div", {class: "select"}, el("select", {onchange: e => { S.errKind = e.target.value; save(); render(); }},
+    el("option", {value: "all"}, "Every kind"), kinds.map(k => el("option", {value: k, selected: S.errKind === k}, ERR[k][0]))));
+  return [
+    el("div", {class: "grid g-tiles"}, kinds.slice(0, 6).map(k => tile(ERR[k][0], compact(errs.filter(e => e.kind === k).length), null, ERR[k][1] === "crit"))),
+    el("div", {style: "height:16px"}),
+    card("Errors over time", "Each dot is one error. Click one for its record.", chartHost(h => strip(h, errs, kinds))),
+    el("div", {style: "height:16px"}),
+    el("div", {class: "grid g-2"},
+      card("By kind", "Click a kind to filter the list.", chartHost(h => rankedBars(h, byKind, compact))),
+      card("Why turns failed", "Read from the end of the host's error output.", chartHost(h => rankedBars(h, classes, compact)))),
+    el("div", {style: "height:16px"}),
+    cardWith("Every error", `${shown.length} shown. Click a row for the full record, to copy for an agent.`, el("div", {style: "display:flex;gap:8px;flex-wrap:wrap"}, kindSel, search),
+      table("errors", shown, [
+        {key: "at", name: "When", get: r => r.at || "", fmt: when},
+        {key: "kind", name: "Kind", render: r => el("span", {class: "pill " + (ERR[r.kind][1])}, ERR[r.kind][0])},
+        {key: "where", name: "Where", get: r => [r.module, r.milestone].filter(Boolean).join(" ") || r.result || "", render: r => [r.module, r.milestone].filter(Boolean).join(" ") || el("span", {class: "dim"}, r.role || "–")},
+        {key: "host", name: "Host", get: r => r.host || ""},
+        {key: "detail", name: "Detail", render: r => el("span", {class: "dim", style: "font-size:12.5px"}, (r.detail || r.class || "").slice(0, 140))}],
+        eventDrawer, {key: "at", dir: -1})),
+  ];
+};
+
+V.versions = f => {
+  const rows = versionRows(f);
+  const metric = (key, name, fmt, desc) => card(name, desc, chartHost(h => rankedBars(h, rows.map(r => ({name: r.version, value: r[key], sub: `${r.turns} turns`})), fmt, 20)));
+  return [
+    card("Each version of the script", "Measured over the turns each version ran. Projects and milestones differ between versions, so read differences beside the turn and milestone counts.",
+      table("versions", rows, [
+        {key: "version", name: "Version", render: r => el("b", {}, r.version)}, {key: "first", name: "First ran", fmt: when},
+        {key: "turns", name: "Turns", num: true}, {key: "sessions", name: "Sessions", num: true}, {key: "done", name: "Milestones Done", num: true},
+        {key: "perTurn", name: U().name + " per turn", num: true, fmt: U().fmt}, {key: "turnMs", name: "Turn length", num: true, fmt: mins},
+        {key: "errRate", name: "Errors per 100 turns", num: true, fmt: x => x.toFixed(1)}, {key: "timeouts", name: "Time limits per 100", num: true, fmt: x => x.toFixed(1)},
+        {key: "compactions", name: "Compactions per 100", num: true, fmt: x => x.toFixed(1)},
+        {key: "failRate", name: "Reviews failed", num: true, fmt: x => isFinite(x) ? pct(x) : "–"}], null, {key: "first", dir: 1})),
+    el("div", {style: "height:16px"}),
+    el("div", {class: "grid g-2"},
+      metric("perTurn", `${U().name} per turn`, U().fmt, "Lower is cheaper work per turn."),
+      metric("errRate", "Errors per 100 turns", x => x.toFixed(1), "Failed, stopped and refused turns, and host errors."),
+      metric("timeouts", "Time limits per 100 turns", x => x.toFixed(1), "Turns the script paused at its time limit."),
+      metric("compactions", "Compactions per 100 turns", x => x.toFixed(1), "How often sessions ran out of context.")),
+  ];
+};
+
+V.retro = f => {
+  const ms = milestoneRows(f).sort((a, b) => b.cost - a.cost);
+  const total = sum(f.turns, U().f), lanes = laneStats(f.turns, f.sessions, f.events);
+  const errs = f.events.filter(isErr);
+  const done = ms.filter(m => m.status === "done" || m.done);
+  const p = (...k) => el("p", {}, ...k);
+  return [el("div", {class: "card prose"},
+    el("h2", {style: "font-size:18px"}, "Retro"),
+    el("div", {class: "desc"}, `Written from the records in this slice: ${RAW.meta.project || "this project"}, ${dayLabel(dayKey(Math.min(...f.turns.map(t => t._t).filter(isFinite)) || Date.now()))} to ${dayLabel(dayKey(Math.max(...f.turns.map(t => t._t).filter(isFinite)) || Date.now()))}.`),
+    el("h3", {}, "What it cost"),
+    p(`${compact(f.turns.length)} turns in ${compact(f.sessions.length)} sessions, ${hours(sum(f.turns, t => t.duration_ms))} of agent time, ${UNITS.weighted.fmt(sum(f.turns, UNITS.weighted.f))} weighted tokens. `,
+      `Codex turns used about ${UNITS.limit.fmt(sum(f.turns, UNITS.limit.f))} of the weekly limit in total; Claude turns would cost ${usd(sum(f.turns, UNITS.usd.f))} at list price.`),
+    el("ul", {}, lanes.sort((a, b) => b.cost - a.cost).map(l => el("li", {}, `${l.name}: ${pct(l.cost / (total || 1))} of spend, ${l.sessions} sessions, median turn ${mins(l.turnMs)}.`))),
+    el("h3", {}, "What it delivered"),
+    p(`${done.length} of ${ms.length} milestones Done. ${ms.filter(m => m.fails).length} failed review at least once, with ${sum(ms, m => m.repeats)} repeated findings.`),
+    el("h3", {}, "The costliest milestones"),
+    el("ul", {}, ms.slice(0, 5).map(m => el("li", {}, `${m.key}: ${U().fmt(m.cost)}, ${m.turns} turns, ${m.reviews} reviews (${m.fails} failed)` + (m.days != null ? `, ${m.days.toFixed(1)} days.` : ".")))),
+    el("h3", {}, "What went wrong"),
+    errs.length ? el("ul", {}, Object.keys(ERR).filter(k => errs.some(e => e.kind === k)).map(k => el("li", {}, `${ERR[k][0]}: ${errs.filter(e => e.kind === k).length}`))) : p("No errors recorded."),
+    el("h3", {}, "Worth looking at next time")),
+    el("div", {style: "height:12px"}), insightCards(insights(f))];
+};
+
+V.data = () => [card("The records", "Everything this page shows, as the files the script keeps. An agent can read these directly, or run the commands below.",
+  el("div", {class: "kv", style: "margin-top:12px"},
+    el("div", {}, "Folder"), el("div", {class: "mono"}, RAW.meta.folder || "–"),
+    el("div", {}, "Sessions"), el("div", {}, compact(RAW.sessions.length)),
+    el("div", {}, "Turns"), el("div", {}, compact(RAW.turns.length)),
+    el("div", {}, "Events"), el("div", {}, compact(RAW.events.length)),
+    el("div", {}, "Milestones"), el("div", {}, compact(RAW.milestones.length)),
+    el("div", {}, "Written"), el("div", {}, when(RAW.meta.generated))),
+  el("pre", {class: "mono"}, `python3 ${RAW.meta.script || "agent_loop.py"} history --worktree <repo> --json\npython3 ${RAW.meta.script || "agent_loop.py"} dashboard --worktree <repo> --json`),
+  el("div", {style: "display:flex;gap:8px;flex-wrap:wrap"}, ["sessions", "turns", "events", "milestones"].map(k =>
+    el("button", {class: "iconbtn", onclick: () => { const b = new Blob([RAW[k].map(r => JSON.stringify(r)).join("\n") + "\n"], {type: "application/x-ndjson"});
+      const a = el("a", {href: URL.createObjectURL(b), download: k + ".jsonl"}); document.body.append(a); a.click(); a.remove(); }}, `Download ${k}.jsonl`))))];
+
+// ---------------------------------------------------------------------------------------------- shell
+function go(v) { S.view = v; history.replaceState(null, "", "#" + v); render(); scrollTo({top: 0}); }
+function buildFilters() {
+  $("#range").replaceChildren(...RANGES.map(([k, n]) => el("button", {"aria-pressed": String(S.range === k), onclick: () => { S.range = k; save(); render(); }}, n)));
+  $("#unit").replaceChildren(...Object.entries(UNITS).map(([k, u]) => el("button", {"aria-pressed": String(S.unit === k), onclick: () => { S.unit = k; save(); render(); }}, u.name)));
+  $("#unitNote").textContent = U().note;
+  const opts = (id, all, values, cur, names = {}) => { $(id).replaceChildren(el("option", {value: "all"}, all), ...values.map(v => el("option", {value: v, selected: v === cur}, names[v] || v))); };
+  opts("#fHost", "Both hosts", [...new Set(turnsAll.map(t => t.host))].sort(), S.host, {codex: "Codex", claude: "Claude"});
+  opts("#fLane", "Every kind of agent", LANES.concat(["other"]).filter(l => turnsAll.some(t => t.lane === l)), S.lane, LANE_NAME);
+  opts("#fModule", "Every module", [...new Set([...RAW.milestones.map(m => (m.module || "").toUpperCase()), ...turnsAll.map(t => (t.module || "").toUpperCase())].filter(Boolean))].sort(), S.module);
+  $("#fHost").onchange = e => { S.host = e.target.value; save(); render(); };
+  $("#fLane").onchange = e => { S.lane = e.target.value; save(); render(); };
+  $("#fModule").onchange = e => { S.module = e.target.value; save(); render(); };
+  $("#fInteractive").checked = S.interactive;
+  $("#fInteractive").onchange = e => { S.interactive = e.target.checked; save(); render(); };
+}
+function summaryFor(f) {
+  return {project: RAW.meta.project, slice: {range: S.range, host: S.host, lane: S.lane, module: S.module, interactive: S.interactive, unit: S.unit},
+    turns: f.turns.length, sessions: f.sessions.length, spend: sum(f.turns, U().f), agent_hours: +(sum(f.turns, t => t.duration_ms) / 3.6e6).toFixed(1),
+    lanes: laneStats(f.turns, f.sessions, f.events), insights: insights(f).map(([s, k, h]) => ({severity: s, topic: k, text: h.replace(/<\/?b>/g, "")})),
+    errors_by_kind: Object.fromEntries(Object.keys(ERR).map(k => [k, f.events.filter(e => e.kind === k).length]).filter(([, n]) => n)),
+    latest_errors: f.events.filter(isErr).sort((a, b) => (b.at || "").localeCompare(a.at || "")).slice(0, 30).map(e => Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith("_")))),
+    milestones: milestoneRows(f).map(m => ({milestone: m.key, status: m.status, spend: m.cost, turns: m.turns, reviews: m.reviews, failed: m.fails, days: m.days})),
+    versions: versionRows(f)};
+}
+$("#copyAll").onclick = () => copy(summaryFor(F()));
+function render() {
+  later.length = 0;
+  buildFilters();
+  const f = F();
+  const errCount = f.events.filter(isErr).length;
+  $("#tabs").replaceChildren(...VIEWS.map(([k, n]) => el("a", {href: "#" + k, "aria-current": S.view === k ? "page" : null, onclick: e => { e.preventDefault(); go(k); }},
+    n, k === "errors" && errCount ? el("span", {class: "count hot"}, compact(errCount)) : k === "milestones" ? el("span", {class: "count"}, compact(f.milestones.length)) : null)));
+  if (!V[S.view]) S.view = "overview";
+  $("#views").replaceChildren(el("section", {class: "view on"}, V[S.view](f)));
+  requestAnimationFrame(() => later.splice(0).forEach(fn => fn()));
+}
+$("#title").textContent = RAW.meta.project ? `${RAW.meta.project} · delivery history` : "Delivery history";
+document.title = RAW.meta.project ? `${RAW.meta.project} delivery` : "Delivery history";
+$("#subtitle").textContent = `${compact(RAW.sessions.length)} sessions · ${compact(RAW.turns.length)} turns · written ${when(RAW.meta.generated)}` + (RAW.meta.version ? ` · orchestrate ${RAW.meta.version}` : "");
+$("#footnote").textContent = "Spend is measured from the hosts' own session files. Weighted tokens count each kind at its price relative to fresh input. " +
+  "Codex's weekly-limit share is the script's fitted estimate, and Claude's list price is not what a plan charges. Interactive sessions are the human's and the lead's own, which the records can't tell apart.";
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 120); });
+render();
+</script>
+</body>
+</html>

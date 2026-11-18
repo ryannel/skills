@@ -518,6 +518,7 @@ below. Its exit status is 0 when the line is the command's own result, and 1 or 
 | `PLANNED` | `plan` | The planner's files were checked and merged |
 | `KEPT` | `plan` | A planner asked to diagnose a milestone kept the plan as it is and named who has to act |
 | `UNFINISHED` | `plan` | The planner's turn ended without one of its endings, so nothing was merged |
+| `PLAN_NOT_MERGED` | `plan` | The planner finished, but the script couldn't merge its files, such as when they conflict with a commit that landed meanwhile. The files are set aside, and `next` gives a planner the task again on the new tip |
 | `MERGED`, `FAILED` | `merge` | The work was merged, or wasn't, with the reason in `detail` |
 | `ADOPTED` | `adopt` | Plan files left uncommitted or unmerged were committed and merged |
 | `MIGRATED` | `migrate` | The plans were moved to the current layout and names, or, with `--branch`, a worktree's own commits were renamed and rebased onto the main branch |
@@ -541,4 +542,4 @@ Avoid: `FLOOR` (now `HOST_FAILED` or `SCRIPT_FAILED`), `PIN` (now `WRONG_MODEL_O
 `NEEDS_REVIEW`), `TAKEN` (now `IN_PROGRESS_ELSEWHERE`). The script still reads `PIN` in the state files of runs
 started before 2.1.0. Proposed: the new names, by the set's author, 2026-11-12. Agreed by the human, 2026-11-12.
 Proposed: `ERROR` and `RUNNING`, by the set's author, 2026-11-15.
-Proposed: `CHECK_IN`, `WARNING_SIGNS` and `RUN_ENDED`, by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: `CHECK_IN`, `WARNING_SIGNS`, `RUN_ENDED` and `PLAN_NOT_MERGED`, by the set's author, 2026-11-18.

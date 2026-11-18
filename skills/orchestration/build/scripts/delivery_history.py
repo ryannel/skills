@@ -738,7 +738,21 @@ def write_atomic(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
+def thin_limits(events: dict) -> None:
+    """Every Codex thread reports the same weekly limit, so the same whole percent arrives from many threads at
+    once. Keep one event each time the shared figure moves."""
+    limits = sorted((e for e in events.values() if e.get("kind") == "limit_changed"), key=lambda e: e.get("at") or "")
+    last: dict = {}
+    for e in limits:
+        k = (e.get("limit"), e.get("window_minutes"))
+        if last.get(k) == (e.get("used_percent"), e.get("resets_at")):
+            events.pop(key_of("events", e), None)
+        else:
+            last[k] = (e.get("used_percent"), e.get("resets_at"))
+
+
 def save(folder: Path, data: dict) -> None:
+    thin_limits(data["events"])
     for kind in FILES:
         rows = sorted(data[kind].values(), key=lambda r: (str(r.get("at") or r.get("start") or r.get("started") or ""),
                                                           key_of(kind, r)))
@@ -1037,6 +1051,55 @@ def summary(folder: Path, recent: int = 25) -> dict:
             "by_version": group(lambda t: t.get("version") or "-"),
             "errors": counts, "recent_errors": sorted(errors, key=lambda e: e.get("at") or "")[-recent:],
             "costliest_milestones": sorted(ms.items(), key=lambda kv: -kv[1]["weighted"])[:10]}
+
+
+# -------------------------------------------------------------------------------------------------------- dashboard
+
+TOKEN_ORDER = ("prompt", "cache_read", "cache_write", "cache_write_1h", "output", "reasoning")
+TURN_COLUMNS = ("s", "role", "module", "milestone", "version", "start", "duration_ms", "model", "effort", "tokens",
+                "weighted", "limit_pct", "usd", "compactions", "ended", "peak_context", "window", "tools",
+                "from_ledger", "path")
+SESSION_FIELDS = ("host", "session", "kind", "parent", "parent_kind", "role", "module", "milestone", "model", "start",
+                  "end", "turns", "weighted", "compactions", "from_ledger", "title")
+
+
+def dashboard_model(folder: Path, meta: dict | None = None) -> dict:
+    """The records the dashboard draws, trimmed to the fields it reads. Turns are stored as columns, with the
+    session as an index into `sessions` and tokens in TOKEN_ORDER, which keeps a large project's page to a few MB.
+    An agent reads the same JSON from `dashboard --json`."""
+    d = rows(folder)
+    sessions = [{k: r[k] for k in SESSION_FIELDS if r.get(k) not in (None, {}, "")} for r in d["sessions"]]
+    for r in sessions:
+        if r.get("title"):
+            r["title"] = r["title"][:120]
+    index = {f"{r['host']}:{r['session']}": i for i, r in enumerate(sessions)}
+    table = []
+    for t in d["turns"]:
+        i = index.get(f"{t.get('host')}:{t.get('session')}")
+        if i is None:
+            continue
+        row = dict(t, s=i)
+        row["tokens"] = [(t.get("tokens") or {}).get(k, 0) for k in TOKEN_ORDER]
+        if row.get("ended") == "complete":
+            row["ended"] = None
+        if sessions[i].get("kind") != "script":
+            row["tools"] = None            # tool time is shown for the script's own agents
+        table.append([row.get(c) for c in TURN_COLUMNS])
+    return {"meta": {"folder": str(folder), "generated": iso(time.time()), "token_order": TOKEN_ORDER, **(meta or {})},
+            "sessions": sessions, "turns": {"columns": TURN_COLUMNS, "rows": table}, "events": d["events"],
+            "milestones": d["milestones"], "checks": d["checks"]}
+
+
+def render(folder: Path, out: Path | None = None, meta: dict | None = None) -> Path:
+    """Write the dashboard: one HTML file with the records embedded, readable offline and after the transcripts
+    are gone."""
+    model = dashboard_model(folder, meta)
+    template = (Path(__file__).with_name("dashboard.html")).read_text()
+    blob = json.dumps(model, separators=(",", ":")).replace("</", "<\\/")
+    html = template.replace("/*__DATA__*/null", blob, 1)
+    out = out or folder / "dashboard.html"
+    write_atomic(out, html)
+    return out
 
 
 def main(argv=None) -> None:
