@@ -169,8 +169,19 @@ A proof in which a reviewer answers a question by reading the code, an interface
 Stored as: the item's `ask` field
 
 **Evidence**
-Saved proof that an item passed, such as a test log or a screenshot, taken from the item's target.
-Stored as: the item's `evidence` field, which says where the proof is saved
+Saved proof that an item passed, such as a test log or a screenshot, taken from the item's target. Reviews,
+handoffs and graded examples are kept with it. Evidence is never committed, because git holds only what the project
+needs to build and run, and nothing builds or runs from evidence.
+Stored as: the item's `evidence` field, which says where the proof is saved, in the working folder
+
+**Working folder**
+The one folder per repository where evidence is kept, outside git: `<git common dir>/orchestrate/evidence/`. Every
+worktree, builder and reviewer on the computer reads and writes the same files there without a commit, and the files
+stay until the human clears them with `cleanup`.
+Stored as: that folder, linked into every worktree at the `Evidence:` path of the project settings
+(`.orchestrate/evidence` by default), which git ignores
+Avoid: evidence folder, which before 2.6.0 meant a folder in git
+Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
 
 **Capture**
 A screenshot, recording or log taken from a target while the product runs. A capture becomes evidence when it is
@@ -268,7 +279,7 @@ Agreed: by the human, 2026-11-13.
 **Handoff**
 What a builder that stops before the milestone is finished writes for the session that picks it up: what is
 finished, what was tried, and what to do first.
-Stored as: `<evidence folder>/<MODULE>/<milestone>-handoff.md`, named in the milestone's `blocked` field
+Stored as: `<working folder>/<MODULE>/<milestone>-handoff.md`, named in the milestone's `blocked` field
 Proposed: by Claude, 2026-11-13. Not yet agreed by the human.
 
 **Builder's note**
@@ -587,8 +598,9 @@ below. Its exit status is 0 when the line is the command's own result, and 1 or 
 | `PLAN_NOT_MERGED` | `plan` | The planner finished, but the script couldn't merge its files, such as when they conflict with a commit that landed meanwhile. The files are set aside, and `next` gives a planner the task again on the new tip |
 | `MERGED`, `FAILED` | `merge` | The work was merged, or wasn't, with the reason in `detail` |
 | `ADOPTED` | `adopt` | Plan files left uncommitted or unmerged were committed and merged |
-| `MIGRATED` | `migrate` | The plans were moved to the current layout and names, or, with `--branch`, a worktree's own commits were renamed and rebased onto the main branch |
-| `NOTHING` | `adopt`, `migrate`, `main-check`, `pause` | There was nothing to do. From `main-check --due`, no main-branch check was due. From `pause`, no run was going |
+| `MIGRATED` | `migrate` | The plans were moved to the current layout and names, or the evidence was moved out of git into the working folder (`evidence` says what moved), or, with `--branch`, a worktree's own commits were renamed and rebased onto the main branch |
+| `WOULD_REMOVE`, `REMOVED` | `cleanup` | What `cleanup` would remove, by kind and size, with nothing removed; or, with `--yes`, what it removed |
+| `NOTHING` | `adopt`, `migrate`, `main-check`, `pause`, `cleanup` | There was nothing to do. From `main-check --due`, no main-branch check was due. From `pause`, no run was going |
 | `COVERED` | `main-check` | A main-branch check passed on a main-branch commit that contains the commit asked about. Exit status 0 |
 | `FAILING_ON_MAIN` | `main-check` | A main-branch check failed twice on a main-branch commit that contains the commit asked about, and no later pass covers it. `by.culprit` names the first failing commit, its subject and its modules; a bisect that reached a commit it couldn't judge says so in `by.bisect_why` instead. Exit status 1 |
 | `NOT_ON_MAIN` | `main-check` | The commit asked about isn't on the main branch yet, so no main-branch check covers it. Exit status 1 |

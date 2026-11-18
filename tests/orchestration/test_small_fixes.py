@@ -133,8 +133,8 @@ for i in m["items"]:
 if verdict == "fail":
     m["findings"] = [{"name": "the water is flat", "item": i["id"]} for i in m["items"]]
 path.write_text(json.dumps(d))
-(cwd / "docs/evidence/WATER").mkdir(parents=True, exist_ok=True)
-(cwd / f"docs/evidence/WATER/{m['id']}-review.md").write_text("judged")
+(cwd / ".orchestrate/evidence/WATER").mkdir(parents=True, exist_ok=True)
+(cwd / f".orchestrate/evidence/WATER/{m['id']}-review.md").write_text("judged")
 reply = f"PASS {m['id']}" if verdict == "pass" else f"FAIL {m['id']}"
 print(json.dumps({"type": "thread.started", "thread_id": "t1"}))
 print(json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": reply}}))
@@ -158,7 +158,7 @@ class ReviewBookkeeping(Repo):
         self.assertIn("status in_progress", out["filled"])
         m1 = self.read_done()["milestones"][0]
         self.assertEqual(m1["status"], "in_progress")
-        self.assertEqual({i["review"] for i in m1["items"]}, {"docs/evidence/WATER/M1-review.md"})
+        self.assertEqual({i["review"] for i in m1["items"]}, {".orchestrate/evidence/WATER/M1-review.md"})
 
     def test_a_passed_review_with_only_verdicts_is_saved_as_done(self):
         self.ready_for_review()
@@ -180,7 +180,7 @@ class ReviewBookkeeping(Repo):
 class GradedExamples(Repo):
     def name_the_file(self):
         with open(self.wt / "ORCHESTRATE.md", "a") as f:
-            f.write("- **Graded examples:** docs/evidence/graded-examples.md\n")
+            f.write("- **Graded examples:** .orchestrate/evidence/graded-examples.md\n")
         self.commit_all()
 
     def failed_review(self):
@@ -189,17 +189,18 @@ class GradedExamples(Repo):
         self.assertEqual(self.review()["result"], "REVIEWED")
 
     def examples(self):
+        """The graded examples, which are kept in the working folder and never committed."""
+        path = self.evidence("graded-examples.md")
         self.git("fetch", "-q", "origin")
-        shown = subprocess.run(["git", "-C", str(self.wt), "show", "origin/main:docs/evidence/graded-examples.md"],
-                               capture_output=True, text=True)
-        return shown.stdout if shown.returncode == 0 else None
+        self.assertNotIn("graded-examples.md", self.git("ls-tree", "-r", "--name-only", "origin/main").stdout)
+        return path.read_text() if path.exists() else None
 
     def test_accepting_a_failed_milestone_adds_the_case_with_the_humans_words(self):
         self.name_the_file()
         self.failed_review()
         out = self.human("accept", "M1", reason="The flat water is the style I asked for.")
         self.assertEqual(out["result"], "DONE", out)
-        self.assertEqual(out["graded_example"], "docs/evidence/graded-examples.md")
+        self.assertEqual(out["graded_example"], ".orchestrate/evidence/graded-examples.md")
         text = self.examples()
         self.assertIn("## WATER M1: the human overturned a review", text)
         self.assertIn("- M1.1 (Fail): M1.1 works", text)

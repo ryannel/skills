@@ -6,6 +6,7 @@ workbench/review-2026-11-08 and check it no longer happens."""
 
 import argparse
 import contextlib
+from datetime import datetime, timedelta, timezone
 import io
 import json
 import os
@@ -897,7 +898,7 @@ class Building(Repo):
         self.review("design")  # the record adopts the first definitions here
         self.git("pull", "-q", "--rebase", "origin", "main")
         self.write_done([milestone("M1", "not_started", ["open"], check="test -n revised")], authorise=False)
-        (self.wt / "docs/evidence/WATER/design-review.md").unlink()  # the fake reviewer rewrites the same text
+        self.evidence("WATER/design-review.md").unlink()  # the fake reviewer rewrites the same text
         self.commit_all()
         os.environ.pop("FAKE_REVIEW")
         self.assertEqual(self.run_loop()["result"], "INVALID")  # revised outside a planner turn
@@ -974,17 +975,18 @@ class Building(Repo):
                           FAKE_REPLY="NEEDS_CONTEXT: which CORE call saves a game; see the handoff")
         result = self.run_loop()
         self.assertEqual(result["result"], "BLOCKED")
-        self.assertEqual(result["blocked"]["handoff"], "docs/evidence/WATER/M1-handoff.md")
-        self.assertEqual(self.git("show", "origin/main:docs/evidence/WATER/M1-handoff.md").stdout,
-                         "Tried the CORE save path; it isn't there.")
-        self.assertIn("docs/evidence/WATER/M1-handoff.md", result["next"]["alternative"])
-        self.assertIn("docs/evidence/WATER/M1-handoff.md", result["next"]["why"])
+        self.assertEqual(result["blocked"]["handoff"], ".orchestrate/evidence/WATER/M1-handoff.md")
+        self.assertEqual(self.evidence("WATER/M1-handoff.md").read_text(), "Tried the CORE save path; it isn't there.")
+        self.git("fetch", "-q", "origin")
+        self.assertNotIn("M1-handoff.md", self.git("ls-tree", "-r", "--name-only", "origin/main").stdout)
+        self.assertIn(".orchestrate/evidence/WATER/M1-handoff.md", result["next"]["alternative"])
+        self.assertIn(".orchestrate/evidence/WATER/M1-handoff.md", result["next"]["why"])
         self.git("checkout", "-q", "--", ".")
         self.git("clean", "-qfd")
         os.environ.pop("FAKE_HANDOFF")
         os.environ.update(FAKE_REPLY="BLOCKED: still stuck")
         self.run_loop(fresh=True, message="CORE has the API now")
-        self.assertIn("left a handoff at docs/evidence/WATER/M1-handoff.md", self.prompt(self.calls()[-1]))
+        self.assertIn("left a handoff at .orchestrate/evidence/WATER/M1-handoff.md", self.prompt(self.calls()[-1]))
 
     def test_paused_goal_stops_before_dispatching_another_turn(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="working")
@@ -1201,9 +1203,7 @@ class Reviewing(Repo):
         self.assertEqual(result["verdict"], "PASS")
         again = self.human("rereview", "M1", reason="too lenient")
         self.assertEqual(self.read_done()["milestones"][0]["status"], "ready_for_review")
-        self.git("fetch", "-q", "origin")
-        files = self.git("ls-tree", "-r", "--name-only", "origin/main").stdout
-        self.assertIn("docs/evidence/WATER/M1-review-1.md", files)
+        self.assertTrue(self.evidence("WATER/M1-review-1.md").exists())
         self.assertTrue(again["commit"])
 
     def test_human_commands_are_refused_inside_a_loop_session(self):
@@ -1773,9 +1773,9 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')
@@ -1789,17 +1789,17 @@ class WhatTheLeadSees(Repo):
         self.assertIn("`turn_not_stopped`", line)
 
     def test_a_blocked_message_gives_paths_in_the_repository_and_names_who_acts(self):
-        os.environ.update(FAKE_PASS="0", FAKE_REPLY=f"BLOCKED: the seam shows in {self.wt}/docs/evidence/WATER/f.png "
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY=f"BLOCKED: the seam shows in {self.wt}/.orchestrate/evidence/WATER/f.png "
                                                     "and I don't know which constant sets it")
         blocked = self.run_loop()
         self.assertEqual((blocked["result"], blocked["reason"]), ("BLOCKED", "needs_context"), blocked)
         what = self.read_done()["milestones"][0]["blocked"]["what"]
-        self.assertEqual(what, "the seam shows in docs/evidence/WATER/f.png and I don't know which constant sets it")
+        self.assertEqual(what, "the seam shows in .orchestrate/evidence/WATER/f.png and I don't know which constant sets it")
         self.assertIn("The lead finds the missing fact, or asks the human", blocked["next"]["why"])
         self.git("fetch", "-q", "origin")
         page = agent_loop.status_page(self.wt, agent_loop.profile(self.wt), "origin/main")
         now_next = page.split("### Now and next")[1].split("###")[0]
-        self.assertIn("Blocked: Needs Context: the seam shows in docs/evidence/WATER/f.png", now_next)
+        self.assertIn("Blocked: Needs Context: the seam shows in .orchestrate/evidence/WATER/f.png", now_next)
         self.assertIn("The lead finds the missing fact, or asks you for it", now_next)
         self.assertNotIn(str(self.wt), page)
 
@@ -3079,12 +3079,12 @@ class FirstRuns(Repo):
         self.assertEqual(nothing["result"], "NOTHING")
         self.assertIn("settings_differ", nothing)
 
-    def test_item2_adopt_lands_build_reports(self):
-        (self.wt / "docs/evidence/build-reports").mkdir(parents=True)
-        (self.wt / "docs/evidence/build-reports/2026-11-10.md").write_text("# Build report")
-        result = self.adopt()
-        self.assertEqual((result["result"], result["files"]),
-                         ("ADOPTED", ["docs/evidence/build-reports/2026-11-10.md"]))
+    def test_item2_adopt_leaves_evidence_uncommitted(self):
+        self.ready()  # links the working folder into the worktree
+        (self.wt / ".orchestrate/evidence/build-reports").mkdir(parents=True)
+        (self.wt / ".orchestrate/evidence/build-reports/2026-11-10.md").write_text("# Build report")
+        self.assertEqual(self.adopt()["result"], "NOTHING")
+        self.assertTrue(self.evidence("build-reports/2026-11-10.md").exists())
 
     # 3. An unplanned repository
 
@@ -3215,7 +3215,7 @@ class FirstRuns(Repo):
         changes = self.review("design", commit=None)
         self.assertEqual((changes["verdict"], changes["next"]["by"]), ("DESIGN CHANGES", "planner"))
         self.assertIn(" plan --worktree ", changes["next"]["command"])
-        self.assertEqual(changes["next"]["findings"], "docs/evidence/WATER/design-review.md")
+        self.assertEqual(changes["next"]["findings"], ".orchestrate/evidence/WATER/design-review.md")
         self.revise_design()
         os.environ.update(FAKE_REVIEW="design")
         ok = self.review("design", commit=None)
@@ -3223,8 +3223,7 @@ class FirstRuns(Repo):
         self.assertIn(" run --module WATER ", ok["next"]["command"])
         # a second design review keeps the first
         self.git("fetch", "-q", "origin")
-        self.assertEqual(self.git("show", "origin/main:docs/evidence/WATER/design-review-1.md").stdout,
-                         "the design needs a second pass")
+        self.assertEqual(self.evidence("WATER/design-review-1.md").read_text(), "the design needs a second pass")
         os.environ.update(FAKE_REVIEW="pass")
         claim = self.run_loop()
         passed = self.review(commit=claim["commit"])
@@ -3441,7 +3440,9 @@ class FirstRuns(Repo):
         result = self.review(commit=claim["commit"])
         self.assertEqual(result["verdict"], "PASS", result)
         self.git("fetch", "-q", "origin")
-        self.assertIn("PNG", self.git("show", "origin/main:docs/evidence/WATER/M1-review/shot.png").stdout)
+        self.assertIn("PNG", self.evidence("WATER/M1-review/shot.png").read_text())
+        self.git("fetch", "-q", "origin")
+        self.assertNotIn("shot.png", self.git("ls-tree", "-r", "--name-only", "origin/main").stdout)
 
     # 10. Owner commands
 
@@ -3568,7 +3569,7 @@ class FirstRuns(Repo):
         os.environ.update(FAKE_REVIEW="design")
         self.assertEqual(self.review("design", commit=None)["verdict"], "DESIGN OK")
         second = self.calls()[-1]["argv"][-1]
-        self.assertIn("Since the last design review (docs/evidence/WATER/design-review.md, at ", second)
+        self.assertIn("Since the last design review (.orchestrate/evidence/WATER/design-review.md, at ", second)
         self.assertIn("these changed: M2.1 changed.", second)
         before = {"milestones": [milestone("M1", "not_started", ["open", "open"]), milestone("M2", "not_started", ["open"])]}
         after = {"milestones": [milestone("M1", "not_started", ["open"]), milestone("M3", "not_started", ["open"])]}
@@ -3592,8 +3593,8 @@ class FirstRuns(Repo):
         self.assertEqual((failed["next"]["escalation"], failed["next"]["by"]), ("diagnosis", "planner"))
         self.assertIn(" plan --worktree ", failed["next"]["command"])
         self.assertIn("Diagnose WATER M1", failed["next"]["command"])
-        self.assertIn("docs/evidence/WATER/M1-review.md", failed["next"]["command"])
-        self.assertEqual(failed["next"]["findings"], "docs/evidence/WATER/M1-review.md")
+        self.assertIn(".orchestrate/evidence/WATER/M1-review.md", failed["next"]["command"])
+        self.assertEqual(failed["next"]["findings"], ".orchestrate/evidence/WATER/M1-review.md")
         # ready: not ready, owed a diagnosis, with the command
         r = self.ready()
         self.assertEqual(r["can_start"], [])
@@ -3641,7 +3642,7 @@ class FirstRuns(Repo):
         nxt = blocked["next"]
         self.assertEqual((blocked["result"], nxt["decides"]), ("BLOCKED", "human"), blocked)
         self.assertTrue(nxt["ask"].startswith("M1.2: M1.2 works (the human picks a direction). Evidence to show "
-                                              "them: docs/evidence/WATER/"), nxt["ask"])
+                                              "them: .orchestrate/evidence/WATER/"), nxt["ask"])
         self.assertIn("The builder's note: M1.2 needs the human", nxt["ask"])
         self.assertIn(" human feedback --module WATER --milestone M1 --item M1.2 ", nxt["command"])
         self.assertIn("--said '<what the human said, in their words>'", nxt["command"])
@@ -3765,9 +3766,9 @@ class FirstRuns(Repo):
                  if line.startswith("- WATER design:")]
         self.assertEqual(len(lines), 2, report)
         self.assertIn("changes", lines[0])
-        self.assertIn("docs/evidence/WATER/design-review-1.md", lines[0])
+        self.assertIn(".orchestrate/evidence/WATER/design-review-1.md", lines[0])
         self.assertIn("ok", lines[1])
-        self.assertIn("docs/evidence/WATER/design-review.md)", lines[1])
+        self.assertIn(".orchestrate/evidence/WATER/design-review.md)", lines[1])
         # a record from before the history was kept still shows the kept review, from its file
         rec = json.loads(self.git("show", "origin/main:docs/plans/WATER/RECORD.json").stdout)
         rec.pop("design_history")
@@ -3775,7 +3776,7 @@ class FirstRuns(Repo):
         ref = self.git("rev-parse", "origin/main").stdout.strip()
         older = agent_loop.design_reviews(self.wt, prof, ref, "WATER", rec)
         self.assertEqual([d["review"] for d in older],
-                         ["docs/evidence/WATER/design-review-1.md", "docs/evidence/WATER/design-review.md"])
+                         [".orchestrate/evidence/WATER/design-review-1.md", ".orchestrate/evidence/WATER/design-review.md"])
 
     # Round seven: the browser-game run
 
@@ -3865,15 +3866,14 @@ class FirstRuns(Repo):
         failed = self.four_fails()
         self.assertEqual((failed["escalation"], failed["next"]["cause"]), ("diagnosis", "a finding keeps coming back"))
         kept = [r.get("review") for r in self.read_record()["milestones"]["M1"]["reviews"]]
-        self.assertEqual(kept, ["docs/evidence/WATER/M1-review-1.md", "docs/evidence/WATER/M1-review.md"])
-        files = self.git("ls-tree", "-r", "--name-only", "origin/main").stdout
-        self.assertIn("docs/evidence/WATER/M1-review-1.md", files)
+        self.assertEqual(kept, [".orchestrate/evidence/WATER/M1-review-1.md", ".orchestrate/evidence/WATER/M1-review.md"])
+        self.assertTrue(self.evidence("WATER/M1-review-1.md").exists())
         task = failed["next"]["command"]
-        self.assertIn("Its reviews, oldest first: docs/evidence/WATER/M1-review-1.md, "
-                      "docs/evidence/WATER/M1-review.md", task)
+        self.assertIn("Its reviews, oldest first: .orchestrate/evidence/WATER/M1-review-1.md, "
+                      ".orchestrate/evidence/WATER/M1-review.md", task)
         self.assertNotIn("git log", task)
         report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
-        self.assertIn("[docs/evidence/WATER/M1-review-1.md]", report)
+        self.assertIn("[.orchestrate/evidence/WATER/M1-review-1.md]", report)
 
     @shares("four-fails")
     def test_r8_the_loop_does_the_replans_bookkeeping_once(self):
@@ -4060,7 +4060,7 @@ class FirstRuns(Repo):
         # the second reviewer is told where the first round is kept, and not what it found, so it judges the items first
         prompt = self.calls()[prompt_before]["argv"][-1]
         self.assertIn("M1 has failed review 1 time since the script last started counting", prompt)
-        self.assertIn("docs/evidence/WATER/M1-review.md", prompt)
+        self.assertIn(".orchestrate/evidence/WATER/M1-review.md", prompt)
         self.assertIn("docs/plans/WATER/RECORD.json under milestones.M1.reviews", prompt)
         self.assertNotIn("the water is flat", prompt)
 
@@ -4224,14 +4224,13 @@ class FirstRuns(Repo):
     def test_r9_each_kept_round_keeps_its_captures(self):
         os.environ.update(FAKE_CAPTURE="1")
         self.four_fails()
-        files = self.git("ls-tree", "-r", "--name-only", "origin/main").stdout.split()
-        self.assertIn("docs/evidence/WATER/M1-review-1/shot.png", files)
-        self.assertIn("docs/evidence/WATER/M1-review/shot.png", files)
-        self.assertEqual(self.git("show", "origin/main:docs/evidence/WATER/M1-review-1/shot.png").stdout, "PNG 4")
-        self.assertEqual(self.git("show", "origin/main:docs/evidence/WATER/M1-review/shot.png").stdout, "PNG 5")
-        kept = self.git("show", "origin/main:docs/evidence/WATER/M1-review-1.md").stdout
+        self.git("fetch", "-q", "origin")
+        self.assertNotIn("shot.png", self.git("ls-tree", "-r", "--name-only", "origin/main").stdout)
+        self.assertEqual(self.evidence("WATER/M1-review-1/shot.png").read_text(), "PNG 4")
+        self.assertEqual(self.evidence("WATER/M1-review/shot.png").read_text(), "PNG 5")
+        kept = self.evidence("WATER/M1-review-1.md").read_text()
         self.assertIn("(M1-review-1/shot.png)", kept)
-        self.assertIn("(M1-review/shot.png)", self.git("show", "origin/main:docs/evidence/WATER/M1-review.md").stdout)
+        self.assertIn("(M1-review/shot.png)", self.evidence("WATER/M1-review.md").read_text())
 
     def test_r9_a_worktree_merely_behind_a_planned_tip_is_told_so(self):
         origin, first = self.root / "o2.git", self.root / "first"
@@ -4721,32 +4720,18 @@ class FirstRuns(Repo):
         self.assertNotIn("--host claude", build[0])
 
     def test_r11_an_archived_design_review_keeps_its_own_time_in_utc(self):
-        ev = self.wt / "docs/evidence/WATER"
+        ev = self.evidence("WATER")
         ev.mkdir(parents=True)
-        (ev / "design-review.md").write_text("first\nDESIGN CHANGES: no LOD plan")
-        self.git("add", "-A")
-        subprocess.run(["git", "-C", str(self.wt), "commit", "-qm", "first review"], check=True, capture_output=True,
-                       env={**os.environ, "GIT_COMMITTER_DATE": "2026-11-10T02:53:50+0100"})
-        (ev / "design-review-1.md").write_text((ev / "design-review.md").read_text())
+        (ev / "design-review-1.md").write_text("first\nDESIGN CHANGES: no LOD plan")
+        when = datetime(2026, 11, 10, 2, 53, 50, tzinfo=timezone(timedelta(hours=1))).timestamp()
+        os.utime(ev / "design-review-1.md", (when, when))  # kept as the second review started
         (ev / "design-review.md").write_text("second\nDESIGN OK")
-        self.git("add", "-A")
-        subprocess.run(["git", "-C", str(self.wt), "commit", "-qm", "second review"], check=True, capture_output=True,
-                       env={**os.environ, "GIT_COMMITTER_DATE": "2026-11-10T02:58:51+0100"})
         prof = agent_loop.profile(self.wt)
-        rec = {"design": {"verdict": "ok", "review": "docs/evidence/WATER/design-review.md",
+        rec = {"design": {"verdict": "ok", "review": ".orchestrate/evidence/WATER/design-review.md",
                           "at": "2026-11-10T01:58:51Z"}}
         rows = agent_loop.design_reviews(self.wt, prof, "HEAD", "WATER", rec)
         self.assertEqual([(d["verdict"], d["at"]) for d in rows],
                          [("changes", "2026-11-10T01:53:50Z"), ("ok", "2026-11-10T01:58:51Z")])
-
-    def test_r11_adopt_names_a_build_report_in_its_subject(self):
-        reports = self.wt / "docs/evidence/build-reports"
-        reports.mkdir(parents=True)
-        (reports / "2026-11-10.md").write_text("# Report\n")
-        self.assertEqual(self.adopt()["result"], "ADOPTED")
-        self.git("fetch", "-q", "origin")
-        self.assertEqual(self.git("log", "-1", "--format=%s", "origin/main").stdout.strip(),
-                         "Adopt build report: 2026-11-10.md")
 
     # Round twelve: the confirmation run
 
@@ -4778,12 +4763,12 @@ class FirstRuns(Repo):
 
     def test_r12_a_written_report_links_from_where_it_lives(self):
         quoted = "a reviewer wrote [see](docs/x.md) and [u](https://x.test/a)"  # not the report's own links
-        text = (agent_loop.md_link("r", "docs/evidence/WATER/M1-review.md") + " "
+        text = (agent_loop.md_link("r", ".orchestrate/evidence/WATER/M1-review.md") + " "
                 + agent_loop.md_link("p", "docs/plans/PAY/PLAN.md") + " " + quoted)
-        self.assertEqual(agent_loop.relink(text, "docs/evidence/build-reports"),
-                         "[r](../WATER/M1-review.md) [p](../../plans/PAY/PLAN.md) " + quoted)
+        self.assertEqual(agent_loop.relink(text, ".orchestrate/evidence/build-reports"),
+                         "[r](../WATER/M1-review.md) [p](../../../docs/plans/PAY/PLAN.md) " + quoted)
         self.assertEqual(agent_loop.relink(text, None),
-                         "[r](docs/evidence/WATER/M1-review.md) [p](docs/plans/PAY/PLAN.md) " + quoted)
+                         "[r](.orchestrate/evidence/WATER/M1-review.md) [p](docs/plans/PAY/PLAN.md) " + quoted)
 
     def test_r13_a_run_that_builds_nothing_isnt_recorded_as_the_modules_run(self):
         self.write_done([milestone("M1", "ready_for_review", ["pass"], inspect="frames"), milestone("M2", "not_started", ["open"])],
@@ -5337,13 +5322,14 @@ class PlanFiles(Repo):
         rec = agent_loop.adopt(doc, agent_loop.text_hash(None))
         rec["design"] = {"verdict": "ok", "hash": agent_loop.text_hash(None)}
         rec["milestones"]["M1"]["done"] = {"by": "review", "at": agent_loop.now(),
-                                                "review": "docs/evidence/WATER/M1-review.md"}
+                                                "review": ".orchestrate/evidence/WATER/M1-review.md"}
         put(self.wt / "docs/plans/WATER/RECORD.json", json.dumps(rec))
         put(self.wt / "docs/plans/WATER/PLAN.md", "# Water\n\n## Open for the human\n- Assumption: waves are blue\n")
         self.write_done([milestone("M1", "not_started", ["open"])], module="EXTRA")
         put(self.wt / "docs/plans/ARCHITECTURE.md", ARCH)
         put(self.wt / "docs/plans/GLOSSARY.md", "**Swell**\nA long wave.\nProposed: by a builder.\n")
         self.commit_all()
+        put(self.evidence("WATER/M1-review.md"), "PASS M1")
         page = self.printed(agent_loop.cmd_status, module=None, worktree=str(self.wt), format="md")
         overview, modules = page.split("## All modules")
         self.assertLess(overview.index("## Overview"), overview.index("### Needs you now"))
@@ -5360,7 +5346,7 @@ class PlanFiles(Repo):
         self.assertNotIn("assumes", needs_you)
         self.assertIn("- M1 (EXTRA M1): Not Started · [plan](EXTRA/PLAN.md)", overview)
         self.assertIn("- The sea moves on screen (WATER M1), ", overview)
-        self.assertIn("[review](../evidence/WATER/M1-review.md)", overview)
+        self.assertIn("[review](../../.orchestrate/evidence/WATER/M1-review.md)", overview)
         lines = [line for line in modules.splitlines() if line.startswith("| ") and "---" not in line][1:]
         self.assertEqual(len(lines), 3)
         self.assertTrue(lines[0].startswith("| 1 | WATER |") and lines[0].endswith("| M2 of 3 · Blocked: Needs Human Feedback |"),
@@ -5484,7 +5470,7 @@ class OnlyTheScriptSetsReadyForReview(Repo):
         doc = json.loads(path.read_text())
         doc["milestones"][0]["status"] = state
         for i in doc["milestones"][0]["items"]:
-            i["builder_result"], i["evidence"] = status, "docs/evidence/WATER/run.log" if status == "pass" else ""
+            i["builder_result"], i["evidence"] = status, ".orchestrate/evidence/WATER/run.log" if status == "pass" else ""
         path.write_text(json.dumps(doc))
         self.git("commit", "-qam", f"M1 {state}", where=where)
 
@@ -5740,19 +5726,19 @@ class ScriptFactsTest(Clean):
     """When the script can't establish a fact, it names where the fact lives rather than stating or dropping it."""
 
     def test_a_round_without_recorded_findings_names_its_review(self):
-        e = {"reviews": [{"verdict": "fail", "at": "2026-11-11T03:14:00Z", "review": "docs/evidence/C/M1-review-1.md"}]}
+        e = {"reviews": [{"verdict": "fail", "at": "2026-11-11T03:14:00Z", "review": ".orchestrate/evidence/C/M1-review-1.md"}]}
         with mock.patch.object(agent_loop, "counted_reviews", lambda e, after=None: e["reviews"]):
             line = agent_loop.history_lines(e)[0]
         self.assertNotIn("no findings recorded", line)
-        self.assertIn("read docs/evidence/C/M1-review-1.md", line)
+        self.assertIn("read .orchestrate/evidence/C/M1-review-1.md", line)
 
     def test_a_design_re_review_that_cant_compare_says_so(self):
-        rec = {"design": {"commit": "a" * 40, "review": "docs/evidence/C/design-review.md", "verdict": "changes"}}
+        rec = {"design": {"commit": "a" * 40, "review": ".orchestrate/evidence/C/design-review.md", "verdict": "changes"}}
         with mock.patch.object(agent_loop, "path_at", lambda *args: None):
             text, changed = agent_loop.design_changes(Path("."), rec, "docs/plans/C/DONE.json", {"milestones": []})
         self.assertIsNone(changed)
         self.assertIn("couldn't compare", text)
-        self.assertIn("docs/evidence/C/design-review.md", text)
+        self.assertIn(".orchestrate/evidence/C/design-review.md", text)
 
     def test_a_changed_design_document_is_named(self):
         doc = {"milestones": []}
@@ -5764,7 +5750,7 @@ class ScriptFactsTest(Clean):
         self.assertIn("the design document (DESIGN.md)", text)
 
     def test_the_planner_task_after_design_changes_counts_must_fix_and_frees_suggestions(self):
-        out = {"verdict": "DESIGN CHANGES", "review": "docs/evidence/C/design-review.md",
+        out = {"verdict": "DESIGN CHANGES", "review": ".orchestrate/evidence/C/design-review.md",
                "line": "DESIGN CHANGES: 2 must_fix findings"}
         task = agent_loop.design_review_next(out, "C", Path("/tmp/x"), {"default_host": "codex"})["command"]
         self.assertIn("Resolve its 2 Must Fix findings", task)
@@ -6323,28 +6309,6 @@ class CommandLine(Repo):
         self.assertIn("[noted](#m2)", on_status)  # an anchor or a web link is left alone
         self.assertIn("[site](https://x.y)", on_status)
 
-    def test_a_review_link_to_a_file_it_doesnt_commit_becomes_text(self):
-        tree = self.root / "tip"
-        (tree / "docs/evidence/WATER/M1-review").mkdir(parents=True)
-        (tree / "docs/evidence/WATER/M1-review/frame.png").write_text("png")
-        text = "See ![frame](M1-review/frame.png) and [the capture](../../../tmp/capture.mov)."
-        out = agent_loop.links_to_tip(text, "docs/evidence/WATER/M1-review.md", tree, "",
-                                      where=", not committed with the review")
-        self.assertIn("![frame](M1-review/frame.png)", out)
-        self.assertIn("the capture (`tmp/capture.mov`, not committed with the review)", out)
-
-    def test_a_handoff_on_main_names_the_branch_for_evidence_only_on_the_builders(self):
-        tree = self.root / "tip"
-        (tree / "docs/evidence/WATER").mkdir(parents=True)
-        (tree / "docs/evidence/WATER/M1.md").write_text("on main")
-        text = ("See [the proof](M1.md), [probe](M1-revision/probe.txt), ![shot](M1-shot.png), "
-                "[plan](../../plans/WATER/PLAN.md#m1), [site](https://example.com/x) and [top](#m1).")
-        out = agent_loop.links_to_tip(text, "docs/evidence/WATER/M1-handoff.md", tree, "build/water")
-        self.assertEqual(out, "See [the proof](M1.md), probe (`docs/evidence/WATER/M1-revision/probe.txt` on branch "
-                              "`build/water`), shot (`docs/evidence/WATER/M1-shot.png` on branch `build/water`), plan "
-                              "(`docs/plans/WATER/PLAN.md` on branch `build/water`), [site](https://example.com/x) "
-                              "and [top](#m1).")
-
 
 class PlannerNudges(Repo):
     def test_a_planner_is_asked_to_shorten_a_long_log_entry_before_its_turn_ends(self):
@@ -6375,7 +6339,7 @@ class CatchUp(Repo):
         self.git("worktree", "add", "-q", "-b", "build/water", str(builder), "origin/main")
         mine = json.loads((builder / "docs/plans/WATER/DONE.json").read_text())
         mine["milestones"][0]["status"] = "in_progress"
-        mine["milestones"][0]["items"][0].update(builder_result="pass", evidence="docs/evidence/WATER/M1.log")
+        mine["milestones"][0]["items"][0].update(builder_result="pass", evidence=".orchestrate/evidence/WATER/M1.log")
         (builder / "docs/plans/WATER/DONE.json").write_text(json.dumps(mine, indent=2) + "\n")
         with (builder / "docs/plans/WATER/LOG.md").open("a") as f:
             f.write("- 2026-11-15 Builder: M1.1 passes.\n")
@@ -6395,7 +6359,7 @@ class CatchUp(Repo):
         merged = json.loads((builder / "docs/plans/WATER/DONE.json").read_text())["milestones"][0]
         self.assertEqual((merged["name"], merged["status"]), ("M1, renamed by the planner", "in_progress"))
         self.assertEqual((merged["items"][0]["builder_result"], merged["items"][0]["evidence"]),
-                         ("pass", "docs/evidence/WATER/M1.log"))
+                         ("pass", ".orchestrate/evidence/WATER/M1.log"))
         text = (builder / "docs/plans/WATER/LOG.md").read_text()
         self.assertIn("Builder: M1.1 passes", text)
         self.assertIn("Planner: renamed M1", text)
@@ -6430,7 +6394,7 @@ class CatchUp(Repo):
         builder = self.root / "builder"
         self.git("worktree", "add", "-q", "-b", "build/water", str(builder), "origin/main")
         mine = json.loads((builder / "docs/plans/WATER/DONE.json").read_text())
-        mine["milestones"][0]["items"][0].update(builder_result="pass", evidence="docs/evidence/WATER/M1.log")
+        mine["milestones"][0]["items"][0].update(builder_result="pass", evidence=".orchestrate/evidence/WATER/M1.log")
         (builder / "docs/plans/WATER/DONE.json").write_text(json.dumps(mine, indent=2) + "\n")
         self.git("commit", "-qam", "build: M1.1", where=builder)
         theirs = json.loads((self.wt / "docs/plans/WATER/DONE.json").read_text())
@@ -6729,7 +6693,7 @@ class MainBranchChecks(Repo):
         self.declare("test ! -f broken")
         self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
         c1 = self.land("tidy the camera", **{"src/camera.txt": "1"})
-        c2 = self.land("water: foam on the shore", **{"broken": "x", "docs/evidence/WATER/foam.md": "foam"})
+        c2 = self.land("water: foam on the shore", **{"broken": "x", "docs/plans/WATER/LOG.md": "- 2026-11-18 foam"})
         self.land("tidy the sky", **{"src/sky.txt": "1"})
         c4 = self.land("tidy the sky again", **{"src/sky.txt": "2"})
         code, line = self.ask(name="images")  # the tip's own answer doesn't wait for the bisect

@@ -104,8 +104,8 @@ When your host restarts, your background commands end with it, though the agents
 first. Read `runs`, the result files and `ready` before you start anything again, because a second review of a
 milestone that was already reviewed holds the module and stops its builder.
 
-A command that stops with a message naming `migrate` has met a project from an older version of this set. Read
-[older projects](references/older-projects.md) before you go on.
+A command that stops with a message naming `migrate` has met a project from an older version of this set, or
+one that commits its evidence. Read [older projects](references/older-projects.md) before you go on.
 
 ### A project that isn't planned yet
 
@@ -341,7 +341,8 @@ back in the queue once you've cleared what blocked it, and prints `UNBLOCKED` wi
 the module's one Blocked milestone, and needs `--milestone <id>` only when there are two. A `human` command prints
 `DONE`, or `RELEASED` for `human release`. `main-check` prints `MAIN_CHECKS`, `STARTED` or `ALREADY_RUNNING`, and
 its log marks each finished run `RAN`, as [locks and main-branch checks](references/locks.md) explains. `pause`
-prints `PAUSED` with the runs it stopped, or `NOTHING` when none was going.
+prints `PAUSED` with the runs it stopped, or `NOTHING` when none was going. `cleanup` prints `WOULD_REMOVE`, or
+`REMOVED` with `--yes`.
 
 Any command prints `REFUSED`, with `problems` and usually `next`, when it won't act. It prints `FAILED`, with
 `detail`, when it tried and couldn't.
@@ -407,7 +408,8 @@ Sessions run in the background by default. With `ORCHESTRATE_VISIBLE=1` on a Mac
 the Codex app, and Claude sessions are also listed in Claude desktop's Code tab. Each result's `path` says which.
 
 Every worktree keeps its own build outputs, so a long build can fill the disk. Clear those in worktrees nothing is
-using. Anything outside the repository, such as a cache shared with other projects, is the human's to clear.
+using. Evidence and the checks' logs and checkouts stay on this computer, outside git, until the human clears them,
+as [clearing up](references/cleanup.md) says. Anything outside the repository is the human's to clear.
 
 An item whose `needs` type is `access` needs the human to approve a permission or a prompt, and one whose type is
 `hardware` needs a device connected. A builder can finish either only in a visible session while the human is at
@@ -429,8 +431,7 @@ doesn't say.
 
 You write a planner's task yourself, from what the human asked for. The design reviewer judges the design against
 that task and the project brief, so where your task settles something the human's words left open, say so in the
-task, and the planner lists it as an assumption the human can overturn. Don't present your own words as the
-human's.
+task, and the planner lists it as an assumption the human can overturn. Don't present your own words as the human's.
 
 - The planner's task goes in `--task`.
 - A restriction the human gave only in conversation, such as "don't touch the schema", goes to the builder with
@@ -456,8 +457,8 @@ with what they said in `--text`:
 | `scope` | The done-when file, as edited in the worktree, is the new scope. Use it only for an edit the human dictated exactly, such as a number: make the edit, show them the diff, and run it on their yes. |
 
 When the human overturns a review with `accept` or `rereview`, and the project settings have a `Graded examples:`
-line, the script adds the review to the file it names, and the result names it in `graded_example`. Later
-reviewers read that file to learn how strict the human is. The `human` commands
+line, the script adds the review to that file in the working folder, and the result names it in `graded_example`.
+Later reviewers read it to learn how strict the human is. The `human` commands
 refuse to run inside a session the script started, and while a `run`, `review` or `plan` is working on the same
 module. In the second case, run it again once that run has stopped.
 

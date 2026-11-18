@@ -1,4 +1,4 @@
-A reviewer has judged M2, and it isn't finished yet. The review is at docs/evidence/APPLE-TILE/M2-review.md.
+A reviewer has judged M2, and it isn't finished yet. The review is at .orchestrate/evidence/APPLE-TILE/M2-review.md.
 
 A reviewer can't try everything, so a review describes what one reviewer happened to try. Where it says an item failed, it shows one thing that makes the item's statement untrue, and there may be others like it that the reviewer never reached. The next review is done by a new reviewer, who starts again from the items and chooses what to try.
 

@@ -161,7 +161,7 @@ human chose.
 
 Have the builder lay the options out side by side for the human, at the size they will be used and also
 enlarged, because a difference in line or texture can be a few pixels at real size. Have it save that as one
-image in the evidence folder too. The human sees it in the chat with the lead, and won't open a file in the
+image in the working folder too. The human sees it in the chat with the lead, and won't open a file in the
 repository.
 
 Hold the options to two things only: the minimum requirements, and being different in kind. They exist so the human

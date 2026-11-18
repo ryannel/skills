@@ -1,11 +1,11 @@
 Review the design of module APPLE-TILE, using the "Reviewing a design" section of the review-milestone skill (the file is /skills/orchestration/review-milestone/SKILL.md).
 
-The goal: a review at docs/evidence/APPLE-TILE/design-review.md that says whether the design does what the human asked for.
+The goal: a review at .orchestrate/evidence/APPLE-TILE/design-review.md that says whether the design does what the human asked for.
 
-Since the last design review (docs/evidence/APPLE-TILE/design-review.md), M2.2 changed.
+Since the last design review (.orchestrate/evidence/APPLE-TILE/design-review.md), M2.2 changed.
 
 About this session:
 - This folder is a clean checkout of the main branch's tip.
-- Any captures go in docs/evidence/APPLE-TILE/design-review/. The script merges the review and that folder, so leave every other file as it is.
+- Any captures go in .orchestrate/evidence/APPLE-TILE/design-review/. The review and that folder are in the repository's working folder, which git ignores, so leave every other file as it is.
 
 To finish, end with the skill's last line.

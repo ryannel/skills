@@ -37,12 +37,19 @@ docs/plans/
     DONE.json                the done-when file
     RECORD.json            the record file; the script writes it
     BRIEF.md                 optional: the human's brief for this module alone
-docs/evidence/<MODULE>/      proof, reviews, and the briefs written for reviews
+.orchestrate/evidence/       the working folder, ignored by git and shared by every worktree
+  <MODULE>/                  proof, reviews, handoffs, and the briefs written for reviews
 ```
 
 A project's plans live in these files and nowhere besides. A plan written in another shape or another place is
 converted into these files and the old one deleted, because two plans for one thing drift apart and the human can't
 tell which is current. Notes an agent keeps while it works stay out of the repository.
+
+Evidence is never committed. The `.orchestrate/evidence` folder (the settings' `Evidence:` path) opens in every
+worktree on the computer onto one working folder in the repository's `.git`, so a review or a capture written in one
+worktree is there in all of them without a commit. Git holds what the project needs to build and run: code, plans,
+and the test data tests read. Evidence is working material, and in git it grows the repository by every capture.
+It stays on the computer until the human clears it with `cleanup`.
 
 Each file has its readers, and is written for them:
 
@@ -106,7 +113,7 @@ paragraphs nobody reads.
 - Assumption: <a reading of the human's words the planner chose, which the human can overturn>
 
 ## M1 <what someone can see or do>: done
-[review](../../evidence/<MODULE>/review.md)
+[review](../../../.orchestrate/evidence/<MODULE>/M1-review.md)
 
 ## M2 <what someone can see or do>
 <A few sentences for the builder, on what the items and the design don't say. Nothing, when there is nothing.>
@@ -119,7 +126,8 @@ paragraphs nobody reads.
 - `Open for the human` holds only open assumptions. When the human answers one, the lead gives their words to a
   planner, because only a planner changes the plan files. The planner deletes the line, notes the answer in the log,
   and changes whatever the answer reaches.
-- Briefs written for reviews go to `docs/evidence/<MODULE>/`, beside the review. Design goes in `DESIGN.md`.
+- Briefs written for reviews go to `.orchestrate/evidence/<MODULE>/` in the working folder, beside the review.
+  Design goes in `DESIGN.md`.
 
 Under a milestone that isn't Done goes a note for its builder, and only when there is something the items and the
 design don't say. That is usually one of three things: what already exists that the milestone builds on, and where it
@@ -146,7 +154,7 @@ file grows until no builder reads all of it.
 
 The log is the module's history: decisions, proposals to change an interface, what a failed review found, and what
 the human said. Each entry is one dated line, with at most a few lines under it, and the newest at the bottom.
-Longer detail goes in `docs/evidence/<MODULE>/` with a link. `plan` and `adopt` refuse an entry of more than eight
+Longer detail goes in the working folder, `.orchestrate/evidence/<MODULE>/`, with a link. `plan` and `adopt` refuse an entry of more than eight
 lines, counting its dated line, and a planner is told to shorten one before its turn ends. Nobody reads the log to
 find out where the module stands, so it may grow.
 

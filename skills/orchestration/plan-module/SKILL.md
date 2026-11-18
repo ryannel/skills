@@ -81,9 +81,9 @@ and lands on an empty dashboard". The script puts those names on `STATUS.md`, th
 like "M2 auth handler refactor" tells the human nothing.
 
 Keep the plan file short. A Done milestone shrinks to its heading and a link to its review. Briefs written for
-reviews go to `docs/evidence/<MODULE>/`, and design goes in `DESIGN.md`. The script refuses a plan over about
-1,500 words, or one with status lines, `###` headings or a log in it, because a plan file that collects those
-grows until no builder reads all of it.
+reviews go to the working folder, `.orchestrate/evidence/<MODULE>/`, and design goes in `DESIGN.md`. The script
+refuses a plan over about 1,500 words, or one with status lines, `###` headings or a log in it, because a plan file
+that collects those grows until no builder reads all of it.
 
 Under a milestone, write only what its builder couldn't work out from the items and the design: what already exists
 and where it is, what another module owns that the milestone uses or could be tempted to change, or an order where the

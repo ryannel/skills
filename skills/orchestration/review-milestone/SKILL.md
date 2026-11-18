@@ -13,20 +13,24 @@ this is finished, the checks pass, and no reviewer has judged it yet". You are t
 of the building. That is what makes you useful: everything you know comes from the files and from the product itself.
 
 The script `agent_loop.py`, which keeps the project's records, started you with its `review` command. You are in a
-clean copy of the commit you are judging. When you finish, the command checks what you changed, saves your review
-and merges it.
+clean copy of the commit you are judging. When you finish, the command checks what you changed, records your
+verdicts and merges them.
 
 ## Where things are
 
 The project settings are in `ORCHESTRATE.md`. They list the devices and platforms the product runs on, which the
-files call targets, and for each target the edge conditions to try, such as a slow network or an empty file. They
-also say where reviews are kept: the folder written `<evidence>` below.
+files call targets, and for each target the edge conditions to try, such as a slow network or an empty file.
+
+Reviews, captures and the builder's evidence are in the repository's working folder, written `<evidence>` below.
+It is the `Evidence:` path in the settings, `.orchestrate/evidence` unless they name another, and it opens in your
+checkout like any folder. Git ignores it, and nothing in it is ever committed: git holds what the project needs to
+build and run, and a review is working material for the people improving the build. Every worktree on this computer
+sees the same files, so you read the builder's evidence and earlier reviews there without a commit.
 
 The graded examples are past reviews that the human, the person the project is for, agreed with or overturned.
-They are the best guide to how strict to be. The project's own are in the file named on the `Graded examples:`
-line of the project settings, or in `<evidence>/graded-examples.md` when there is no such line. A new project
-won't have them yet, so read [the starting set](references/graded-examples.md) that comes with this skill as
-well.
+They are the best guide to how strict to be. The project's own are in the working folder, in the file the `Graded
+examples:` line of the project settings names, or in `<evidence>/graded-examples.md`. A new project won't have
+them yet, so read [the starting set](references/graded-examples.md) that comes with this skill as well.
 
 If the plans folder has a `GLOSSARY.md`, read it. It holds the agreed name for each thing in the project, and
 your review should use those names. A name in the work that disagrees with the glossary is worth reporting, but
@@ -117,9 +121,9 @@ less than many short looks with `sleep` and `tail`. Your task gives the script's
 4. The review is written down, in two files and one folder:
    - The full review, with your inspection lists, goes in `<evidence>/<MODULE>/<milestone>-review.md`.
    - Screenshots and recordings go in the folder `<evidence>/<MODULE>/<milestone>-review/`. Link them from the
-     review rather than embedding them, because whoever reads the review loads everything embedded in it. Link only
-     files in that folder or files already on the main branch. The `review` command commits only these files, so a
-     link to anything else is broken once the review is on the main branch.
+     review rather than embedding them, because whoever reads the review loads everything embedded in it. Link
+     files in that folder, other files in the working folder, or files on the main branch, so the link opens from
+     any worktree.
    - In the done-when file, set each item's `verdict`. If any result isn't `pass`, or a Must Fix lies outside the
      items, list every Must Fix in the milestone's `findings`, one entry each: a short `name`, and the `item` it
      fails, which you leave out for a finding outside the items. Every item that didn't pass needs a finding.
@@ -143,8 +147,9 @@ human, so keep the field for faults in the items, and leave work that falls shor
 A `could_not_judge` counts as a fail, because nobody could check the item. A Must Fix outside the items fails the
 milestone too, and the review then proposes an item that would have caught it. A Suggestion never fails it.
 
-Change only those two files and that folder, and leave them uncommitted, because the `review` command commits
-and merges them itself. Leave the code as you found it: if you fixed what you found, nothing independent would
+Change only the done-when file in your checkout, and write the review and its folder in the working folder. Leave
+all of it uncommitted, because the `review` command checks your verdicts and merges them itself, and the review
+stays where it is. Leave the code as you found it: if you fixed what you found, nothing independent would
 have checked the fix. If you change any of the planner's fields, or touch another milestone, the `review` command
 rejects the whole review and saves none of it. Do the reading and the judging yourself rather than starting other
 agents, because a review whose reading was handed to a helper hasn't read the work.

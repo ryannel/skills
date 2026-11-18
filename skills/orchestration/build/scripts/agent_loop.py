@@ -256,8 +256,8 @@ Subcommands:
   adopt [--worktree PATH] [--message TEXT] [PLAN FILE]...
         Commits plan files that are uncommitted, or committed here but not merged, and merges them through a
         clean checkout of the tip, as the script merges its own records, so nothing else in the worktree goes with them.
-        Also merges a first ORCHESTRATE.md (one the tip doesn't have yet) and files under <evidence>/build-reports/, where
-        older projects kept a report a day.
+        Also merges a first ORCHESTRATE.md (one the tip doesn't have yet). Evidence, build reports among it, is never
+        merged: it stays in the working folder.
         A module's definitions are a draft until a design review of it passes. While they are, and nothing has been
         built (no Ready for Review record, review or acceptance, no milestone past not_started, no run holding the module), adopt authorises
         changed definitions (`authorised` lists the modules; the record's stamp says why), because the owed design
@@ -419,7 +419,7 @@ Subcommands:
         the main branch's commits since the last pass (a command exits 75 when it couldn't judge the commit, such as a
         capture that dropped frames: it is tried up to three times, and a run it still can't judge fails nothing and
         starts no bisect), naming the first failing commit, its subject and the modules
-        whose plans or evidence it changed. With NAME it answers for a commit (default HEAD): COVERED (exit 0) when a
+        whose plans it changed. With NAME it answers for a commit (default HEAD): COVERED (exit 0) when a
         pass exists on a main-branch commit that contains it; FAILING_ON_MAIN (exit 1) when a failure that held does
         and no pass does; NOT_ON_MAIN (exit 1) for a commit the main branch doesn't contain yet. Otherwise it joins the
         run in flight or starts one, in a process of its own that outlives the request, and waits up to --wait
@@ -557,10 +557,12 @@ this one.
 - A lead is running this build. Once the script's checks pass on your merged work, a reviewer in a new session \
 judges the milestone.
 - The script is `python3 {loop}`.
+- Evidence files, such as captures and logs, go under {captures}/. That folder is the repository's working \
+folder, shared by every worktree on this computer and ignored by git, so leave them uncommitted.
 - {session}
 {resources}{needs}{rules}{lead}
-When the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to {handoff} and \
-commit it with your work. Then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, or with \
+When the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to {handoff}, which \
+is in the working folder too. Then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, or with \
 `NEEDS_CONTEXT: <the fact you need>` when what you are missing is a fact. The skill lists the reasons."""
 
 REVIEW_TEMPLATE = """Review milestone {milestone} of module {module}, using the review-milestone skill ({skill}).
@@ -571,7 +573,8 @@ set as the skill says.
 About this session:
 - This folder is a clean checkout of commit {commit}, which the script made for you. Build and run the product \
 from it where an item needs you to see it working.{checks}
-- Captures and other evidence files go in {captures}/.
+- Captures and other evidence files go in {captures}/. The review and that folder are in the repository's working \
+folder, which git ignores, and the script keeps them there.
 - The script is `python3 {loop}`, for the `background` and `wait` commands the skill describes.
 
 To finish, end with the skill's last line."""
@@ -583,7 +586,8 @@ The goal: a review at {review} that says whether the design does what the human 
 {changed}{briefs}
 About this session:
 - This folder is a clean checkout of the main branch's tip.
-- Any captures go in {captures}/. The script merges the review and that folder, so leave every other file as it is.
+- Any captures go in {captures}/. The review and that folder are in the repository's working folder, which git \
+ignores, so leave every other file as it is.
 
 To finish, end with the skill's last line."""
 
@@ -629,7 +633,7 @@ class TipError(Exception):
 
 # --------------------------------------------------------------------------------------------------------- settings
 
-PROFILE_FIELDS = {"plans": "docs/plans", "evidence": "docs/evidence", "test command": None, "branch": "main",
+PROFILE_FIELDS = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "test command": None, "branch": "main",
                   "remote": "origin", "merge": None, "codex sandbox": "workspace-write", "writable roots": "",
                   "graded examples": "", "effort": "", "claude permissions": "auto", "default host": "",
                   "review host": "", "planner host": "", "exclusive resources": "", "setup command": "",
@@ -846,9 +850,18 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
     problems += locks["problems"]
     out["main_checks"] = main_check_lines(text, problems)
     out["roots"] = [r.strip() for r in out.pop("writable roots").split(",") if r.strip()]
+    if Path(out["evidence"]).is_absolute() or ".." in Path(out["evidence"]).parts:
+        problems.append(f"evidence: {out['evidence']!r} (want a path inside the repository, such as "
+                        f"{EVIDENCE_DEFAULT}, which the script links to the working folder)")
+        out["evidence"] = EVIDENCE_DEFAULT
+    # Graded examples are evidence too, so they live in the working folder. The `Graded examples:` line turns them on:
+    # only then does a decision of the human's that overturns a review add one. A name under `Evidence:` is kept as
+    # it is; any other name keeps its file name and moves into the working folder.
     graded = out.pop("graded examples")
-    out["graded_examples"] = graded or f"{out['evidence']}/graded-examples.md"
-    out["graded_examples_named"] = bool(graded)  # only a named file gains the human's overturned reviews
+    named = bool(graded) and graded.lower() != "none"
+    out["graded_examples"] = (graded.rstrip("/") if named and inside(graded, out["evidence"]) else
+                              f"{out['evidence']}/{Path(graded).name if named else 'graded-examples.md'}")
+    out["graded_examples_named"] = named  # only a named file gains the human's overturned reviews
     # Prose rules the script restates on resumed turns; None when the line is missing or still a placeholder.
     out["bounds"] = {}
     for label in BOUNDS:
@@ -858,6 +871,10 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
         raise SystemExit(flat_refusal(worktree, out["plans"]))
     if not old_ok and (old := old_names_here(worktree, out["plans"], text)):
         raise SystemExit(old_names_refusal(worktree, old))
+    if not old_ok and path.exists():
+        if committed := committed_evidence(worktree, text):
+            raise SystemExit(evidence_refusal(worktree, committed))
+        link_evidence(worktree, out["evidence"], remember=True)
     if problems:
         message = "ORCHESTRATE.md has missing, unfilled or invalid fields: " + "; ".join(problems)
         if strict:
@@ -1050,6 +1067,149 @@ def loop_dir(worktree: Path) -> Path:
     return path
 
 
+# ---------------------------------------------------------------------------------------------- the working folder
+# Git holds what the project needs to build and run: its code, its plans and the test data its tests read. Evidence
+# is working material for a review: captures, frames, logs, builder handoffs, write-ups, the reviews themselves and
+# graded examples. Nothing reads it in a later step of the project, so it is never committed. It lives in one working
+# folder per repository, <git common dir>/orchestrate/evidence/, which every worktree, builder and reviewer on this
+# computer can already read and write, and stays there until the human clears it with `cleanup`. The settings'
+# `Evidence:` path (EVIDENCE_DEFAULT unless the settings name another) is a link to that folder in every worktree the
+# script creates or brings up, and git ignores it, so a path written from the repository's root, such as a done-when
+# file's `review` pointer, opens from inside any worktree.
+
+EVIDENCE_DEFAULT = ".orchestrate/evidence"
+OLD_EVIDENCE_DEFAULT = "docs/evidence"  # the default before 2.6.0, when evidence was committed
+EVIDENCE_MOVED_FILE = "evidence-moved.json"  # under <git common dir>/orchestrate: the folders `migrate` moved it out of
+EVIDENCE_HERE: dict = {}  # git common dir -> the `Evidence:` path the settings last named, for the script's checkouts
+
+
+def evidence_root(worktree: Path) -> Path:
+    """The working folder: <git common dir>/orchestrate/evidence/."""
+    return loop_dir(worktree) / "evidence"
+
+
+def inside(path: str, folder: str) -> bool:
+    """Whether the repository path `path` is `folder` or under it."""
+    folder = folder.rstrip("/")
+    return path == folder or path.startswith(folder + "/")
+
+
+def evidence_file(worktree: Path, prof: dict, rel: str) -> Path:
+    """The file at `rel`, a path from the repository's root. One under `Evidence:` is read in the working folder
+    itself, so the script never depends on a worktree's link."""
+    if inside(rel, prof["evidence"]):
+        return evidence_root(worktree) / rel[len(prof["evidence"]):].lstrip("/")
+    return worktree / rel
+
+
+def evidence_setting(text: str) -> str:
+    """The `Evidence:` path a settings file names, or the default."""
+    value = (profile_value(text, "evidence") or "").split()
+    return value[0].rstrip("/") if value and not PLACEHOLDER.search(value[0]) else EVIDENCE_DEFAULT
+
+
+def link_evidence(tree: Path, rel: str | None = None, remember: bool = False) -> bool:
+    """Makes `rel`, the settings' `Evidence:` path, a link to the working folder in `tree`, and makes sure git ignores
+    it. With no `rel`, the path the settings last named in this repository, else the one in the tree's own settings.
+    A path that is already something else, such as a folder still committed before `migrate`, is left alone. True
+    when the link is in place. With `remember`, `rel` is the path the settings name now (`profile` passes it). Never
+    raises: a tree it can't link works as before, through the paths in prompts."""
+    try:
+        common = git_common_dir(tree)
+        if remember and rel:
+            EVIDENCE_HERE[common] = rel
+        rel = rel or EVIDENCE_HERE.get(common)
+        if rel is None:
+            settings = tree / PROFILE_FILE
+            rel = evidence_setting(settings.read_text() if settings.exists() else "")
+        if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
+            return False
+        target = Path(common) / "orchestrate" / "evidence"
+        target.mkdir(parents=True, exist_ok=True)
+        link = tree / rel
+        if link.is_symlink():
+            if Path(os.readlink(link)) == target:
+                return True
+            link.unlink()  # a link left by a clone at another path
+        elif link.exists():
+            try:
+                link.rmdir()  # an empty folder, such as one a checkout of a refused commit left behind
+            except OSError:
+                return False
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(target)
+        ignore_evidence(tree, rel)
+        return True
+    except (OSError, WriteBlocked):
+        return False
+
+
+def ignore_evidence(tree: Path, rel: str) -> None:
+    """Adds `rel` to the repository's own ignore list (info/exclude, shared by every worktree), unless git already
+    ignores it. A line there changes no file in git, so the project's .gitignore stays the project's."""
+    if git(tree, "check-ignore", "-q", "--no-index", rel).returncode == 0:
+        return
+    out = git(tree, "rev-parse", "--git-path", "info/exclude").stdout.strip()
+    if not out:
+        return
+    exclude = Path(out) if Path(out).is_absolute() else tree / out
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    text = exclude.read_text() if exclude.exists() else ""
+    line = "/" + rel.strip("/")
+    if line not in text.splitlines():
+        exclude.write_text(text + ("" if not text or text.endswith("\n") else "\n") +
+                           "# orchestrate's working folder: evidence is never committed\n" + line + "\n")
+
+
+def committed_evidence(tree: Path, text: str) -> str | None:
+    """The folder where this working copy still keeps committed evidence, as projects did before 2.6.0: the
+    `Evidence:` path when it is a folder git tracks, or the old default when the settings name none. None when
+    there is none, which costs no git call for a project already moved."""
+    words = (profile_value(text, "evidence") or OLD_EVIDENCE_DEFAULT).split()
+    rel = words[0].rstrip("/") if words else OLD_EVIDENCE_DEFAULT
+    path = tree / rel
+    if path.is_symlink() or not path.is_dir():
+        return None
+    return rel if git(tree, "cat-file", "-e", f"HEAD:{rel}").returncode == 0 else None
+
+
+def evidence_refusal(tree: Path, rel: str) -> str:
+    """The message a command stops with when a project still commits its evidence."""
+    return (f"error: this project still keeps its evidence in git, under {rel}. From orchestrate 2.6.0 evidence lives "
+            f"in a working folder outside git, <git common dir>/orchestrate/evidence/, linked into each worktree at "
+            f"{EVIDENCE_DEFAULT}, because git holds only what the project needs to build and run. Move it once, while "
+            "no run is working, with:\n  " + loop_cmd("migrate", "--worktree", str(tree)) +
+            f"\nmigrate copies the files at the tip into the working folder (it leaves them in git, for you to remove "
+            f"from history if you want to), points the done-when files, records and plan links at the new place, and "
+            f"changes the Evidence line.")
+
+
+def moved_evidence(worktree: Path) -> list[str]:
+    """The folders `migrate` moved evidence out of, which nothing may commit to again."""
+    try:
+        return list(json.loads((loop_dir(worktree) / EVIDENCE_MOVED_FILE).read_text()).get("from") or [])
+    except (OSError, ValueError, AttributeError):
+        return []
+
+
+def evidence_in_commits(tree: Path, prof: dict, base: str) -> list[str]:
+    """Files under `Evidence:`, or under a folder `migrate` moved evidence out of, that the commits since `base` add
+    or change. Removing them is fine."""
+    folders = [prof.get("evidence") or EVIDENCE_DEFAULT, *moved_evidence(tree)]
+    out = git(tree, "diff", "--name-only", "--diff-filter=ACMRT", base, "HEAD", "--", *folders).stdout
+    return [p for p in out.splitlines() if p]
+
+
+def evidence_commit_problem(committed: list[str], prof: dict) -> str:
+    """Why `merge` refused commits that put evidence in git, and what to do."""
+    return (f"these commits add or change evidence in git: {', '.join(committed[:10])}"
+            f"{', ...' if len(committed) > 10 else ''}. Evidence is never committed: it lives in the working folder "
+            f"at {prof.get('evidence') or EVIDENCE_DEFAULT}, which every worktree on this computer shares, because git "
+            "holds only what the project needs to build and run. A file a test or a check reads belongs outside it, "
+            "as test data. Move the files, take them out of the commits (`git rm --cached` and amend, or rebase), "
+            "and merge again")
+
+
 def base_ref(prof: dict) -> str:
     return f"{prof['remote']}/{prof['branch']}" if prof["merge"] == "push" else prof["branch"]
 
@@ -1167,9 +1327,8 @@ def catch_up(worktree: Path, prof: dict, ref: str) -> dict:
     the plan files since they parted, so a builder never resumes against plans a planner has replaced. A conflict in
     the plans folder is settled for the tip: its definitions and records, with the builder's proof kept on items whose
     definitions didn't change (`merged_done`) and both sides' LOG.md entries kept. A conflict anywhere else is the
-    builder's to settle, so the rebase is undone and the worktree left as it was, except the builder's handoff, where
-    the builder's own copy wins: the tip's is the copy the script merged when the milestone was blocked, with links to
-    evidence still on this branch turned into text (`links_to_tip`). Returns what happened, for the result line: {}
+    builder's to settle, so the rebase is undone and the worktree left as it was, except a handoff committed before
+    2.6.0, where the builder's own copy wins over the copy the script merged when the milestone was blocked. Returns what happened, for the result line: {}
     when there was nothing to do."""
     if git(worktree, "status", "--porcelain").stdout.strip() or is_ancestor(worktree, ref, "HEAD") \
             or is_ancestor(worktree, "HEAD", ref):
@@ -1334,8 +1493,8 @@ def log_rel(prof: dict, stem: str) -> str:
 
 
 def handoff_rel(prof: dict, stem: str, mid: str) -> str:
-    """Where a builder that stops short writes what the next session needs: the evidence folder, which the script
-    merges and every agent can read."""
+    """Where a builder that stops short writes what the next session needs: the working folder, which every agent on
+    this computer reads without a commit."""
     return f"{prof['evidence']}/{stem}/{mid}-handoff.md"
 
 
@@ -2421,15 +2580,18 @@ def counted_reviews(e: dict, after: int | None = None) -> list[dict]:
 
 
 def review_files(worktree: Path, prof: dict, module: str, mid: str) -> tuple[list[str], bool]:
-    """(the file of every review against the milestone's current definitions, oldest first; whether some of
-    those files were overwritten before the script kept them), read from the record at the last-fetched tip."""
+    """(the file of every review against the milestone's current definitions that is still in the working folder,
+    oldest first; whether some of those reviews are no longer there: overwritten before the script kept them, or
+    cleared by `cleanup`), read from the record at the last-fetched tip."""
     try:
         rec = json.loads(show(worktree, base_ref(prof), record_rel(prof, module)) or "{}")
     except (json.JSONDecodeError, SystemExit):
         rec = {}
     e = (rec.get("milestones") or {}).get(mid) or {}
     reviews = counted_reviews(e)
-    return [r["review"] for r in reviews if r.get("review")], any(r.get("review_in_history") for r in reviews)
+    named = [r["review"] for r in reviews if r.get("review")]
+    here = [f for f in named if evidence_file(worktree, prof, f).is_file()]
+    return here, len(here) < len(named) or any(r.get("review_in_history") for r in reviews)
 
 
 def review_history(worktree: Path | None, prof: dict, module: str, mid: str, after: int | None = None) -> list[str]:
@@ -2456,7 +2618,7 @@ def review_notes(mid: str, prof: dict, stem: str, feedback: list | None, earlier
     if earlier:
         files = [r["review"] for r in earlier if r.get("review")]
         kept = (f"Those reviews are {', '.join(files)}. Your review replaces the latest one, and the script keeps a "
-                "copy of it" if files else "Those reviews are only in git history")
+                "copy of it" if files else "Those reviews are no longer in the working folder")
         parts.append(f"{mid} has failed review {plural(len(earlier), 'time')} since the script last started counting. {kept}. "
                      f"The name of each finding is in {record_rel(prof, stem)} under milestones.{mid}.reviews. Judge "
                      "the items before you read any of these, as the skill's section \"A milestone that has been "
@@ -2476,7 +2638,7 @@ def history_lines(e: dict, after: int | None = None) -> list[str]:
         found = r.get("findings")
         if found is None:  # reviews from before findings were recorded: point at the review rather than say "none"
             failed = [i for i, v in (r.get("items") or {}).items() if v != "pass"]
-            read = f"read {r['review']}" if r.get("review") else "its review is only in git history"
+            read = f"read {r['review']}" if r.get("review") else "its review is no longer kept"
             what = (f"items {', '.join(failed)} didn't pass; " if failed else "") + \
                 f"its findings weren't recorded, so {read} for their names"
         else:
@@ -2494,7 +2656,8 @@ def diagnosis_task(module: str, mid: str, counts: dict, prof: dict, worktree: Pa
     latest = f"{prof['evidence']}/{module}/{mid}-review.md"
     files, lost = review_files(worktree, prof, module, mid) if worktree else ([], True)
     where = (f"Its reviews, oldest first: {', '.join(files)}" if files else f"The latest review is {latest}") + \
-        (f" (earlier ones are only in git history: git log -p -- {latest})" if lost or not files else "")
+        (" (some earlier ones are no longer in the working folder; the delivery history keeps a copy of each "
+         "review the script counted, under reviews/ in the folder `history` names)" if lost or not files else "")
     history = review_history(worktree, prof, module, mid)
     each = f" What failed in each review: {' | '.join(history)}." if history else ""
     if marked := planner_findings(counts):
@@ -4152,6 +4315,7 @@ def verify_tree(worktree: Path, name: str, ref: str) -> Path:
     if (path / ".git").exists():
         if git(path, "checkout", "--quiet", "--force", "--detach", ref).returncode == 0:
             git(path, "clean", "-ffdq")
+            link_evidence(path)
             return path
         shutil.rmtree(path, ignore_errors=True)
     git(worktree, "worktree", "prune")
@@ -4159,6 +4323,7 @@ def verify_tree(worktree: Path, name: str, ref: str) -> Path:
     r = git(worktree, "worktree", "add", "--quiet", "--force", "--detach", str(path), ref)
     if r.returncode != 0:
         raise TipError(f"couldn't make a clean checkout at {path}: {r.stderr.strip()[-300:]}")
+    link_evidence(path)
     return path
 
 
@@ -4202,6 +4367,8 @@ def land(tree: Path, prof: dict, check: bool = False) -> tuple[bool, str]:
             if r.returncode != 0:
                 git(tree, "rebase", "--abort")
                 return False, f"rebase onto {base} failed: {(r.stdout + r.stderr).strip()[-400:]}"
+            if committed := evidence_in_commits(tree, prof, base):
+                return False, evidence_commit_problem(committed, prof)
             if check and prof["test_command"] and (setup := run_setup(tree, prof)):
                 return False, " ".join(setup["problem"].split("\n"))
             if check and prof["test_command"]:
@@ -4254,7 +4421,7 @@ def loop_write(worktree: Path, prof: dict, name: str, change, message: str,
         except TipError as e:
             return False, str(e)
         legacy = trailer and take_up_ok and unrecorded(tree, prof, "HEAD")
-        paths = change(tree)
+        paths = [p for p in change(tree) or [] if not inside(p, prof.get("evidence") or EVIDENCE_DEFAULT)]  # evidence is never committed
         if not paths:
             return True, head_commit(tree)
         if legacy:
@@ -5774,7 +5941,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.5.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.6.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5803,6 +5970,23 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.6.0": [
+        "Evidence is no longer committed. Reviews, captures, handoffs, builders' proof and graded examples go in "
+        "one working folder per repository, <git common dir>/orchestrate/evidence/, which opens in every worktree "
+        "at the `Evidence:` path (.orchestrate/evidence by default) and which git ignores. Git holds only code, "
+        "plans and the test data tests read; `merge` refuses a commit that adds or changes files under the "
+        "evidence path. Read the build skill's references/cleanup.md.",
+        "A project whose evidence is committed is refused by every command until `migrate --worktree <repo>` runs. "
+        "It copies the committed files into the working folder (leaving them in git), points the done-when files, "
+        "records, plan links and settings at the new place in one commit, and is safe to run twice. Give any "
+        "`definitions_naming_it` to a planner, and tell the human that links into the working folder open on this "
+        "computer but not in a fresh clone or a docs link checker. The old files leave history only when the human "
+        "has them purged.",
+        "New `cleanup`: it lists what the build keeps on this computer (evidence of Done milestones, the script's "
+        "checkouts, logs, copied ledger rows) by kind and size, and removes it only with `--yes`, on the human's "
+        "word. The delivery history now keeps a copy of each counted review. `adopt` no longer merges build "
+        "reports.",
+    ],
     "2.5.0": [
         "New delivery history: after every turn the script copies that session's tokens, model, timing, compactions "
         "and errors out of the Claude or Codex session file into ~/.orchestrate/history/, so they outlive the "
@@ -6384,12 +6568,12 @@ def session_rule(headless: bool, host: str) -> str:
 
 
 def earlier_handoff(worktree: Path, prof: dict, stem: str, mid: str) -> str:
-    """A note naming the handoff an earlier session on this milestone left, when there is one at the main branch's
-    tip, for a session that starts without it."""
+    """A note naming the handoff an earlier session on this milestone left in the working folder, for a session that
+    starts without it."""
     rel = handoff_rel(prof, stem, mid)
     try:
-        here = show(worktree, tip(worktree, prof, fetch=False), rel)
-    except TipError:
+        here = evidence_file(worktree, prof, rel).read_text(errors="replace")
+    except OSError:
         here = None
     if not (here or "").strip():
         return ""
@@ -6397,27 +6581,6 @@ def earlier_handoff(worktree: Path, prof: dict, stem: str, mid: str) -> str:
 
 
 LINK = re.compile(r"(!?)\[([^\]\n]*)\]\(([^)\s]+)(\s+\"[^\"]*\")?\)")
-
-
-def links_to_tip(text: str, rel: str, tree: Path, branch: str, where: str | None = None) -> str:
-    """A handoff as it can stand at the main branch's tip: each relative link whose file the tip lacks becomes the
-    link's text and the path in backticks, with the branch that holds it. The handoff merges before the builder's
-    work does, and a link to evidence still on the builder's branch would fail the repository's link check on main
-    for every builder."""
-    folder = Path(rel).parent
-
-    def fix(m):
-        target = m.group(3)
-        if re.match(r"^[a-z][a-z0-9+.-]*:|^#|^/", target, re.IGNORECASE):
-            return m.group(0)
-        path = os.path.normpath(folder / target.split("#", 1)[0])
-        if path.startswith("..") or (tree / path).exists():
-            return m.group(0)
-        place = where if where is not None else \
-            f" on branch `{branch}`" if branch and branch != "HEAD" else " on the builder's branch"
-        label = m.group(2).strip()
-        return f"{label + ' ' if label and label != path else ''}(`{path}`{place})"
-    return LINK.sub(fix, text)
 
 
 def handoff_note(rel: str, mid: str) -> str:
@@ -6437,7 +6600,7 @@ def build_prompt(host: str, headless: bool, prof: dict, stem: str, mid: str, mil
         loop=LOOP, skill=skill_note("build-milestone", host),
         lead=f"\nFrom the lead:\n{lead}\n" if lead else "",
         feedback=("\n" + feedback_note(feedback, mid, record_rel(prof, stem)) + "\n") if feedback else "",
-        handoff=handoff_rel(prof, stem, mid), earlier=earlier,
+        handoff=handoff_rel(prof, stem, mid), earlier=earlier, captures=f"{prof['evidence']}/{stem}/{mid}",
         needs="".join(f"- {line}\n" for line in needs_rules(milestone, headless)),
         resources=resources_rule(prof), session=session_rule(headless, host),
         rules="".join(f"- {human_rules_line([x])}\n" for x in rules))
@@ -7642,25 +7805,11 @@ def cmd_run(a: argparse.Namespace) -> None:
         what = repo_relative(what, worktree_roots(worktree))
         blocked = {"reason": reason, **({"items": items} if items else {}), "what": what[:2000],
                    **({"work": w} if (w := builder_work(worktree, prof)) else {})}
-        # The builder's handoff merges on its own, as the builder's file and not a record, before the block that
-        # names it, so whoever reads the block can open it at the main branch's tip.
+        # The builder's handoff is in the working folder, where whoever reads the block opens it without a commit.
         rel = handoff_rel(prof, stem, mid)
-        source = worktree / rel
+        source = evidence_file(worktree, prof, rel)
         if source.is_file() and source.read_text(errors="replace").strip():
-            branch = git(worktree, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-            raw = source.read_text(errors="replace")
-
-            def put(tree):
-                text = links_to_tip(raw, rel, tree, branch).encode()
-                target = tree / rel
-                if target.is_file() and target.read_bytes() == text:
-                    return []
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(text)
-                return [rel]
-            ok, _ = loop_write(worktree, prof, key, put, f"{stem} {mid}: the builder's handoff", trailer=False)
-            if ok:
-                blocked["handoff"] = rel
+            blocked["handoff"] = rel
 
         def change(tree):
             path = tree / done_rel(prof, stem)
@@ -8148,7 +8297,36 @@ KEEP_LINE = re.compile(r"^KEEP\s+([A-Za-z0-9_.-]+)\s+([A-Za-z0-9_.-]+)\s*:\s*(bu
 
 def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     """Runs one review, milestone or design, and returns its result instead of printing it. `locked` means the
-    caller (a `run` doing an owed design review) already holds the module's run lock."""
+    caller (a `run` doing an owed design review) already holds the module's run lock. The reviewer writes its review
+    straight into the working folder, so a review that isn't counted (invalid, stopped, or not merged) is taken back
+    out of it, leaving the review that was there before."""
+    undo: list = []
+    try:
+        out = review_turn(a, locked, undo)
+    except BaseException:
+        for step in undo:
+            step()
+        raise
+    if out.get("result") != "REVIEWED":
+        for step in undo:
+            step()
+    return out
+
+
+def put_back(path: Path, text: str | None) -> None:
+    """Puts the file at `path` back to `text`, or removes it when there was none."""
+    try:
+        if text is None:
+            path.unlink(missing_ok=True)
+        elif not path.exists() or path.read_text(errors="replace") != text:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+    except OSError:
+        pass
+
+
+def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
+    """`review_once`'s work. It adds to `undo` what takes an uncounted review back out of the working folder."""
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, strict=True)
     if not a.host and prof.get("review_host"):  # the settings' Review host, against whoever made what's judged
@@ -8262,7 +8440,17 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
         tree = verify_tree(worktree, stem, start)
     except TipError as e:
         return _result("SCRIPT_FAILED", **info, reason=str(e))
-    before_review = (tree / review_path).read_text() if (tree / review_path).exists() else None
+    # The earlier review is kept beside the new one before the reviewer starts, since the reviewer writes over it.
+    latest = evidence_file(worktree, prof, review_path)
+    before_review = latest.read_text(errors="replace") if latest.is_file() else None
+    kept = None
+    if before_review is not None and before_review.strip():
+        had = set(latest.parent.iterdir())
+        kept = f"{prof['evidence']}/{keep_review(evidence_root(worktree), latest)[0]}"
+        made = set(latest.parent.iterdir()) - had  # a new copy, and the copy of the captures folder
+        undo.append(lambda: [shutil.rmtree(p, ignore_errors=True) if p.is_dir() and not p.is_symlink()
+                             else p.unlink(missing_ok=True) for p in made])
+    undo.append(lambda: put_back(latest, before_review))
     captures = review_path[:-len(".md")]
     feedback = (rec["milestones"].get(mid) or {}).get("human_feedback") if not design else None
     e_ = rec["milestones"].get(mid) or {}
@@ -8343,16 +8531,12 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
                            str(worktree), "--host", host), "lead", why,
                            ask=f"The review of {stem} {mid} needs you at the machine: {sentence(what)} Are you there "
                                "now?"))
-    allowed = {review_path} | (set() if design else {done_path})
+    # The review and its captures are in the working folder, which git ignores, so the only file a reviewer changes
+    # in its checkout is the done-when file.
+    allowed = set() if design else {done_path}
     changed = changed_paths(tree, start)
-    evidence = [p for p in changed if p.startswith(captures + "/")]
-    problems = [f"changed {p}, which a reviewer doesn't own" for p in changed if p not in allowed and p not in evidence]
-    problems += [f"{p} isn't a plain file; captures must be files" for p in evidence
-                 if (tree / p).is_symlink() or ((tree / p).exists() and not (tree / p).is_file())]
-    # read now: merging reuses this checkout, so the files must be in hand before it's reset to the tip
-    captured = {p: (tree / p).read_bytes() if (tree / p).is_file() and not (tree / p).is_symlink() else None
-                for p in evidence}
-    review_text = (tree / review_path).read_text() if (tree / review_path).exists() else None
+    problems = [f"changed {p}, which a reviewer doesn't own" for p in changed if p not in allowed]
+    review_text = latest.read_text(errors="replace") if latest.is_file() else None
     if not review_text or review_text == before_review:
         problems.append(f"didn't write the review to {review_path}")
     m = REVIEW_LINE.match(out["last_line"].strip("`* "))
@@ -8401,27 +8585,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     counts: dict = {}  # the milestone's counts as the script left them, read back from `change`
 
     def change(t):
-        write = [review_path]
-        (t / review_path).parent.mkdir(parents=True, exist_ok=True)
-        earlier, kept = t / review_path, None
-        if earlier.exists() and earlier.read_text() != review_text:
-            # keep the earlier review beside the new one, named as `human rereview` names its copies
-            kept, moved_files = keep_review(t, earlier)
-            write += [p for p in moved_files if p not in write]
-        (t / review_path).write_text(review_text)
-        for p, data in captured.items():  # captures the reviewer saved beside the review
-            if data is not None:
-                (t / p).parent.mkdir(parents=True, exist_ok=True)
-                (t / p).write_bytes(data)
-                write.append(p)
-            elif (t / p).exists():
-                (t / p).unlink()
-                write.append(p)
-        # A link to a file this commit doesn't carry, such as a capture saved outside the review's folder, would be
-        # broken on the main branch and fail a link check there for every builder, so it becomes plain text.
-        landed_text = links_to_tip(review_text, review_path, t, "", where=", not committed with the review")
-        if landed_text != review_text:
-            (t / review_path).write_text(landed_text)
+        write = []
         doc = json.loads((t / done_path).read_text())
         record = record_in(t, prof, stem, doc)
         if design:
@@ -8512,6 +8676,7 @@ def review_once(a: argparse.Namespace, locked: bool = False) -> dict:
     if not ok:
         return _result("INVALID", **info, merged=False,
                        problems=[f"the review was valid but couldn't be merged: {landed}"])
+    history_review(worktree, review_path, review_text)
     if passed and not design:
         drop_hold(worktree, prof, key, mid)
     with_repeat = counts.get("failed_reviews_with_repeat") if counts else None
@@ -10041,7 +10206,7 @@ def settle_batch(tree: Path, prof: dict, base: str, group: list[dict], results: 
     same group, which isn't run again. `bases` holds what is known of each base this batch has tested: None for one
     that passes, or `broken_base`'s answer for one that fails without any branch on it."""
     bases = {} if bases is None else bases
-    built = build_batch(tree, base, group, results)
+    built = build_batch(tree, base, group, results, prof)
     if not built:
         return base, []
     if failed is not None and len(built) != len(group):
@@ -10160,9 +10325,11 @@ def main_broken_next(worktree: Path, prof: dict, broken: dict) -> dict:
                     "once it passes")
 
 
-def build_batch(tree: Path, base: str, group: list[dict], results: dict) -> list[tuple[dict, str, str]]:
+def build_batch(tree: Path, base: str, group: list[dict], results: dict,
+                prof: dict | None = None) -> list[tuple[dict, str, str]]:
     """Rebases each request's commits onto `base` in `tree`, one on top of the other in the order given. A request
-    that conflicts is left out, with the files it conflicts in named in its result."""
+    that conflicts is left out, with the files it conflicts in named in its result, and so is one whose commits put
+    evidence in git."""
     git(tree, "rebase", "--abort")  # a rebase left by a runner that died mid-batch; nothing to abort is harmless
     git(tree, "checkout", "--quiet", "--force", "--detach", base)
     git(tree, "clean", "-ffdq")
@@ -10182,6 +10349,12 @@ def build_batch(tree: Path, base: str, group: list[dict], results: dict) -> list
                  f"Your branch couldn't be rebased onto the main branch's tip: {(rb.stdout + rb.stderr).strip()[-400:]} ")
                 + "Nothing of yours landed. Fetch, rebase onto the main branch, resolve the conflicts, commit, and "
                   "run merge again")}
+            continue
+        if prof is not None and (committed := evidence_in_commits(tree, prof, prior)):
+            git(tree, "checkout", "--quiet", "--force", "--detach", prior)
+            git(tree, "clean", "-ffdq")
+            results[r["id"]] = {"ok": False, "detail": evidence_commit_problem(committed, prof)
+                                + ". Nothing of yours landed"}
             continue
         built.append((r, prior, head_commit(tree)))
     return built
@@ -10576,7 +10749,7 @@ def report_text(worktree: Path, since=None) -> tuple[float, str]:
     start, window = report_window(worktree, since)
     hours = max((time.time() - start) / 3600, 1 / 60)
     stamp = datetime.fromtimestamp(start, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    graded = worktree / prof["graded_examples"]
+    graded = evidence_file(worktree, prof, prof["graded_examples"])
     graded_n = sum(1 for line in graded.read_text().splitlines() if line.startswith(("## ", "### "))) \
         if graded.exists() else 0
     live = [loop_view(r) for r in live_loops(repository_of(git_common_dir(worktree)), clean=False)[0]]
@@ -10633,8 +10806,7 @@ def report_text(worktree: Path, since=None) -> tuple[float, str]:
                 if v.get("at", "") >= stamp:
                     verdicts.append(f"- {stem} {m['id']}: {v.get('verdict')} ({v.get('at')}, {v.get('host') or 'host?'})"
                                     + (f", {md_link(v['review'], v['review'])}" if v.get("review") else
-                                       f", overwritten before reviews were kept (git log -p -- {v['review_in_history']})"
-                                       if v.get("review_in_history") else ""))
+                                       ", overwritten before reviews were kept" if v.get("review_in_history") else ""))
             if recorded_done(m, rec):
                 continue
             if m.get("status") == "blocked":
@@ -10791,7 +10963,8 @@ def flow_numbers(worktree: Path, hours: float) -> dict:
     after = f"--since=@{int(start)}"
     commits = git(worktree, "rev-list", "--count", after, ref).stdout.strip() if ref else ""
     code = git(worktree, "rev-list", "--count", after, ref, "--", ".",
-               f":(exclude){prof['plans']}", f":(exclude){prof['evidence']}").stdout.strip() if ref else ""
+               f":(exclude){prof['plans']}", f":(exclude){prof['evidence']}",
+               *[f":(exclude){m}" for m in moved_evidence(worktree)]).stdout.strip() if ref else ""
     builders = len({(r.get("module"), r.get("milestone"), r.get("session")) for r in ledger_rows(worktree)
                     if r.get("role") == "build" and (r.get("at") or "") >= since})
     locks: dict = {}
@@ -10878,7 +11051,8 @@ def design_reviews(worktree: Path, prof: dict, ref: str, stem: str, rec: dict) -
     out = list(rec.get("design_history") or []) + ([rec["design"]] if rec.get("design") else [])
     named = {d.get("review") for d in out}
     folder = f"{prof['evidence']}/{stem}"
-    listed = git(worktree, "ls-tree", "--name-only", f"{ref}:{folder}").stdout.split() if ref else []
+    here = evidence_file(worktree, prof, folder)
+    listed = [p.name for p in here.iterdir()] if here.is_dir() else []
     kept = sorted((n for n in listed if re.fullmatch(r"design-review-\d+\.md", n)),
                   key=lambda n: int(re.sub(r"\D", "", n)))
     older = []
@@ -10886,15 +11060,16 @@ def design_reviews(worktree: Path, prof: dict, ref: str, stem: str, rec: dict) -
         path = f"{folder}/{name}"
         if path in named:
             continue
-        last = next((line.strip() for line in reversed((show(worktree, ref, path) or "").splitlines())
-                     if line.strip()), "")
+        try:
+            text = (here / name).read_text(errors="replace")
+            stamp = (here / name).stat().st_mtime
+        except OSError:
+            continue
+        last = next((line.strip() for line in reversed(text.splitlines()) if line.strip()), "")
         verdict = "ok" if last.startswith("DESIGN OK") else "changes" if last.startswith("DESIGN CHANGES") else "?"
-        # The copy was made when the next review replaced it, so its own commit time is that later review's; the
-        # review it holds merged with the last change to design-review.md before that commit. In UTC.
-        added = git(worktree, "log", "-1", "--diff-filter=A", "--format=%H", ref, "--", path).stdout.strip()
-        stamp = (git(worktree, "log", "-1", "--format=%ct", f"{added}^", "--", f"{folder}/design-review.md").stdout
-                 .strip() if added else "") or git(worktree, "log", "-1", "--format=%ct", ref, "--", path).stdout.strip()
-        at = datetime.fromtimestamp(int(stamp), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if stamp.isdigit() else ""
+        # The copy is made as the next review starts, so its own time is close to when the review it holds was
+        # replaced. In UTC.
+        at = datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         older.append({"verdict": verdict, "review": path, "at": at})
     return sorted(older + out, key=lambda d: d.get("at") or "")
 
@@ -10946,6 +11121,21 @@ def history_milestones(worktree: Path) -> int:
     rows = delivery_history.milestone_rows(proj)
     delivery_history.write_milestones(Path(repository_of(git_common_dir(worktree))), rows)
     return len(rows)
+
+
+def history_review(worktree: Path, rel: str, text: str) -> None:
+    """Copies a review's text into the delivery history as it is counted, as reviews/<MODULE>/<review>-<time>.md, so
+    it outlives the working folder, which `cleanup` clears. Never fails the caller."""
+    if os.environ.get("ORCHESTRATE_NO_HISTORY"):
+        return
+    try:
+        folder = delivery_history.project_dir(Path(repository_of(git_common_dir(worktree)))) / "reviews"
+        name = Path(rel).name[:-len(".md")] if rel.endswith(".md") else Path(rel).name
+        path = folder / Path(rel).parent.name / f"{name}-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    except Exception:
+        pass
 
 
 def history_meta(worktree: Path) -> dict:
@@ -11021,6 +11211,14 @@ def md_link(text: str, target: str) -> str:
     return f"[{text}]({LINK_MARK}{target})"
 
 
+def evidence_link(worktree: Path, prof: dict, text: str, target: str) -> str:
+    """A link to a file in the working folder while it is there, and its path as text once `cleanup` has cleared it,
+    so a page in git never carries a link that is broken."""
+    if inside(target, prof["evidence"]) and not evidence_file(worktree, prof, target).exists():
+        return f"{text} `{target}` (cleared)"
+    return md_link(text, target)
+
+
 def relink(text: str, folder: str | None, root: str | None = None) -> str:
     """The report's own links (from `md_link`), with targets written from the repository root made relative to a
     file in `folder`, so they resolve where the file is opened; with no folder, left as they are. `folder` is from
@@ -11034,13 +11232,9 @@ def relink(text: str, folder: str | None, root: str | None = None) -> str:
     return re.sub(r"\]\(" + LINK_MARK + r"([^)\s]+)\)", fix, text)
 
 
-def reports_dir(prof: dict) -> str:
-    return f"{prof['evidence']}/build-reports"
-
-
 def adoptable(prof: dict, worktree: Path, ref: str, p: str) -> str | None:
-    """Why `adopt` won't merge the path `p`, or None: it merges plan files, a first settings file, and build reports."""
-    plans, reports = prof["plans"] + "/", reports_dir(prof) + "/"
+    """Why `adopt` won't merge the path `p`, or None: it merges plan files and a first settings file."""
+    plans = prof["plans"] + "/"
     if p == PROFILE_FILE:
         if file_at(worktree, ref, p) is not None:
             return (f"{p} differs from the one at {base_ref(prof)}; adopt doesn't merge a changed settings file on an existing "
@@ -11053,10 +11247,10 @@ def adoptable(prof: dict, worktree: Path, ref: str, p: str) -> str | None:
         if (where := module_of(prof, p)) and where[1] == "record" or p.endswith(("-" + OLD_RECORD, "/" + OLD_RECORD)):
             return f"{p} is a record file, which only the script writes"
         return next(iter(flat_names(prof, [p])), None)
-    if p.startswith(reports):
-        return None
-    return (f"{p} isn't a plan file under {plans}, a first {PROFILE_FILE} or a report under {reports}; commit and "
-            "merge it another way")
+    if inside(p, prof["evidence"]):
+        return (f"{p} is evidence, which stays in the working folder at {prof['evidence']} and is never committed, "
+                "because git holds only what the project needs to build and run")
+    return (f"{p} isn't a plan file under {plans} or a first {PROFILE_FILE}; commit and merge it another way")
 
 
 def building_begun(doc: dict, record: dict, held: dict, key: str) -> bool:
@@ -11372,7 +11566,7 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
             reviews = ((rec.get("milestones") or {}).get(mid) or {}).get("reviews") or []
             latest = next((r["review"] for r in reversed(reviews) if r.get("review")), None)
             now_next.append(f"- {name} ({stem} {mid}): {status_word(step, rec)} · {plan}" +
-                            (f" · {md_link('latest review', latest)}" if latest else ""))
+                            (f" · {evidence_link(worktree, prof, 'latest review', latest)}" if latest else ""))
         elif status == "design_not_approved":
             now_next.append(f"- {stem}'s design: {status_word(step, rec)} · "
                             f"{md_link('design', design_rel(prof, stem))} · {plan}")
@@ -11384,7 +11578,7 @@ def status_page(worktree: Path, prof: dict, ref: str, proj: dict | None = None, 
                                                    or []) if r.get("review")), None)
                 recent.append((acc.get("at") or "", f"- {x.get('name') or x['id']} ({stem} {x['id']}), "
                                                     f"{short_date(acc.get('at'))}" +
-                               (f" · {md_link('review', review)}" if review else "")))
+                               (f" · {evidence_link(worktree, prof, 'review', review)}" if review else "")))
     chosen += [f"- A name in the glossary waits for your agreement: {x}"
                for x in proposed_names(show(worktree, ref, project_file(prof, "glossary")))]
     if unlanded:
@@ -11580,7 +11774,7 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
 
 def cmd_adopt(a: argparse.Namespace) -> None:
     """Merges plan files left uncommitted, or committed but not merged, so `run` and `ready` can see them, with a
-    first ORCHESTRATE.md and any build reports."""
+    first ORCHESTRATE.md."""
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, strict=True)
     if os.environ.get("ORCHESTRATE_ROLE"):
@@ -11596,9 +11790,7 @@ def cmd_adopt(a: argparse.Namespace) -> None:
     except TipError as e:
         done_with("FAILED", 1, detail=str(e), **({"next": e.next} if getattr(e, "next", None) else {}))
     drift = plan_drift(worktree, prof, ref)
-    reports = folder_drift(worktree, reports_dir(prof), ref)
-    unlanded = sorted(set(drift["uncommitted"]) | set(drift["unmerged"]) | set(reports["uncommitted"]) |
-                      set(reports["unmerged"]))
+    unlanded = sorted(set(drift["uncommitted"]) | set(drift["unmerged"]))
     if a.paths:
         paths = []
         for p in a.paths:
@@ -11611,8 +11803,7 @@ def cmd_adopt(a: argparse.Namespace) -> None:
     else:
         paths, problems = unlanded, []
     if not paths:
-        done_with("NOTHING", detail=f"no plan file under {prof['plans']}, and no report under {reports_dir(prof)}, "
-                                    f"differs from {base_ref(prof)}" + (
+        done_with("NOTHING", detail=f"no plan file under {prof['plans']} differs from {base_ref(prof)}" + (
                                         f", other than {', '.join(drift['with_work'][:10])}, which merge with the "
                                         "builder's work: a builder's proof and log, and copies the tip has since "
                                         "changed, which a rebase replaces" if drift["with_work"] else ""),
@@ -11692,11 +11883,7 @@ def cmd_adopt(a: argparse.Namespace) -> None:
             written += [done_rel(prof, stem), record_rel(prof, stem)]
         return written
 
-    reports = sum(p.startswith(reports_dir(prof) + "/") for p in paths)
-    plans = len(paths) - reports
-    kinds = [x for x in (f"build report{'s' if reports > 1 else ''}" if reports else "",
-                         f"plan file{'s' if plans > 1 else ''}" if plans else "") if x]
-    message = a.message or f"Adopt {' and '.join(kinds) or 'plan files'}: " + \
+    message = a.message or f"Adopt plan file{'s' if len(paths) > 1 else ''}: " + \
         ", ".join(Path(p).name for p in paths)[:200]
     try:
         try:
@@ -11913,13 +12100,10 @@ def cmd_human(a: argparse.Namespace) -> None:
             e = entry(record, mid)
             if e.get("definitions") != definitions(m):
                 raise SystemExit(f"error: {mid}'s definitions aren't authorised; settle them with `human scope` first")
+            # Graded examples and kept reviews are in the working folder, written once this decision has merged.
+            pending.pop("example", None)
             if verb in ("accept", "rereview") and (example := graded_example(prof, stem, m, e, verb, words, decision["at"])):
-                graded = t / prof["graded_examples"]
-                text = graded.read_text() if graded.exists() else "# Graded examples\n"
-                graded.parent.mkdir(parents=True, exist_ok=True)
-                graded.write_text(text.rstrip("\n") + "\n\n" + example)
-                written.append(prof["graded_examples"])
-                out["graded_example"] = prof["graded_examples"]
+                pending["example"] = example
             if verb == "accept":
                 m["status"] = "done"
                 m.pop("blocked", None)
@@ -11927,12 +12111,6 @@ def cmd_human(a: argparse.Namespace) -> None:
             elif verb == "rereview":
                 if not recorded_done(m, record):
                     raise SystemExit(f"error: {mid} isn't Done in the record, so there's nothing to re-review")
-                old_review = t / prof["evidence"] / stem / f"{mid}-review.md"
-                if old_review.exists():
-                    n = 1
-                    while (t / prof["evidence"] / stem / f"{mid}-review-{n}.md").exists():
-                        n += 1
-                    shutil.copy(old_review, old_review.with_name(f"{mid}-review-{n}.md"))
                 out["commit"] = e["done"].get("commit") or ready_record(e).get("commit")
                 e.setdefault("history", []).append(e.pop("done"))
                 m["status"] = "ready_for_review"
@@ -11945,13 +12123,22 @@ def cmd_human(a: argparse.Namespace) -> None:
                 e.pop("too_many_failed_reviews", None)
             write_json(path, doc)
             written.append(done_rel(prof, stem))
-            if verb == "rereview":
-                written += [str(p.relative_to(t)) for p in (t / prof["evidence"] / stem).glob(f"{mid}-review-*.md")]
         write_json(rec_path, record)
         return written
 
+    pending: dict = {}
     ok, detail = loop_write(worktree, prof, key, change,
                             f"orchestrate: human {verb} {stem} {mid}: {words.splitlines()[0][:80]}")
+    if ok and pending.get("example"):
+        graded = evidence_file(worktree, prof, prof["graded_examples"])
+        text = graded.read_text() if graded.exists() else "# Graded examples\n"
+        graded.parent.mkdir(parents=True, exist_ok=True)
+        graded.write_text(text.rstrip("\n") + "\n\n" + pending["example"])
+        out["graded_example"] = prof["graded_examples"]
+    if ok and verb == "rereview":  # the old review is kept, so the next one doesn't hide it
+        old_review = evidence_file(worktree, prof, f"{prof['evidence']}/{stem}/{mid}-review.md")
+        if old_review.is_file():
+            keep_review(evidence_root(worktree), old_review)
     if ok and verb in ("accept", "release") and mid != "design":
         drop_hold(worktree, prof, key, mid)
     if ok and verb == "scope":
@@ -11976,11 +12163,9 @@ def graded_example(prof: dict, stem: str, m: dict, e: dict, verb: str, words: st
     """The graded example a human decision adds when it overturns a review, in the shape of
     review-milestone/references/graded-examples.md: what was judged, each item's result and the review's findings,
     what the human said instead, and why it is kept. `human accept` overturns a failed review, and `human rereview`
-    a passed one. None when the settings name no graded examples file, the file named is outside the repository, or
-    the decision overturns no review (an accept with no failed review behind it, or a re-review of work the human
-    accepted)."""
-    rel = prof.get("graded_examples") or ""
-    if not prof.get("graded_examples_named") or Path(rel).is_absolute() or ".." in Path(rel).parts:
+    a passed one. None when the settings name no graded examples file, or the decision overturns no review (an accept
+    with no failed review behind it, or a re-review of work the human accepted)."""
+    if not prof.get("graded_examples_named"):
         return None
     reviews = e.get("reviews") or []
     last = reviews[-1] if reviews else {}
@@ -12036,12 +12221,209 @@ def split_log(text: str) -> tuple[str, str]:
 
 def set_plans_line(text: str, to: str) -> str:
     """ORCHESTRATE.md with its Plans line naming `to`, adding the line after the last settings line if it has none."""
-    line = re.compile(r"^(\s*[-*]\s*\*\*Plans:\*\*[ \t]*).*$", re.IGNORECASE | re.MULTILINE)
+    return set_setting_line(text, "Plans", to)
+
+
+def set_setting_line(text: str, label: str, value: str) -> str:
+    """ORCHESTRATE.md with its `label` line set to `value`, adding the line after the last settings line if it has
+    none. A note in *(...)* after the old value is dropped with it."""
+    line = re.compile(rf"^(\s*[-*]\s*\*\*{re.escape(label)}:\*\*[ \t]*).*$", re.IGNORECASE | re.MULTILINE)
     if line.search(text):
-        return line.sub(lambda m: m.group(1) + to, text, count=1)
+        return line.sub(lambda m: m.group(1) + value, text, count=1)
     settings = list(re.finditer(r"^\s*[-*]\s*\*\*[^*]+:\*\*.*$", text, re.MULTILINE))
     at = settings[-1].end() if settings else len(text)
-    return text[:at] + ("\n" if at else "") + f"- **Plans:** {to}" + ("" if at < len(text) else "\n") + text[at:]
+    return text[:at] + ("\n" if at else "") + f"- **{label}:** {value}" + ("" if at < len(text) else "\n") + text[at:]
+
+
+# ------------------------------------------------------------------------------------- moving evidence out of git
+# Before 2.6.0 the script committed evidence under the settings' `Evidence:` folder (docs/evidence by default).
+# `migrate` moves a project over in three steps: it copies the files git holds there at the tip into the working
+# folder, leaving them in git (taking them out of history is a separate job, done with every run stopped); it
+# points the done-when files, the records, the plan documents' links and the settings at the new place, in one
+# commit made as the script; and it links the new path into every worktree. Each step skips what is already done,
+# so running it twice is safe.
+
+EVIDENCE_SUBJECT = "orchestrate: move evidence out of git, into the working folder"
+
+
+def evidence_to_move(worktree: Path, ref: str) -> str | None:
+    """The folder of committed evidence at `ref`: the `Evidence:` path the tip's settings name (or the old default,
+    when they name none) when git holds files under it there. None once the settings name the new place."""
+    text = show(worktree, ref, PROFILE_FILE) or ""
+    words = (profile_value(text, "evidence") or OLD_EVIDENCE_DEFAULT).split()
+    rel = words[0].rstrip("/") if words else OLD_EVIDENCE_DEFAULT
+    if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
+        return None
+    return rel if git(worktree, "cat-file", "-e", f"{ref}:{rel}").returncode == 0 else None
+
+
+def copy_evidence(worktree: Path, ref: str, old: str) -> dict:
+    """Copies every file git holds under `old` at `ref` into the working folder, keeping its path below `old`. A file
+    already there is left as it is, since it may be newer. The files come through git's filters, so a file kept in
+    Git LFS arrives as its content, not its pointer. Returns how many were copied and how many were already there."""
+    root = evidence_root(worktree)
+    listed = git(worktree, "ls-tree", "-r", "-z", "--full-tree", ref, "--", old + "/").stdout
+    todo, already = [], 0
+    for entry in listed.split("\0"):
+        if "\t" not in entry:
+            continue
+        meta, path = entry.split("\t", 1)
+        mode, kind, oid = meta.split()
+        if kind != "blob" or not inside(path, old):
+            continue
+        dest = root / path[len(old):].lstrip("/")
+        if dest.exists() or dest.is_symlink():
+            already += 1
+            continue
+        todo.append((mode, oid, path, dest))
+    copied = 0
+    if todo:
+        filtered = git(worktree, "cat-file", "--filters", f"{ref}:{todo[0][2]}").returncode == 0
+        batch = subprocess.Popen(["git", "-C", str(worktree), "cat-file", "--batch", *(["--filters"] if filtered else [])],
+                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        try:
+            for mode, oid, path, dest in todo:
+                batch.stdin.write(f"{oid} {path}\n".encode() if filtered else f"{oid}\n".encode())
+                batch.stdin.flush()
+                header = batch.stdout.readline().decode().split()
+                if len(header) < 3 or header[1] == "missing":
+                    continue
+                left = int(header[2])
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                part = dest.with_name(f".{dest.name}.part")
+                with open(part, "wb") as out:
+                    while left:
+                        chunk = batch.stdout.read(min(left, 1 << 20))
+                        if not chunk:
+                            raise OSError(f"git cat-file stopped while copying {path}")
+                        out.write(chunk)
+                        left -= len(chunk)
+                batch.stdout.read(1)  # the newline after each object
+                if mode == "120000":
+                    target = part.read_text()
+                    part.unlink()
+                    os.symlink(target, dest)
+                else:
+                    part.replace(dest)
+                    if mode == "100755":
+                        dest.chmod(0o755)
+                copied += 1
+        finally:
+            batch.stdin.close()
+            batch.wait()
+            batch.stdout.close()
+    return {"copied": copied, "already_there": already}
+
+
+def moved_path(text: str, old: str, new: str) -> str:
+    """`text` with every path from the repository's root that starts with `old`/ starting with `new`/ instead."""
+    return re.sub(rf"(?<![\w./-]){re.escape(old)}(?=/|$|[\s`'\")\]#])", new, text)
+
+
+def relink_evidence(text: str, rel: str, old: str, new: str) -> str:
+    """A markdown file at `rel` with each link into `old` pointing into `new` instead, written from the file's own
+    folder as before, so it opens through the link in every worktree. Paths written out from the repository's root
+    move too."""
+    folder = os.path.dirname(rel)
+
+    def fix(m: re.Match) -> str:
+        target = m.group(3)
+        if re.match(r"^[a-z][a-z0-9+.-]*:|^#", target, re.IGNORECASE):
+            return m.group(0)
+        path, _, anchor = target.partition("#")
+        full = os.path.normpath(path.lstrip("/") if path.startswith("/") else os.path.join(folder, path))
+        if not inside(full, old):
+            return m.group(0)
+        moved = new + full[len(old):]
+        written = ("/" + moved) if path.startswith("/") else os.path.relpath(moved, folder or ".")
+        if path.endswith("/") and not written.endswith("/"):
+            written += "/"
+        return f"{m.group(1)}[{m.group(2)}]({written}{'#' + anchor if anchor else ''}{m.group(4) or ''})"
+    return moved_path(LINK.sub(fix, text), old, new)
+
+
+def point_at_moved(value, old: str, new: str, keys: tuple[str, ...], skip: tuple[str, ...] = ()):
+    """`value` (a done-when file or record, as JSON) with each string under one of `keys` that is a path into `old`
+    moved into `new`. Fields under `skip` are left as they are."""
+    if isinstance(value, dict):
+        return {k: (v if k in skip else moved_path(v, old, new) if k in keys and isinstance(v, str)
+                    else point_at_moved(v, old, new, keys, skip)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [point_at_moved(v, old, new, keys, skip) for v in value]
+    return value
+
+
+def migrate_evidence_tree(tree: Path, prof: dict, old: str, new: str, done: dict) -> list[str]:
+    """The commit half of moving evidence out of git, in a checkout of the tip: the settings' Evidence line (and a
+    Graded examples line under it), each done-when file's `review` and `evidence` pointers and blocked handoffs, each
+    record's review paths, and the links and paths in every markdown file under the plans folder. A design
+    document whose text changes keeps its design review: the record's hash of it is stamped again, since only the
+    paths moved. An item's definitions are left alone, because changing them would undo its progress; the ones that
+    name the old folder are listed instead. Returns every path written, and fills `done`."""
+    paths, rewritten, naming = [], [], []
+    settings = tree / PROFILE_FILE
+    text = settings.read_text() if settings.exists() else ""
+    after = set_setting_line(text, "Evidence", new)
+    graded = profile_value(after, "graded examples")
+    if graded and inside(graded.split()[0] if graded.split() else "", old):
+        after = set_setting_line(after, "Graded examples", moved_path(graded.split()[0], old, new))
+    if after != text:
+        settings.write_text(after)
+        paths.append(PROFILE_FILE)
+    designs = {}
+    for rel in git(tree, "ls-files", "-z", "--", prof["plans"] + "/").stdout.split("\0"):
+        if not rel.endswith(".md") or not (tree / rel).is_file():
+            continue
+        before = (tree / rel).read_text(errors="replace")
+        moved = relink_evidence(before, rel, old, new)
+        if moved != before:
+            (tree / rel).write_text(moved)
+            paths.append(rel)
+            rewritten.append(rel)
+            designs[rel] = (before, moved)
+    for stem in modules_here(tree, prof):
+        doc_path, rec_path = tree / done_rel(prof, stem), tree / record_rel(prof, stem)
+        try:
+            doc = json.loads(doc_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        for m in doc.get("milestones") or []:
+            for i in m.get("items") or []:
+                if isinstance(i, dict) and any(old in str(i.get(k) or "") for k in DEFINITION_KEYS):
+                    naming.append(f"{stem} {i.get('id')}")
+        new_doc = point_at_moved(doc, old, new, ("review", "evidence", "handoff"), skip=DEFINITION_KEYS)
+        if new_doc != doc:
+            write_json(doc_path, new_doc)
+            paths.append(done_rel(prof, stem))
+            rewritten.append(done_rel(prof, stem))
+        try:
+            rec = json.loads(rec_path.read_text()) if rec_path.exists() else None
+        except json.JSONDecodeError:
+            rec = None
+        if rec is None:
+            continue
+        new_rec = point_at_moved(rec, old, new, ("review", "handoff"), skip=("briefs", "definitions"))
+        design = designs.get(design_rel(prof, stem))
+        if design and (new_rec.get("design") or {}).get("hash") == text_hash(design[0]):
+            new_rec["design"]["hash"] = text_hash(design[1])
+        if new_rec != rec:
+            write_json(rec_path, new_rec)
+            paths.append(record_rel(prof, stem))
+            rewritten.append(record_rel(prof, stem))
+    done["evidence"] = {"from": old, "to": new, "rewritten": sorted(set(rewritten)),
+                        **({"definitions_naming_it": naming} if naming else {})}
+    return list(dict.fromkeys(paths))
+
+
+def link_worktrees(worktree: Path, rel: str) -> list[str]:
+    """Links the working folder at `rel` into every worktree of the repository. Returns the worktrees it linked."""
+    out = []
+    for block in git(worktree, "worktree", "list", "--porcelain").stdout.split("\n\n"):
+        lines = block.splitlines()
+        path = next((Path(l[len("worktree "):]) for l in lines if l.startswith("worktree ")), None)
+        if path is not None and "bare" not in lines and path.is_dir() and link_evidence(path, rel):
+            out.append(str(path))
+    return out
 
 
 def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict) -> list[str]:
@@ -12319,8 +12701,9 @@ def left_behind(behind: list[dict], otherwise: dict | None = None) -> dict:
 
 def cmd_migrate(a: argparse.Namespace) -> None:
     """Moves a project from flat plan files (<MODULE>-DONE.json and the rest, side by side) to a folder per module,
-    and brings it to the names of 2.0, through a clean checkout of the tip, in one commit made as the script. With
-    --branch, brings one worktree's own commits over to a main branch already migrated (`migrate_branch`)."""
+    brings it to the names of 2.0, and moves its evidence out of git into the working folder (2.6.0), through a clean
+    checkout of the tip, in one commit made as the script. With --branch, brings one worktree's own commits over to a
+    main branch already migrated (`migrate_branch`)."""
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, strict=True, flat_ok=True, old_ok=True)
 
@@ -12347,11 +12730,14 @@ def cmd_migrate(a: argparse.Namespace) -> None:
     except TipError as e:
         done_with("FAILED", 1, detail=str(e))
     drop_tree(worktree, "_migrate-tip")
-    if not at_tip and (not to or to == tip_prof["plans"]):
+    moving = evidence_to_move(worktree, ref)
+    if not at_tip and (not to or to == tip_prof["plans"]) and not moving:
         here = bring_up(worktree, prof, ref)
         behind = worktrees_on_old_names(worktree)
+        link_worktrees(worktree, evidence_setting(show(worktree, ref, PROFILE_FILE) or ""))
         done_with("NOTHING", detail=f"the plans at {base_ref(prof)} already have a folder per module and the names "
-                                    "of 2.0", worktree=here, **left_behind(behind))
+                                    "of 2.0, and the evidence is in the working folder", worktree=here,
+                  **left_behind(behind))
     folder = loop_dir(worktree)
     busy = [name for name in (p.name[len("run-"):-len(".lock")] for p in folder.glob("run-*.lock"))
             if run_holder(folder, name) not in (None, os.getpid())]
@@ -12370,29 +12756,285 @@ def cmd_migrate(a: argparse.Namespace) -> None:
             f"at the tip, so set these aside first (`git stash push --include-untracked -- {prof['plans']}`), "
             "migrate, then put them back under their new names"])
     did: dict = {}
+    copied = copy_evidence(worktree, ref, moving) if moving else {}
 
     def change(t):
-        return migrate_tree(t, profile(t, missing_ok=True, flat_ok=True, old_ok=True), to, did)
+        written = migrate_tree(t, profile(t, missing_ok=True, flat_ok=True, old_ok=True), to, did)
+        if moving:
+            written += migrate_evidence_tree(t, profile(t, missing_ok=True, flat_ok=True, old_ok=True), moving,
+                                             EVIDENCE_DEFAULT, did)
+        return list(dict.fromkeys(written))
 
-    ok, landed = loop_write(worktree, prof, "_migrate", change, MIGRATE_SUBJECT + (f", under {to}" if to else ""),
-                            take_up_ok=False)
+    subject = MIGRATE_SUBJECT + (f", under {to}" if to else "") if at_tip or to else EVIDENCE_SUBJECT
+    ok, landed = loop_write(worktree, prof, "_migrate", change, subject, take_up_ok=False)
     if not ok:
         done_with("FAILED", 1, detail=landed)
+    if moving:
+        try:
+            seen = moved_evidence(worktree)
+            write_json(loop_dir(worktree) / EVIDENCE_MOVED_FILE,
+                       {"from": sorted(set(seen) | {moving}), "to": EVIDENCE_DEFAULT, "at": now()})
+        except OSError:
+            pass
+        did.setdefault("evidence", {"from": moving, "to": EVIDENCE_DEFAULT}).update(
+            **copied, folder=str(evidence_root(worktree)))
     try:
         landed_tip = tip(worktree, prof, fetch=False)  # past the migration, to the STATUS.md written after it
     except TipError:
         landed_tip = landed
     here = bring_up(worktree, prof, landed_tip)
     behind = worktrees_on_old_names(worktree)
+    if moving:
+        did["evidence"]["linked"] = link_worktrees(worktree, EVIDENCE_DEFAULT)
+        did["evidence"]["note"] = (
+            f"the files stay in git under {moving} until you take them out of history; nothing commits there again, "
+            f"because `merge` refuses commits that add or change files under it. Links in plan documents now point "
+            f"into {EVIDENCE_DEFAULT}, which opens through the link in every worktree on this computer but not in a "
+            "fresh clone")
     if not did:
         done_with("NOTHING", detail=f"the plans at {base_ref(prof)} already have a folder per module and the names "
                                     "of 2.0", worktree=here, **left_behind(behind))
     done_with("MIGRATED", commit=landed, plans=did.get("plans", prof["plans"]), modules=did.get("modules", []),
               **({"logs_split": did["logs_split"]} if did.get("logs_split") else {}),
-              **({"renamed": did["renamed"]} if did.get("renamed") else {}), worktree=here,
+              **({"renamed": did["renamed"]} if did.get("renamed") else {}),
+              **({"evidence": did["evidence"]} if did.get("evidence") else {}), worktree=here,
               **left_behind(behind, next_cmd(loop_cmd("status", "--worktree", str(worktree)), "lead",
                                              "see the project in its new layout; STATUS.md is written beside the "
                                              "module folders")))
+
+
+# ------------------------------------------------------------------------------------------------------- cleanup
+# What orchestrate keeps on the computer stays until the human clears it, because only they know when they are done
+# looking at it. `cleanup` lists what it would remove, by kind and size, and removes it only with --yes. It never
+# touches the plans, which are in git, the delivery history under ~/.orchestrate/history, which keeps each counted
+# review and the figures from the ledgers for good, or anything of a module whose run lock is held.
+
+CLEANUP_KINDS = {
+    "evidence": "the working folder's files for milestones that are Done (and a module's design reviews once every "
+                "milestone of it is Done)",
+    "checkouts": "the script's clean checkouts for reviews, merges and main-branch checks that no run is using",
+    "logs": "saved check output, background job logs and main-branch check logs",
+    "ledgers": "rows of the usage and result ledgers that the delivery history has already copied",
+    "graded": "the graded examples file in the working folder",
+}
+CLEANUP_DEFAULT = ("evidence", "checkouts", "logs", "ledgers")  # graded examples teach reviewers, so only by name
+LEDGERS = ("usage.jsonl", "results.jsonl")
+
+
+def disk_size(path: Path) -> int:
+    """The bytes under `path`, not following links."""
+    try:
+        if path.is_symlink() or path.is_file():
+            return path.lstat().st_size
+        return sum(p.lstat().st_size for p in path.rglob("*") if p.is_symlink() or p.is_file())
+    except OSError:
+        return 0
+
+
+def newest_change(path: Path) -> float:
+    """When anything under `path` last changed, not following links."""
+    try:
+        times = [path.lstat().st_mtime]
+        if path.is_dir() and not path.is_symlink():
+            times += [p.lstat().st_mtime for p in path.rglob("*")]
+        return max(times)
+    except OSError:
+        return time.time()
+
+
+def human_size(n: float) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} GB"
+
+
+def cleanup_found(worktree: Path, prof: dict, kinds: list[str], cutoff: float) -> tuple[list[dict], list[str]]:
+    """(what `cleanup` would remove, as {kind, path, bytes, ...}; what it left alone and why). Only what last
+    changed before `cutoff` counts."""
+    folder, found, kept = loop_dir(worktree), [], []
+    try:
+        ref = tip(worktree, prof, fetch=False)
+        proj = project(worktree, prof, ref)
+    except (TipError, SystemExit):
+        proj = {}
+    held = {key for key in proj if run_holder(folder, key) is not None}
+    kept += [f"{proj[k]['stem']}: its run lock is held, so nothing of it is touched" for k in sorted(held)]
+
+    def add(kind: str, path: Path, **more) -> None:
+        if newest_change(path) < cutoff:
+            found.append({"kind": kind, "path": str(path), "bytes": disk_size(path), **more})
+
+    if "evidence" in kinds:
+        root = evidence_root(worktree)
+        for key, e in sorted(proj.items()):
+            here = root / e["stem"]
+            if key in held or not here.is_dir():
+                continue
+            milestones = e["doc"].get("milestones") or []
+            done = [m["id"] for m in milestones if recorded_done(m, e["record"])]
+            for p in sorted(here.iterdir()):
+                mid = next((d for d in done if p.name == d or p.name.startswith((d + "-", d + "."))), None)
+                design = p.name.startswith("design-review") and milestones and len(done) == len(milestones)
+                if mid or design:
+                    add("evidence", p, module=e["stem"], milestone=mid or "design")
+    if "checkouts" in kinds:
+        verify = folder / "verify"
+        for p in sorted(verify.iterdir()) if verify.is_dir() else []:
+            if not p.is_dir() or p.name.startswith("."):
+                continue
+            if p.name.upper() in held:
+                continue
+            if lock_held(tree_marks(p)[0]) or str(p) in _TREE_HOLDS:
+                kept.append(f"{p}: a run is using it")
+                continue
+            used = tree_marks(p)[1]
+            if (used.stat().st_mtime if used.exists() else newest_change(p)) < cutoff:
+                found.append({"kind": "checkouts", "path": str(p), "bytes": disk_size(p)})
+        checks = folder / MAIN_CHECKS_DIR
+        for check in sorted(checks.iterdir()) if checks.is_dir() else []:
+            p = check / "checkout"
+            if not p.is_dir():
+                continue
+            if lock_held(check / "run.lock"):
+                kept.append(f"{p}: the main-branch check {check.name} is running")
+                continue
+            if newest_change(check / "runs") < cutoff:
+                found.append({"kind": "checkouts", "path": str(p), "bytes": disk_size(p)})
+    if "logs" in kinds:
+        for p in sorted((folder / CHECKS_DIR).glob("*.std*")) if (folder / CHECKS_DIR).is_dir() else []:
+            add("logs", p)
+        running = {str(Path(j.get("log") or "")) for j in job_rows(worktree)
+                   if int(j.get("pid") or 0) > 0 and job_alive(int(j["pid"]))}
+        for p in sorted((folder / "jobs").iterdir()) if (folder / "jobs").is_dir() else []:
+            if str(p) not in running:
+                add("logs", p)
+        checks = folder / MAIN_CHECKS_DIR
+        for p in sorted(checks.glob("*/logs/*")) if checks.is_dir() else []:
+            add("logs", p)
+    if "ledgers" in kinds:
+        copied = history_copied_at(worktree)
+        if copied is None:
+            kept.append("ledgers: the delivery history hasn't copied them yet (or is off), so they are kept; "
+                        "`history` brings it up to date")
+        else:
+            until = min(cutoff, copied)
+            for name in LEDGERS:
+                path = folder / name
+                lines = path.read_text().splitlines(keepends=True) if path.is_file() else []
+                old = [line for line in lines if (row_time(line) or until) < until]
+                if old:
+                    found.append({"kind": "ledgers", "path": str(path), "bytes": sum(len(x.encode()) for x in old),
+                                  "rows": len(old), "before": datetime.fromtimestamp(until, timezone.utc)
+                                  .strftime("%Y-%m-%dT%H:%M:%SZ")})
+    if "graded" in kinds:
+        p = evidence_file(worktree, prof, prof["graded_examples"])
+        if p.is_file():
+            add("graded", p)
+    return found, kept
+
+
+def row_time(line: str) -> float | None:
+    try:
+        return delivery_history.parse_time(json.loads(line).get("at"))
+    except (ValueError, AttributeError):
+        return None
+
+
+def history_copied_at(worktree: Path) -> float | None:
+    """When the delivery history last read this repository's ledgers, or None when it never has or is off."""
+    if os.environ.get("ORCHESTRATE_NO_HISTORY"):
+        return None
+    try:
+        folder = delivery_history.project_dir(Path(repository_of(git_common_dir(worktree))))
+        return delivery_history.parse_time(json.loads((folder / "state.json").read_text()).get("_last_run"))
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def cleanup_remove(worktree: Path, entry: dict) -> str | None:
+    """Removes one thing `cleanup_found` listed. The problem, or None."""
+    path = Path(entry["path"])
+    try:
+        if entry["kind"] == "ledgers":
+            until = delivery_history.parse_time(entry["before"])
+            size = path.stat().st_size
+            lines = path.read_text().splitlines(keepends=True)
+            keep = [line for line in lines if (row_time(line) or until) >= until]
+            part = path.with_name(f".{path.name}.{os.getpid()}")
+            part.write_text("".join(keep))
+            if path.stat().st_size != size:  # a row was added meanwhile: leave the file for the next cleanup
+                part.unlink()
+                return f"{path} grew while it was being thinned; run cleanup again"
+            part.replace(path)
+            return None
+        if entry["kind"] == "checkouts":
+            lock = tree_marks(path)[0] if path.parent.name == "verify" else path.parent / "run.lock"
+            with open(lock, "a") as handle:
+                try:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    return f"{path}: a run started using it"
+                if git(worktree, "worktree", "remove", "--force", str(path)).returncode != 0:
+                    shutil.rmtree(path, ignore_errors=True)
+                git(worktree, "worktree", "prune")
+                if path.parent.name == "verify":
+                    tree_marks(path)[1].unlink(missing_ok=True)
+            return None
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)
+        return None
+    except OSError as e:
+        return f"{path}: {e.strerror or e}"
+
+
+def cmd_cleanup(a: argparse.Namespace) -> None:
+    """Lists what orchestrate keeps on this computer and could remove, by kind and size, and removes it with --yes."""
+    worktree = Path(a.worktree).resolve()
+    prof = profile(worktree, missing_ok=True)
+    if os.environ.get("ORCHESTRATE_ROLE"):
+        raise SystemExit("error: cleanup can't run inside a session the script started; clearing what the build "
+                         "keeps is the human's decision")
+    kinds = list(dict.fromkeys(a.kind or CLEANUP_DEFAULT))
+    cutoff = time.time() - (a.older_than or 0) * 86400
+    found, kept = cleanup_found(worktree, prof, kinds, cutoff)
+    by_kind = {k: {"items": sum(1 for f in found if f["kind"] == k), "bytes": sum(f["bytes"] for f in found
+                                                                                   if f["kind"] == k)}
+               for k in kinds}
+    total = sum(f["bytes"] for f in found)
+    failed = [problem for f in found if (problem := cleanup_remove(worktree, f))] if a.yes else []
+    again = loop_cmd("cleanup", "--worktree", str(worktree), *[x for k in kinds for x in ("--kind", k)],
+                     *(["--older-than", f"{a.older_than:g}"] if a.older_than else []), "--yes")
+    out = {"result": ("REMOVED" if a.yes else "WOULD_REMOVE") if found else "NOTHING", "kinds": by_kind,
+           "bytes": total, "size": human_size(total), **({"older_than_days": a.older_than} if a.older_than else {}),
+           **({"kept": kept} if kept else {}), **({"failed": failed} if failed else {}),
+           **({"next": next_cmd(again, "lead", "this removes what is listed; run it only on the human's yes, "
+                                "because nothing removed can be brought back", decides="human",
+                                ask=f"Remove {human_size(total)} that orchestrate keeps on this computer: "
+                                    + ", ".join(f"{k} {human_size(v['bytes'])}" for k, v in by_kind.items()
+                                                if v["items"]) + "?")}
+              if found and not a.yes else {})}
+    if a.json:
+        print(json.dumps({**out, "found": found}, indent=1))
+        return
+    if not found:
+        print("Nothing to remove" + (f" that is older than {a.older_than:g} days" if a.older_than else "") + ".")
+    else:
+        print(("Removed" if a.yes else "Would remove") + f" {human_size(total)}:")
+        for k, v in by_kind.items():
+            if v["items"]:
+                print(f"  {k:<10} {v['items']:>6} {'item' if v['items'] == 1 else 'items'}  {human_size(v['bytes']):>9}"
+                      f"  {CLEANUP_KINDS[k]}")
+        if not a.yes:
+            print(f"Nothing was removed. To remove it: {again}")
+    for line in kept:
+        print(f"Kept: {line}")
+    for line in failed:
+        print(f"Not removed: {line}")
+    print(json.dumps({k: v for k, v in out.items() if k not in ("next",)}))
 
 
 # ------------------------------------------------------------------------------------------- main-branch checks
@@ -12571,12 +13213,14 @@ def main_check_tree(worktree: Path, name: str, ref: str) -> Path:
     if (path / ".git").exists():
         if git(path, "checkout", "--quiet", "--force", "--detach", ref).returncode == 0:
             git(path, "clean", "-ffdq")
+            link_evidence(path)
             return path
         shutil.rmtree(path, ignore_errors=True)
     git(worktree, "worktree", "prune")
     r = git(worktree, "worktree", "add", "--quiet", "--force", "--detach", str(path), ref)
     if r.returncode != 0:
         raise TipError(f"couldn't make a clean checkout at {path}: {r.stderr.strip()[-300:]}")
+    link_evidence(path)
     return path
 
 
@@ -12641,15 +13285,10 @@ def main_check_row(worktree: Path, name: str, kind: str, commit: str, spec: dict
 
 
 def commit_modules(worktree: Path, prof: dict, commit: str) -> tuple[list[str], list[str]]:
-    """(modules, files) for a commit: the files it changed, and the modules whose plans or evidence folders it changed
-    files in, which is how a commit shows whose it is."""
+    """(modules, files) for a commit: the files it changed, and the modules whose plan folders it changed files in,
+    which is how a commit shows whose it is. Evidence is never committed, so it shows nothing here."""
     files = [f for f in git(worktree, "diff", "--name-only", f"{commit}^", commit).stdout.splitlines() if f]
-    modules = set()
-    for f in files:
-        if where := module_of(prof, f):
-            modules.add(where[0])
-        elif f.startswith(prof["evidence"] + "/") and len(f.split("/")) > len(prof["evidence"].split("/")) + 1:
-            modules.add(f[len(prof["evidence"]) + 1:].split("/")[0])
+    modules = {where[0] for f in files if (where := module_of(prof, f))}
     return sorted(modules), files
 
 
@@ -12681,7 +13320,7 @@ def main_check_bisect(tree: Path, prof: dict, name: str, spec: dict, folder: Pat
     return {"bisect": "done", "bisect_runs": tried, "culprit": {
         "commit": culprit, "subject": git(tree, "log", "-1", "--format=%s", culprit).stdout.strip(),
         "modules": modules, "files": files[:20],
-        **({} if modules else {"modules_why": "the commit changed no file in a module's plans or evidence folder, "
+        **({} if modules else {"modules_why": "the commit changed no file in a module's plans folder, "
                                               "so its files are the guide"})}}
 
 
@@ -13598,8 +14237,9 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--format", choices=["text", "md"], default="text",
                         help="md: the human's page, STATUS.md, as the script writes it")
     status.set_defaults(func=cmd_status)
-    migrate = sub.add_parser("migrate", help="move flat plan files into a folder per module, and bring a project to "
-                                             "the names of orchestrate 2.0")
+    migrate = sub.add_parser("migrate", help="move flat plan files into a folder per module, bring a project to "
+                                             "the names of orchestrate 2.0, and move committed evidence into the "
+                                             "working folder")
     migrate.add_argument("--worktree", default=".")
     migrate.add_argument("--to", help="also move the whole plans folder here, and change the Plans line to match "
                                       "(for example docs/plans)")
@@ -13710,6 +14350,17 @@ def build_parser() -> argparse.ArgumentParser:
     main_check.add_argument("--runner", action="store_true", help=argparse.SUPPRESS)
     main_check.add_argument("--force", action="store_true", help=argparse.SUPPRESS)
     main_check.set_defaults(func=cmd_main_check)
+    clean = sub.add_parser("cleanup", help="list what orchestrate keeps on this computer, by kind and size, and "
+                                           "remove it with --yes")
+    clean.add_argument("--worktree", default=".")
+    clean.add_argument("--kind", action="append", choices=sorted(CLEANUP_KINDS),
+                       help="what to clear, repeatable (default: " + ", ".join(CLEANUP_DEFAULT) + "): " +
+                       "; ".join(f"{k}: {v}" for k, v in CLEANUP_KINDS.items()))
+    clean.add_argument("--older-than", type=float, metavar="DAYS", help="only what last changed more than this many "
+                                                                         "days ago")
+    clean.add_argument("--yes", action="store_true", help="remove it; without this, nothing is removed")
+    clean.add_argument("--json", action="store_true", help="the full list, every path with its size, as JSON")
+    clean.set_defaults(func=cmd_cleanup)
     runs = sub.add_parser("runs", aliases=["loops"], help="list every run, review and plan running on this machine")  # `loops` before 2.1.0
     runs.add_argument("--repo", help="only runs in the repository holding this path")
     runs.add_argument("--json", action="store_true", help="one JSON object, for a lead")

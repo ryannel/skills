@@ -16,7 +16,7 @@ from support import Clean, agent_loop  # noqa: E402
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 LOOP = Path("/skills/orchestration/build/scripts/agent_loop.py")
-PROF = {"plans": "docs/plans", "evidence": "docs/evidence", "merge": "push", "remote": "origin", "branch": "main",
+PROF = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "merge": "push", "remote": "origin", "branch": "main",
         "test_command": "./dev check", "exclusive resources": "gpu: timing runs and captures",
         "bounds": {"Licences and paths not to touch": "no GPL code", "Human decides": "spending and publishing"}}
 MILESTONE = {"id": "M2", "items": [
@@ -26,7 +26,7 @@ MILESTONE = {"id": "M2", "items": [
 FEEDBACK = [{"at": "2026-11-10T08:37:00Z", "items": ["M2.2"], "asked": "Is the resize smooth enough to ship?",
              "said": "Looks good to me, but the corners flicker once."}]
 ROUND = {"verdict": "fail", "at": "2026-11-09T21:00:00Z", "counts": True,
-         "review": "docs/evidence/APPLE-TILE/M2-review.md",
+         "review": ".orchestrate/evidence/APPLE-TILE/M2-review.md",
          "findings": [{"name": "corner flicker on resize", "item": "M2.2"},
                       {"name": "log written to the worktree", "repeat": True}]}
 
@@ -70,39 +70,39 @@ def prompts() -> dict[str, str]:
     out["build-old-branch-note"] = agent_loop.state_refusal(set_state, old_branch=True)
     out["review"] = agent_loop.review_prompt(
         "claude", PROF, "APPLE-TILE", "M2", "a6101020", "docs/plans/APPLE-TILE/DONE.json",
-        "docs/evidence/APPLE-TILE/M2-review.md",
+        ".orchestrate/evidence/APPLE-TILE/M2-review.md",
         {"id": "M2", "items": [{"id": "M2.1", "check": "./dev test tiles"}, {"id": "M2.2"}]},
         {"ready_for_review": {"checked": "b7c2e91d04aa"}, "reviews": [ROUND]}, FEEDBACK,
         [{"why": "the reviews judged the capture tooling, not the tiles", "at": "2026-11-10T12:00:00Z"}])
     out["review-restatement"] = agent_loop.binding(PROF, "review", done="docs/plans/APPLE-TILE/DONE.json",
-                                                   review="docs/evidence/APPLE-TILE/M2-review.md")[0]
+                                                   review=".orchestrate/evidence/APPLE-TILE/M2-review.md")[0]
     out["design-review"] = agent_loop.review_prompt(
         "claude", PROF, "APPLE-TILE", "design", "HEAD", "docs/plans/APPLE-TILE/DONE.json",
-        "docs/evidence/APPLE-TILE/design-review.md", None, {}, None, [],
-        context="Since the last design review (docs/evidence/APPLE-TILE/design-review.md), M2.2 changed.",
+        ".orchestrate/evidence/APPLE-TILE/design-review.md", None, {}, None, [],
+        context="Since the last design review (.orchestrate/evidence/APPLE-TILE/design-review.md), M2.2 changed.",
         design=True)
     out["plan"] = agent_loop.PLAN_TEMPLATE.format(
         task="Plan module APPLE-TILE. The human said on 9 November: \"tiles should load as you scroll, never "
              "all at once\".", skill=agent_loop.skill_note("plan-module", "claude"), loop=LOOP)
     with mock.patch.object(agent_loop, "review_history", lambda *a, **k: agent_loop.history_lines({"reviews": [ROUND]})), \
             mock.patch.object(agent_loop, "review_files", lambda *a, **k: (
-                ["docs/evidence/APPLE-TILE/M2-review-1.md", "docs/evidence/APPLE-TILE/M2-review.md"], False)):
+                [".orchestrate/evidence/APPLE-TILE/M2-review-1.md", ".orchestrate/evidence/APPLE-TILE/M2-review.md"], False)):
         out["planner-diagnosis-task-repeated-finding"] = agent_loop.diagnosis_task(
             "APPLE-TILE", "M2", {"failed_reviews": 4, "failed_reviews_with_repeat": 4}, PROF, Path("/repo"))
         out["planner-diagnosis-task-new-findings"] = agent_loop.diagnosis_task(
             "APPLE-TILE", "M2", {"failed_reviews": 6, "failed_reviews_with_repeat": 1}, PROF, Path("/repo"))
     out["planner-after-design-changes"] = agent_loop.design_review_next(
-        {"verdict": "DESIGN CHANGES", "review": "docs/evidence/APPLE-TILE/design-review.md",
+        {"verdict": "DESIGN CHANGES", "review": ".orchestrate/evidence/APPLE-TILE/design-review.md",
          "line": "DESIGN CHANGES: 2 must_fix findings"}, "APPLE-TILE", Path("/repo"), PROF)["command"]
     blocked = {"reason": "needs_dependency", "what": "CORE has no save API yet",
-               "handoff": "docs/evidence/APPLE-TILE/M2-handoff.md",
+               "handoff": ".orchestrate/evidence/APPLE-TILE/M2-handoff.md",
                "work": {"branch": "build/apple-tile", "commit": "7911c75b" + "0" * 32}}
     out["planner-needs-dependency"] = agent_loop.next_for(
         {"module": "APPLE-TILE", "milestone": "M2", "status": "blocked", "reason": "needs_dependency",
          "blocked": blocked}, Path("/repo"), PROF)["command"]
     out["claude-review-or-plan-turn-note"] = agent_loop.CLAUDE_TURN_NOTE
     out["findings"] = agent_loop.FINDINGS_TEMPLATE.format(milestone="M2", module="APPLE-TILE",
-                                                          evidence="docs/evidence")
+                                                          evidence=".orchestrate/evidence")
     return out
 
 

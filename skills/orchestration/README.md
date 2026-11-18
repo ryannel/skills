@@ -416,24 +416,26 @@ commits write to it.
 
 ### After a builder
 
-Before the `run` command sets a milestone to Ready for Review, three things must hold. The done-when file is
-still valid, the builder changed only its own fields, and the items are the approved ones, so a builder can't
-reword an item to make it easier. The work is committed, with no stray files, and merged into the main branch. And
-the test command and every Automated Check pass when the script runs them itself, in a clean copy of the main
-branch. Those checks run in the script's own process, outside the builder's sandbox and outside `merge`, so a
-check that needs the GPU or the screen can pass, and a 40-minute check doesn't hold up other builders' merges. A
-check that already passed on exactly the same files, in the builder's `check` or in `merge`, isn't run a third
+Before the `run` command sets a milestone to Ready for Review, three things must hold. The done-when file is still
+valid, the builder changed only its own fields, and the items are the approved ones, so a builder can't reword an
+item to make it easier. The work is committed, with no stray files and no evidence, and merged into the main
+branch. And the test command and every Automated Check pass when the script runs them itself, in a clean copy of
+the main branch. Those checks run in the script's own process, outside the builder's sandbox and outside `merge`,
+so a check that needs the GPU or the screen can pass, and a 40-minute check doesn't hold up other builders' merges.
+A check that already passed on exactly the same files, in the builder's `check` or in `merge`, isn't run a third
 time, and an item that lists the files its check `reads` is reused while those files stay the same, whatever else
-merged. If a builder goes three turns in a row without changing or reporting anything, the command stops
-it.
+merged. If a builder goes three turns in a row without changing or reporting anything, the command stops it.
 
 ### After a reviewer
 
 A reviewer works in a clean copy of the commit it judges. The `review` command confirms that the reviewer changed
 only its review, its folder of screenshots and its own fields in the done-when file, that each item's result agrees
 with the review's last line, and that a failed review lists its findings. If any of that is wrong, nothing is saved.
-Otherwise the script works out the milestone's status and the counts from the reviewer's verdicts, and merges the
-review itself.
+Otherwise the script works out the milestone's status and the counts from the reviewer's verdicts, and merges
+them itself. The review and its screenshots stay out of git, in the repository's working folder, a folder in `.git`
+that every worktree on your computer opens at `.orchestrate/evidence`. Git holds only code, plans and the test data
+tests read, so captures don't grow the repository, and `merge` refuses a commit that puts evidence in git. Evidence
+stays until you clear it with `cleanup`, which lists what it would remove and removes it only with `--yes`.
 
 ### After a planner
 

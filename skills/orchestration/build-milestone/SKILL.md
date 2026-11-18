@@ -53,7 +53,13 @@ keeps the project's records. Run them as `python3 <the build skill's folder>/scr
 ## What finished looks like
 
 1. Every item is marked as passed, with evidence from the item's target. Evidence is saved proof, such as a test
-   log or a screenshot.
+   log or a screenshot. It goes in the repository's working folder, at `<evidence>/<MODULE>/` in your checkout,
+   where `<evidence>` is the `Evidence:` path of the project settings (`.orchestrate/evidence` unless they name
+   another). Every worktree on this computer sees the same files there, and git ignores the folder, so leave
+   evidence uncommitted: git holds what the project needs to build and run, and evidence is only working
+   material for the reviewer and the human. Commit code, plans, and the test data your tests read. A file a test or
+   a check reads belongs in the repository outside the working folder, because `merge` refuses a commit that adds
+   or changes files under `<evidence>`.
 2. The work is merged with `agent_loop.py merge --worktree .`, which prints `MERGED`, and the milestone's `status`
    is still `in_progress`. Leave `ready_for_review` and `done` to the script. `merge` refuses a commit that sets
    either, because other builders rebase onto the main branch and would take a status they find there as checked.
@@ -65,7 +71,7 @@ keeps the project's records. Run them as `python3 <the build skill's folder>/scr
    milestone that needs no reviewer goes straight to Done.
 3. `LOG.md` has an entry of a few lines saying what you did, with what you verified kept apart from what you think is
    probably true. Keep it to eight lines at most, because the script refuses a longer entry when the plan files
-   merge. Longer notes go in the module's evidence folder, linked from the entry. Leave status out of the plan file.
+   merge. Longer notes go in the working folder, at `<evidence>/<MODULE>/`, linked from the entry. Leave status out of the plan file.
    The script writes the human's page, `STATUS.md`, from the done-when file, and a status line anywhere else is out
    of date the next time a milestone moves.
 4. Your last line is `DONE`, or `BLOCKED <reason>: <what would unblock it>`, or `NEEDS_CONTEXT: <what is
@@ -74,11 +80,11 @@ keeps the project's records. Run them as `python3 <the build skill's folder>/scr
    write `BLOCKED:` with no reason. The script and the lead read this line to decide what happens next, so keep
    to these forms.
 
-If you stop without `DONE`, write a handoff first, at `<evidence folder>/<MODULE>/<milestone>-handoff.md`, and
-commit it with your work. Whoever picks the milestone up next, a builder or a planner, has seen none of your
-session, so say what is finished and on which commit, what you tried and ruled out, what you confirmed and what
-you only suspect, and what to do first. The script merges the handoff even though your work isn't merged, and
-names it in the next agent's prompt. That lets your last line be one sentence. If an earlier session left a
+If you stop without `DONE`, write a handoff first, at `<evidence>/<MODULE>/<milestone>-handoff.md` in the
+working folder, and leave it uncommitted like the rest of the evidence. Whoever picks the milestone up next, a
+builder or a planner, has seen none of your session, so say what is finished and on which commit, what you tried
+and ruled out, what you confirmed and what you only suspect, and what to do first. Every worktree sees the handoff
+where you wrote it, even though your work isn't merged, and the script names it in the next agent's prompt. That lets your last line be one sentence. If an earlier session left a
 handoff for your milestone, read it before you start, and rewrite it rather than add to it if you stop too.
 
 You change only three fields in the done-when file: an item's `builder_result` (`open` or `pass`), an item's
@@ -118,7 +124,8 @@ it is written, so a guess that reads like a fact turns into an instruction. Ask 
 other builders should do is the lead's to decide, because only the lead can see every run.
 
 Record in your evidence the commit each proof ran on, and link evidence by its path from the repository's root,
-because your worktree's absolute paths stop working when it is reused.
+such as `.orchestrate/evidence/WATER/M2.log`, because your worktree's absolute paths stop working when it is reused.
+That path opens in every worktree on this computer.
 
 The script's run of the checks after your turn is the proof of record, and the reviewer is told it passed and on
 which commit. So once you have merged, there is no need to run your checks again yourself, and on a busy main branch

@@ -74,7 +74,7 @@ SETTINGS = {module: {name: value for name, value in vars(module).items()
 STATE = {name: getattr(agent_loop, name) for name in (
     "RUN_HERE", "LIVE", "_LIVE_LOCK", "_RUN_LOCKS", "CONTEXT", "HOSTS_USED", "_COMMON", "QUOTA_WORKTREE",
     "TURN_USAGE", "TURN_SIZE", "TURN_STOP", "WARNINGS", "EMIT_EXTRA", "LAUNCH_HOSTS", "_VERSIONS", "SESSION_PATH",
-    "_IMPORTS_SENT", "_HELP", "STEPS_RUN")}
+    "_IMPORTS_SENT", "_HELP", "STEPS_RUN", "EVIDENCE_HERE")}
 assert not any(STATE.values()), "the script's per-process state starts empty"
 
 PROFILE = ("- **Plans:** docs/plans\n- **Merge:** push\n- **Test command:** none\n- **Default host:** codex\n")
@@ -141,7 +141,7 @@ def proved(m):
     """The milestone with evidence on every item that passes."""
     for i in m["items"]:
         if i["builder_result"] == "pass":
-            i["evidence"] = "docs/evidence/WATER/run.log"
+            i["evidence"] = ".orchestrate/evidence/WATER/run.log"
     return m
 
 
@@ -214,8 +214,8 @@ def git(*a):
 reply = os.environ.get("FAKE_REPLY", "DONE")
 path = cwd / "docs/plans/WATER/DONE.json"
 if role == "build" and os.environ.get("FAKE_HANDOFF"):
-    (cwd / "docs/evidence/WATER").mkdir(parents=True, exist_ok=True)
-    (cwd / "docs/evidence/WATER/M1-handoff.md").write_text(os.environ["FAKE_HANDOFF"])
+    (cwd / ".orchestrate/evidence/WATER").mkdir(parents=True, exist_ok=True)
+    (cwd / ".orchestrate/evidence/WATER/M1-handoff.md").write_text(os.environ["FAKE_HANDOFF"])
 if role == "build" and os.environ.get("FAKE_PASS") == "1":
     d = json.loads(path.read_text())
     for m in d["milestones"]:
@@ -252,7 +252,7 @@ elif role == "review":
         subprocess.run(os.environ["FAKE_DURING"], shell=True, check=True, capture_output=True)
     d = json.loads(path.read_text())
     target = next((m for m in d["milestones"] if m["status"] == "ready_for_review"), None)
-    ev = cwd / "docs/evidence/WATER"
+    ev = cwd / ".orchestrate/evidence/WATER"
     ev.mkdir(parents=True, exist_ok=True)
     if mode == "design":
         (ev / "design-review.md").write_text("design is fine")
@@ -268,7 +268,7 @@ elif role == "review":
     else:
         mid, verdict = target["id"], ("fail" if mode == "fail" else "pass")
         for i in target["items"]:
-            i["verdict"], i["review"] = verdict, f"docs/evidence/WATER/{mid}-review.md"
+            i["verdict"], i["review"] = verdict, f".orchestrate/evidence/WATER/{mid}-review.md"
         if verdict == "pass":
             target["status"] = "done"
             if os.environ.get("FAKE_PASS_FINDINGS"):
@@ -589,6 +589,10 @@ class Repo(Clean):
         record.write_text(json.dumps(rec))
         self.commit_all()
         return work
+
+    def evidence(self, rel=""):
+        """A path in the repository's working folder, where evidence is kept outside git."""
+        return agent_loop.evidence_root(self.wt) / rel
 
     def read_done(self, ref="origin/main"):
         self.git("fetch", "-q", "origin")

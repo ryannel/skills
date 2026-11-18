@@ -8,7 +8,9 @@ runs, the script copies the figures it needs out of that session's file: tokens 
 the turn took, how full its context got, its tool calls, compactions, and how it ended. It keeps numbers, names and
 times, and never what was said. The copy is the delivery history, in `~/.orchestrate/history/<repository>-<hash>/`,
 or under `$ORCHESTRATE_HISTORY_DIR` when that is set. It lives outside the hosts' folders and outside the clone, so
-deleting either leaves it in place.
+deleting either leaves it in place. It also keeps a copy of each review the script counts, under
+`reviews/<MODULE>/`, because the reviews themselves are in the working folder, which the human clears with
+`cleanup`.
 
 The script also reads the sessions that ran without it, each time you run `report`, `history` or `dashboard`: turns
 the human started in the app, Codex auto-review threads, subagents, and the human's own sessions in the
