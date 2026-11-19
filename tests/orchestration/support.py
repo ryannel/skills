@@ -53,6 +53,10 @@ os.environ.update(
 for key in [k for k in os.environ if k.startswith("FAKE_")] + ["ORCHESTRATE_ROLE", "ORCHESTRATE_VISIBLE"]:
     os.environ.pop(key, None)
 
+# No __pycache__ beside the scripts, where it would outlive a rename of their folder. The variable covers the
+# script runs the tests start.
+sys.dont_write_bytecode = True
+os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
 sys.path.insert(0, str(SCRIPTS))
 import agent_loop  # noqa: E402
 
