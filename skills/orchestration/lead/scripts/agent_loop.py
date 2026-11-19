@@ -5909,7 +5909,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.8.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.8.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5938,6 +5938,10 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.8.1": [
+        "The prompts for builders, reviewers and planners name the project's glossary, so each agent uses the "
+        "agreed names even when it skims its skill.",
+    ],
     "2.8.0": [
         "The skills are named for the agent that reads them: `lead` (was `build`), `interview` (was "
         "`interview-me`), `planner` (was `plan-module`), `builder` (was `build-milestone`) and `reviewer` (was "
@@ -6587,7 +6591,7 @@ def build_prompt(host: str, headless: bool, prof: dict, stem: str, mid: str, mil
     earlier sessions and the script's own note, if there are any."""
     return BUILD_TEMPLATE.format(
         goal=GOAL_LINE if host == "codex" else "", milestone=mid, module=stem, done=done_rel(prof, stem),
-        loop=LOOP, skill=skill_note("builder", host),
+        loop=LOOP, skill=skill_note("builder", host), glossary=project_file(prof, "glossary"),
         lead=f"\nFrom the lead:\n{lead}\n" if lead else "",
         feedback=("\n" + feedback_note(feedback, mid, record_rel(prof, stem)) + "\n") if feedback else "",
         handoff=handoff_rel(prof, stem, mid), earlier=earlier, captures=f"{prof['evidence']}/{stem}/{mid}",
@@ -8786,7 +8790,7 @@ def review_prompt(host: str, prof: dict, stem: str, mid: str, commit: str, done:
                            loop=LOOP, checks="" if design else checks_note(prof, milestone,
                                                                             ready_record(entry).get("checked")),
                            changed=f"\n{context}\n" if context else "", briefs="", review=review,
-                           skill=skill_note("reviewer", host),
+                           skill=skill_note("reviewer", host), glossary=project_file(prof, "glossary"),
                            answers=moved + review_notes(
                                mid, prof, stem, feedback,
                                [] if design else [r for r in counted_reviews(entry) if r.get("verdict") == "fail"],
@@ -9136,7 +9140,8 @@ def cmd_plan(a: argparse.Namespace) -> None:
     start = head_commit(tree)
     seen = reflog_size(tree)
     before = done_docs_at(tree, prof, start)
-    prompt = PLAN_TEMPLATE.format(task=a.task, skill=skill_note("planner", host), loop=LOOP)
+    prompt = PLAN_TEMPLATE.format(task=a.task, skill=skill_note("planner", host), loop=LOOP,
+                                  glossary=project_file(prof, "glossary"))
     out = one_session(host, prof, model, effort, tree, prompt, "plan", lambda msg: plan_owed(tree, start, msg),
                       a.turn_timeout_hours * 3600, title=plan_title(worktree, tree, prof, a.task))
     result = out.pop("result")

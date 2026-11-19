@@ -82,5 +82,5 @@ to cases the failure didn't cover, and leave the story of what happened out of t
 commit message, or in the domain README when it explains why the set is built the way it is. Record what was left
 out on purpose in the README too.
 
-Check the result with `python3 skills/agent-writing/skill-creator/scripts/check_skill.py <skill-folder>`,
+Check the result with `python3 skills/skill-creator/scripts/check_skill.py <skill-folder>`,
 `claude plugin validate .` and `npx skills add ./ --list`.

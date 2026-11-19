@@ -34,7 +34,7 @@ class Home:
             dest = self.claude / "skills" / name
             dest.mkdir(parents=True)
             if name == "prompting-agents":
-                text = (ROOT / "skills/agent-writing/prompting-agents/SKILL.md").read_bytes()
+                text = (ROOT / "skills/prompting-agents/SKILL.md").read_bytes()
             else:  # the lead's skill as 2.7.1 published it, under its old name
                 text = subprocess.run(["git", "-C", str(ROOT), "show", OLD_BUILD], capture_output=True,
                                       check=True).stdout

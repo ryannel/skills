@@ -6,6 +6,7 @@ About this session:
 - This worktree is yours for the milestone. Other builders are working in their own, so keep your changes inside this one.
 - A lead is running this build. Once the script's checks pass on your merged work, a reviewer in a new session judges the milestone.
 - The script is `python3 {loop}`.
+- The project's agreed names are in {glossary}, if that file exists. Use them in what you write, as the skill says.
 - Evidence files, such as captures and logs, go under {captures}/. That folder is the repository's working folder, shared by every worktree on this computer and ignored by git, so leave them uncommitted.
 - {session}
 {resources}{needs}{rules}{lead}

@@ -6,6 +6,7 @@ Since the last design review (.orchestrate/evidence/APPLE-TILE/design-review.md)
 
 About this session:
 - This folder is a clean checkout of the main branch's tip.
+- The project's agreed names are in docs/plans/GLOSSARY.md, if that file exists. Use them in your review, as the skill says.
 - Any captures go in .orchestrate/evidence/APPLE-TILE/design-review/. The review and that folder are in the repository's working folder, which git ignores, so leave every other file as it is.
 
 To finish, end with the skill's last line.

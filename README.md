@@ -93,11 +93,11 @@ the orchestration plugin from the GitHub marketplace.
 
 ## Agent writing
 
-The `skills/agent-writing/` folder holds two skills for writing what other AI agents act on. Each is its own
-plugin. skill-creator and orchestrate both depend on prompting-agents, so installing either brings it with them;
+Two standalone skills, each in its own folder under `skills/`, are for writing what other AI agents act on. Each
+is its own plugin. skill-creator and orchestrate both depend on prompting-agents, so installing either brings it with them;
 orchestrate doesn't bring skill-creator.
 
-[`prompting-agents`](./skills/agent-writing/prompting-agents/) is for any text another agent will act on: a brief
+[`prompting-agents`](./skills/prompting-agents/) is for any text another agent will act on: a brief
 for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt, or an
 AGENTS.md or CLAUDE.md file. It says what such a text must carry, what to leave out, and how to write it plainly,
 with one reference file per model. It is built from Anthropic's and OpenAI's guidance for Claude Opus 5.5, Claude
@@ -105,7 +105,7 @@ Fable 5.2, GPT-6.2 Astra and GPT-6.2 Sol; the research behind it is in
 [workbench/prompting-agents](./workbench/prompting-agents/README.md). It replaced `instructing-agents` on
 10 November 2026, and relies on its description to trigger, with no hook.
 
-[`skill-creator`](./skills/agent-writing/skill-creator/) creates, rewrites and tests skills. It keeps the method of
+[`skill-creator`](./skills/skill-creator/) creates, rewrites and tests skills. It keeps the method of
 Anthropic's skill-creator (write from a real task, test with and without the skill in fresh contexts, show the
 person, fix the cause). Its one script, `check_skill.py`, finds the mistakes that make a skill fail without an
 error. The research behind it is in [workbench/skill-creator](./workbench/skill-creator/README.md).

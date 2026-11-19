@@ -318,7 +318,7 @@ Your request reaches the planner word for word: in one test run a plan read "acc
 meant, and the finished tool dropped the letter `Ø`. Rules that must hold for a whole session are sent again when
 it is resumed, and reviewers and planners are started unable to start other agents, because a reviewer that hands
 its reading to a helper hasn't read the work. The
-[`prompting-agents`](https://github.com/ryannel/skills/tree/main/skills/agent-writing/prompting-agents) skill
+[`prompting-agents`](https://github.com/ryannel/skills/tree/main/skills/prompting-agents) skill
 explains these rules and their sources.
 
 ### Our own practice

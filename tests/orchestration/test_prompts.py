@@ -83,7 +83,8 @@ def prompts() -> dict[str, str]:
         design=True)
     out["plan"] = agent_loop.PLAN_TEMPLATE.format(
         task="Plan module APPLE-TILE. The human said on 9 November: \"tiles should load as you scroll, never "
-             "all at once\".", skill=agent_loop.skill_note("planner", "claude"), loop=LOOP)
+             "all at once\".", skill=agent_loop.skill_note("planner", "claude"), loop=LOOP,
+        glossary="docs/plans/GLOSSARY.md")
     with mock.patch.object(agent_loop, "review_history", lambda *a, **k: agent_loop.history_lines({"reviews": [ROUND]})), \
             mock.patch.object(agent_loop, "review_files", lambda *a, **k: (
                 [".orchestrate/evidence/APPLE-TILE/M2-review-1.md", ".orchestrate/evidence/APPLE-TILE/M2-review.md"], False)):
