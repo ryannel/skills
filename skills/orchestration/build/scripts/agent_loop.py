@@ -301,6 +301,13 @@ Subcommands:
         (`renamed` lists the files given the new names), NOTHING (the tip has folders and names already), REFUSED
         or FAILED. Either success lists in `worktrees_on_old_names` every worktree whose files still use the old
         layout or names, each with its `migrate --branch` command.
+  migrate --commit-map FILE --worktree PATH
+        After history was rewritten, such as by `git filter-repo`: points every record file (in one commit made as
+        the script) and the run state under <git common dir>/orchestrate at the new commit hashes. FILE holds one
+        `old new` pair of full hashes a line, as .git/filter-repo/commit-map does. Refused while a run holds the
+        repository, because it would write the old hashes back. MIGRATED (`commits_remapped`, `records`,
+        `state_files`), NOTHING (nothing names an old hash), REFUSED or FAILED.
+
   migrate --branch --worktree PATH [--module CORE]
         For a worktree whose own commits were made before the main branch was migrated, which `run` refuses:
         renames each of its commits as `migrate` renamed the main branch, then rebases them onto the tip, so the
@@ -5961,7 +5968,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.7.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.7.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5990,6 +5997,11 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.7.1": [
+        "After history is rewritten, such as by `git filter-repo`, `migrate --commit-map <map> --worktree <repo>` "
+        "points the records and the run state at the new commit hashes, so reviews of milestones that were Ready "
+        "for Review no longer come back INVALID. Run it with every run stopped.",
+    ],
     "2.7.0": [
         "A design gets at most two design reviews in a row that ask for changes. The planner's revision after the "
         "second is approved by the script without a third review (stored as `by: review_limit` in the record), "
@@ -12756,6 +12768,94 @@ def left_behind(behind: list[dict], otherwise: dict | None = None) -> dict:
         "onto the main branch, holding only its module's run lock, so other modules' runs carry on")}
 
 
+# After history is rewritten, such as by `git filter-repo` to take old evidence out of it, every commit has a new
+# hash, and the records and the run state still name the old ones. A review of a milestone whose ready commit is no
+# longer on the main branch is INVALID, so `migrate --commit-map` points them all at the new hashes.
+COMMIT_MAP_SUBJECT = "orchestrate: point the records at the rewritten history"
+FULL_HASH = re.compile(r"(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])")
+
+
+def read_commit_map(path: Path) -> dict[str, str]:
+    """Old hash to new, from a map with one `old new` pair a line, as `git filter-repo` writes it. Its header line,
+    and a commit the rewrite dropped (all zeros), are left out."""
+    pairs = {}
+    for line in path.read_text().splitlines():
+        parts = line.split()
+        if (len(parts) == 2 and all(FULL_HASH.fullmatch(p) for p in parts) and parts[1] != "0" * 40
+                and parts[0] != parts[1]):
+            pairs[parts[0]] = parts[1]
+    return pairs
+
+
+def remap_hashes(text: str, pairs: dict[str, str]) -> tuple[str, int]:
+    """`text` with every full commit hash in `pairs` replaced by its new one, and how many were replaced."""
+    count = 0
+
+    def new(m: re.Match) -> str:
+        nonlocal count
+        if m.group(0) in pairs:
+            count += 1
+            return pairs[m.group(0)]
+        return m.group(0)
+    return FULL_HASH.sub(new, text), count
+
+
+def remap_commits(worktree: Path, prof: dict, map_path: Path, done_with) -> None:
+    """Rewrites the commit hashes in every record file, in one commit made as the script, and in the run state under
+    the git common dir. The clean checkouts and the working folder are left as they are."""
+    try:
+        pairs = read_commit_map(map_path)
+    except OSError as e:
+        done_with("FAILED", 1, detail=f"can't read {map_path}: {e}")
+    if not pairs:
+        done_with("FAILED", 1, detail=f"{map_path} has no `old new` pairs of full commit hashes")
+    folder = loop_dir(worktree)
+    busy = [name for name in (p.name[len("run-"):-len(".lock")] for p in folder.glob("run-*.lock"))
+            if run_holder(folder, name) not in (None, os.getpid())]
+    if busy or not run_lock(worktree, "_plan"):
+        done_with("REFUSED", 1, problems=[
+            f"a run, review, plan or adopt is running here ({', '.join(busy) or '_plan'}). Stop them first (`runs "
+            "--repo` shows them, `pause` stops them), because a run would write the old hashes back"])
+    for name in modules_here(worktree, prof):
+        run_lock(worktree, name.upper())
+    did = {"records": 0, "hashes": 0}
+
+    def change(t: Path) -> list[str]:
+        written = []
+        for stem in modules_here(t, prof):
+            rel = record_rel(prof, stem)
+            if not (t / rel).is_file():
+                continue
+            text, n = remap_hashes((t / rel).read_text(), pairs)
+            if n:
+                (t / rel).write_text(text)
+                written.append(rel)
+                did["records"] += 1
+                did["hashes"] += n
+        return written
+
+    ok, landed = loop_write(worktree, prof, "_migrate", change, COMMIT_MAP_SUBJECT, take_up_ok=False)
+    if not ok:
+        done_with("FAILED", 1, detail=landed)
+    state = 0
+    skip = {"verify", "evidence"}  # clean checkouts, and the working folder, which holds no state
+    for path in sorted(folder.rglob("*")):
+        rel = path.relative_to(folder)
+        if rel.parts[0] in skip or path.is_symlink() or not path.is_file() or path.suffix not in (".json", ".jsonl"):
+            continue
+        try:
+            text, n = remap_hashes(path.read_text(), pairs)
+            if n:
+                path.write_text(text)
+                state += 1
+        except (OSError, UnicodeDecodeError):
+            continue
+    if not did["hashes"] and not state:
+        done_with("NOTHING", detail=f"no record or run state names a commit in {map_path}")
+    done_with("MIGRATED", **({"commit": landed} if did["records"] else {}), commits_remapped=did["hashes"],
+              records=did["records"], state_files=state)
+
+
 def cmd_migrate(a: argparse.Namespace) -> None:
     """Moves a project from flat plan files (<MODULE>-DONE.json and the rest, side by side) to a folder per module,
     brings it to the names of 2.0, and moves its evidence out of git into the working folder (2.6.0), through a clean
@@ -12770,6 +12870,10 @@ def cmd_migrate(a: argparse.Namespace) -> None:
 
     if os.environ.get("ORCHESTRATE_ROLE"):
         raise SystemExit("error: migrate can't run inside a session the script started; the lead runs it")
+    if getattr(a, "commit_map", None):
+        if getattr(a, "branch", False) or getattr(a, "to", None):
+            raise SystemExit("error: --commit-map runs on its own, without --branch or --to")
+        remap_commits(worktree, prof, Path(a.commit_map), done_with)
     if getattr(a, "branch", False):
         if getattr(a, "to", None):
             raise SystemExit("error: --to moves the main branch's plans folder; --branch follows wherever it went")
@@ -14306,6 +14410,9 @@ def build_parser() -> argparse.ArgumentParser:
                          help="bring this worktree's own commits, made before the main branch was migrated, over to "
                               "the new names and rebase them onto it, holding only the module's run lock")
     migrate.add_argument("--module", help="with --branch: the module the worktree builds, when the script can't tell")
+    migrate.add_argument("--commit-map", help="after history was rewritten, a file of `old new` commit hash pairs "
+                                              "(such as .git/filter-repo/commit-map): point the records and the run "
+                                              "state at the new hashes")
     migrate.set_defaults(func=cmd_migrate)
     nxt = sub.add_parser("next", help="say what to do after a failed review, and print the command")
     for flag in ("--module", "--worktree", "--milestone"):

@@ -154,6 +154,31 @@ class Migrate(Repo):
         self.assertEqual(self.git("rev-parse", "origin/main").stdout, before)
         self.assertEqual(self.evidence("WATER/M1-review.md").read_text(), "newer")
 
+    def test_migrate_with_a_commit_map_points_records_and_run_state_at_the_new_hashes(self):
+        put(self.wt / "docs/plans/WATER/DESIGN.md", "# WATER design\n")
+        doc = done(milestone("M1", "done", ["pass"]), milestone("M2", "ready_for_review", ["pass"]))
+        put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
+        rec = agent_loop.adopt(doc, agent_loop.text_hash("# WATER design\n"))
+        rec["milestones"]["M1"]["reviews"] = [{"verdict": "pass", "commit": "b" * 40}]
+        rec["milestones"]["M2"]["ready_for_review"] = {"commit": "c" * 40, "checked": "d" * 40}
+        put(self.wt / "docs/plans/WATER/RECORD.json", json.dumps(rec))
+        self.commit_all()
+        state = self.wt / ".git/orchestrate/results/WATER-M2-run.json"
+        put(state, json.dumps({"result": "READY_FOR_REVIEW", "commit": "c" * 40}))
+        commit_map = self.root / "commit-map"
+        commit_map.write_text("old new\n" + "".join(f"{o * 40} {n * 40}\n" for o, n in ("b1", "c2", "d3"))
+                              + "e" * 40 + " " + "0" * 40 + "\n")
+        out = self.call(agent_loop.cmd_migrate, worktree=str(self.wt), commit_map=str(commit_map))
+        self.assertEqual(out["result"], "MIGRATED", out)
+        self.assertEqual((out["commits_remapped"], out["records"], out["state_files"]), (3, 1, 1))
+        rec = self.read_record()
+        self.assertEqual(rec["milestones"]["M1"]["reviews"][0]["commit"], "1" * 40)
+        self.assertEqual(rec["milestones"]["M2"]["ready_for_review"], {"commit": "2" * 40, "checked": "3" * 40})
+        self.assertEqual(json.loads(state.read_text())["commit"], "2" * 40)
+        self.assertIn(agent_loop.COMMIT_MAP_SUBJECT, self.git("log", "-3", "--format=%s", "origin/main").stdout)
+        again = self.call(agent_loop.cmd_migrate, worktree=str(self.wt), commit_map=str(commit_map))
+        self.assertEqual(again["result"], "NOTHING", again)
+
     def test_after_migrate_merge_refuses_new_files_in_the_old_folder(self):
         self.old_project()
         self.migrate()

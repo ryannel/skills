@@ -35,6 +35,11 @@ human that such a checker will report those links, and that the files under the 
 them out of history is a separate job, done with every run stopped, and `merge` refuses any new commit there in the
 meantime. A test or check that reads a file there should have it moved to test data in the repository first.
 
+Rewriting history gives every commit a new hash, while the records and the run state still name the old ones, so
+a review of a milestone that was Ready for Review comes back INVALID. Straight after the rewrite, with every run
+still stopped, run `migrate --commit-map <map> --worktree <repo>`, where the map is the `old new` list the rewrite
+wrote, such as `.git/filter-repo/commit-map`. It points the records and the run state at the new hashes.
+
 ## Worktrees with commits from before the migration
 
 `run` refuses a worktree with commits of its own from before the migration, and `migrate` lists each one under
