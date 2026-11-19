@@ -51,7 +51,7 @@
       "description": "Build software with AI agents in Claude Code, Codex or another host. The lead talks with you to find out what you want and agrees the project's terms, a planner writes milestones with done-when files, builders prove them, and new reviewers judge them. /build keeps a chosen number of builders busy and accepts no work it can't verify.",
       "source": "./",
       "strict": false,
-      "version": "2.7.1",
+      "version": "2.8.0",
       "category": "development",
       "keywords": [
         "agents",
@@ -70,16 +70,16 @@
         "prompting-agents"
       ],
       "skills": [
-        "./skills/orchestration/interview-me",
+        "./skills/orchestration/interview",
         "./skills/orchestration/domain-language",
-        "./skills/orchestration/plan-module",
-        "./skills/orchestration/build-milestone",
-        "./skills/orchestration/review-milestone",
-        "./skills/orchestration/build"
+        "./skills/orchestration/planner",
+        "./skills/orchestration/builder",
+        "./skills/orchestration/reviewer",
+        "./skills/orchestration/lead"
       ],
       "agents": [
-        "./skills/orchestration/build/agents/claude/orchestrate-reviewer.md",
-        "./skills/orchestration/build/agents/claude/orchestrate-planner.md"
+        "./skills/orchestration/reviewer/agents/claude/orchestrate-reviewer.md",
+        "./skills/orchestration/planner/agents/claude/orchestrate-planner.md"
       ]
     },
     {

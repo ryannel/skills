@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from support import Clean, agent_loop  # noqa: E402
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
-LOOP = Path("/skills/orchestration/build/scripts/agent_loop.py")
+LOOP = Path("/skills/orchestration/lead/scripts/agent_loop.py")
 PROF = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "merge": "push", "remote": "origin", "branch": "main",
         "test_command": "./dev check", "exclusive resources": "gpu: timing runs and captures",
         "bounds": {"Licences and paths not to touch": "no GPL code", "Human decides": "spending and publishing"}}
@@ -83,7 +83,7 @@ def prompts() -> dict[str, str]:
         design=True)
     out["plan"] = agent_loop.PLAN_TEMPLATE.format(
         task="Plan module APPLE-TILE. The human said on 9 November: \"tiles should load as you scroll, never "
-             "all at once\".", skill=agent_loop.skill_note("plan-module", "claude"), loop=LOOP)
+             "all at once\".", skill=agent_loop.skill_note("planner", "claude"), loop=LOOP)
     with mock.patch.object(agent_loop, "review_history", lambda *a, **k: agent_loop.history_lines({"reviews": [ROUND]})), \
             mock.patch.object(agent_loop, "review_files", lambda *a, **k: (
                 [".orchestrate/evidence/APPLE-TILE/M2-review-1.md", ".orchestrate/evidence/APPLE-TILE/M2-review.md"], False)):

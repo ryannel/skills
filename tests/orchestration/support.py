@@ -32,7 +32,7 @@ from pathlib import Path
 from unittest import mock
 
 HERE = Path(__file__).resolve().parent
-SCRIPTS = HERE.parents[1] / "skills/orchestration/build/scripts"
+SCRIPTS = HERE.parents[1] / "skills/orchestration/lead/scripts"
 
 PROCESS = Path(tempfile.mkdtemp(prefix="orchestrate-tests-"))
 atexit.register(shutil.rmtree, PROCESS, True)

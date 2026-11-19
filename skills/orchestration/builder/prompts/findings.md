@@ -1,0 +1,7 @@
+A reviewer has judged {milestone}, and it isn't finished yet. The review is at {evidence}/{module}/{milestone}-review.md.
+
+A reviewer can't try everything, so a review describes what one reviewer happened to try. Where it says an item failed, it shows one thing that makes the item's statement untrue, and there may be others like it that the reviewer never reached. The next review is done by a new reviewer, who starts again from the items and chooses what to try.
+
+So the milestone is finished when every item is true as it is written, which is what finished meant before the review. A Must Fix that the review raises outside the items, such as something that worked before and is now broken, has to be gone as well. The script has set the items that didn't pass back to open, and each needs new evidence. An item marked could_not_judge is one the reviewer couldn't see for itself, so it needs evidence a reviewer can reach. The Suggestions in the review are yours to take or leave.
+
+The `findings` list in the done-when file marks with `repeat` anything an earlier review also found.

@@ -1,4 +1,4 @@
-Review milestone M2 of module APPLE-TILE, using the review-milestone skill (the file is /skills/orchestration/review-milestone/SKILL.md).
+Review milestone M2 of module APPLE-TILE, using the reviewer skill (the file is /skills/orchestration/reviewer/SKILL.md).
 
 The goal: a review at .orchestrate/evidence/APPLE-TILE/M2-review.md that judges every item of M2 in docs/plans/APPLE-TILE/DONE.json, with the verdicts and findings set as the skill says.
 
@@ -12,6 +12,6 @@ A planner's diagnosis on 2026-11-10 kept M2's items as written, for this reason:
 About this session:
 - This folder is a clean checkout of commit a6101020, which the script made for you. Build and run the product from it where an item needs you to see it working. Before it set Ready for Review, the script made sure that the project's test command (`./dev check`) and the `check` of M2.1 passed on the files at b7c2e91d04aa. It ran them in its own clean checkout, apart from any that had already passed on exactly those files. Run one again only if you doubt that result.
 - Captures and other evidence files go in .orchestrate/evidence/APPLE-TILE/M2-review/. The review and that folder are in the repository's working folder, which git ignores, and the script keeps them there.
-- The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`, for the `background` and `wait` commands the skill describes.
+- The script is `python3 /skills/orchestration/lead/scripts/agent_loop.py`, for the `background` and `wait` commands the skill describes.
 
 To finish, end with the skill's last line.

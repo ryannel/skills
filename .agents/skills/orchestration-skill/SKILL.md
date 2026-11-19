@@ -1,6 +1,6 @@
 ---
 name: orchestration-skill
-description: Sets the rules for writing the orchestrate skills in skills/orchestration, their agent files and agent_loop.py. Use when adding or changing interview-me, domain-language, plan-module, build, build-milestone or review-milestone, an orchestrate agent file, or the script and its prompts. Not for the generative-media domain (media-model-skill).
+description: Sets the rules for writing the orchestrate skills in skills/orchestration, their agent files and agent_loop.py. Use when adding or changing interview, domain-language, lead, planner, builder or reviewer, an orchestrate agent file, or the script and its prompts. Not for the generative-media domain (media-model-skill).
 metadata:
   internal: true
 ---
@@ -23,7 +23,7 @@ entry, marked as proposed, for any new thing you have to name. The glossary isn'
 in each skill before its first use, because each skill is read alone. The script, its files and its messages
 use the glossary's names too, so a stored name is the agreed name written as a field, a value or a command, such
 as `ready_for_review` or `human feedback`. Give the stored name once, where the reader will meet it.
-[The done-when reference](../../../skills/orchestration/plan-module/references/done-when.md#statuses-and-their-stored-names)
+[The done-when reference](../../../skills/orchestration/planner/references/done-when.md#statuses-and-their-stored-names)
 holds the full table of statuses and their stored names. Renaming a stored name changes existing projects' files,
 so it goes with a step in the script's `migrate` command that rewrites them.
 
@@ -32,23 +32,25 @@ plan". Name who does each step.
 
 Nothing in a skill is particular to one project. Paths, commands, targets, the human's rules and the
 standards for a kind of work come from the project's `ORCHESTRATE.md`
-([template](../../../skills/orchestration/plan-module/references/profile.md)). If a skill needs a new setting, add
+([template](../../../skills/orchestration/planner/references/profile.md)). If a skill needs a new setting, add
 it to the template, and to `profile()` in `agent_loop.py` if the script reads it.
 
 Model and effort are set when a session starts, by the script's flags or the project settings, and saved in
 the record of that session. Skills and Claude agent files name neither, because Claude lets that frontmatter
-override the command line. The Codex agent file `build/agents/codex/orchestrate-reviewer.toml` is the exception: it
+override the command line. The Codex agent file `reviewer/agents/codex/orchestrate-reviewer.toml` is the exception: it
 names both, because Codex reads them only from that file.
 
 One kind of agent writes each field of the done-when file, as the table in
-`plan-module/references/done-when.md` lists. A change to who writes what updates that table, the skills that
+`planner/references/done-when.md` lists. A change to who writes what updates that table, the skills that
 write, and the script.
 
 Links stay inside the domain (`../sibling/…`), because an install flattens the domain folder.
 
-The prompts the script sends, such as the build, plan and review templates in `agent_loop.py`, are prompts like
-any other, and follow `prompting-agents` too. The skills name `prompting-agents` wherever an agent writes for
-another agent: the plan files, the brief, a `--message`, a review. Name it as a skill, not as a link, because it
+Each folder is named for the agent that reads it: `interview` and `lead` for the agent the human chats with, then
+`planner`, `builder` and `reviewer`. The main prompts the script sends to an agent live beside that agent's skill,
+in `<role>/prompts/`, and the script reads them with `prompt_text`. Those, and the shorter texts still in
+`agent_loop.py`, are prompts like any other, and follow `prompting-agents` too. The skills name `prompting-agents`
+wherever an agent writes for another agent: the plan files, the brief, a `--message`, a review. Name it as a skill, not as a link, because it
 lives in another domain, and `install.py` installs it whenever it installs orchestrate.
 
 Say each thing once, close to the moment it applies. A session's first prompt carries that session's facts: its
@@ -68,10 +70,10 @@ share a fake host, a repository and the reset between tests in `tests/orchestrat
 `Repo` only when it needs a repository. A script that starts agents goes through the host adapters in `agent_loop.py`,
 so that every host is handled in one place and Claude sessions get no API key.
 
-Agent files for Claude live in `build/agents/claude/` and are listed in the marketplace entry. The Codex
-copies live in `build/agents/codex/` and are installed by `install_agents.sh`. The script and the installer use
-the files' names, so keep the names. The `build` skill sets `disable-model-invocation: true`, and
-`build/agents/openai.yaml` sets `allow_implicit_invocation: false` for Codex, because a build runs agents for hours
+Each role keeps its agent files beside its skill: Claude's in `<role>/agents/claude/`, listed in the marketplace
+entry, and Codex's in `<role>/agents/codex/`, installed by `install_agents.sh`. The script and the installer use
+the files' names, so keep the names. The `lead` skill sets `disable-model-invocation: true`, and
+`lead/agents/openai.yaml` sets `allow_implicit_invocation: false` for Codex, because a build runs agents for hours
 and should start only when the human asks for it. `check_skill.py` prints a note about that field, and the note is
 expected.
 

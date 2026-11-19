@@ -2,7 +2,7 @@
 """Drives builders, reviewers and planners for the orchestrate process on any supported agent host, with model and
 effort named at every launch, and decides itself which work is accepted.
 
-Used by the `build` lead (on any host that can run shell commands) and runnable by hand. Project settings come from
+Used by the lead (the `lead` skill) (on any host that can run shell commands) and runnable by hand. Project settings come from
 ORCHESTRATE.md at the worktree root (`settings` prints what was read). Needs git, plus the CLI of each host it
 launches. POSIX only (fcntl, process groups).
 
@@ -543,97 +543,38 @@ TRAILERS = (TRAILER, "Orchestrate-Loop: yes")  # the second marks the script's c
 HOLDS = "refs/orchestrate/claims"
 
 LOOP = Path(__file__).resolve()
-SKILLS = LOOP.parents[2]  # the folder holding build, build-milestone, review-milestone and plan-module
+SKILLS = LOOP.parents[2]  # the folder holding each role's skill: lead, planner, builder and reviewer
+
+
+def prompt_text(name: str) -> str:
+    """A prompt the script sends, kept with the skill of the role it is sent to: "builder/build" is
+    builder/prompts/build.md. The file's last newline isn't part of the prompt. Its {fields} are filled in with
+    str.format, so a literal brace in the file is written {{ or }}."""
+    role, file = name.split("/")
+    return (SKILLS / role / "prompts" / f"{file}.md").read_text().removesuffix("\n")
+
 
 GOAL_LINE = ("Call your create_goal tool with the paragraph that starts \"The goal:\" as the objective, word for word. "
              "The rest of this message is for this turn only.\n\n")
 
-# The builder's first prompt. It carries only what the build-milestone skill can't: the milestone and its files,
-# this install's paths, this session's facts and the lead's note. A Codex builder makes the paragraph that starts
+# The builder's first prompt, in builder/prompts/build.md. It carries only what the builder skill can't: the
+# milestone and its files, this install's paths, this session's facts and the lead's note. A Codex builder makes the paragraph that starts
 # "The goal:" its goal, which Codex re-sends every turn, so nothing that is only for this turn sits in it. {lead} is the lead's --message under
 # "From the lead", after the rules, {feedback} the Human Feedback note, {earlier} names the handoff an earlier
 # session left, {needs} one rule per kind of item that needs someone, and {rules} the human's rules; each is empty
 # when there is none. {handoff} is where this session writes its own handoff if it stops short.
-BUILD_TEMPLATE = """{goal}Build milestone {milestone} of module {module}, using the build-milestone skill ({skill}).
+BUILD_TEMPLATE = prompt_text("builder/build")
 
-The goal: every item of {milestone} in {done} has builder_result pass, with evidence from the item's target, and the work \
-is merged, with {milestone}'s status left as in_progress. When you end with DONE, the script runs the checks on the \
-merged work and sets the status itself.
-{feedback}{earlier}
-About this session:
-- This worktree is yours for the milestone. Other builders are working in their own, so keep your changes inside \
-this one.
-- A lead is running this build. Once the script's checks pass on your merged work, a reviewer in a new session \
-judges the milestone.
-- The script is `python3 {loop}`.
-- Evidence files, such as captures and logs, go under {captures}/. That folder is the repository's working \
-folder, shared by every worktree on this computer and ignored by git, so leave them uncommitted.
-- {session}
-{resources}{needs}{rules}{lead}
-When the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to {handoff}, which \
-is in the working folder too. Then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, or with \
-`NEEDS_CONTEXT: <the fact you need>` when what you are missing is a fact. The skill lists the reasons."""
+REVIEW_TEMPLATE = prompt_text("reviewer/review")
 
-REVIEW_TEMPLATE = """Review milestone {milestone} of module {module}, using the review-milestone skill ({skill}).
+DESIGN_REVIEW_TEMPLATE = prompt_text("reviewer/design-review")
 
-The goal: a review at {review} that judges every item of {milestone} in {done}, with the verdicts and findings \
-set as the skill says.
-{answers}
-About this session:
-- This folder is a clean checkout of commit {commit}, which the script made for you. Build and run the product \
-from it where an item needs you to see it working.{checks}
-- Captures and other evidence files go in {captures}/. The review and that folder are in the repository's working \
-folder, which git ignores, and the script keeps them there.
-- The script is `python3 {loop}`, for the `background` and `wait` commands the skill describes.
-
-To finish, end with the skill's last line."""
-
-DESIGN_REVIEW_TEMPLATE = """Review the design of module {module}, using the "Reviewing a design" section of the \
-review-milestone skill ({skill}).
-
-The goal: a review at {review} that says whether the design does what the human asked for.
-{changed}{briefs}
-About this session:
-- This folder is a clean checkout of the main branch's tip.
-- Any captures go in {captures}/. The review and that folder are in the repository's working folder, which git \
-ignores, so leave every other file as it is.
-
-To finish, end with the skill's last line."""
-
-PLAN_TEMPLATE = """{task}
-
-Use the plan-module skill ({skill}) for this task.
-
-About this session:
-- The `plan` command started this session, and it commits and merges the files you leave uncommitted when you end \
-with `PLANNED`. A reviewer in a new session then reviews the design of each module that is owed one.
-- The script is `python3 {loop}`. Its `check --module <M> --milestone <id> --worktree . --items-only` command \
-tries a milestone's item checks without recording anything. It leaves out the project's test command, and runs \
-each check under the item's lock, waiting while a builder holds it.
-
-To finish: say what changed and any decision the human must make, then end with `PLANNED` once the files are \
-written. The script lists the files you changed itself. If the plan should stay as it is, change no file and end \
-with the `KEEP` line your task gives. If you can't go on, end with `BLOCKED: ...` or `NEEDS_CONTEXT: ...`. On \
-`KEEP`, `BLOCKED` or `NEEDS_CONTEXT` the script merges no file of yours."""
+PLAN_TEMPLATE = prompt_text("planner/plan")
 
 # What a builder is sent after a failed review. It says what a review is, and leaves the review itself to be read
 # from its file, because a list of findings to clear gets cleared and nothing more: the next reviewer starts again
 # from the items. How to merge and finish is in the goal, which every turn restates.
-FINDINGS_TEMPLATE = """A reviewer has judged {milestone}, and it isn't finished yet. The review is at \
-{evidence}/{module}/{milestone}-review.md.
-
-A reviewer can't try everything, so a review describes what one reviewer happened to try. Where it says an item \
-failed, it shows one thing that makes the item's statement untrue, and there may be others like it that the \
-reviewer never reached. The next review is done by a new reviewer, who starts again from the items and chooses \
-what to try.
-
-So the milestone is finished when every item is true as it is written, which is what finished meant before the \
-review. A Must Fix that the review raises outside the items, such as something that worked before and is now \
-broken, has to be gone as well. The script has set the items that didn't pass back to open, and each needs new \
-evidence. An item marked could_not_judge is one the reviewer couldn't see for itself, so it needs evidence a \
-reviewer can reach. The Suggestions in the review are yours to take or leave.
-
-The `findings` list in the done-when file marks with `repeat` anything an earlier review also found."""
+FINDINGS_TEMPLATE = prompt_text("builder/findings")
 
 
 class TipError(Exception):
@@ -1622,7 +1563,7 @@ def module_stem(worktree: Path, prof: dict, module: str) -> str:
         if stem.upper() == module.upper():
             return stem
     raise SystemExit(f"error: {worktree / done_rel(prof, module)} doesn't exist; the module needs planning "
-                     "(/plan-module) first")
+                     "(/planner) first")
 
 
 def stem_at_tip(worktree: Path, prof: dict, module: str) -> str:
@@ -1642,7 +1583,7 @@ def stem_at_tip(worktree: Path, prof: dict, module: str) -> str:
             if stem.upper() == module.upper():
                 return stem
         raise SystemExit(f"error: {module} isn't planned here or at {base_ref(prof)}; the module needs planning "
-                         "(/plan-module) first") from None
+                         "(/planner) first") from None
 
 
 def load_done(worktree: Path, module: str, prof: dict | None = None) -> dict:
@@ -2698,7 +2639,7 @@ def diagnosis_task(module: str, mid: str, counts: dict, prof: dict, worktree: Pa
         what = (f"It has failed review {plural(failed, 'time')}, mostly on findings that no earlier review had "
                 "raised, so each fix held and the milestone still doesn't pass")
     return (f"Diagnose {module} {mid}. {what}. {where}.{each} Read every review and decide why it keeps failing, as "
-            "the plan-module skill's section \"When a milestone keeps failing review\" describes. If the plan is at "
+            "the planner skill's section \"When a milestone keeps failing review\" describes. If the plan is at "
             "fault, change what is at fault, write each item you change again from what it claims, and end with "
             "PLANNED. If the plan is "
             f"sound, change no file and end with `KEEP {module} {mid}: builder: <why>`, `... reviewer: <why>` or "
@@ -5968,7 +5909,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.7.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.8.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5997,6 +5938,13 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.8.0": [
+        "The skills are named for the agent that reads them: `lead` (was `build`), `interview` (was "
+        "`interview-me`), `planner` (was `plan-module`), `builder` (was `build-milestone`) and `reviewer` (was "
+        "`review-milestone`). The script is now at lead/scripts/agent_loop.py, so start every later command from "
+        "the new copy's path, and read the lead skill again. The human runs `/lead` where they ran `/build`. "
+        "Nothing else behaves differently, and no project files change.",
+    ],
     "2.7.1": [
         "After history is rewritten, such as by `git filter-repo`, `migrate --commit-map <map> --worktree <repo>` "
         "points the records and the run state at the new commit hashes, so reviews of milestones that were Ready "
@@ -6408,7 +6356,7 @@ def emit(result: str, **fields) -> None:
     warnings = list(WARNINGS)
     if newer := newer_install():
         warnings.append(f"this is orchestrate {VERSION}, and a newer copy is installed at {newer}; run the next "
-                        "command from that copy, and read the build skill again, because its commands may have "
+                        "command from that copy, and read the lead skill again, because its commands may have "
                         "changed")
     extra = {"warnings": warnings} if warnings else {}
     if "next" in fields:
@@ -6639,7 +6587,7 @@ def build_prompt(host: str, headless: bool, prof: dict, stem: str, mid: str, mil
     earlier sessions and the script's own note, if there are any."""
     return BUILD_TEMPLATE.format(
         goal=GOAL_LINE if host == "codex" else "", milestone=mid, module=stem, done=done_rel(prof, stem),
-        loop=LOOP, skill=skill_note("build-milestone", host),
+        loop=LOOP, skill=skill_note("builder", host),
         lead=f"\nFrom the lead:\n{lead}\n" if lead else "",
         feedback=("\n" + feedback_note(feedback, mid, record_rel(prof, stem)) + "\n") if feedback else "",
         handoff=handoff_rel(prof, stem, mid), earlier=earlier, captures=f"{prof['evidence']}/{stem}/{mid}",
@@ -6716,7 +6664,7 @@ def claude_version_tuple(text: str | None) -> tuple[int, ...] | None:
 
 CLAUDE_AGENTS_MD = (2, 1, 277)  # the first Claude Code that reads AGENTS.md itself (Claude Code memory docs, 9 Nov 2026)
 AGENTS_HOME = Path.home() / ".agents"
-ROLE_SKILLS = {"build": "build-milestone", "review": "review-milestone", "plan": "plan-module"}
+ROLE_SKILLS = {"build": "builder", "review": "reviewer", "plan": "planner"}
 
 
 def instruction_warnings(worktree: Path, exe_version: str | None) -> list[str]:
@@ -7491,14 +7439,14 @@ NEW_SESSION_AT = 0.6  # how full a session may be before the next turn starts a 
 
 
 # What a builder's session is given that a new version of the script can change: these prompt texts, and the
-# build-milestone skill it is told to read. `session_basis` hashes them.
+# builder skill it is told to read. `session_basis` hashes them.
 BUILD_SESSION_TEXTS = ("GOAL_LINE", "BUILD_TEMPLATE", "FINDINGS_TEMPLATE", "SCRIPT_SETS_STATE")
 
 
 def session_basis() -> str:
     """A hash of what a builder's session was given at its start: the script's builder prompt texts and the
-    build-milestone skill, as this copy of the script has them."""
-    skill = SKILLS / "build-milestone" / "SKILL.md"
+    builder skill, as this copy of the script has them."""
+    skill = SKILLS / "builder" / "SKILL.md"
     try:
         skill_text = skill.read_text()
     except OSError:
@@ -7515,7 +7463,7 @@ def stale_session(state: dict) -> str | None:
     the session was told. A state file with no `basis`, from before it was recorded, goes by `version` as it did."""
     if state.get("basis"):
         if state["basis"] != session_basis():
-            return (f"the build prompt or the build-milestone skill has changed since the session started (it was "
+            return (f"the build prompt or the builder skill has changed since the session started (it was "
                     f"started by version {state.get('version') or 'unknown'} of the script, and this is {VERSION})")
     elif state.get("version") != VERSION:
         return (f"the session was started by {'version ' + str(state['version']) if state.get('version') else 'a version before 2.1.0'} "
@@ -8838,7 +8786,7 @@ def review_prompt(host: str, prof: dict, stem: str, mid: str, commit: str, done:
                            loop=LOOP, checks="" if design else checks_note(prof, milestone,
                                                                             ready_record(entry).get("checked")),
                            changed=f"\n{context}\n" if context else "", briefs="", review=review,
-                           skill=skill_note("review-milestone", host),
+                           skill=skill_note("reviewer", host),
                            answers=moved + review_notes(
                                mid, prof, stem, feedback,
                                [] if design else [r for r in counted_reviews(entry) if r.get("verdict") == "fail"],
@@ -9188,7 +9136,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
     start = head_commit(tree)
     seen = reflog_size(tree)
     before = done_docs_at(tree, prof, start)
-    prompt = PLAN_TEMPLATE.format(task=a.task, skill=skill_note("plan-module", host), loop=LOOP)
+    prompt = PLAN_TEMPLATE.format(task=a.task, skill=skill_note("planner", host), loop=LOOP)
     out = one_session(host, prof, model, effort, tree, prompt, "plan", lambda msg: plan_owed(tree, start, msg),
                       a.turn_timeout_hours * 3600, title=plan_title(worktree, tree, prof, a.task))
     result = out.pop("result")
@@ -12230,7 +12178,7 @@ RESULT_NAMES = {"pass": "Pass", "fail": "Fail", "could_not_judge": "Could Not Ju
 
 def graded_example(prof: dict, stem: str, m: dict, e: dict, verb: str, words: str, at: str) -> str | None:
     """The graded example a human decision adds when it overturns a review, in the shape of
-    review-milestone/references/graded-examples.md: what was judged, each item's result and the review's findings,
+    reviewer/references/graded-examples.md: what was judged, each item's result and the review's findings,
     what the human said instead, and why it is kept. `human accept` overturns a failed review, and `human rereview`
     a passed one. None when the settings name no graded examples file, or the decision overturns no review (an accept
     with no failed review behind it, or a re-review of work the human accepted)."""
@@ -14275,7 +14223,7 @@ def cmd_watch(a: argparse.Namespace) -> None:
 
 
 USAGE = """Starts and checks the builders, reviewers and planners of the orchestrate set, and keeps each module's
-record. The lead of the build skill runs it, and you can run it by hand. Project settings come from ORCHESTRATE.md at
+record. The lead runs it, following the lead skill, and you can run it by hand. Project settings come from ORCHESTRATE.md at
 the worktree root.
 
 Each command has its own --help for its flags. The docstring at the top of this file explains the whole design.

@@ -19,6 +19,9 @@ install = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(install)
 
 
+OLD_BUILD = "9e8a4e8:skills/orchestration/build/SKILL.md"
+
+
 class Home:
     """A throwaway home shaped like an earlier standalone install."""
 
@@ -28,10 +31,14 @@ class Home:
         self.env = mock.patch.dict(os.environ, {"HOME": tmp, "CLAUDE_CONFIG_DIR": str(self.claude),
                                                 "CODEX_HOME": str(self.codex)})
         for name in ("prompting-agents", "build"):
-            src = ROOT / ("skills/agent-writing/prompting-agents" if name == "prompting-agents" else "skills/orchestration/build")
             dest = self.claude / "skills" / name
             dest.mkdir(parents=True)
-            (dest / "SKILL.md").write_bytes((src / "SKILL.md").read_bytes())
+            if name == "prompting-agents":
+                text = (ROOT / "skills/agent-writing/prompting-agents/SKILL.md").read_bytes()
+            else:  # the lead's skill as 2.7.1 published it, under its old name
+                text = subprocess.run(["git", "-C", str(ROOT), "show", OLD_BUILD], capture_output=True,
+                                      check=True).stdout
+            (dest / "SKILL.md").write_bytes(text)
             (self.home / ".agents/skills").mkdir(parents=True, exist_ok=True)
             (self.home / ".agents/skills" / name).symlink_to(dest)
         (self.claude / "skills/build/agents").mkdir()

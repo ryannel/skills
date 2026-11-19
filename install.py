@@ -32,7 +32,7 @@ doesn't match any committed version of this repo's skill is left alone.
 
 With --repo: reports whether Claude will read the repo's AGENTS.md, from the files that decide it and the CLI
 version, and writes a CLAUDE.md holding `@AGENTS.md` when it wouldn't and the repo has no CLAUDE.md. With
-orchestrate, checks ORCHESTRATE.md with `agent_loop.py profile` when it exists; `/plan-module` writes it otherwise.
+orchestrate, checks ORCHESTRATE.md with `agent_loop.py profile` when it exists; `/planner` writes it otherwise.
 
 CLAUDE_CONFIG_DIR and CODEX_HOME are honoured, so a throwaway config can be used to try it.
 """
@@ -54,7 +54,9 @@ ENTRIES = {e["name"]: e for e in json.loads((HERE / ".claude-plugin/marketplace.
 DEFAULT_PLUGINS = ["prompting-agents", "orchestrate", "skill-creator"]
 # A plugin, and the earlier plugins it replaced. Their skills either live on inside it or were retired.
 RETIRED_PLUGINS = {"prompting-agents": ["instructing-agents"]}
-RETIRED_SKILLS = {"prompting-agents": ["instructing-agents"]}  # skills that no current plugin holds
+RETIRED_SKILLS = {"prompting-agents": ["instructing-agents"],  # skills that no current plugin holds
+                  # orchestrate's skills before 2.8.0 named the document, not the role that reads it
+                  "orchestrate": ["interview-me", "plan-module", "build", "build-milestone", "review-milestone"]}
 # A plugin, and the plugins it needs installed beside it. Orchestrate's agents write prompts for each other all day,
 # and its skills tell them to use prompting-agents. skill-creator takes its writing guidance from it.
 REQUIRES = {e["name"]: e.get("dependencies", []) for e in ENTRIES.values()}  # Codex ignores `dependencies`
@@ -419,12 +421,12 @@ def setup_codex(plugins: list[str], source: str) -> None:
     if "orchestrate" in plugins:
         # The Codex reviewer agent isn't a plugin component. Link it from the plugin's installed copy so it keeps
         # working if this checkout moves. Copy the definition if there is no plugin cache.
-        script = "skills/orchestration/build/scripts/install_agents.sh"
+        script = "skills/orchestration/lead/scripts/install_agents.sh"
         cached = sorted((codex_home() / "plugins/cache" / MARKETPLACE / "orchestrate").glob(f"*/{script}"))
         if cached:
             run(["bash", str(cached[-1]), "--global", "--codex-only"])
         else:
-            target = (HERE / script).parent.parent / "agents/codex/orchestrate-reviewer.toml"
+            target = HERE / "skills/orchestration/reviewer/agents/codex/orchestrate-reviewer.toml"
             destination = codex_home() / "agents" / target.name
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.unlink(missing_ok=True)
@@ -468,12 +470,12 @@ def setup_repo(repo: Path, plugins: list[str]) -> None:
     if "orchestrate" in plugins:
         profile = repo / "ORCHESTRATE.md"
         if profile.exists():
-            r = run([sys.executable, str(HERE / "skills/orchestration/build/scripts/agent_loop.py"), "profile",
+            r = run([sys.executable, str(HERE / "skills/orchestration/lead/scripts/agent_loop.py"), "profile",
                      "--worktree", str(repo)], check=False)
             if r.returncode != 0:
                 failures.append(f"{profile} didn't validate (agent_loop.py profile exited {r.returncode})")
         else:
-            print("  no ORCHESTRATE.md yet: run /plan-module in the repo, which writes it first")
+            print("  no ORCHESTRATE.md yet: run /planner in the repo, which writes it first")
 
 
 def checkout_revision(source: str) -> str:

@@ -1,6 +1,6 @@
 ---
-name: review-milestone
-description: Judges a milestone that is Ready for Review, or a module's design before building starts, and writes the review, as part of the orchestrate set. Use when a milestone needs a review, or a design needs an independent read. Not for building or fixing (build-milestone).
+name: reviewer
+description: Judges a milestone that is Ready for Review, or a module's design before building starts, and writes the review, as part of the orchestrate set. Use when a milestone needs a review, or a design needs an independent read. Not for building or fixing (builder).
 ---
 
 # Review a milestone
@@ -41,7 +41,7 @@ the module's history in `LOG.md`. What the milestone must achieve is in `DONE.js
 items, and each item is one thing that must be true before the milestone is Done. Each item says how it is proved, in
 one or more of three ways: an Automated Check (a command in its `check` field), a Reviewer Inspection (something to
 look at in the running product, in its `inspect` field), or a Reviewer Question (something to answer by reading the
-code, in its `ask` field). [Proofs](../plan-module/references/proofs.md) explains each one. A milestone also has a
+code, in its `ask` field). [Proofs](../planner/references/proofs.md) explains each one. A milestone also has a
 quality bar, in its `quality_bar` field: the standard its work is judged against.
 
 Form your own view of each item from the item, the design, the changed code and the running product before you
@@ -86,7 +86,7 @@ less than many short looks with `sleep` and `tail`. Your task gives the script's
      rely on that result, so run a check again when you have a reason to doubt it, such as a check that depends
      on timing.
    - For a Reviewer Inspection, write the list of what you will look at before you look, as
-     [how to inspect](../plan-module/references/proofs.md#how-to-inspect) describes. Then judge each entry on the
+     [how to inspect](../planner/references/proofs.md#how-to-inspect) describes. Then judge each entry on the
      list against the item and the quality bar, side by side with the project's references, if it keeps any. The
      `Anchors:` line of the project settings says where they are.
    - For a Reviewer Question, read the code the question is about, on both sides of an interface when it asks about
@@ -130,7 +130,7 @@ less than many short looks with `sleep` and `tail`. Your task gives the script's
 
      Leave every other field alone. The script works out the rest from your verdicts and findings when it saves the
      review: the milestone's `status`, each item's `review` link to the review file, and the counts of failed
-     reviews. [Who changes what](../plan-module/references/done-when.md#who-changes-what-and-when) has the whole
+     reviews. [Who changes what](../planner/references/done-when.md#who-changes-what-and-when) has the whole
      table.
 5. Your last line is `PASS <milestone>` or `FAIL <milestone>`, and the script reads it. The review file carries the
    findings, so your reply can be short: the result, the worst finding, and anything the lead must act on. The

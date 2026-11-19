@@ -52,12 +52,12 @@ an `ORCHESTRATE.md` file of project settings, so the skills know nothing about y
 
 | Skill | What it does |
 |---|---|
-| [`interview-me`](./skills/orchestration/interview-me/) | Talks with you to find out what you want built and why, and writes the project brief that planning starts from |
+| [`interview`](./skills/orchestration/interview/) | Talks with you to find out what you want built and why, and writes the project brief that planning starts from |
 | [`domain-language`](./skills/orchestration/domain-language/) | Agrees one name for each thing in the project with you, and keeps the glossary that plans, code and chat follow |
-| [`plan-module`](./skills/orchestration/plan-module/) | Splits a project into modules, and writes each module's design, milestones and done-when file, and the project settings |
-| [`build-milestone`](./skills/orchestration/build-milestone/) | Builds one milestone, proves it and merges it, in Claude Code or Codex |
-| [`review-milestone`](./skills/orchestration/review-milestone/) | A new session judges a milestone that is Ready for Review, or a design, by using the product and reading the changed code |
-| [`build`](./skills/orchestration/build/) | The lead's skill: runs the whole build with a chosen number of builders through `agent_loop.py`, which sets a milestone to Done only after running the checks itself |
+| [`planner`](./skills/orchestration/planner/) | Splits a project into modules, and writes each module's design, milestones and done-when file, and the project settings |
+| [`builder`](./skills/orchestration/builder/) | Builds one milestone, proves it and merges it, in Claude Code or Codex |
+| [`reviewer`](./skills/orchestration/reviewer/) | A new session judges a milestone that is Ready for Review, or a design, by using the product and reading the changed code |
+| [`lead`](./skills/orchestration/lead/) | The lead's skill: runs the whole build with a chosen number of builders through `agent_loop.py`, which sets a milestone to Done only after running the checks itself |
 
 Install the orchestration plugin and evaluator from an interactive terminal with Node.js, Git and Python 3:
 
@@ -70,7 +70,7 @@ Choose Claude Code, Codex or both when their CLIs are available. Choose **Global
 are installed globally. When Claude Code needs the project agents installed separately, the installer
 writes portable copies to the project's `.claude/agents/` directory.
 
-Restart open sessions and run `/plan-module` in the target project to write `ORCHESTRATE.md`.
+Restart open sessions and run `/planner` in the target project to write `ORCHESTRATE.md`.
 For scripted installs, see [Setting up for Claude Code and Codex](#setting-up-for-claude-code-and-codex).
 [Why it looks like this](./skills/orchestration/README.md).
 
@@ -204,7 +204,7 @@ loads.
 
 What stays manual:
 - **Restart** open sessions; skills load at session start.
-- **ORCHESTRATE.md.** `/plan-module` writes it, since its values are the project's.
+- **ORCHESTRATE.md.** `/planner` writes it, since its values are the project's.
 
 **No hook, for now.** An earlier version shipped a PreToolUse hook that refused the first handoff in each context
 with a one-line nudge to apply the skill, then called instructing-agents. It was removed on 9 November 2026 to test whether the description

@@ -1,6 +1,6 @@
 ---
-name: interview-me
-description: Talks with the human to find out what they want built and why, before a project or a feature is planned, and writes the project brief that planning starts from. For the agent the human is chatting with, as part of the orchestrate set. Use when someone describes a project or feature that is big enough to need a plan, or asks to talk an idea through. Not for a change small enough to build in this session (build-milestone), and not for writing the plan (plan-module).
+name: interview
+description: Talks with the human to find out what they want built and why, before a project or a feature is planned, and writes the project brief that planning starts from. For the agent the human is chatting with, as part of the orchestrate set. Use when someone describes a project or feature that is big enough to need a plan, or asks to talk an idea through. Not for a change small enough to build in this session (builder), and not for writing the plan (planner).
 ---
 
 # Interview me
@@ -235,7 +235,7 @@ if the correction left something else open.
 ## Handing over to planning
 
 The commands below belong to the set's script, which starts agents and keeps the project's records. It is not an
-agent. Run it as `python3 <the build skill's folder>/scripts/agent_loop.py`.
+agent. Run it as `python3 <the lead skill's folder>/scripts/agent_loop.py`.
 
 1. Put the brief on the main branch, with `GLOSSARY.md` if you wrote one.
    - In a repository that has an `ORCHESTRATE.md`, run
@@ -248,9 +248,9 @@ agent. Run it as `python3 <the build skill's folder>/scripts/agent_loop.py`.
    The command waits until the planner has finished, which can take a long time, so run it as a background
    command and tell the human that planning has started.
 3. When it finishes, tell the human what was planned and what the planner assumed. To start the build, the human
-   says "build it" or runs `/build`.
+   says "build it" or runs `/lead`.
 
-If the human would rather do all of it in this one chat with no other agents, go on to the `plan-module` skill
+If the human would rather do all of it in this one chat with no other agents, go on to the `planner` skill
 with the brief.
 
 ## When the human changes their mind later

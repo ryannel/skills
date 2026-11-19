@@ -1,6 +1,6 @@
 Call your create_goal tool with the paragraph that starts "The goal:" as the objective, word for word. The rest of this message is for this turn only.
 
-Build milestone M2 of module APPLE-TILE, using the build-milestone skill ($build-milestone in Codex; the file is /skills/orchestration/build-milestone/SKILL.md).
+Build milestone M2 of module APPLE-TILE, using the builder skill ($builder in Codex; the file is /skills/orchestration/builder/SKILL.md).
 
 The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has builder_result pass, with evidence from the item's target, and the work is merged, with M2's status left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the status itself.
 
@@ -12,7 +12,7 @@ An earlier session on M2 stopped short and left a handoff at .orchestrate/eviden
 About this session:
 - This worktree is yours for the milestone. Other builders are working in their own, so keep your changes inside this one.
 - A lead is running this build. Once the script's checks pass on your merged work, a reviewer in a new session judges the milestone.
-- The script is `python3 /skills/orchestration/build/scripts/agent_loop.py`.
+- The script is `python3 /skills/orchestration/lead/scripts/agent_loop.py`.
 - Evidence files, such as captures and logs, go under .orchestrate/evidence/APPLE-TILE/M2/. That folder is the repository's working folder, shared by every worktree on this computer and ignored by git, so leave them uncommitted.
 - This session runs in the background, so approval prompts, such as a Computer Use or a permission dialog, can't appear in it. A question you ask through a tool reaches nobody either, so when you need an answer, end your turn with `BLOCKED` or `NEEDS_CONTEXT` instead, as below.
 - This project's exclusive resources are: gpu: timing runs and captures. Wrap a command that uses one in the script's `lock <name> -- <command>`, which waits its turn while another builder holds the lock.

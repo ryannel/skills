@@ -92,7 +92,7 @@ class BuilderSessions(Clean):
 
     def test_a_session_given_other_prompts_or_another_skill_starts_again(self):
         why = agent_loop.stale_session({"version": agent_loop.VERSION, "basis": "0" * 16})
-        self.assertIn("build prompt or the build-milestone skill has changed", why)
+        self.assertIn("build prompt or the builder skill has changed", why)
         state = {"version": agent_loop.VERSION, "basis": agent_loop.session_basis()}
         agent_loop.BUILD_TEMPLATE = agent_loop.BUILD_TEMPLATE + " Something new."
         self.assertIsNotNone(agent_loop.stale_session(state))

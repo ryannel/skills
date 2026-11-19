@@ -17,7 +17,7 @@ There are four kinds of agent. The lead is the agent you chat with, and it never
 writes the plan. A builder writes the code. A reviewer judges a plan or some code, and it is always a new session,
 so it has seen none of the work it judges.
 
-There is also one script, `build/scripts/agent_loop.py`. It is not an agent. It is a set of commands, and the lead
+There is also one script, `lead/scripts/agent_loop.py`. It is not an agent. It is a set of commands, and the lead
 runs them the way you would run `git commit`. The commands start the other agents, run the tests and keep the
 records.
 
@@ -25,12 +25,16 @@ Each kind of agent has a skill that tells it how to do its job:
 
 | Skill | Who reads it | Default model and effort | What it covers |
 |---|---|---|---|
-| [`interview-me`](interview-me/) | the lead | the lead's | Talking with you to find out what you want and why, and writing the project brief |
+| [`interview`](interview/) | the lead | the lead's | Talking with you to find out what you want and why, and writing the project brief |
 | [`domain-language`](domain-language/) | the lead, or any agent asked to sort out the project's names | that agent's | Agreeing one name for each thing in the project, and keeping the glossary |
-| [`plan-module`](plan-module/) | the planner | Opus 5.5, high | Splitting a project into modules, and writing each module's design, milestones and done-when file |
-| [`build-milestone`](build-milestone/) | a builder | Codex `gpt-6.2-sol` or Opus 5.5, medium | Building one milestone, proving it, and merging it |
-| [`review-milestone`](review-milestone/) | a reviewer | Opus 5.5, medium | Judging a design, or a milestone that is Ready for Review |
-| [`build`](build/) | the lead | Opus 5.5, medium (either host can lead) | Running the whole build: keeping the work moving, and when to come to you |
+| [`planner`](planner/) | the planner | Opus 5.5, high | Splitting a project into modules, and writing each module's design, milestones and done-when file |
+| [`builder`](builder/) | a builder | Codex `gpt-6.2-sol` or Opus 5.5, medium | Building one milestone, proving it, and merging it |
+| [`reviewer`](reviewer/) | a reviewer | Opus 5.5, medium | Judging a design, or a milestone that is Ready for Review |
+| [`lead`](lead/) | the lead | Opus 5.5, medium (either host can lead) | Running the whole build: keeping the work moving, and when to come to you |
+
+Each folder is named for the agent that reads it. Beside its `SKILL.md`, a role's folder holds what belongs to that
+role: `prompts/` for the prompts the script sends it, `agents/` for the Claude and Codex agent files that start it,
+and `references/` for the longer guidance it reads when it needs it. The lead's folder also holds the script.
 
 ## How a project runs
 
@@ -363,7 +367,7 @@ can install for one project or for all of them, and Codex installs for all of th
 
 From a clone of the skills repository, `python3 install.py --plugins orchestrate` installs the `orchestrate` plugin
 in both hosts. In Claude Code that is the skills plus the agent files for the planner and the reviewer. In Codex it
-is the skills plus the reviewer's agent file, which `build/scripts/install_agents.sh --global --codex-only`
+is the skills plus the reviewer's agent file, which `lead/scripts/install_agents.sh --global --codex-only`
 installs. Add `--repo <repo>` to prepare one repository as well: it adds a `CLAUDE.md` holding `@AGENTS.md`, for
 older versions of Claude Code that wouldn't otherwise read `AGENTS.md`, and checks `ORCHESTRATE.md` once a planner
 has written it.
@@ -375,18 +379,18 @@ has written it.
 You do all of this by talking to the lead, and never need a terminal. The smallest project is one module in an
 empty repository with one commit.
 
-1. Say what you want, or run `/interview-me`. The lead asks what it can't look up, including which hosts you build
+1. Say what you want, or run `/interview`. The lead asks what it can't look up, including which hosts you build
    with and whether agents may push, and shows you the project brief to approve. To skip the conversation, say
-   "just plan it" or run `/plan-module`. A planner then takes the safest reading of anything you left out, and
+   "just plan it" or run `/planner`. A planner then takes the safest reading of anything you left out, and
    lists what it assumed.
 2. The lead has a reviewer read each design. Until a design is Design Approved, the plan can be revised freely. After
    that, a milestone's items change only when a planner re-plans the milestone or you change the scope, so nobody can
    quietly make a requirement easier to meet.
-3. Say "build it", or run `/build`, and say how many builders to run and on which hosts, such as "two Claude
+3. Say "build it", or run `/lead`, and say how many builders to run and on which hosts, such as "two Claude
    builders and one Codex". The lead keeps builders and reviewers going, and tells you when a milestone is Done or
    needs you.
 
-You can also work in one chat with no lead: run `/interview-me`, `/plan-module`, then `/build-milestone`, in
+You can also work in one chat with no lead: run `/interview`, `/planner`, then `/builder`, in
 either host. You can switch hosts partway, because everything the next agent needs is in the files.
 
 Some decisions are yours: choosing between options, judging an item no agent can, accepting a milestone that
@@ -405,7 +409,7 @@ and the report lists every decision saved in your name, so you can spot one you 
 | how the build is going | `report`, with its own reading on top |
 | to save a decision of yours | `human feedback`, `accept`, `rereview`, `reopen` or `scope` |
 
-Each of these is a command of `python3 <where the skills are installed>/build/scripts/agent_loop.py`, and you can
+Each of these is a command of `python3 <where the skills are installed>/lead/scripts/agent_loop.py`, and you can
 run them yourself if you would rather.
 
 ## What the script verifies
@@ -551,7 +555,7 @@ and Codex 0.167.
 
 ### The reviewer is the least proven part
 
-The `review-milestone` skill makes a reviewer use the product itself, read every changed line, write down what it
+The `reviewer` skill makes a reviewer use the product itself, read every changed line, write down what it
 will look at before it looks, and fail what it finds. It comes with five example reviews that a person has graded.
 You tune it by reading its early reviews and saying where it was wrong. Nobody has measured how often this reviewer
 catches a fake or wrongly fails sound work. In the test runs below, reviewers did fail real defects, but no person
@@ -595,7 +599,7 @@ Those runs were short. The longest took 97 minutes. Each was run once, no person
 lead also played the human. Only the last had the lead save a human's decisions the way it does now. Accepting a
 milestone by hand, asking for a new review and editing the scope are covered by automated tests only.
 
-The `interview-me` and `domain-language` skills were added after those runs. Each was tested on three requests,
+The `interview` and `domain-language` skills were added after those runs. Each was tested on three requests,
 with a second agent playing the human, against a run of the same request with no skill, graded blind against checks
 written beforehand. With the skill, the agent asked why before offering choices, kept the human's words apart from
 its own decisions, and planned nothing before the human approved. Without it, one agent built a whole app after two

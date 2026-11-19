@@ -1,6 +1,6 @@
 ---
-name: build
-description: Runs the build of a planned project as the lead, as part of the orchestrate set. The lead starts planners, builders and reviewers with scripts/agent_loop.py, keeps a chosen number of builders busy on Codex, Claude Code or another host, and brings the human's decisions to the chat. Use when the human says to build, run or keep going on planned modules. Not for building one milestone by hand (build-milestone).
+name: lead
+description: Runs the build of a planned project as the lead, as part of the orchestrate set. The lead starts planners, builders and reviewers with scripts/agent_loop.py, keeps a chosen number of builders busy on Codex, Claude Code or another host, and brings the human's decisions to the chat. Use when the human says to build, run or keep going on planned modules. Not for building one milestone by hand (builder).
 disable-model-invocation: true
 ---
 
@@ -111,7 +111,7 @@ one that commits its evidence. Read [older projects](references/older-projects.m
 
 With no `ORCHESTRATE.md`, the project hasn't been planned. A planner can't ask the human anything, so the first
 step is usually a conversation with the human that ends in a project brief they have approved, saved as
-`BRIEF.md` in the plans folder. The `interview-me` skill describes that conversation. When the human says to plan
+`BRIEF.md` in the plans folder. The `interview` skill describes that conversation. When the human says to plan
 straight away, there is no brief, and the planner lists what it assumed.
 
 The `plan` command refuses a working copy with uncommitted files, so put the brief on the main branch first. In a
@@ -143,7 +143,7 @@ is saved as `observed` in the Ready for Review and review records, and a turn th
 
 When the human wants one kind of agent set differently from now on, such as "plan with Fable" or "review at high
 effort", that is a line in the project settings, such as `Claude planner: claude-fable-5-2 high` or
-`Reviewer: high`. [The settings reference](../plan-module/references/profile.md#a-model-or-an-effort-for-one-kind-of-agent)
+`Reviewer: high`. [The settings reference](../planner/references/profile.md#a-model-or-an-effort-for-one-kind-of-agent)
 has the forms. On a new project, put the human's words in the planner's task and pass the flags on that first `plan`.
 
 On a planned project, add the line yourself, since the human asked for it. `adopt` won't merge a changed
@@ -255,7 +255,7 @@ sorts each module's next milestone into a group, since a module's milestones run
 | `finished` | none: every milestone of the module is Done |
 
 `status --module <M>` lists every milestone of one module with its
-latest review. [The done-when reference](../plan-module/references/done-when.md#statuses-and-their-stored-names)
+latest review. [The done-when reference](../planner/references/done-when.md#statuses-and-their-stored-names)
 lists every status and its stored name.
 
 `ready` also lists under `plan_ahead` the modules in the module table that have no plan yet but whose Needs are
@@ -361,7 +361,7 @@ that was.
 A builder stops only when the milestone is finished or Blocked, or the main branch is broken. On `BLOCKED`, `reason`
 says why the milestone is Blocked, and `next` says who steps in and gives the command, with the question for the
 human when the step is theirs. [The done-when
-reference](../plan-module/references/done-when.md#statuses-and-their-stored-names) lists the reasons. When the
+reference](../planner/references/done-when.md#statuses-and-their-stored-names) lists the reasons. When the
 builder left a handoff, the `blocked` field names it. The `reason` is the builder's own reading, from inside one
 session, so weigh it against what you can see across the build.
 
@@ -378,7 +378,7 @@ on (`same_builder`), then a new builder session starts (`new_builder_session`), 
 milestone keeps failing (`diagnosis`), and last, the milestone is Blocked for the human
 (`too_many_failed_reviews`). A `run` carries the first two on by itself. The counts are the record of what has been
 tried, so stepping around them repeats an attempt that already failed.
-[The done-when reference](../plan-module/references/done-when.md#when-a-review-fails) explains each step, and
+[The done-when reference](../planner/references/done-when.md#when-a-review-fails) explains each step, and
 `next --module <M> --worktree <path> --milestone <id>` works the step out again later. A diagnosis ends `PLANNED`
 or `KEPT`, and either settles it, even a `PLANNED` that changed only the design.
 

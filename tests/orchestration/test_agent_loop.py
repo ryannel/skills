@@ -494,7 +494,7 @@ class Profiles(Clean):
         self.assertTrue(agent_loop.BUILD_TEMPLATE.format(**values).startswith(agent_loop.GOAL_LINE + "Build milestone M1 of module W,"))
 
     def test_fable_16_prompts_carry_the_skill_path_for_hosts_without_skills(self):
-        self.assertIn(str(SCRIPTS.parents[1] / "build-milestone" / "SKILL.md"), agent_loop.skill_note("build-milestone"))
+        self.assertIn(str(SCRIPTS.parents[1] / "builder" / "SKILL.md"), agent_loop.skill_note("builder"))
 
     def test_claude_environment_drops_keys_but_keeps_config_dir(self):
         with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x", "CLAUDE_CONFIG_DIR": "/c", "CLAUDECODE": "1",
@@ -1773,9 +1773,9 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')
@@ -2420,17 +2420,17 @@ class Fold(Repo):
 
     def test_item7_a_skill_missing_where_the_host_loads_it_is_a_warning(self):
         warn = agent_loop.skill_warnings
-        self.assertIn("review-milestone isn't installed where claude", warn("claude", self.wt, "review")[0])
-        self.assertIn("plan-module isn't installed where codex", warn("codex", self.wt, "plan")[0])
+        self.assertIn("reviewer isn't installed where claude", warn("claude", self.wt, "review")[0])
+        self.assertIn("planner isn't installed where codex", warn("codex", self.wt, "plan")[0])
         self.assertEqual(warn("echo", self.wt, "build"), [])
-        for folder in (agent_loop.CLAUDE_HOME / "skills/review-milestone",
-                       agent_loop.AGENTS_HOME / "skills/plan-module", self.home / "skills/build-milestone"):
+        for folder in (agent_loop.CLAUDE_HOME / "skills/reviewer",
+                       agent_loop.AGENTS_HOME / "skills/planner", self.home / "skills/builder"):
             folder.mkdir(parents=True)
             (folder / "SKILL.md").write_text("x")
         self.assertEqual(warn("claude", self.wt, "review"), [])
         self.assertEqual(warn("codex", self.wt, "plan"), [])
         self.assertIn("docs don't list", warn("codex", self.wt, "build")[0])
-        plugin = agent_loop.CLAUDE_HOME / "plugins/cache/m/orchestrate/1.0/skills/plan-module"
+        plugin = agent_loop.CLAUDE_HOME / "plugins/cache/m/orchestrate/1.0/skills/planner"
         plugin.mkdir(parents=True)
         (plugin / "SKILL.md").write_text("x")
         self.assertEqual(warn("claude", self.wt, "plan"), [])
@@ -2448,11 +2448,11 @@ class Fold(Repo):
         for role in ("review", "plan"):
             call = next(c for c in self.calls() if c["role"] == role)
             self.assertNotIn(resume_flag, call["argv"], f"{host} {role} resumes nothing")
-            first = "Review milestone M1 of module WATER, using the review-milestone skill" if role == "review" \
+            first = "Review milestone M1 of module WATER, using the reviewer skill" if role == "review" \
                 else "plan PAY"
             self.assertTrue(self.prompt(call).startswith(first), f"{host} {role} gets only its own task")
             if role == "plan":
-                self.assertIn("plan-module skill", self.prompt(call))
+                self.assertIn("planner skill", self.prompt(call))
             if role == "review":
                 self.assertNotEqual(call["cwd"], builder["cwd"], "a clean checkout, not the builder's tree")
 
@@ -2614,20 +2614,20 @@ class Holistic(Repo):
 
     def install_plugin(self, home):
         ver = home / "plugins/cache/ryannel-skills/orchestrate/1.3.0"
-        for name in ("review-milestone", "plan-module", "build-milestone"):
+        for name in ("reviewer", "planner", "builder"):
             (ver / "skills/orchestration" / name).mkdir(parents=True)
             (ver / "skills/orchestration" / name / "SKILL.md").write_text("x")
-        (ver / "skills/orchestration/build/agents/claude").mkdir(parents=True)
-        (ver / "skills/orchestration/build/agents/claude/orchestrate-reviewer.md").write_text("x")
+        (ver / "skills/orchestration/reviewer/agents/claude").mkdir(parents=True)
+        (ver / "skills/orchestration/reviewer/agents/claude/orchestrate-reviewer.md").write_text("x")
         (ver / ".claude-plugin").mkdir()
         (ver / ".claude-plugin/marketplace.json").write_text(json.dumps({"plugins": [
-            {"name": "orchestrate", "skills": ["./skills/orchestration/review-milestone",
-                                               "./skills/orchestration/plan-module",
-                                               "./skills/orchestration/build-milestone"],
-             "agents": ["./skills/orchestration/build/agents/claude/orchestrate-reviewer.md"]},
+            {"name": "orchestrate", "skills": ["./skills/orchestration/reviewer",
+                                               "./skills/orchestration/planner",
+                                               "./skills/orchestration/builder"],
+             "agents": ["./skills/orchestration/reviewer/agents/claude/orchestrate-reviewer.md"]},
             {"name": "skill-creator", "skills": ["./skills/skill-creator"]}]}))
         # the same repository copied for another plugin doesn't provide orchestrate's skills
-        other = home / "plugins/cache/ryannel-skills/skill-creator/1.0.0/skills/orchestration/build"
+        other = home / "plugins/cache/ryannel-skills/skill-creator/1.0.0/skills/orchestration/lead"
         other.mkdir(parents=True)
         (other / "SKILL.md").write_text("x")
 
@@ -2637,10 +2637,10 @@ class Holistic(Repo):
         self.install_plugin(self.home)
         self.assertEqual(warn("claude", self.wt, "review"), [])
         self.assertEqual(warn("codex", self.wt, "plan"), [])
-        self.assertEqual(agent_loop.plugin_components(self.home, "skills").get("build"), None)
-        note = agent_loop.skill_note("review-milestone", "codex")
-        self.assertTrue(note.startswith("`orchestrate:review-milestone` in Codex; the file is "), note)
-        self.assertTrue(agent_loop.skill_note("review-milestone", "claude").startswith("the file is "))
+        self.assertEqual(agent_loop.plugin_components(self.home, "skills").get("lead"), None)
+        note = agent_loop.skill_note("reviewer", "codex")
+        self.assertTrue(note.startswith("`orchestrate:reviewer` in Codex; the file is "), note)
+        self.assertTrue(agent_loop.skill_note("reviewer", "claude").startswith("the file is "))
 
     def test_holistic_7_a_plugin_agent_is_used_for_claude_reviews(self):
         self.write_done([milestone("M1", "not_started", ["open"], inspect="frames"), milestone("M2", "not_started", ["open"])])
@@ -2659,14 +2659,15 @@ class HolisticAlone(ProfileOnly):
 
     def test_holistic_4_no_skill_or_claude_agent_file_sets_model_or_effort(self):
         root = agent_loop.SKILLS
-        files = [root / n / "SKILL.md" for n in ("build", "build-milestone", "review-milestone", "plan-module")]
-        files += sorted((root / "build/agents/claude").glob("*.md"))
+        files = [root / n / "SKILL.md" for n in ("lead", "builder", "reviewer", "planner")]
+        files += sorted(root.glob("*/agents/claude/*.md"))
+        self.assertEqual(len(files), 6)
         for f in files:
             front = f.read_text().split("\n---\n")[0]
             self.assertNotRegex(front, r"(?m)^(model|effort):", str(f))
 
     def test_holistic_8_review_skill_and_findings_message_separate_blocking_from_advisory(self):
-        review = (agent_loop.SKILLS / "review-milestone/SKILL.md").read_text()
+        review = (agent_loop.SKILLS / "reviewer/SKILL.md").read_text()
         self.assertIn("A Suggestion never fails it.", review)
         self.assertIn("list every Must Fix in the milestone's `findings`", review)
         self.assertNotIn("If you think the defect doesn't matter, say so in the finding", review)
@@ -6028,7 +6029,7 @@ class Versions(Clean):
 
     def test_a_newer_installed_copy_is_found_beside_a_cached_one(self):
         with tempfile.TemporaryDirectory() as tmp:
-            rest = Path("skills/orchestration/build/scripts/agent_loop.py")
+            rest = Path("skills/orchestration/lead/scripts/agent_loop.py")
             for version in ("1.7.1", "2.0.0", "2.1.0"):
                 put(Path(tmp, "orchestrate", version) / rest, "")
             with mock.patch.object(agent_loop, "LOOP", Path(tmp, "orchestrate", "1.7.1") / rest):
@@ -6316,7 +6317,7 @@ class CommandLine(Repo):
         self.assertEqual(run.message, "a\n\nb")
 
     def test_next_points_at_the_newest_installed_copy(self):
-        newer = "/plugins/orchestrate/9.9.9/skills/orchestration/build/scripts/agent_loop.py"
+        newer = "/plugins/orchestrate/9.9.9/skills/orchestration/lead/scripts/agent_loop.py"
         command = agent_loop.loop_cmd("run", "--module", "WATER", "--worktree", "/w")
         with mock.patch.object(agent_loop, "newer_install", return_value=newer):
             fitted = agent_loop.fit_next(agent_loop.next_cmd(command, "lead", "why"))

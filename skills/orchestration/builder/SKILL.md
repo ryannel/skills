@@ -1,6 +1,6 @@
 ---
-name: build-milestone
-description: Builds one milestone of a module from its plan and done-when file, proves it and merges it, as part of the orchestrate set in Claude Code or Codex. Use when a lead or the human gives you a milestone to build, or asks for a change small enough to build in this session, in a repository that has an ORCHESTRATE.md. Not for planning (plan-module) or judging a milestone (review-milestone).
+name: builder
+description: Builds one milestone of a module from its plan and done-when file, proves it and merges it, as part of the orchestrate set in Claude Code or Codex. Use when a lead or the human gives you a milestone to build, or asks for a change small enough to build in this session, in a repository that has an ORCHESTRATE.md. Not for planning (planner) or judging a milestone (reviewer).
 ---
 
 # Build a milestone
@@ -44,11 +44,11 @@ three ways:
 - a Reviewer Inspection, in the `inspect` field: something a reviewer looks at in the running product;
 - a Reviewer Question, in the `ask` field: something a reviewer answers by reading the code or a design.
 
-A reviewer is a new agent that judges your finished milestone. [Proofs](../plan-module/references/proofs.md)
+A reviewer is a new agent that judges your finished milestone. [Proofs](../planner/references/proofs.md)
 explains each way of proving an item.
 
 The commands below that start with `agent_loop.py` belong to the script that starts agents, runs the tests and
-keeps the project's records. Run them as `python3 <the build skill's folder>/scripts/agent_loop.py`.
+keeps the project's records. Run them as `python3 <the lead skill's folder>/scripts/agent_loop.py`.
 
 ## What finished looks like
 
@@ -89,7 +89,7 @@ handoff for your milestone, read it before you start, and rewrite it rather than
 
 You change only three fields in the done-when file: an item's `builder_result` (`open` or `pass`), an item's
 `evidence` (where the proof is saved), and the milestone's `status`, which you set only to `in_progress`. The planner
-and the reviewer own the rest, as [who changes what](../plan-module/references/done-when.md#who-changes-what-and-when)
+and the reviewer own the rest, as [who changes what](../planner/references/done-when.md#who-changes-what-and-when)
 sets out, and the script rejects your work if any of the planner's fields has changed. So if an item is wrong or can't
 be met, leave it as written and say so in your report.
 
@@ -200,8 +200,8 @@ output to a file, and prints where the file is. A check that passes here is reme
 same files after your merge it doesn't run that check again.
 
 Then judge each `inspect` and `ask` item yourself, the way a reviewer will, on the exact build and the real target.
-[How to inspect](../plan-module/references/proofs.md#how-to-inspect) says how. For an item judged by taste, first
-get the fresh opinions described under [subjective work](../plan-module/references/proofs.md#subjective-work),
+[How to inspect](../planner/references/proofs.md#how-to-inspect) says how. For an item judged by taste, first
+get the fresh opinions described under [subjective work](../planner/references/proofs.md#subjective-work),
 and keep the best attempt.
 
 ## The review
@@ -300,4 +300,4 @@ When you need a name for something new and the glossary has none, add an entry i
 `Proposed: by a builder, <date>. Not yet agreed by the human.` Mention it in your report and carry on. If your merge
 then fails because another builder added an entry to the same file, keep both.
 
-This skill covers one milestone. To keep going past it, or to run with no one watching, the human uses `/build`.
+This skill covers one milestone. To keep going past it, or to run with no one watching, the human uses `/lead`.

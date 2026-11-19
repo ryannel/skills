@@ -49,7 +49,7 @@ Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
 A helper agent that an agent starts from inside its own session. The lead doesn't use them to build or review.
 
 **The script**
-`build/scripts/agent_loop.py`. Not an agent: a set of commands that start agents, run the tests and keep the
+`lead/scripts/agent_loop.py`. Not an agent: a set of commands that start agents, run the tests and keep the
 records. Write "the lead runs the `plan` command", never "the lead tells the script to plan".
 Avoid: the loop, the harness
 
@@ -568,7 +568,7 @@ Proposed: by the set's author, 2026-11-12. Not yet agreed by the human.
 
 Every command of the script ends by printing one JSON line, its result, whose `result` field is one of the names
 below. Its exit status is 0 when the line is the command's own result, and 1 or 2 when the command stopped short
-(`ERROR`, `SCRIPT_FAILED`, or `merge`'s `FAILED`). The lead decides what to do next from it, and the `build` skill's tables say what to do for each. A
+(`ERROR`, `SCRIPT_FAILED`, or `merge`'s `FAILED`). The lead decides what to do next from it, and the `lead` skill's tables say what to do for each. A
 `reason` field, where there is one, says which of a result's causes it was.
 
 | Result | Printed by | Means |

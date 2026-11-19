@@ -23,7 +23,7 @@ about to be planned that way, the glossary is `GLOSSARY.md` in the plans folder.
 
 The builders, the agents that write the code, work on their own branches. So a glossary you write in the human's
 chat has to reach the main branch before they can read it. Merge it with the set's script:
-`python3 <the build skill's folder>/scripts/agent_loop.py adopt --worktree <repo> <plans folder>/GLOSSARY.md`.
+`python3 <the lead skill's folder>/scripts/agent_loop.py adopt --worktree <repo> <plans folder>/GLOSSARY.md`.
 
 In any other project, the glossary is `GLOSSARY.md` at the root of the repository.
 

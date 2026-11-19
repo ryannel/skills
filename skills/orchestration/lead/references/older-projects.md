@@ -86,4 +86,4 @@ A project planned before the settings had a `Graded examples:` line still gives 
 `<evidence>/graded-examples.md` in the working folder to read, but `human accept` and `human rereview` add nothing to it, because the
 script adds the human's overturned reviews only to a file the settings name. Suggest to the human that you add the
 line, naming the file the project already uses, so their corrections reach later reviewers. A settings change is
-committed with git on the main branch, as the build skill says.
+committed with git on the main branch, as the lead skill says.

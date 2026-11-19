@@ -2143,8 +2143,8 @@
       ],
       "open_findings": []
     },
-    "plan-module": {
-      "path": "skills/orchestration/plan-module",
+    "planner": {
+      "path": "skills/orchestration/planner",
       "tier": "active",
       "cadence_days": 7,
       "last_checked": "2026-11-08",
@@ -2153,16 +2153,16 @@
       "why_tier": "Registered 2026-11-08. Names current models (Opus 5.5, gpt-6.2-sol) and Codex CLI flags and local files, which move with each release.",
       "watchlist": [
         {
-          "id": "plan-module-models",
+          "id": "planner-models",
           "type": "model-names",
           "claim": "Default models are claude-opus-5-5 and gpt-6.2-sol; Codex flags and rollout fields as used by agent_loop.py.",
-          "where": "skills/orchestration/plan-module",
+          "where": "skills/orchestration/planner",
           "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
         }
       ]
     },
-    "build-milestone": {
-      "path": "skills/orchestration/build-milestone",
+    "builder": {
+      "path": "skills/orchestration/builder",
       "tier": "active",
       "cadence_days": 7,
       "last_checked": "2026-11-08",
@@ -2171,16 +2171,16 @@
       "why_tier": "Registered 2026-11-08. Names current models (Opus 5.5, gpt-6.2-sol) and Codex CLI flags and local files, which move with each release.",
       "watchlist": [
         {
-          "id": "build-milestone-models",
+          "id": "builder-models",
           "type": "model-names",
           "claim": "Default models are claude-opus-5-5 and gpt-6.2-sol; Codex flags and rollout fields as used by agent_loop.py.",
-          "where": "skills/orchestration/build-milestone",
+          "where": "skills/orchestration/builder",
           "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
         }
       ]
     },
-    "review-milestone": {
-      "path": "skills/orchestration/review-milestone",
+    "reviewer": {
+      "path": "skills/orchestration/reviewer",
       "tier": "active",
       "cadence_days": 7,
       "last_checked": "2026-11-08",
@@ -2189,16 +2189,16 @@
       "why_tier": "Registered 2026-11-08. Names current models (Opus 5.5, gpt-6.2-sol) and Codex CLI flags and local files, which move with each release.",
       "watchlist": [
         {
-          "id": "review-milestone-models",
+          "id": "reviewer-models",
           "type": "model-names",
           "claim": "Default models are claude-opus-5-5 and gpt-6.2-sol; Codex flags and rollout fields as used by agent_loop.py.",
-          "where": "skills/orchestration/review-milestone",
+          "where": "skills/orchestration/reviewer",
           "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
         }
       ]
     },
-    "build": {
-      "path": "skills/orchestration/build",
+    "lead": {
+      "path": "skills/orchestration/lead",
       "tier": "active",
       "cadence_days": 7,
       "last_checked": "2026-11-08",
@@ -2210,7 +2210,7 @@
           "id": "build-models",
           "type": "model-names",
           "claim": "Default models are claude-opus-5-5 and gpt-6.2-sol; Codex flags and rollout fields as used by agent_loop.py.",
-          "where": "skills/orchestration/build",
+          "where": "skills/orchestration/lead",
           "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
         }
       ]
@@ -2258,8 +2258,8 @@
         }
       ]
     },
-    "interview-me": {
-      "path": "skills/orchestration/interview-me",
+    "interview": {
+      "path": "skills/orchestration/interview",
       "tier": "stable",
       "cadence_days": 30,
       "last_checked": "2026-11-10",
@@ -2268,10 +2268,10 @@
       "why_tier": "Registered 2026-11-10. A method skill; its sources are other skill libraries, which change slowly compared with model names.",
       "watchlist": [
         {
-          "id": "interview-me-sources",
+          "id": "interview-sources",
           "type": "external-practice",
           "claim": "The conversation rules rest on obra/superpowers brainstorming v7.0.2 (3 Nov 2026), EveryInc/compound-engineering ce-brainstorm and mattpocock/skills grilling, and name Claude Opus 5.5's over-asking.",
-          "where": "skills/orchestration/interview-me",
+          "where": "skills/orchestration/interview",
           "check": "Have those libraries changed their tested rules, or published new measurements? Has a newer model changed the over-asking behaviour?"
         }
       ]

@@ -1,6 +1,6 @@
 ---
-name: plan-module
-description: Plans work for AI agents to build, whether software, a game or a set of assets, as part of the orchestrate set. Splits a project into modules, writes each module's design, milestones and done-when file, and writes the ORCHESTRATE.md project settings. Use when starting or re-planning a project or a module, when an interface between modules has to change, or after a milestone has failed review repeatedly. Not for building (build-milestone) or judging (review-milestone).
+name: planner
+description: Plans work for AI agents to build, whether software, a game or a set of assets, as part of the orchestrate set. Splits a project into modules, writes each module's design, milestones and done-when file, and writes the ORCHESTRATE.md project settings. Use when starting or re-planning a project or a module, when an interface between modules has to change, or after a milestone has failed review repeatedly. Not for building (builder) or judging (reviewer).
 ---
 
 # Plan
@@ -18,7 +18,7 @@ the project is tested, and what this project cares about. If there is no such fi
 human, the person the project is for, ask once for the rest. When the script's `plan` command started you, there
 is nobody to ask, so take the safest reading and list what you assumed.
 
-The script is `agent_loop.py`, in the build skill's `scripts/` folder. It is a set of commands that start agents,
+The script is `agent_loop.py`, in the lead skill's `scripts/` folder. It is a set of commands that start agents,
 run the tests and keep the records. The lead, the agent the human chats with, runs those commands.
 
 Two files in the plans folder say what the human wants. Read them if they exist.

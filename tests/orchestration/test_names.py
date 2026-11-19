@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DOMAIN = ROOT / "skills" / "orchestration"
-SCRIPT = DOMAIN / "build" / "scripts" / "agent_loop.py"
+SCRIPT = DOMAIN / "lead" / "scripts" / "agent_loop.py"
 GLOSSARY = DOMAIN / "GLOSSARY.md"
 
 # Calls whose first string argument, or keyword `result`, is a result name.
