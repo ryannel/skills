@@ -1773,9 +1773,9 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.8.1"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.8.1", "2.8.2"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.8.1"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.8.1", "2.8.2"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')
@@ -1898,14 +1898,47 @@ class LandingOnGit(Repo):
         self.assertEqual(self.git("rev-parse", "origin/main").stdout.strip(), landed)
         self.assertEqual(landed, mine)
 
-    def test_a_push_rejected_twice_fails_and_says_so(self):
+    def test_a_push_rejected_every_time_fails_and_says_so(self):
         self.commit("mine.txt", "mine")
-        self.reject_pushes(2)
+        self.reject_pushes(agent_loop.LAND_TRIES)
         ok, detail = agent_loop.land(self.wt, agent_loop.profile(self.wt, strict=True))
         self.assertFalse(ok)
         self.assertIn("push rejected", detail)
         self.assertIn("pre-receive hook declined", detail)
-        self.assertEqual((self.origin / "rejected").read_text().strip(), "2")  # it tried twice, no more
+        self.assertEqual((self.origin / "rejected").read_text().strip(), str(agent_loop.LAND_TRIES))  # no more
+
+    def test_a_record_lands_while_a_builder_merge_holds_the_merge_lock(self):
+        self.commit("docs/plans/WATER/STATUS.md", "unblocked\n")
+        done = []
+        with agent_loop.held("merge", self.wt):  # a builder's merge, running its test command
+            t = threading.Thread(target=lambda: done.append(agent_loop.land(self.wt, agent_loop.profile(self.wt))))
+            t.start()
+            t.join(30)
+            self.assertTrue(done, "the record waited for the merge lock")
+        self.assertTrue(done[0][0], done[0])
+
+    def test_a_builder_merge_that_loses_its_push_to_a_record_lands_without_testing_again(self):
+        other = self.root / "other"
+        self.sh("git", "clone", "-q", str(self.origin), str(other))
+        for key, value in (("user.name", "t"), ("user.email", "t@t")):
+            self.git("config", key, value, where=other)
+        count = self.root / "runs"
+        script = self.root / "test.sh"
+        script.write_text(  # the first run lands a record from elsewhere while the builder's test runs
+            f'echo run >> "{count}"\n'
+            f'if [ "$(wc -l < "{count}")" -eq 1 ]; then\n'
+            f'  cd "{other}" && git pull -q origin main && mkdir -p docs/plans && echo blocked > docs/plans/STATUS.md && git add -A && '
+            f'git commit -qm record && git push -q origin main\nfi\n')
+        self.commit("ORCHESTRATE.md", PROFILE.replace("**Test command:** none", f"**Test command:** sh {script}"))
+        self.git("push", "-q", "origin", "HEAD:main")
+        mine = self.commit("water.txt", "built\n")
+        ok, landed = agent_loop.land(self.wt, agent_loop.profile(self.wt, strict=True), check=True)
+        self.assertTrue(ok, landed)
+        self.assertEqual(count.read_text().count("run"), 1)  # the pass was reused over the record
+        self.git("fetch", "-q", "origin")
+        self.assertEqual(self.git("rev-parse", "origin/main").stdout.strip(), landed)
+        self.assertNotEqual(landed, mine)  # rebased onto the record
+        self.assertEqual(self.git("show", f"{landed}:docs/plans/STATUS.md").stdout, "blocked\n")
 
     def test_a_rebase_that_conflicts_is_aborted_and_the_work_kept(self):
         other = self.root / "other"
@@ -1920,6 +1953,26 @@ class LandingOnGit(Repo):
         self.assertEqual(self.git("status", "--porcelain").stdout, "")
         self.assertEqual(agent_loop.head_commit(self.wt), mine)
         self.assertEqual((self.wt / "shared.txt").read_text(), "mine\n")
+
+    def test_a_local_merge_rebases_over_a_record_that_landed_during_its_test(self):
+        count = self.root / "runs"
+        script = self.root / "test.sh"
+        script.write_text(
+            f'echo run >> "{count}"\n'
+            f'if [ "$(wc -l < "{count}")" -eq 1 ]; then\n'
+            f'  cd "{self.wt}" && mkdir -p docs/plans && echo blocked > docs/plans/STATUS.md && git add -A && '
+            f'git commit -qm record\nfi\n')
+        self.commit("ORCHESTRATE.md", PROFILE.replace("push", "local").replace(
+            "**Test command:** none", f"**Test command:** sh {script}"))
+        build = self.root / "build"
+        self.git("worktree", "add", "-q", "-b", "build/x", str(build), "main")
+        self.commit("water.txt", "built\n", where=build)
+        ok, landed = agent_loop.land(build, agent_loop.profile(build, strict=True), check=True)
+        self.assertTrue(ok, landed)
+        self.assertEqual(agent_loop.head_commit(self.wt), landed)
+        self.assertEqual(((self.wt / "water.txt").read_text(), (self.wt / "docs/plans/STATUS.md").read_text()),
+                         ("built\n", "blocked\n"))  # neither the record nor the build was lost
+        self.assertEqual(count.read_text().count("run"), 1)
 
     def test_a_local_main_branch_that_cant_fast_forward_is_left_as_it_was(self):
         before = self.commit("ORCHESTRATE.md", PROFILE.replace("push", "local"))
@@ -3186,7 +3239,7 @@ class FirstRuns(Repo):
         f = json.loads(self.printed(agent_loop.cmd_flow, worktree=str(self.wt), since=24.0))
         self.assertEqual((f["ready_for_review"], f["done"]), (1, 1))
         self.assertEqual((f["locks"]["gpu"]["holds"], f["locks"]["gpu"]["failed"]), (1, 1))
-        self.assertIn("merge", f["locks"])  # the builder's merge held the merge lock
+        self.assertIn("records", f["locks"])  # with no test command to run, the builder's merge took the short lock
         self.assertGreaterEqual(f["commits"], f["code_commits"])
 
     # 6. quota

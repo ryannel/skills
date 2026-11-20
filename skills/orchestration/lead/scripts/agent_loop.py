@@ -230,7 +230,9 @@ Subcommands:
         Merges the worktree's commits under the merge lock: rebase onto the base, run the test command, then push
         (Merge: push) or fast-forward the local branch (Merge: local). Builders use this. MERGED or FAILED. It
         refuses (FAILED) commits that set a milestone's status to ready_for_review or done, which only the script
-        sets, after its checks; the items' checks don't run here, so they never hold the merge lock. Merges go
+        sets, after its checks; the items' checks don't run here, so they never hold the merge lock. The script's own
+        records (statuses, reviews, plans, STATUS.md) run no test and don't wait for the merge lock; a merge whose
+        push loses to one rebases and tries again, reusing its test pass when only the plans folder changed. Merges go
         through a queue in the repository's loop folder: each `merge` waits for its own result, and one of the
         waiting ones runs the queue. A branch waiting alone lands as above. Several land as one batch: each is
         rebased, in the order they arrived, onto a checkout of the main branch's tip; one that conflicts is left out
@@ -405,6 +407,7 @@ Subcommands:
         commands at once; NAME.alone waits until it has the resource alone, and new shared requests queue behind
         it. A command still holding the lock after the settings' `Lock hold limit` (30 minutes unless they say
         otherwise) is stopped, with exit status 124 and a message on stderr. A locked item check is held to it too.
+        The script's own merge and records locks aren't: a merge's test command may run for up to an hour.
   locks [--worktree PATH] [--json]
         Who holds each lock of the repository (pid, worktree, command, for how long) and who is queued for it.
   runs [--repo PATH] [--json]   (`loops` before 2.1.0, still accepted)
@@ -3345,7 +3348,7 @@ def run_proc(args, cwd: Path | None, timeout_s: float, shell: bool = False,
 # two days queued for one GPU lock, and that took a hand-run audit to find.
 LOCKS_FILE = "locks.jsonl"
 UNRECORDED_LOCKS = {"last-runs"}  # the script's own bookkeeping, held for milliseconds
-SCRIPT_LOCKS = {"merge", "last-runs"}  # the script's own locks: always exclusive, never stopped by the hold limit
+SCRIPT_LOCKS = {"merge", "records", "last-runs"}  # the script's own locks: always exclusive, never stopped by the hold limit
 
 # Shared resources and sole use. The project settings can declare a resource that several runs may use at once, up to
 # a number (`Shared resources: gpu: 3`). `lock gpu` then shares it, and `lock gpu.alone` waits until it has the
@@ -4319,12 +4322,23 @@ def holder_of(tree: Path, branch: str) -> Path | None:
     return None
 
 
+LAND_TRIES = 6  # a merge whose push loses the race to a record tries again from the new tip
+
+
 def land(tree: Path, prof: dict, check: bool = False) -> tuple[bool, str]:
-    """Merges the commits in `tree` under the merge lock: rebase onto the base, optionally run the project's test
-    command, then push (push) or fast-forward the local branch (local). Returns (ok, merged commit or the problem)."""
+    """Merges the commits in `tree`: rebase onto the base, optionally run the project's test command, then push
+    (push) or fast-forward the local branch (local). Returns (ok, merged commit or the problem).
+
+    A merge that runs the test command holds the merge lock, so builders' merges test one at a time. A record the
+    script writes (a status, a review, a plan, STATUS.md) runs no test, so it takes the records lock instead, which
+    is held for seconds. In Thrum, records queued behind builders' 35 to 45 minute test runs on the merge lock, and
+    a one-line status took two to three hours to land. The push, or the compare-and-swap of the local branch, is
+    what keeps two merges from overwriting each other. A merge that loses that race rebases onto the new tip and
+    tries again; when the new commits only touch the plans folder, the test command's pass is reused (see
+    `files_key`), so a record landing mid-test costs a builder seconds, not another test run."""
     detail = ""
-    with held("merge", tree):
-        for _ in range(2):
+    with held("merge" if check and prof["test_command"] else "records", tree):
+        for _ in range(LAND_TRIES):
             if prof["merge"] == "push":
                 f = git(tree, "fetch", "--quiet", prof["remote"], prof["branch"])
                 if f.returncode != 0:
@@ -4360,6 +4374,9 @@ def land(tree: Path, prof: dict, check: bool = False) -> tuple[bool, str]:
             old = git(tree, "rev-parse", f"refs/heads/{prof['branch']}").stdout.strip()
             if old == new:
                 return True, new
+            if git(tree, "merge-base", "--is-ancestor", old, new).returncode != 0:  # it moved since the rebase
+                detail = f"{prof['branch']} moved"
+                continue
             holder = holder_of(tree, prof["branch"])
             if holder is None:
                 u = git(tree, "update-ref", f"refs/heads/{prof['branch']}", new, old)
@@ -4370,6 +4387,9 @@ def land(tree: Path, prof: dict, check: bool = False) -> tuple[bool, str]:
             m = git(holder, "merge", "--ff-only", "--quiet", new)
             if m.returncode == 0:
                 return True, new
+            if git(tree, "rev-parse", f"refs/heads/{prof['branch']}").stdout.strip() != old:
+                detail = f"{prof['branch']} moved"
+                continue
             return False, (f"couldn't fast-forward {prof['branch']} in {holder}, which has it checked out: "
                            f"{(m.stdout + m.stderr).strip()[-300:]}")
     return False, detail
@@ -5909,7 +5929,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.8.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.8.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5938,6 +5958,11 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.8.2": [
+        "The script's records (unblock, review verdicts, Ready for Review, STATUS.md, plans) no longer wait behind "
+        "builders' test runs on the merge lock. They take a short records lock of their own, and a builder's merge "
+        "that loses its push to one rebases and lands without running the test command again.",
+    ],
     "2.8.1": [
         "The prompts for builders, reviewers and planners name the project's glossary, so each agent uses the "
         "agreed names even when it skims its skill.",
@@ -10179,7 +10204,7 @@ def land_batch(worktree: Path, prof: dict, batch: list[dict]) -> dict[str, dict]
     runs: list[dict] = []
     detail = ""
     with held("merge", worktree) as use:
-        for _ in range(2):
+        for _ in range(LAND_TRIES):
             try:
                 start = tip(worktree, prof)
                 tree = verify_tree(worktree, BATCH_TREE, start)
@@ -10402,6 +10427,8 @@ def publish_batch(worktree: Path, tree: Path, prof: dict, start: str, final: str
     m = git(holder, "merge", "--ff-only", "--quiet", final)
     if m.returncode == 0:
         return True, "", False
+    if git(worktree, "rev-parse", f"refs/heads/{prof['branch']}").stdout.strip() != old:
+        return False, f"{prof['branch']} moved while the batch was tested", True
     return False, (f"couldn't fast-forward {prof['branch']} in {holder}, which has it checked out: "
                    f"{(m.stdout + m.stderr).strip()[-300:]}"), False
 
