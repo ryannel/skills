@@ -114,14 +114,11 @@ and Codex](#setting-up-for-claude-code-and-codex)).
 
 ## Domain language
 
-[`domain-language`](./skills/domain-language/) is a standalone skill for agreeing one name for each thing in a
-project with you, keeping the names in `GLOSSARY.md`, and keeping code, plans and chat using them. It prefers the
-terms your field already uses, so someone who knows the field recognises the work at once, and explains each one
-as it is agreed. It hears how you describe the work first, finds the clashes across the data, code, screens and
-docs, settles them with you in rounds with concrete examples, checks the rules you state against the code, and adds a pointer to `AGENTS.md`
-so later sessions keep to the names. It is built from the best of the published glossary and ubiquitous-language
-skills; the research is in [workbench/domain-language](./workbench/domain-language/research.md). Orchestrate keeps
-its own glossary and doesn't need it. Install it with `python3 install.py --plugins domain-language`.
+[`domain-language`](./skills/domain-language/) is a standalone skill that builds and sharpens a project's
+ubiquitous language with you, in `GLOSSARY.md`. It prefers the terms your field already uses, so someone who
+knows the field recognises the work at once, hunts out ambiguous and duplicate words, keeps you and the agent
+using the agreed terms, fixes code and docs that drift from them, and adds a pointer to `AGENTS.md` so later
+sessions keep to them. Orchestrate keeps its own glossary and doesn't need it. Install it with `npx skills add ryannel/skills --skill domain-language`.
 
 ## Install
 

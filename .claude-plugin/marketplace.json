@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills organised by domain — deeply researched, provenance-tracked, and kept current against fast-moving ecosystems",
-    "version": "2.11.0"
+    "version": "2.12.0"
   },
   "plugins": [
     {
@@ -105,10 +105,10 @@
     },
     {
       "name": "domain-language",
-      "description": "Agrees one name for each thing in a project with you, preferring the terms your field already uses and explaining each one, keeps the names in GLOSSARY.md, and keeps code, plans and chat using them. Hears how you describe the work first, finds clashes across the data, code, screens and docs, settles them in rounds with concrete examples, checks the rules you state against the code, and leaves a pointer so later agent sessions keep to the names.",
+      "description": "Builds and sharpens your project's ubiquitous language with you, in a GLOSSARY.md that follows your field's standard terms. Hunts out words that mean two things and things called by two words, keeps you and the agent using the agreed terms, fixes code and docs that drift from them, and leaves a pointer so later sessions keep to them.",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "development",
       "keywords": [
         "glossary",
