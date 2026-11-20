@@ -5929,7 +5929,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.8.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.8.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -5958,6 +5958,12 @@ def newer_install() -> str | None:
 # the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
 # human so.
 CHANGES = {
+    "2.8.3": [
+        "The domain-language skill has left orchestrate and is now a standalone plugin. Orchestrate keeps its "
+        "glossary: the lead settles names in the interview, and each agent's skill tells it to read the glossary and "
+        "use its names. The lead's skill now says how to agree a proposed name, and the interview names a thing by "
+        "the term its field already uses where there is one, explained to the human, before the human's own word.",
+    ],
     "2.8.2": [
         "The script's records (unblock, review verdicts, Ready for Review, STATUS.md, plans) no longer wait behind "
         "builders' test runs on the merge lock. They take a short records lock of their own, and a builder's merge "

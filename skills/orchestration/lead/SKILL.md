@@ -67,8 +67,7 @@ true before a milestone is Done.
 
 The project settings are in `ORCHESTRATE.md`. Everything else is in the plans folder, `docs/plans` unless the
 settings name another: the module list `ARCHITECTURE.md`, and a folder for each module holding its design
-`DESIGN.md`, plan file `PLAN.md`, log `LOG.md`, done-when file `DONE.json`, which lists the items, and record file
-`RECORD.json`.
+`DESIGN.md`, plan file `PLAN.md`, log `LOG.md`, done-when file `DONE.json` (the items) and record `RECORD.json`.
 
 `STATUS.md` in the plans folder is the human's status page: what needs them now, the choices made for them, what
 is happening now and next, what was recently done, and every module in build order. The script rewrites it after
@@ -97,8 +96,9 @@ work in it is compacted sooner and more often, and loses part of this skill each
 
 Read `ORCHESTRATE.md`, then run `settings --worktree <repo>` to confirm the script can read it. That command fails
 on purpose when the `Merge:` or `Test command:` line is missing, because the script won't guess whether it may push
-or which command runs the tests. If the plans folder has a `GLOSSARY.md`, read it. It holds the agreed name for
-each thing in the project, and you use those names with the human and the agents.
+or which command runs the tests. Read the plans folder's `GLOSSARY.md` too, and use its agreed names with the human
+and the agents. When the human agrees an entry marked `Proposed:`, remove that line and `adopt` the file; give a
+changed name to a planner, the only one who edits the plan files.
 
 When your host restarts, your background commands end with it, though the agents they started may have finished
 first. Read `runs`, the result files and `ready` before you start anything again, because a second review of a

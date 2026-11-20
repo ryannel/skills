@@ -53,7 +53,6 @@ an `ORCHESTRATE.md` file of project settings, so the skills know nothing about y
 | Skill | What it does |
 |---|---|
 | [`interview`](./skills/orchestration/interview/) | Talks with you to find out what you want built and why, and writes the project brief that planning starts from |
-| [`domain-language`](./skills/orchestration/domain-language/) | Agrees one name for each thing in the project with you, and keeps the glossary that plans, code and chat follow |
 | [`planner`](./skills/orchestration/planner/) | Splits a project into modules, and writes each module's design, milestones and done-when file, and the project settings |
 | [`builder`](./skills/orchestration/builder/) | Builds one milestone, proves it and merges it, in Claude Code or Codex |
 | [`reviewer`](./skills/orchestration/reviewer/) | A new session judges a milestone that is Ready for Review, or a design, by using the product and reading the changed code |
@@ -113,6 +112,17 @@ error. The research behind it is in [workbench/skill-creator](./workbench/skill-
 Install them with `python3 install.py --plugins prompting-agents,skill-creator` (see [Setting up for Claude Code
 and Codex](#setting-up-for-claude-code-and-codex)).
 
+## Domain language
+
+[`domain-language`](./skills/domain-language/) is a standalone skill for agreeing one name for each thing in a
+project with you, keeping the names in `GLOSSARY.md`, and keeping code, plans and chat using them. It prefers the
+terms your field already uses, so someone who knows the field recognises the work at once, and explains each one
+as it is agreed. It hears how you describe the work first, finds the clashes across the data, code, screens and
+docs, settles them with you in rounds with concrete examples, checks the rules you state against the code, and adds a pointer to `AGENTS.md`
+so later sessions keep to the names. It is built from the best of the published glossary and ubiquitous-language
+skills; the research is in [workbench/domain-language](./workbench/domain-language/research.md). Orchestrate keeps
+its own glossary and doesn't need it. Install it with `python3 install.py --plugins domain-language`.
+
 ## Install
 
 ```bash
@@ -149,16 +159,18 @@ As a Claude Code plugin instead:
 /plugin install generative-media-skills@ryannel-skills
 ```
 
-These routes are for the generative-media skills. `prompting-agents`, `orchestrate` and `skill-creator` install
+These routes are for the generative-media skills. `prompting-agents`, `orchestrate`, `skill-creator` and
+`domain-language` install
 through `install.py`, below.
 
 ## Setting up for Claude Code and Codex
 
-For `prompting-agents`, `orchestrate` and `skill-creator`, one command from a clone of this repo sets up both hosts
+For `prompting-agents`, `orchestrate`, `skill-creator` and `domain-language`, one command from a clone of this repo
+sets up both hosts
 without editing settings by hand:
 
 ```bash
-python3 install.py                       # all three plugins, both hosts, user scope
+python3 install.py                       # all four plugins, both hosts, user scope
 python3 install.py --replace-standalone  # the same, replacing an earlier npx-skills or hand install (see below)
 python3 install.py --repo ~/code/app     # and set that repo up too
 python3 install.py --plugins prompting-agents --host codex

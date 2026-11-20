@@ -140,8 +140,12 @@ one to plan first, and list the others under "Not part of this" as later work.
 ### Names
 
 When two words are in use for one thing, or one word for two things, and the thing is particular to this project,
-settle its name. The human's own word for a thing is its name. If they have used none, ask what they call it before
-you suggest one. Then use that one name in the chat and in the brief.
+settle its name. Where the project's field has an established term for the thing, use it, so someone who knows the
+field recognises the work at once. Look the term up rather than guessing, and recommend it to the human in one line
+that says what it means and where it comes from, since they may be new to the field. Where the field has no term,
+the human's own word is the name, and if they have used none, ask what they call it before you suggest one. The
+human can keep their own word over the field's; then give the field's term in the entry. Use the one agreed name in
+the chat and in the brief.
 
 Write each settled name into `GLOSSARY.md`, beside the brief:
 

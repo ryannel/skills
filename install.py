@@ -2,7 +2,8 @@
 """Sets this repo's skills up for Claude Code and Codex, with no settings edited by hand.
 
 Usage:
-  python3 install.py                          # prompting-agents, orchestrate and skill-creator, both hosts, user scope
+  python3 install.py                          # prompting-agents, orchestrate, skill-creator and domain-language,
+                                              # both hosts, user scope
   python3 install.py --replace-standalone     # the same, first moving aside earlier standalone copies and hook
   python3 install.py --plugins prompting-agents --host codex
   python3 install.py --repo ~/code/app        # also set up that repo (see below)
@@ -51,7 +52,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 MARKETPLACE = "ryannel-skills"
 ENTRIES = {e["name"]: e for e in json.loads((HERE / ".claude-plugin/marketplace.json").read_text())["plugins"]}
-DEFAULT_PLUGINS = ["prompting-agents", "orchestrate", "skill-creator"]
+DEFAULT_PLUGINS = ["prompting-agents", "orchestrate", "skill-creator", "domain-language"]
 # A plugin, and the earlier plugins it replaced. Their skills either live on inside it or were retired.
 RETIRED_PLUGINS = {"prompting-agents": ["instructing-agents"]}
 RETIRED_SKILLS = {"prompting-agents": ["instructing-agents"],  # skills that no current plugin holds

@@ -26,7 +26,6 @@ Each kind of agent has a skill that tells it how to do its job:
 | Skill | Who reads it | Default model and effort | What it covers |
 |---|---|---|---|
 | [`interview`](interview/) | the lead | the lead's | Talking with you to find out what you want and why, and writing the project brief |
-| [`domain-language`](domain-language/) | the lead, or any agent asked to sort out the project's names | that agent's | Agreeing one name for each thing in the project, and keeping the glossary |
 | [`planner`](planner/) | the planner | Opus 5.5, high | Splitting a project into modules, and writing each module's design, milestones and done-when file |
 | [`builder`](builder/) | a builder | Codex `gpt-6.2-sol` or Opus 5.5, medium | Building one milestone, proving it, and merging it |
 | [`reviewer`](reviewer/) | a reviewer | Opus 5.5, medium | Judging a design, or a milestone that is Ready for Review |
@@ -222,7 +221,9 @@ between "I don't know", "I don't mind" and "you decide".
 Each agent starts new and knows only the files, so a name that isn't written down gets invented again, slightly
 differently, by the next agent. This set went through that itself: by 10 November 2026 its files said "claimed",
 "the loop", "the ladder" and "parked", and its human couldn't tell what they meant. Going through them one by one
-produced the set's own glossary and the rules in `domain-language`. The rules for keeping a glossary from going
+produced the set's own glossary and the rules for it, which now live in the standalone `domain-language` skill.
+The set keeps only the glossary: the lead settles names in the interview, and each agent's skill tells it to read
+the glossary and use its names. The rules for keeping a glossary from going
 wrong, such as holding names and nothing else, and removing entries as well as adding them, come from Matt Pocock's
 and Compound Engineering's reports. Nobody has measured whether agents do better work with a glossary. We keep it
 because the human couldn't follow the build without it.

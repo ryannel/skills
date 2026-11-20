@@ -1,0 +1,22 @@
+diff --git a/src/notices.py b/src/notices.py
+index 538dcec..15c59e1 100644
+--- a/src/notices.py
++++ b/src/notices.py
+@@ -12,3 +12,17 @@ def send_overdue_notices(loans, users, today: date) -> int:
+             send_email(patron["email"], "Overdue: " + loan["title"], "Please return it.")
+             sent += 1
+     return sent
++
++def send_due_date_reminders(loans, users, today: date) -> int:
++    """Due Date Reminder: two days before the due date, for loans not yet returned."""
++    sent = 0
++    for loan in loans:
++        if loan["returned"] is None and loan["due"] - timedelta(days=2) == today:
++            patron = users[loan["user_id"]]
++            send_email(
++                patron["email"],
++                "Due soon: " + loan["title"],
++                f"This book is due back on {loan['due'].isoformat()}.",
++            )
++            sent += 1
++    return sent

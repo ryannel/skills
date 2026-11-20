@@ -2277,7 +2277,7 @@
       ]
     },
     "domain-language": {
-      "path": "skills/orchestration/domain-language",
+      "path": "skills/domain-language",
       "tier": "stable",
       "cadence_days": 30,
       "last_checked": "2026-11-10",
@@ -2289,7 +2289,7 @@
           "id": "domain-language-sources",
           "type": "external-practice",
           "claim": "The glossary rules rest on mattpocock/skills domain-modeling (GLOSSARY.md) and EveryInc/compound-engineering CONCEPTS.md as read on 10 Nov 2026.",
-          "where": "skills/orchestration/domain-language",
+          "where": "skills/domain-language",
           "check": "Have those libraries changed their glossary format or published evidence that a glossary helps agents?"
         }
       ]

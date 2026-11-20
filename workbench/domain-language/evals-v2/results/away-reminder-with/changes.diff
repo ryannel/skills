@@ -1,0 +1,56 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 2e567fa..43e1f7b 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -1,3 +1,10 @@
+ # Agent notes
+ 
+ Python 3.12, no dependencies. Run `python3 -m unittest` before you finish.
++
++## Names
++
++`GLOSSARY.md` holds the agreed name for each thing in this project. Read it before you write a plan, a design,
++text a user will see or a report. Use its names in code, plans, tests and chat, and not the words under `Avoid`.
++An entry marked `Proposed:` isn't agreed yet. If you need a name for something new, check the glossary first; if
++it isn't there, add an entry marked `Proposed:` and say so in your report.
+diff --git a/GLOSSARY.md b/GLOSSARY.md
+index a96e943..557260b 100644
+--- a/GLOSSARY.md
++++ b/GLOSSARY.md
+@@ -11,6 +11,14 @@ A book a patron has taken out, from checkout until it is returned.
+ Avoid: borrowing, checkout record
+ Source: the standard library term
+ 
++**Courtesy Notice**
++The email a patron gets two days before a loan's due date, while the book is still out, reminding them when it is due back.
++Not: Overdue Notice. A courtesy notice goes before the due date; an overdue notice goes after it has passed.
++Avoid: reminder, due-soon email, pre-due notice, advance notice
++Source: the term used by circulation systems such as Evergreen, Alma and Sierra (Koha calls it an "advance notice")
++Stored as: `send_courtesy_notices` in `src/notices.py`
++Proposed: by the agent, 2026-11-20. Not yet agreed by the human.
++
+ **Due Date**
+ The day a loan has to be returned by.
+ Source: the standard library term
+diff --git a/src/notices.py b/src/notices.py
+index 538dcec..3ae545f 100644
+--- a/src/notices.py
++++ b/src/notices.py
+@@ -12,3 +12,17 @@ def send_overdue_notices(loans, users, today: date) -> int:
+             send_email(patron["email"], "Overdue: " + loan["title"], "Please return it.")
+             sent += 1
+     return sent
++
++def send_courtesy_notices(loans, users, today: date) -> int:
++    """Courtesy Notice: two days before the due date, for loans not yet returned."""
++    sent = 0
++    for loan in loans:
++        if loan["returned"] is None and loan["due"] - timedelta(days=2) == today:
++            patron = users[loan["user_id"]]
++            send_email(
++                patron["email"],
++                "Due soon: " + loan["title"],
++                f"This is due back on {loan['due'].isoformat()}.",
++            )
++            sent += 1
++    return sent

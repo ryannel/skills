@@ -1,6 +1,6 @@
 ---
 name: orchestration-skill
-description: Sets the rules for writing the orchestrate skills in skills/orchestration, their agent files and agent_loop.py. Use when adding or changing interview, domain-language, lead, planner, builder or reviewer, an orchestrate agent file, or the script and its prompts. Not for the generative-media domain (media-model-skill).
+description: Sets the rules for writing the orchestrate skills in skills/orchestration, their agent files and agent_loop.py. Use when adding or changing interview, lead, planner, builder or reviewer, an orchestrate agent file, or the script and its prompts. Not for the generative-media domain (media-model-skill).
 metadata:
   internal: true
 ---
