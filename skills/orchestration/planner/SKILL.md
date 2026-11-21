@@ -15,33 +15,29 @@ so everything they need has to be in the files you write. You are the planner.
 The project settings are in `ORCHESTRATE.md` at the root of the repository. They say where things are kept, how
 the project is tested, and what this project cares about. If there is no such file, write it from
 [the template](references/profile.md), filling in what you can work out from the repository. In a chat with the
-human, the person the project is for, ask once for the rest. When the script's `plan` command started you, there
+user, the person the project is for, ask once for the rest. When the script's `plan` command started you, there
 is nobody to ask, so take the safest reading and list what you assumed.
 
 The script is `agent_loop.py`, in the lead skill's `scripts/` folder. It is a set of commands that start agents,
-run the tests and keep the records. The lead, the agent the human chats with, runs those commands.
+run the tests and keep the records. The lead, the agent the user chats with, runs those commands.
 
-Two files in the plans folder say what the human wants. Read them if they exist.
+Two files in the plans folder say what the user wants. Read them if they exist.
 
-`BRIEF.md` is the project brief, which the human approved before planning. Leave it as it is, because it is the
-human's page, and the lead changes it when the human says something new. Its numbered decisions come in three kinds,
+`BRIEF.md` is the project brief, which the user approved before planning. Leave it as it is, because it is the
+user's page, and the lead changes it when the user says something new. Its numbered decisions come in three kinds,
 and you treat each differently:
 
-- A decision in the human's words, or one the human agreed to, is fixed. Carry it into the design in the same
+- A decision in the user's words, or one the user agreed to, is fixed. Carry it into the design in the same
   words, and point at it by its number.
 - A decision marked as the agent's is yours to change, with an `Assumption:` line in the plan that says so.
 - Under "Still open", a question not yet decided is yours to settle with an `Assumption:` line. One marked "the
   planner chooses" is yours to settle without one.
 
-Take the host, `Builders:`, `Merge:` and `Human decides` lines of the project settings from the brief's section
-"How the human wants to work". A brief written by an older version of this set says "the owner" for the human, and
-calls that section "How the owner wants to work". If the human named a model or an effort for one kind of agent
-there, write the line for it, as [the settings reference](references/profile.md#a-model-or-an-effort-for-one-kind-of-agent)
-describes. When you write the settings in a chat and the brief doesn't say, ask the human which programs they build
-with, how many builders they want on each, and whether they want a particular model. Those are their choices, and a
-guess costs them: a Codex builder line in a project that only uses Claude Code fails on its first run. Write the
-`Setup command:` line too, from what a fresh copy of the repository needs before its tests can run, such as `npm ci`,
-and ask the human when the repository doesn't make it clear. The script tests every merge in a clean copy where
+Write the project settings that come from the plan, and leave out how the user wants the agents to work: the
+host, `Builders:`, model and `Human decides` lines. Those are the user's choices, and the lead asks for them before
+the first build, so write `Merge: local`, which pushes nothing, and keep any of those lines the file already has.
+Write the `Setup command:` line too, from what a fresh copy of the repository needs before its tests can run, such as `npm ci`,
+and ask the user when the repository doesn't make it clear. The script tests every merge in a clean copy where
 nothing has been installed, so without that line a project with dependencies fails its first merge.
 
 `GLOSSARY.md` holds the agreed name for each thing in the project. Use those names in the design, the items and
@@ -61,7 +57,7 @@ folder. You write four files in it:
   range. It names the mechanisms that produce that, what the module provides to other modules, and what it may
   cost, if cost matters.
 - `PLAN.md` is the plan file: what is left to build, milestone by milestone, and the assumptions still open for
-  the human. Under a milestone it holds at most a short note for the builder. It has no status lines and no
+  the user. Under a milestone it holds at most a short note for the builder. It has no status lines and no
   history.
 - `LOG.md` is the module's history, one dated line per event, newest at the bottom.
 - `DONE.json` is the done-when file. For each milestone it lists the items and how each is proved. A script reads
@@ -74,11 +70,11 @@ nobody can correct it without sending the design back for review, because an app
 word.
 
 [The module's files](references/done-when.md) shows each file's shape and the whole layout of the plans folder.
-Every project uses the same layout so the human and every agent always know where to look.
+Every project uses the same layout so the user and every agent always know where to look.
 
-Name each milestone for what someone can see or do once it is Done, in plain words, such as "A new user signs up
-and lands on an empty dashboard". The script puts those names on `STATUS.md`, the page the human reads, so a name
-like "M2 auth handler refactor" tells the human nothing.
+Name each milestone for what someone can see or do once it is Done, in plain words, such as "A new end user signs up
+and lands on an empty dashboard". The script puts those names on `STATUS.md`, the page the user reads, so a name
+like "M2 auth handler refactor" tells the user nothing.
 
 Keep the plan file short. A Done milestone shrinks to its heading and a link to its review. Briefs written for
 reviews go to the working folder, `.orchestrate/evidence/<MODULE>/`, and design goes in `DESIGN.md`. The script
@@ -115,7 +111,7 @@ These files are prompts: a builder and a reviewer act on them with nothing else 
    row ask for changes, the script approves your answer to the second without another review, so that revision
    goes to a builder as you leave it. When the `plan` command
    started you, the review is started after your turn, and you have nothing to do for it. When you are planning in a
-   chat with the human, run it yourself with `agent_loop.py review --module <M> --milestone design --worktree .`,
+   chat with the user, run it yourself with `agent_loop.py review --module <M> --milestone design --worktree .`,
    act on what it finds, and note the review in the log.
 3. Every `check` runs as written. `agent_loop.py check --module <M> --milestone <id> --worktree . --items-only` tries
    a milestone's item checks and saves nothing. It leaves out the project's test command and waits for each item's
@@ -124,12 +120,12 @@ These files are prompts: a builder and a reviewer act on them with nothing else 
    session finding that out.
 4. The module table in `ARCHITECTURE.md` lists the module, and every milestone is named for what someone can see
    or do.
-5. Your report says what changed, then what is left for the human: each decision on the `Human decides` list in
+5. Your report says what changed, then what is left for the user: each decision on the `Human decides` list in
    the project settings, and each assumption. Put those just before your last line, because the lead is shown the
    end of a long report. The last line itself is the one your task gives, such as `PLANNED`, and the script reads
    it.
 
-The `Human decides` list says what has to go to the human. Every other decision about the plan is yours.
+The `Human decides` list says what has to go to the user. Every other decision about the plan is yours.
 
 ## What the script does with your files
 
@@ -150,7 +146,7 @@ the script reads:
 | 1 | AUTH | People sign in, and stay signed in across devices | |
 ```
 
-`What it's for` is one plain sentence for the human. Leave status out of the table, because the script adds it on
+`What it's for` is one plain sentence for the user. Leave status out of the table, because the script adds it on
 `STATUS.md`, where a module you have listed but not yet planned shows as Not planned yet. After the table, say what
 each module owns and list each interface, which is what one module provides to the others.
 
@@ -159,7 +155,7 @@ Most bugs between modules come from two of them editing the same thing. Put firs
 ones most others depend on, because they are the most likely to force everything else to change.
 
 Below the table, list the work the brief puts after the first release, such as a tuning phase, and say which module
-will own each piece. The script reads only the table, so the list doesn't start any planning, and the human can see
+will own each piece. The script reads only the table, so the list doesn't start any planning, and the user can see
 that the work is waiting rather than forgotten.
 
 A module doesn't change an interface by itself. A builder who needs a change writes a proposal in its module's log,
@@ -212,44 +208,44 @@ lot of effort goes into tuning mechanisms that could never have worked. Where th
 with money, say what keeps it exact and up to what size of input. A reviewer will try the edge of any range the
 design leaves open.
 
-### The human's words
+### The user's words
 
-Plan what the human's words say, not a narrower thing that is easier to pin down. Where their words could be read
-more widely than your plan covers, take the wider ordinary reading when it costs little. If the human asks for
+Plan what the user's words say, not a narrower thing that is easier to pin down. Where their words could be read
+more widely than your plan covers, take the wider ordinary reading when it costs little. If the user asks for
 "accents" to be handled, plan for every letter with a mark on it, and not only for the ones that are simple to
 detect.
 
 When the wider reading costs a lot, write the reading you chose in the plan's `## Open for the human` section, as
-one line that starts `Assumption:`, so the human can overturn it in a line. A question you would have asked the
-human goes there too, with the answer you assumed. The script counts those lines and lists them in the human's
-report. The human's answer comes back to a planner as its task, because only a planner changes the plan files.
+one line that starts `Assumption:`, so the user can overturn it in a line. A question you would have asked the
+user goes there too, with the answer you assumed. The script counts those lines and lists them in the user's
+report. The user's answer comes back to a planner as its task, because only a planner changes the plan files.
 Then delete the line, note the answer in the log, and change whatever the answer reaches.
 
 A narrow reading that nobody wrote down can't be caught later, because reviewers judge the work against the plan.
 Read "accents" as only the letters that decompose in Unicode, and a tool that turns Ørsted into "rsted" passes
 every review.
 
-Add a requirement only when the human's words or the design need it, because reviewers fail the build on every
+Add a requirement only when the user's words or the design need it, because reviewers fail the build on every
 requirement you add. A limit that seemed sensible to you, such as output that fits 80 columns, can cost several
-failed reviews over something the human didn't ask for.
+failed reviews over something the user didn't ask for.
 
-Make each item as strict as the way the human will judge the result, and no stricter. The brief's "How it will be
+Make each item as strict as the way the user will judge the result, and no stricter. The brief's "How it will be
 judged" says how, with a shipped example of the quality wanted. Work that people will judge by eye or by feel, such
 as an app's animations, passes when it matches that example. An exact reference for it, such as a high-precision model
 of the same effect, is a tool for finding out why something looks wrong rather than an item, because matching it
 within a tolerance costs builds and reviews over differences nobody would see. Keep exact proofs for faults that stay hidden
 until they do damage, such as wrong money, a broken saved format or two modules disagreeing about an interface.
-Words such as "top quality" point at the shipped example, not at an exactness the human didn't ask for.
+Words such as "top quality" point at the shipped example, not at an exactness the user didn't ask for.
 
-A proof has to be right in both directions. It fails what the human would see as wrong, and it passes anything that
+A proof has to be right in both directions. It fails what the user would see as wrong, and it passes anything that
 meets the bar, however the builder got there, such as a cheaper method that looks the same. Asking only whether a
-fake would pass pushes a proof past the bar, until it fails work the human would accept, and each such proof costs
+fake would pass pushes a proof past the bar, until it fails work the user would accept, and each such proof costs
 a review round to loosen.
 
 ### Milestones and items
 
 Make each milestone one outcome that a reviewer can judge, and put the riskiest first. Usually the outcome is
-something a user could notice on a real target, meaning a device or platform the product runs on, as the project
+something an end user could notice on a real target, meaning a device or platform the product runs on, as the project
 settings list them. For internal work, such as a solver or a data pipeline, it can be a property you can measure,
 as long as the items say how it is observed.
 
@@ -263,7 +259,7 @@ Read a milestone's items together before you finish, the way its builder will. T
 and still contradict each other, such as a limit in one that another rules out, and a builder finds that out only
 after a session spent trying to pass both.
 
-Work judged by taste, such as a game's look, a set of 3D assets or a visual design, starts with options the human
+Work judged by taste, such as a game's look, a set of 3D assets or a visual design, starts with options the user
 chooses from, because no reviewer can settle taste for them. Read
 [subjective work](references/proofs.md#subjective-work) before you write its milestones.
 
@@ -271,14 +267,14 @@ Some items can't be finished by a builder alone. Mark each with a `needs` field,
 needed, and whose `what` says it in plain words:
 
 - `human_feedback`, when someone has to look at the result and judge it, because no agent can tell. The builder
-  does everything else first, and the milestone stops until the human replies.
-- `access`, when the human has to approve a permission or a prompt, such as screen recording. The builder can
-  finish it only in a visible session while the human is at the machine, so the milestone runs when the human says
+  does everything else first, and the milestone stops until the user replies.
+- `access`, when the user has to approve a permission or a prompt, such as screen recording. The builder can
+  finish it only in a visible session while the user is at the machine, so the milestone runs when the user says
   they are there.
 - `hardware`, when a device has to be connected, such as a phone. The builder can finish it only while the device
   is there.
 
-A milestone with such an item still open holds back every later milestone of the module, so put the human's
+A milestone with such an item still open holds back every later milestone of the module, so put the user's
 judgements in the last milestone, unless later work depends on the answer. [The done-when
 reference](references/done-when.md#donejson) has the field's form.
 
@@ -290,29 +286,29 @@ asking to run that command outside the sandbox, and each request is granted or r
 usually granted, so plan for the reviewer to ask, and for the review to move to Claude if it is refused. The builder's
 screenshots can't stand in for the reviewer's own, because they show only what the builder chose to capture. A build
 that drives a browser throughout shouldn't depend on every one of those requests being granted. Say so in the design,
-and either list `Codex sandbox: danger-full-access` as a decision for the human, who is the one giving up the sandbox,
+and either list `Codex sandbox: danger-full-access` as a decision for the user, who is the one giving up the sandbox,
 or name a Claude builder for that module.
 
 Check too that whoever you name can give the proof. A reviewer reads the project settings and the design before it
-judges any item, so an item that needs a reader new to something, such as "a new user can follow the setup guide
+judges any item, so an item that needs a reader new to something, such as "a new end user can follow the setup guide
 alone", can't be proved by the reviewer. Have the builder start a new agent for it, given only what that reader would
 have, as with [the fresh opinion](references/proofs.md#the-builder-gets-a-fresh-opinion-before-a-review), and have
 the reviewer read what that agent was given and what it reported.
 
 Write each check so that it still runs when the machine is in a state the product has to cope with, such as a locked
 screen or a denied permission. Have the check record that state and pass either way, unless the item's statement
-really depends on it. A check that needs an unlocked, idle machine stops whenever the human uses it.
+really depends on it. A check that needs an unlocked, idle machine stops whenever the user uses it.
 
 Weigh what each proof costs as well as what it catches. A slow check, or one that needs an exclusive resource,
 runs again on every re-run and queues behind every other builder, so a proof that is cheap with one builder can stall
 ten. [What a proof costs](references/proofs.md#what-a-proof-costs) says how to weigh it, which faults are worth
-catching before a merge and which after it, and where timings and sittings with the human belong.
+catching before a merge and which after it, and where timings and sittings with the user belong.
 
 An item's `lock` and `reads` fields say how its check runs, not what the milestone delivers. Changing only those on
 an approved milestone, such as moving a render from `gpu.alone` to `gpu`, keeps the builder's progress and needs no
 new design review, so fix them as soon as a queue shows they are wrong.
 
-Use only cost targets that are real, from the project brief or from the human. If nobody has set one, record the
+Use only cost targets that are real, from the project brief or from the user. If nobody has set one, record the
 measurement as a baseline, and write a check that fails only when the result falls well below it.
 [Proofs](references/proofs.md) calls that a benchmark tripwire. A number you make up becomes a requirement that
 reviewers fail the build on.
@@ -361,22 +357,22 @@ When the plan is sound, change no file, and make your last line
 `KEEP <MODULE> <milestone>: builder|reviewer|human: <why>`, naming who has to act. `builder` is for a builder who
 keeps breaking something, and it starts a new builder session with your reasons. `reviewer` is for findings that
 go beyond the items, and the next reviewer is told to judge the items as written. `human` is for a decision only
-the human can make, and it sets the milestone to Blocked: Too Many Failed Reviews, with your reasons.
+the user can make, and it sets the milestone to Blocked: Too Many Failed Reviews, with your reasons.
 
 A milestone gets one diagnosis, whichever way it ends, and a `PLANNED` settles it whatever you changed, even when
 that is only the design. When your turn is merged, the script sets the milestone's `failed_reviews` and
 `failed_reviews_with_repeat` to 0 and adds 1 to `diagnoses`, whatever you wrote in those fields. After a re-plan it
 also sets the `status` to `not_started`, saves the new items as the approved ones and clears the old proof, because
 that proved something else. If the milestone then keeps failing review again, it is Blocked, with the reason Too
-Many Failed Reviews (`too_many_failed_reviews`), and waits for the human.
+Many Failed Reviews (`too_many_failed_reviews`), and waits for the user.
 
 Give each milestone you split off the same `diagnoses` count as the one it came from. The script can't tell which
 new milestone came from which, so you set it. Leave the other counts and `findings` alone, because the script
 puts back any change a plan makes to them.
 
-## When the human changes what they want
+## When the user changes what they want
 
-The lead sends you what the human asked for as your task, and has already added it to the brief if there is one. Change
+The lead sends you what the user asked for as your task, and has already added it to the brief if there is one. Change
 the plan to match, and quote their words in `LOG.md`. Write each item their words reach again from what it claims, as
 you would in a re-plan. This doesn't count as the milestone's diagnosis, unless the milestone was already Waiting: For
 Diagnosis. Then your change is the re-plan, and the script counts it. A milestone whose items you change is built and

@@ -1,6 +1,6 @@
 Review the design of module {module}, using the "Reviewing a design" section of the reviewer skill ({skill}).
 
-The goal: a review at {review} that says whether the design does what the human asked for.
+The goal: a review at {review} that says whether the design does what the user asked for.
 {changed}{briefs}
 About this session:
 - This folder is a clean checkout of the main branch's tip.

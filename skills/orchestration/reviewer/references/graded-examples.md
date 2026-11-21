@@ -20,7 +20,7 @@ work and couldn't.
 
 ## A stub that looks finished
 
-The milestone: a new user signs up and lands on an empty dashboard. The builder's screenshots showed every step.
+The milestone: a new end user signs up and lands on an empty dashboard. The builder's screenshots showed every step.
 
 The reviewer signed up, reloaded the page, and was signed out. The changed code showed the sign-up handler
 returning a fixed user object, and nothing written to the database. The Automated Check passed, because it
@@ -55,7 +55,7 @@ Why it is here: a result from a stand-in is useful, but it never becomes a Pass 
 
 ## Meets the numbers, misses the look
 
-The milestone: twelve harbour props for a low-poly sailing game, judged against the option the human chose, which
+The milestone: twelve harbour props for a low-poly sailing game, judged against the option the user chose, which
 was hand-painted, chunky and slightly crooked. Every prop loaded, sat under its triangle budget and shared one
 texture atlas, so the Automated Checks passed.
 

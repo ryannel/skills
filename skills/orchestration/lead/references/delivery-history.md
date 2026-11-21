@@ -1,6 +1,6 @@
 # The delivery history
 
-This is for the lead, the agent the human chats with while it runs a build with the orchestrate set. It covers
+This is for the lead, the agent the user chats with while it runs a build with the orchestrate set. It covers
 the record of what a build cost and what went wrong, kept after the hosts' own session files are gone.
 
 Claude Code deletes its session files after 30 days, and Codex moves or archives its own. So after every turn it
@@ -9,11 +9,11 @@ the turn took, how full its context got, its tool calls, compactions, and how it
 times, and never what was said. The copy is the delivery history, in `~/.orchestrate/history/<repository>-<hash>/`,
 or under `$ORCHESTRATE_HISTORY_DIR` when that is set. It lives outside the hosts' folders and outside the clone, so
 deleting either leaves it in place. It also keeps a copy of each review the script counts, under
-`reviews/<MODULE>/`, because the reviews themselves are in the working folder, which the human clears with
+`reviews/<MODULE>/`, because the reviews themselves are in the working folder, which the user clears with
 `cleanup`.
 
 The script also reads the sessions that ran without it, each time you run `report`, `history` or `dashboard`: turns
-the human started in the app, Codex auto-review threads, subagents, and the human's own sessions in the
+the user started in the app, Codex auto-review threads, subagents, and the user's own sessions in the
 repository. Each is tagged with the kind of agent it was and, where the ledger says, the module, milestone and
 version of the script it served.
 
@@ -49,5 +49,5 @@ script appears as its own row, with errors, time limits and compactions per hund
 the change helped. Turns from different projects and milestones differ, so read a version's figures beside its
 turn count.
 
-Offer the dashboard when the human asks what a project cost, how a release changed things, or for a retro. Its
+Offer the dashboard when the user asks what a project cost, how a release changed things, or for a retro. Its
 Retro view gathers what it cost by kind of agent, what was delivered, the costliest milestones and what went wrong.

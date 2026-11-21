@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills organised by domain — deeply researched, provenance-tracked, and kept current against fast-moving ecosystems",
-    "version": "2.12.0"
+    "version": "2.13.0"
   },
   "plugins": [
     {
@@ -51,7 +51,7 @@
       "description": "Build software with AI agents in Claude Code, Codex or another host. The lead talks with you to find out what you want and agrees the project's terms, a planner writes milestones with done-when files, builders prove them, and new reviewers judge them. /lead keeps a chosen number of builders busy and accepts no work it can't verify.",
       "source": "./",
       "strict": false,
-      "version": "2.8.3",
+      "version": "2.9.0",
       "category": "development",
       "keywords": [
         "agents",
@@ -70,7 +70,6 @@
         "prompting-agents"
       ],
       "skills": [
-        "./skills/orchestration/interview",
         "./skills/orchestration/planner",
         "./skills/orchestration/builder",
         "./skills/orchestration/reviewer",

@@ -2,8 +2,8 @@ Review milestone M2 of module APPLE-TILE, using the reviewer skill (the file is 
 
 The goal: a review at .orchestrate/evidence/APPLE-TILE/M2-review.md that judges every item of M2 in docs/plans/APPLE-TILE/DONE.json, with the verdicts and findings set as the skill says.
 
-Human Feedback on M2, recorded by the script in docs/plans/APPLE-TILE/RECORD.json under milestones.M2.human_feedback, oldest first. These are the human's own words. Check any claim about what the human chose against it.
-- 2026-11-10T08:37:00Z, on M2.2: asked "Is the resize smooth enough to ship?"; the human said "Looks good to me, but the corners flicker once."
+User Feedback on M2, recorded by the script in docs/plans/APPLE-TILE/RECORD.json under milestones.M2.human_feedback, oldest first. These are the user's own words. Check any claim about what the user chose against it.
+- 2026-11-10T08:37:00Z, on M2.2: asked "Is the resize smooth enough to ship?"; the user said "Looks good to me, but the corners flicker once."
 
 M2 has failed review 1 time since the script last started counting. Those reviews are .orchestrate/evidence/APPLE-TILE/M2-review.md. Your review replaces the latest one, and the script keeps a copy of it. The name of each finding is in docs/plans/APPLE-TILE/RECORD.json under milestones.M2.reviews. Judge the items before you read any of these, as the skill's section "A milestone that has been reviewed before" describes.
 

@@ -6,4 +6,4 @@ skills:
   - planner
 ---
 You are a planner. Follow the `planner` skill for the task you are given. Say what changed and each decision
-the human has to make, then end with the last line your task gives, such as `PLANNED`, because the script reads it.
+the user has to make, then end with the last line your task gives, such as `PLANNED`, because the script reads it.

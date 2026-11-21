@@ -25,14 +25,14 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import (PROFILE, SCRIPTS, Clean, Repo, agent_loop, check_next_commands, done, item,  # noqa: E402
+from support import (BASE_PROFILE, PROFILE, SCRIPTS, Clean, Repo, agent_loop, check_next_commands, done, item,  # noqa: E402
                      milestone, parse, proved, put, release, shares)
 
 
 def too_many(mid, statuses, **kw):
-    """A milestone blocked after too many failed reviews, waiting for the human to decide."""
+    """A milestone blocked after too many failed reviews, waiting for the user to decide."""
     return dict(milestone(mid, "blocked", statuses, **kw),
-                blocked={"reason": "too_many_failed_reviews", "what": "the human decides"})
+                blocked={"reason": "too_many_failed_reviews", "what": "the user decides"})
 
 
 def needs(kind, what):
@@ -1322,8 +1322,8 @@ class Leads(Repo):
     def test_ready_names_the_modules_to_plan_next(self):
         put(self.wt / "docs/plans/ARCHITECTURE.md", ARCH.replace(
             "| WATER |\n", "| WATER M1 |\n| 3 | HARBOUR | Boats dock | modules 1 to 2 |\n"
-                           "| 4 | GULLS | Birds | the human's call |\n| 5 | FISH | Fish swim | none |\n"
-                           "| 6 | TIDE | Tides | WATER M1; the human's port timing |\n"))
+                           "| 4 | GULLS | Birds | the user's call |\n| 5 | FISH | Fish swim | none |\n"
+                           "| 6 | TIDE | Tides | WATER M1; the user's port timing |\n"))
         self.commit_all()
         ahead = self.ready()["plan_ahead"]
         self.assertEqual([(a["module"], a["needs"]) for a in ahead], [("SHIPS", ["WATER"]), ("FISH", [])])
@@ -1678,7 +1678,7 @@ class ReviewerAccess(Repo):
         m1 = self.read_done()["milestones"][0]
         self.assertEqual((m1["status"], m1.get("failed_reviews", 0), m1["failed_reviews_with_repeat"]), ("ready_for_review", 0, 0))
         self.assertFalse(self.read_record()["milestones"]["M1"].get("reviews"))
-        # the same review, once the human is at the machine, judges it as usual
+        # the same review, once the user is at the machine, judges it as usual
         os.environ.update(FAKE_REVIEW="pass")
         self.assertEqual(self.review(commit=self.commit)["verdict"], "PASS")
 
@@ -1697,13 +1697,22 @@ class ReviewerAccess(Repo):
         self.assertNotIn("Bash had been open", nudge)  # the shell command had finished, and is never stopped
 
 class WhatTheLeadSees(Repo):
-    """Release 5 of the 2026-11-12 improvement plan: what the lead and the human see (N5, L5, N8, F3, P5 and the
+    """Release 5 of the 2026-11-12 improvement plan: what the lead and the user see (N5, L5, N8, F3, P5 and the
     smaller issues)."""
 
     def builders_line(self, line):
-        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + f"- **Builders:** {line}\n")
+        (self.wt / "ORCHESTRATE.md").write_text(BASE_PROFILE + f"- **Builders:** {line}\n")
         self.commit_all()
 
+    def test_run_starts_no_builder_until_the_user_has_said_how_the_agents_work(self):
+        # The planner leaves the Builders line out; the lead asks the user before the first build.
+        (self.wt / "ORCHESTRATE.md").write_text(BASE_PROFILE)
+        self.commit_all()
+        refused = self.run_loop()
+        self.assertEqual(refused["result"], "REFUSED", refused)
+        self.assertIn("no Builders line", refused["problems"][0])
+        self.assertEqual(refused["next"]["decides"], "human")
+        self.assertIn("Before the first build", refused["next"]["ask"])
 
     def test_run_refuses_a_builder_past_the_builders_count_without_the_humans_words(self):
         self.builders_line("one Codex builder")
@@ -1773,9 +1782,9 @@ class WhatTheLeadSees(Repo):
             self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.8.1", "2.8.2", "2.8.3"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.8.1", "2.8.2", "2.8.3", "2.9.0"])
         note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.8.1", "2.8.2", "2.8.3"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.8.1", "2.8.2", "2.8.3", "2.9.0"])
         note.write_text('{"version": "2.2.0"}')
         (line,) = agent_loop.version_change(self.wt)["2.2.1"]
         note.write_text('{"version": "2.2.1"}')
@@ -1795,7 +1804,7 @@ class WhatTheLeadSees(Repo):
         self.assertEqual((blocked["result"], blocked["reason"]), ("BLOCKED", "needs_context"), blocked)
         what = self.read_done()["milestones"][0]["blocked"]["what"]
         self.assertEqual(what, "the seam shows in .orchestrate/evidence/WATER/f.png and I don't know which constant sets it")
-        self.assertIn("The lead finds the missing fact, or asks the human", blocked["next"]["why"])
+        self.assertIn("The lead finds the missing fact, or asks the user", blocked["next"]["why"])
         self.git("fetch", "-q", "origin")
         page = agent_loop.status_page(self.wt, agent_loop.profile(self.wt), "origin/main")
         now_next = page.split("### Now and next")[1].split("###")[0]
@@ -1819,9 +1828,9 @@ class WhatTheLeadSeesAlone(ProfileOnly):
     def test_profile_reads_the_builders_count_as_a_digit_or_a_word(self):
         for line, count in (("two Codex builders", 2), ("3 on Codex, one on Claude", 4), ("usually one", 1),
                             ("as many as can start", None), ("<how many builders>", None)):
-            (self.wt / "ORCHESTRATE.md").write_text(PROFILE + f"- **Builders:** {line}\n")
+            (self.wt / "ORCHESTRATE.md").write_text(BASE_PROFILE + f"- **Builders:** {line}\n")
             self.assertEqual(agent_loop.profile(self.wt)["builders"], count, line)
-        (self.wt / "ORCHESTRATE.md").write_text(PROFILE)
+        (self.wt / "ORCHESTRATE.md").write_text(BASE_PROFILE)
         self.assertIsNone(agent_loop.profile(self.wt)["builders"])
 
 
@@ -1979,12 +1988,12 @@ class LandingOnGit(Repo):
         build = self.root / "build"
         self.git("worktree", "add", "-q", "-b", "build/x", str(build), "main")
         self.commit("water.txt", "built\n", where=build)
-        (self.wt / "water.txt").write_text("the human's edit, not committed\n")  # main, checked out here, is dirty
+        (self.wt / "water.txt").write_text("the user's edit, not committed\n")  # main, checked out here, is dirty
         ok, detail = agent_loop.land(build, agent_loop.profile(build, strict=True))
         self.assertFalse(ok)
         self.assertIn(f"couldn't fast-forward main in {self.wt.resolve()}", detail)
         self.assertEqual(agent_loop.head_commit(self.wt), before)
-        self.assertEqual((self.wt / "water.txt").read_text(), "the human's edit, not committed\n")
+        self.assertEqual((self.wt / "water.txt").read_text(), "the user's edit, not committed\n")
 
 
 class FakeCodexApp:
@@ -2623,13 +2632,13 @@ class Holistic(Repo):
         self.run_loop(host="claude", fresh=True, message="Findings: see the review.")
         self.run_loop(host="claude", message="go on")
         first, fresh, resumed = (self.prompt(c) for c in self.calls())
-        self.assertIn("The human's rule: never edit the schema.", first)
-        self.assertIn("The human's rule: never edit the schema.", fresh, "a fresh session keeps the rule")
+        self.assertIn("The user's rule: never edit the schema.", first)
+        self.assertIn("The user's rule: never edit the schema.", fresh, "a fresh session keeps the rule")
         self.assertIn("Findings: see the review.", fresh)
-        self.assertIn("The human's rule: never edit the schema.", resumed)
+        self.assertIn("The user's rule: never edit the schema.", resumed)
         self.assertEqual(self.state()["human_rules"], [rule])
         self.run_loop(host="claude", fresh=True, clear_human_rules=True, message="x is 3")
-        self.assertNotIn("The human's rule:", self.prompt(self.calls()[-1]))
+        self.assertNotIn("The user's rule:", self.prompt(self.calls()[-1]))
         self.assertEqual(self.state()["human_rules"], [])
 
     def test_holistic_2_an_active_codex_goal_still_gets_human_rules_added_after_it(self):
@@ -2640,7 +2649,7 @@ class Holistic(Repo):
             conn.execute("insert into thread_goals values ('t1', 'active')")
         self.run_loop(message="go on", human_rule=["keep the public API"])
         resumed = self.prompt(self.calls()[1])
-        self.assertEqual(resumed, "go on\n\nThe human's rule: keep the public API.")
+        self.assertEqual(resumed, "go on\n\nThe user's rule: keep the public API.")
 
     # 3. Progress-only turns are capped.
 
@@ -3127,8 +3136,8 @@ class FirstRuns(Repo):
                                                                            worktree=str(self.wt)))
         refused = self.adopt("ORCHESTRATE.md")
         self.assertEqual(refused["result"], "REFUSED")
-        self.assertIn("the lead commits and merges it with git once the human has agreed", refused["problems"][0])
-        self.assertIn("once the human has agreed to it", self.ready()["settings_differ"])
+        self.assertIn("the lead commits and merges it with git once the user has agreed", refused["problems"][0])
+        self.assertIn("once the user has agreed to it", self.ready()["settings_differ"])
         nothing = self.adopt()
         self.assertEqual(nothing["result"], "NOTHING")
         self.assertIn("settings_differ", nothing)
@@ -3424,15 +3433,15 @@ class FirstRuns(Repo):
         self.assertEqual(rows[1]["session"], rows[0]["session"])
         self.assertEqual(self.read_record()["milestones"]["M1"]["ready_for_review"]["usage"]["cost_usd"], 0.8)
 
-    # 8. Human Feedback on items a builder can't judge
+    # 8. User Feedback on items a builder can't judge
 
     def test_item8_human_feedback_goes_through_the_record_and_into_the_prompts(self):
         m1 = milestone("M1", "not_started", ["open", "open", "open"], inspect="frames")
-        m1["items"][1]["needs"] = needs("human_feedback", "the human picks a direction")
-        m1["items"][2]["needs"] = needs("human_feedback", "the human judges the ink")
+        m1["items"][1]["needs"] = needs("human_feedback", "the user picks a direction")
+        m1["items"][2]["needs"] = needs("human_feedback", "the user judges the ink")
         self.write_done([m1, milestone("M2", "not_started", ["open"])])
         self.commit_all()
-        os.environ.update(FAKE_SKIP_NEEDS="1", FAKE_STATE="in_progress", FAKE_REPLY="BLOCKED: M1.2 needs the human")
+        os.environ.update(FAKE_SKIP_NEEDS="1", FAKE_STATE="in_progress", FAKE_REPLY="BLOCKED: M1.2 needs the user")
         blocked = self.run_loop()
         self.assertEqual((blocked["result"], blocked["reason"]), ("BLOCKED", "needs_human_feedback"), blocked)
         self.assertEqual(blocked["next"]["decides"], "human")
@@ -3455,11 +3464,11 @@ class FirstRuns(Repo):
         self.assertEqual(claim["result"], "READY_FOR_REVIEW", claim)
         prompt = self.calls()[-1]["argv"][-1]
         order = [prompt.find(part) for part in (
-            "Build milestone M1 of module WATER,", "The goal: ", "Human Feedback on M1", "\nAbout this session:\n",
+            "Build milestone M1 of module WATER,", "The goal: ", "User Feedback on M1", "\nAbout this session:\n",
             "\nFrom the lead:\nShow the ink direction first.", "\nWhen the goal is met, end with DONE")]
         self.assertTrue(all(i >= 0 for i in order) and order == sorted(order), (order, prompt))
         self.assertIn('on M1.2, M1.3: asked "Which direction do you want, A or B?"; '
-                      'the human said "Direction B, the ink one."', prompt)
+                      'the user said "Direction B, the ink one."', prompt)
         self.assertEqual(prompt.count(f"python3 {agent_loop.LOOP}"), 1, "the script's path is given once")
         os.environ.update(FAKE_REVIEW="pass")
         self.review(commit=claim["commit"])
@@ -3468,11 +3477,11 @@ class FirstRuns(Repo):
     def test_item8_feedback_needs_the_question_and_only_covers_items_that_need_human_feedback(self):
         m1 = milestone("M1", "not_started", ["open", "open", "open"])
         m1["items"][1]["needs"] = needs("hardware", "plug in the iPhone")
-        m1["items"][2]["needs"] = needs("human_feedback", "the human judges the ink")
+        m1["items"][2]["needs"] = needs("human_feedback", "the user judges the ink")
         self.write_done([m1, milestone("M2", "not_started", ["open"])])
         self.commit_all()
         self.assertIn("ORCHESTRATE_VISIBLE=1", self.refused_feedback("M1", ["M1.2"]))
-        self.assertIn("isn't marked as needing human feedback", self.refused_feedback("M1", ["M1.1"]))
+        self.assertIn("isn't marked as needing user feedback", self.refused_feedback("M1", ["M1.1"]))
         try:
             with self.assertRaises(SystemExit) as stop, contextlib.redirect_stdout(io.StringIO()):
                 agent_loop.cmd_human(argparse.Namespace(action="feedback", module="WATER", milestone="M1",
@@ -3504,7 +3513,7 @@ class FirstRuns(Repo):
         with self.assertRaises(SystemExit) as stop:
             agent_loop.cmd_human(argparse.Namespace(action="accept", module="WATER", milestone="M1", item=None,
                                                     text="  ", worktree=str(self.wt)))
-        self.assertIn("human accept needs --text, the human's words", str(stop.exception))
+        self.assertIn("human accept needs --text, the user's words", str(stop.exception))
 
     def test_item10_human_scope_leaves_the_worktree_clean(self):
         self.edit_m2()
@@ -3589,7 +3598,7 @@ class FirstRuns(Repo):
         self.sh("git", "init", "-q", "--bare", "-b", "main", str(origin))
         self.sh("git", "init", "-q", "-b", "main", str(empty))
         self.git("remote", "add", "origin", str(origin), where=empty)
-        (empty / "ORCHESTRATE.md").write_text(PROFILE)  # the human's profile, waiting for adopt to land it
+        (empty / "ORCHESTRATE.md").write_text(PROFILE)  # the user's profile, waiting for adopt to land it
         adopted = self.call(agent_loop.cmd_adopt, worktree=str(empty), message=None, paths=[])
         self.assertEqual(adopted["result"], "FAILED", adopted)
         self.assertIn("no commits yet", adopted["detail"])
@@ -3684,23 +3693,23 @@ class FirstRuns(Repo):
 
     # Round six: the taste-led rerun
 
-    # Round eighteen: the human decides in chat, and the lead records it
+    # Round eighteen: the user decides in chat, and the lead records it
 
     def test_r18_a_block_on_human_feedback_tells_the_lead_what_to_ask_and_what_to_run(self):
         m1 = milestone("M1", "not_started", ["open", "open"], inspect="frames")
-        m1["items"][1]["needs"] = needs("human_feedback", "the human picks a direction")
+        m1["items"][1]["needs"] = needs("human_feedback", "the user picks a direction")
         self.write_done([m1, milestone("M2", "not_started", ["open"])])
         self.commit_all()
-        os.environ.update(FAKE_SKIP_NEEDS="1", FAKE_STATE="in_progress", FAKE_REPLY="BLOCKED: M1.2 needs the human")
+        os.environ.update(FAKE_SKIP_NEEDS="1", FAKE_STATE="in_progress", FAKE_REPLY="BLOCKED: M1.2 needs the user")
         blocked = self.run_loop()
         nxt = blocked["next"]
         self.assertEqual((blocked["result"], nxt["decides"]), ("BLOCKED", "human"), blocked)
-        self.assertTrue(nxt["ask"].startswith("M1.2: M1.2 works (the human picks a direction). Evidence to show "
+        self.assertTrue(nxt["ask"].startswith("M1.2: M1.2 works (the user picks a direction). Evidence to show "
                                               "them: .orchestrate/evidence/WATER/"), nxt["ask"])
-        self.assertIn("The builder's note: M1.2 needs the human", nxt["ask"])
+        self.assertIn("The builder's note: M1.2 needs the user", nxt["ask"])
         self.assertIn(" human feedback --module WATER --milestone M1 --item M1.2 ", nxt["command"])
-        self.assertIn("--said '<what the human said, in their words>'", nxt["command"])
-        self.assertIn("Ask the human in chat", nxt["why"])
+        self.assertIn("--said '<what the user said, in their words>'", nxt["command"])
+        self.assertIn("Ask the user in chat", nxt["why"])
         self.assertNotIn("alternative", nxt)
         for text in (json.dumps(blocked), json.dumps(self.ready())):
             self.assertNotIn("terminal", text)
@@ -3725,7 +3734,7 @@ class FirstRuns(Repo):
         self.assertIn("Direction B, the ink one.", self.calls()[-1]["argv"][-1])
         os.environ.update(FAKE_REVIEW="pass")
         self.review(commit=claim["commit"])
-        self.assertIn("Human Feedback on M1", self.calls()[-1]["argv"][-1])
+        self.assertIn("User Feedback on M1", self.calls()[-1]["argv"][-1])
 
     def test_r18_every_verb_keeps_the_humans_words_and_report_lists_them(self):
         self.write_done([dict(too_many("M1", ["open"]), failed_reviews_with_repeat=4), milestone("M2", "not_started", ["open"])])
@@ -3756,11 +3765,11 @@ class FirstRuns(Repo):
         self.assertNotIn("decisions", self.read_record())
 
     def test_r19_report_lists_planner_turns_with_their_tasks(self):
-        self.plan(task="Plan PAY. The human said: \"card payments only, no PayPal\"")
+        self.plan(task="Plan PAY. The user said: \"card payments only, no PayPal\"")
         self.git("pull", "-q", "--rebase", "origin", "main")
         report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         section = report.split("## Planner turns (with the task each was given)")[1].split("\n## ")[0]
-        self.assertIn(', PAY: Plan PAY. The human said: "card payments only, no PayPal"', section)
+        self.assertIn(', PAY: Plan PAY. The user said: "card payments only, no PayPal"', section)
 
     def test_r18_older_records_read_as_they_were_written_once_migrated(self):
         rec = json.loads((self.wt / "docs/plans/WATER/RECORD.json").read_text())
@@ -3836,10 +3845,10 @@ class FirstRuns(Repo):
 
     def test_r7_a_block_with_another_cause_leads_and_the_report_still_lists_the_feedback_item(self):
         m1 = milestone("M1", "not_started", ["open", "open"], inspect="frames")
-        m1["items"][1]["needs"] = needs("human_feedback", "the human plays both and picks a direction")
+        m1["items"][1]["needs"] = needs("human_feedback", "the user plays both and picks a direction")
         self.write_done([m1, milestone("M2", "not_started", ["open"])])
         self.commit_all()
-        os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: no browser starts here; M1.2 needs the human's pick")
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: no browser starts here; M1.2 needs the user's pick")
         blocked = self.run_loop()
         self.assertEqual((blocked["result"], blocked["reason"]), ("BLOCKED", "needs_context"), blocked)
         self.assertIn(" --message '<the missing fact>'", blocked["next"]["command"])  # the builder's cause leads
@@ -3847,8 +3856,8 @@ class FirstRuns(Repo):
         self.assertEqual(r["blocked"][0]["blocked"]["reason"], "needs_context")
         report = self.printed(agent_loop.cmd_report, worktree=str(self.wt), since=24.0)
         section = report.split("## Needs you now")[1].split("\n## ")[0]
-        self.assertIn("- WATER M1 M1.2 (needs human feedback: the human plays both and picks a direction)", section)
-        self.assertIn("Ask the human in chat; their reply goes in `", section)
+        self.assertIn("- WATER M1 M1.2 (needs user feedback: the user plays both and picks a direction)", section)
+        self.assertIn("Ask the user in chat; their reply goes in `", section)
         self.assertIn(" human feedback --module WATER --milestone M1 --item M1.2 ", section)
 
     def test_r7_a_builder_names_the_reason_it_is_blocked(self):
@@ -3878,7 +3887,7 @@ class FirstRuns(Repo):
         [warning] = agent_loop.browser_warnings(self.wt)
         self.assertIn("target web, WATER M1.1, WATER M2.1 need a browser", warning)
         self.assertNotIn("target cli", warning)
-        self.assertNotIn("--host claude", warning)  # round eleven: never steer a lead off the human's host
+        self.assertNotIn("--host claude", warning)  # round eleven: never steer a lead off the user's host
         self.assertIn("has to ask to run it outside the sandbox", warning)
         self.assertIn("Codex sandbox: danger-full-access", warning)
         # N8: a run's warning names only the milestone it builds, not 18 items from other modules
@@ -4052,7 +4061,7 @@ class FirstRuns(Repo):
         m1 = self.read_done()["milestones"][0]
         self.assertEqual((m1["failed_reviews_with_repeat"], m1["failed_reviews"], m1["diagnoses"], m1["status"]),
                          (0, 0, 1, "in_progress"))
-        # a second run of four repeated failures goes to the human, as it does after a re-plan
+        # a second run of four repeated failures goes to the user, as it does after a re-plan
         self.assertEqual(agent_loop.escalation_of(dict(m1, failed_reviews=4, failed_reviews_with_repeat=4)),
                          "too_many_failed_reviews")
 
@@ -4072,7 +4081,7 @@ class FirstRuns(Repo):
         self.assertTrue(any("the water is flat (M1.1)" in h for h in stuck["next"]["history"]), stuck["next"])
         for verb in ("Accept it", "change its scope", "reopen it"):
             self.assertIn(verb, stuck["next"]["ask"])
-        # the human reopens it: the counts start again, and the earlier rounds no longer count as repeats
+        # the user reopens it: the counts start again, and the earlier rounds no longer count as repeats
         self.assertEqual(self.human("reopen", "M1", "one more go")["result"], "DONE")
         self.git("pull", "-q", "--rebase", "origin", "main")
         m1 = self.read_done()["milestones"][0]
@@ -4123,7 +4132,7 @@ class FirstRuns(Repo):
     def test_human_scope_restarts_the_counts_and_unblocks_it(self):
         self.six_rounds(diagnoses=1)
         doc = self.read_done("HEAD")
-        doc["milestones"][0]["items"][0]["statement"] = "what the human wants now"
+        doc["milestones"][0]["items"][0]["statement"] = "what the user wants now"
         put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
         self.assertEqual(self.human("scope", "M1")["result"], "DONE")
         self.git("pull", "-q", "--rebase", "origin", "main")
@@ -4154,7 +4163,7 @@ class FirstRuns(Repo):
     def test_r8_human_scope_on_an_owed_milestone_leaves_nothing_to_diagnose(self):
         self.four_fails()
         doc = self.read_done("HEAD")
-        doc["milestones"][0]["items"][0]["statement"] = "what the human wants now"
+        doc["milestones"][0]["items"][0]["statement"] = "what the user wants now"
         put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
         scoped = self.human("scope", "M1")
         self.assertEqual((scoped["result"], scoped["replanned"]), ("DONE", ["M1"]), scoped)
@@ -4167,9 +4176,9 @@ class FirstRuns(Repo):
 
     def feedback_m1(self, state="blocked", result="open"):
         m1 = milestone("M1", state, ["open", result], inspect="frames")
-        m1["items"][1]["needs"] = needs("human_feedback", "the human picks a direction")
+        m1["items"][1]["needs"] = needs("human_feedback", "the user picks a direction")
         if state == "blocked":
-            m1["blocked"] = {"reason": "needs_human_feedback", "items": ["M1.2"], "what": "M1.2 needs the human"}
+            m1["blocked"] = {"reason": "needs_human_feedback", "items": ["M1.2"], "what": "M1.2 needs the user"}
         self.write_done([m1, milestone("M2", "not_started", ["open"])])
         self.commit_all()
 
@@ -4397,7 +4406,7 @@ class FirstRuns(Repo):
                          (None, "lead", "human"))
         self.assertNotIn("docs/plans/PAY/DONE.json",
                          self.git("ls-tree", "-r", "--name-only", "origin/main").stdout.split())
-        self.assertIn("docs/plans/PAY/DONE.json", refused["set_aside"])  # kept in a stash, for the human
+        self.assertIn("docs/plans/PAY/DONE.json", refused["set_aside"])  # kept in a stash, for the user
 
     def test_r15_a_record_forged_during_a_review_refuses_it(self):
         self.write_done([milestone("M1", "not_started", ["open"], inspect="frames"), milestone("M2", "not_started", ["open"])])
@@ -4631,7 +4640,7 @@ class FirstRuns(Repo):
         refused = self.plan()
         self.assertEqual((refused["result"], refused["merged"]), ("INVALID", False), refused)
         self.assertIn("without the script's trailer changed", refused["problems"][0])
-        # no revert handed out: the human decides what happens to a commit already on the tip
+        # no revert handed out: the user decides what happens to a commit already on the tip
         self.assertEqual((refused["next"]["command"], refused["next"]["by"], refused["next"]["decides"]),
                          (None, "lead", "human"))
 
@@ -4803,7 +4812,7 @@ class FirstRuns(Repo):
         self.assertIn("docs/plans/PAY/RECORD.json under `briefs`", self.calls()[-1]["argv"][-1])
 
     def test_r12_a_planners_assumptions_are_counted_and_reported(self):
-        os.environ.update(FAKE_ASSUME="\n\n## Open for the human\n\n- Assumption: accents means any letter with a Latin base\n"
+        os.environ.update(FAKE_ASSUME="\n\n## Open for the user\n\n- Assumption: accents means any letter with a Latin base\n"
                                        "Assumption: the size limit is in bytes\nNot an assumption: this line\n")
         planned = self.plan()
         self.assertEqual(planned["assumptions"], {"PAY": 2}, planned)
@@ -4891,7 +4900,7 @@ class FirstRunsAlone(ProfileOnly):
                 (0, 3, 0, "new_builder_session", "lead", "--fresh"),
                 (3, 4, 0, "new_builder_session", "lead", "--fresh"),
                 (4, 4, 0, "diagnosis", "planner", " plan "),
-                (4, 5, 1, "too_many_failed_reviews", "human", " human reopen "),  # the lead runs it once the human decides
+                (4, 5, 1, "too_many_failed_reviews", "human", " human reopen "),  # the lead runs it once the user decides
                 (1, 6, 0, "diagnosis", "planner", " plan "),
                 (1, 6, 1, "too_many_failed_reviews", "human", " human reopen ")):
             word_now = agent_loop.escalation(failed, with_repeat, diagnoses)
@@ -4906,7 +4915,7 @@ class FirstRunsAlone(ProfileOnly):
             then = agent_loop.escalation_next(word, "WATER", "M1", {"failed_reviews": 4, "failed_reviews_with_repeat": 4, "diagnoses": 1}, self.wt, prof)
             self.assertEqual(then["decides"], "human")
             self.assertTrue(then["ask"])
-            self.assertIn("--text '<what the human said", then["command"])
+            self.assertIn("--text '<what the user said", then["command"])
         for step in ({"module": "WATER", "milestone": "M1", "status": "blocked", "reason": "too_many_failed_reviews"},
                      {"module": "WATER", "milestone": "M1", "status": "ready_for_review", "stored_status": "done"},
                      {"module": "WATER", "milestone": "M1", "status": "in_progress_elsewhere", "by": "elsewhere"}):
@@ -4914,7 +4923,7 @@ class FirstRunsAlone(ProfileOnly):
             text = json.dumps(n)
             self.assertNotIn("terminal", text)
             self.assertNotIn("--reason", text)
-            self.assertIn("--text '<what the human said", text)
+            self.assertIn("--text '<what the user said", text)
             if n["by"] == "human":
                 self.assertTrue(n["ask"])
 
@@ -4977,7 +4986,7 @@ ARCH = ("# Architecture\n\nSome words first.\n\n| a | b |\n|---|---|\n| 1 | 2 |\
 
 
 class PlanFiles(Repo):
-    """One folder per module under docs/plans, the human's STATUS.md, `migrate` from the flat layout, the module
+    """One folder per module under docs/plans, the user's STATUS.md, `migrate` from the flat layout, the module
     table, and the checks a plan has to pass where it lands."""
 
     def prof(self):
@@ -5065,7 +5074,7 @@ class PlanFiles(Repo):
         m2 = dict(milestone("M2", "open", ["open", "open"]), needs=["M1"])
         m2["items"][1].update(inspect="on the phone", attended="plug in the iPhone")
         m4 = milestone("M4", "open", ["open"])
-        m4["items"][0]["attended"] = "the human picks a direction"
+        m4["items"][0]["attended"] = "the user picks a direction"
         doc = done(milestone("M1", "done", ["pass"]), m2, dict(milestone("M3", "parked", ["open"]), failed_reviews_with_repeat=4), m4)
         rec = json.loads((self.wt / "docs/plans/WATER/RECORD.json").read_text())
         rec["milestones"] = {m["id"]: {"definitions": agent_loop.old_definitions(m), "authorised": {"by": "plan"},
@@ -5095,7 +5104,7 @@ class PlanFiles(Repo):
                                        "authorised": {"by": "owner decision", "words": "as planned", "at": at}}
                              for m in doc["milestones"]}
         rec["milestones"]["M1"]["accepted"] = {"by": "checks", "at": at}
-        rec["milestones"]["M2"]["diagnoses"] = [{"who": "owner", "why": "the human decides", "at": at}]
+        rec["milestones"]["M2"]["diagnoses"] = [{"who": "owner", "why": "the user decides", "at": at}]
         for m in doc["milestones"]:
             m["state"], m["fails"], m["rounds"] = m.pop("status"), m.pop("failed_reviews_with_repeat"), m.pop("failed_reviews", 0)
             m["replans"] = 1 if m["id"] == "M2" else 0  # M2 has had its re-plan
@@ -5187,7 +5196,7 @@ class PlanFiles(Repo):
         self.assertEqual([m["status"] for m in doc["milestones"]], ["done", "not_started", "blocked", "not_started"])
         self.assertEqual((m2["depends_on"], "attended" in m2["items"][1]), (["M1"], False))
         self.assertEqual(m2["items"][1]["needs"], {"type": "hardware", "what": "plug in the iPhone"})
-        self.assertEqual(m4["items"][0]["needs"], {"type": "human_feedback", "what": "the human picks a direction"})
+        self.assertEqual(m4["items"][0]["needs"], {"type": "human_feedback", "what": "the user picks a direction"})
         self.assertEqual(m3["blocked"]["reason"], "too_many_failed_reviews")
         rec = self.read_record()["milestones"]
         self.assertEqual(rec["M2"]["human_feedback"], [{"asked": None, "said": "Direction B", "items": ["M2.2"],
@@ -5367,10 +5376,10 @@ class PlanFiles(Repo):
 
     def test_status_md_has_the_overview_then_every_module_in_build_order(self):
         doc = done(milestone("M1", "done", ["pass"]), milestone("M2", "not_started", ["open"], check="true",
-                                                                  needs=needs("human_feedback", "the human")),
+                                                                  needs=needs("human_feedback", "the user")),
                    milestone("M3", "not_started", ["open"]))
         doc["milestones"][1]["status"], doc["milestones"][1]["blocked"] = "blocked", {
-            "reason": "needs_human_feedback", "items": ["M2.1"], "what": "needs the human"}
+            "reason": "needs_human_feedback", "items": ["M2.1"], "what": "needs the user"}
         doc["milestones"][0]["name"] = "The sea moves on screen"
         put(self.wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
         rec = agent_loop.adopt(doc, agent_loop.text_hash(None))
@@ -5378,7 +5387,7 @@ class PlanFiles(Repo):
         rec["milestones"]["M1"]["done"] = {"by": "review", "at": agent_loop.now(),
                                                 "review": ".orchestrate/evidence/WATER/M1-review.md"}
         put(self.wt / "docs/plans/WATER/RECORD.json", json.dumps(rec))
-        put(self.wt / "docs/plans/WATER/PLAN.md", "# Water\n\n## Open for the human\n- Assumption: waves are blue\n")
+        put(self.wt / "docs/plans/WATER/PLAN.md", "# Water\n\n## Open for the user\n- Assumption: waves are blue\n")
         self.write_done([milestone("M1", "not_started", ["open"])], module="EXTRA")
         put(self.wt / "docs/plans/ARCHITECTURE.md", ARCH)
         put(self.wt / "docs/plans/GLOSSARY.md", "**Swell**\nA long wave.\nProposed: by a builder.\n")
@@ -5391,19 +5400,19 @@ class PlanFiles(Repo):
         self.assertLess(overview.index("### Choices made for you"), overview.index("### Now and next"))
         self.assertLess(overview.index("### Now and next"), overview.index("### Recently done"))
         self.assertIn("0 of 3 modules done · 1 in progress · 2 to come", overview)
-        # L5: what needs the human is apart from the choices a planner made for them
+        # L5: what needs the user is apart from the choices a planner made for them
         needs_you, chosen = overview.split("### Choices made for you")
         chosen = chosen.split("### Now and next")[0]
         self.assertIn("- WATER assumes: waves are blue ([plan](WATER/PLAN.md))", chosen)
         self.assertIn("Swell (by a builder)", chosen)
-        self.assertIn("Blocked: Needs Human Feedback, M2.1: M2.1 works (the human). You judge it", needs_you)
+        self.assertIn("Blocked: Needs User Feedback, M2.1: M2.1 works (the user). You judge it", needs_you)
         self.assertNotIn("assumes", needs_you)
         self.assertIn("- M1 (EXTRA M1): Not Started · [plan](EXTRA/PLAN.md)", overview)
         self.assertIn("- The sea moves on screen (WATER M1), ", overview)
         self.assertIn("[review](../../.orchestrate/evidence/WATER/M1-review.md)", overview)
         lines = [line for line in modules.splitlines() if line.startswith("| ") and "---" not in line][1:]
         self.assertEqual(len(lines), 3)
-        self.assertTrue(lines[0].startswith("| 1 | WATER |") and lines[0].endswith("| M2 of 3 · Blocked: Needs Human Feedback |"),
+        self.assertTrue(lines[0].startswith("| 1 | WATER |") and lines[0].endswith("| M2 of 3 · Blocked: Needs User Feedback |"),
                         lines[0])
         self.assertTrue(lines[1].endswith("| Not planned yet |"), lines[1])
         self.assertTrue(lines[2].startswith("|  | EXTRA | (no row in the module table)"), lines[2])
@@ -5489,7 +5498,7 @@ class PlanFilesAlone(ProfileOnly):
     def test_plan_checks(self):
         p = "docs/plans/W/PLAN.md"
         self.assertEqual(agent_loop.plan_text_problems(p, "# W\n\n## M1 sea: done\n[review](x.md)\n\n## M2 waves\n"
-                                                          "- [ ] a\n\n## Open for the human\n- Assumption: x\n"), [])
+                                                          "- [ ] a\n\n## Open for the user\n- Assumption: x\n"), [])
         cases = {"long": "word " * 1600, "Now:": "# W\nNow: building M2\n", "###": "# W\n## M2\n### Notes\n",
                  "## Log": "# W\n## Log\n- 2026-11-01 x\n", "under": "## M1 sea: done\n[review](x.md)\nsome notes\n"}
         for say, text in cases.items():
@@ -5771,7 +5780,7 @@ class OldNeedsTest(Clean):
     def test_an_old_attended_note_becomes_the_matching_needs_type(self):
         cases = {"Screen Recording permission already granted; approve Computer Use for IINA": "access",
                  "plug in the iPhone": "hardware",
-                 "the human judges whether the animation is smooth": "human_feedback"}
+                 "the user judges whether the animation is smooth": "human_feedback"}
         for text, kind in cases.items():
             self.assertEqual(agent_loop.old_needs({"attended": text})["type"], kind, text)
 

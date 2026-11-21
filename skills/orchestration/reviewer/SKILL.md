@@ -27,7 +27,7 @@ checkout like any folder. Git ignores it, and nothing in it is ever committed: g
 build and run, and a review is working material for the people improving the build. Every worktree on this computer
 sees the same files, so you read the builder's evidence and earlier reviews there without a commit.
 
-The graded examples are past reviews that the human, the person the project is for, agreed with or overturned.
+The graded examples are past reviews that the user, the person the project is for, agreed with or overturned.
 They are the best guide to how strict to be. The project's own are in the working folder, in the file the `Graded
 examples:` line of the project settings names, or in `<evidence>/graded-examples.md`. A new project won't have
 them yet, so read [the starting set](references/graded-examples.md) that comes with this skill as well.
@@ -56,7 +56,7 @@ So your sense of whether a defect matters doesn't decide the result. The written
 when it breaks an item's statement or the quality bar. Outside the items, a defect is a Must Fix when it breaks
 something that worked before, breaks the design or an interface (what one module provides to the others), loses
 data, opens a security hole, or shows the work was faked. A Must Fix in an item fails that item. Every other
-defect is a Suggestion. Report it too. It doesn't fail the milestone, and the human can still ask for it to be fixed.
+defect is a Suggestion. Report it too. It doesn't fail the milestone, and the user can still ask for it to be fixed.
 
 Use the product yourself, on its real target, built from the commit you were given. Take your own screenshots and
 recordings, because the builder's show what the builder wanted you to see. Run the edge conditions the project
@@ -92,17 +92,17 @@ less than many short looks with `sleep` and `tail`. Your task gives the script's
    - For a Reviewer Question, read the code the question is about, on both sides of an interface when it asks about
      one, and answer the question.
 
-   - For an item marked as needing human feedback (its `needs` field has the type `human_feedback`), the human's
-     reply is the judgement. The script records it as Human Feedback, in the record file `RECORD.json` under
-     `human_feedback`, with the question the lead (the agent the human chats with) asked, the human's words and
-     when. Check the work against what the human said there, and check any claim about what the human chose against
-     that record. A lead's message or a builder's summary doesn't count as the human's words.
+   - For an item marked as needing user feedback (its `needs` field has the type `human_feedback`), the user's
+     reply is the judgement. The script records it as User Feedback, in the record file `RECORD.json` under
+     `human_feedback`, with the question the lead (the agent the user chats with) asked, the user's words and
+     when. Check the work against what the user said there, and check any claim about what the user chose against
+     that record. A lead's message or a builder's summary doesn't count as the user's words.
 
    If you couldn't see or reach something, give it `could_not_judge` and say what evidence would settle it. If
-   you can't reach the product at all, because the screen is locked, a permission needs the human's approval or a
+   you can't reach the product at all, because the screen is locked, a permission needs the user's approval or a
    device isn't connected, judge nothing. End with `BLOCKED needs_access: <what the human has to do>` instead of a result
    line. The script merges nothing and counts no failed review, and the lead runs the same review again in a visible
-   session while the human is at the machine.
+   session while the user is at the machine.
 2. You have read every changed line of the milestone, not only the files the items mention, and on a module's
    last milestone, the whole module. Look for the signs of work that only looks finished: hard-coded return
    values, canned data, buttons that do nothing, feature flags that default to on, branches that run only under
@@ -142,7 +142,7 @@ user can follow alone, given to a reviewer who has already read the design. Or t
 so that meeting one breaks the other. For a finding like that, add a `planner` field saying why only a planner can
 settle it. The script then sends the milestone straight to a planner, who diagnoses it, instead of giving the
 builder a turn it can't use. A milestone gets one diagnosis, and after it a finding marked this way goes to the
-human, so keep the field for faults in the items, and leave work that falls short of an item to the builder.
+user, so keep the field for faults in the items, and leave work that falls short of an item to the builder.
 
 A `could_not_judge` counts as a fail, because nobody could check the item. A Must Fix outside the items fails the
 milestone too, and the review then proposes an item that would have caught it. A Suggestion never fails it.
@@ -157,7 +157,7 @@ agents, because a review whose reading was handed to a helper hasn't read the wo
 ## A milestone that has been reviewed before
 
 When earlier reviews of the milestone failed, your task says how many the script is counting and where they are kept.
-The script starts counting again after a planner's diagnosis or a decision of the human's, so reviews from before then
+The script starts counting again after a planner's diagnosis or a decision of the user's, so reviews from before then
 aren't listed. Judge the items as they are written before you read the earlier reviews, the same way you form your own
 view before you read the builder's evidence. An earlier review tells you where to look, and a reviewer who reads it
 first ends up checking that the places it named are fixed, which is a narrower job than judging the items.
@@ -180,13 +180,13 @@ to a planner.
 
 Sometimes you are given a module's design to judge before anything is built. The prompt that started you says where
 the tasks the planner was given are saved. If the plans folder has a module list, `ARCHITECTURE.md`, it has a short
-entry on what this module is for. If it has a `BRIEF.md`, that is the project brief, which the human approved, and a
-decision in it counts as something the human asked for.
+entry on what this module is for. If it has a `BRIEF.md`, that is the project brief, which the user approved, and a
+decision in it counts as something the user asked for.
 
 Read the planner's tasks and the brief first, and work out what the module must do. Then compare that with the
 design. Look for what the design misses, what it adds that nobody asked for, and mechanisms nobody has shown can
 produce their behaviour. Try the task's own words on ordinary inputs that the design's examples leave out. A design
-that reads the task more narrowly than its words, and doesn't list that as an assumption for the human, has a gap.
+that reads the task more narrowly than its words, and doesn't list that as an assumption for the user, has a gap.
 
 Then read the items in the done-when file, and ask of each whether you could really judge it when its milestone ends,
 with only the milestones before it built, and whether a convincing fake would pass it. Agreeing the items before
@@ -207,7 +207,7 @@ turns into a procedure each builder has to untangle.
 If a `design-review.md` is already there, it is the previous review of this design. Go through its Must Fix findings
 first and say whether each is resolved. Then read every item that has changed since, because a revision can make a
 proof easier to pass as well as sharper. Raise a new Must Fix only for something the revision broke, or something
-missed last time that really is one. What is left of an earlier Must Fix, when it changes nothing the human would
+missed last time that really is one. What is left of an earlier Must Fix, when it changes nothing the user would
 see and nothing another module relies on, is a Suggestion. Reviews that each find one more refinement never let
 the build start.
 

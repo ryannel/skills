@@ -1,5 +1,5 @@
-"""Checks for `report`, the facts the lead sends when the human asks how the build is going: the window it covers,
-the four questions it answers (what needs the human, what is done, what is moving, what has slowed down), the file
+"""Checks for `report`, the facts the lead sends when the user asks how the build is going: the window it covers,
+the four questions it answers (what needs the user, what is done, what is moving, what has slowed down), the file
 `--write` puts it in, and that no result asks the lead for a report a day any more."""
 
 import contextlib
@@ -33,7 +33,7 @@ class Report(Repo):
 
     def test_it_answers_the_four_questions_in_order(self):
         m1 = milestone("M1", "in_progress", ["pass", "open"])
-        m1["items"][1]["needs"] = {"type": "human_feedback", "what": "the human picks a colour"}
+        m1["items"][1]["needs"] = {"type": "human_feedback", "what": "the user picks a colour"}
         self.write_done([m1, milestone("M2", "not_started", ["open"])])
         self.commit_all()
         report = self.report(since=24.0)
@@ -42,7 +42,7 @@ class Report(Repo):
         self.assertIn("# Build report, the last 24 hours", report)
         self.assertIn("0 of 1 module Done", report)
         needs = section(report, "## Needs you now")
-        self.assertIn("- WATER M1 M1.2 (needs human feedback: the human picks a colour)", needs)
+        self.assertIn("- WATER M1 M1.2 (needs user feedback: the user picks a colour)", needs)
         self.assertIn(" human feedback --module WATER --milestone M1 --item M1.2 ", needs)
         moving = section(report, "## Now and next")
         self.assertIn("- WATER M1 (milestone 1 of 2): In Progress, 1 of 2 items passing", moving)
@@ -53,7 +53,7 @@ class Report(Repo):
         m1 = milestone("M1", "in_progress", ["open"])
         m1.update(failed_reviews=3, failed_reviews_with_repeat=2)
         m2 = dict(milestone("M2", "blocked", ["open"]),
-                  blocked={"reason": "too_many_failed_reviews", "what": "the human decides"})
+                  blocked={"reason": "too_many_failed_reviews", "what": "the user decides"})
         self.write_done([m1, m2])
         self.commit_all()
         results = agent_loop.loop_dir(self.wt) / "results"
@@ -83,7 +83,7 @@ class Report(Repo):
         self.assertIn("- Running now: WATER M1, build on codex gpt-6.2-sol medium, started 2h 0m ago, 2 turns done, "
                       "one running for 40m; now builder turn 3", moving)
         needs = section(report, "## Needs you now")
-        self.assertIn("- WATER M2: Blocked: Too Many Failed Reviews, because the human decides. You decide:", needs)
+        self.assertIn("- WATER M2: Blocked: Too Many Failed Reviews, because the user decides. You decide:", needs)
 
     def test_the_default_window_runs_from_the_last_report_at_least_an_hour_old(self):
         first = self.report()

@@ -78,7 +78,7 @@ class RoutineSteps(Clean):
                        escalation="too_many_failed_reviews", decides="human", ask="Reopen it?")
         words, why = self.follows(human)
         self.assertIsNone(words)
-        self.assertIn("human's", why)
+        self.assertIn("user's", why)
 
     def test_results_that_need_judgement_stop_the_steps(self):
         again = run_cmd("run", "--module", "WATER", "--worktree", WT)

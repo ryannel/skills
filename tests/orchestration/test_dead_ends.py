@@ -178,7 +178,7 @@ class PlannerEndings(Repo):
         result = self.plan()
         self.assertEqual(result["result"], "BLOCKED")
         self.assertIn("plan PAY", command(result))
-        self.assertIn("the human must choose the payment provider", command(result))
+        self.assertIn("the user must choose the payment provider", command(result))
         self.assertIn("<the answer", command(result))
 
     def test_an_unfinished_planner_gets_the_task_again(self):
@@ -228,13 +228,13 @@ class PlannerEndings(Repo):
 
 
 class HumanDecisionsBesideAPlanner(Repo):
-    """`human` was refused while any planner held the repository's planner lock, so with planners queued the human's
+    """`human` was refused while any planner held the repository's planner lock, so with planners queued the user's
     answers couldn't be recorded for hours."""
 
     def test_a_human_decision_is_recorded_while_a_planner_works_on_another_module(self):
         m1 = milestone("M1", "blocked", ["open", "open"], inspect="frames")
-        m1["items"][1]["needs"] = {"type": "human_feedback", "what": "the human picks a direction"}
-        m1["blocked"] = {"reason": "needs_human_feedback", "items": ["M1.2"], "what": "M1.2 needs the human"}
+        m1["items"][1]["needs"] = {"type": "human_feedback", "what": "the user picks a direction"}
+        m1["blocked"] = {"reason": "needs_human_feedback", "items": ["M1.2"], "what": "M1.2 needs the user"}
         self.write_done([m1, milestone("M2", "not_started", ["open"])])
         self.commit_all()
         code = (f"import sys, time; sys.path.insert(0, {str(SCRIPTS)!r}); import agent_loop\n"

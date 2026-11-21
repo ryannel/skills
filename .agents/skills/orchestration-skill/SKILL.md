@@ -30,7 +30,7 @@ so it goes with a step in the script's `migrate` command that rewrites them.
 The script is not an agent. Write "the lead runs the `plan` command", and never "the lead tells the script to
 plan". Name who does each step.
 
-Nothing in a skill is particular to one project. Paths, commands, targets, the human's rules and the
+Nothing in a skill is particular to one project. Paths, commands, targets, the user's rules and the
 standards for a kind of work come from the project's `ORCHESTRATE.md`
 ([template](../../../skills/orchestration/planner/references/profile.md)). If a skill needs a new setting, add
 it to the template, and to `profile()` in `agent_loop.py` if the script reads it.
@@ -46,15 +46,17 @@ write, and the script.
 
 Links stay inside the domain (`../sibling/…`), because an install flattens the domain folder.
 
-Each folder is named for the agent that reads it: `interview` and `lead` for the agent the human chats with, then
-`planner`, `builder` and `reviewer`. The main prompts the script sends to an agent live beside that agent's skill,
+Each folder is named for the agent that reads it: `lead` for the agent the user chats with, then `planner`,
+`builder` and `reviewer`. The lead's `SKILL.md` is a router: it works out which stage the project is in, and each
+stage has its own file in `lead/stages/`, numbered in order: interview, start planning, before the first build, build.
+`lead/references/` holds what the lead looks up during the build, and `planner/` stays the planner's own skill. The main prompts the script sends to an agent live beside that agent's skill,
 in `<role>/prompts/`, and the script reads them with `prompt_text`. Those, and the shorter texts still in
 `agent_loop.py`, are prompts like any other, and follow `prompting-agents` too. The skills name `prompting-agents`
 wherever an agent writes for another agent: the plan files, the brief, a `--message`, a review. Name it as a skill, not as a link, because it
 lives in another domain, and `install.py` installs it whenever it installs orchestrate.
 
 Say each thing once, close to the moment it applies. A session's first prompt carries that session's facts: its
-paths, whether it is visible, which items need someone, the human's rules. The skill carries the guidance, with
+paths, whether it is visible, which items need someone, the user's rules. The skill carries the guidance, with
 its reason. The message on a resumed turn restates the goal, because a compacted session may have lost the skill.
 A boundary the script enforces needs no line in a prompt. A message about a failed review says what a review is
 and where it is kept, and leaves out a list of what to fix, because a list of findings gets cleared and nothing
@@ -62,7 +64,7 @@ more, while the next reviewer starts again from the items.
 
 Scripts are standard-library Python, with tests in `tests/orchestration/`, which are not shipped with the skill. Run
 `python3 tests/orchestration/run.py` before a commit. It runs them in up to eight processes and takes about 70 seconds
-on the human's Mac. `python3 -m unittest discover tests/orchestration` runs the same tests in one process, in about
+on the user's Mac. `python3 -m unittest discover tests/orchestration` runs the same tests in one process, in about
 seven minutes. `tests/orchestration/prompts/` holds a saved copy of each prompt the script sends, and `test_prompts.py`
 fails when a template changes. When the change is intended, write the new copies with
 `ORCHESTRATE_WRITE_PROMPTS=1 python3 -m unittest tests.orchestration.test_prompts`, and read their diff. The tests
@@ -72,10 +74,10 @@ so that every host is handled in one place and Claude sessions get no API key.
 
 Each role keeps its agent files beside its skill: Claude's in `<role>/agents/claude/`, listed in the marketplace
 entry, and Codex's in `<role>/agents/codex/`, installed by `install_agents.sh`. The script and the installer use
-the files' names, so keep the names. The `lead` skill sets `disable-model-invocation: true`, and
-`lead/agents/openai.yaml` sets `allow_implicit_invocation: false` for Codex, because a build runs agents for hours
-and should start only when the human asks for it. `check_skill.py` prints a note about that field, and the note is
-expected.
+the files' names, so keep the names. The `lead` skill loads by itself, because it is the way into a project: someone
+describing what they want built starts with its interview. That is safe because nothing runs for hours before the
+user has approved a brief and said how they want the agents to work, and `run` refuses to start a builder until
+the settings' `Builders:` line has a count.
 
 Add guidance only for a failure that has been seen. Write it as what to do and why, so the reader can apply it
 to cases the failure didn't cover, and leave the story of what happened out of the skill. The story goes in the

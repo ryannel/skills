@@ -1,6 +1,6 @@
 Review the design of module APPLE-TILE, using the "Reviewing a design" section of the reviewer skill (the file is /skills/orchestration/reviewer/SKILL.md).
 
-The goal: a review at .orchestrate/evidence/APPLE-TILE/design-review.md that says whether the design does what the human asked for.
+The goal: a review at .orchestrate/evidence/APPLE-TILE/design-review.md that says whether the design does what the user asked for.
 
 Since the last design review (.orchestrate/evidence/APPLE-TILE/design-review.md), M2.2 changed.
 

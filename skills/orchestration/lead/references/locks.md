@@ -1,6 +1,6 @@
 # Locks and main-branch checks
 
-This is for the lead, the agent the human chats with while it runs a build with the orchestrate set. Read it when
+This is for the lead, the agent the user chats with while it runs a build with the orchestrate set. Read it when
 the project settings, `ORCHESTRATE.md`, have `Exclusive resources`, `Shared resources` or `Main-branch check` lines.
 A project without them never meets anything here.
 
@@ -23,7 +23,7 @@ lock, how long it was held, how long work queued for it, and how many holds ende
 busy most of the day, with hours queued against it, is a limit that more builders make worse. Its failed holds cost
 the most, because nobody else could use the time they took. The fixes sit around the builders, not in them: fewer
 builders on that resource, a cheaper proof, or a check that runs once on the main branch instead of once per
-milestone. They go to a planner or to the human, as [reading delivery](../SKILL.md#reading-delivery) says.
+milestone. They go to a planner or to the user, as [reading delivery](../stages/4-build.md#reading-delivery) says.
 
 ## Main-branch checks
 

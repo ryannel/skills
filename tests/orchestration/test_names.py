@@ -1,7 +1,7 @@
 """The script's result names and fields keep to the set's glossary.
 
 The authoring spec says the script uses the glossary's names, but nothing checked it, and by 2.0.0 the script
-printed results such as FLOOR and PIN that no glossary entry or skill explained. A lead reading FLOOR told the human
+printed results such as FLOOR and PIN that no glossary entry or skill explained. A lead reading FLOOR told the user
 "likely quota" for a merge that had finished after its turn ended. These tests fail when a result or field name
 drifts from the glossary again.
 """
@@ -91,7 +91,9 @@ class ResultNames(unittest.TestCase):
 
     def test_every_result_is_explained_in_a_skill(self):
         names, _ = glossary_results()
-        skills = "".join(p.read_text() for p in DOMAIN.rglob("SKILL.md"))
+        # The lead's skill is a router, and its stage files and references explain the results.
+        skills = "".join(p.read_text() for p in [*DOMAIN.rglob("SKILL.md"), *DOMAIN.rglob("stages/*.md"),
+                                                 *DOMAIN.rglob("references/*.md")])
         unexplained = sorted(n for n in names if f"`{n}`" not in skills and n not in SKILL_TEXT_TO_COME)
         self.assertEqual(unexplained, [], "the lead or an agent meets these results, but no skill says what they mean")
 

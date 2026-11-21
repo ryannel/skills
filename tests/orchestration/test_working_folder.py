@@ -135,7 +135,7 @@ class Migrate(Repo):
         self.assertEqual(rec["design"]["hash"], agent_loop.text_hash(design))  # the design review still counts
         self.assertTrue((self.wt / "docs/plans/WATER" / "../../../.orchestrate/evidence/WATER/design-proof/proof.py")
                         .exists())
-        # the old files stay in git until the human has them purged
+        # the old files stay in git until the user has them purged
         self.assertIn("docs/evidence/WATER/M1-review.md",
                       self.git("ls-tree", "-r", "--name-only", "origin/main").stdout)
         self.git("pull", "-q", "--rebase", "origin", "main")
@@ -271,7 +271,7 @@ class Cleanup(Repo):
     def test_cleanup_is_refused_inside_a_session(self):
         with mock.patch.dict(os.environ, {"ORCHESTRATE_ROLE": "build"}), self.assertRaises(SystemExit) as stop:
             self.cleanup()
-        self.assertIn("human's decision", str(stop.exception))
+        self.assertIn("user's decision", str(stop.exception))
 
 
 if __name__ == "__main__":

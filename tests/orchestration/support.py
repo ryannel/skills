@@ -1,7 +1,7 @@
 """What every orchestration test shares: a folder of this process's own, the script, the fake host and `Repo`.
 
 Import it first in every test file. Before it imports the script, it points every host, home and state folder the
-script reads at that folder, so no test reads the human's settings or writes under their home folder. A test that
+script reads at that folder, so no test reads the user's settings or writes under their home folder. A test that
 forgets to install a fake host fails at once instead of starting the real CLI.
 
 Tests run many commands in one process, and the script keeps per-process state in module globals. `Clean` puts that
@@ -47,7 +47,7 @@ os.environ.update(
     ORCHESTRATE_CLAUDE="/no/such/host",
     # The delivery history is read after every turn; only test_history turns it on, with its own folders.
     ORCHESTRATE_NO_HISTORY="1", ORCHESTRATE_HISTORY_DIR=str(PROCESS / "history"),
-    # The human's git settings (pull.rebase, the LFS filters) never reach the test repositories. The file here
+    # The user's git settings (pull.rebase, the LFS filters) never reach the test repositories. The file here
     # gives commits an author, as CI's global settings do.
     GIT_CONFIG_GLOBAL=str(PROCESS / "gitconfig"), GIT_CONFIG_NOSYSTEM="1")
 for key in [k for k in os.environ if k.startswith("FAKE_")] + ["ORCHESTRATE_ROLE", "ORCHESTRATE_VISIBLE"]:
@@ -81,7 +81,10 @@ STATE = {name: getattr(agent_loop, name) for name in (
     "_IMPORTS_SENT", "_HELP", "STEPS_RUN", "EVIDENCE_HERE")}
 assert not any(STATE.values()), "the script's per-process state starts empty"
 
-PROFILE = ("- **Plans:** docs/plans\n- **Merge:** push\n- **Test command:** none\n- **Default host:** codex\n")
+# The settings without a Builders line, as the planner writes them before the lead asks the user how they want
+# the agents to work; PROFILE adds a count high enough that tests never meet it.
+BASE_PROFILE = "- **Plans:** docs/plans\n- **Merge:** push\n- **Test command:** none\n- **Default host:** codex\n"
+PROFILE = BASE_PROFILE + "- **Builders:** 20 builders\n"
 
 
 def release():
@@ -336,7 +339,7 @@ elif role == "plan":
         reply = f"Read every round.\\nKEEP WATER M1: {mode[5:]}: the {mode[5:]} has to act"
     elif mode == "blocked":
         (cwd / "docs/plans/PAY/DESIGN.md").write_text("# Pay design, half done")
-        reply = "BLOCKED: the human must choose the payment provider"
+        reply = "BLOCKED: the user must choose the payment provider"
     else:
         if mode != "nodesign":
             (cwd / "docs/plans/PAY/DESIGN.md").write_text("# Pay design")
@@ -344,7 +347,7 @@ elif role == "plan":
         (cwd / "docs/plans/PAY/DONE.json").write_text(json.dumps({"module": "PAY", "milestones": [
             {"id": "M1", "name": "pay", "status": "not_started", "failed_reviews_with_repeat": 0, "diagnoses": 0,
              "items": [{"id": "M1.1", "statement": "pays", "check": "true", "builder_result": "open", "evidence": ""}]}]}))
-        reply = "Planned PAY. Nothing for the human to decide.\\nPLANNED" + ("" if os.environ.get("FAKE_PLAN_BARE") else ": " + ", ".join(files))
+        reply = "Planned PAY. Nothing for the user to decide.\\nPLANNED" + ("" if os.environ.get("FAKE_PLAN_BARE") else ": " + ", ".join(files))
         side = os.environ.get("FAKE_PLAN_SIDE")
         if side:  # a planner that forges a record, commits it and puts it on the tip itself, or fakes the tip
             (cwd / "docs/plans/WATER/RECORD.json").write_text('{"forged": true}')
@@ -427,7 +430,7 @@ def check_next_commands(result):
 
 def loop_commands(text):
     """The arguments of each `agent_loop.py` command in a shell command line, which must be one a lead can paste:
-    the shell must parse it, and a placeholder such as '<what the human said, in their words>' must be quoted, so
+    the shell must parse it, and a placeholder such as '<what the user said, in their words>' must be quoted, so
     it reaches the script as one word. In 2.1.0 a placeholder with an apostrophe in it ended its own quotes."""
     try:
         words = shlex.split(text)
@@ -666,8 +669,8 @@ class Repo(Clean):
     def ready(self, where=None):
         return json.loads(self.printed(agent_loop.cmd_ready, worktree=str(where or self.wt)))
 
-    def human(self, action, milestone_id, reason="the human said so", where=None, item=None, asked=None):
-        """A human command. For `feedback`, `reason` is what the human said and `asked` the lead's question."""
+    def human(self, action, milestone_id, reason="the user said so", where=None, item=None, asked=None):
+        """A human command. For `feedback`, `reason` is what the user said and `asked` the lead's question."""
         feedback = action == "feedback"
         return self.call(agent_loop.cmd_human, action=action, module="WATER", milestone=milestone_id,
                          item=[item] if isinstance(item, str) else item, worktree=str(where or self.wt),

@@ -1,6 +1,6 @@
 """The smaller fixes from the whole-set review of 2026-11-18: the setup command, the Builders line read as a person
 would, builder sessions kept across a script fix, a result line from `pause`, a CHANGES entry for every version, the
-review's bookkeeping worked out by the script, and graded examples from the human's overturned reviews."""
+review's bookkeeping worked out by the script, and graded examples from the user's overturned reviews."""
 
 import os
 import subprocess
@@ -15,7 +15,7 @@ class SetupCommand(Repo):
     def settings(self, setup, test="none"):
         (self.wt / "ORCHESTRATE.md").write_text(
             f"- **Plans:** docs/plans\n- **Merge:** push\n- **Test command:** {test}\n- **Default host:** codex\n"
-            f"- **Setup command:** {setup}\n")
+            f"- **Setup command:** {setup}\n- **Builders:** 20 builders\n")
         (self.wt / ".gitignore").write_text("deps/\n")
         self.commit_all()
 
@@ -202,7 +202,7 @@ class GradedExamples(Repo):
         self.assertEqual(out["result"], "DONE", out)
         self.assertEqual(out["graded_example"], ".orchestrate/evidence/graded-examples.md")
         text = self.examples()
-        self.assertIn("## WATER M1: the human overturned a review", text)
+        self.assertIn("## WATER M1: the user overturned a review", text)
         self.assertIn("- M1.1 (Fail): M1.1 works", text)
         self.assertIn("the water is flat (M1.1)", text)
         self.assertIn("> The flat water is the style I asked for.", text)

@@ -57,7 +57,8 @@ DEFAULT_PLUGINS = ["prompting-agents", "orchestrate", "skill-creator", "domain-l
 RETIRED_PLUGINS = {"prompting-agents": ["instructing-agents"]}
 RETIRED_SKILLS = {"prompting-agents": ["instructing-agents"],  # skills that no current plugin holds
                   # orchestrate's skills before 2.8.0 named the document, not the role that reads it
-                  "orchestrate": ["interview-me", "plan-module", "build", "build-milestone", "review-milestone"]}
+                  "orchestrate": ["interview-me", "plan-module", "build", "build-milestone", "review-milestone",
+                                  "interview"]}  # the interview became the lead's first stage in 2.9.0
 # A plugin, and the plugins it needs installed beside it. Orchestrate's agents write prompts for each other all day,
 # and its skills tell them to use prompting-agents. skill-creator takes its writing guidance from it.
 REQUIRES = {e["name"]: e.get("dependencies", []) for e in ENTRIES.values()}  # Codex ignores `dependencies`

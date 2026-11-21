@@ -346,7 +346,7 @@ def read_codex(path: Path, start: int = 0, meta: dict | None = None) -> dict:
 # ------------------------------------------------------------------------------------------------------------ Claude
 
 def claude_prompt(e: dict) -> bool:
-    """Whether a `user` line is a prompt typed by the human or the script, and so starts a turn. Tool results, the
+    """Whether a `user` line is a prompt typed by the user or the script, and so starts a turn. Tool results, the
     compaction summary and the host's own meta lines don't."""
     if e.get("isMeta") or e.get("isCompactSummary") or e.get("isVisibleInTranscriptOnly"):
         return False

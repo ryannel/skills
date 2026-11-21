@@ -3,27 +3,37 @@
 The agreed name for each thing in the orchestrate set. The skills, the README, the agent files and the script use
 these names, and each skill defines the ones it uses before their first use, because each skill is read alone.
 `Stored as` gives the name as it is written in a file, a command or the script's output, where that differs. An
-entry with a `Proposed:` line hasn't been agreed by the human yet; every other entry has.
+entry with a `Proposed:` line hasn't been agreed by the user yet; every other entry has.
 
 This file holds names and what they mean. How each thing works is in the skills and the script's help. This file is
 for the people and agents who write the set, and it is not installed with the skills.
 
 ## People and agents
 
-**Human**
-The person the project is being built for. The README speaks to the human as "you".
-Avoid: owner, user, person (in the skills)
-Stored as: `human`, as in the `human` commands, `--human-rule`, `decides: human` and the `Human decides` line of
-the project settings
+**User**
+The person the agents work with, who wants the project built and makes its decisions. The README speaks to the
+user as "you".
+Not: End user. The user decides what is built; end users use what is built.
+Avoid: human, owner, person
+Source: the standard term in agent prompting, as Anthropic's and OpenAI's docs and the hosts' system prompts use it
+Stored as: `human`, as in the `human` commands, `--human-rule`, `decides: human`, `human_feedback` and the
+`Human decides` line of the project settings
+
+**End user**
+Someone who will use what the project builds, such as a player of a game or a customer of a shop. They may
+include the user.
+Not: User, the person the agents work with.
+Avoid: user, for this meaning
+Source: the standard term in software and requirements engineering
 
 **Agent**
-One AI session working in the human's repository.
+One AI session working in the user's repository.
 
 **Host**
 The program an agent runs in: Claude Code or Codex.
 
 **Lead**
-The agent the human chats with. It runs the script's commands and comes back to the human when a decision is
+The agent the user chats with. It runs the script's commands and comes back to the user when a decision is
 theirs. It never writes or judges code.
 Avoid: orchestrator, coordinator
 Source: the lead agent of Anthropic's multi-agent research system, which plans the work and starts subagents
@@ -43,7 +53,7 @@ Stored as: `orchestrate-reviewer`, the agent file's name
 **Design reviewer**
 A reviewer judging a module's design, with its done-when items, before any of the module is built.
 Stored as: `design reviewer` in a settings line, such as `Codex design reviewer: high`
-Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Subagent**
 A helper agent that an agent starts from inside its own session.
@@ -56,8 +66,8 @@ Avoid: the loop, the harness
 ## The plan
 
 **Project brief**
-What the human wants and why, written before any planning: the human's request word for word, the reason, what is
-left out, how the human will judge the result, and the decisions made so far.
+What the user wants and why, written before any planning: the user's request word for word, the reason, what is
+left out, how the user will judge the result, and the decisions made so far.
 
 **Glossary**
 A project's file of agreed names, `GLOSSARY.md` in the plans folder. This file is the set's own glossary.
@@ -73,10 +83,10 @@ The project's own guidance for each kind of work, such as a skill on how this pr
 settings link to.
 Avoid: building guidance
 Stored as: the `## Project guidance` section of `ORCHESTRATE.md`
-Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **`Human decides` list**
-What only the human may decide, such as spending or publishing.
+What only the user may decide, such as spending or publishing.
 Stored as: the `Human decides` line of the project settings
 
 **Target**
@@ -106,12 +116,12 @@ What one module provides to the others, such as a function that returns the bala
 A module's file saying what the module must do for the people who use it.
 
 **Plan file**
-A module's `PLAN.md`: what is left to build, milestone by milestone, and the assumptions open for the human.
+A module's `PLAN.md`: what is left to build, milestone by milestone, and the assumptions open for the user.
 
 **Builder's note**
 The few sentences under a milestone in the plan file, for its builder, on what the items and the design don't say.
 Stored as: the text under the milestone's heading in `PLAN.md`
-Proposed: by Claude, 2026-11-13. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-13. Not yet agreed by the user.
 
 **Log**
 A module's `LOG.md`: its history, one dated entry per event.
@@ -150,19 +160,19 @@ Avoid: claim, claim record
 Stored as: `ready_for_review` in the milestone's entry in the record file
 
 **Status page**
-The file in the plans folder, which only the script writes, with an overview for the human and every module in
+The file in the plans folder, which only the script writes, with an overview for the user and every module in
 build order with its status.
 Not: Dashboard, which is drawn from the delivery history.
 Avoid: status lines
 Stored as: `STATUS.md`
 
 **Needs you now**, **Choices made for you**
-The first two parts of the status page's overview. Needs you now lists what waits on the human, each line saying
-who acts. Choices made for you lists what a planner or the lead chose where the human's words left it open, such as
-assumptions and proposed glossary names, each standing until the human says otherwise.
+The first two parts of the status page's overview. Needs you now lists what waits on the user, each line saying
+who acts. Choices made for you lists what a planner or the lead chose where the user's words left it open, such as
+assumptions and proposed glossary names, each standing until the user says otherwise.
 Avoid: Waiting on you
 Stored as: the `### Needs you now` and `### Choices made for you` headings of `STATUS.md`
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Worktree**
 A second working copy of the repository. Each module is built in its own, so builders don't overwrite each other's
@@ -194,12 +204,12 @@ that holds is traced to the first failing commit, which is fixed forward.
 Not: Test command, which runs before every merge.
 Avoid: trunk sentinel, sentinel
 Stored as: a `Main-branch check <name>:` line of the project settings; the `main-check` command
-Proposed: by Claude, 2026-11-15. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
 
 **Covered**
 What a commit is when a main-branch check passed on a main-branch commit that contains it.
 Stored as: the `COVERED` result of `main-check`
-Proposed: by Claude, 2026-11-15. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
 
 **Evidence**
 Saved proof that an item passed, such as a test log or a screenshot, taken from the item's target. It is kept in
@@ -211,7 +221,7 @@ The one folder per repository where evidence, reviews and handoffs are kept, out
 Avoid: evidence folder
 Stored as: `<git common dir>/orchestrate/evidence/`, linked into every worktree at the `Evidence:` path of the
 project settings (`.orchestrate/evidence` by default)
-Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Capture**
 A screenshot, recording or log taken from a target while the product runs. A capture becomes evidence when it is
@@ -221,13 +231,13 @@ Avoid: captures, as a word for all evidence
 **Saved check output**
 The whole output of each check the script runs, kept in a file that the check's failure message names.
 Stored as: files under `<git common dir>/orchestrate/checks/`
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Reused check**
 A check the script didn't run again, because the same command had already passed on the same files. A pass is
 reused, never a failure.
 Stored as: `reused` on an item in `check`'s output, and `reused_checks` in `run`'s result
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Review**
 A reviewer's written judgement of a design or a milestone.
@@ -254,16 +264,16 @@ A Must Fix that an earlier review also raised.
 Avoid: recurring finding
 Stored as: `repeat` on the finding
 
-**Needs human feedback, needs access, needs hardware**
-How a planner marks an item that a builder can't finish alone. Needs human feedback: someone has to look at the
+**Needs user feedback, needs access, needs hardware**
+How a planner marks an item that a builder can't finish alone. Needs user feedback: someone has to look at the
 result and judge it. Needs access: someone has to approve a permission or a prompt. Needs hardware: a device has to
 be connected.
 Avoid: attended, needs a person
 Stored as: the item's `needs` field, with `type` one of `human_feedback`, `access` or `hardware`
 
-**Human Feedback**
-The human's verdict on an item a builder couldn't judge, such as "looks good to me", recorded with the question the
-lead asked. A reviewer reads it as the human's own words.
+**User Feedback**
+The user's verdict on an item a builder couldn't judge, such as "looks good to me", recorded with the question the
+lead asked. A reviewer reads it as the user's own words.
 Not: approving access or connecting a device, which are done, not said. Not a `--message` from the lead either.
 Avoid: owner answer
 Stored as: `human_feedback` in the record file; the `human feedback` command
@@ -300,7 +310,7 @@ What a builder that stops before the milestone is finished writes for the sessio
 finished, what was tried, and what to do first.
 Not: a handoff in the OpenAI Agents SDK, which passes the live conversation to another agent in the same run.
 Stored as: `<working folder>/<MODULE>/<milestone>-handoff.md`
-Proposed: by Claude, 2026-11-13. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-13. Not yet agreed by the user.
 
 ## Statuses
 
@@ -327,14 +337,14 @@ The reasons a milestone is Blocked:
 
 | Reason | Means | Stored as |
 |---|---|---|
-| Needs Human Feedback | A builder couldn't judge an item and asked for the human's eye | `needs_human_feedback` |
+| Needs User Feedback | A builder couldn't judge an item and asked for the user's eye | `needs_human_feedback` |
 | Needs Access | A builder or a reviewer couldn't get a permission or an approval prompt, or couldn't reach the product | `needs_access`; a reviewer's `BLOCKED needs_access` ending |
 | Needs Hardware | A device wasn't connected | `needs_hardware` |
 | Needs Context | The builder is missing a fact, which the lead supplies | `needs_context`, from the builder's `NEEDS_CONTEXT` ending |
 | Needs Dependency | It needs something another module owns that no plan provides yet | `needs_dependency` |
-| Too Many Failed Reviews | It kept failing review after its Diagnosis, or the planner found that the decision is the human's | `too_many_failed_reviews` |
+| Too Many Failed Reviews | It kept failing review after its Diagnosis, or the planner found that the decision is the user's | `too_many_failed_reviews` |
 
-Avoid: claimed, parked, attended, Waiting on Dependency, For Replan, Awaiting Replan, Awaiting Diagnosis, Needs Human
+Avoid: claimed, parked, attended, Waiting on Dependency, For Replan, Awaiting Replan, Awaiting Diagnosis, Needs User
 Feedback as a status of its own (in prose)
 
 A design has statuses of its own:
@@ -345,7 +355,7 @@ A design has statuses of its own:
 | Design Changes Requested | The latest design review asked for changes | `design.verdict` `changes` in the record file; the review's `DESIGN CHANGES` line |
 | Design Approved | The design as it now stands is approved, so building can start | `design.verdict` `ok` whose `hash` is the design's; `by` says what approved it |
 
-Proposed: the design statuses as entries, by Claude, 2026-11-20. Not yet agreed by the human.
+Proposed: the design statuses as entries, by Claude, 2026-11-20. Not yet agreed by the user.
 
 ## Commands and settings
 
@@ -361,7 +371,7 @@ broke it.
 Avoid: train, which in GitLab's merge trains means a queue that tests each request with the ones ahead of it
 Source: batching with bisection, as Bors does it
 Stored as: the `batch` field of `merge`'s result; the queue under `<git common dir>/orchestrate/merge-queue/`
-Proposed: by Claude, 2026-11-15. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
 
 **Run**
 One `run`, `review` or `plan` command working on a module, with the agent sessions it starts.
@@ -371,7 +381,7 @@ Stored as: the `runs` command, which lists every run on the machine
 **Step**
 What a run is doing now, such as `builder turn 3` or `merging the review`.
 Stored as: `step` and `open_tool_call` in `runs --json`
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Routine steps**
 The steps a `run` or `plan` command carries on through by itself, because the process settles them without
@@ -379,20 +389,20 @@ judgement, such as the review of a milestone that reached Ready for Review. The 
 wakes the lead.
 Not: Step, which is what one run is doing now.
 Stored as: `steps_run` and `stopped_because` in the result of `run` and `plan`; `--one-step` for one step only
-Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Checks only**
 A `run` that starts no agent. It runs the script's checks on a milestone whose work is already merged, and sets it
 Ready for Review if they pass.
 Stored as: `run --checks-only`
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Builders count**
-How many builders the human wants running at once in the project.
+How many builders the user wants running at once in the project.
 Avoid: parallelism, concurrency (in prose)
 Stored as: the `Builders:` line of the project settings; `run --more-builders '<the human's words>'` lets one more
 start
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Exclusive resource**
 Something only one run at a time may use, such as a simulator. The script's `lock` command holds it.
@@ -405,12 +415,12 @@ renders side by side.
 Avoid: slot, pool
 Stored as: the `Shared resources` line of the project settings, such as `gpu: 3`; an item's `"lock": "gpu"`, or
 `"lock": "gpu.alone"` for a run that needs the whole device
-Proposed: by Claude, 2026-11-15. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
 
 **Hold limit**
 How long a command may hold a lock before the script stops it, so one stuck run can't keep everyone else waiting.
 Stored as: the `Lock hold limit` line of the project settings
-Proposed: by Claude, 2026-11-15. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
 
 **Background job**
 A long command an agent starts with the script's `background` command, so that it carries on when the agent's
@@ -421,48 +431,48 @@ Stored as: the `background`, `wait` and `jobs` commands
 The command the lead keeps running in the background through a build. It ends to wake the lead at the lead
 check-in, or when it sees a new warning sign.
 Stored as: the `watch` command
-Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Lead check-in**
 How long `watch` waits for a warning sign before it wakes the lead anyway, so the lead looks at delivery even when
 nothing has gone wrong.
 Stored as: the `Lead check-in` line of the project settings, such as `3h`
-Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Warning sign**
 Something in the script's records that usually means delivery has slowed, such as a builder with no progress for
 two hours.
 Stored as: `warning_signs` in `watch`'s result
-Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Flow**
 How fast the work moves: milestones reaching Ready for Review and Done, set beside the effort spent on them.
 Source: flow and its metrics (throughput, cycle time, work in progress) as the Kanban Guide defines them. Setting
 them beside effort is the set's own addition
 Stored as: the `flow` command, and the `## Flow` part of the report
-Proposed: by Claude, 2026-11-15. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
 
 **Usage ledger**
 The file where the script writes one row for each agent turn with the tokens it used.
 Stored as: `<git common dir>/orchestrate/usage.jsonl`; the `cost` and `report` commands add it up
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Weighted tokens**
 Tokens counted at their price relative to a fresh input token. The one measure that compares a Claude turn's cost
 with a Codex turn's.
 Avoid: cost (alone), which could mean dollars or the Codex weekly limit
 Stored as: `weighted` on a turn or session
-Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **How full a session is**
 The size of a session's last request and its reply, against the most the session can hold.
 Stored as: `context` and `window`, in the usage ledger and the run's state file; `fresh_because` in `run`'s result
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Stopped turn**
 A headless turn the script ended itself, because a tool call stayed open too long.
 Stored as: `stopped_turn` in the run's state file and the command's result
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Delivery history**
 The figures the script copies out of the hosts' session files for one repository: each session and turn with its
@@ -470,25 +480,25 @@ tokens, model, timing and how it ended, and the signals between them. It keeps n
 the hosts' own files.
 Avoid: telemetry, analytics, usage log
 Stored as: `~/.orchestrate/history/<repository>-<hash>/`; the `history` command
-Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Dashboard**
-The page drawn from the delivery history, for the human's review and the lead's diagnosis.
+The page drawn from the delivery history, for the user's review and the lead's diagnosis.
 Not: Status page, which shows where the plan stands.
 Stored as: the `dashboard` command, which writes `dashboard.html` in the history folder
-Proposed: by Claude, 2026-11-18. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **What changed**
 The list of changes to how the set behaves, in the first result any command prints after the script's version
 changes in a project.
 Stored as: `changed` in that result
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Migrating a branch**
 Renaming a worktree's own commits, made before the main branch was migrated, the way `migrate` renamed the main
 branch, then rebasing them onto it.
 Stored as: `migrate --branch`
-Proposed: by Claude, 2026-11-12. Not yet agreed by the human.
+Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 ## Results
 
@@ -514,7 +524,7 @@ result's causes it was.
 | `ERROR` | any command | The command stopped before doing what it was asked, with the reason in `error` |
 | `RUNNING` | `run`, `review`, `plan`, `unblock` | Only in a result file: the command that writes it hasn't finished |
 | `WRONG_MODEL_OR_EFFORT` | `run`, `review` | A turn ran on a model or effort other than the ones the command named |
-| `PAUSED` | `run`, `plan`, `pause` | `pause` or the human stopped it |
+| `PAUSED` | `run`, `plan`, `pause` | `pause` or the user stopped it |
 | `INVALID` | `run`, `review`, `plan` | A done-when file can't be read, or an agent changed what isn't its to change |
 | `REVIEWED` | `review` | The review was saved, with its verdict in `verdict` |
 | `PLANNED` | `plan` | The planner's files were checked and merged |
@@ -535,7 +545,7 @@ result's causes it was.
 | `RAN` | `main-check` | Only in a runner's log: one run of a main-branch check finished |
 | `REFUSED` | `adopt`, `migrate`, `run` | The command wouldn't act, with the reasons in `problems` |
 | `UNBLOCKED` | `unblock` | The milestone is no longer Blocked |
-| `DONE`, `RELEASED`, `FAILED` | `human` | The human's decision was saved, or a milestone another lead started was taken out of In Progress, or it couldn't be saved |
+| `DONE`, `RELEASED`, `FAILED` | `human` | The user's decision was saved, or a milestone another lead started was taken out of In Progress, or it couldn't be saved |
 | `CHECK_IN` | `watch` | The lead check-in passed with no warning sign |
 | `WARNING_SIGNS` | `watch` | A warning sign appeared that the lead hasn't been told about |
 | `RUN_ENDED` | `watch` | With `--runs`, a top-level `run`, `review` or `plan` ended, with its result in `results` |
@@ -545,19 +555,21 @@ Avoid: `FLOOR` (now `HOST_FAILED` or `SCRIPT_FAILED`), `PIN` (now `WRONG_MODEL_O
 `NEEDS_REVIEW`), `TAKEN` (now `IN_PROGRESS_ELSEWHERE`)
 
 Proposed: `ERROR` and `RUNNING`, by Claude, 2026-11-15; `CHECK_IN`, `WARNING_SIGNS`, `RUN_ENDED` and
-`PLAN_NOT_MERGED`, by Claude, 2026-11-18. Not yet agreed by the human.
+`PLAN_NOT_MERGED`, by Claude, 2026-11-18. Not yet agreed by the user.
 
 ## Open questions
 
 - "Design Approved": a design is approved by a DESIGN OK review of it as it now stands, or, after two design
   reviews in a row asked for changes, by the script approving the planner's revision without another review
   (`by: review_limit`). The Delivery Lead read Design Approved as DESIGN OK only. Should the two causes have one
-  status or two? The human is still working on the two-round limit.
+  status or two? The user is still working on the two-round limit.
 
 ## Retired
 
 Old names, what replaced them and when. The script's `migrate` command rewrites the ones kept in files.
 
+- Human, for the person the agents work with: now User (2.9.0), in prose and in what the script prints. The
+  stored names keep `human`, as the User entry lists.
 - `owner` (everywhere it was stored, and the `Owner decides` line): now `human` and `Human decides` (2.2).
 - `state`: now `status`, the milestone's field (2.2).
 - `bar`: now `quality_bar` (2.2).

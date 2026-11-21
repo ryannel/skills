@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import (PROFILE, SCRIPTS, Clean, Repo, agent_loop, milestone, put)  # noqa: E402
+from support import (BASE_PROFILE, PROFILE, SCRIPTS, Clean, Repo, agent_loop, milestone, put)  # noqa: E402
 import test_dead_ends as dead_ends  # noqa: E402  (a module, so its test classes don't run again here)
 
 command = dead_ends.command
@@ -61,7 +61,7 @@ class ChainedSteps(Clean):
     """Script 2 and 3: what a `run` or `plan` keeps of its steps, and passes on to the next."""
 
     def test_a_plan_steps_report_stays_in_steps_run(self):
-        line = {"result": "PLANNED", "report": "The human must choose the payment provider.\nPLANNED: a, b"}
+        line = {"result": "PLANNED", "report": "The user must choose the payment provider.\nPLANNED: a, b"}
         entry = agent_loop.step_entry(["plan", "--worktree", "x", "--task", "plan PAY"], line, 60)
         self.assertIn("the payment provider", entry["report"])
 
@@ -193,7 +193,7 @@ class MainCheckSetup(Repo):
 
 
 class PlannerFindingsAfterADiagnosis(Repo):
-    """Script 10: a finding only a planner can settle went straight to the human after any earlier diagnosis, even
+    """Script 10: a finding only a planner can settle went straight to the user after any earlier diagnosis, even
     one about something else."""
 
     def test_after_a_diagnosis_for_something_else_it_gets_a_diagnosis(self):
@@ -239,7 +239,7 @@ class AChainHoldsItsBuilderSlot(Repo):
 
     def test_watch_counts_the_chain_against_the_builders_line(self):
         settings = self.wt / "ORCHESTRATE.md"
-        settings.write_text(settings.read_text() + "- **Builders:** one\n")
+        settings.write_text(BASE_PROFILE + "- **Builders:** one\n")
         self.commit_all()
         repo = agent_loop.repository_of(agent_loop.git_common_dir(self.wt))
         loops = [{"pid": 4242, "role": "steps", "module": "PAY", "repository": repo}]
@@ -309,7 +309,7 @@ class WatchWording(Clean):
                 "since": {"ready_waiting": 1.0}, "limit": 3, "waiting": [{"module": "WATER", "milestone": "M1"}]}
         text = agent_loop.watch_signs(look)["ready_waiting"]["text"]
         self.assertIn("Builders line", text)
-        self.assertIn("agreed a lower number with the human in chat", text)
+        self.assertIn("agreed a lower number with the user in chat", text)
 
 
 class StaleTemplateLines(Clean):

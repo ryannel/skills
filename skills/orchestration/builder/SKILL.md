@@ -1,6 +1,6 @@
 ---
 name: builder
-description: Builds one milestone of a module from its plan and done-when file, proves it and merges it, as part of the orchestrate set in Claude Code or Codex. Use when a lead or the human gives you a milestone to build, or asks for a change small enough to build in this session, in a repository that has an ORCHESTRATE.md. Not for planning (planner) or judging a milestone (reviewer).
+description: Builds one milestone of a module from its plan and done-when file, proves it and merges it, as part of the orchestrate set in Claude Code or Codex. Use when a lead or the user gives you a milestone to build, or asks for a change small enough to build in this session, in a repository that has an ORCHESTRATE.md. Not for planning (planner) or judging a milestone (reviewer).
 ---
 
 # Build a milestone
@@ -11,8 +11,8 @@ the work has seen none of it and goes only by what you saved.
 
 The work comes from a plan. A planner, another agent, split the project into modules, which are parts one builder can
 work on without touching the others, and split each module into milestones, which are pieces small enough to finish in
-one session. You are the builder: the agent that writes the code. The human is the person the project is for. The lead
-is the agent the human chats with, and when a lead is running the build, it started you.
+one session. You are the builder: the agent that writes the code. The user is the person the project is for. The lead
+is the agent the user chats with, and when a lead is running the build, it started you.
 
 ## Where things are
 
@@ -27,7 +27,7 @@ code.
 
 The module's files are in its folder, `<plans folder>/<MODULE>/`. Your milestone is the one your task names. A
 task that names a module and no milestone means that module's first milestone that isn't Done, because milestones
-are built in order. A task that names neither, such as a fix the human asked for in the chat, is that change and
+are built in order. A task that names neither, such as a fix the user asked for in the chat, is that change and
 nothing more, and [a change no milestone covers](#a-change-no-milestone-covers) says how to merge it. The plan's
 milestones are left for their builders, because a lead may already be running one. Under your milestone's heading
 the planner may have left a note on what the items and the design don't say, such as what already exists or what
@@ -57,7 +57,7 @@ keeps the project's records. Run them as `python3 <the lead skill's folder>/scri
    where `<evidence>` is the `Evidence:` path of the project settings (`.orchestrate/evidence` unless they name
    another). Every worktree on this computer sees the same files there, and git ignores the folder, so leave
    evidence uncommitted: git holds what the project needs to build and run, and evidence is only working
-   material for the reviewer and the human. Commit code, plans, and the test data your tests read. A file a test or
+   material for the reviewer and the user. Commit code, plans, and the test data your tests read. A file a test or
    a check reads belongs in the repository outside the working folder, because `merge` refuses a commit that adds
    or changes files under `<evidence>`.
 2. The work is merged with `agent_loop.py merge --worktree .`, which prints `MERGED`, and the milestone's `status`
@@ -72,7 +72,7 @@ keeps the project's records. Run them as `python3 <the lead skill's folder>/scri
 3. `LOG.md` has an entry of a few lines saying what you did, with what you verified kept apart from what you think is
    probably true. Keep it to eight lines at most, because the script refuses a longer entry when the plan files
    merge. Longer notes go in the working folder, at `<evidence>/<MODULE>/`, linked from the entry. Leave status out of the plan file.
-   The script writes the human's page, `STATUS.md`, from the done-when file, and a status line anywhere else is out
+   The script writes the user's page, `STATUS.md`, from the done-when file, and a status line anywhere else is out
    of date the next time a milestone moves.
 4. Your last line is `DONE`, or `BLOCKED <reason>: <what would unblock it>`, or `NEEDS_CONTEXT: <what is
    missing>`. The reason is one of `needs_human_feedback`, `needs_access`, `needs_hardware`, `needs_dependency` or
@@ -101,11 +101,11 @@ Some items can't be finished by a builder alone. The planner marks them with a `
 what is needed:
 
 - `human_feedback`: someone has to look at the result and judge it, because you can't tell. Do every other item
-  first, and save the evidence the human will look at. Then end with `BLOCKED needs_human_feedback`, naming the
-  items and the question to put to the human. The lead asks them, and the script records their reply as Human
+  first, and save the evidence the user will look at. Then end with `BLOCKED needs_human_feedback`, naming the
+  items and the question to put to the user. The lead asks them, and the script records their reply as User
   Feedback. When a later session reads that reply, cite where the script recorded it rather than restating it.
-- `access`: the human has to approve a permission or a prompt, such as Computer Use for an app. Ask for that
-  access as soon as your session starts, so the prompt appears while the human is there. Their approval in the
+- `access`: the user has to approve a permission or a prompt, such as Computer Use for an app. Ask for that
+  access as soon as your session starts, so the prompt appears while the user is there. Their approval in the
   prompt is all you need, so don't ask them to confirm it in words. If the prompt can't appear, because the session
   runs in the background, do every other item and end with `BLOCKED needs_access`, naming what has to be approved.
 - `hardware`: a device has to be connected, such as an iPhone. If it is there, use it. If not, do every other item
@@ -113,7 +113,7 @@ what is needed:
 
 ## What you write
 
-The lead reads your last line, your handoff and your log entry, and passes what matters to the human. Write them in
+The lead reads your last line, your handoff and your log entry, and passes what matters to the user. Write them in
 whole sentences, the way the `prompting-agents` skill describes. Name an item by its ID and a few words of what it is
 about, such as "M2.5, the window resize recording", and a module by its name in the plans. The lead knows the plan's
 names. It has no way to look up a short name you made up while you worked, or the name of a file or a package in the
@@ -140,7 +140,7 @@ Hold a lock only for the command that needs it. Don't wrap the script's own `che
 takes each item's lock just for that item, and `merge` waits in the merge queue, so `lock` refuses them. `merge`
 already makes builders take turns, so a script of your own that holds a lock across a rebase, a check and a merge
 makes everyone wait through all three, and it usually fails because the main branch moved while it ran. In the same
-way, check that the human is there and the screen is unlocked before you take a lock for a run that needs them,
+way, check that the user is there and the screen is unlocked before you take a lock for a run that needs them,
 because a lock held while waiting for a person stops
 every other builder that needs it.
 
@@ -152,8 +152,8 @@ its result. `FAILING_ON_MAIN` means the main branch fails the check at or before
 the commit that broke it. If that commit is yours, fix it as part of this milestone. If it isn't, the fix belongs to
 that commit's module, so say so in your report rather than working around it.
 
-Some items need the human at the machine, for human feedback or for access. Prove those after your last merge, on a
-build of the merged commit, so that the human's time is spent once. When a new proof has to match evidence you took
+Some items need the user at the machine, for user feedback or for access. Prove those after your last merge, on a
+build of the merged commit, so that the user's time is spent once. When a new proof has to match evidence you took
 earlier, take the earlier evidence again on the merged commit. A build of an older commit differs from the one under
 review, so the reviewer can't count anything recorded on it.
 
@@ -186,7 +186,7 @@ race theirs.
 
 ## A change no milestone covers
 
-When the human asks for a change that no milestone covers, such as a small fix, merge it the same way: make the
+When the user asks for a change that no milestone covers, such as a small fix, merge it the same way: make the
 change, add a test if one would catch the fault coming back, and run `merge`. Then the fix can't collide with a
 builder's merge or skip the tests. Change only what you were asked to change. Something else you notice on the way
 goes in your reply, because it may belong to a module another builder is working on, or to a milestone not yet
@@ -215,9 +215,9 @@ work and prints `READY_FOR_REVIEW` once it has set the milestone Ready for Revie
 failed, for you to fix and merge again. A `READY_FOR_REVIEW` with `review: false` means the milestone is Done and
 needs no reviewer. Otherwise you start the reviewer, with
 `agent_loop.py review --module <M> --milestone <id> --commit <sha> --worktree .`, where the commit is the one that
-result names. If the human uses both Claude Code and Codex, add `--host` with the one you are not running in. Pass
+result names. If the user uses both Claude Code and Codex, add `--host` with the one you are not running in. Pass
 the command nothing else, so the reviewer forms its own view. Only a review started by that command is saved, and
-only a saved review can set the milestone to Done. Without one, the human has to accept the milestone by hand. If
+only a saved review can set the milestone to Done. Without one, the user has to accept the milestone by hand. If
 you can't start a review, end with `DONE` and say the milestone still needs one.
 
 ## When a review fails
@@ -237,7 +237,7 @@ with `BLOCKED` and what you found.
 
 A result you can't explain, such as a test that fails on one machine or a screenshot that differs from the
 last run, isn't a reason to end with `BLOCKED`. It is a problem to find and fix. If fixing it needs a fact or a
-choice only the human has, end with `NEEDS_CONTEXT:` and the question, and the lead puts it to the human.
+choice only the user has, end with `NEEDS_CONTEXT:` and the question, and the lead puts it to the user.
 
 On Codex, a browser, or any other program that needs more than the `workspace-write` sandbox allows, won't start
 inside the sandbox. Ask to run that command outside it. The script starts Codex so that each request is granted
@@ -293,11 +293,11 @@ Some things belong to someone else, and each has a way to ask for a change.
 - Something another module owns, or a later milestone of this one, belongs there. Built here, it would have two
   modules in charge of it. When an item needs it, end with `BLOCKED needs_dependency` and name it, so a planner
   can add it to the module that owns it or move the item.
-- A decision on the `Human decides` list in the project settings belongs to the human. End with `BLOCKED` and name
+- A decision on the `Human decides` list in the project settings belongs to the user. End with `BLOCKED` and name
   the decision.
 
 When you need a name for something new and the glossary has none, add an entry in the same commit, with the line
 `Proposed: by a builder, <date>. Not yet agreed by the human.` Mention it in your report and carry on. If your merge
 then fails because another builder added an entry to the same file, keep both.
 
-This skill covers one milestone. To keep going past it, or to run with no one watching, the human uses `/lead`.
+This skill covers one milestone. To keep going past it, or to run with no one watching, the user uses `/lead`.

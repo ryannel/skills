@@ -1037,7 +1037,7 @@ $("#title").textContent = RAW.meta.project ? `${RAW.meta.project} · delivery hi
 document.title = RAW.meta.project ? `${RAW.meta.project} delivery` : "Delivery history";
 $("#subtitle").textContent = `${compact(RAW.sessions.length)} sessions · ${compact(RAW.turns.length)} turns · written ${when(RAW.meta.generated)}` + (RAW.meta.version ? ` · orchestrate ${RAW.meta.version}` : "");
 $("#footnote").textContent = "Spend is measured from the hosts' own session files. Weighted tokens count each kind at its price relative to fresh input. " +
-  "Codex's weekly-limit share is the script's fitted estimate, and Claude's list price is not what a plan charges. Interactive sessions are the human's and the lead's own, which the records can't tell apart.";
+  "Codex's weekly-limit share is the script's fitted estimate, and Claude's list price is not what a plan charges. Interactive sessions are the user's and the lead's own, which the records can't tell apart.";
 let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 120); });
 render();
 </script>

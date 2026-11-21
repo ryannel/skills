@@ -31,7 +31,7 @@ planner. Running `migrate` again does nothing more.
 
 A link the migration rewrote points into `.orchestrate/evidence`, which opens in every worktree on this computer but
 not in a fresh clone, on CI or in a tool that lists only the files git holds, such as a docs link checker. Tell the
-human that such a checker will report those links, and that the files under the old folder are still in git: taking
+user that such a checker will report those links, and that the files under the old folder are still in git: taking
 them out of history is a separate job, done with every run stopped, and `merge` refuses any new commit there in the
 meantime. A test or check that reads a file there should have it moved to test data in the repository first.
 
@@ -64,9 +64,9 @@ a lead that hasn't read the new skill yet isn't stopped.
 
 ## Files that say "the owner"
 
-Older versions of this set called the human "the owner". A project planned by one says "the owner" in its brief,
+Older versions of this set called the user "the owner". A project planned by one says "the owner" in its brief,
 plans, glossary and reviews, and its plan files have a section `## Open for the owner`. All of these mean the
-human. They need no change, because the script doesn't read those words.
+user. They need no change, because the script doesn't read those words.
 
 ## Ready for Review set by a builder
 
@@ -78,12 +78,12 @@ record of the script's checks, is listed under `can_start`, not `ready_for_revie
 
 Before 2.4 the lead wrote a report each day to `<evidence>/build-reports/<date>.md`. Those files move to the working
 folder with the rest of the evidence, and `adopt` no longer merges them. Nothing new is written there: `report` now
-prints the facts when the human asks, as [the report](report.md) describes.
+prints the facts when the user asks, as [the report](report.md) describes.
 
 ## No `Graded examples:` line
 
 A project planned before the settings had a `Graded examples:` line still gives reviewers
 `<evidence>/graded-examples.md` in the working folder to read, but `human accept` and `human rereview` add nothing to it, because the
-script adds the human's overturned reviews only to a file the settings name. Suggest to the human that you add the
+script adds the user's overturned reviews only to a file the settings name. Suggest to the user that you add the
 line, naming the file the project already uses, so their corrections reach later reviewers. A settings change is
 committed with git on the main branch, as the lead skill says.

@@ -9,7 +9,7 @@ About this session:
 - The project's agreed names are in docs/plans/GLOSSARY.md, if that file exists. Use them in what you write, as the skill says.
 - Evidence files, such as captures and logs, go under .orchestrate/evidence/APPLE-TILE/M2/. That folder is the repository's working folder, shared by every worktree on this computer and ignored by git, so leave them uncommitted.
 - This session is visible in the Claude app, so an approval prompt can appear in it if someone is there to answer it.
-- M2.2 (does the tile animation read as smooth) needs human feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the human to look at, then end with `BLOCKED needs_human_feedback: <the question for the human>`.
+- M2.2 (does the tile animation read as smooth) needs user feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the user to look at, then end with `BLOCKED needs_human_feedback: <the question for the human>`.
 - M2.3 (an iPhone connected over USB) needs hardware. Check the device is connected before other work. If it isn't, do the rest and end with `BLOCKED needs_hardware: <the device>`.
 
 When the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to .orchestrate/evidence/APPLE-TILE/M2-handoff.md, which is in the working folder too. Then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, or with `NEEDS_CONTEXT: <the fact you need>` when what you are missing is a fact. The skill lists the reasons.
