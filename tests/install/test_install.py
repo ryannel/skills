@@ -202,28 +202,25 @@ class InteractiveOrchestration(unittest.TestCase):
         self.assertEqual((args.host, args.scope, args.plugins, args.source, args.repo),
                          ("codex", "user", "orchestrate", "ryannel/skills", None))
 
-    def test_project_fallback_copies_both_claude_agents_and_can_be_rerun(self):
+    def test_old_agent_files_are_removed_and_the_users_own_are_kept(self):
         with tempfile.TemporaryDirectory() as tmp:
-            project = Path(tmp)
-            record = {"id": "orchestrate@ryannel-skills", "installPath": str(ROOT)}
-            details = mock.Mock(returncode=1, stdout="", stderr="unknown command 'details'")
-            with mock.patch.object(install.subprocess, "run", return_value=details):
-                for _ in range(2):
-                    quietly(install.link_claude_agents, "claude", record, "project", project)
-            agents = project / ".claude" / "agents"
-            self.assertEqual(sorted(p.name for p in agents.iterdir()),
-                             ["orchestrate-planner.md", "orchestrate-reviewer.md"])
-            for agent in agents.iterdir():
-                self.assertFalse(agent.is_symlink())
-                self.assertIn("Managed by the ryannel/skills", agent.read_text())
-
+            agents = Path(tmp)
+            (agents / "orchestrate-planner.md").write_text(f"x\n\n{install.OLD_AGENT_MARKER}\n")
+            (agents / "orchestrate-reviewer.md").symlink_to(agents / "gone.md")
+            (agents / "mine.md").write_text("mine\n")
+            quietly(install.remove_old_agents, agents, install.OLD_AGENTS, install.OLD_AGENT_MARKER)
+            self.assertEqual(sorted(p.name for p in agents.iterdir()), ["mine.md"])
+            (agents / "orchestrate-reviewer.md").write_text("my own reviewer\n")
+            quietly(install.remove_old_agents, agents, install.OLD_AGENTS, install.OLD_AGENT_MARKER)
+            self.assertTrue((agents / "orchestrate-reviewer.md").exists())
 
 
 class Required(unittest.TestCase):
-    def test_orchestrate_and_skill_creator_bring_prompting_agents(self):
+    def test_orchestrate_and_skill_creator_bring_what_they_need(self):
         out = io.StringIO()
         with redirect_stdout(out):
-            self.assertEqual(install.with_required(["orchestrate"]), ["orchestrate", "prompting-agents"])
+            self.assertEqual(install.with_required(["orchestrate"]),
+                             ["orchestrate", "prompting-agents", "domain-language"])
             self.assertEqual(install.with_required(["skill-creator"]), ["skill-creator", "prompting-agents"])
         self.assertIn("needs prompting-agents", out.getvalue())
 
@@ -232,8 +229,8 @@ class Required(unittest.TestCase):
             self.assertNotIn("skill-creator", install.with_required(["orchestrate"]))
 
     def test_nothing_is_added_twice(self):
-        self.assertEqual(install.with_required(["prompting-agents", "orchestrate", "skill-creator"]),
-                         ["prompting-agents", "orchestrate", "skill-creator"])
+        self.assertEqual(install.with_required(["prompting-agents", "domain-language", "orchestrate", "skill-creator"]),
+                         ["prompting-agents", "domain-language", "orchestrate", "skill-creator"])
 
 
 

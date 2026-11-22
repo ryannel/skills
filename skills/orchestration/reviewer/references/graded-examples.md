@@ -7,8 +7,8 @@ line of the project settings, adds real ones over time. Where the two disagree, 
 ## A real pass
 
 The milestone: a command-line tool reads a CSV from standard input or from a file and prints a summary, with a
-useful exit code on bad input. Its items are an Automated Check over quoted fields, empty input and malformed
-rows, and a Reviewer Question about whether both input routes use the same parser.
+useful exit code on bad input. Its items are a `check` over quoted fields, empty input and malformed rows, and
+an `ask` about whether both input routes use the same parser.
 
 The reviewer built the commit in a clean copy and ran the check. It also tried input the tests didn't cover: a
 1 GB file piped in, a file with Windows line endings, and Ctrl-C halfway through. The exit codes matched the help
@@ -23,7 +23,7 @@ work and couldn't.
 The milestone: a new end user signs up and lands on an empty dashboard. The builder's screenshots showed every step.
 
 The reviewer signed up, reloaded the page, and was signed out. The changed code showed the sign-up handler
-returning a fixed user object, and nothing written to the database. The Automated Check passed, because it
+returning a fixed user object, and nothing written to the database. The `check` passed, because it
 asserted only that the dashboard rendered. The sign-up item got a Fail, with the reload as the steps to reproduce
 it. The review added a finding that the check was too weak, and proposed an item that signs up, reloads and
 confirms the session survives.
@@ -36,19 +36,21 @@ code showed there was nothing behind them.
 The milestone: a chart's labels stay readable from one data point to ten thousand. The builder's screenshots
 showed the chart with fifty points.
 
-The reviewer wrote an inspection list (no data, one point, fifty, ten thousand, negative values, and a label forty
-characters long) and captured each one. At ten thousand points the labels overlapped into a solid bar, and the long
-label ran off the edge. The item got a Fail, with the screenshot for each entry on the list.
+The item's `inspect` checklist named the cases to look at: no data, one point, fifty, ten thousand, negative
+values, and a label forty characters long. The reviewer captured each one. At ten thousand points the labels
+overlapped into a solid bar, and the long label ran off the edge. The item got a Fail, answering those two lines no,
+with a screenshot for each line.
 
 Why it is here: the builder's screenshots were honest, but they showed only the one case that worked.
 
 ## Couldn't reach the target
 
-The milestone includes an item proved on a physical iPhone. The reviewer had only the simulator.
+The milestone includes an item proved on a physical iPhone, and the settings name none available to reviewers. The
+reviewer had only the simulator.
 
 That item got Could Not Judge (`could_not_judge`), not a Pass, with the reason: no device was available, and the
 simulator can't show performance. The review said what would settle it, which was a frame-time recording from the
-device. Everything else passed. The review ended `0 fail, 1 could_not_judge`, so the builder's next attempt knows
+device. Everything else passed, so the milestone failed on that item alone, and the builder's next attempt knows
 exactly what evidence to bring.
 
 Why it is here: a result from a stand-in is useful, but it never becomes a Pass on the real target.
@@ -57,13 +59,13 @@ Why it is here: a result from a stand-in is useful, but it never becomes a Pass 
 
 The milestone: twelve harbour props for a low-poly sailing game, judged against the option the user chose, which
 was hand-painted, chunky and slightly crooked. Every prop loaded, sat under its triangle budget and shared one
-texture atlas, so the Automated Checks passed.
+texture atlas, so the `check`s passed.
 
-The reviewer wrote an inspection list (the silhouette at the game camera's distance, edge wear, the palette
-beside the reference, and how the set reads together). It took screenshots of each prop beside the reference,
-from four angles and at play distance. Nine props matched. The crane, a bollard and the lantern had clean, even
-bevels and a brighter palette, and read as a different set. The look item got a Fail that named those three props
-and the two qualities that differed, with the side-by-side screenshots. The budget and format items passed.
+The `inspect` checklist asked, for each prop beside the reference, about its silhouette at the game camera's
+distance, its edge wear, its palette, and whether the set reads as one. The reviewer took screenshots of each prop
+beside the reference, from four angles and at play distance. Nine props matched. The crane, a bollard and the
+lantern had clean, even bevels and a brighter palette. The look item got a Fail, with the edge-wear and palette lines
+answered no for those three props and the side-by-side screenshots linked. The budget and format items passed.
 
-Why it is here: an item judged by taste fails on named qualities beside the reference, piece by piece, and never
-on a general impression. Passing checks don't carry it either.
+Why it is here: an item judged by taste fails on named lines of its checklist, piece by piece, beside the reference,
+because a general impression gives the builder nothing to fix. Passing checks don't carry it either.

@@ -1,7 +1,6 @@
 # The report
 
-This is for the lead, the agent the user chats with while it runs a build with the orchestrate set. Write the
-user a report when they ask how things are going, and when you stop.
+Write the user a report when they ask how things are going, and when you stop.
 
 The user reads it to catch what an unattended build would otherwise settle without them, and to decide whether the
 build is heading where they want. So it is short enough to read in one sitting, and it starts with what needs them.
@@ -32,12 +31,12 @@ Then go through the parts that need the user, and make each easy to settle:
   decision there that they didn't make is the thing to look for. Quote any decision the script has no command for,
   such as a change to the project settings, so it is on the same list.
 - Point at each review while the project's graded examples hold fewer than about ten, which the report flags,
-  because the user's corrections are how reviewers learn how strict to be. Name any new Reviewer Inspection items
-  too, the ones a reviewer judges by running the product, so the user can adjust that milestone's quality bar.
-- Name each choice made for them, from a planner's `Assumption:` lines or your own reading of their words, so they
-  can overturn it while that is still cheap. Overturning one is a task for a planner.
-- Name each glossary entry with a `Proposed:` line, so they can agree the name or pick another. When they agree,
-  remove the line and merge the glossary with `adopt`.
+  because the user's corrections are how reviewers learn how strict to be.
+- Name each reference a planner chose for an `inspect` in this window, from its report, so the user can say whether
+  it is the quality they want before builders aim at it. A different reference is a task for a planner.
+- Go through the choices made for them, so the user can overturn any while that is still cheap. Overturning an
+  assumption is a task for a planner. When they agree a proposed name, remove its `Proposed:` line and merge the
+  glossary with `adopt`.
 
 Read "What has slowed down" and the flow numbers against the number of builders, and say what you make of them
 when delivery has fallen behind the effort. Leave out what nobody needs to act on, because a long report hides the

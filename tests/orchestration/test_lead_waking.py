@@ -274,7 +274,7 @@ class Watching(Repo):
             self.assertTrue(first["disk"]["low"])
             second = self.watch()
         self.assertEqual(second["result"], "CHECK_IN", second)  # the same signs don't wake it again
-        self.assertEqual(len(second["warning_signs"]), 2)
+        self.assertEqual(len(second["earlier_signs"]), 2)  # named, without their text again
 
     def test_the_same_items_failing_two_reviews_in_a_row(self):
         self.check_in("1h")

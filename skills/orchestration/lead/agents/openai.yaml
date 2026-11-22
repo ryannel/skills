@@ -1,5 +1,0 @@
-interface:
-  display_name: "Lead (orchestrate)"
-  short_description: "Leads a project from the first conversation to a finished build, with N builders on any host"
-policy:
-  allow_implicit_invocation: true

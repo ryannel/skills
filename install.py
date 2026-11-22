@@ -19,7 +19,8 @@ reinstalling the plugins it had.
 Codex: the same marketplace with the Codex CLI (the copy inside the Codex app when `codex` isn't on PATH), which
 reads `.claude-plugin/marketplace.json`. With prompting-agents, one line goes into the global AGENTS.md.
 
-skill-creator and orchestrate both need prompting-agents, so installing either installs it too. Claude Code does this
+skill-creator and orchestrate both need prompting-agents, and orchestrate needs domain-language, so installing
+one installs what it needs too. Claude Code does this
 itself from the `dependencies` in marketplace.json; Codex doesn't read that field, so this script adds it.
 
 prompting-agents replaced instructing-agents. Installing it uninstalls the old plugin, treats a standalone copy
@@ -350,38 +351,24 @@ def setup_claude(plugins: list[str], scope: str, repo: Path | None, source: str)
     if "orchestrate" in plugins and "orchestrate" not in installed:
         sys.exit(f"Claude Code: could not verify orchestrate at {scope} scope.")
     if "orchestrate" in installed:
-        link_claude_agents(claude, installed["orchestrate"], scope, repo)
+        remove_old_agents(claude_home() / "agents" if scope == "user" else repo / ".claude" / "agents",
+                          OLD_AGENTS, OLD_AGENT_MARKER)
 
 
-def link_claude_agents(claude: str, rec: dict, scope: str, repo: Path | None) -> None:
-    """Claude Code 2.1.239 and 2.1.317 don't load the `agents` a marketplace entry lists (`claude plugin details`
-    shows Agents (0)), so link the orchestrate agents from the installed copy, as install_agents.sh would."""
-    details = subprocess.run([claude, "plugin", "details", rec["id"]], cwd=repo if scope != "user" else None,
-                             text=True, capture_output=True)
-    if details.returncode == 0 and re.search(r"Agents \([1-9][0-9]*\)", details.stdout):
-        return
-    root = Path(rec.get("readFromFolder") or rec["installPath"])
-    folder = claude_home() / "agents" if scope == "user" else repo / ".claude" / "agents"
-    folder.mkdir(parents=True, exist_ok=True)
-    marker = "<!-- Managed by the ryannel/skills orchestrate installer. -->"
-    for path in ENTRIES["orchestrate"].get("agents", []):
-        destination, target = folder / Path(path).name, root / path
-        if not target.is_file():
-            sys.exit(f"Claude Code: missing agent definition {target}")
-        if scope == "user" and (destination.is_symlink() or not destination.exists()):
-            destination.unlink(missing_ok=True)
-            destination.symlink_to(target)
-            print(f"  linked {destination} -> {target}")
-            continue
-        contents = target.read_text()
-        if destination.exists() or destination.is_symlink():
-            existing = destination.read_text() if destination.is_file() else ""
-            if existing == contents:
-                continue
-            if destination.is_symlink() or not existing.endswith(f"\n{marker}\n"):
-                sys.exit(f"Claude Code: {destination} already exists. Move it aside and rerun to install the agent.")
-        destination.write_text(f"{contents.rstrip()}\n\n{marker}\n")
-        print(f"  wrote {destination}")
+OLD_AGENTS = ("orchestrate-planner.md", "orchestrate-reviewer.md")
+OLD_AGENT_MARKER = "<!-- Managed by the ryannel/skills orchestrate installer. -->"
+
+
+def remove_old_agents(folder: Path, names: tuple[str, ...], marker: str | None = None) -> None:
+    """Orchestrate before 2.9.0 shipped agent files, and earlier runs of this script linked or copied them here.
+    The script now starts reviewers and planners from the skills alone, so remove what an earlier run left: a
+    link, or a copy carrying the installer's marker. A file without the marker is someone's own, so it stays."""
+    for name in names:
+        path = folder / name
+        if path.is_symlink() or (path.is_file() and (marker is None or path.read_text(errors="replace")
+                                                     .rstrip().endswith(marker))):
+            path.unlink()
+            print(f"  removed {path}, an agent file from an earlier orchestrate install")
 
 
 def codex_registered(codex: str) -> str | None:
@@ -421,19 +408,7 @@ def setup_codex(plugins: list[str], source: str) -> None:
             agents_md.write_text(new)
         print(f"  {did} {agents_md}")
     if "orchestrate" in plugins:
-        # The Codex reviewer agent isn't a plugin component. Link it from the plugin's installed copy so it keeps
-        # working if this checkout moves. Copy the definition if there is no plugin cache.
-        script = "skills/orchestration/lead/scripts/install_agents.sh"
-        cached = sorted((codex_home() / "plugins/cache" / MARKETPLACE / "orchestrate").glob(f"*/{script}"))
-        if cached:
-            run(["bash", str(cached[-1]), "--global", "--codex-only"])
-        else:
-            target = HERE / "skills/orchestration/reviewer/agents/codex/orchestrate-reviewer.toml"
-            destination = codex_home() / "agents" / target.name
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.unlink(missing_ok=True)
-            shutil.copyfile(target, destination)
-            print(f"  copied {destination}")
+        remove_old_agents(codex_home() / "agents", ("orchestrate-reviewer.toml",))
 
 
 # ---- one repository -------------------------------------------------------------------------------------------
@@ -519,7 +494,7 @@ def choose_orchestration_install(a: argparse.Namespace) -> None:
         if a.host == "claude":
             scopes.append(("project", "Project (this Git repository)"))
         else:
-            print("The full Codex plugin and evaluator install at global scope.")
+            print("Codex installs plugins at global scope only.")
         a.scope = choose("Where should orchestration be installed?", scopes)
     except (EOFError, KeyboardInterrupt):
         sys.exit("Installation cancelled.")

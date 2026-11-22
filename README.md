@@ -57,16 +57,14 @@ an `ORCHESTRATE.md` file of project settings, so the skills know nothing about y
 | [`reviewer`](./skills/orchestration/reviewer/) | A new session judges a milestone that is Ready for Review, or a design, by using the product and reading the changed code |
 | [`lead`](./skills/orchestration/lead/) | The lead's skill: runs the whole build with a chosen number of builders through `agent_loop.py`, which sets a milestone to Done only after running the checks itself |
 
-Install the orchestration plugin and evaluator from an interactive terminal with Node.js, Git and Python 3:
+Install the orchestration plugin from an interactive terminal with Node.js, Git and Python 3:
 
 ```sh
 npx @ryannel/orchestrate
 ```
 
 Choose Claude Code, Codex or both when their CLIs are available. Choose **Global** for all projects, or
-**Project** for Claude Code from inside the target Git repository. The full Codex plugin and evaluator
-are installed globally. When Claude Code needs the project agents installed separately, the installer
-writes portable copies to the project's `.claude/agents/` directory.
+**Project** for Claude Code from inside the target Git repository. Codex installs plugins globally only.
 
 Restart open sessions and run `/planner` in the target project to write `ORCHESTRATE.md`.
 For scripted installs, see [Setting up for Claude Code and Codex](#setting-up-for-claude-code-and-codex).
@@ -186,7 +184,7 @@ inside the Codex app):
 | How | adds `ryannel/skills` as the `ryannel-skills` marketplace, then `claude plugin install` for each plugin | the same marketplace through `codex plugin marketplace add` and `codex plugin add`; Codex reads `.claude-plugin/marketplace.json` itself. Without `codex` on PATH it uses the CLI inside `/Applications/ChatGPT.app` |
 | Skills | each plugin's skills, as `plugin:skill` | each plugin's skills, listed as `plugin:skill`, where the app loads them (`$CODEX_HOME/plugins/cache`) |
 | prompting-agents | the skill only; its description is what makes it trigger. Installing skill-creator or orchestrate installs it too, through the `dependencies` in `marketplace.json` | the skill, plus one line in `$CODEX_HOME/AGENTS.md` saying to apply it before a handoff. Codex ignores `dependencies`, so `install.py` adds it when you install skill-creator or orchestrate |
-| orchestrate | the planner and evaluator agents, linked into `~/.claude/agents` from the installed plugin, because neither Claude Code version loads the `agents` a marketplace entry lists (`claude plugin details` shows `Agents (0)`) | the evaluator agent, linked into `$CODEX_HOME/agents` from the plugin cache by `install_agents.sh --global --codex-only` |
+| orchestrate | the skills, plus domain-language and prompting-agents through `dependencies`. Agent-file links left by an install before 2.9.0 are removed | the skills, with domain-language and prompting-agents added by `install.py`. An agent file left in `$CODEX_HOME/agents` by an install before 2.9.0 is removed |
 | `--repo` | says whether Claude will read the repo's AGENTS.md, judged from the CLI version and any `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the repo or above it; when it won't and the repo has no `CLAUDE.md`, writes one holding `@AGENTS.md`. With orchestrate it checks `ORCHESTRATE.md`, and a failed check fails the run. `--scope project` declares the plugins in the repo's `.claude/settings.json` instead of user settings | nothing; Codex reads AGENTS.md |
 
 **Replacing an earlier install.** Skills installed earlier with `npx skills` (in `~/.claude/skills`, `~/.agents/skills`

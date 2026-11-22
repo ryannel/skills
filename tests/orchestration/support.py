@@ -312,6 +312,9 @@ elif role == "plan":
     (cwd / "docs/plans/PAY").mkdir(parents=True, exist_ok=True)
     if os.environ.get("FAKE_DURING"):  # something lands on the tip while the planner works
         subprocess.run(os.environ["FAKE_DURING"], shell=True, check=True, capture_output=True)
+    if os.environ.get("FAKE_PLAN_LOG"):  # the planner adds a log entry to WATER's log
+        with open(cwd / "docs/plans/WATER/LOG.md", "a") as f:
+            f.write(os.environ["FAKE_PLAN_LOG"])
     if mode == "catch_up":  # the planner brings the tip into its worktree, and writes a test outside the plans
         git("fetch", "-q", "origin")
         git("merge", "-q", "--ff-only", "origin/main")

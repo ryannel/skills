@@ -1,6 +1,6 @@
 ---
 name: orchestration-skill
-description: Sets the rules for writing the orchestrate skills in skills/orchestration, their agent files and agent_loop.py. Use when adding or changing interview, lead, planner, builder or reviewer, an orchestrate agent file, or the script and its prompts. Not for the generative-media domain (media-model-skill).
+description: Sets the rules for writing the orchestrate skills in skills/orchestration and agent_loop.py. Use when adding or changing lead, planner, builder or reviewer, or the script and its prompts. Not for the generative-media domain (media-model-skill).
 metadata:
   internal: true
 ---
@@ -36,9 +36,8 @@ standards for a kind of work come from the project's `ORCHESTRATE.md`
 it to the template, and to `profile()` in `agent_loop.py` if the script reads it.
 
 Model and effort are set when a session starts, by the script's flags or the project settings, and saved in
-the record of that session. Skills and Claude agent files name neither, because Claude lets that frontmatter
-override the command line. The Codex agent file `reviewer/agents/codex/orchestrate-reviewer.toml` is the exception: it
-names both, because Codex reads them only from that file.
+the record of that session. Skills name neither, because Claude lets a skill's frontmatter override the command
+line.
 
 One kind of agent writes each field of the done-when file, as the table in
 `planner/references/done-when.md` lists. A change to who writes what updates that table, the skills that
@@ -53,11 +52,14 @@ stage has its own file in `lead/stages/`, numbered in order: interview, start pl
 in `<role>/prompts/`, and the script reads them with `prompt_text`. Those, and the shorter texts still in
 `agent_loop.py`, are prompts like any other, and follow `prompting-agents` too. The skills name `prompting-agents`
 wherever an agent writes for another agent: the plan files, the brief, a `--message`, a review. Name it as a skill, not as a link, because it
-lives in another domain, and `install.py` installs it whenever it installs orchestrate.
+lives in another domain, and `install.py` installs it whenever it installs orchestrate. Name `domain-language` the same way wherever an agent adds or agrees a name in the project's glossary: the
+orchestrate skills say when, and that skill says how.
 
 Say each thing once, close to the moment it applies. A session's first prompt carries that session's facts: its
 paths, whether it is visible, which items need someone, the user's rules. The skill carries the guidance, with
-its reason. The message on a resumed turn restates the goal, because a compacted session may have lost the skill.
+its reason. Where the script knows which kind of task it is starting, as with a planner, the prompt also carries
+that kind's instructions, read from a file in the skill's `tasks/` folder, and the skill keeps only what every kind
+shares. The message on a resumed turn restates the goal, because a compacted session may have lost the skill.
 A boundary the script enforces needs no line in a prompt. A message about a failed review says what a review is
 and where it is kept, and leaves out a list of what to fix, because a list of findings gets cleared and nothing
 more, while the next reviewer starts again from the items.
@@ -72,9 +74,9 @@ share a fake host, a repository and the reset between tests in `tests/orchestrat
 `Repo` only when it needs a repository. A script that starts agents goes through the host adapters in `agent_loop.py`,
 so that every host is handled in one place and Claude sessions get no API key.
 
-Each role keeps its agent files beside its skill: Claude's in `<role>/agents/claude/`, listed in the marketplace
-entry, and Codex's in `<role>/agents/codex/`, installed by `install_agents.sh`. The script and the installer use
-the files' names, so keep the names. The `lead` skill loads by itself, because it is the way into a project: someone
+The set ships skills and no agent files. The script starts each planner and reviewer as a plain session whose
+prompt names its skill's file, and passes the host's flag that stops it starting agents of its own, so an agent file
+would add nothing the script doesn't already do. The `lead` skill loads by itself, because it is the way into a project: someone
 describing what they want built starts with its interview. That is safe because nothing runs for hours before the
 user has approved a brief and said how they want the agents to work, and `run` refuses to start a builder until
 the settings' `Builders:` line has a count.

@@ -9,9 +9,9 @@ It moves the files into a folder per module, splits each plan's log into `LOG.md
 settings lines whose labels changed, and merges the change. It prints `MIGRATED`, or `NOTHING` when there was nothing
 to do.
 
-After a move, start a planner to bring the plans into the current shape: the module table at the top of
-`ARCHITECTURE.md`, milestones named for what someone can see or do, Done milestones shrunk to a line, review briefs
-moved to the working folder, and plan files elsewhere converted or deleted.
+After a move, start a planner with `plan --kind fix` to bring the plans into the current shape: the module table at
+the top of `ARCHITECTURE.md`, milestones named for what someone can see or do, Done milestones shrunk to a line,
+review briefs moved to the working folder, and plan files elsewhere converted or deleted.
 
 ## Evidence committed to git
 
@@ -21,13 +21,13 @@ should hold only what the project needs to build and run, and a repository that 
 gigabytes. Every command refuses a project that still has committed evidence there, until `migrate` has run.
 
 `migrate --worktree <repo>` moves it over and merges one commit. It copies each file git holds under the old folder
-into the working folder, leaving the files in git and in history; it sets the `Evidence:` line to
-`.orchestrate/evidence`, and moves the `Graded examples:` line with it when that named a file there; it points each
-done-when file's `review`, `evidence` and handoff fields, and each record's reviews, at the new place; and it
-rewrites links into the old folder in every markdown file under the plans folder. Commit hashes in reviews, handoffs
+into the working folder, leaving the files in git and in history. It sets the `Evidence:` line to
+`.orchestrate/evidence`, and moves the `Graded examples:` line with it when that named a file there. It points each
+done-when file's `review`, `evidence` and handoff fields, and each record's reviews, at the new place. It rewrites
+links into the old folder in every markdown file under the plans folder. Commit hashes in reviews, handoffs
 and results are left as they are. An item whose `check` or wording names the old folder is listed under
 `definitions_naming_it` rather than changed, because changing an item's definition starts it again: give those to a
-planner. Running `migrate` again does nothing more.
+planner as a `plan --kind fix` task. Running `migrate` again does nothing more.
 
 A link the migration rewrote points into `.orchestrate/evidence`, which opens in every worktree on this computer but
 not in a fresh clone, on CI or in a tool that lists only the files git holds, such as a docs link checker. Tell the
@@ -62,11 +62,8 @@ for either when it was migrated, which still gets its diagnosis.
 The `owner` command is now `human`, and `--owner-rule` is `--human-rule`. The old command and flag still work, so
 a lead that hasn't read the new skill yet isn't stopped.
 
-## Files that say "the owner"
-
-Older versions of this set called the user "the owner". A project planned by one says "the owner" in its brief,
-plans, glossary and reviews, and its plan files have a section `## Open for the owner`. All of these mean the
-user. They need no change, because the script doesn't read those words.
+Older plans say "the owner", and `## Open for the owner`, for the user. They need no change, because the script
+doesn't read those words.
 
 ## Ready for Review set by a builder
 
@@ -83,7 +80,7 @@ prints the facts when the user asks, as [the report](report.md) describes.
 ## No `Graded examples:` line
 
 A project planned before the settings had a `Graded examples:` line still gives reviewers
-`<evidence>/graded-examples.md` in the working folder to read, but `human accept` and `human rereview` add nothing to it, because the
-script adds the user's overturned reviews only to a file the settings name. Suggest to the user that you add the
-line, naming the file the project already uses, so their corrections reach later reviewers. A settings change is
-committed with git on the main branch, as the lead skill says.
+`<evidence>/graded-examples.md` in the working folder to read, but `human accept` and `human rereview` add nothing to
+it, because the script adds the user's overturned reviews only to a file the settings name. Suggest to the user that
+you add the line, naming the file the project already uses, so their corrections reach later reviewers. A settings
+change is committed with git on the main branch, as the lead skill says.

@@ -93,7 +93,7 @@ class ResultNames(unittest.TestCase):
         names, _ = glossary_results()
         # The lead's skill is a router, and its stage files and references explain the results.
         skills = "".join(p.read_text() for p in [*DOMAIN.rglob("SKILL.md"), *DOMAIN.rglob("stages/*.md"),
-                                                 *DOMAIN.rglob("references/*.md")])
+                                                 *DOMAIN.rglob("tasks/*.md"), *DOMAIN.rglob("references/*.md")])
         unexplained = sorted(n for n in names if f"`{n}`" not in skills and n not in SKILL_TEXT_TO_COME)
         self.assertEqual(unexplained, [], "the lead or an agent meets these results, but no skill says what they mean")
 

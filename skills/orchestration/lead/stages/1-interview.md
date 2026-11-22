@@ -1,8 +1,9 @@
 # Interview
 
-This stage runs when there is no approved brief and no `ORCHESTRATE.md`. Interview the user and write the project
-brief that planning starts from. When the user says to plan straight away, skip it, and the planner lists what it
-assumed.
+This stage runs when there is no approved brief and no plan, and when the user brings a feature big enough to need
+its own interview. A small change of mind goes straight to [start planning](2-start-planning.md). Interview the user
+and write the project brief that planning starts from. When the user says to plan straight away, skip this stage and
+plan from their words, and the planner lists what it assumed.
 
 Contents:
 - [What the planner does with the brief](#what-the-planner-does-with-the-brief)
@@ -17,7 +18,8 @@ Contents:
 
 The planner is a new session that reads the brief as a description of what the user wants to accomplish, and
 designs the best way to get there: it breaks the work into modules and milestones, and writes the checks each
-milestone is judged by. It can't ask the user anything, so the brief is all it knows of the goal.
+milestone is judged by. The brief is all it knows of the goal, and a question the brief leaves open comes back to
+the user later, through you, often while they're away, so settle it here while they're in the chat.
 
 The brief says what the user wants and why. Where the user cares how something is built, that goes in too, as a
 decision the planner designs around. The rest of the how is the planner's to choose. What the planner can't work
@@ -28,7 +30,8 @@ out is what only the user knows:
 - Where the first release ends. The planner plans up to "What finishes this goal" and no further.
 - How the user will judge the result. Each check is made as strict as that, and a number goes into a check only if
   the brief gives one.
-- The decisions already made. One in the user's words is fixed. One marked as the agent's, the planner may change.
+- The decisions already made. Once the user approves the brief, each is fixed, yours as much as theirs, so the
+  planner carries them into the design as written.
 
 Every hole in the brief is a risk. The planner has to work around it, and each workaround is a choice about the
 goal that the user didn't make. A few of them, carried through every module and milestone, are enough for the
@@ -50,11 +53,10 @@ A brief can hold everything the user said and still fall short:
 
 ## Research first, then ask
 
-Finding things out is your job. Deciding is the user's. Before your first message, read the repository, an
-existing brief and the plans folder's `GLOSSARY.md`. The plans folder is `docs/plans` unless `ORCHESTRATE.md`
-names another. Then look up how the field handles a project like this one: what shipped products do, what such a
-project usually has to decide, and what tends to go wrong. The user may not know what their project has to decide,
-so raise those questions yourself, each with the recommendation your research supports.
+Finding things out is your job. Deciding is the user's. Before your first message, read the repository, an existing
+brief and the plans folder's `GLOSSARY.md`. Then look up how the field handles a project like this one: what shipped
+products do, what such a project usually has to decide, and what tends to go wrong. The user may not know what their
+project has to decide, so raise those questions yourself, each with the recommendation your research supports.
 
 Ask the user only what would change what gets built and only they can answer. Decide everything else yourself and
 say so, with your reason, so the user can correct it. That includes how to work, such as where a file goes or
@@ -92,14 +94,15 @@ Settle the scope: what the end users will be able to do in the first release, an
 where the line falls, and ask what would make the user call this goal finished, because the planner plans to that
 line and no further.
 
-Run a pre-mortem: ask the user to imagine the first release has disappointed them, and say why. Their answers
-are how they will judge it. Pin each one to a number or a shipped example, so a reviewer can check it.
+Run a pre-mortem: ask the user to imagine the first release has disappointed them, and say why. Their answers are how
+they will judge it. Pin each one to a number, which a check can test, or a shipped example, which the planner can
+choose as an inspection's reference.
 
 ## Check the brief before you show it
 
 You're too close to the conversation to see what the brief leaves out, so have a fresh subagent read it as the
 planner would and list each question about what to build that it would still need answered. Give it only the
-brief's path, not your own view, or it will tend to agree with you. With no subagents, reread the brief as if new.
+brief's path, not your own view, so what it finds is its own reading. With no subagents, reread the brief as if new.
 
 Put each question to the user in another round, or decide it and mark it as yours. Repeat until the reader finds
 nothing that matters.
@@ -113,8 +116,8 @@ than replace it, and date the new request. The planner reads the brief by its he
 Quote the user's words wherever they give a number, a limit or a "never", because each later document softens
 them. With each decision, name the option it ruled out, so no one brings it back. Mark each decision you made
 yourself as the agent's. When the user leaves a choice to the agents, put it under "Still open", marked "the
-planner chooses". Add any name you settle to the plans folder's `GLOSSARY.md`, preferring the field's established
-term.
+planner chooses". Add any name you settle to the plans folder's `GLOSSARY.md`, as the `domain-language` skill
+describes.
 
 ```markdown
 # Project brief: <name>
@@ -154,4 +157,5 @@ term.
 Show the brief in the chat, with the decisions you made yourself listed above it. Approving the brief confirms
 them.
 
-Once the user approves, go on to [start planning](2-start-planning.md), which commits the brief and starts the planner.
+Once the user approves, go on to [start planning](2-start-planning.md), which commits the brief and starts the
+planner.

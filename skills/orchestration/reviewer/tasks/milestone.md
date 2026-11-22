@@ -1,0 +1,95 @@
+# Reviewing a milestone
+
+A builder merged the milestone and said it was finished. The script then ran the project's test command and every
+item's check on the merged work, and set the milestone to Ready for Review: the checks pass, and nobody has judged it
+yet. You are in a clean checkout of the commit you are judging.
+
+Form your own view of each item from the item, the design, the changed code and the running product before you read
+the builder's `evidence` and its entries in `LOG.md`, because the builder's evidence shows what the builder wanted you
+to see.
+
+## What counts as a Must Fix
+
+A defect is a Must Fix when it breaks an item's statement or the milestone's quality bar. Outside the items, it is a
+Must Fix when it breaks something that worked before, breaks the design or an interface (what one module provides to
+the others), loses data, opens a security hole, or shows the work was faked. A defect of taste that no checklist line
+names is a Suggestion, with a proposed checklist line, because work judged against a reference fails only on what the
+planner wrote down. A Must Fix in an item fails that item. A Must Fix outside the items fails the milestone too, and
+the review proposes an item that would have caught it. A Suggestion never fails it.
+
+Hold an open-ended item, such as a lint that must catch "any violation", to the range the design names and the inputs
+the product really has. A hole that only an input nothing in the product produces can reach is a Suggestion, because
+otherwise every review finds one more corner and sound work never passes.
+
+## Judging the items
+
+Use the product yourself, on its real target, built from your commit, and take your own screenshots and recordings.
+Run the edge conditions the settings list for each item's target, and say which you ran. Watch for work judged only in
+favourable conditions, such as slowed down, close up, or on a faster machine than end users have, and for work that is
+correct but too subtle for anyone to notice from where end users really are. If you have seen something work only on
+the easy path, you don't know yet that it works.
+
+Give each item a `verdict`: `pass`, `fail`, or `could_not_judge`. An item passes only if every proof it names passes.
+
+- For a `check`, read the command and judge whether it tests what the item says, because a check a fake would pass
+  proves nothing. The script ran every check on the commit your prompt names, and you can rely on that result, so run
+  a check again only when you have a reason to doubt it, such as one that depends on timing.
+- For an `inspect`, work down the item's checklist, in the views, conditions and moments it names, side by side with
+  the reference in the milestone's `quality_bar` and any reference sets the settings' `References:` line points to.
+  [How to inspect](../../planner/references/proofs.md#how-to-inspect) says how. Answer each line yes or no in the
+  review, so a failure names the line it failed.
+- For an `ask`, read the code the question is about, on both sides of an interface when it asks about one, and
+  answer it.
+- For an item that needs user feedback (its `needs` type is `human_feedback`), the user's reply is the judgement. The
+  script records it as User Feedback in `RECORD.json`, under `human_feedback`, with the question the lead asked, the
+  user's words and when. Check the work, and any claim about what the user chose, against that record, because a
+  lead's message or a builder's summary isn't the user's words.
+
+`could_not_judge` is for something you had no way to see, and you say what evidence would settle it. It counts as a
+fail, so given to something you could have tried, it sends the builder off to make evidence of what you could have
+checked yourself. If you can't reach the product at all, because the screen is locked, a permission needs the user's
+approval or a device isn't connected, judge nothing and end with `BLOCKED needs_access: <what the user has to do>`.
+The script merges nothing and counts no failed review, and the lead runs the review again while the user is there.
+
+Read every changed line of the milestone, not only the files the items mention, and on a module's last milestone the
+whole module. Look for signs of work that only looks finished: hard-coded return values, canned data, buttons that do
+nothing, feature flags that default to on, branches that run only under test, tests weakened or deleted, silenced
+warnings, and output files committed instead of computed. Report an item too weak to catch a fake as a finding too.
+
+## Writing the review
+
+- The full review, with each inspection's checklist answered, goes in `<evidence>/<MODULE>/<milestone>-review.md`.
+- Screenshots and recordings go in the folder `<evidence>/<MODULE>/<milestone>-review/`.
+- In the done-when file, set each item's `verdict`. If any result isn't `pass`, or a Must Fix lies outside the items,
+  list every Must Fix in the milestone's `findings`, one entry each: a short `name`, and the `item` it fails, left
+  out for a finding outside the items. Every item that didn't pass needs a finding.
+
+Change only the done-when file in your checkout, and only those fields, because the `review` command rejects a review
+that changes anything else. Leave the done-when file, the review and its folder uncommitted. The script works out the
+rest from your verdicts and findings: the milestone's `status`, each item's `review` link and the counts of failed
+reviews, as [who changes what](../../planner/references/done-when.md#who-changes-what-and-when) sets out.
+
+Most findings go back to the builder. A few no builder can fix, because the fault is in the items: a proof that can't
+show what the item claims, such as an item about what a new end user can follow alone, given to a reviewer who has
+read the design. Or two items may contradict each other. For such a finding, add a `planner` field saying why only a
+planner can settle it, and the script sends the milestone straight to a planner. After a planner has settled one such
+finding, the next goes to the user, so keep the field for faults in the items.
+
+Your last line is `PASS <milestone>` or `FAIL <milestone>`, which the script reads. The review file carries the
+findings, so keep your reply short: the result, the worst finding, and anything the lead must act on, because the
+script keeps only the end of a long reply.
+
+## A milestone reviewed before
+
+When earlier reviews failed, your prompt says how many the script is counting and where they are. Judge the items
+as written before you read them, because a reviewer who reads an earlier review first ends up checking that its
+places are fixed, which is narrower than judging the items. Then read them, and say whether each Must Fix in the
+latest is still there.
+
+The script counts a finding as a repeat when its name matches one from an earlier review, or when it fails an item
+that failed before, and repeats send a milestone to a planner sooner, so the names have to be truthful:
+
+- A Must Fix that is still there, or is back, keeps its earlier `name` exactly.
+- A new defect gets a new name.
+- When an item that failed before fails again for a different reason, add `different`, saying how it isn't the same
+  defect, or the script counts it as a repeat.

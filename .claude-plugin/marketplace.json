@@ -67,17 +67,14 @@
         "glossary"
       ],
       "dependencies": [
-        "prompting-agents"
+        "prompting-agents",
+        "domain-language"
       ],
       "skills": [
         "./skills/orchestration/planner",
         "./skills/orchestration/builder",
         "./skills/orchestration/reviewer",
         "./skills/orchestration/lead"
-      ],
-      "agents": [
-        "./skills/orchestration/reviewer/agents/claude/orchestrate-reviewer.md",
-        "./skills/orchestration/planner/agents/claude/orchestrate-planner.md"
       ]
     },
     {

@@ -322,6 +322,17 @@ class BrokenMainBranch(Repo):
         [a] = self.merge(self.builder("a"))
         self.assert_main_broken(a, culprit)
 
+    def test_an_earlier_commit_that_broke_the_main_branch_is_found_by_halving(self):
+        self.use_test_command("test ! -f broken")
+        culprit = self.break_main()
+        for n in range(3):  # later changes outside the plans, each still failing
+            put(self.wt / f"later{n}.txt", "x")
+            self.git("add", "-A")
+            self.git("commit", "-qm", f"tidy {n}")
+        self.git("push", "-q", "origin", "main")
+        [a] = self.merge(self.builder("a"))
+        self.assert_main_broken(a, culprit)
+
     def test_a_branch_that_breaks_the_test_command_itself_still_is_blamed(self):
         self.use_test_command("test ! -f b.txt")
         a, b = self.merge(self.builder("a"), self.builder("b"))

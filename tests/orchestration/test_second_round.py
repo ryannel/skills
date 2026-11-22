@@ -192,6 +192,42 @@ class MainCheckSetup(Repo):
         self.assertEqual(agent_loop.main_check_result([got, got]), "unjudged")
 
 
+class MainCheckRequestRunsNow(Repo):
+    """Delivery Lead: an item's `main-check` waited for the check's next scheduled run, so with `every 4h` a merged
+    milestone sat idle for hours with no builder working."""
+
+    def setUp(self):
+        super().setUp()
+        settings = self.wt / "ORCHESTRATE.md"
+        settings.write_text(settings.read_text() + "- **Main-branch check soak:** `true`; every 4h\n")
+        self.commit_all()
+        self.prof = agent_loop.profile(self.wt)
+        self.folder = agent_loop.main_check_dir(self.wt, "soak")
+
+    def test_a_request_starts_a_run_without_waiting_out_every(self):
+        spawned = []
+        with mock.patch.object(agent_loop, "main_check_spawn",
+                               lambda wt, name, force=False: spawned.append(force) or mock.Mock(poll=lambda: None)):
+            got = agent_loop.main_check_wait(self.wt, self.prof, "soak", agent_loop.head_commit(self.wt), 0)
+        self.assertEqual(got["result"], "PENDING")
+        self.assertEqual(spawned, [True])
+
+    def test_a_request_wakes_a_runner_waiting_out_every(self):
+        with mock.patch.object(agent_loop, "main_check_flight", lambda folder: {"state": "scheduled"}):
+            agent_loop.main_check_wait(self.wt, self.prof, "soak", agent_loop.head_commit(self.wt), 0)
+        self.assertTrue((self.folder / agent_loop.MAIN_CHECK_REQUEST).exists())
+
+    def test_a_scheduled_runner_starts_at_once_when_asked(self):
+        head = agent_loop.head_commit(self.wt)
+        (self.folder / "runs").mkdir(parents=True, exist_ok=True)
+        (self.folder / "runs" / "1-old.json").write_text(json.dumps(
+            {"kind": "tip", "commit": "0" * 40, "result": "pass", "started_s": time.time(), "finished_s": time.time()}))
+        (self.folder / agent_loop.MAIN_CHECK_REQUEST).touch()
+        got = agent_loop.main_check_runner(self.wt, self.prof, "soak", self.prof["main_checks"]["soak"])
+        self.assertFalse((self.folder / agent_loop.MAIN_CHECK_REQUEST).exists())
+        self.assertEqual(agent_loop.main_check_wait(self.wt, self.prof, "soak", head, 0)["result"], "COVERED", got)
+
+
 class PlannerFindingsAfterADiagnosis(Repo):
     """Script 10: a finding only a planner can settle went straight to the user after any earlier diagnosis, even
     one about something else."""

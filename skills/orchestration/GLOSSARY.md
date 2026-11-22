@@ -1,6 +1,6 @@
 # Glossary of the orchestrate set
 
-The agreed name for each thing in the orchestrate set. The skills, the README, the agent files and the script use
+The agreed name for each thing in the orchestrate set. The skills, the README and the script use
 these names, and each skill defines the ones it uses before their first use, because each skill is read alone.
 `Stored as` gives the name as it is written in a file, a command or the script's output, where that differs. An
 entry with a `Proposed:` line hasn't been agreed by the user yet; every other entry has.
@@ -41,6 +41,13 @@ Source: the lead agent of Anthropic's multi-agent research system, which plans t
 **Planner**
 An agent that writes the plan: the module list, and each module's design, plan file and done-when file.
 
+**Kind of planner task**
+Which of the planner's instructions a task needs: a new project, a module, a change, unblocking, a diagnosis, a
+design revision or a fix. Each has its file in the planner skill's `tasks/` folder. The reviewer has two kinds, a
+milestone review and a design review, in its own `tasks/` folder.
+Stored as: `plan --kind`
+Proposed: by Claude, 2026-11-21. Not yet agreed by the user.
+
 **Builder**
 An agent that writes the code for one milestone, proves it and merges it.
 Avoid: implementer, worker
@@ -48,7 +55,6 @@ Avoid: implementer, worker
 **Reviewer**
 An agent that judges a design or a milestone. Always a new session, so it has seen none of the work it judges.
 Avoid: evaluator
-Stored as: `orchestrate-reviewer`, the agent file's name
 
 **Design reviewer**
 A reviewer judging a module's design, with its done-when items, before any of the module is built.
@@ -337,7 +343,7 @@ The reasons a milestone is Blocked:
 
 | Reason | Means | Stored as |
 |---|---|---|
-| Needs User Feedback | A builder couldn't judge an item and asked for the user's eye | `needs_human_feedback` |
+| Needs User Feedback | An item needs the user's judgement | `needs_human_feedback` |
 | Needs Access | A builder or a reviewer couldn't get a permission or an approval prompt, or couldn't reach the product | `needs_access`; a reviewer's `BLOCKED needs_access` ending |
 | Needs Hardware | A device wasn't connected | `needs_hardware` |
 | Needs Context | The builder is missing a fact, which the lead supplies | `needs_context`, from the builder's `NEEDS_CONTEXT` ending |

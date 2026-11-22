@@ -10,18 +10,18 @@ User Feedback on M2, recorded by the script in docs/plans/APPLE-TILE/RECORD.json
 An earlier session on M2 stopped short and left a handoff at .orchestrate/evidence/APPLE-TILE/M2-handoff.md. Read it before you start. Where it disagrees with the done-when file or the plan, those win, because a planner may have changed them since. Rewrite the handoff if you stop short too.
 
 About this session:
-- This worktree is yours for the milestone. Other builders are working in their own, so keep your changes inside this one.
-- A lead is running this build. Once the script's checks pass on your merged work, a reviewer in a new session judges the milestone.
+- This worktree is yours for the milestone. Other builders work in their own, so keep your changes inside this one.
+- A lead is running this build. Once the script's checks pass on your merged work, the script starts a reviewer in a new session to judge the milestone.
 - The script is `python3 /skills/orchestration/lead/scripts/agent_loop.py`.
-- The project's agreed names are in docs/plans/GLOSSARY.md, if that file exists. Use them in what you write, as the skill says.
-- Evidence files, such as captures and logs, go under .orchestrate/evidence/APPLE-TILE/M2/. That folder is the repository's working folder, shared by every worktree on this computer and ignored by git, so leave them uncommitted.
-- This session runs in the background, so approval prompts, such as a Computer Use or a permission dialog, can't appear in it. A question you ask through a tool reaches nobody either, so when you need an answer, end your turn with `BLOCKED` or `NEEDS_CONTEXT` instead, as below.
+- The project's agreed names are in docs/plans/GLOSSARY.md, if that file exists.
+- Evidence files, such as captures and logs, go under .orchestrate/evidence/APPLE-TILE/M2/.
+- This session runs in the background, so approval prompts, such as a Computer Use or a permission dialog, can't appear in it. A question you ask through a tool reaches nobody either, so when you need an answer, end your turn with `NEEDS_CONTEXT` and the question, or `BLOCKED`, as below, and the lead gets it answered.
 - This project's exclusive resources are: gpu: timing runs and captures. Wrap a command that uses one in the script's `lock <name> -- <command>`, which waits its turn while another builder holds the lock.
-- M2.2 (does the tile animation read as smooth) needs user feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the user to look at, then end with `BLOCKED needs_human_feedback: <the question for the human>`.
+- M2.2 (does the tile animation read as smooth) needs user feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the user to look at, then end with `BLOCKED needs_human_feedback: <the question for the user>`.
 - M2.3 (an iPhone connected over USB) needs hardware: someone has to connect a device, and nobody can in this session. Do every other item, then end with `BLOCKED needs_hardware: <what is needed>`.
 - The user's rule: never modify Broadsides.
 
 From the lead:
 The user said at 08:37 they would be away until noon. The lock on gpu is held by the APPLE-PRESENTATION builder's capture; that is normal.
 
-When the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to .orchestrate/evidence/APPLE-TILE/M2-handoff.md, which is in the working folder too. Then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, or with `NEEDS_CONTEXT: <the fact you need>` when what you are missing is a fact. The skill lists the reasons.
+When the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to .orchestrate/evidence/APPLE-TILE/M2-handoff.md, in the working folder too, then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, or with `NEEDS_CONTEXT: <the question>` when you are missing a fact or a choice, and the lead gets it answered. The skill lists the reasons.

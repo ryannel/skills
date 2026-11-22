@@ -2157,7 +2157,7 @@
           "type": "model-names",
           "claim": "Default models are claude-opus-5-5 and gpt-6.2-sol; Codex flags and rollout fields as used by agent_loop.py.",
           "where": "skills/orchestration/planner",
-          "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
+          "check": "Are these still the current models and flags? Update the defaults in agent_loop.py and the README together."
         }
       ]
     },
@@ -2175,7 +2175,7 @@
           "type": "model-names",
           "claim": "Default models are claude-opus-5-5 and gpt-6.2-sol; Codex flags and rollout fields as used by agent_loop.py.",
           "where": "skills/orchestration/builder",
-          "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
+          "check": "Are these still the current models and flags? Update the defaults in agent_loop.py and the README together."
         }
       ]
     },
@@ -2193,7 +2193,7 @@
           "type": "model-names",
           "claim": "Default models are claude-opus-5-5 and gpt-6.2-sol; Codex flags and rollout fields as used by agent_loop.py.",
           "where": "skills/orchestration/reviewer",
-          "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
+          "check": "Are these still the current models and flags? Update the defaults in agent_loop.py and the README together."
         }
       ]
     },
@@ -2211,7 +2211,7 @@
           "type": "model-names",
           "claim": "Default models are claude-opus-5-5 and gpt-6.2-sol; Codex flags and rollout fields as used by agent_loop.py.",
           "where": "skills/orchestration/lead",
-          "check": "Are these still the current models and flags? Update defaults, agent files and agent_loop.py together."
+          "check": "Are these still the current models and flags? Update the defaults in agent_loop.py and the README together."
         },
         {
           "id": "lead-interview-practice",
