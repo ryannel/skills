@@ -1,12 +1,13 @@
 Build milestone M2 of module APPLE-TILE, using the builder skill (the file is /skills/orchestration/builder/SKILL.md).
 
-The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has builder_result pass, with evidence from the item's target, and the work is merged, with M2's status left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the status itself.
+The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has builder_result pass, with evidence from the item's target, and the work is merged, with M2's status left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the status itself: Done, or Ready for Review when the milestone needs a reviewer.
 
 About this session:
 - This worktree is yours for the milestone. Other builders work in their own, so keep your changes inside this one.
-- A lead is running this build. Once the script's checks pass on your merged work, the script starts a reviewer in a new session to judge the milestone.
+- A lead is running this build.
+- Start each commit's subject with `APPLE-TILE M2: `, because that is one way the script tells whose commit broke a check on the main branch.
 - The script is `python3 /skills/orchestration/lead/scripts/agent_loop.py`.
-- The project's agreed names are in docs/plans/GLOSSARY.md, if that file exists.
+- The module's plan files are in docs/plans/APPLE-TILE/, and the project's agreed names are in docs/plans/GLOSSARY.md, if that file exists.
 - Evidence files, such as captures and logs, go under .orchestrate/evidence/APPLE-TILE/M2/.
 - This session is visible in the Claude app, so an approval prompt can appear in it if someone is there to answer it.
 - M2.2 (does the tile animation read as smooth) needs user feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the user to look at, then end with `BLOCKED needs_human_feedback: <the question for the user>`.

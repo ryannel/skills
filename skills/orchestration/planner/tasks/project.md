@@ -7,38 +7,26 @@ its turn comes.
 
 ## The module list
 
-`ARCHITECTURE.md` in the plans folder opens with a table of every module in build order. The script reads the
-table, so keep this header:
+The module list opens with the module table, every module in build order, under the exact
+header [the module table](../references/done-when.md#the-module-table) gives, because the script reads it. A project
+small enough for one module still gets the table, with one row. After the table, say what each module owns, and list
+each interface, meaning what one module provides to the others. Then list the brief's "Later", each piece with the
+module that will own it, so the user can see it is waiting rather than forgotten.
 
-```markdown
-| # | Module | What it's for | Needs |
-|---|---|---|---|
-| 1 | AUTH | People sign in, and stay signed in across devices | |
-```
-
-`What it's for` is one plain sentence for the user. A project small enough for one module still gets the table,
-with one row. After the table, say what each module owns, and list each interface, meaning what one module provides
-to the others. Then list the brief's "Later", each piece with the module that will own it, so the user can see it is
-waiting rather than forgotten.
-
-Draw the lines between modules around state, so each kind of state has one module in charge of it, because most bugs
-between modules come from two of them changing the same thing.
+Draw the lines between modules around state, so each kind of state has one module in charge of it.
 
 ## The order
 
 Plan the first milestones as a thin slice through the whole product: the smallest thing an end user could do from
 start to finish, however crude, such as importing one statement and printing one balance. Each module on that path
-makes its part of the slice its first milestone. The slice shows that the modules fit together before any of them is
-built out, and gives the user something to try early. After it, build first what is riskiest and what most other work
-depends on, because that is what is most likely to force everything else to change.
+makes its part of the slice its first milestone.
 
 In an empty repository, the first milestone of one module lays down what every other builds in, such as the
-manifest, the framework and the database setup, and the other slice milestones list it in `depends_on`, because
-builders who each create it at once produce merges that conflict. After that, plan enough work that can run side by
-side for the number of builders your task names, with interfaces and stubs so modules don't wait on each other.
-When the look is the product, the user's choice of look comes before any slice milestone that carries it. Options
-that are images or sounds made outside the product needn't depend on the milestone that lays down the project, so
-they can be built, and chosen from, while it is.
+manifest, the framework and the database setup, and the other slice milestones list it in `depends_on`. After that,
+plan enough work that can run side by side for the number of builders your task names, with interfaces and stubs so
+modules don't wait on each other. When the look is the product, the user's choice of look comes before any slice
+milestone that carries it. Options that are images or sounds made outside the product needn't depend on the
+milestone that lays down the project, so they can be built, and chosen from, while it is.
 
 ## The acceptance module
 
@@ -51,11 +39,8 @@ build.
 
 ## The settings
 
-The lead writes the settings, `ORCHESTRATE.md`, from the brief before planning starts. Add two lines to them: `Test
-command:`, the command that must pass before every merge, and `Setup command:`, what a fresh copy of the repository
-needs before its tests run, such as `npm ci`, or `none`. Once you've chosen the stack, also fill in the settings'
-"Starting from a clean clone" section and the Run and Capture columns of the Targets table, because several builders
-and reviewers run copies of the product at once, and each needs its own ports and database. The script tests every
-merge in a clean copy where nothing is installed. The test command has to pass before any test exists, so on a new
-repository use one that passes on an empty suite. `pytest`, for one, fails when it finds no tests, and `pytest || [ $?
--eq 5 ]` lets that case pass.
+The lead writes the settings, `ORCHESTRATE.md`, from the brief before planning starts. Once you've chosen the stack,
+write their `Test command:` and `Setup command:` lines. Also fill in the "Starting from a clean clone" section and
+the Run and Capture columns of the Targets table, because several builders and reviewers run copies of the product
+at once, and each needs its own ports and database. The script's `settings --template` explains each line and what
+it needs. The settings hold settings, not progress, so write no status there.

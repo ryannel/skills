@@ -1,12 +1,13 @@
 {goal}Build milestone {milestone} of module {module}, using the builder skill ({skill}).
 
-The goal: every item of {milestone} in {done} has builder_result pass, with evidence from the item's target, and the work is merged, with {milestone}'s status left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the status itself.
+The goal: every item of {milestone} in {done} has builder_result pass, with evidence from the item's target, and the work is merged, with {milestone}'s status left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the status itself: Done, or Ready for Review when the milestone needs a reviewer.
 {feedback}{earlier}
 About this session:
 - This worktree is yours for the milestone. Other builders work in their own, so keep your changes inside this one.
-- A lead is running this build. Once the script's checks pass on your merged work, the script starts a reviewer in a new session to judge the milestone.
+- A lead is running this build.
+- Start each commit's subject with `{module} {milestone}: `, because that is one way the script tells whose commit broke a check on the main branch.
 - The script is `python3 {loop}`.
-- The project's agreed names are in {glossary}, if that file exists.
+- The module's plan files are in {module_dir}/, and the project's agreed names are in {glossary}, if that file exists.
 - Evidence files, such as captures and logs, go under {captures}/.
 - {session}
 {resources}{needs}{rules}{lead}

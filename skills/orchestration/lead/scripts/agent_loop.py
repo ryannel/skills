@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Drives builders, reviewers and planners for the orchestrate process on any supported agent host, with model and
-effort named at every launch, and decides itself which work is accepted.
+effort named at every launch, and decides itself which milestones are Done.
 
 Used by the lead (the `lead` skill) (on any host that can run shell commands) and runnable by hand. Project settings come from
 ORCHESTRATE.md at the worktree root (`settings` prints what was read). Needs git, plus the CLI of each host it
@@ -10,14 +10,14 @@ Hosts:
   codex    `codex exec`, resumable, with goals, pinned-turn checks and a quota forecast from Codex's local files.
   claude   `claude -p` with stream-json, resumable, launched with no API key in its environment so it uses the
            signed-in plan.
-  <name>   any other CLI, from a `- **Host <name>:** <command>` line in the project settings, with {prompt}, {model}, {effort}
-           and {cwd} placeholders. Each turn is a fresh process; the files carry state between turns.
+  <name>   any other CLI, from a `- **Host <name>:** <command>` line in the project settings, with {prompt}, {model} and
+           {effort} placeholders, all required, and {cwd} if it needs the folder. Each turn is a fresh process; the files carry state between turns.
   With no --host, the host is the settings' `Default host`, else the host this command runs inside, else the only
   one installed, else codex.
 
   Sessions run headless as above by default, so nothing opens in either app. With ORCHESTRATE_VISIBLE=1, on a Mac
-  with the Codex app or Claude desktop running, codex and claude sessions are ones the app lists under the project,
-  where the user can watch, steer, pause (Stop) and take over; the script still drives and checks every turn. Codex
+  with the Codex app or Claude desktop running, codex and claude sessions are ones the app lists (Codex threads under
+  Recents, Claude sessions in the project's Code tab), where the user can watch, steer, pause (Stop) and take over; the script still drives and checks every turn. Codex
   threads then run in the app itself, and each new thread brings the app to the front. Claude turns run in the script's
   own signed-in `claude -p`, imported into the Code tab. When the app can't take them (another OS, app not installed
   or not running, Claude CLI signed out), they run headless. Every result line from a turn says which: `path` is
@@ -38,441 +38,36 @@ table, `| # | Module | What it's for | Needs |`, in build order) and STATUS.md, 
 after each record it merges and nobody edits. Plans still in the older flat layout (<MODULE>-DONE.json and the rest
 side by side in the plans folder) stop every command until `migrate` has moved them.
 
-What the script owns. In each module's folder it keeps RECORD.json, which only the script writes and
-which is committed, so every worktree, clone and lead sees the same thing. Per milestone it holds the authorised hash
-of the approved items, the Ready for Review record the script checked (code commit and the main branch's tip it ran the checks on),
-the reviews that judged it, and whether it was accepted, by checks, a reviewer or the user. It also holds the
-module's design review. A milestone is finished only when the record accepts it with its current definitions; a
-`done` status in the done-when file isn't enough. A module with no record yet has its definitions authorised and
-nothing accepted, with its design review owed. Only in a repository that has never had a record file is a module
-adopted as it stands, finished milestones accepted; the script's first record-keeping commit writes those records.
+What the script owns. RECORD.json in each module's folder, which only the script writes and which is committed,
+says which milestones are Done, with the Ready for Review record the script checked, the reviews that judged each
+one and the module's design review. A `done` status in the done-when file isn't enough.
 
 The script reruns checks with your own permissions, outside any host's sandbox, in a clean checkout of the main
 branch's tip. It pins the check strings, but a script a check calls can still be changed by the builder, so review new check
 scripts.
 
 Results and exit status:
-  Every command ends with one JSON line, its result, as the last line on stdout. The exit status says what kind of
-  line it is: 0 for the command's own result, 2 for ERROR when the command line was refused (with `usage`, and the
-  closest command or flag when one was misspelt), 1 for ERROR when a check stopped the command, or SCRIPT_FAILED
-  when the script failed (with `traceback`). `merge`, `check`, `lock`, `wait` and `main-check` keep their own
-  statuses. Results are also written under <git common dir>/orchestrate/results/ (`result_file`); run, review, plan and unblock first
-  mark the files a lead might read RUNNING, with their pid, and an ERROR replaces them too, so a file never holds an
-  earlier attempt's result. A `next` names the newest installed copy of the script, and `next.argv` is the same
-  command as a list of words. `run --message` and `plan --task` can be given more than once; the texts are joined.
+  The commands a lead acts on (run, review, plan, ready, next, unblock, pause, watch, settings, adopt, migrate,
+  human, merge, main-check and cleanup) end with one JSON line, their result, as the last line on stdout, carrying
+  `result` and `version`, with `warnings` when there are any. Read that line and nothing else: `result` names what
+  happened; `next`, when present, is {command, argv, by, why}, the exact command to run next, by `lead` or
+  `planner` (`argv` is the same command as a list of words, and it names the newest installed copy of the
+  script); `decides: human` on a `next` marks a decision only the user may make, with `ask` the question to put to
+  them in chat, and the script never runs that command itself; `changed` lists what changed in the script since
+  the version this repository last ran, once. `run --message` and `plan --task` can be given more than once; the
+  texts are joined, so a lead adds its own words to a printed `next` by adding the flag again.
+  The exit status says what kind of line it is: 0 for the command's own result, 2 for ERROR when the command line
+  was refused (with `usage`, and the closest command or flag when one was misspelt), 1 for ERROR when a check
+  stopped the command, or SCRIPT_FAILED when the script failed (with `traceback`). `adopt`, `migrate` and `human`
+  exit 1 on REFUSED or FAILED, and `merge`, `check`, `lock`, `wait` and `main-check` keep the statuses their help
+  gives, so a shell or an item's check can test them. Results are also written under
+  <git common dir>/orchestrate/results/ (`result_file`); run, review, plan and unblock first mark the files a lead
+  might read RUNNING, with their pid, and an ERROR replaces them too, so a file never holds an earlier attempt's
+  result. The commands that report to people (status, report, cost, quota, check, locks, runs, jobs, flow,
+  history and dashboard) print text or JSON as their help says, many with --json.
 
-Subcommands:
-
-  run   --module CORE --worktree PATH [--host H] [--model M] [--effort E] [--milestone M2] [--fresh]
-        [--message TEXT] [--human-rule TEXT]... [--clear-human-rules] [--no-progress-hours 4] [--no-design-review]
-        [--review-host H] [--checks-only]
-        REFUSED, starting nothing, while the settings have no Builders line with a count; its `next` (decides: human)
-        asks the user how they want the agents to work. Otherwise it starts (or resumes) a builder session on the
-        module's next milestone and drives it one turn at a time until:
-        READY_FOR_REVIEW  the script checked the milestone and set it to Ready for Review: the done-when file is
-                      valid and only the builder's own fields changed, every item is `pass` with evidence, the tree
-                      is clean, HEAD is on the main branch's tip (fetched fresh), and the test command and every
-                      item's `check` exit 0 in the script's clean checkout of that tip, run in this process, outside
-                      the builder's sandbox and the merge lock (a check that already passed on the same files isn't
-                      run again; `reused_checks` lists those). Only then does the script write the record and set
-                      the status, `ready_for_review`, or `done` when no review is needed, in one commit. The builder
-                      leaves the status in_progress, and `merge` refuses a commit that sets it. `review` says whether
-                      a reviewer must judge it, `commit` is the builder's commit and `checked` the tip the checks ran
-                      on. A milestone that needs no review is accepted there and then. `next` is the review command
-                      on the review host, or, with no review owed, `run` for the next milestone. Before any turn,
-                      `run` checks a milestone whose work is already merged with every item passing, and after a
-                      turn it waits for a `merge` the builder left running as a background job.
-        BLOCKED       the milestone can't move until someone steps in. The script records `status: blocked` and a
-                      `blocked` object, {reason, items?, what}, and the result carries `reason` and `blocked`. The
-                      reason is the one the builder's last line named (`BLOCKED needs_access: ...`); with none, items
-                      that need someone decide it once every other item passes, and otherwise it is needs_context
-                      (also the reason for a builder's `NEEDS_CONTEXT: ...` ending). A run that isn't visible stops
-                      BLOCKED needs_access or needs_hardware by itself once only such items are open, and its `next`
-                      is the same `run` with ORCHESTRATE_VISIBLE=1, for when the user is at the machine; a visible
-                      run on a milestone blocked that way unblocks it and builds.
-        CHECKS_FAILED the agent said DONE (or its goal completed) three times without the work holding up. Its
-                      `next`, as STALLED's and NO_PROGRESS_FOR_HOURS's, starts the builder again with --fresh and the
-                      reasons in --message, with a planner's task as `alternative`; when the builder said an item
-                      can't be met, the planner's task comes first. A check that exits 75 (a main-branch check that
-                      hasn't judged the commit yet) isn't a failure: the run asks again, with no builder turn
-        INVALID       the done-when file is malformed, or something outside the builder's fields changed
-        NEEDS_REVIEW   the module's next milestone is Ready for Review, with the script's record, and waiting for its
-                      review. One that is Ready for Review without the record is checked by `run` instead
-        WAITING       `reason` on_dependency: the next milestone depends on milestones in other modules that aren't
-                      Done yet (`depends_on` lists them). `reason` for_diagnosis: it failed review four
-                      times on a repeated finding, or six times in all (`cause` says which); `next` is the
-                      planner's task, and no builder starts on it until the planner has changed its definitions
-                      or kept them. `reason` for_planning: every milestone in the done-when file is Done, and the
-                      plan names more (`later` lists them) with no items yet; `next` is the planner's task
-        DESIGN_NOT_APPROVED
-                      the module's design hasn't passed a design review (or changed since it did). Unless
-                      --no-design-review, `run` first runs that review itself, as `review --milestone design` would
-                      with the same --effort, on the review host (--review-host, else the settings' `Review host`,
-                      else the builder's host; --model only when that is the builder's host), and on DESIGN OK goes
-                      on to build; any other outcome stops here with the review's result under `design_review`.
-                      After DESIGN OK, every later result of the run carries `design_review` (verdict, host, model,
-                      review file and its `usage`), so the review's cost shows with the build's
-        FINISHED      the module has nothing left
-        IN_PROGRESS_ELSEWHERE
-                      another lead or run holds this module or milestone; `by` and `holder` say which (pid, role,
-                      worktree, since when) where the records show it
-        NO_PROGRESS_FOR_HOURS
-                      no new passing item, and no commit of the builder's own outside the plans folder, for
-                      --no-progress-hours
-        STALLED       three turns in a row changed nothing and reported nothing (progress updates); the two
-                      continuations between them named the open items
-        HOST_FAILED   two failed turns in a row, the host CLI is missing, or the goal is usage- or budget-limited
-                      (likely quota, sign-in or outage)
-        SCRIPT_FAILED the script couldn't do a step of its own: fetch the main branch's tip, make its checkout,
-                      write a file the sandbox refused, record that a milestone is Ready for Review, or unblock
-                      a milestone
-        WRONG_MODEL_OR_EFFORT
-                      a turn ran on a model or effort other than the named ones
-        PAUSED        `pause` stopped it, the user stopped it or has it open in the app, or the Codex goal is
-                      paused; `run` again carries on (re-activating a paused goal on a visible thread)
-        A run on the same milestone resumes its session (with --message as the first prompt, e.g. the reviewer's
-        findings) unless --fresh is given or the host, model or effort changed. A new milestone starts a new session.
-        --milestone only confirms which milestone you expect; it never skips one that comes first.
-        --checks-only starts no agent: it runs the script's checks on a milestone whose work is merged with every item
-        passing, and prints READY_FOR_REVIEW, or CHECKS_FAILED with `reasons`. A builder in a chat with no lead uses it.
-        Each resumed turn restates the goal and what binds the builder (its fields, `merge`, the test command, the
-        settings' `Licences and paths not to touch` and `Human decides` lines, items that need someone, the user's rules), except
-        on a Codex thread whose goal is active, which gets only the user's rules; `goal` in the result says which, and `constraints_missing` names settings lines that
-        weren't there to restate. Ready for Review records and reviews record the requested host, model and effort, the CLI's
-        version, under `observed` only what the host's own output showed, and under `usage` the tokens its headless
-        turns reported (input not read from cache, cache reads, output, and Claude's list-price estimate for that
-        turn, taken as the rise in the session's cumulative total), with
-        `incomplete_turns` counting turns that showed no tokens (a visible Codex turn) or only some (a Claude turn
-        stopped before its result event, counted from its messages). A result line's `usage` is the session's
-        running total. A Ready for Review record's `usage` is what the session spent since its previous one, so a
-        milestone's records add up; `session_usage` beside it is the running total, not to be added.
-        Every result that stops short of building (WAITING, DESIGN_NOT_APPROVED, NEEDS_REVIEW, BLOCKED, INVALID,
-        HOST_FAILED, SCRIPT_FAILED, IN_PROGRESS_ELSEWHERE) carries `next`: {command, by, why}, the exact command to run next. Its `--worktree` is the one
-        the command producing it was given, so a `next` from `ready` or `status` run in the main checkout names the
-        main checkout. A `run` or design `review` in any `next` (and in `ready`'s and `next`'s) gets the host and
-        review host of that module's latest build run on this machine (<git common dir>/orchestrate/last-runs.json,
-        written when a build turn starts) where the command names none; with `Review host: other` only a review host
-        the lead named on that run is kept, and a design review owed after a planner turn names the host that
-        didn't plan it. A milestone review's host is left to
-        `review`, which takes the builder's from the Ready for Review record. `by` names who runs
-        `command` (lead or planner). `decides: human` marks a decision only the user may make: `ask` is what the
-        lead asks them in chat, and `command` the `human` command the lead runs once they've replied, with their
-        words in --said (feedback) or --text; the script never runs those itself. For Blocked: Needs User Feedback,
-        `next` is `human feedback` naming the blocked items, and `ask` shows each item, what it needs judged and
-        its evidence. Items that need access or hardware never get a reply recorded. When plan
-        files under the settings' plans folder are uncommitted or not merged, the result names them under
-        `unmerged_plans` and `next` is `adopt`, with what would have come next under `then`.
-        A project with no ORCHESTRATE.md gives INVALID with `next` naming `plan`.
-        Prints one JSON line with the result as the last line of output. Its `warnings` are the launch's loader
-        checks for the resolved host and binary (an AGENTS.md that Claude won't read, a skill not installed where
-        the host finds skills by name); they never stop a run.
-
-  review --module CORE --milestone M2 --commit SHA --worktree PATH [--host H] [--model M] [--effort E]
-        Runs a fresh reviewer in a clean checkout of the commit that is Ready for Review (or of the main branch's tip, with --milestone
-        design), then checks what it did: only the review file and the reviewer's own fields changed, the verdicts
-        agree with its last line. If all holds, the script merges the review itself,
-        sets failed items back to open, and records the verdict. An earlier review is kept beside the new
-        one as <milestone>-review-N.md (reusing `human rereview`'s copy of the same text), and its record entry
-        points there; entries overwritten before reviews were kept say `review_in_history`. Captures go in the folder beside the review file
-        (<evidence>/<MODULE>/<milestone>-review/), which merges with it. REVIEWED, INVALID (nothing merged), or the host's
-        HOST_FAILED, SCRIPT_FAILED, WRONG_MODEL_OR_EFFORT or PAUSED. With no --host, a review goes to the settings' `Review host` (`other` means the host
-        that built the milestone swapped, or for a design review the host of the planner turn that wrote the plan
-        swapped, else the settings' default host swapped). REVIEWED's `next` is the
-        {command, by, why}. After a failed milestone review `failed_reviews` counts its failed reviews since the last
-        re-plan, kept plan or decision of the user's, `failed_reviews_with_repeat` those with a finding that repeated
-        an earlier review's (`repeated` names them), and `escalation` (and `next.escalation`) says what the counts
-        call for (same_builder, new_builder_session, diagnosis, too_many_failed_reviews) with `next` the command for
-        it: `run --message` pointing the builder to the review, `run --fresh --message`, `plan` with a diagnosis
-        task naming the reviews (by: planner), or `human reopen` (decides: human, with each review under `history`)
-        for a milestone the script blocked with too many failed reviews.
-        A planner given a diagnosis ends with `PLANNED` (a re-plan) or `KEEP <MODULE> <milestone>:
-        builder|reviewer|human: <why>`, which `plan` records as KEPT. Either starts the counts again and adds 1 to
-        diagnoses; `human` there, or the same counts reached a second time, blocks it with too many failed
-        reviews. After a pass it is the
-        next ready milestone or "finished", the planner's revision with `findings` after DESIGN CHANGES.
-        A second design review keeps the first as design-review-N.md, and its prompt names the done-when items
-        added, removed or redefined since the first.
-
-  plan  --worktree PATH --task TEXT [--host H] [--model M] [--effort high]
-        Runs a fresh planner in the script's own checkout of the main branch's tip (<git common dir>/orchestrate/verify/
-        _PLANNER), so --worktree only names the repository and the lead's worktree is left as it is; a first plan,
-        before ORCHESTRATE.md exists, runs in --worktree itself, which must be clean. Its last line must be `PLANNED`, after changing files
-        (a DESIGN.md in the folder of every changed done-when file), else it's nudged with what's missing, at most
-        twice; PLANNED's `files` lists what it changed. Then the script checks its done-when files, commits and merges its files, and authorises the new
-        definitions (resetting proof on milestones whose definitions changed). PLANNED lists the modules whose
-        design review is now owed. BLOCKED or NEEDS_CONTEXT from the planner, or UNFINISHED, merges nothing; the
-        files it changed are listed under `set_aside` and kept in a stash (`stash`), and any commits on a branch
-        (`branch`), since the planner's checkout is reset for the next plan. Their `next` gives a planner the same
-        task again, with how the last turn ended (and, after BLOCKED or NEEDS_CONTEXT, a placeholder for the
-        answer). PLAN_NOT_MERGED: the planner finished but its files couldn't merge (a conflict with a commit that
-        landed meanwhile, say); they are set aside the same way, and `next` gives a planner the task again. A KEEP
-        naming the builder for a milestone Blocked with Needs Dependency or Needs Context lifts the block
-        (`unblocked`), with `run` as `next`. Its `report` keeps the end of the planner's message (where the user's decisions go),
-        up to 6000 characters. PLANNED's `next` is the owed design review on the review host, or `ready`;
-        `assumptions` counts, per module, the `Assumption:` lines in its PLAN.md. The whole task is kept in the plan
-        commit's body and in each module's record file under `briefs` (the authorisation stamps name only its
-        first line), which design reviews are pointed at. For each
-        milestone that was owed a diagnosis and whose definitions the plan changed, the script sets failed_reviews
-        and failed_reviews_with_repeat 0, adds 1 to diagnoses and sets it not_started, in its own commit, whatever the planner wrote there (`replanned` lists them). In a
-        repository with no commits (or origin with no main branch), SCRIPT_FAILED before any planner turn, with `next`
-        giving the first commit and push. One planner runs per repository at a time: another waits for it (listed in
-        `runs` with `waiting_for`, and by `status` in line), then plans from the tip the first one merged. Waiting
-        planners go in the order they were started; `pause` doesn't reach a waiting
-        planner, but stopping its process does (PAUSED). The script merges only what the planner leaves uncommitted: a
-        turn whose checkout's reflog shows a commit made during it, or whose HEAD the tip lacks, is INVALID (`next` by lead, no
-        command), and so is one during which a commit
-        without the script's trailer changed an record file on the tip (named, `next` decides: human, no command). Its
-        HEAD may move along the tip meanwhile (a `merge` elsewhere fast-forwards the checkout holding the base
-        branch). Everything it leaves uncommitted merges, outside the plans folder too (acceptance tests, say), except
-        record files. Any other INVALID turn's files are stashed, and its `next` gives a planner the task again
-        with the problems. The whole task is kept once, under `briefs`. A review is refused the same way when a
-        record changes on the tip without the trailer while it runs, or its checkout's reflog shows a commit. `merge` refuses to run in a plan or review
-        session.
-
-  merge --worktree PATH [--no-check]
-        Merges the worktree's commits under the merge lock: rebase onto the base, run the test command, then push
-        (Merge: push) or fast-forward the local branch (Merge: local). Builders use this. MERGED or FAILED. It
-        refuses (FAILED) commits that set a milestone's status to ready_for_review or done, which only the script
-        sets, after its checks; the items' checks don't run here, so they never hold the merge lock. The script's own
-        records (statuses, reviews, plans, STATUS.md) run no test and don't wait for the merge lock; a merge whose
-        push loses to one rebases and tries again, reusing its test pass when only the plans folder changed. Merges go
-        through a queue in the repository's loop folder: each `merge` waits for its own result, and one of the
-        waiting ones runs the queue. A branch waiting alone lands as above. Several land as one batch: each is
-        rebased, in the order they arrived, onto a checkout of the main branch's tip; one that conflicts is left out
-        (FAILED, with `conflicts` naming the files); the test command runs once on the batch; and when it fails, the
-        batch is split in halves until the branch that broke it is found (FAILED with the test output) and the rest
-        land. A branch that fails the test command alone is told so only when the main branch passes without it;
-        when the main branch fails on its own, the result carries `main_broken` (the commit, and under `culprit` the
-        latest commit that changed files outside the plans folder when its parent passes, with its modules) and a
-        `next` that gives the fix to a planner for those modules, or to the lead. A branch whose milestone in
-        progress has definitions other than the ones authorised at the tip is refused (FAILED): a planner has
-        changed them since it started. A landed branch's result carries `batch` (its id, the branches that landed in order, this branch's
-        place, the test runs) and moves the worktree to the landed tip. Requests outlive a `merge` that dies while
-        running the queue: the next waiting one carries on.
-
-  ready [--worktree PATH]       What each module's next milestone is waiting for, read at the main branch's tip. When
-        nothing is ready it adds `next`. A milestone Waiting for a re-plan or diagnosis, or Blocked with too many
-        failed reviews, carries its own `next` (the planner's or the user's command), never as ready. `plan_ahead`
-        lists the module table's modules with no plan yet whose Needs are all planned, in build order, each with
-        the `plan` command in its `next`. It names unmerged plan files (`unmerged_plans`) as `run` does, and
-        `settings_differ` when ORCHESTRATE.md here differs from the tip's. With no ORCHESTRATE.md it gives `unplanned`
-        and `next` naming `plan`, or, when the main branch's tip does have one, `behind` and `next` naming the merge
-        that brings this worktree up to it.
-  adopt [--worktree PATH] [--message TEXT] [PLAN FILE]...
-        Commits plan files that are uncommitted, or committed here but not merged, and merges them through a
-        clean checkout of the tip, as the script merges its own records, so nothing else in the worktree goes with them.
-        Also merges a first ORCHESTRATE.md (one the tip doesn't have yet). Evidence, build reports among it, is never
-        merged: it stays in the working folder.
-        A module's definitions are a draft until a design review of it passes. While they are, and nothing has been
-        built (no Ready for Review record, review or acceptance, no milestone past not_started, no run holding the module), adopt authorises
-        changed definitions (`authorised` lists the modules; the record's stamp says why), because the owed design
-        review will judge them; it holds the module's run lock while it merges and checks again before each commit.
-        Refuses files outside those, record files, a hand-edited STATUS.md, files under the old flat names,
-        a PLAN.md or LOG.md that fails the plan checks (as a planner turn's merging does), invalid done-when files, changed definitions on a module
-        that's no longer a draft (with `next` naming `plan` and `human scope`), a changed ORCHESTRATE.md the tip
-        already has (the lead commits it once the user agrees), anything `ready` would then call invalid, files the tip changed since,
-        and any session the script started. While it merges it has a `runs` record, so a run turned away names it.
-        ADOPTED, NOTHING, REFUSED or FAILED (with `next` when the repository has no commits to build on).
-  status [--module CORE] --worktree PATH [--format md]   Every milestone with its status, blockers and last verdict,
-        and which modules (and the planner) have a live run. A milestone the script hasn't checked yet shows as `done,
-        unchecked`. It warns about a module folder with no row in ARCHITECTURE.md's module table (`ready` lists the
-        same under `module_table`), and about tracked PLAN.md or *-PLAN.md files outside the plans folder.
-        --format md prints STATUS.md, the user's page, as the script writes it after each record it merges (in a
-        commit of its own, which never fails or holds up the record), plus any plan files here that haven't merged.
-        The page opens with an overview (a progress line, what waits on the user, what is under way or next, and
-        what was accepted in the last 7 days), then every module in build order with its status.
-  migrate --worktree PATH [--to docs/plans]
-        Moves plans from the old flat layout into a folder per module: <M>.md to <M>/DESIGN.md, <M>-PLAN.md to
-        <M>/PLAN.md, and <M>-DONE.json, <M>-ACCEPTED.json and <M>-BRIEF.md into <M>/, with each plan's `## Log`
-        section moved to <M>/LOG.md. --to also moves the whole plans folder there and changes the Plans line in
-        ORCHESTRATE.md. In the same commit it brings the project to the names of 2.0: the settings lines `Check:`
-        and `Integrate:` become `Test command:` and `Merge:`; in each DONE.json the states open, claimed and parked
-        become not_started, ready_for_review and blocked (too_many_failed_reviews), a text `blocked` becomes
-        {reason: needs_context, what}, a milestone's `needs` list becomes `depends_on`, an item's `attended`
-        becomes `needs` ({type: human_feedback, or hardware when it names a device, what}), cant_tell becomes
-        could_not_judge and a `proxy:` target `stand_in:`; in each ACCEPTED.json `owner_answers` {text, item}
-        becomes `human_feedback` {asked: null, said, items, at} and `parked` becomes `too_many_failed_reviews`.
-        It also brings a project to the names of 2.2: the settings line `Owner decides:` becomes `Human decides:`;
-        each ACCEPTED.json becomes RECORD.json, and in it `accepted` becomes `done` and an `owner decision` a `human
-        decision`; in each DONE.json a milestone's `state` becomes `status`, an item's `status` becomes
-        `builder_result`, `bar` becomes `quality_bar`, and the counts `rounds`, `fails` and `replans` become
-        `failed_reviews`, `failed_reviews_with_repeat` and `diagnoses`, where an earlier re-plan or diagnosis counts
-        as the milestone's one diagnosis.
-        Each stored definitions hash the rename alone changed is re-stamped, so nothing reads as changed outside a
-        planner turn. Every other command refuses a project with the old names, naming `migrate`. It works on a clean checkout of the tip and merges as the script's own commit, then
-        fast-forwards a clean worktree. Acceptance survives: records hold no plan paths, and a design's hash is of
-        its text. Refused while any run, review, plan or adopt is running, and while plan files here differ from the
-        tip, unless the tip is migrated already, when it changes nothing and needs no run stopped. MIGRATED
-        (`renamed` lists the files given the new names), NOTHING (the tip has folders and names already), REFUSED
-        or FAILED. Either success lists in `worktrees_on_old_names` every worktree whose files still use the old
-        layout or names, each with its `migrate --branch` command.
-  migrate --commit-map FILE --worktree PATH
-        After history was rewritten, such as by `git filter-repo`: points every record file (in one commit made as
-        the script) and the run state under <git common dir>/orchestrate at the new commit hashes. FILE holds one
-        `old new` pair of full hashes a line, as .git/filter-repo/commit-map does. Refused while a run holds the
-        repository, because it would write the old hashes back. MIGRATED (`commits_remapped`, `records`,
-        `state_files`), NOTHING (nothing names an old hash), REFUSED or FAILED.
-
-  migrate --branch --worktree PATH [--module CORE]
-        For a worktree whose own commits were made before the main branch was migrated, which `run` refuses:
-        renames each of its commits as `migrate` renamed the main branch, then rebases them onto the tip, so the
-        rebase meets no conflict in a file the renames changed. It holds only the module's run lock (the module its
-        run state names, else the one whose files its commits changed, else --module), so other modules' runs
-        carry on. The worktree must be clean. MIGRATED (`commits` renamed, `was` the old HEAD, `renamed` the files),
-        NOTHING (its commits use the new names already; a clean worktree behind the tip is fast-forwarded), REFUSED
-        (the tip isn't migrated, the worktree has uncommitted changes or merge commits, a run holds the module, or
-        the builder's commits conflict with the main branch's own changes, named in `conflicts`; the worktree is
-        then left as it was) or FAILED.
-  check --module CORE --milestone M2 [--worktree PATH] [--plans-from PATH] [--timeout 600] [--items-only] [--json]
-        Runs the milestone's checks (each item's `check` under its `lock`, then the test command, which
-        --items-only leaves out, for a planner trying its checks while builders work) in the given tree, as it stands,
-        and prints a line per check, with the why and last output lines of any that didn't pass (--json: one JSON
-        object with everything): per check `pass`, `fail` (it ran and failed: likely not built yet; the output says),
-        `error` or `timeout`, with the exit code and the output's tail. `error` means the check can't run as
-        written, and is given only where that's certain: it doesn't parse as shell, or exit 126. Its fix is to how the
-        check is written, never to what it tests. Exits 0 only when every check passes. Writes nothing in the
-        repository. Each check's whole stdout and stderr is saved under <git common dir>/orchestrate/checks/ (`stdout`
-        and `stderr` in --json), and a pass is remembered by the files it ran on (leaving out the plans folder) and its
-        command, so `merge` and `run` don't run it again on the same files (`reused`).
-  cost [--module CORE] [--since HOURS] --worktree PATH [--json]
-        Tokens per milestone from this machine's usage ledger (<git common dir>/orchestrate/usage.jsonl), which
-        every turn the script runs appends to, paused ones too: planning, then each milestone's build and review
-        (a design review under milestone `design`), with totals and how many turns showed no tokens or only some.
-        A milestone the ledger has nothing on (a clone, or a project built before the ledger) is read from the
-        `usage` its Ready for Review records and reviews carry in the committed record file, and marked as from the record.
-  report [--since HOURS|TIME] --worktree PATH [--write [PATH]]
-        The facts for the lead's answer when the user asks how the build is going, as markdown, read from the
-        records at the main branch's tip, this machine's usage ledger and lock log, the result files and the runs
-        going now. In order: what needs the user now (items that need user feedback, access or hardware, and
-        milestones Blocked with too many failed reviews, each with who acts); every decision recorded in the user's
-        name with their words (for the user to spot one they didn't make); what became Done or reached Ready for
-        Review; the verdicts with links (every design review in the window, DESIGN CHANGES ones included); the planner
-        turns with the task each was given; what is under way and how far along (each module's next milestone, its
-        items passing and failed reviews, and each run going now with its turns and step); what has slowed down,
-        with the cause the records show (repeated failed reviews and diagnoses, Waiting and Blocked milestones, runs
-        that ended STALLED, NO_PROGRESS_FOR_HOURS, HOST_FAILED, SCRIPT_FAILED or WRONG_MODEL_OR_EFFORT, merges that
-        failed, runs with no sign of activity for 30 minutes, time queued for a lock, a failing main-branch check);
-        the `flow` numbers; the planners' assumptions in plans changed in the window and the glossary's proposed
-        names; and cost (as `cost` reads it). --since is hours, or a time such as 2026-11-17 or 2026-11-17T09:00
-        (this machine's time zone); by default it covers the time since the last report at least an hour old, else
-        the last 24 hours. Each report's time is kept in <git common dir>/orchestrate/report-times.json. Links are
-        paths from the repository root. --write puts it in a file instead, by default
-        <git common dir>/orchestrate/reports/<date>-<time>.md, with its links relative to that file, and prints
-        `written`.
-  next  --module CORE --worktree PATH --milestone M2   The escalation after a failed review (see done-when.md):
-        read at the main branch's tip, where the review merged. `action` is what the counts call for, `message` what to send (the builder's message, or for
-        `diagnosis` the planner's task), and `next` the command.
-  unblock --module CORE [--milestone M2] --worktree PATH   Puts a blocked milestone back in the queue, in_progress,
-        and prints UNBLOCKED with the `run` to start next. With no --milestone it takes the module's one blocked
-        milestone.
-        Refused for Needs User Feedback (`human feedback` unblocks it) and Too Many Failed Reviews (`human reopen`).
-  pause [--module CORE] --worktree PATH   Stops the runs in this repository, and their agents, cleanly.
-  human accept|rereview|reopen|scope|release --module CORE --milestone M2|design --worktree PATH --text TEXT
-  human feedback --module CORE --milestone M2 [--item M2.3]... --worktree PATH --asked TEXT --said TEXT
-        Records a decision the user made in chat; the lead runs it, with the user's words in --text (--said for
-        feedback, where --text also works) as they gave them. Every verb records those words, when, and which verb, under `decisions` in the module's record (the
-        script can't tell who ran it, so it doesn't say), and `report` lists them all. Refused inside any session the
-        script started (ORCHESTRATE_ROLE set: Claude's environment, and Codex's shell through shell_environment_policy,
-        confirmed headless and unconfirmed in the app) and while a run, review or plan holds the module or the
-        planner. These stop mistakes and casual shortcuts, not a determined agent. `feedback` records User
-        Feedback, {asked, said, items, at}, under `human_feedback`, for items whose `needs.type` is human_feedback
-        (by default the blocked items, else every open one); it is refused for an item that needs access or
-        hardware, which is done at the machine and never recorded. It puts a milestone Blocked: Needs User
-        Feedback back in the queue; the resumed builder is told to read it there, oldest first, and the reviewer
-        counts it as the user's words. `release` takes a milestone out of In Progress when the lead that started it is gone. `scope` takes the done-when file as edited in the
-        worktree (refused, saying nothing changed, when it matches the tip), leaves the worktree clean on the tip where it can, and says under `worktree` what to do where it
-        can't. A `scope` that changes a milestone owed a diagnosis replaces the definitions its reviews failed, so
-        nothing is left to diagnose: it is not_started, listed under `replanned` with `replanned_why`. `scope` and
-        `reopen` both start the milestone's counts again, diagnoses too. `reopen` takes a milestone Blocked with too
-        many failed reviews back to in_progress.
-  quota [--worktree PATH] [--budget 120] [--json]
-        A short readout leading with the verdict, saying whose use each figure counts; --json gives everything.
-        The weekly Codex limit, read from Codex's local rollouts by codex_quota.py beside this file: burn per active
-        hour (idle time excluded) and per builder-hour by model and effort, a tokens-to-percent fit with its range, what
-        each milestone of this repository cost (its turns and reviews; runs in other repositories count only as the
-        machine's orchestrate use), the script's own use apart from other local threads and from usage
-        no local rollout explains, and a forecast of the open milestones against what's left before the reset, with a
-        one-sentence verdict. Every result line carries a short `quota` field: the rate (what's left, hours to the
-        reset, %/h, what's left at the reset), used, reset, recent burn, the verdict,
-        `warn` (only when the quota won't last) and `runs_out` when one builder at the usual pace would use it up.
-        Reading is cached and capped at two seconds on a result line; a first, cold read finishes here. Only result
-        lines from a run that launched or meant to launch Codex carry `quota`.
-  settings --worktree PATH [--host H]   Prints the project settings read from ORCHESTRATE.md, or exits 1 naming what's wrong
-        (with no ORCHESTRATE.md, `planned: false` and `next` naming `plan`), plus the loader checks for that host
-        (`preflight`). Models appear per host only. On Codex with `Codex sandbox: workspace-write`, the preflight
-        (here, and before a build turn) warns, with the fixes, when the settings' targets or an open
-        milestone's items plainly need a browser, which won't start inside that sandbox unless the agent asks
-        to run it outside and is granted it. A run says so once, on stderr before its first build turn and on its
-        result line; reviews aren't warned.
-  lock [--worktree PATH] NAME -- COMMAND...
-        Runs COMMAND under a named lock shared by every worktree of the repository (not the whole machine), in
-        first-come order. A resource the settings' `Shared resources:` line names is shared by up to that many
-        commands at once; NAME.alone waits until it has the resource alone, and new shared requests queue behind
-        it. A command still holding the lock after the settings' `Lock hold limit` (30 minutes unless they say
-        otherwise) is stopped, with exit status 124 and a message on stderr. A locked item check is held to it too.
-        The script's own merge and records locks aren't, nor is the test command under its `Test command lock`:
-        the test command may run for up to an hour.
-  locks [--worktree PATH] [--json]
-        Who holds each lock of the repository (pid, worktree, command, for how long) and who is queued for it.
-  runs [--repo PATH] [--json]   (`loops` before 2.1.0, still accepted)
-        Every run, review and plan running on this machine, in any repository and from any copy of this script: its
-        repository, module, milestone, role, host, model, effort, path (visible or headless), pid, start, turns, time
-        since the last sign of activity (a turn starting or ending, or its session file growing) and tokens where the
-        host reported them. Tokens count when a turn ends, so a turn under way shows as `turn_running_s` (and "turn N
-        running for ..."); a run's build row counts from its build, the design review it ran first being under
-        `design_review` on its result line. A dollar figure, here and in `cost` and `report`, is Claude's list price
-        for the Claude turns only; Codex reports tokens, not a price. Each loop keeps a record in $ORCHESTRATE_LOOPS_DIR (default
-        ~/.local/state/orchestrate/loops, or under $XDG_STATE_HOME), which counts only while its process holds a lock
-        on it, so a dead run never shows; this command removes what dead runs left there. A run
-        that can't write its record (a sandboxed home) runs as usual, and is listed from the process table with what
-        its command line says. --repo narrows the list to one repository; --json is for a lead.
-  main-check [NAME] [--worktree PATH] [--commit REV] [--wait 3300] [--start] [--due]
-        Main-branch checks: slow checks declared by `Main-branch check <name>:` lines in the project settings, run on
-        the main branch's tip after merges, one run covering every commit merged since the last. One run at a time per
-        check, for the whole repository; a failed run is tried again once, and a failure that holds is bisected over
-        the main branch's commits since the last pass (a command exits 75 when it couldn't judge the commit, such as a
-        capture that dropped frames: it is tried up to three times, and a run it still can't judge fails nothing and
-        starts no bisect), naming the first failing commit, its subject and the modules
-        whose plans it changed. With NAME it answers for a commit (default HEAD): COVERED (exit 0) when a
-        pass exists on a main-branch commit that contains it; FAILING_ON_MAIN (exit 1) when a failure that held does
-        and no pass does; NOT_ON_MAIN (exit 1) for a commit the main branch doesn't contain yet. Otherwise it joins the
-        run in flight or starts one now, whatever `every` says, in a process of its own that outlives the request (a
-        runner waiting out `every` starts at once), and waits up to --wait
-        seconds, then says PENDING (exit 75) while the run carries on. An item's check proves itself with
-        `python3 "$ORCHESTRATE_SCRIPT" main-check NAME`, which the script sets for every check it runs. --start
-        starts a run on the tip now; --due starts each check whose `every` has passed since its last run, if the
-        main branch has moved (STARTED, ALREADY_RUNNING or NOTHING). With no NAME it lists each check's latest
-        result (MAIN_CHECKS). Runs are kept under <git common dir>/orchestrate/main-checks/<name>/.
-  watch --worktree PATH [--runs]
-        Kept running in the background by the lead, and ends to wake it: at its check-in (the settings' `Lead
-        check-in`, 3 hours by default, counted from when a watch last ended), at a new warning sign, or with --runs
-        when a run, review or plan of the repository ends. The signs are read from the script's own records: a
-        builder with no progress for 2 hours, a milestone failing its last two reviews on the same items, ready work
-        with a free builder slot for 5 minutes, a planner queued for an hour, a module with one planned milestone
-        left, a low disk, and a main-branch check failing on the tip. Each sign wakes the lead once, until it changes
-        or goes, and later results name it in `earlier_signs` without its text; <git common dir>/orchestrate/
-        watch.json keeps what it has said. The result (WARNING_SIGNS, RUN_ENDED or CHECK_IN) sums up the build for a
-        lead with no other context: what moved since the last watch, what hasn't, milestones going back and forth
-        between building and review, builder slots, planners, disk, the main branch and the flow numbers.
-
-Routine steps. Without --one-step, `run` and `plan` carry on through the steps the process makes routine, each run
-as a command of its own with --one-step, and end with the last one's result plus `steps_run` (each step and its
-result) and `stopped_because`. After `run`: the review of a milestone that reached Ready for Review, a builder
-again after a failed review that the counts send back to the builder, the module's next milestone after a pass,
-and a planner revision each time the design review asks for changes, then the run again. After `plan`: the design
-review of each module the plan left owed one, and a planner revision each time a design review asks for changes.
-After two design reviews in a row ask for changes, the script approves the planner's revision without another
-review (DESIGN_REVIEW_ROUNDS; PLANNED says so under `design_approved_at_limit`). They
-stop at anything else: a `next` the user decides or with an `ask`, Blocked, a diagnosis or another escalation,
-HOST_FAILED, KEPT, PAUSED or a stop signal, a finished module, a next milestone that can't
-start, a failing main-branch check, a newer copy of the script, or any `next` that isn't a plain command for the
-step.
-
-Per-worktree session state lives in <git dir>/orchestrate/<module>.json, so re-running the same command resumes.
-Run locks (run-<MODULE>.lock, run-_plan.lock) live in <git common dir>/orchestrate/. The kernel releases one when its
-run ends; the file stays, holding the last holder's pid. A run, a review or a plan holds its lock for as long as it
-runs, and adopt holds the lock of each module whose definitions it authorises while it merges them; nothing else
-locks them.
+Commands: `agent_loop.py --help` lists them, and each command's --help gives what it does, its results and its
+fields (COMMAND_HELP below). `settings` prints every path and setting the script uses.
 
 A write under .git that the system or a sandbox refuses (Codex's workspace-write sandbox, for one), or a lock file
 another git process holds, stops any command with one line naming the path and the fix (`blocked_write`): SCRIPT_FAILED, or
@@ -593,12 +188,11 @@ def scope_text(scope: str | None) -> str:
     if not scope:
         return ""
     return (f"\n- This task is limited to {scope}, because planners of other modules may be working at the same "
-            f"time. Change {scope}'s folder in the plans folder, the files outside the plans folder that {scope} owns, "
-            "and the project files beside the module folders where you add to them, such as a glossary entry or a "
-            "log line. Leave other modules' folders, which the script refuses, their files, and any interface in the "
-            "module list that another module provides or uses, because that module's design is reviewed against it. "
-            "If the task needs a change to any of those, say which and end with `BLOCKED: needs <MODULE>'s files`, and "
-            "the lead gives the task to a planner for the whole project.")
+            f"time. Change {scope}'s folder in the plans folder, the files outside it that {scope} owns, and "
+            "additions to the shared project files, such as a glossary entry. If the task needs another module's "
+            "files, or an interface in the module list that another module provides or uses, end with "
+            "`BLOCKED: needs <MODULE>'s files`, saying which change and what it must deliver; the lead then gives "
+            "the task to a planner for the whole project.")
 
 
 def module_name_arg(value: str) -> str:
@@ -652,7 +246,7 @@ PROFILE_FIELDS = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "t
                   "remote": "origin", "merge": None, "codex sandbox": "workspace-write", "writable roots": "",
                   "graded examples": "", "effort": "", "claude permissions": "auto", "default host": "",
                   "review host": "", "planner host": "", "exclusive resources": "", "setup command": "",
-                  "lead check-in": "", "test command lock": ""}
+                  "lead check-in": "", "test command lock": "", "worktrees": ""}
 REQUIRED = {"test command": "the command that must pass before merging, or `none`",
             "merge": "push (standing permission to push) or local"}
 ONE_WORD = {"branch", "remote", "merge", "codex sandbox", "effort", "claude permissions", "default host",
@@ -785,7 +379,7 @@ def builders_count(text: str) -> int | None:
 
 
 def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat_ok: bool = False,
-            old_ok: bool = False) -> dict:
+            old_ok: bool = False, read_tip: bool | None = None) -> dict:
     """Reads the project settings from ORCHESTRATE.md (`- **Label:** value` lines). `Merge` and `Test command` must
     be there, because silently pushing, or merging with no test, isn't something to default into. A missing
     settings file, or a missing, unfilled or invalid value, raises SystemExit when strict, and falls back to safe
@@ -794,11 +388,11 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
     write it. A plans folder still in the old flat layout (<MODULE>-DONE.json directly in it) stops the command with
     the `migrate` command to run, unless `flat_ok`; so does a project still using the names from before 2.0, unless
     `old_ok`. When this working copy's settings are only behind the main branch's tip (it hasn't changed them itself),
-    the tip's are read instead, unless `old_ok` (migrate rewrites the file here)."""
+    the tip's are read instead, unless `old_ok` (migrate rewrites the file here) or `read_tip` is False."""
     path = worktree / "ORCHESTRATE.md"
     problems = [] if path.exists() else [f"no ORCHESTRATE.md in {worktree}"]
     text = path.read_text() if path.exists() else ""
-    if text and not old_ok:
+    if text and (not old_ok if read_tip is None else read_tip):
         text = settings_at_tip(worktree, text)
     out = {}
     for key, default in PROFILE_FIELDS.items():
@@ -815,7 +409,9 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
             problems.append(f"{key}: {value!r}")
             out[key] = default
         else:
-            out[key] = value.rstrip("/") if key in ("plans", "evidence") else value
+            out[key] = value.rstrip("/") if key in ("plans", "evidence", "worktrees") else value
+    if out["worktrees"].lower() == "none":
+        out["worktrees"] = ""
     if not profile_value(text, "plans") and not (worktree / out["plans"]).exists() and (worktree / OLD_PLANS).is_dir():
         out["plans"] = OLD_PLANS  # a project from before docs/plans keeps its modules where they are
     out["merge"] = out["merge"] or "local"
@@ -832,8 +428,15 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
     out["hosts"] = {}
     for m in re.finditer(r"^\s*[-*]\s*\*\*Host ([\w.-]+):\*\*[ \t]*(.*)$", text, re.IGNORECASE | re.MULTILINE):
         name, command = m.group(1).lower(), re.sub(r"\*\(.*?\)\*", "", m.group(2)).replace("`", "").strip()
-        if name in ("codex", "claude") or "{prompt}" not in command:
-            problems.append(f"host {name}: {command!r} (needs a {{prompt}} placeholder, and codex and claude are built in)")
+        missing = [f"{{{k}}}" for k in ("prompt", "model", "effort") if f"{{{k}}}" not in command]
+        if name in ("codex", "claude"):
+            problems.append(f"host {name}: {command!r} (codex and claude are built in, so they take no Host line)")
+        elif missing:
+            # Every launch names its model and effort, so a host whose command can't take them would run on its
+            # own default, which the settings didn't choose.
+            problems.append(f"host {name}: {command!r} (needs the {', '.join(missing)} placeholder"
+                            f"{'s' if len(missing) > 1 else ''}: the script passes the prompt, model and effort to "
+                            "every launch, so none is left to the host's own default)")
         else:
             out["hosts"][name] = command
     out["roles"] = role_lines(text, {"codex", "claude", *out["hosts"]}, problems)
@@ -974,9 +577,10 @@ def unplanned(worktree: Path) -> dict | None:
     return {"reason": f"the project isn't planned yet: there's no ORCHESTRATE.md in {worktree}",
             "next": next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task",
                                       "Plan the project: <what the user asked for, in their words>"), "lead",
-                             "the lead writes the project settings (ORCHESTRATE.md) from the brief and commits them, "
-                             "then a planner writes the module table in ARCHITECTURE.md, the first module's plan and "
-                             "the test command; give it the user's ask")}
+                             "the lead writes the brief, and the project settings (ORCHESTRATE.md) from "
+                             "`settings --template`, then a planner writes the module table, the first module's plan "
+                             "and the test command; give it the user's ask. `plan` sends unmerged files to `adopt` "
+                             "first")}
 
 
 def codex_flags(prof: dict, role: str = "build") -> list[str]:
@@ -1169,7 +773,7 @@ def link_evidence(tree: Path, rel: str | None = None, remember: bool = False) ->
         return False
 
 
-def ignore_evidence(tree: Path, rel: str) -> None:
+def ignore_evidence(tree: Path, rel: str, why: str = "orchestrate's working folder: evidence is never committed") -> None:
     """Adds `rel` to the repository's own ignore list (info/exclude, shared by every worktree), unless git already
     ignores it. A line there changes no file in git, so the project's .gitignore stays the project's."""
     if git(tree, "check-ignore", "-q", "--no-index", rel).returncode == 0:
@@ -1183,7 +787,7 @@ def ignore_evidence(tree: Path, rel: str) -> None:
     line = "/" + rel.strip("/")
     if line not in text.splitlines():
         exclude.write_text(text + ("" if not text or text.endswith("\n") else "\n") +
-                           "# orchestrate's working folder: evidence is never committed\n" + line + "\n")
+                           f"# {why}\n" + line + "\n")
 
 
 def committed_evidence(tree: Path, text: str) -> str | None:
@@ -1300,6 +904,74 @@ def changed_paths(tree: Path, start: str) -> list[str]:
     return sorted(n for n in names if n)
 
 
+def build_branch(stem: str) -> str:
+    return f"build/{stem.lower()}"
+
+
+def worktrees_by_branch(repo: Path) -> dict[str, Path]:
+    """Each branch checked out in a worktree of the repository, and where."""
+    out, path = {}, None
+    for line in git(repo, "worktree", "list", "--porcelain").stdout.splitlines():
+        if line.startswith("worktree "):
+            path = Path(line[len("worktree "):])
+        elif line.startswith("branch refs/heads/") and path:
+            out[line[len("branch refs/heads/"):]] = path
+    return out
+
+
+def module_worktree(worktree: Path, prof: dict, stem: str) -> tuple[Path, str | None]:
+    """The worktree to build `stem` in, and whether the script found or made it. With a `Worktrees:` line, a `run`
+    given a checkout of the main branch builds in the module's own worktree, on build/<module>: the one already
+    checked out on that branch, else a new one in the `Worktrees:` folder, which git is told to ignore, branched from
+    the main branch's tip. Any other worktree is the lead's choice and is used as it is."""
+    branch = git(worktree, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    if not prof.get("worktrees") or branch != prof["branch"]:
+        return worktree, None
+    name = build_branch(stem)
+    found = worktrees_by_branch(worktree).get(name)
+    if found and found.exists():
+        return found.resolve(), "found"
+    repo = Path(repository_of(git_common_dir(worktree)))
+    folder = (repo / prof["worktrees"] / stem.lower()).resolve()
+    if not Path(prof["worktrees"]).is_absolute():
+        ignore_evidence(repo, prof["worktrees"], "orchestrate's module worktrees")
+    try:
+        ref = tip(worktree, prof)
+    except TipError as e:
+        raise SystemExit(f"error: couldn't make a worktree for {stem}: {e}")
+    has_branch = git(worktree, "show-ref", "--verify", "--quiet", f"refs/heads/{name}").returncode == 0
+    made = git(worktree, "worktree", "add", *([str(folder), name] if has_branch else ["-b", name, str(folder), ref]))
+    if made.returncode != 0:
+        raise SystemExit(f"error: couldn't make a worktree for {stem} at {folder}: "
+                         f"{(made.stdout + made.stderr).strip()[-300:]}")
+    return folder, "made"
+
+
+def finished_worktrees(worktree: Path, prof: dict, finished: list[str]) -> list[str]:
+    """Removes the worktree of each finished module that the script made (inside the `Worktrees:` folder), once it
+    is clean and the main branch holds its commits, and the branch with it; returns what it removed. Build output
+    takes disk the other builders need."""
+    if not prof.get("worktrees"):
+        return []
+    repo = Path(repository_of(git_common_dir(worktree)))
+    root = (repo / prof["worktrees"]).resolve()
+    try:
+        ref = tip(worktree, prof, fetch=False)
+    except TipError:
+        return []
+    have, removed = worktrees_by_branch(worktree), []
+    for stem in finished:
+        path = have.get(build_branch(stem))
+        if not path or root not in path.resolve().parents or path.resolve() == worktree.resolve():
+            continue
+        if git(path, "status", "--porcelain").stdout.strip() or not is_ancestor(path, "HEAD", ref):
+            continue
+        if git(worktree, "worktree", "remove", str(path)).returncode == 0:
+            git(worktree, "branch", "-d", build_branch(stem))
+            removed.append(str(path))
+    return removed
+
+
 def sync_worktree(worktree: Path, prof: dict) -> None:
     """Fast-forwards a clean worktree that's behind the main branch's tip, so a warm worktree doesn't start a milestone
     from old files. A worktree with uncommitted or unmerged work is left for its builder to rebase."""
@@ -1311,7 +983,7 @@ def sync_worktree(worktree: Path, prof: dict) -> None:
         git(worktree, "merge", "--ff-only", "--quiet", ref)
 
 
-ITEM_PROOF = ("builder_result", "evidence")  # what a builder writes on an item, as done-when.md's table says
+ITEM_PROOF = ("builder_result", "evidence")  # what a builder writes on an item
 
 
 def merged_done(tip_text: str, builder_text: str) -> str:
@@ -2094,8 +1766,9 @@ def needs_review(milestone: dict, done: dict, entry: dict | None = None) -> bool
     """`inspect` and `ask` need the reviewer's judgement, and so does the module's last milestone, whose review reads
     the whole module, and the last milestone of each stretch a planner wrote (`ends_stretch` in its record), which
     stays reviewed when the next stretch is planned while it builds. Other milestones close on their checks. A
-    stretch that ends on the user's judgement, such as their pick between options, has had its judge: once the user
-    has answered and the checks pass, it closes without a reviewer."""
+    stretch that ends on an item the user judges isn't reviewed for being a stretch's end, but the user's pick
+    between options is still reviewed: the milestones after it have no items yet, so it is the done-when file's last
+    milestone, which is always reviewed."""
     if any(i.get("inspect") or i.get("ask") for i in milestone["items"]):
         return True
     if milestone["id"] == done["milestones"][-1]["id"]:
@@ -2698,9 +2371,7 @@ def review_notes(mid: str, prof: dict, stem: str, feedback: list | None, earlier
         kept = (f"Those reviews are {', '.join(files)}. Your review replaces the latest one, and the script keeps a "
                 "copy of it" if files else "Those reviews are no longer in the working folder")
         parts.append(f"{mid} has failed review {plural(len(earlier), 'time')} since the script last started counting. {kept}. "
-                     f"The name of each finding is in {record_rel(prof, stem)} under milestones.{mid}.reviews. Judge "
-                     "the items before you read any of these, as \"A milestone reviewed before\" in your instructions "
-                     "describes.")
+                     f"The name of each finding is in {record_rel(prof, stem)} under milestones.{mid}.reviews.")
     if judged:
         j = judged[-1]
         on = f" on {j['at'][:10]}" if j.get("at") else ""
@@ -2748,11 +2419,7 @@ def diagnosis_task(module: str, mid: str, counts: dict, prof: dict, worktree: Pa
     else:
         what = (f"It has failed review {plural(failed, 'time')}, mostly on findings that no earlier review had "
                 "raised, so each fix held and the milestone still doesn't pass")
-    return (f"Diagnose {module} {mid}. {what}. {where}.{each} Read every review and decide why it keeps failing. If the plan is at "
-            "fault, change what is at fault, write each item you change again from what it claims, and end with "
-            "PLANNED. If the plan is "
-            f"sound, change no file and end with `KEEP {module} {mid}: builder: <why>`, `... reviewer: <why>` or "
-            "`... human: <why>`, naming who has to act.")
+    return f"Diagnose {module} {mid}. {what}. {where}.{each} A plan you keep ends with `KEEP {module} {mid}: ...`."
 
 
 def keep_review(tree: Path, current: Path) -> tuple[str, list[str]]:
@@ -2925,10 +2592,12 @@ def replay_plan(tree: Path, prof: dict) -> tuple[bool, list[str]]:
     return ok, unsettled
 
 
-def keep_counts(before: dict | None, after: dict, settled: list[str], stem: str, restart: bool = False) -> None:
+def keep_counts(before: dict | None, after: dict, settled: list[str], stem: str, restart: bool = False,
+                diagnosed: str | None = None) -> None:
     """Puts back what a planner changed in the script's counts: on each milestone the plan didn't settle, the counts,
-    `findings` and a Too Many Failed Reviews block as they were. A milestone split off a new one keeps the `diagnoses`
-    it was given, and starts with no failed reviews. A milestone Blocked with too many failed reviews whose definitions
+    `findings` and a Too Many Failed Reviews block as they were. A new milestone starts with no failed reviews; in a
+    diagnosis of `diagnosed`, it was split off that milestone, so it carries the diagnosed milestone's new count of
+    diagnoses, and the escalation goes on where it was rather than starting again. A milestone Blocked with too many failed reviews whose definitions
     the plan changes, in a `change` task (`restart`), is the user's decision carried out by a planner: it starts
     again as `human scope` starts it, and joins `settled`. Any other task leaves it Blocked, since only the user sends
     one of those back."""
@@ -2940,6 +2609,9 @@ def keep_counts(before: dict | None, after: dict, settled: list[str], stem: str,
         if was is None:
             m.update(failed_reviews=0, failed_reviews_with_repeat=0)
             m.pop("findings", None)
+            source = next((x for x in after.get("milestones") or [] if x.get("id") == diagnosed), None)
+            if source is not None:
+                m["diagnoses"] = int(source.get("diagnoses", 0) or 0)
             continue
         stuck = lambda x: x.get("status") == "blocked" and blocked_of(x)["reason"] == "too_many_failed_reviews"
         if restart and stuck(was) and run_free_definitions(was) != run_free_definitions(m):
@@ -3066,8 +2738,8 @@ def human_next(verb: str, mod: str, mid: str, wt: str, ask: str, why: str, **mor
     The lead runs the command (`by: lead`); `decides: human` because the decision is theirs, in their words."""
     flag = "--said" if verb == "feedback" else "--text"
     return next_cmd(human_cmd(verb, mod, mid, wt, more.pop("items", None)), "lead",
-                    why + f". Ask the user in chat; once they have replied, run the command with their words in "
-                    f"{flag}, as they gave them, and never decide for them", ask=ask, decides="human", **more)
+                    why + f". Run it with the user's reply in {flag}, in their words", ask=ask, decides="human",
+                    **more)
 
 
 def needs_ask(worktree: Path, prof: dict, proj: dict | None, mod: str, mid: str, items: list[str],
@@ -3170,8 +2842,7 @@ def block_gone(worktree: Path, prof: dict, step: dict, ref: str) -> str | None:
 
 def answered_line(mod: str, mid: str) -> str:
     """The end of a planner's task about a block: how to end when the plan already answers it."""
-    return (f" If the plan already provides it, change no file and end with `KEEP {mod} {mid}: builder: <where the "
-            "plan provides it>`, and the script lifts the block.")
+    return f" A plan you keep ends with `KEEP {mod} {mid}: builder: <where the plan provides it>`."
 
 
 def planned_since_block(worktree: Path, prof: dict, mod: str, mid: str, own: bool = False) -> str | None:
@@ -3235,21 +2906,14 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
                             "carries on")
         if reason == "needs_human_feedback":
             return human_next("feedback", mod, mid, wt, needs_ask(worktree, prof, proj, mod, mid, items, what),
-                              f"{mod} {mid} is Blocked: Needs User Feedback on {', '.join(items) or 'its items'}. The "
-                              "user judges it: the lead shows them the evidence and asks the question. Their reply "
-                              "goes into the record file, "
-                              "where the builder reads it and the reviewer counts it as the user's words, and puts the "
-                              "milestone back in the queue; then `run` resumes the builder. Don't pass it through "
-                              "`run --message`, because a reviewer can't tell those words from an agent's." + work,
+                              f"{mod} {mid} is Blocked: Needs User Feedback on {', '.join(items) or 'its items'}. "
+                              "Show the user the evidence and ask; `then` resumes the builder" + work,
                               items=items, then=loop_cmd("run", "--module", mod, "--worktree", wt))
         if reason in ("needs_access", "needs_hardware"):
             kind = "approve the access prompts" if reason == "needs_access" else "connect the device"
             return next_cmd(visible_run(mod, wt), "lead",
                             f"{mod} {mid} is Blocked: {reason.replace('_', ' ').replace('human', 'user').capitalize()} ({what}). The user "
-                            f"has to be at the machine to {kind}, and the lead runs the builder again in a visible "
-                            "session while they are. The visible run unblocks it; nothing is recorded, and the user "
-                            "isn't asked to confirm it."
-                            + work,
+                            f"has to be at the machine to {kind}; run this while they are." + work,
                             ask=f"Are you at the machine to {kind} for {mod} {mid}? {what}")
         if reason == "needs_dependency":
             plan = loop_cmd("plan", "--worktree", wt, "--kind", "unblock", "--task",
@@ -3276,11 +2940,8 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
                                                  f"Unblock {mod} {mid}. The builder wrote: {sentence(what)}" + work
                                                  + answered_line(mod, mid)))
         return next_cmd(loop_cmd("run", "--module", mod, "--worktree", wt) + " --message '<the missing fact>'", "lead",
-                        f"{mod} {mid} is Blocked: Needs Context ({what}). The builder asked a question. The lead answers "
-                        "it from what it can see, and resumes the builder with the answer in `run --message`, which "
-                        "unblocks it. When the question is about the plan, such as a gap in the design or something "
-                        "another module owns, a planner answers it instead. Take it to the user only when only they "
-                        "can decide, together with any other questions for them, while other work carries on." + work,
+                        f"{mod} {mid} is Blocked: Needs Context ({what}). Answer it with `run --message`, which "
+                        "unblocks it, or give it to a planner (`alternative`) when it is about the plan." + work,
                         alternative=loop_cmd("plan", "--worktree", wt, *module_args(mod), "--kind", "unblock", "--task",
                                              f"Unblock {mod} {mid}. The builder wrote: {sentence(what)}" + work
                                              + answered_line(mod, mid)))
@@ -3519,7 +3180,7 @@ def plan_drift(worktree: Path, prof: dict, ref: str) -> dict:
     committed but not merged. `run` and `ready` read plans at the tip, so these are invisible to them. Committed files
     that merge with a builder's work instead are under `with_work`. A settings file
     the tip doesn't have at all is part of a first plan, so it counts too. One the tip has in another form is only
-    named, under `settings_differ`: the lead commits it once the user has agreed."""
+    named, under `settings_differ`: the lead changes it with `settings --set` once the user has agreed."""
     out = folder_drift(worktree, prof["plans"], ref)
     for key in ("uncommitted", "unmerged"):  # the script writes STATUS.md itself; it never waits to be merged
         out[key] = [p for p in out[key] if p != status_rel(prof)]
@@ -3553,8 +3214,8 @@ def profile_note(drift: dict, prof: dict) -> dict:
     if not drift.get("settings_differ"):
         return {}
     return {"settings_differ": f"this worktree's {PROFILE_FILE} differs from the one at {base_ref(prof)}, which "
-                               "builders, reviewers and the script's checks read. The lead commits and merges a "
-                               "changed settings file once the user has agreed to it; the script doesn't merge it"}
+                               "builders, reviewers and the script's checks read. Once the user has agreed, the "
+                               "lead changes each line with `settings --set`"}
 
 
 def drift_fields(drift: dict, worktree: Path, step_next: dict | None = None) -> dict:
@@ -3745,7 +3406,7 @@ def hold_limit_note(name: str, limit_s: float, command: str) -> str:
     return (f"`{command}` held the {name} lock for {limit_text(limit_s)}, which is this project's hold limit, so the "
             "script stopped it before it finished, and its output is incomplete. Hold the lock only for the part "
             f"that needs {name.removesuffix(ALONE)}, or split the work into shorter commands. If this work really "
-            "needs longer, ask the planner to raise the `Lock hold limit` line in ORCHESTRATE.md.")
+            "needs longer, say so in your report, or end BLOCKED; the lead can raise the `Lock hold limit` line.")
 
 
 def ticket_live(path: Path) -> bool | None:
@@ -4922,6 +4583,17 @@ def ready_current(entry: dict | None) -> bool:
 # the 30 lines its message held (N3); and the checks at the end of one milestone ran three times on the same files,
 # once for the builder's `check`, once for `merge` and once for the script, which took 35 minutes (N4).
 CHECKS_DIR = "checks"
+CHECK_RUNS_FILE = "check-runs.jsonl"  # under the loop folder: each run of the test command or a check, and how long
+MERGES_FILE = "merges.jsonl"  # under the loop folder: each `merge`, from joining the queue to its result
+
+
+def note_row(worktree: Path, name: str, row: dict) -> None:
+    """Appends a row to a ledger in the loop folder. A ledger that can't be written costs a metric, not the work."""
+    try:
+        with open(loop_dir(worktree) / name, "a") as handle:
+            handle.write(json.dumps(row) + "\n")
+    except OSError:
+        pass
 CHECK_TAIL_LINES = 30
 
 
@@ -4998,6 +4670,7 @@ def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plan
         if saved.get("exit") == 0 and saved.get("command") == command:
             return {"exit": 0, "out": "", "err": "", "stdout": saved.get("stdout"), "stderr": saved.get("stderr"),
                     "reused": saved.get("at") or True}
+    started = time.time()
     if lock:
         with held(lock, tree, what=command) as use:
             limit = use.get("limit_s") if hold_limit else None
@@ -5009,6 +4682,9 @@ def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plan
             use["exit"] = code
     else:
         code, out, err = run_proc(command, tree, timeout_s, shell=True, env=full_env)
+    note_row(tree, CHECK_RUNS_FILE, {"command": command[:300], "exit": code, "started_s": round(started, 1),
+                                     "seconds": round(time.time() - started, 1), "lock": lock,
+                                     "role": os.environ.get("ORCHESTRATE_ROLE") or "script"})
     paths = {"stdout": None, "stderr": None}
     if folder:
         stem = f"{(key or 'changed')[:24]}-{name}" + ("" if key else f"-{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}")
@@ -5141,9 +4817,8 @@ def check_failures(tree: Path, prof: dict, milestone: dict, timeout_s: float = 3
 
 
 SCRIPT_SETS_STATE = ("Only the script sets a milestone to Ready for Review or Done, once its own checks pass on the "
-                     "merged work. A builder leaves the status in_progress. Set {what} back to in_progress in {done}, "
-                     "commit that, and run `merge` again. Then end your turn with DONE, and the script checks the "
-                     "work and sets the status itself.")
+                     "merged work. Put {what} back to in_progress in {done}, merge again, and end your turn with "
+                     "DONE.")
 
 
 def states_set(worktree: Path, prof: dict, old: str, new: str = "HEAD") -> list[tuple[str, str, str]]:
@@ -5173,7 +4848,7 @@ def state_refusal(found: list[tuple[str, str, str]], old_branch: bool = False) -
     `old_branch`, the commits are in the worktree when its run starts, left by a builder before 2.1.0."""
     what = ", ".join(f"{mid} to {state}" for _, mid, state in found)
     rels = sorted({rel for rel, _, _ in found})
-    said = (f"Commits in this worktree that haven't merged yet set {what}, as builders did before 2.1.0. "
+    said = (f"Commits in this worktree that haven't merged yet set {what}. "
             if old_branch else f"Your commits set {what}. ")
     return (said + SCRIPT_SETS_STATE.format(
         what="the status" if len(found) == 1 else "each status", done=" and ".join(rels)))
@@ -6321,7 +5996,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.9.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.10.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6346,361 +6021,52 @@ def newer_install() -> str | None:
     return None
 
 
-# What behaves differently in each version, for a lead whose project has just moved to it. The first result after
-# the change carries the lines as `changed`. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong, and told the
-# user so.
+# What a lead must do differently, or tell the user, in each version, for a lead whose project has just moved to it.
+# The first result after the change carries the lines as `changed`. Everything before 2.6.0 is one entry, under 2.5.0,
+# so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
+# and told the user so.
 CHANGES = {
+    "2.10.0": [
+        "Read the lead skill again. It is much shorter, because each command's --help now says what the command does, "
+        "its results and its fields, and the top-level --help gives the result contract.",
+        "Change a settings line with `settings --set LABEL VALUE --said TEXT`, with the user's words, once they have "
+        "agreed. `settings` prints every setting, the model and effort each kind of agent gets, and every path.",
+        "When a builder runs on a model or effort other than the settings name, rerun it as set, as its `next` says, "
+        "and tell the user. Only when the rerun does the same does `next` carry `decides: human` with an `ask`.",
+        "The script names the model and effort on every launch, so a `Host <name>:` line in the settings needs "
+        "`{model}` and `{effort}` placeholders. Add them with `settings --set` once the user agrees.",
+        "The user's pick between options is reviewed after they answer, as a module's last milestone always is. "
+        "2.9.0 said it closes without a reviewer, which was wrong.",
+    ],
     "2.9.0": [
-        "The set ships no agent files. Planners and reviewers start from their skills, with `--disallowedTools Agent` "
-        "on Claude and multi-agent off on Codex, and `install.py` removes agent files an earlier install linked or copied.",
-        "A `plan --kind change` that changes the items of a milestone Blocked with Too Many Failed Reviews starts it "
-        "again, as `human scope` does, so the user isn't asked the same question twice.",
-        "A merge that finds the test command failing on the main branch saves it for the whole repository: `watch`, "
-        "the steps of every run and the ready-work warning act on it, and a planner merge or a landed merge clears it.",
-        "An item's main-branch check answers for the builder's merged commit and the module, given in "
-        "ORCHESTRATE_CHECK_COMMIT and ORCHESTRATE_CHECK_MODULE, and a run waiting on one asks again on the same tip. "
-        "A failure traced to another module's commit exits 75, so the builder waits without a turn or a strike.",
-        "A Needs Context block that a plan answered since gets `run --message` pointing at the answer.",
-        "`report` lists items that need the user only on milestones a builder has started, and `human feedback` "
-        "refuses a milestone that hasn't started. A builder stopped with `BLOCKED needs_human_feedback` and no item "
-        "is asking for an approval, which `human feedback` records without --item.",
-        "`watch` warns when a module has one planned milestone left and no planner is writing its next ones, and "
-        "warns about idle ready work after 5 minutes rather than 30.",
-        "A plan that changes the settings or files outside the plans folder merges only after the test command passes.",
-        "`plan --module <M>` limits a planner to that module's folder, the project files and files outside the plans "
-        "folder, and planners of different modules now run side by side; a planner without it still runs alone. The "
-        "script's own planner tasks about one module carry `--module`.",
-        "A `Test command lock:` line names a lock, such as `gpu`, that the script takes whenever it runs the test "
-        "command.",
-        "A plan whose merge conflicts only with fields a builder or the script wrote meanwhile in a done-when file, "
-        "such as an item's evidence, now merges, keeping both, instead of sending the planner's turn back.",
-        "A run keeps its builder slot while its milestone is with a reviewer, and frees it while a planner works on "
-        "the milestone or it waits on a main-branch check. A builder coming back to a slot goes ahead of runs that "
-        "haven't started, in the order they began waiting, and two runs starting at once can no longer both take the "
-        "last slot.",
-        "The design reviews a plan leaves owed go on past a module whose run is going, which does its own.",
-        "A first plan, while the settings have no `Builders:` line, ends with `first_plan` and a `next` to show the "
-        "user the plan; `plan` without `--one-step` stops there rather than going on to the design reviews. The "
-        "design reviews a plan leaves owed are listed in build order, as the module table has them.",
-        "A `plan --kind change` that leaves a milestone Blocked with Too Many Failed Reviews untouched lists it in "
-        "`still_blocked`, with the `human reopen` command to run when the change carried out the user's answer to it.",
-        "The lock hold limit no longer stops the test command, which keeps its own limit of an hour.",
-        "`watch` raises a sign for every module a planner could plan now, including one with no plan yet whose needs "
-        "are planned. Only a merge that ran the test command clears a saved test-command failure. A planner limited "
-        "to one module is told to leave other modules' interfaces in the module list and their files alone.",
-        "A milestone with `\"alone\": true` in its done-when file is built in a quiet window: its run waits for the "
-        "turns under way to end, and no new builder turn, review, planner or main-branch check run starts until it "
-        "ends. A main-branch check's `gap` spaces out every run, even one an item waits for.",
-        "Only a test command that fails on the main branch on its own stops a `run` between steps; a failing "
-        "main-branch check no longer does, since it doesn't stop merges. When the test command fails on its own, "
-        "the script now halves the last 50 commits to find the one that broke it, not only the latest. A plan that "
-        "can't be tested for that reason is kept on a branch, and `plan --merge-kept <branch>` merges it once the main "
-        "branch passes, without a new planner turn.",
-        "A diagnosis goes to a planner for the whole project, because the fix is often in another module. `PLANNED` "
-        "warns when a diagnosis added another module's milestone that the diagnosed one doesn't list in "
-        "`depends_on`. A planner limited to one module that stops because it needs another's files hands on the end "
-        "of its report, not one line.",
-        "A pick between options holds back what is planned from it: `ready` lists no next stretch for its module, "
-        "and no module whose Needs name it, such as `ART M2`, until the pick is Done. Then it lists a "
-        "`plan --kind change` task for each module whose milestones not started yet depend on the pick and were "
-        "written before it. A stretch that ends on the user's judgement closes without a reviewer.",
-        "`watch` gives each warning sign's text once, and names the earlier ones in `earlier_signs`.",
-        "When the script looks for whose commit broke the main branch, a commit that changed no plan file now counts "
-        "as the module whose merge landed it, which the merge queue notes, or else the module its subject starts "
-        "with. A main-branch check failure traced to a commit no module is known to own no longer costs a waiting "
-        "builder a turn or a strike; the lead is told to find the owner. A saved test-command failure stops counting "
-        "once a commit outside the plans folder lands on the main branch, such as a revert made by hand.",
-        "The glossary now grows with the plan instead of waiting to be written. The lead shows the names the first "
-        "plan proposed in the plan preview before the first build, brings later proposed names with the questions it "
-        "gathers for the user, and a design review reports names that drift. Orchestrate now installs the "
-        "domain-language skill, which agents follow to choose a name and write its entry, and the status page reads "
-        "its `###` entries and bold `Proposed:` lines.",
-        "An item's `main-check <name>` on a merged commit no run covers yet now starts the run at once, or wakes a "
-        "runner waiting out `every`, instead of waiting for the next scheduled run. `every` now only spaces out the "
-        "runs nobody is waiting for, so a milestone no longer sits idle for hours after merging.",
-        "The person you work with is now called the user, not the human, in every skill and in what the script "
-        "prints, such as Blocked: Needs User Feedback; the people who use what is built are end users. Stored names "
-        "keep `human`: the `human` commands, `--human-rule`, `decides: human`, `human_feedback` and the "
-        "`Human decides` line. The interview now says what the planner needs from the brief, and is done when "
-        "the planner can plan without working around a hole in what the user wants. It researches the field first, "
-        "asks numbered questions in rounds with a recommended answer, draws inferences from the answers for the user "
-        "to overturn, runs a pre-mortem, and has a fresh subagent read the brief as the planner would before showing "
-        "it. Approving the brief confirms the agent's own decisions. It no longer asks how the user wants the "
-        "agents to work: the lead writes the settings from the brief before planning, with `Merge: local`, the "
-        "planner adds only the test and setup commands, and `run` refuses to start a builder until the settings have a Builders line, so the lead "
-        "asks the user before the first build. The lead now drives a project from the start, and loads by itself "
-        "when someone describes a project: its skill works out which stage the project is in (interview, planning, "
-        "before the first build, building) and reads that stage's file in `stages/`. The interview is no longer a skill of "
-        "its own but the lead's first stage, and `install.py` removes the old copy. Before the first build the lead "
-        "recommends clearing or compacting the conversation.",
-        "Every question an agent can't answer now comes to the lead, and the skills no longer say a planner can't "
-        "ask. A builder or a planner ends with `NEEDS_CONTEXT:` and the question when guessing would change what "
-        "gets built. The lead answers it from what it can see, gives it to a planner when it is about the plan, or "
-        "takes it to the user only when it is theirs, gathering the user's questions into one message and keeping "
-        "other work moving meanwhile.",
-        "A planner now plans a module a stretch at a time: items for the next one or two milestones, and later "
-        "milestones named in the plan file as headings with no items. A module with named milestones left isn't "
-        "finished: its next step is `waiting` with `reason: for_planning`, `ready` lists it under `plan_ahead` once "
-        "one planned milestone is left, and another module's `depends_on` may name one. The lead now writes the "
-        "project settings from the brief before planning, and the planner adds only the test and setup commands.",
-        "The planner's prompt now carries the instructions for its kind of task, from the planner skill's `tasks/` "
-        "folder, and the skill keeps only what every kind shares. The planner is no longer a skill to call by hand: "
-        "ask the lead for a plan or a change to one. "
-        "`plan` takes `--kind` (project, module, change, unblock, diagnose, revise or fix); without it, project "
-        "before there is a module list and module after. The script's own `plan` commands name the kind, and the "
-        "lead passes `--kind change` when the user asks for something new or changes their mind. The reviewer works "
-        "the same way: a milestone review and a design review each carry their instructions in the prompt, from the "
-        "reviewer skill's `tasks/` folder, and the reviewer is no longer a skill to call by hand.",
-        "Items have three kinds of proof: a `check` for objective outcomes, an `inspect` for subjective outcomes, "
-        "and an `ask` for implementation outcomes, kept to the parts of the plan the architecture depends on. The "
-        "planner writes each inspection as a checklist drawn from a carefully chosen reference, which the reviewer "
-        "answers line by line, and a design review checks the reference against what the user asked for. The "
-        "builder, reviewer and planner task files are rewritten in the plainer style of the planner skill, and the "
-        "planner no longer adds an ask to every item whose test the builder writes.",
-    ],
-    "2.8.3": [
-        "The domain-language skill has left orchestrate and is now a standalone plugin. Orchestrate keeps its "
-        "glossary: the lead settles names in the interview, and each agent's skill tells it to read the glossary and "
-        "use its names. The lead's skill now says how to agree a proposed name, and the interview names a thing by "
-        "the term its field already uses where there is one, explained to the human, before the human's own word.",
-    ],
-    "2.8.2": [
-        "The script's records (unblock, review verdicts, Ready for Review, STATUS.md, plans) no longer wait behind "
-        "builders' test runs on the merge lock. They take a short records lock of their own, and a builder's merge "
-        "that loses its push to one rebases and lands without running the test command again.",
-    ],
-    "2.8.1": [
-        "The prompts for builders, reviewers and planners name the project's glossary, so each agent uses the "
-        "agreed names even when it skims its skill.",
+        "The person you work with is now called the user, and the people who use what is built are end users. "
+        "Stored names keep `human`, such as the `human` commands and `decides: human`.",
+        "The lead now leads a project from the user's first description: the interview is its first stage, and its "
+        "skill says which stage the project is in. Planners and reviewers are no longer skills to call by hand.",
+        "The lead writes the settings from the brief before planning, with `Merge: local`, and asks the user how "
+        "many builders they want before the first build, since `run` refuses to start one without a `Builders:` line.",
+        "Every question a builder or planner can't answer comes to the lead as `NEEDS_CONTEXT`. Pass `--kind change` "
+        "to `plan` when the user asks for something new or changes their mind.",
     ],
     "2.8.0": [
-        "The skills are named for the agent that reads them: `lead` (was `build`), `interview` (was "
-        "`interview-me`), `planner` (was `plan-module`), `builder` (was `build-milestone`) and `reviewer` (was "
-        "`review-milestone`). The script is now at lead/scripts/agent_loop.py, so start every later command from "
-        "the new copy's path, and read the lead skill again. The human runs `/lead` where they ran `/build`. "
-        "Nothing else behaves differently, and no project files change.",
+        "The skills are named for the agent that reads them, and the script is now at lead/scripts/agent_loop.py, so "
+        "start later commands from that path. The user runs `/lead` where they ran `/build`.",
     ],
     "2.7.1": [
-        "After history is rewritten, such as by `git filter-repo`, `migrate --commit-map <map> --worktree <repo>` "
-        "points the records and the run state at the new commit hashes, so reviews of milestones that were Ready "
-        "for Review no longer come back INVALID. Run it with every run stopped.",
+        "After history is rewritten, such as by `git filter-repo`, run `migrate --commit-map` with every run stopped.",
     ],
     "2.7.0": [
-        "A design gets at most two design reviews in a row that ask for changes. The planner's revision after the "
-        "second is approved by the script without a third review (stored as `by: review_limit` in the record), "
-        "and `PLANNED` names the module under `design_approved_at_limit`. `run` and `plan` now carry on through "
-        "that second planner revision instead of stopping, so building starts without you.",
-        "Planners and design reviewers now treat a proof as right in both directions: it fails what the human "
-        "would see as wrong and passes work that meets the bar by another route, such as a cheaper method that "
-        "looks the same. A design review raises a proof that would fail such work as a Must Fix, and treats what "
-        "is left of an earlier Must Fix, when nothing visible or shared depends on it, as a Suggestion.",
+        "A design is approved by the script after two design reviews in a row ask for changes, so building can start "
+        "without a third review. Tell the user when `PLANNED` names a module under `design_approved_at_limit`.",
     ],
     "2.6.0": [
-        "Evidence is no longer committed. Reviews, captures, handoffs, builders' proof and graded examples go in "
-        "one working folder per repository, <git common dir>/orchestrate/evidence/, which opens in every worktree "
-        "at the `Evidence:` path (.orchestrate/evidence by default) and which git ignores. Git holds only code, "
-        "plans and the test data tests read; `merge` refuses a commit that adds or changes files under the "
-        "evidence path. Read the build skill's references/cleanup.md.",
-        "A project whose evidence is committed is refused by every command until `migrate --worktree <repo>` runs. "
-        "It copies the committed files into the working folder (leaving them in git), points the done-when files, "
-        "records, plan links and settings at the new place in one commit, and is safe to run twice. Give any "
-        "`definitions_naming_it` to a planner, and tell the human that links into the working folder open on this "
-        "computer but not in a fresh clone or a docs link checker. The old files leave history only when the human "
-        "has them purged.",
-        "New `cleanup`: it lists what the build keeps on this computer (evidence of Done milestones, the script's "
-        "checkouts, logs, copied ledger rows) by kind and size, and removes it only with `--yes`, on the human's "
-        "word. The delivery history now keeps a copy of each counted review. `adopt` no longer merges build "
-        "reports.",
+        "Evidence is no longer committed. Run `migrate` when a command names it, and tell the user that links into "
+        "the evidence folder open on this computer but not in a fresh clone. `cleanup` removes files only on the "
+        "user's word.",
     ],
     "2.5.0": [
-        "New delivery history: after every turn the script copies that session's tokens, model, timing, compactions "
-        "and errors out of the Claude or Codex session file into ~/.orchestrate/history/, so they outlive the "
-        "hosts' files. `history --json` prints spend by kind of agent, model and version, and every kind of error "
-        "with the latest. `dashboard --open` draws the same records as a page for the human. Read the build skill's "
-        "references/delivery-history.md.",
-        "A finding only a planner can settle, met after a diagnosis that answered something else, now gets a "
-        "diagnosis of its own; only a second one after a planner already answered such a finding goes to the human. "
-        "`Builders:` in the settings also reads counts like \"2 Codex, 1 Claude\".",
-    ],
-    "2.4.0": [
-        "`run` and `plan` now carry on through the routine steps themselves: a milestone Ready for Review is "
-        "reviewed, a failed review goes back to the builder, a pass moves on to the module's next milestone, and a "
-        "plan goes on to its design review. They stop, with `steps_run` and `stopped_because`, at anything that "
-        "needs your judgement or the human's. `--one-step` runs one step, as before.",
-        "New `watch`: keep it running in the background, and it wakes you at the `Lead check-in:` interval "
-        "(3 hours unless the settings say otherwise) or when it sees a warning sign, with a summary of what moved "
-        "and what didn't. Look for delivery problems then, and start it again.",
-        "The daily report is gone. `report` prints the facts for a report whenever the human asks how things are "
-        "going; `--since` sets the window and `--write` gives the human a file to open.",
-        "CHECKS_FAILED, STALLED and NO_PROGRESS_FOR_HOURS now give a `next` that works (`run --fresh` with the "
-        "reasons, or a planner's task), every planner ending gives a `next`, and a plan that can't land ends "
-        "PLAN_NOT_MERGED. `human` commands no longer wait for planners on other modules.",
-        "A main-branch check that hasn't judged yet (exit 75) no longer costs the builder a turn. When a branch "
-        "fails the test command alone, `merge` tests the main branch without it and reports `main_broken`.",
-        "A run whose milestone a planner re-planned stops with `run` as its `next`, and `merge` refuses a branch "
-        "whose definitions aren't the authorised ones. A finding marked `planner` goes straight to the planner's "
-        "diagnosis.",
-        "New `Setup command:` setting, run in the script's own checkouts before tests and checks. The script works "
-        "out a review's status, pointers and counts from its verdicts and findings. `human accept` and `human "
-        "rereview` add a graded example when the `Graded examples:` line is set. Builder sessions restart only when "
-        "the prompts they were given change. The Builders line's counts add up, and `pause` ends with a result.",
-        "A builder stopped by a broken main branch ends BLOCKED with reason `main_broken`, and the run's result "
-        "carries `main_broken` and its `next`; the milestone stays In Progress. A planner sent from a stuck run can "
-        "end `KEEP <module> <milestone>: builder: <why>` when every item can be met, and a refused KEEP gives the "
-        "planner the task again. A diagnosis that fixes something other than the milestone's items still settles it, "
-        "and a finding marked `planner` after a diagnosis for something else gets a diagnosis of its own.",
-        "`watch` starts the main-branch checks that are due, so you needn't run `main-check --due` when woken. A run "
-        "that waited out its hours on a main-branch check points you at `main-check`. A failed setup command counts "
-        "as a check that couldn't judge, not as a failure. A `run` carrying on through its steps counts as a builder "
-        "while it reviews, and `pause` stops it between steps too. A plan step's report stays in `steps_run`, and "
-        "`--host` carries to later run steps.",
-    ],
-    "2.3.9": [
-        "A builder's branch with its own proof and log entries, or with copies of plan files the main branch has "
-        "since changed, no longer sends you to `adopt`, which refused them. Those files merge with the builder's "
-        "work, and the result's `next` is the command for the milestone itself.",
-        "When `run` can't rebase a builder's branch onto new plan files, because the branch conflicts outside the "
-        "plans folder or has uncommitted work, it now starts the builder to rebase first, instead of stopping "
-        "INVALID and asking for a rebase by hand.",
-        "A milestone Blocked with Needs Context or Needs Dependency, whose builder's work has since merged (by "
-        "hand, say, after its merge failed), is now unblocked by the next `run`, so it needs no `unblock`.",
-    ],
-    "2.3.8": [
-        "A worktree or module branch whose ORCHESTRATE.md is only behind the main branch now runs on the main branch's "
-        "settings, such as a new model, and the result says so in `settings_read_from`. A copy the branch changed "
-        "itself is still read as it is.",
-        "Planners waiting for the planner lock now go in the order they were started, and `status` lists them in "
-        "that order. Start the most needed planner first.",
-        "A `next` that starts with ORCHESTRATE_VISIBLE=1 now names the newest installed copy too, and its `argv` "
-        "starts with `env`, so it runs without a shell.",
-        "While the Codex app hasn't started a queued turn, `runs` says so in the run's `now:` line, with how to "
-        "restart a stuck thread.",
-        "A review's links to files it doesn't commit become plain text when it lands, and a planner's links in an "
-        "`Assumption:` line now resolve on STATUS.md and in the daily report.",
-    ],
-    "2.3.7": [
-        "Codex agents now default to gpt-6.2-sol, and gpt-6.2-astra is named as the stronger model. A project "
-        "with no `Codex model:` line moves to the new default.",
-    ],
-    "2.3.6": [
-        "A main-branch check that exits 75 hasn't judged the commit, and is tried again rather than counted as a "
-        "failure. A bisect stops at a commit no check could judge.",
-    ],
-    "2.3.5": [
-        "`flow` splits failed jobs into those stopped, the script's own answers and errors. `lock` refuses to "
-        "lock the script's own commands.",
-    ],
-    "2.3.4": [
-        "A re-plan that changes a milestone lifts its Needs Dependency or Needs Context block.",
-    ],
-    "2.3.3": [
-        "Idle checkouts are pruned only when they carry the script's own mark, before every turn and on `status`.",
-    ],
-    "2.3.2": [
-        "The script removes its idle checkouts after 6 hours, or after 30 minutes when the disk is low.",
-    ],
-    "2.3.1": [
-        "A lock limits how many runs share a device, and doesn't make the machine quiet. `.alone` takes the whole "
-        "device.",
-    ],
-    "2.3.0": [
-        "Slow checks can run once on the main branch (`Main-branch check`). A GPU is shared up to the settings' "
-        "count. Locks have a hold limit. Merges go in batches. A check is reused while the files it reads are "
-        "unchanged, and changing an item's lock or reads keeps its progress.",
-    ],
-    "2.2.6": [
-        "`run` on a Codex builder whose goal a block or `pause` left paused now sets the goal active again on the "
-        "headless path too, and resumes the session, where it used to report PAUSED before any turn. If the goal "
-        "can't be set active, the run starts a new session. A result's `goal` is read when the run ends.",
-    ],
-    "2.2.5": [
-        "A planner whose LOG.md entry runs past eight lines, or whose PLAN.md fails the plan checks, is now told before "
-        "its turn ends and shortens it itself, so `plan` no longer refuses the turn and stashes the plan for that.",
-    ],
-    "2.2.4": [
-        "Every command now ends with a JSON result and an exit status: 0 for its own result, 2 for ERROR when the "
-        "command line was refused (with `usage` and a suggestion for a misspelt command or flag), 1 for ERROR when a "
-        "check stopped it, or SCRIPT_FAILED for a fault in the script. Don't send a command's output to /dev/null or "
-        "cut it with tail: read its last line and its exit status.",
-        "run, review, plan and unblock mark their result files RUNNING, with their pid, as they start, and an ERROR "
-        "replaces those files, so a result file never holds an earlier attempt's result.",
-        "`next` names the newest installed copy of the script and carries `argv`. To add your own words to a printed "
-        "command, add another --task (plan) or --message (run) in single quotes; both can be given more than once.",
-        "`unblock` takes the module's one blocked milestone when you give no --milestone, and prints UNBLOCKED with "
-        "the run to start next.",
-        "`run` rebases a builder's branch onto the main branch's tip when a planner has changed the module's plan files, "
-        "keeping main's plan files and the builder's proof on items whose definitions didn't change (`caught_up`). "
-        "A conflict outside the plans folder is left for the builder.",
-        "A blocked builder's handoff merges with its links to branch-only evidence turned into text naming the branch, "
-        "so it no longer breaks the repository's link check on main.",
-        "For a day after the human gives --more-builders words, later runs of that module reuse them, so restarting "
-        "its builder isn't refused again.",
-    ],
-    "2.2.3": [
-        "The build skill now opens with your job: you're responsible for delivering the project brief, as fast as you "
-        "can without lowering its quality, with as little of the human's attention and quota as the work allows. A "
-        "result's `next` is the process's next step and usually right, but when what you can see calls for something "
-        "else, do that, and clearing whatever stops a builder is your job. Start each command as its own background "
-        "command and don't chain several into one, because Claude Code wakes you only when a command ends. Read the "
-        "build skill again now.",
-    ],
-    "2.2.2": [
-        "You write a planner's task yourself, from what the human asked for, rather than passing the human's words on "
-        "unchanged. Where your task settles something the human's words left open, say so in the task, so the planner "
-        "lists it as an assumption. A design review judges the design against the planner's tasks and the project brief, "
-        "and the brief wins where they disagree.",
-    ],
-    "2.2.1": [
-        "`pause`, a hung tool call and the turn limit now stop a Codex turn whose thread the app's window has moved "
-        "away from. The app refused that stop before, the script took the turn as stopped, and it worked on with "
-        "nothing following it. If the app still doesn't take the stop, the result says so in `turn_not_stopped`, "
-        "with the thread to stop in the app.",
-    ],
-    "2.2.0": [
-        "Stored names changed, and `migrate` brings a project's files to them in one commit. Every other command "
-        "stops until it has run. In the done-when file a milestone's `state` is now `status`, an item's `status` is "
-        "`builder_result`, `bar` is `quality_bar`, and the counts `rounds` and `fails` are `failed_reviews` and "
-        "`failed_reviews_with_repeat`. The record file ACCEPTED.json is RECORD.json, and `accepted` in it is `done`. "
-        "The settings line `Owner decides:` is `Human decides:`.",
-        "A milestone that keeps failing review gets one diagnosis, where it used to get a re-plan and then a "
-        "diagnosis. After four failed reviews with a repeated finding, or six failed reviews in all, it is Waiting: "
-        "For Diagnosis, and `cause` says which. The planner changes the plan, which is a re-plan, or keeps it with "
-        "`KEEP`. If the milestone reaches either count again, the script blocks it with too many failed reviews. "
-        "The human's `scope` and `reopen` start the counts again, the diagnosis too.",
-        "The `owner` command is now `human`, `--owner-rule` is `--human-rule`, and `decides: owner` in a `next` is "
-        "`decides: human`. The old command and flags still work.",
-        "The groups `ready` prints have new names: `ready` is `can_start`, `review_owed` is `ready_for_review` and "
-        "`taken` is `in_progress_elsewhere`. `run` prints NEEDS_REVIEW where it printed REVIEW_OWED, and "
-        "IN_PROGRESS_ELSEWHERE where it printed TAKEN. After a failed review, `ladder` is now `escalation`, with "
-        "same_builder, new_builder_session and diagnosis.",
-        "`--budget-hours` is now `--no-progress-hours`, which says what it measures. The old flag still works.",
-    ],
-    "2.1.0": [
-        "Only the script sets a milestone to Ready for Review now. A builder merges its work with the milestone still "
-        "In Progress and ends with DONE; `run` then runs the checks on the main branch and sets the status if they "
-        "pass. `merge` refuses a commit that sets Ready for Review or Done.",
-        "`run` starts a new session, instead of resuming the old one, when the old one is over 60% full, was started "
-        "by another version of the script, or fails to resume. `fresh_because` says why, so `--fresh` is rarely "
-        "needed.",
-        "Results have new names: FLOOR is now HOST_FAILED when the host failed and SCRIPT_FAILED when the script "
-        "couldn't do a step of its own; PIN is WRONG_MODEL_OR_EFFORT, DESIGN_OWED is DESIGN_NOT_APPROVED, NOT_READY "
-        "is CHECKS_FAILED and BUDGET is NO_PROGRESS_FOR_HOURS. The `loops` command is now `runs`, and it shows the "
-        "step each run is on.",
-        "`run` prints REFUSED when as many builders as the project settings' Builders line names are already "
-        "running. Ask the human, and pass their words with `--more-builders` to start one more.",
-        "A reviewer who can't reach the product ends with BLOCKED needs_access. `review` then prints BLOCKED, merges "
-        "nothing and counts no round, and `next` is the same review in a visible session.",
-        "The script stops a background turn when a tool call that isn't a shell command has been open for 15 "
-        "minutes, and `stopped_turn` names the call.",
-        "`migrate --branch --worktree <path>` brings over a worktree whose own commits were made before the main "
-        "branch was migrated: it renames them and rebases them onto the main branch, holding only that module's run "
-        "lock, so other modules keep building. Plain `migrate` no longer waits for runs once the main branch is "
-        "migrated, and lists the worktrees still on the old names.",
-        "After a failed review, the message in `next` tells the builder what a review is and points it to the "
-        "review file. It no longer lists findings to fix, so add none. A reviewer of a milestone that failed before "
-        "is told where the earlier reviews are, and judges the items before reading them.",
-        "A planner sent a re-plan can keep the plan, as it can on a diagnosis: it ends with KEEP, naming who has to "
-        "act, and `plan` prints KEPT. That counts as the milestone's re-plan.",
+        "From before 2.6.0: read the lead skill again, and run `migrate` when a command names it. Codex agents "
+        "default to gpt-6.2-sol, and the daily report is gone: `report` gives the facts when the user asks.",
     ],
 }
 VERSION_FILE = "version.json"  # under <git common dir>/orchestrate: the version of the script that last printed a result
@@ -6960,8 +6326,9 @@ def resolve(a: argparse.Namespace, prof: dict, role: str) -> tuple[str, str, str
     host = (a.host or (prof.get("planner_host") if role == "plan" else None) or default_host(prof)).lower()
     line_model, line_effort = role_setting(prof, role, host)
     model = a.model or line_model or prof["models"].get(host) or ""
-    if not model and host in prof.get("hosts", {}) and "{model}" in prof["hosts"][host]:
-        raise SystemExit(f"error: host {host} needs --model, or a '- **{host} model:** <model>' line in the project settings")
+    if not model:  # never left to the host's own default
+        raise SystemExit(f"error: host {host} needs --model, or a '- **{host.capitalize()} model:** <model>' line in "
+                         "the project settings, because every launch names its model")
     effort = a.effort or line_effort or ("high" if role == "plan" else prof["effort"])
     if effort not in EFFORTS:
         raise SystemExit(f"error: effort {effort!r} isn't one of {sorted(EFFORTS)}")
@@ -7062,15 +6429,13 @@ def resources_rule(prof: dict) -> str:
     shared = prof.get("shared_resources") or {}
     out = ""
     if names and names.lower() not in ("none", "none."):
-        out += (f"- This project's exclusive resources are: {names.rstrip('.')}. Wrap a command that uses one in the "
-                "script's `lock <name> -- <command>`, which waits its turn while another builder holds the lock.\n")
+        out += (f"- This project's exclusive resources are: {names.rstrip('.')}. Wrap a command that uses one in "
+                "`lock <name> -- <command>`, which waits its turn while another run holds it.\n")
     if shared:
         listed = ", ".join(f"{n} (up to {c} runs at once)" for n, c in shared.items())
-        out += (f"- This project's shared resources are: {listed}. `lock <name> -- <command>` shares one with other "
-                "runs up to that number. A run that needs the whole device, such as all of its memory, uses "
-                "`lock <name>.alone -- <command>`, which waits for the shared runs to finish and keeps new ones out "
-                "until it is done. A lock keeps out only runs that take it, so it doesn't make the machine quiet for "
-                "a timing.\n")
+        out += (f"- This project's shared resources are: {listed}. `lock <name> -- <command>` shares one up to that "
+                "number, and `lock <name>.alone -- <command>` has it alone, for a run that needs the whole device; "
+                "`lock --help` says how each waits.\n")
     if out and prof.get("lock_hold_limit_s"):
         out += (f"- The script stops a command that holds a lock for longer than "
                 f"{limit_text(prof['lock_hold_limit_s'])}, so hold one only for the part of the work that needs the "
@@ -7078,19 +6443,22 @@ def resources_rule(prof: dict) -> str:
     return out
 
 
-def session_rule(headless: bool, host: str) -> str:
+def session_rule(headless: bool, host: str, prof: dict | None = None) -> str:
     """Whether an approval prompt can appear in this session, which the script knows and the lead often doesn't:
     in Thrum a headless session spent three turns trying to use Computer Use, whose prompts it could never show.
     Questions asked through a tool reach nobody either: a builder and a reviewer in Thrum each asked one and
-    waited."""
+    waited. On Codex under `workspace-write`, a program with a window needs a request to run outside the sandbox;
+    under `danger-full-access` there is no sandbox, so nothing is said about one."""
+    sandbox = (prof or {}).get("sandbox", "workspace-write")
+    codex = (" A browser, or another program with a window, starts only outside Codex's sandbox, so ask to run it "
+             "there from the start and say what it is for. Each such request is decided on its own, so an item is "
+             "blocked only once its own request has been refused.") if host == "codex" and sandbox == "workspace-write" else ""
     if headless:
-        return ("This session runs in the background, so approval prompts, such as a Computer Use or a permission "
-                "dialog, can't appear in it. A question you ask through a tool reaches nobody either, so when you "
-                "need an answer, end your turn with `NEEDS_CONTEXT` and the question, or `BLOCKED`, as below, and "
-                "the lead gets it answered.")
+        return ("This session runs in the background, so no approval prompt, such as a Computer Use or a permission "
+                "dialog, can appear in it, and a question you ask through a tool reaches nobody." + codex)
     app = "the Codex app" if host == "codex" else "the Claude app"
     return (f"This session is visible in {app}, so an approval prompt can appear in it if someone is there to "
-            "answer it.")
+            "answer it." + codex)
 
 
 def earlier_handoff(worktree: Path, prof: dict, stem: str, mid: str) -> str:
@@ -7124,11 +6492,12 @@ def build_prompt(host: str, headless: bool, prof: dict, stem: str, mid: str, mil
     return BUILD_TEMPLATE.format(
         goal=GOAL_LINE if host == "codex" else "", milestone=mid, module=stem, done=done_rel(prof, stem),
         loop=LOOP, skill=skill_note("builder", host), glossary=project_file(prof, "glossary"),
+        module_dir=str(Path(done_rel(prof, stem)).parent),
         lead=f"\nFrom the lead:\n{lead}\n" if lead else "",
         feedback=("\n" + feedback_note(feedback, mid, record_rel(prof, stem)) + "\n") if feedback else "",
         handoff=handoff_rel(prof, stem, mid), earlier=earlier, captures=f"{prof['evidence']}/{stem}/{mid}",
         needs="".join(f"- {line}\n" for line in needs_rules(milestone, headless)),
-        resources=resources_rule(prof), session=session_rule(headless, host),
+        resources=resources_rule(prof), session=session_rule(headless, host, prof),
         rules="".join(f"- {human_rules_line([x])}\n" for x in rules))
 
 
@@ -7175,14 +6544,13 @@ def binding(prof: dict, role: str, mid: str = "", milestone: dict | None = None,
     lead has just written, because the lead's message is the newer fact. A reviewer is never told to merge."""
     missing = [label for label, value in prof.get("bounds", {}).items() if not value]
     if role == "review":
-        fields = f", and the verdict fields, status and findings in {done}" if done else ""
+        fields = f", and the verdict fields and findings in {done}" if done else ""
         text = (f"What you write hasn't changed: the review at {review} and its folder of captures{fields}. Leave "
                 "them uncommitted, because the script checks what you changed and merges it itself.")
     else:
         text = (f"The goal hasn't changed. Every item of {mid} has to pass with evidence, and the work has to be "
-                f"merged with `python3 {LOOP} merge --worktree .`, with {mid}'s status left as in_progress for the "
-                f"script to set. In {done}, change only {mid}'s items' `builder_result` and `evidence`, and its "
-                "`status` only to in_progress.")
+                f"merged with `python3 {LOOP} merge --worktree .`. In {done}, change only {mid}'s items' "
+                "`builder_result` and `evidence`; the script sets the status.")
         if not lead_spoke:
             for line in needs_rules(milestone, headless):
                 text += " " + line
@@ -7320,11 +6688,9 @@ def browser_warnings(worktree: Path, module: str | None = None, milestone: str |
     if not needs:
         return []
     shown = ", ".join(needs[:6]) + (f" and {len(needs) - 6} more" if len(needs) > 6 else "")
-    return [f"{shown} need a browser, and a browser won't start inside Codex's workspace-write sandbox. The agent "
-            "has to ask to run it outside the sandbox, and auto-review may refuse; Codex reviewers have asked and been "
-            "granted one, and a builder that didn't ask lost its turn. If browser work has to be dependable on this "
-            "build, the user can set `Codex sandbox: danger-full-access` in ORCHESTRATE.md (that hands the agent "
-            "this machine)"]
+    return [f"{shown} need a browser, which starts on Codex only outside the workspace-write sandbox, so the agent "
+            "has to ask to run it there. Its prompt says to; if auto-review refuses, tell the agent with `run "
+            "--message` that it may, and why"]
 
 
 def floor_reason(host: str, code: int, err: str) -> str:
@@ -7651,6 +7017,13 @@ def codex_goal_activate(thread: str, status: str = "active") -> bool:
 
 
 def codex_queue(thread: str, text: str) -> None:
+    """Queues `text` as the thread's next turn. A queued turn, and each turn a goal chains after it, runs on the
+    settings the app holds for the thread (`codex queue --help`: "Queued messages use the thread's model"), which
+    follow the last recorded turn or what the user picked in the window, and `codex queue` takes no model or effort.
+    The bootstrap turn records the launch's model and effort, and `pin_check` reads every turn's settings from the
+    rollout, so a turn that ran on others ends WRONG_MODEL_OR_EFFORT. As of app 26.1117 nothing outside the app can
+    change the thread's settings: its app-server talks only to the app over stdio, and the IPC router that carried
+    `thread-follower-*` requests no longer listens."""
     out = subprocess.run([CODEX_APP_CLI, "queue", "--thread", thread, "--resume", "--message", text],
                          capture_output=True, text=True, timeout=60)
     if out.returncode != 0 or "Queued" not in out.stdout + out.stderr:
@@ -7742,8 +7115,8 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
         on with nothing following it. An app that isn't running has no turn to stop."""
         if not codex_interrupt(thread) and not visible_unavailable("codex"):
             SESSION_PATH["turn_not_stopped"] = (f"the Codex app didn't take the stop for thread {thread}, so its "
-                                                "turn may still be running: open the thread in the app and stop it "
-                                                "there")
+                                                "turn may still be running: ask the user to open the thread in the "
+                                                "app and stop it there")
     while True:
         rollout = rollout or rollout_for(thread)
         events, offset = new_events(rollout, offset)
@@ -7926,8 +7299,7 @@ def checks_note(prof: dict, milestone: dict | None, checked: str | None) -> str:
     if not ran:
         return ""
     return (f" Before it set Ready for Review, the script made sure that {' and '.join(ran)} passed on the files "
-            f"at {checked[:12]}. It ran them in its own clean checkout, apart from any that had already passed on "
-            "exactly those files. Run one again only if you doubt that result.")
+            f"at {checked[:12]}. Run one again only if you doubt that result.")
 
 
 def resume_facts(worktree: Path, milestone: dict | None, last_exit: int | None, timeout_h: float,
@@ -8183,7 +7555,8 @@ def not_ready_message(why: str, checkout: Path | None) -> str:
             (f"\n\nThe script ran these in its own clean checkout of the main branch, {checkout}, without your "
              "shell's environment, so a difference between there and your worktree can be the cause." if checkout
              else "") +
-            "\n\nFix the cause and end with DONE. If an item can't be met as written, leave it as it is and say so.")
+            "\n\nFix the cause and end with DONE. If an item can't be met as written, end with `BLOCKED: <item> can't "
+             "be met as written` and why.")
 
 
 def cmd_run(a: argparse.Namespace) -> None:
@@ -8196,6 +7569,10 @@ def cmd_run(a: argparse.Namespace) -> None:
     preflight(host, worktree, "build")
     stem = module_stem(worktree, prof, a.module)
     key = stem.upper()
+    worktree, how = module_worktree(worktree, prof, stem)
+    if how:
+        a.worktree = str(worktree)
+        EMIT_EXTRA["worktree"] = {"path": str(worktree), "branch": build_branch(stem), "how": how}
     again = run_again(a, stem, worktree)
     # Items that need access or hardware are done only in a session the user can see and answer.
     headless = host not in ("codex", "claude") or visible_unavailable(host) is not None
@@ -8305,15 +7682,14 @@ def cmd_run(a: argparse.Namespace) -> None:
             WARNINGS.append(w)
     if prof.get("builders") is None and not getattr(a, "checks_only", False):
         # The planner leaves out how the user wants the agents to work; the lead asks before the first build.
-        why = ("the project settings have no Builders line with a count, so the user hasn't said yet how they want "
-               "the agents to work. Ask them in plain words: which programs to build with, how many builders may "
-               "work at once, whether finished work may be pushed without them looking, and what they want to "
-               "decide themselves. Write their answers as the Builders, host, Merge and Human decides lines of "
-               "ORCHESTRATE.md, commit it on the main branch, and run this again")
+        why = ("the project settings have no Builders line with a count, so the user hasn't said yet how many "
+               "builders may work at once. Once they have seen the plan, ask them, and save their answer as the "
+               "Builders line; `then` starts this run")
         emit("REFUSED", module=stem, milestone=mid, problems=[why], next=next_cmd(
-            again, "lead", why, decides="human",
-            ask="Before the first build: how many agents should build at once, and with which programs? Should "
-                "finished work go in without you looking? What do you want to decide yourself?"))
+            loop_cmd("settings", "--worktree", str(worktree), "--set", "Builders", "<their answer, in their words>",
+                     "--said", "<what the user said>"), "lead", why, decides="human",
+            ask="Before the first build: how many agents should build at once, and with which programs?",
+            then=again))
     more = (getattr(a, "more_builders", None) or "").strip()
     more_from = None
     if prof.get("builders") and not getattr(a, "checks_only", False):
@@ -8420,6 +7796,9 @@ def cmd_run(a: argparse.Namespace) -> None:
     # The user's rules outlive fresh sessions and milestones, until the user has them cleared.
     rules = [] if getattr(a, "clear_human_rules", False) else list(state.get("human_rules") or state.get("owner_rules") or [])
     rules += [r.strip() for r in getattr(a, "human_rule", None) or [] if r.strip() and r.strip() not in rules]
+    # The user is asked about a wrong model or effort only when the run before this one on the milestone ended on it
+    # too: once, the lead reruns as set; twice, the host's own setting keeps winning, which the user has to change.
+    repeat_mismatch = state.get("milestone") == mid and state.get("result") in ("WRONG_MODEL_OR_EFFORT", "PIN")
     if fresh:
         state = {"module": stem, "milestone": mid, "thread": None, "turns": 0, "pin": pin}
     state["human_rules"] = rules
@@ -8446,6 +7825,28 @@ def cmd_run(a: argparse.Namespace) -> None:
                                        "once it's back, or on the other host", alternative=run_again(
                                            a, stem, worktree, other_host(host)))
 
+    def limit_next(status: str) -> dict:
+        """A Codex goal that hit its usage or budget limit: whether to wait for the reset or move the work to the
+        other host spends the user's plan, so it is theirs to choose."""
+        return next_cmd(again, "lead", f"the Codex goal stopped: {status.replace('_', ' ')}", decides="human",
+                        ask=f"Codex has hit its {status.split('_')[0]} limit. Wait for it to reset and carry on there, "
+                            f"or move {stem} to {other_host(host)}?",
+                        alternative=run_again(a, stem, worktree, other_host(host)))
+
+    def model_next(bad: list[str]) -> dict:
+        ran = "; ".join(bad[:2])
+        if repeat_mismatch:
+            return next_cmd(again, "lead", f"the builder's session ran on a model or effort other than the settings "
+                                           f"name ({ran}), as the run before it did, so the host's own setting keeps "
+                                           "winning; the next run starts a new session",
+                            decides="human", ask="The builder has twice run on a different model or effort than the "
+                                                 "settings name, usually because the host's own setting wins. Change "
+                                                 "that setting and run it again as set, or change the settings to "
+                                                 "what it ran on?")
+        return next_cmd(again, "lead", f"the builder's session ran on a model or effort other than the settings name "
+                                       f"({ran}); run it again as set, which starts a new session, and mention it to "
+                                       "the user")
+
     def planner_next(problems: list[str]) -> dict:
         return next_cmd(loop_cmd("plan", "--worktree", str(worktree), *module_args(stem), "--kind", "fix", "--task", plan_task(stem, problems[:5])),
                         "lead", "send the problems to the planner, and don't resume this builder until a planner "
@@ -8461,14 +7862,12 @@ def cmd_run(a: argparse.Namespace) -> None:
         fresh = run_again(a, stem, worktree) + " " + shlex.join([
             "--fresh", "--message", f"The last run on {mid} stopped: {ended}. The script's reasons: {why}\n\nWork "
                                     "from the milestone's files and these reasons. If an item can't be met as "
-                                    "written, leave it as it is and say so."])
+                                    "written, end with `BLOCKED: <item> can't be met as written` and why."])
         plan = loop_cmd("plan", "--worktree", str(worktree), *module_args(stem), "--kind", "unblock", "--task",
                         f"{stem} {mid}: its run stopped ({ended}), and the builder may be unable to meet an item as "
                         f"written. The script's reasons: {why}" + (f"\nThe builder's last words: {tail(said, 600)}"
                                                                   if said.strip() else "") +
-                        f"\nIf an item can't be met as written, change it and end with PLANNED. If every item can be "
-                        f"met as written, change no file and end with `KEEP {stem} {mid}: builder: <how it can be "
-                        "met>`.")
+                        f"\nA plan you keep ends with `KEEP {stem} {mid}: builder: <how it can be met>`.")
         if re.search(r"\bcan(?:'|’|no)?t be met\b|\bcannot be met\b", said + " " + why, re.IGNORECASE):
             return next_cmd(plan, "lead", f"{stem} {mid} stopped ({ended}), and the builder says an item can't be "
                                           "met as written; a planner decides, and only then does a builder resume",
@@ -8713,7 +8112,7 @@ def cmd_run(a: argparse.Namespace) -> None:
             new_session(why)
         status = goal_status(state.get("thread")) if host == "codex" else None
         if status in ("usage_limited", "budget_limited"):
-            finish(state_path, state, "HOST_FAILED", reason=f"goal {status}", next=floor_next())
+            finish(state_path, state, "HOST_FAILED", reason=f"goal {status}", next=limit_next(status))
         if status == "paused" or _STOP:
             finish(state_path, state, "PAUSED")
         first = state.get("thread") is None or not resumable
@@ -8809,12 +8208,12 @@ def cmd_run(a: argparse.Namespace) -> None:
         bad, seen_now = pin_check(host, state.get("thread"), seen, model, effort)
         state["observed"] = still_observed(state.get("observed"), seen_now)
         if bad:
-            finish(state_path, state, "WRONG_MODEL_OR_EFFORT", mismatches=bad[:5])
+            finish(state_path, state, "WRONG_MODEL_OR_EFFORT", mismatches=bad[:5], next=model_next(bad))
         status = goal_status(state["thread"]) if host == "codex" else None
         if host == "codex":
             state["goal"] = status or "none"  # whether the builder created its goal; without one, turns restate
         if status in ("usage_limited", "budget_limited"):
-            finish(state_path, state, "HOST_FAILED", reason=f"goal {status}", next=floor_next())
+            finish(state_path, state, "HOST_FAILED", reason=f"goal {status}", next=limit_next(status))
         if status == "paused":
             finish(state_path, state, "PAUSED")
         # A `merge` the builder started in the background can outlast its turn. The run waits for it rather than
@@ -9071,6 +8470,11 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
     if design:
         start, before_doc = ref, proj[key]["doc"]
     else:
+        if not a.commit:
+            a.commit = (ready_record(rec["milestones"].get(mid) or {}) or {}).get("commit")
+            if not a.commit:
+                return _result("INVALID", **info, problems=[f"{mid} has no Ready for Review record, so there is no "
+                                                            "commit to review; pass --commit"])
         r = git(worktree, "rev-parse", "--verify", "--quiet", f"{a.commit}^{{commit}}")
         if r.returncode != 0:
             return _result("INVALID", **info, problems=[f"commit {a.commit} doesn't exist here"])
@@ -9165,9 +8569,14 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
               "under `briefs`, oldest first. Some are the lead's or the script's own words, such as re-plan tasks. "
               "Where a task disagrees with the project brief, the brief wins, because the user approved it."
               if design and rec.get("briefs") else "")
-    context = " ".join(x.strip() for x in (changed, briefs) if x.strip())
+    round_no = len(design_changes_in_a_row(rec)) + 1 if design else 0
+    rounds = (f"This is design review {round_no} of the {DESIGN_REVIEW_ROUNDS} in a row that may ask for changes. "
+              + ("If it asks for changes, the script approves the planner's revision without another review, so ask "
+                 "now for everything that has to change." if round_no >= DESIGN_REVIEW_ROUNDS else "")
+              if design else "")
+    context = " ".join(x.strip() for x in (changed, briefs, rounds) if x.strip())
     prompt = review_prompt(host, prof, stem, mid, start, done_path, review_path, None if design else under_review, e_,
-                           feedback, judged, moved_note, context, design)
+                           feedback, judged, moved_note, context, design, tree)
     wanted = ("DESIGN OK", "DESIGN CHANGES") if design else ("PASS", "FAIL")
     try:  # the tip as the turn starts, to check what reaches it while the reviewer works
         launch_tip = tip(worktree, prof)
@@ -9443,10 +8852,12 @@ def after_pass(worktree: Path, prof: dict, key: str) -> dict:
         return next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", f"see what's ready ({e})")
     if step["status"] == "finished":
         drop_tree(worktree, step["module"])
-        return next_cmd(None, "lead", f"{step['module']} is finished: every milestone is Done. Remove the worktree "
-                                      "you built it in (`git worktree remove <path>`) once nothing in it is unmerged, "
-                                      "since its build output takes disk the other builders need. Then start other "
-                                      f"ready work (`{loop_cmd('ready', '--worktree', str(worktree))}`)")
+        repo = repository_of(git_common_dir(worktree))
+        gone = ("`ready` removes its worktree once nothing in it is unmerged" if prof.get("worktrees") else
+                "remove the worktree it was built in once nothing in it is unmerged, since its build output takes "
+                "disk the other builders need")
+        return next_cmd(loop_cmd("ready", "--worktree", repo), "lead",
+                        f"{step['module']} is finished: every milestone is Done; {gone}. Start other ready work")
     return next_for(step, worktree, prof, proj) or next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead",
                                                             f"{step['module']} is {step['status']}; see what's ready")
 
@@ -9457,16 +8868,15 @@ def design_review_next(out: dict, stem: str, worktree: Path, prof: dict) -> dict
     if out.get("verdict") == "DESIGN CHANGES":
         m = re.search(r"(\d+)\s+must_fix", out.get("line") or "")
         found = f"its {m.group(1)} Must Fix findings" if m else "its Must Fix findings"
-        task = (f"The design review of {stem} at {out.get('review')} asked for changes. Resolve {found} in the "
-                "design and the plan. Its Suggestions are yours to take or leave; say which you took and why.")
+        task = f"The design review of {stem} at {out.get('review')} asked for changes, with {found}."
         try:
             text = show(worktree, tip(worktree, prof, fetch=False), record_rel(prof, stem))
             rounds = len(design_changes_in_a_row(json.loads(text))) if text else 0
         except (TipError, ValueError, KeyError, OSError, SystemExit):  # no record to read: count none
             rounds = 0
         if rounds >= DESIGN_REVIEW_ROUNDS:
-            task += (f" This is the last of {DESIGN_REVIEW_ROUNDS} design review rounds: the script approves the "
-                     "design you leave without another review, and building starts from it.")
+            task += (f" That makes {DESIGN_REVIEW_ROUNDS} design reviews in a row that asked for changes, so the "
+                     "script approves the design you leave without another review, and building starts from it.")
             return next_cmd(loop_cmd("plan", "--worktree", wt, *module_args(stem), "--kind", "revise", "--task", task), "planner",
                             f"{DESIGN_REVIEW_ROUNDS} design reviews in a row found Must Fix findings; send these to "
                             "the planner. The script approves its revision without another review, "
@@ -9485,15 +8895,19 @@ def design_review_next(out: dict, stem: str, worktree: Path, prof: dict) -> dict
 
 def review_prompt(host: str, prof: dict, stem: str, mid: str, commit: str, done: str, review: str,
                   milestone: dict | None, entry: dict, feedback: list[dict] | None, judged: list[dict], moved: str = "",
-                  context: str = "", design: bool = False) -> str:
+                  context: str = "", design: bool = False, tree: Path | None = None) -> str:
     """A reviewer's prompt. `entry` is the milestone's entry in the record file, `judged` the diagnoses that kept
     the plan and blamed the reviews, `moved` the note on a Ready for Review the script set after the builder's
-    commit, and `context` what changed since the last design review."""
+    commit, `context` what changed since the last design review, and `tree` the reviewer's checkout, where a design
+    reviewer finds the brief and the module list."""
     template = DESIGN_REVIEW_TEMPLATE if design else REVIEW_TEMPLATE
-    return template.format(milestone=mid, module=stem, commit=commit, done=done, captures=review[:-len(".md")],
+    headless = host not in ("codex", "claude") or visible_unavailable(host) is not None
+    return template.format(session=session_rule(headless, host, prof),
+                           **paths_for_prompt(tree or Path.cwd(), prof),milestone=mid, module=stem, commit=commit, done=done, captures=review[:-len(".md")],
                            loop=LOOP, checks="" if design else checks_note(prof, milestone,
                                                                             ready_record(entry).get("checked")),
-                           changed=f"\n{context}\n" if context else "", briefs="", review=review,
+                           changed=f"\n{context}\n" if context else "", review=review,
+                           module_dir=str(Path(done).parent), graded=prof["graded_examples"],
                            skill=skill_note("reviewer", host), glossary=project_file(prof, "glossary"),
                            kind=kind_text("design" if design else "milestone", "reviewer"),
                            answers=moved + review_notes(
@@ -9761,6 +9175,17 @@ def cmd_plan(a: argparse.Namespace) -> None:
     task_line = a.task.splitlines()[0][:80] if a.task.strip() else ""
     scope = a.module.upper() if getattr(a, "module", None) else None
     PLAN_SCOPE[:] = [scope] if scope else []
+    if (worktree / PROFILE_FILE).exists() and not no_base(worktree, prof):
+        # The planner reads the main branch's tip, so a brief, glossary or settings file not merged there yet
+        # would be invisible to it. `run` refuses the same way.
+        try:
+            unmerged = drift_fields(plan_drift(worktree, prof, tip(worktree, prof)), worktree, next_cmd(loop_cmd(
+                "plan", "--worktree", str(worktree), *kind_args(a.kind), *module_args(scope), "--task", a.task,
+                *(["--host", a.host] if a.host else [])), "lead", "the planner then reads the merged files"))
+        except TipError:
+            unmerged = {}
+        if unmerged.get("unmerged_plans"):
+            emit("REFUSED", **info, merged=False, problems=[unmerged["unmerged_plans"]["note"]], **unmerged)
     # A planner for the whole project runs alone, and planners limited to different modules run side by side, since
     # they change different files. A planner waits for any running or earlier-started planner it clashes with, then
     # plans on the tip it merged, so the lead decides which goes first by starting it first.
@@ -9869,7 +9294,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
     before = done_docs_at(tree, prof, start)
     kind = a.kind or default_kind(tree, prof)
     prompt = PLAN_TEMPLATE.format(task=a.task, skill=skill_note("planner", host), kind=kind_text(kind),
-                                  kind_name=PLAN_KINDS[kind], loop=LOOP,
+                                  kind_name=PLAN_KINDS[kind], loop=LOOP, **paths_for_prompt(tree, prof),
                                   glossary=project_file(prof, "glossary"), scope=scope_text(scope))
     if getattr(a, "merge_kept", None):
         # The plan a planner finished earlier, kept while the main branch was broken: its files go through every
@@ -10087,7 +9512,8 @@ def cmd_plan(a: argparse.Namespace) -> None:
             settled = settle_replanned(was, doc, stem, diagnosed[1] if diagnosed and diagnosed[0] == stem else None)
             if stem in extra and not settled:
                 continue  # it wasn't owed the diagnosis after all, and nothing else of it changed
-            keep_counts(was, doc, settled, stem, restart=kind == "change")
+            keep_counts(was, doc, settled, stem, restart=kind == "change",
+                        diagnosed=diagnosed[1] if diagnosed and diagnosed[0] == stem else None)
             replanned.extend(settled)
             for name in settled:  # the reviews before this diagnosis no longer count towards the next one
                 e = record["milestones"].get(name.split(" ", 1)[1])
@@ -10215,8 +9641,7 @@ def cmd_ready(a: argparse.Namespace) -> None:
         except TipError:
             ref = None
         key = "behind" if not_yet.get("behind") else "unplanned"
-        print(json.dumps({"tip": ref, **empty, key: not_yet["reason"], "next": not_yet["next"]}, indent=2))
-        return
+        emit("READY", tip=ref, **empty, **{key: not_yet["reason"]}, next=not_yet["next"])
     ref, proj = read_project(worktree, prof)
     held, mine = holds(worktree), me(worktree)
     out = {"tip": ref, **empty}
@@ -10232,6 +9657,9 @@ def cmd_ready(a: argparse.Namespace) -> None:
         out[step.pop("status")].append(step)
     if ahead := plan_ahead(worktree, prof, ref, proj):
         out["plan_ahead"] = ahead
+    if gone := finished_worktrees(worktree, prof, [s["module"] for s in out["finished"]
+                                                   if run_holder(folder, s["module"].upper()) is None]):
+        out["worktrees_removed"] = gone
     drift = plan_drift(worktree, prof, ref)
     if drift["uncommitted"] or drift["unmerged"] or not out["can_start"]:
         out.update(drift_fields(drift, worktree, None if out["can_start"] else
@@ -10242,9 +9670,7 @@ def cmd_ready(a: argparse.Namespace) -> None:
     for k in list(out):
         if isinstance(out[k], list):
             out[k] = [dict(x, next=fit_next(x["next"])) if isinstance(x, dict) and "next" in x else x for x in out[k]]
-    if "next" in out:
-        out["next"] = fit_next(out["next"])
-    print(json.dumps(out, indent=2))
+    emit("READY", **out)
 
 
 def cmd_status(a: argparse.Namespace) -> None:
@@ -10358,28 +9784,192 @@ def cmd_next(a: argparse.Namespace) -> None:
     else:
         message = FINDINGS_TEMPLATE.format(milestone=milestone["id"], module=stem, evidence=prof["evidence"])
         then = escalation_next(action, stem, milestone["id"], counts, worktree, prof) if action != "none" else None
-    print(json.dumps({"milestone": milestone["id"], **counts,
-                      "action": action, "message": message, **({"next": fit_next(then)} if then else {})}))
+    emit("ESCALATION", module=stem, milestone=milestone["id"], **counts, action=action, message=message,
+         **({"next": then} if then else {}))
+
+
+SETTINGS_TEMPLATE = """\
+# Project settings: <project>
+
+- **Purpose:** docs/plans/BRIEF.md  *(the project brief, or another document that says what the project is for and what finishes the current goal)*
+- **Quality bar:** <how good inspected work has to be, in words, naming shipped examples>
+- **References:** <for subjective work, the folder in the repository where the option the user chose and the reference sets are kept; or none>  *(the planner writes it when it chooses a reference)*
+- **Plans:** docs/plans  *(script: leave it out for the standard place; an older project may name another folder)*
+- **Evidence:** .orchestrate/evidence  *(script: where the working folder opens in each worktree, for reviews, handoffs and saved proof; never committed; leave it out for this standard place)*
+- **Worktrees:** .orchestrate/worktrees  *(script: optional; with this line, `run --worktree` given the main checkout builds the module in its own worktree on build/<module> in this folder, which git ignores, and `ready` removes it once the module is finished and merged; left out or `none`, each run builds in the worktree it is given. Keep it on a new project)*
+- **Graded examples:** .orchestrate/evidence/graded-examples.md  *(script: optional; with this line, `human accept` and `human rereview` add each review the user overturns to this file in the working folder, so later reviewers learn how strict the user is; left out, nothing is added. Keep it on a new project)*
+- **Test command:** none  *(script: required; the project's test command, which must pass before a merge, or `none` until the planner chooses one with the stack. It runs in a clean checkout after the setup command, and must pass before any test exists: `pytest`, for one, exits 5 when it finds no tests)*
+- **Setup command:** npm ci  *(script: optional; installs what the tests and checks need in a fresh checkout, into ignored folders, leaving tracked files as they were, as `npm ci` does; or `none`)*
+- **Merge:** local  *(script: required; `push` rebases onto Remote/Branch and pushes without force; `local` fast-forwards the local Branch only)*
+- **Branch:** main  *(script: the main branch)*
+- **Remote:** origin  *(script)*
+- **Builders:** <how many builders, on which hosts, as the user said: "one Claude builder", say>  *(script: the lead writes it before the first build; `run` starts no builder without a count, adds the counts up, and starts none past them unless `--more-builders` carries the user's words)*
+- **Lead check-in:** 3h  *(script: optional; how long the lead's `watch` waits for a warning sign before it wakes the lead anyway, such as 3h or 90m; left out, 3 hours)*
+- **Default host:** <host>  *(script: optional; codex, claude or a `Host` line's name, for when the lead names none; left out, the host the script runs inside, else the only one installed, else codex, so a project that uses only Claude Code names `claude`)*
+- **Review host:** <same|other|host>  *(script: optional; the host for milestone reviews: `same` as the builder, `other` than the builder (a reviewer from another company shares fewer of its blind spots), or a host's name; left out, the builder's host)*
+- **Planner host:** <host>  *(script: optional, and only if the user wants planners on another host; left out, the `Default host`)*
+- **<Host> model:** <model>  *(script: optional, and only when the user named a model; any `<host> model:` line, such as `Claude model:`, sets that host's model)*
+- **Claude planner:** <model> <effort>  *(script: optional, and only when the user asked; a model, an effort or both for one kind of agent on one host: `<Host> planner|builder|reviewer|design reviewer:`; `settings` prints what each kind of agent gets and where it came from)*
+- **Reviewer:** <effort>  *(script: optional, and only when the user asked; an effort for one kind of agent on every host)*
+- **Effort:** medium  *(script: optional; for builders and reviewers, default medium; planners default to high)*
+- **Claude permissions:** auto  *(script: the permission mode for Claude sessions in the background: auto, acceptEdits, dontAsk or bypassPermissions)*
+- **Codex sandbox:** workspace-write  *(script: or danger-full-access, which only the user chooses; in workspace-write a browser starts once the agent asks to run it outside the sandbox)*
+- **Writable roots:** <paths the build writes outside the worktree, separated by commas, such as ~/.cargo, ~/.npm>  *(script)*
+- **Host <name>:** <command with {prompt}, {model} and {effort}, and {cwd} if it needs the folder>  *(script: optional; any other command-line agent; the first three placeholders are required, because every launch names its model and effort rather than leave them to the host's default)*
+- **<Name> model:** <model>  *(script: needed for each Host line's name, unless the lead passes --model)*
+
+## Starting from a clean clone
+<how a new worktree gets to a running product: the setup command, seed data and test accounts, the services it
+needs, where secrets come from, and how two worktrees avoid sharing a port or a database>
+
+## Targets
+
+| Target | What it is | Run | Capture | Edge conditions |
+|---|---|---|---|---|
+| <web-chrome> | <Chrome, desktop> | <`npm run dev`> | <Playwright screenshots, console and network log> | <empty, loading, error, slow network, resize> |
+| <cli> | <the built binary> | <`cargo run -- …`> | <transcript and exit code> | <bad arguments, piped input, Ctrl-C> |
+
+## Rules
+- **Exclusive resources:** <things only one run at a time may use, such as "simulator"; or none>  *(script: named in each builder's prompt, which wraps a command that uses one in `lock <name> -- <command>`)*
+- **Shared resources:** <resources several runs may use at once, each with how many, such as "gpu: 3"; or none>  *(script: `lock gpu` shares it up to that number, and `lock gpu.alone` waits to have it alone, for a run that needs the whole device)*
+- **Test command lock:** none  *(script: a lock name, such as `gpu` or `gpu.alone`, that the script takes whenever it runs the test command, for a test command that uses a shared or exclusive resource)*
+- **Lock hold limit:** 30 minutes  *(script: the default; a command under `lock`, or a locked item check, that holds a lock longer is stopped; the test command isn't; or none)*
+- **Main-branch check <name>:** `<command>`; every <30m>; gap <leave out>; lock <resource names, or leave out>; timeout <2h>  *(script: optional, one line per check too slow to run before every merge; it runs on the main branch's tip after merges, and an item proves itself with `python3 "$ORCHESTRATE_SCRIPT" main-check <name>`, with no `lock` of its own, because an item lock held while it waits would block the run it waits for. `every` spaces out the runs nobody waits for; `gap` spaces out every run, even one an item waits for, for a check that takes a machine builders share)*
+- **Human decides:** <for example: changing the goal; spending; publishing or deploying; anything that can't be undone>  *(script: sent again on resumed turns)*
+- **Licences and paths not to touch:** <for example: no GPL code, because the project ships under MIT; ../other-repo belongs to another team, so ask before changing it>  *(script: sent again on resumed turns)*
+
+## Project guidance
+- <rules for this kind of work that each agent reads, such as "Building: .agents/skills/<project>-engineering">
+"""
+
+
+def project_paths(worktree: Path, prof: dict) -> dict:
+    """The plans folder and the files about the whole project in it, as absolute paths in `worktree`, for
+    `settings` and for the prompts of sessions that plan or review a design, so no agent types one."""
+    plans = worktree / prof["plans"]
+    return {"plans": str(plans), **{k: str(plans / f) for k, f in PROJECT_FILES.items()}}
+
+
+def paths_for_prompt(tree: Path, prof: dict) -> dict:
+    """The brief, the module list and the plans folder, for a planner's or design reviewer's prompt."""
+    paths = project_paths(tree, prof)
+    return {k: paths[k] for k in ("brief", "architecture", "plans")}
+
+
+def settings_paths(worktree: Path, prof: dict) -> dict:
+    """Every place the script reads or writes for this repository, as absolute paths, so no agent has to work one
+    out from a default and an override."""
+    orch = Path(git_common_dir(worktree)) / "orchestrate"
+    plans = worktree / prof["plans"]
+    return {
+        "repository": str(worktree), "settings": str(worktree / PROFILE_FILE), "plans": str(plans),
+        "modules": {d.name: str(d) for d in sorted(plans.glob("*")) if (d / MODULE_FILES["done"]).is_file()},
+        **{k: v for k, v in project_paths(worktree, prof).items() if k != "plans"},
+        "evidence": str(worktree / prof["evidence"]), "working_folder": str(orch / "evidence"),
+        "graded_examples": str(worktree / prof["graded_examples"]), "results": str(orch / "results"),
+        "check_logs": str(orch / "checks"), "jobs": str(orch / "jobs"), "checkouts": str(orch / "verify"),
+        "main_checks": str(orch / "main-checks"), "usage_ledger": str(orch / "usage.jsonl"),
+        "history": str(delivery_history.project_dir(Path(repository_of(git_common_dir(worktree))))),
+        "runs": str(LOOPS_DIR), "script": str(LOOP),
+        "module_worktrees": (str(Path(repository_of(git_common_dir(worktree))) / prof["worktrees"])
+                             if prof.get("worktrees") else None),
+        "skills": {role: str(SKILLS / role) for role in ("lead", "planner", "builder", "reviewer")},
+    }
+
+
+def agent_settings(prof: dict) -> dict:
+    """The model and effort each kind of agent gets on each host when the lead names neither, with where each came
+    from, as `resolve` would choose them."""
+    out = {}
+    for host in ("codex", "claude", *prof.get("hosts", {})):
+        for role, kind in (("plan", "planner"), ("build", "builder"), ("review", "reviewer"),
+                           ("design", "design reviewer")):
+            model, effort = role_setting(prof, role, host)
+            host_model = prof["models"].get(host)
+            out.setdefault(host, {})[kind] = {
+                "model": model or host_model or None,
+                "model_from": "a line for this kind of agent" if model else
+                              (f"the {host} model" if host_model else "the command's --model"),
+                "effort": effort or ("high" if role == "plan" else prof["effort"]),
+                "effort_from": "a line for this kind of agent" if effort else
+                               ("the planners' default" if role == "plan" else "the Effort line or its default")}
+    return out
 
 
 def cmd_settings(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
+    if a.template:
+        print(SETTINGS_TEMPLATE, end="")
+        return
+    if a.set:
+        return settings_set(a, worktree)
     if not_yet := unplanned(worktree):
-        print(json.dumps({"planned": False, "problems": [not_yet["reason"]], "next": not_yet["next"],
-                          **({"behind": not_yet["behind"]} if not_yet.get("behind") else {})}, indent=2))
-        sys.exit(1)
-    prof = profile(worktree, strict=True, flat_ok=True, old_ok=True)  # the settings print; old layout or names below
+        try:  # where the brief, glossary and plans go on a new project, from the defaults
+            paths = {"paths": settings_paths(worktree, profile(worktree, missing_ok=True))}
+        except (SystemExit, KeyError, OSError):
+            paths = {}
+        emit("ERROR", planned=False, problems=[not_yet["reason"]], next=not_yet["next"], **paths,
+             **({"behind": not_yet["behind"]} if not_yet.get("behind") else {}))
+    # the copy every other command reads: the main branch's, when this one is only behind it
+    prof = profile(worktree, strict=True, flat_ok=True, old_ok=True, read_tip=True)
+    text = settings_at_tip(worktree, (worktree / PROFILE_FILE).read_text())
     if flat_modules(worktree, prof["plans"]):
         prof["flat_layout"] = flat_refusal(worktree, prof["plans"])[len("error: "):]
     if old := old_names_here(worktree, prof["plans"]):
         prof["old_names"] = old_names_refusal(worktree, old)[len("error: "):]
     host = (a.host or default_host(prof)).lower()
-    prof.pop("model")  # the Codex model, kept for its flags; `models` holds every host's, so none looks like the default
+    prof.pop("model")  # the Codex model, kept for its flags; `agents` gives each host's
+    prof["exclusive_resources"] = prof.pop("exclusive resources")
     found = instruction_warnings(worktree, cli_version("claude")) if host == "claude" else []
     found += [w for role in ROLE_SKILLS for w in skill_warnings(host, worktree, role)]
     found += browser_warnings(worktree) if host == "codex" else []
-    prof["preflight"] = {"host": host, "warnings": found}
-    print(json.dumps(prof, indent=2))
+    emit("SETTINGS", read_from=EMIT_EXTRA.pop("settings_read_from", None) or str(worktree / PROFILE_FILE),
+         **prof, defaulted=sorted(k for k in PROFILE_FIELDS if not profile_value(text, k)),
+         host_when_none_named=default_host(prof), agents=agent_settings(prof), paths=settings_paths(worktree, prof),
+         preflight={"host": host, "warnings": found})
+
+
+def settings_set(a: argparse.Namespace, worktree: Path) -> None:
+    """`settings --set LABEL VALUE --said TEXT`: sets one line of ORCHESTRATE.md on the main branch, in a commit of
+    its own carrying the user's words, merged as the script merges plan files (pushed under `Merge: push`). Settings
+    are the user's choices, so it refuses inside a session the script started, and wants their words."""
+    label, value = a.set
+    if os.environ.get("ORCHESTRATE_ROLE"):
+        raise SystemExit("error: settings --set records the user's choice, so the lead runs it, not a session the "
+                         "script started")
+    if not (a.said or "").strip():
+        raise SystemExit("error: --set needs --said with the user's words, as they gave them in chat")
+    prof = profile(worktree, strict=True)
+    wrote = []
+
+    def change(tree):
+        before = (tree / PROFILE_FILE).read_text()
+        after = set_setting_line(before, label, value)
+        if after == before:
+            return []
+        wrote.append(PROFILE_FILE)
+        (tree / PROFILE_FILE).write_text(after)
+        try:
+            profile(tree, strict=True, read_tip=False)
+        except SystemExit as e:
+            (tree / PROFILE_FILE).write_text(before)
+            raise SettingRefused(str(e)) from None
+        return [PROFILE_FILE]
+
+    try:
+        ok, detail = loop_write(worktree, prof, "_settings", change,
+                                f"Settings: {label}: {value}"[:200] + f"\n\nThe user said: {a.said.strip()}",
+                                trailer=False)
+    except SettingRefused as e:
+        own_status("REFUSED", 1, label=label, value=value, problems=[str(e)])
+    if not ok:
+        own_status("FAILED", 1, label=label, value=value, detail=detail)
+    own_status("SAVED" if wrote else "NOTHING", 0, label=label, value=value, commit=detail,
+               **({} if wrote else {"detail": "the main branch's settings already say this"}))
+
+
+class SettingRefused(Exception):
+    pass
 
 
 def cmd_quota(a: argparse.Namespace) -> None:
@@ -10745,8 +10335,7 @@ def cmd_merge(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     prof = profile(worktree, strict=True)
     if dirty := git(worktree, "status", "--porcelain").stdout.strip():
-        print(json.dumps({"result": "FAILED", "detail": "commit, remove or ignore these first: " + dirty[:300]}))
-        sys.exit(1)
+        own_status("FAILED", 1, detail="commit, remove or ignore these first: " + dirty[:300])
     # A builder's edits to the plan files (a log entry, ticks in an older plan) merge with its work; the plan checks
     # only warn here.
     # The tip is fetched first, so that the script's own records already on the main branch, such as another
@@ -10761,22 +10350,26 @@ def cmd_merge(a: argparse.Namespace) -> None:
     # hours. A planner or a reviewer never runs `merge`, and the user's and the script's records are merged by the
     # script itself, so this catches only a builder, including one from before 2.1.0 or a branch it left.
     if base and (found := states_set(worktree, prof, base)):
-        print(json.dumps({"result": "FAILED", "detail": state_refusal(found), "commit": head_commit(worktree)}))
-        sys.exit(1)
+        own_status("FAILED", 1, detail=state_refusal(found), commit=head_commit(worktree))
     if stale := stale_definitions(worktree, prof, upstream):
-        print(json.dumps({"result": "FAILED", "commit": head_commit(worktree), "detail": (
+        own_status("FAILED", 1, commit=head_commit(worktree), detail=(
             f"{' and '.join(stale)} on this branch {'isn' if len(stale) == 1 else 'aren'}'t what the record at "
             f"{base_ref(prof)} authorises: a planner has changed {'it' if len(stale) == 1 else 'them'} since this "
-            f"branch started. Nothing landed. Rebase onto {base_ref(prof)}, taking its copy of the plan files, read "
-            "the items again, change your work to meet them as they now stand, then merge")}))
-        sys.exit(1)
+            f"branch started. Nothing merged. Rebase onto {base_ref(prof)}, taking its copy of the plan files, read "
+            "the items again, change your work to meet them as they now stand, then merge"))
     touched = git(worktree, "diff", "--name-only", base, "HEAD").stdout.split() if base else []
     warnings = plan_checks(worktree, prof, touched)
     warnings += [f"{p} changed; the script writes it after each record it merges, so this change will be overwritten"
                  for p in touched if p == status_rel(prof)]
     own = int(git(worktree, "rev-list", "--count", f"{base}..HEAD").stdout.strip() or 0) if base else 0
     asked = head_commit(worktree)
+    queued_at = time.time()
     got = queue_merge(worktree, prof, check=not a.no_check, base=base)
+    note_row(worktree, MERGES_FILE, {
+        "asked_s": round(queued_at, 1), "done_s": round(time.time(), 1), "ok": bool(got.get("ok")),
+        "module": merging_module(worktree, prof, base) if base else None, "commits": own,
+        "batch": len(got.get("batch") or []) or 1, "conflicts": bool(got.get("conflicts")),
+        "main_broken": bool(got.get("main_broken")), "role": os.environ.get("ORCHESTRATE_ROLE")})
     ok, detail = bool(got.get("ok")), got.get("detail") or ""
     out = {"result": "MERGED" if ok else "FAILED", "detail": detail}
     if "batch" in got:
@@ -10810,8 +10403,18 @@ def cmd_merge(a: argparse.Namespace) -> None:
             shared.unlink(missing_ok=True)
     except OSError:
         pass
-    print(json.dumps({**out, **({"plan_warnings": warnings} if warnings else {})}))
-    sys.exit(0 if ok else 1)
+    out = {**out, **({"plan_warnings": warnings} if warnings else {})}
+    if ok and not os.environ.get("ORCHESTRATE_ROLE") and "next" not in out:
+        # Merged by hand, outside a run: no run will check the milestone and set it to Ready for Review.
+        building = [stem for stem in modules_here(worktree, prof) if any(
+            isinstance(m, dict) and m.get("status") == "in_progress"
+            for m in (read_json_file(worktree / done_rel(prof, stem)) or {}).get("milestones") or [])]
+        if len(building) == 1:
+            out["next"] = next_cmd(loop_cmd("run", "--checks-only", "--module", building[0], "--worktree",
+                                            str(worktree)), "lead",
+                                   f"merged outside a run; the script checks {building[0]}'s milestone and sets it to "
+                                   "Ready for Review")
+    own_status(out.pop("result"), 0 if ok else 1, **out)
 
 
 MAIN_BROKEN_FILE = "main_broken.json"  # under a worktree's own git dir/orchestrate: its last merge's main_broken;
@@ -11292,6 +10895,29 @@ def main_broken_next(worktree: Path, prof: dict, broken: dict) -> dict:
                                                ", and the script couldn't tell which commit broke it") +
                     ". Find the commit that broke it and give the fix to whoever owns that work; builders merge again "
                     "once it passes")
+
+
+def main_check_fix_next(worktree: Path, name: str, culprit: dict, why: str) -> dict:
+    """`next` when a main-branch check fails since a commit: a planner for the module that made it, when the bisect
+    tied it to one, with reverting that commit as the alternative; else the lead, who finds the owner."""
+    commit = culprit.get("commit", "")
+    revert = f"git revert --no-edit {commit[:12]}" if commit else None
+    if culprit.get("modules"):
+        mods = " and ".join(culprit["modules"])
+        return next_cmd(loop_cmd("plan", "--worktree", str(worktree),
+                                 *module_args(culprit["modules"][0] if len(culprit["modules"]) == 1 else None),
+                                 "--kind", "fix", "--task",
+                                 f"The main-branch check {name} fails since commit {commit[:12]} "
+                                 f"({culprit.get('subject', '')}), which changed {mods}'s files. Find what in that "
+                                 f"commit breaks it, and fix it in {mods}'s plan, or plan the fix as {mods}'s next "
+                                 "milestone."), "lead", why + "; a planner plans the fix",
+                        alternative=revert and (
+                            f"`{revert}` on the main branch, when the fix would take long; then tell that module's "
+                            "builder what was reverted (`run --message`), run `human rereview` on any Done milestone "
+                            f"whose work it removed, and `main-check {name} --start` on the new tip"))
+    return next_cmd(None, "lead", why + (f"; read the diff of {commit[:12]} and give the fix to the module whose "
+                                          f"code it changed, or revert it (`{revert}`)" if commit else
+                                          "; find the commit that broke it and give the fix to whoever owns it"))
 
 
 def build_batch(tree: Path, base: str, group: list[dict], results: dict,
@@ -11997,10 +11623,129 @@ def flow_numbers(worktree: Path, hours: float) -> dict:
                 jobs["script_said_no"] += 1
             else:
                 jobs["errors"] += 1
-    return {"hours": hours, "tip": ref, "ready_for_review": ready, "done": done,
-            "commits": int(commits) if commits.isdigit() else None,
-            "code_commits": int(code) if code.isdigit() else None,
-            "build_sessions": builders, "locks": locks, "background_jobs": jobs}
+    out = {"hours": hours, "tip": ref, "ready_for_review": ready, "done": done,
+           "commits": int(commits) if commits.isdigit() else None,
+           "code_commits": int(code) if code.isdigit() else None,
+           "build_sessions": builders, "builders_allowed": prof.get("builders"), "locks": locks,
+           "background_jobs": jobs, "merges": merge_times(worktree, start),
+           "checks": check_times(worktree, start, prof.get("test_command")),
+           "reviews": review_rates(proj, since)}
+    out["signs"] = flow_signs(out)
+    return out
+
+
+def spread(minutes: list[float]) -> dict:
+    """Count, median, 90th percentile and longest, in minutes."""
+    if not minutes:
+        return {"count": 0}
+    m = sorted(minutes)
+    return {"count": len(m), "median_min": round(m[len(m) // 2], 1), "p90_min": round(m[int(len(m) * 0.9)], 1),
+            "max_min": round(m[-1], 1), "total_h": round(sum(m) / 60, 1)}
+
+
+def merge_times(worktree: Path, start: float) -> dict:
+    """How long each `merge` took, from joining the queue to its result, since `start`: from the merge ledger, or,
+    for merges before it existed, from the background jobs that ran `merge` (start to exit). The time a builder
+    waits here is time it isn't building, and the whole of it is the queue plus the test command."""
+    rows = []
+    path = loop_dir(worktree) / MERGES_FILE
+    for line in (path.read_text().splitlines() if path.exists() else []):
+        try:
+            r = json.loads(line)
+            if float(r["done_s"]) >= start:
+                rows.append(r)
+        except (ValueError, KeyError, TypeError):
+            continue
+    source = "merge ledger"
+    if not rows:
+        source = "background merge jobs"
+        for j in job_rows(worktree):
+            if float(j.get("started_s") or 0) < start or " merge " not in f" {j.get('command') or ''} ":
+                continue
+            state, code = job_state(j) if j.get("log") and j.get("pid") else ("gone", None)
+            if state != "exited":
+                continue
+            try:
+                ended = Path(j["log"] + ".exit").stat().st_mtime
+            except OSError:
+                continue
+            rows.append({"asked_s": float(j["started_s"]), "done_s": ended, "ok": code == 0})
+    minutes = [(float(r["done_s"]) - float(r["asked_s"])) / 60 for r in rows]
+    return {"source": source, **spread(minutes), "failed": sum(not r.get("ok") for r in rows),
+            "conflicts": sum(bool(r.get("conflicts")) for r in rows),
+            "main_broken": sum(bool(r.get("main_broken")) for r in rows),
+            "batched": sum(int(r.get("batch") or 1) > 1 for r in rows)}
+
+
+def check_times(worktree: Path, start: float, test_command: str | None) -> dict:
+    """How long the test command and the other checks ran since `start`, from the check ledger: the test command
+    on its own, since every merge waits for it, and the slowest other commands."""
+    by: dict = {}
+    path = loop_dir(worktree) / CHECK_RUNS_FILE
+    for line in (path.read_text().splitlines() if path.exists() else []):
+        try:
+            r = json.loads(line)
+            if float(r["started_s"]) < start:
+                continue
+        except (ValueError, KeyError, TypeError):
+            continue
+        b = by.setdefault(r.get("command") or "?", {"minutes": [], "failed": 0})
+        b["minutes"].append(float(r.get("seconds") or 0) / 60)
+        b["failed"] += r.get("exit") not in (0, None)
+    rows = {c: {**spread(b["minutes"]), "failed": b["failed"]} for c, b in by.items()}
+    test = rows.pop(test_command, {"count": 0}) if test_command else {"count": 0}
+    slowest = sorted(rows.items(), key=lambda kv: -kv[1].get("total_h", 0))[:5]
+    return {"test_command": test, "slowest_other": [{"command": c, **s} for c, s in slowest]}
+
+
+def review_rates(proj: dict, since: str) -> dict:
+    """Reviews since `since`: how many, how many passed, and how many milestones passed their first review. A low
+    first-pass rate means builders can't see what the reviewer sees, or the items ask for more than the user does."""
+    total = passed = firsts = first_passes = 0
+    for e in proj.values():
+        for r in ((e.get("record") or {}).get("milestones") or {}).values():
+            reviews = [v for v in r.get("reviews") or [] if isinstance(v, dict)]
+            for i, v in enumerate(reviews):
+                if (v.get("at") or "") < since:
+                    continue
+                total += 1
+                passed += v.get("verdict") == "pass"
+                if i == 0:
+                    firsts += 1
+                    first_passes += v.get("verdict") == "pass"
+    return {"count": total, "passed": passed, "first_reviews": firsts, "first_review_passes": first_passes}
+
+
+def flow_signs(f: dict) -> list[str]:
+    """Plain sentences for the numbers a lead should look into, each naming the figure. They are starting points
+    for a diagnosis, not verdicts: a long merge may be the test command, a batch split in halves, or a queue."""
+    out, m, t = [], f["merges"], f["checks"]["test_command"]
+    if m.get("count") and m["p90_min"] >= 30:
+        out.append(f"merges are slow: {m['count']} took a median {m['median_min']} min and a 90th percentile of "
+                   f"{m['p90_min']} min (longest {m['max_min']} min), {m['total_h']} h in all, during which each "
+                   "builder waited instead of building")
+    if m.get("count") and (m["failed"] / m["count"]) >= 0.25:
+        out.append(f"{m['failed']} of {m['count']} merges failed ({m['conflicts']} on conflicts, "
+                   f"{m['main_broken']} on a main branch that failed on its own)")
+    if t.get("count") and t["p90_min"] >= 15:
+        out.append(f"the test command is slow: a median {t['median_min']} min, 90th percentile {t['p90_min']} min, "
+                   f"over {t['count']} runs, and every merge waits for it")
+    if t.get("count") and t["failed"] / t["count"] >= 0.2:
+        out.append(f"the test command failed {t['failed']} of {t['count']} runs")
+    for name, s in f["locks"].items():
+        if s["busy"] >= 0.6 or s["queued_h"] >= 1:
+            out.append(f"the `{name}` lock was held {s['busy']:.0%} of the window, with {s['queued_h']} h queued "
+                       "for it")
+    r = f["reviews"]
+    if r["first_reviews"] >= 4 and r["first_review_passes"] / r["first_reviews"] < 0.5:
+        out.append(f"only {r['first_review_passes']} of {r['first_reviews']} milestones passed their first review")
+    j = f["background_jobs"]
+    if j["started"] >= 10 and j["errors"] / j["started"] >= 0.1:
+        out.append(f"{j['errors']} of {j['started']} background jobs failed with an error in the command itself")
+    if f["build_sessions"] and f["ready_for_review"] * 2 < f["build_sessions"]:
+        out.append(f"{f['build_sessions']} build sessions brought {f['ready_for_review']} milestones to Ready for "
+                   "Review")
+    return out
 
 
 def flow_text(f: dict) -> list[str]:
@@ -12012,6 +11757,17 @@ def flow_text(f: dict) -> list[str]:
         out.append(f"- `{name}` lock: held {s['held_h']} h ({s['busy']:.0%} of the window) over {s['holds']} holds, "
                    f"with {s['queued_h']} h spent queued for it and a longest wait of {s['longest_wait_h']} h; "
                    f"{s['failed']} holds ended in a failed command, using {s['failed_held_h']} h of it")
+    m, t, r = f.get("merges") or {}, (f.get("checks") or {}).get("test_command") or {}, f.get("reviews") or {}
+    if m.get("count"):
+        out.append(f"- merges: {m['count']}, a median {m['median_min']} min from joining the queue to the result, "
+                   f"90th percentile {m['p90_min']} min, longest {m['max_min']} min; {m['failed']} failed")
+    if t.get("count"):
+        out.append(f"- test command: {t['count']} runs, a median {t['median_min']} min, 90th percentile "
+                   f"{t['p90_min']} min; {t['failed']} failed")
+    if r.get("count"):
+        out.append(f"- reviews: {r['passed']} of {r['count']} passed; {r['first_review_passes']} of "
+                   f"{r['first_reviews']} milestones passed their first review")
+    out += [f"- to look into: {s}" for s in f.get("signs") or []]
     j = f["background_jobs"]
     out.append(f"- background jobs: {j['started']} started, {j['running']} still running, {j['failed']} failed or "
                f"vanished: {j.get('stopped', 0)} stopped by a pause, a relaunch or a signal; "
@@ -12216,8 +11972,10 @@ def adoptable(prof: dict, worktree: Path, ref: str, p: str) -> str | None:
     plans = prof["plans"] + "/"
     if p == PROFILE_FILE:
         if file_at(worktree, ref, p) is not None:
-            return (f"{p} differs from the one at {base_ref(prof)}; adopt doesn't merge a changed settings file on an existing "
-                    "project: the lead commits and merges it with git once the user has agreed to it")
+            return (f"{p} differs from the one at {base_ref(prof)}; adopt doesn't merge a changed settings file on an "
+                    "existing project, because the settings carry the user's permissions. Once the user has agreed, "
+                    "the lead changes each line with `settings --set LABEL VALUE --said '<the user's words>'`, which "
+                    "keeps their words in the commit")
         return None
     if p == status_rel(prof):
         return (f"{p} is written by the script from the records after each one it merges, so a change to it by hand "
@@ -12453,7 +12211,7 @@ def proposed_names(text: str | None) -> list[str]:
 
 
 def status_word(step: dict, record: dict | None = None) -> str:
-    """The plain status of a module's next milestone, in the words of done-when.md's status table."""
+    """The plain status of a module's next milestone, in the glossary's words."""
     status, state = step["status"], step.get("stored_status")
     if status == "finished":
         return "Done"
@@ -12763,8 +12521,7 @@ def cmd_adopt(a: argparse.Namespace) -> None:
                          "`plan`, and a builder's through `merge`")
 
     def done_with(result: str, code: int = 0, **fields) -> None:
-        print(json.dumps({"result": result, **fields}))
-        sys.exit(code)
+        own_status(result, code, **fields)
 
     try:
         ref = tip(worktree, prof)
@@ -13122,6 +12879,10 @@ def cmd_human(a: argparse.Namespace) -> None:
         graded.parent.mkdir(parents=True, exist_ok=True)
         graded.write_text(text.rstrip("\n") + "\n\n" + pending["example"])
         out["graded_example"] = prof["graded_examples"]
+    elif ok and verb in ("accept", "rereview") and not prof.get("graded_examples_named"):
+        WARNINGS.append("the settings have no `Graded examples:` line, so a review the user overturns isn't kept to "
+                        "teach later reviewers how strict they are; `settings --template` shows the line, and "
+                        "`settings --set` adds it if the user wants it")
     if ok and verb == "rereview":  # the old review is kept, so the next one doesn't hide it
         old_review = evidence_file(worktree, prof, f"{prof['evidence']}/{stem}/{mid}-review.md")
         if old_review.is_file():
@@ -13138,9 +12899,11 @@ def cmd_human(a: argparse.Namespace) -> None:
         out["next"] = next_cmd(loop_cmd("run", "--module", stem, "--worktree", str(worktree)), "lead",
                                f"the User Feedback is in the record file; the resumed builder is told to read it "
                                f"there ({record_rel(prof, stem)}, milestones.{mid}.human_feedback)")
-    print(json.dumps({"result": ("RELEASED" if verb == "release" else "DONE") if ok else "FAILED", "action": verb,
-                      "module": stem, "milestone": mid, "detail": detail, **out}))
-    sys.exit(0 if ok else 1)
+    if not ok:
+        own_status("FAILED", 1, action=verb, module=stem, milestone=mid, detail=detail, **out)
+    if verb == "release":
+        own_status("RELEASED", 0, action=verb, module=stem, milestone=mid, detail=detail, **out)
+    own_status("DONE", 0, action=verb, module=stem, milestone=mid, detail=detail, **out)
 
 
 RESULT_NAMES = {"pass": "Pass", "fail": "Fail", "could_not_judge": "Could Not Judge"}
@@ -13783,8 +13546,7 @@ def cmd_migrate(a: argparse.Namespace) -> None:
     prof = profile(worktree, strict=True, flat_ok=True, old_ok=True)
 
     def done_with(result: str, code: int = 0, **fields) -> None:
-        print(json.dumps({"result": result, **fields}))
-        sys.exit(code)
+        own_status(result, code, **fields)
 
     if os.environ.get("ORCHESTRATE_ROLE"):
         raise SystemExit("error: migrate can't run inside a session the script started; the lead runs it")
@@ -13877,9 +13639,24 @@ def cmd_migrate(a: argparse.Namespace) -> None:
               **({"logs_split": did["logs_split"]} if did.get("logs_split") else {}),
               **({"renamed": did["renamed"]} if did.get("renamed") else {}),
               **({"evidence": did["evidence"]} if did.get("evidence") else {}), worktree=here,
-              **left_behind(behind, next_cmd(loop_cmd("status", "--worktree", str(worktree)), "lead",
-                                             "see the project in its new layout; STATUS.md is written beside the "
-                                             "module folders")))
+              **left_behind(behind, migrated_next(worktree, did)))
+
+
+def migrated_next(worktree: Path, did: dict) -> dict:
+    """After a migration: a planner for the item definitions that still name the old evidence path, which only a
+    planner may change, or else `status`, to see the new layout."""
+    naming = (did.get("evidence") or {}).get("definitions_naming_it") or []
+    if not naming:
+        return next_cmd(loop_cmd("status", "--worktree", str(worktree)), "lead",
+                        "see the project in its new layout; STATUS.md is written beside the module folders")
+    move = did["evidence"]
+    modules = sorted({n.split()[0] for n in naming})
+    return next_cmd(loop_cmd("plan", "--worktree", str(worktree), *module_args(modules[0] if len(modules) == 1 else None),
+                             "--kind", "fix", "--task",
+                             f"The evidence folder moved from {move['from']} to {move['to']}, and these items' "
+                             f"definitions still name the old path: {', '.join(naming[:20])}. Point them at the new "
+                             "one, changing nothing else."), "lead",
+                    "item definitions still name the old evidence path, and only a planner changes an item")
 
 
 # ------------------------------------------------------------------------------------------------------- cleanup
@@ -14113,7 +13890,7 @@ def cmd_cleanup(a: argparse.Namespace) -> None:
         print(f"Kept: {line}")
     for line in failed:
         print(f"Not removed: {line}")
-    print(json.dumps({k: v for k, v in out.items() if k not in ("next",)}))
+    print(json.dumps({**out, "next": fit_next(out["next"])} if "next" in out else out))
 
 
 # ------------------------------------------------------------------------------------------- main-branch checks
@@ -14543,19 +14320,16 @@ def main_check_wait(worktree: Path, prof: dict, name: str, commit: str, wait_s: 
                         "by": main_check_view(row), "why": (
                     f"the main-branch check {name} fails on {row['commit'][:12]}, and the first failing commit is "
                     f"{culprit['commit'][:12]} ({culprit['subject']}), {whose}; this work waits for a pass on a "
-                    "commit that contains it, without a builder turn"), "next": next_cmd(
-                        None, "lead", "the main branch fails this check because of another module's commit; that "
-                        "module fixes it as its next task, or the lead reverts that commit"
-                        if culprit.get("modules") else "the main branch fails this check because of commit "
-                        f"{culprit['commit'][:12]}, which no module's merge landed; read its diff, give the fix to "
-                        "the module whose code it changed, or revert it")}
+                    "commit that contains it, without a builder turn"), "next": main_check_fix_next(
+                        worktree, name, culprit, "the main branch fails this check because of " +
+                        ("another module's commit" if culprit.get("modules") else
+                         f"commit {culprit['commit'][:12]}, which no module's merge made"))}
             return {"result": "FAILING_ON_MAIN", "code": 1, **fields, "by": main_check_view(row), "why": (
                 f"the main-branch check {name} fails on {row['commit'][:12]}, which contains {commit[:12]}, and no "
                 f"later pass covers it. It was tried twice, so it isn't a one-off.{where} The fix goes forward on the "
                 "main branch; once a run passes on a commit containing this one, this check passes. Its whole "
-                f"output is in {row['file']} and the files it names"), "next": next_cmd(
-                    None, "lead", "the main branch fails this check; the module that made the first failing commit "
-                    "fixes it as its next task, or the lead reverts that commit")}
+                f"output is in {row['file']} and the files it names"), "next": main_check_fix_next(
+                    worktree, name, culprit, "the main branch fails this check")}
         if flight and flight.get("state") == "scheduled":
             (folder / MAIN_CHECK_REQUEST).touch()  # the runner is waiting out `every`: someone is waiting, so run now
         if flight is None:
@@ -14631,14 +14405,21 @@ def main_check_report_lines(worktree: Path) -> list[str]:
     return lines
 
 
+def own_status(result: str, code: int, **fields) -> None:
+    """The result line of a command that keeps its own exit status (`adopt`, `migrate`, `human`, `main-check`):
+    one JSON line as `emit` prints it, but exiting `code`, so a shell or a check can test the status."""
+    if "next" in fields:
+        fields["next"] = fit_next(fields["next"])
+    warnings = list(WARNINGS)
+    print(json.dumps({"result": result, **fields, **({"warnings": warnings} if warnings else {}), "version": VERSION}))
+    sys.exit(code)
+
+
 def main_check_out(result: str, code: int, **fields) -> None:
     """The result line of `main-check`, with the exit status an item's check needs: 0 only when it passes."""
     if fields.get("why"):
         print(fields["why"], file=sys.stderr)
-    if "next" in fields:
-        fields["next"] = fit_next(fields["next"])
-    print(json.dumps({"result": result, **fields, "version": VERSION}))
-    sys.exit(code)
+    own_status(result, code, **fields)
 
 
 def start_due_checks(worktree: Path, prof: dict, ref: str, names: list[str] | None = None,
@@ -14919,6 +14700,8 @@ def main_broken(worktree: Path, prof: dict | None = None) -> list[dict]:
             if latest.get("result") == "fail":
                 culprit = latest.get("culprit") or {}
                 out.append({"check": c["name"], "commit": latest.get("commit"), "modules": culprit.get("modules") or [],
+                            "next": main_check_fix_next(worktree, c["name"], culprit,
+                                                        f"the main-branch check {c['name']} fails"),
                             "text": f"main-branch check `{c['name']}` failed on {(latest.get('commit') or '?')[:12]}"
                                     + (f"; the first failing commit is {culprit['commit'][:12]} ({culprit.get('subject')})"
                                        if culprit.get("commit") else "")})
@@ -14993,10 +14776,9 @@ READY_IDLE_WARN_S = 5 * 60.0  # how long ready work may wait with a builder slot
 # a run's steps, so a run carrying on to its next milestone doesn't wake the lead, and short enough that work a
 # finished dependency frees doesn't sit for half an hour
 PLANNER_QUEUE_WARN_S = 3600.0  # how long a planner may wait for the one before it
-WATCH_WHY = ("Read this for delivery problems and act on them: message a builder (stop its run with `pause --module "
-             "<M>`, then start it again with `run --message`), start a planner on a re-plan, change the order of the "
-             "work, start a builder on ready work, or ask the user. Then start this command again in the background, "
-             "so the next check-in or warning sign wakes you")
+WATCH_WHY = ("start this command again in the background, so the next check-in or warning sign wakes you. A running "
+             "builder takes a message once it is stopped with `pause --module <M>` and started again with "
+             "`run --message`")
 
 
 def check_in_s(value: str | None, problems: list) -> float:
@@ -15136,7 +14918,9 @@ def watch_signs(look: dict) -> dict:
         signs["low_disk"] = {"seen": "low", "text": f"the disk holding the repository has {look['disk'] / 1e9:.0f} GB "
                                                     "free; builds stall when it fills"}
     for b in look["broken"]:
-        signs[f"main_broken {b['check']}"] = {"seen": str(b["commit"]), "text": b["text"]}
+        then = b.get("next") or {}
+        signs[f"main_broken {b['check']}"] = {"seen": str(b["commit"]), "text": b["text"] + (
+            f"; run `{then['command']}`" if then.get("command") else "")}
     for x in look.get("ahead") or []:
         signs[f"plan_ahead {x['module']}"] = {"seen": x["next"]["why"], "text": x["next"]["why"] + (
             f"; run `{x['next']['command']}`" if x["next"].get("command") else "")}
@@ -15217,7 +15001,7 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dic
     try:
         f = flow_numbers(worktree, max(0.1, (stamp - since_s) / 3600))
         out["flow"] = {k: f[k] for k in ("hours", "ready_for_review", "done", "commits", "code_commits",
-                                         "build_sessions")}
+                                         "build_sessions", "signs")}
         out["flow"]["hours"] = round(out["flow"]["hours"], 1)
     except (Exception, SystemExit):
         pass
@@ -15304,15 +15088,505 @@ def cmd_watch(a: argparse.Namespace) -> None:
                        WATCH_WHY))
 
 
-USAGE = """Starts and checks the builders, reviewers and planners of the orchestrate set, and keeps each module's
-record. The lead runs it, following the lead skill, and you can run it by hand. Project settings come from ORCHESTRATE.md at
-the worktree root.
+ROUTINE_STEPS = f"""\
+Routine steps. Without --one-step, `run` and `plan` carry on through the steps the process makes routine, each run
+as a command of its own with --one-step, and end with the last one's result plus `steps_run` (each step and its
+result) and `stopped_because`. After `run`: the review of a milestone that reached Ready for Review, the builder
+again after a failed review that the counts send back to it, the module's next milestone after a pass, and a
+planner revision each time the design review asks for changes, then the run again. After `plan`: the design review
+of each module the plan left owed one, and a planner revision each time a design review asks for changes. After
+{DESIGN_REVIEW_ROUNDS} design reviews in a row ask for changes, the script approves the planner's revision without
+another review, and PLANNED names the module under `design_approved_at_limit`. They stop at anything else: a `next`
+the user decides or with an `ask`, Blocked, a diagnosis or another escalation, HOST_FAILED, KEPT, PAUSED or a stop
+signal, a finished module, a next milestone that can't start, a failing main-branch check, a newer copy of the
+script, or any `next` that isn't a plain command for the step.
+"""
 
-Each command has its own --help for its flags. The docstring at the top of this file explains the whole design.
+COMMAND_HELP = {  # each command's --help, after its flags: what it does, its results and its fields
+    "run": f"""\
+run   --module CORE --worktree PATH [--host H] [--model M] [--effort E] [--milestone M2] [--fresh]
+      [--message TEXT] [--human-rule TEXT]... [--clear-human-rules] [--no-progress-hours 4] [--no-design-review]
+      [--review-host H] [--checks-only] [--one-step]
+      With a `Worktrees:` setting, a PATH on the main branch (the main checkout) means the module's own worktree:
+      the one already on build/<module>, or a new one the script makes in the `Worktrees:` folder from the main
+      branch's tip. The result's `worktree` field names it, and the run's later commands use it. Any other PATH is
+      used as it is.
+      REFUSED, starting nothing, while the settings have no Builders line with a count; its `next` (decides: human)
+      asks the user how they want the agents to work, and saves the answer with `settings --set Builders`. Otherwise it starts (or resumes) a builder session on the
+      module's next milestone and drives it one turn at a time until:
+      READY_FOR_REVIEW  the script's own checks passed on the merged tip, and it set the milestone Ready for
+                    Review, or Done when no review is owed (`review` says which). `commit` is the builder's commit
+                    and `checked` the tip the checks ran on. `next` is the review on the review host, or, with no
+                    review owed, `run` for the next milestone.
+      BLOCKED       the milestone can't move until someone steps in. The result carries `reason` and `blocked`
+                    ({{reason, items?, what}}). The reason is the one the builder's last line named (`BLOCKED
+                    needs_access: ...`); with none, items that need someone decide it once every other item passes,
+                    and otherwise it is needs_context (also the reason for a builder's `NEEDS_CONTEXT: ...` ending). A
+                    run that isn't visible stops BLOCKED needs_access or needs_hardware once only such items are
+                    open, and its `next` is the same `run` with ORCHESTRATE_VISIBLE=1, for when the user is at the
+                    machine; a visible run on a milestone blocked that way unblocks it and builds.
+      CHECKS_FAILED the builder said DONE (or its goal completed) three times without the work holding up. Its
+                    `next`, as STALLED's and NO_PROGRESS_FOR_HOURS's, starts the builder again with --fresh and the
+                    reasons in --message, with a planner's task as `alternative`; when the builder said an item
+                    can't be met, the planner's task comes first. A check that exits {MAIN_CHECK_PENDING_EXIT} (a
+                    main-branch check that hasn't judged the commit yet) isn't a failure: the run asks again, with
+                    no builder turn.
+      INVALID       the done-when file is malformed, or something outside the builder's fields changed
+      NEEDS_REVIEW  the module's next milestone is Ready for Review and waiting for its review
+      WAITING       `reason` on_dependency: the next milestone depends on milestones in other modules that aren't
+                    Done yet (`depends_on` lists them). `reason` for_diagnosis: it failed review
+                    {REPEATS_TO_DIAGNOSE} times on a repeated finding, or {FAILED_REVIEWS_TO_DIAGNOSE} times in all,
+                    or a reviewer marked a finding for a planner (`cause` says which); `next` is the planner's task,
+                    and no builder starts on it until the planner has changed its definitions or kept them.
+                    `reason` for_planning: every milestone in the done-when file is Done, and the plan names more
+                    (`later` lists them) with no items yet; `next` is the planner's task.
+      DESIGN_NOT_APPROVED
+                    the module's design hasn't passed a design review (or changed since it did). Unless
+                    --no-design-review, `run` first runs that review itself, on the review host (--review-host,
+                    else the settings' `Review host`, else the builder's host), and on DESIGN OK goes on to build.
+                    With --one-step, any other outcome stops here with the review's result under `design_review`;
+                    without it, DESIGN CHANGES goes on through the routine steps below. After DESIGN OK, every
+                    later result of the run carries `design_review`, so the review's cost shows with the build's.
+      FINISHED      the module has nothing left
+      IN_PROGRESS_ELSEWHERE
+                    another lead or run holds this module or milestone; `by` and `holder` say which
+      NO_PROGRESS_FOR_HOURS
+                    no new passing item, and no commit of the builder's own outside the plans folder, for
+                    --no-progress-hours
+      STALLED       {STALL_TURNS} turns in a row changed nothing and reported nothing
+      HOST_FAILED   two failed turns in a row, the host CLI is missing, or the goal is usage- or budget-limited
+                    (likely quota, sign-in or outage)
+      SCRIPT_FAILED the script couldn't do a step of its own, such as fetching the main branch's tip or making
+                    its checkout; `reason` says which
+      WRONG_MODEL_OR_EFFORT
+                    a turn ran on a model or effort other than the named ones (`mismatches`). Its `next` runs the
+                    builder again as set, in a new session, which the lead does and tells the user; when the rerun
+                    does the same, `next` has `decides: human` and an `ask`.
+      PAUSED        `pause` stopped it, the user stopped it or has it open in the app, or the Codex goal is
+                    paused; `run` again carries on
+      A run on the same milestone resumes its session (with --message as the first prompt, such as a pointer to
+      the review) unless --fresh is given, the host, model or effort changed, or the session is over
+      {NEW_SESSION_AT:.0%} full (`fresh_because` says why). A new milestone starts a new session. --milestone only
+      confirms which milestone you expect; it never skips one that comes first. `goal` says whether a resumed turn
+      restated the goal, and `constraints_missing` names settings lines that were empty. A result line's `usage` is
+      the session's running total; `cost --help` says how usage is counted.
+      --checks-only starts no agent: it runs the script's checks on a milestone whose work is merged with every item
+      passing, and prints READY_FOR_REVIEW, or CHECKS_FAILED with `reasons`. A builder in a chat with no lead uses it.
+      Every result that stops short of building carries `next`. A `run` or `review` in a `next` keeps the hosts of
+      the module's last run. When plan files are uncommitted or not merged, the result names them under
+      `unmerged_plans` and `next` is `adopt`, with what would have come next under `then`. A project with no
+      ORCHESTRATE.md gives INVALID with `next` naming `plan`. `warnings` are the launch's loader checks (an AGENTS.md
+      that Claude won't read, a skill not installed where the host finds skills by name); they never stop a run.
 
-examples:
+""" + ROUTINE_STEPS,
+    "review": """\
+review --module CORE --milestone M2|design --worktree PATH [--commit SHA] [--host H] [--model M] [--effort E]
+      Runs a fresh reviewer in a clean checkout of the commit that is Ready for Review (by default the one its
+      record names), or of the main branch's tip for --milestone design, then checks what it did: only the review
+      file and the reviewer's own fields changed, and the verdicts agree with its last line. If all holds, the script
+      merges the verdicts and the record, sets failed items back to open, and records the verdict. The review and
+      its captures (<evidence>/<MODULE>/<milestone>-review/) stay in the working folder; an earlier review is kept
+      beside the new one as <milestone>-review-N.md, and a second design review keeps the first as
+      design-review-N.md.
+      With no --host, a review goes to the settings' `Review host` (`other` means the host that built the milestone
+      swapped, or for a design review the host of the planner turn that wrote the plan swapped, else the settings'
+      default host swapped).
+      REVIEWED, with `next` the command that comes next: after a pass, the next ready milestone or "finished"; after
+        DESIGN CHANGES, the planner's revision with `findings`; after a failed milestone review, what the counts call
+        for. `failed_reviews` counts the failed reviews since the last re-plan, kept plan or decision of the user's,
+        `failed_reviews_with_repeat` those with a finding an earlier review made (`repeated` names them), and
+        `escalation` (same_builder, new_builder_session, diagnosis, too_many_failed_reviews) says what they call
+        for; `next --help` gives the counts.
+      BLOCKED, with `reason` needs_access: the reviewer couldn't reach the product. Nothing merged, no review counted,
+        the milestone stays Ready for Review, and `next` is the same review in a visible session, for when the user
+        is at the machine.
+      INVALID (nothing merged), or the host's HOST_FAILED, SCRIPT_FAILED, WRONG_MODEL_OR_EFFORT or PAUSED, as `run
+      --help` describes them.
+""",
+    "plan": """\
+plan  --worktree PATH --task TEXT [--kind KIND] [--module CORE] [--host H] [--model M] [--effort high] [--one-step]
+      Runs a fresh planner in the script's own checkout of the main branch's tip, so --worktree only names the
+      repository and the lead's worktree is left as it is; a first plan, before ORCHESTRATE.md exists, runs in
+      --worktree itself, which must be clean. A planner with no --module runs alone; planners limited to different
+      modules run side by side. One whose scope clashes with a running planner waits for it (listed in `runs` with
+      `waiting_for`), in the order they were started, then plans from the tip the first one merged.
+      The planner's last line must be `PLANNED`, after changing files, else it is nudged with what's missing, at
+      most twice. Then the script checks its done-when files, commits and merges what it left uncommitted (outside
+      the plans folder too, except record files), and authorises the new definitions, resetting proof on
+      milestones whose definitions changed. Results:
+      PLANNED       `files` lists what it changed, `design_review_owed` the modules whose design review is now
+                    owed, `assumptions` the `Assumption:` lines per module, and `replanned` each milestone owed a
+                    diagnosis whose definitions changed (its counts start again). `next` is the owed design review,
+                    or `ready`.
+      KEPT          the planner ended `KEEP <MODULE> <milestone>: builder|reviewer|human: <why>`. Naming the builder
+                    for a milestone Blocked with Needs Dependency or Needs Context lifts the block (`unblocked`),
+                    with `run` as `next`.
+      BLOCKED, NEEDS_CONTEXT or UNFINISHED
+                    nothing merges; the files it changed are listed under `set_aside` and kept in `stash` (any
+                    commits on `branch`). `next` gives a planner the same task again, with how the last turn ended
+                    and, after BLOCKED or NEEDS_CONTEXT, a placeholder for the answer.
+      PLAN_NOT_MERGED
+                    the planner finished but its files couldn't merge; they are set aside the same way, and `next`
+                    gives a planner the task again. A plan kept on a branch because the main branch failed its test
+                    command on its own merges later with `plan --merge-kept <branch>`.
+      INVALID       the planner committed, or a record file changed on the tip without the script during the turn;
+                    `next` says who acts.
+      SCRIPT_FAILED in a repository with no commits, before any planner turn, with `next` giving the first commit.
+      REFUSED       `unmerged_plans`: ORCHESTRATE.md or plan files in --worktree aren't on the main branch yet, so a
+                    planner would plan without them; `next` is `adopt`, with this plan command under `then`.
+      `report` keeps the end of the planner's message, where the user's decisions go. The whole task is kept in the
+      plan commit's body and in each module's record file under `briefs`, which design reviews are pointed at.
+      `pause` doesn't reach a waiting planner, but stopping its process does (PAUSED). Without --one-step, plan
+      carries on through the routine steps that `run --help` describes.
+""",
+    "merge": """\
+merge --worktree PATH [--no-check]
+      Merges the worktree's commits: rebases them onto the main branch's tip, runs the test command, then pushes
+      (Merge: push) or fast-forwards the local branch (Merge: local). Builders use this. Start each commit's
+      subject with `<MODULE> <milestone>:` (for example `ENGINE M3: ...`), because the script reads it to find
+      whose commit broke the main branch. Branches waiting at the same time merge as one batch, tested once; one
+      that breaks it is found and failed, and the rest merge.
+      MERGED, with `batch` (the branches merged, in order, and this one's place); the worktree moves to the merged
+      tip, and a MERGED outside a run names `run --checks-only` in `next`.
+      FAILED, with `detail` saying what to fix (and `conflicts` naming files that conflicted). It refuses commits
+      that set a milestone's status to ready_for_review or done, which only the script sets, and a branch whose
+      milestone's definitions a planner has changed since it started. When the main branch fails the test command
+      on its own, the result carries `main_broken` (the commit, and under `culprit` the commit that broke it, with
+      its modules) and a `next` that gives the fix to a planner for those modules, or to the lead.
+      The items' checks don't run here. `merge` refuses to run in a plan or review session.
+""",
+    "ready": """\
+ready [--worktree PATH]       READY: what each module's next milestone is waiting for, read at the main branch's tip. When
+      nothing is ready it adds `next`. A milestone Waiting for a re-plan or diagnosis, or Blocked with too many
+      failed reviews, carries its own `next` (the planner's or the user's command), never as ready. `plan_ahead`
+      lists the module table's modules with no plan yet whose Needs are all planned, in build order, each with
+      the `plan` command in its `next`. It names unmerged plan files (`unmerged_plans`) as `run` does, and
+      `settings_differ` when ORCHESTRATE.md here differs from the tip's. With no ORCHESTRATE.md it gives `unplanned`
+      and `next` naming `plan`, or, when the main branch's tip does have one, `behind` and `next` naming the merge
+      that brings this worktree up to it.
+      The groups: can_start; in_progress_elsewhere (another run holds it); ready_for_review;
+      design_not_approved (a design, or milestones added to an approved one, waiting for a design review);
+      waiting, with a `reason`: on_dependency (an unmet depends_on), for_planning (the plan names more milestones
+      with no items yet, listed in `later`) or for_diagnosis (with a `cause`); blocked, with a `reason` and who
+      unblocks it: needs_human_feedback (the user's reply, through `human feedback`), needs_access (a visible run
+      with the user at the machine), needs_hardware (a run with the device connected), needs_context (the lead
+      supplies the fact, `run --message`), needs_dependency (a planner adds the missing piece) or
+      too_many_failed_reviews (the user decides); finished (every milestone Done); and invalid (a done-when file
+      the script can't read, or one changed by an agent that may not change it).
+""",
+    "adopt": """\
+adopt [--worktree PATH] [--message TEXT] [PLAN FILE]...
+      Commits plan files that are uncommitted, or committed here but not merged, and merges them through a clean
+      checkout of the tip, so nothing else in the worktree goes with them. Also merges a first ORCHESTRATE.md (one
+      the tip doesn't have yet). Evidence is never merged: it stays in the working folder.
+      A module's definitions are a draft until a design review of it passes. While they are, and nothing has been
+      built (no milestone past not_started, no Ready for Review record, review or Done milestone, no run holding
+      the module), adopt authorises changed definitions (`authorised` lists the modules), because the owed design
+      review will judge them.
+      Refuses files outside the plans folder, record files, a hand-edited STATUS.md, files under the old flat names,
+      a PLAN.md or LOG.md that fails the plan checks, invalid done-when files, changed definitions on a module
+      that's no longer a draft (with `next` naming `plan` and `human scope`), a changed ORCHESTRATE.md the tip
+      already has (change a line with `settings --set` once the user agrees), anything `ready` would then call
+      invalid, files the tip changed since, and any session the script started.
+      ADOPTED, NOTHING, REFUSED or FAILED (with `next` when the repository has no commits to build on).
+""",
+    "status": f"""\
+status [--module CORE] --worktree PATH [--format md]   Every milestone with its status, blockers and last verdict,
+      and which modules (and the planner) have a live run. A milestone the script hasn't checked yet shows as `done,
+      unchecked`. It warns about a module folder with no row in ARCHITECTURE.md's module table (`ready` lists the
+      same under `module_table`), and about tracked PLAN.md or *-PLAN.md files outside the plans folder.
+      --format md prints STATUS.md, the user's page, as the script writes it after each record it merges, plus any
+      plan files here that haven't merged. The page opens with an overview (a progress line, what waits on the
+      user, what is under way or next, and what became Done in the last {RECENT_DAYS} days), then every module in
+      build order with its status.
+""",
+    "migrate": """\
+migrate --worktree PATH [--to docs/plans]
+      Brings a project to the current layout and names in one commit, and moves committed evidence into the working
+      folder. Every other command refuses a project with the old layout or names, naming `migrate`. --to also moves
+      the whole plans folder there and changes the Plans line. Refused while any run, review, plan or adopt is
+      running, and while plan files here differ from the tip, unless the tip is migrated already. MIGRATED
+      (`renamed` lists the files given new names), NOTHING (the tip is current already), REFUSED or FAILED. Either
+      success lists in `worktrees_on_old_names` every worktree still on the old layout or names, each with its
+      `migrate --branch` command, and `definitions_naming_it` items that name the old evidence path, for a planner.
+
+migrate --commit-map FILE --worktree PATH
+      After history was rewritten, such as by `git filter-repo`: points every record file and the run state at the
+      new commit hashes. FILE holds one `old new` pair of full hashes a line, as .git/filter-repo/commit-map does.
+      Refused while a run holds the repository. MIGRATED (`commits_remapped`, `records`, `state_files`), NOTHING
+      (nothing names an old hash), REFUSED or FAILED.
+
+migrate --branch --worktree PATH [--module CORE]
+      For a worktree whose own commits were made before the main branch was migrated, which `run` refuses: renames
+      its commits as `migrate` renamed the main branch, then rebases them onto the tip. It holds only the module's
+      run lock, so other modules' runs carry on. The worktree must be clean. MIGRATED (`commits` renamed, `was` the
+      old HEAD, `renamed` the files), NOTHING (its commits use the new names already), REFUSED (the tip isn't
+      migrated, the worktree has uncommitted changes or merge commits, a run holds the module, or its commits
+      conflict with the main branch's, named in `conflicts`; the worktree is left as it was) or FAILED.
+""",
+    "check": """\
+check --module CORE --milestone M2 [--worktree PATH] [--plans-from PATH] [--timeout 600] [--items-only] [--json]
+      Runs the milestone's checks (each item's `check` under its `lock`, then the test command, which
+      --items-only leaves out, for a planner trying its checks while builders work) in the given tree, as it stands,
+      and prints a line per check, with the why and last output lines of any that didn't pass (--json: one JSON
+      object with everything): per check `pass`, `fail` (it ran and failed: likely not built yet; the output says),
+      `error` or `timeout`, with the exit code and the output's tail. `error` means the check can't run as
+      written, and is given only where that's certain: it doesn't parse as shell, or exit 126. Its fix is to how the
+      check is written, never to what it tests. Exits 0 only when every check passes. Writes nothing in the
+      repository. Each check's whole output is saved (`stdout` and `stderr` in --json), and a pass on the same
+      files isn't run again by `merge` or `run` (`reused`).
+""",
+    "cost": """\
+cost [--module CORE] [--since HOURS] --worktree PATH [--json]
+      Tokens per milestone from this machine's usage ledger, which every turn the script runs appends to, paused
+      ones too: planning, then each milestone's build and review (a design review under milestone `design`), with
+      totals and how many turns showed no tokens (a visible Codex turn) or only some. A milestone the ledger has
+      nothing on (a clone, say) is read from the `usage` its Ready for Review records and reviews carry in the
+      record file, and marked as from the record. A Ready for Review record's `usage` is what the session spent
+      since its previous one, so a milestone's records add up; `session_usage` beside it is the running total, not
+      to be added. A dollar figure is Claude's list price for the Claude turns only; Codex reports tokens.
+""",
+    "report": f"""\
+report [--since HOURS|TIME] --worktree PATH [--write [PATH]]
+      The facts for the lead's answer when the user asks how the build is going, as markdown, read from the
+      records at the main branch's tip, this machine's usage ledger and lock log, the result files and the runs
+      going now. In order: what needs the user now (items that need user feedback, access or hardware, and
+      milestones Blocked with too many failed reviews, each with who acts); every decision recorded in the user's
+      name with their words (for the user to spot one they didn't make); what became Done or reached Ready for
+      Review; the verdicts with links (every design review in the window, DESIGN CHANGES ones included); the planner
+      turns with the task each was given; what is under way and how far along; what has slowed down, with the
+      cause the records show (repeated failed reviews and diagnoses, Waiting and Blocked milestones, runs that ended
+      STALLED, NO_PROGRESS_FOR_HOURS, HOST_FAILED, SCRIPT_FAILED or WRONG_MODEL_OR_EFFORT, merges that failed, runs
+      with no sign of activity for {limit_text(REPORT_IDLE_S)}, time queued for a lock, a failing main-branch
+      check); the `flow` numbers; the planners' assumptions in plans changed in the window and the glossary's
+      proposed names; and cost (as `cost` reads it). --since is hours, or a time such as 2026-11-17 or
+      2026-11-17T09:00 (this machine's time zone); by default it covers the time since the last report at least
+      {limit_text(REPORT_REPEAT_S)} old, else the last {REPORT_DEFAULT_H:g} hours. Links are paths from the
+      repository root. --write puts it in a file instead, with its links relative to that file, and prints
+      `written`.
+""",
+    "next": f"""\
+next  --module CORE --worktree PATH --milestone M2   ESCALATION: what to do after a failed review, read at the
+      main branch's tip, where the review merged. `action` is what the counts call for, `message` what to send (the
+      builder's message, or for `diagnosis` the planner's task), and `next` the command.
+      The counts, kept by the script on each milestone: `failed_reviews`, and `failed_reviews_with_repeat` for
+      reviews with a finding an earlier review made. The first that applies:
+        diagnosis              a finding marked for the planner (an item its proof can't prove, items that
+                               contradict each other), {REPEATS_TO_DIAGNOSE} reviews with a repeat, or {FAILED_REVIEWS_TO_DIAGNOSE} failed reviews.
+                               A milestone gets one diagnosis; the same counts after it block it with
+                               too_many_failed_reviews, for the user to decide (`human accept`, `human scope` or
+                               `human reopen`). A planner finding after a diagnosis of something else gets a
+                               diagnosis of its own.
+        new_builder_session    {NEW_SESSION_AFTER_FAILED_REVIEWS} failed reviews, or {NEW_SESSION_AFTER_FAILED_REVIEWS} with a repeat: a builder in a new session.
+        same_builder           otherwise: the same builder, told to read the review.
+      A diagnosis ends in a re-plan (PLANNED) or a kept plan (KEEP ... builder|reviewer|human), and adds 1 to
+      `diagnoses`. The counts start again after either, and after `human scope` or `human reopen`, which also clear
+      the diagnosis.
+""",
+    "unblock": """\
+unblock --module CORE [--milestone M2] --worktree PATH   Puts a blocked milestone back in the queue, in_progress,
+      and prints UNBLOCKED with the `run` to start next. With no --milestone it takes the module's one blocked
+      milestone.
+      Refused for Needs User Feedback (`human feedback` unblocks it) and Too Many Failed Reviews (`human reopen`).
+""",
+    "pause": """\
+pause [--module CORE] --worktree PATH   Stops the runs in this repository, and their agents, cleanly.
+""",
+    "human": """\
+human accept|rereview|reopen|scope|release --module CORE --milestone M2|design --worktree PATH --text TEXT
+
+human feedback --module CORE --milestone M2 [--item M2.3]... --worktree PATH --asked TEXT --said TEXT
+      Records a decision the user made in chat; the lead runs it, with the user's words in --text (--said for
+      feedback) as they gave them. Every verb records those words, when, and which verb, under `decisions` in the
+      module's record, and `report` lists them all. Refused inside a session the script started, and while a run,
+      review or plan holds the module or the planner.
+      `feedback` records User Feedback, {asked, said, items, at}, under `human_feedback`, for items whose
+      `needs.type` is human_feedback (by default the blocked items, else every open one); it is refused for an item
+      that needs access or hardware, which is done at the machine and never recorded. It puts a milestone Blocked:
+      Needs User Feedback back in the queue; the resumed builder reads it there, and the reviewer counts it as the
+      user's words. `release` takes a milestone out of In Progress when the lead that started it is gone. `scope`
+      takes the done-when file as edited in the worktree (refused when it matches the tip), and says under
+      `worktree` what to do where it can't leave the worktree clean on the tip. A `scope` that changes a milestone
+      owed a diagnosis leaves nothing to diagnose: it is not_started, listed under `replanned`. `scope` and `reopen`
+      both start the milestone's counts again, diagnoses too. `reopen` takes a milestone Blocked with too many
+      failed reviews back to in_progress.
+      DONE, RELEASED for `release`, or FAILED (exit 1) with the reason in `detail`.
+""",
+    "quota": """\
+quota [--worktree PATH] [--budget 120] [--json]
+      A short readout leading with the verdict, saying whose use each figure counts; --json gives everything.
+      The weekly Codex limit, read from Codex's local rollouts: burn per active hour and per builder-hour by model
+      and effort, what each milestone of this repository cost, the script's own use apart from other local threads,
+      and a forecast of the open milestones against what's left before the reset, with a one-sentence verdict.
+      Result lines from a run that launched or meant to launch Codex carry a short `quota` field: what's left, hours
+      to the reset, the burn rate, the verdict, `warn` (only when the quota won't last) and `runs_out` when one
+      builder at the usual pace would use it up.
+""",
+    "settings": """\
+settings --worktree PATH [--host H]
+      SETTINGS: the project settings as every other command reads them, from ORCHESTRATE.md on the main branch's
+      tip when this worktree's copy is only behind it (`read_from` says which file), or ERROR naming what's wrong
+      (with no ORCHESTRATE.md, `planned: false`, the default `paths`, and `next` naming `plan`). Beside each setting:
+        defaulted     the settings lines the file leaves out, so their built-in default applies
+        agents        per host and kind of agent (planner, builder, reviewer, design reviewer), the model and effort
+                      a launch gets when the lead names neither, and where each came from. For each launch the model
+                      is the first of: --model, the line for that kind of agent on that host (`Claude planner:
+                      <model> <effort>`), the host's model line (`Claude model:`), the built-in default. The effort
+                      is the first of: --effort, the line for that kind of agent on that host, its line on every
+                      host (`Reviewer: high`), high for a planner, the `Effort` line, medium. A design reviewer with
+                      no line of its own uses the reviewer's. A line for one host never reaches another.
+        paths         every place the script reads or writes, as absolute paths: the plans folder and each module's
+                      folder, the brief, glossary, architecture and status files, the evidence link and the working
+                      folder behind it, the graded examples, results, check logs, jobs, checkouts, main-branch checks,
+                      the usage ledger, the delivery history, the runs folder, the script and each skill's folder
+        preflight     the loader checks for that host (an AGENTS.md Claude won't read, a skill not installed where
+                      the host finds skills by name). On Codex with `Codex sandbox: workspace-write`, it warns, with
+                      the fixes, when the settings' targets or an open milestone's items plainly need a browser,
+                      which won't start inside that sandbox; a run says the same once before its first build turn.
+      `old_names` or `flat_layout` appears when the project needs `migrate`.
+
+settings --template
+      Prints a new ORCHESTRATE.md to fill in: every line the script reads, each with a note saying what it does,
+      its default and its allowed values, then the sections agents read (starting from a clean clone, targets,
+      rules, project guidance). `Merge` and `Test command` are required; the commands that build, review or merge
+      refuse to run without them.
+
+settings --set LABEL VALUE --said TEXT
+      Sets one line, `- **LABEL:** VALUE`, in ORCHESTRATE.md on the main branch, in a commit of its own whose body
+      keeps the user's words, merged as the script merges plan files, and checks the result reads. Settings are the
+      user's choices, so the lead runs it once the user has said so, and it refuses inside a session the script
+      started. SAVED (with `commit`), NOTHING (the main branch already says this), REFUSED (the new settings wouldn't
+      read, with `problems`; exit 1) or FAILED (exit 1).""",
+    "lock": f"""\
+lock [--worktree PATH] NAME -- COMMAND...
+      Runs COMMAND under a named lock shared by every worktree of the repository (not the whole machine), in
+      first-come order. A resource the settings' `Shared resources:` line names is shared by up to that many
+      commands at once; NAME.alone waits until it has the resource alone, and new shared requests queue behind
+      it. A command still holding the lock after the settings' `Lock hold limit` ({limit_text(DEFAULT_HOLD_LIMIT_S)} unless they
+      say otherwise) is stopped, with exit status 124 and a message on stderr. A locked item check is held to it
+      too. The test command under its `Test command lock` isn't: it may run for up to {limit_text(MERGE_TEST_TIMEOUT_S)}.
+""",
+    "locks": """\
+locks [--worktree PATH] [--json]
+      Who holds each lock of the repository (pid, worktree, command, for how long) and who is queued for it.
+""",
+    "runs": """\
+runs [--repo PATH] [--json]
+      Every run, review and plan running on this machine, in any repository and from any copy of this script: its
+      repository, module, milestone, role, host, model, effort, path (visible or headless), pid, start, turns, time
+      since the last sign of activity (a turn starting or ending, or its session file growing) and tokens where the
+      host reported them. Tokens count when a turn ends, so a turn under way shows as `turn_running_s`. A dollar
+      figure is Claude's list price for the Claude turns only. --repo narrows the list to only runs in the
+      repository holding that path; --json is for a lead.
+""",
+    "main-check": f"""\
+main-check [NAME] [--worktree PATH] [--commit REV] [--wait {MAIN_CHECK_WAIT_S:.0f}] [--start] [--due]
+      Main-branch checks: slow checks declared by `Main-branch check <name>:` lines in the project settings, run on
+      the main branch's tip after merges, one run covering every commit merged since the last. One run at a time per
+      check, for the whole repository; a failed run is tried again once, and a failure that holds is bisected over
+      the main branch's commits since the last pass, naming the first failing commit, its subject and the modules
+      whose plans it changed. A command exits {MAIN_CHECK_UNJUDGED_EXIT} when it couldn't judge the commit (such as a
+      capture that dropped frames): it is tried up to {MAIN_CHECK_TRIES} times, and a run it still can't judge fails
+      nothing. With NAME it answers for a commit (default HEAD): COVERED (exit 0) when a pass exists on a main-branch
+      commit that contains it; FAILING_ON_MAIN (exit 1) when a failure that held does and no pass does; NOT_ON_MAIN
+      (exit 1) for a commit the main branch doesn't contain yet. Otherwise it joins the run in flight or starts one
+      now, in a process of its own that outlives the request, and waits up to --wait seconds, then says PENDING
+      (exit {MAIN_CHECK_PENDING_EXIT}) while the run carries on. An item's check proves itself with
+      `python3 "$ORCHESTRATE_SCRIPT" main-check NAME`, which the script sets for every check it runs. --start
+      starts a run on the tip now; --due starts each check whose `every` has passed since its last run, if the
+      main branch has moved (STARTED, ALREADY_RUNNING or NOTHING). With no NAME it lists each check's latest
+      result (MAIN_CHECKS). A runner's log ends each run with RAN.
+""",
+    "watch": f"""\
+watch --worktree PATH [--runs]
+      Kept running in the background by the lead, and ends to wake it: at its check-in (the settings' `Lead
+      check-in`, {limit_text(LEAD_CHECK_IN_S)} by default, counted from when a watch last ended), at a new warning sign,
+      or with --runs when a run, review or plan of the repository ends. The signs are read from the script's own
+      records: a builder with no progress for {limit_text(NO_PROGRESS_WARN_H * 3600)}, a milestone failing its last two reviews on the same
+      items, ready work with a free builder slot for {limit_text(READY_IDLE_WARN_S)}, a planner queued for {limit_text(PLANNER_QUEUE_WARN_S)}, a module with
+      one planned milestone left, a low disk, and a main-branch check failing on the tip. Each sign wakes the lead
+      once, until it changes or goes, and later results name it in `earlier_signs` without its text. The result (WARNING_SIGNS, RUN_ENDED or CHECK_IN) sums
+      up the build for a lead with no other context: what moved since the last watch, what hasn't, milestones going
+      back and forth between building and review, builder slots, planners, disk, the main branch and the flow
+      numbers.
+""",
+    "history": """\
+history --worktree PATH [--json] [--full] [--budget SECONDS]
+      Brings the delivery history up to date and prints what it holds. After every turn it runs, the script copies
+      the figures it needs out of that session's file (tokens by kind, model and effort, time, how full the context
+      got, tool calls, compactions, how the turn ended), because Claude Code deletes its session files after 30
+      days and Codex archives its own. It keeps numbers, names and times, never what was said, plus a copy of each
+      review the script merges, since `cleanup` clears the working folder. `history`, `report` and `dashboard` also
+      read the sessions that ran without the script (turns started in the app, Codex auto-review threads,
+      subagents, the user's own sessions in the repository), each tagged with its kind of agent and, where the
+      ledger says, its module, milestone and version of the script. `settings` prints where the history lives.
+      --json prints the summary: spend by host, kind of agent, model and version of the script; every kind of
+      error with a count and the latest ones; and the costliest milestones.
+      Cost comes in three measures, each named where it is shown, because the hosts bill a plan rather than each
+      token: weighted tokens (each kind priced relative to a fresh input token, which compares a Claude turn with a
+      Codex turn), Codex's share of the weekly limit, and Claude's list price.
+""",
+    "dashboard": """\
+dashboard --worktree PATH [--out FILE] [--open] [--json] [--no-sweep] [--budget SECONDS]
+      Writes the delivery history (see `history --help`) as one HTML page: cost by host, kind of agent, model and
+      version, milestones, errors and versions, and a Retro view of what it cost by kind of agent, what was
+      delivered, the costliest milestones and what went wrong. It reads new sessions first unless --no-sweep.
+      Prints {written, bytes}; --json prints the records the page draws instead.
+""",
+    "flow": """\
+flow --worktree PATH [--since HOURS]
+      One JSON line of flow numbers for the window (default 24 hours), for diagnosing where delivery time goes:
+      milestones that reached Ready for Review and Done (delivery) beside commits, build sessions and the
+      `Builders:` limit (effort); `merges`, how long each took from joining the queue to its result (median, 90th
+      percentile, longest, total), with failures, conflicts and merges refused because the main branch failed on
+      its own; `checks`, the test command's run times and failures, and the five other checks that took longest;
+      `reviews`, how many passed and how many milestones passed their first review; each lock's holding, queueing
+      and failures; and background jobs. `signs` says in sentences which figures look wrong, as starting points to
+      dig into, not conclusions. `report` and `watch` include the same numbers; `history --json` has cost and
+      errors by host, model and kind of agent over the whole history.
+""",
+    "cleanup": f"""\
+cleanup --worktree PATH [--kind KIND]... [--older-than DAYS] [--yes] [--json]
+      Lists what orchestrate keeps on this computer outside git, by kind and size, and removes it with --yes. All
+      of it is under the git common dir, shared by every worktree: the working folder (builders' proof, reviews
+      and captures, handoffs, the graded examples), the script's clean checkouts, logs, and the usage and result
+      ledgers. Without --yes it prints WOULD_REMOVE, removes nothing, and its `next` (decides: human) asks the user;
+      run it with --yes only on their yes, because nothing removed comes back. Then REMOVED, or NOTHING.
+      With no --kind it covers evidence, checkouts, logs and ledgers. `graded` is only cleared when named, because
+      the graded examples teach later reviewers how strict the user is. It never touches a module whose run lock
+      is held, a milestone that isn't Done, the plans, or the delivery history, which keeps every merged review, so
+      removing a Done milestone's evidence loses captures and handoffs, not verdicts. --older-than keeps anything
+      changed more recently. The last line is the JSON result; --json prints every path with its size.
+      Apart from this, the script removes its own checkouts that nobody has used for {limit_text(TREE_IDLE_S)}, or for
+      {limit_text(TREE_IDLE_LOW_DISK_S)} when the disk has less than {LOW_DISK_BYTES // 1024 ** 3} GB free.
+""",
+    "background": """\
+background [--worktree PATH] [--log FILE] -- COMMAND...
+      Starts COMMAND as a job that outlives the agent's tool call, logged under <git dir>/orchestrate/jobs/, and
+      prints {job, pid, log} at once. Use it for anything longer than a few minutes (a merge, a long test run, a
+      capture), then `wait` for it, because a host stops a tool call that runs too long. A run waits for a `merge`
+      its builder left running in the background before it checks the milestone.
+""",
+    "jobs": """\
+jobs [--worktree PATH] [--json]
+      This worktree's background jobs: id, pid, command, log, and whether each is still running.
+""",
+    "wait": """\
+wait [JOB] [--file LOG [--pid PID]] [--until REGEX] [--timeout SECONDS] [--lines N]
+      Blocks until a background job ends, or its log's end matches --until, or --timeout passes (under Claude's
+      ten-minute limit on a tool call; call it again to keep waiting), then prints how it ended (exited with its code,
+      matched, or still running) and the log's last lines. One long wait costs less context than many short looks.
+""",
+}
+
+
+USAGE = __doc__
+
+EXAMPLES = """examples:
   agent_loop.py ready --worktree .
+  agent_loop.py settings --worktree .
   agent_loop.py run --module CORE --worktree ../core-wt
+  agent_loop.py run --help
 """
 
 
@@ -15352,15 +15626,18 @@ class Joined(argparse.Action):
 
 def build_parser() -> argparse.ArgumentParser:
     """The command line: every command, its flags and their defaults."""
-    parser = Parser(description=USAGE, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = Parser(description=USAGE, epilog=EXAMPLES, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
 
     def host_args(p):
-        p.add_argument("--host", help="codex, claude, or a host named in the project settings (default: see above)")
+        p.add_argument("--host", help="codex, claude, or a host named in the project settings (default: for a review, the settings' "
+                                     "`Review host`, else the builder's host; otherwise the settings' `Default host`, else the host this command runs inside, else the only one installed, else codex)")
         p.add_argument("--model", help="default: the settings' line for this kind of agent on the host "
                                        "(e.g. 'Claude planner'), else its model for the host")
-        p.add_argument("--effort", help="default: medium (high for planners), or the settings' Effort")
-        p.add_argument("--turn-timeout-hours", type=float, default=2.0)
+        p.add_argument("--effort", help="default: the settings' line for this kind of agent on the host, else high for a "
+                                        "planner, else the settings' Effort, else medium")
+        p.add_argument("--turn-timeout-hours", type=float, default=2.0,
+                       help="stop a turn that runs longer than this and count it as failed (default %(default)g)")
 
     run = sub.add_parser("run", help="build a module's next milestone with a builder, then check and review it")
     run.add_argument("--module", required=True)
@@ -15368,23 +15645,27 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--milestone")
     run.add_argument("--fresh", action="store_true",
                      help="start a new session even if one exists. Without it the script starts one anyway when the "
-                          "old session is over 60%% full, another version of the script started it, or resuming it "
+                          f"old session is over {NEW_SESSION_AT:.0%}% full, another version of the script started it, or resuming it "
                           "failed, and says why in fresh_because")
     run.add_argument("--message", action=Joined, help="the builder's first prompt, e.g. pointing it at a review; "
                      "give it more than once to add your own words to a printed command")
-    run.add_argument("--human-rule", "--owner-rule", dest="human_rule", action="append",  # --owner-rule: its name before 2.2
+    run.add_argument("--human-rule", dest="human_rule", action="append",
                      help="a restriction the user gave in conversation; stored "
                      "with the module's run state and restated every turn, across --fresh and milestones")
-    run.add_argument("--clear-human-rules", "--clear-owner-rules", dest="clear_human_rules", action="store_true",
+    run.add_argument("--clear-human-rules", dest="clear_human_rules", action="store_true",
                      help="drop the user's stored rules (when the user says so)")
-    run.add_argument("--no-progress-hours", "--budget-hours", dest="no_progress_hours", type=float, default=4.0,
-                     help="stop the run when no item has passed for this long (--budget-hours before 2.2)")
+    run.add_argument("--no-progress-hours", dest="no_progress_hours", type=float, default=4.0,
+                     help="stop the run when no item has passed for this long (default %(default)g)")
+    # Names from before 2.2, still accepted and left out of the help, which uses the glossary's names.
+    run.add_argument("--owner-rule", dest="human_rule", action="append", help=argparse.SUPPRESS)
+    run.add_argument("--clear-owner-rules", dest="clear_human_rules", action="store_true", help=argparse.SUPPRESS)
+    run.add_argument("--budget-hours", dest="no_progress_hours", type=float, default=4.0, help=argparse.SUPPRESS)
     run.add_argument("--no-design-review", action="store_true", help="return DESIGN_NOT_APPROVED instead of running the "
                      "owed design review first")
     run.add_argument("--checks-only", action="store_true", help="start no agent: run the script's checks on the "
                      "milestone's merged work and set it Ready for Review if they pass (READY_FOR_REVIEW), or say why "
                      "not (CHECKS_FAILED). For a builder in a chat with no lead, after it merges")
-    run.add_argument("--more-builders", metavar="HUMAN_WORDS", help="the user's words, as they gave them, for "
+    run.add_argument("--more-builders", metavar="USER_WORDS", help="the user's words, as they gave them, for "
                      "starting a builder past the count in the project settings' Builders line, where `run` "
                      "otherwise prints REFUSED")
     run.add_argument("--review-host", help="the host for the owed design review run starts itself (default: the "
@@ -15398,7 +15679,8 @@ def build_parser() -> argparse.ArgumentParser:
     review = sub.add_parser("review", help="review a milestone that is Ready for Review, or a module's design")
     for flag in ("--module", "--milestone", "--worktree"):
         review.add_argument(flag, required=True)
-    review.add_argument("--commit", default="HEAD")
+    review.add_argument("--commit", default=None,
+                        help="the commit to review (default: the one the milestone's Ready for Review record names)")
     host_args(review)
     review.set_defaults(func=cmd_review)
     plan = sub.add_parser("plan", help="start a planner on a task, and check and merge its plan")
@@ -15416,9 +15698,9 @@ def build_parser() -> argparse.ArgumentParser:
                            "of other modules. Without it, the planner may change any file and runs alone")
     plan.add_argument("--merge-kept", metavar="BRANCH",
                       help="merge the plan an earlier turn on this task left on BRANCH, without a new planner turn, "
-                           "when it couldn't land only because the main branch failed its test command on its own")
+                           "when it couldn't merge only because the main branch failed its test command on its own")
     plan.add_argument("--one-step", action="store_true", help="run this one planner and stop. Without it, plan "
-                      "carries on into the design review of each module it left owed one, and one planner revision if a "
+                      "carries on into the design review of each module it left owed one, and a planner revision each time a "
                       "design review asks for changes")
     host_args(plan)
     plan.set_defaults(func=cmd_plan)
@@ -15442,9 +15724,8 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--format", choices=["text", "md"], default="text",
                         help="md: the user's page, STATUS.md, as the script writes it")
     status.set_defaults(func=cmd_status)
-    migrate = sub.add_parser("migrate", help="move flat plan files into a folder per module, bring a project to "
-                                             "the names of orchestrate 2.0, and move committed evidence into the "
-                                             "working folder")
+    migrate = sub.add_parser("migrate", help="bring a project to the current layout and names, and move "
+                                             "committed evidence into the working folder")
     migrate.add_argument("--worktree", default=".")
     migrate.add_argument("--to", help="also move the whole plans folder here, and change the Plans line to match "
                                       "(for example docs/plans)")
@@ -15479,8 +15760,9 @@ def build_parser() -> argparse.ArgumentParser:
     human.add_argument("action", choices=["accept", "rereview", "reopen", "scope", "release", "feedback"])
     for flag in ("--module", "--milestone", "--worktree"):
         human.add_argument(flag, required=True)
-    human.add_argument("--text", "--reason", dest="text",
+    human.add_argument("--text", dest="text",
                        help="the user's words for this decision, as they gave them (for feedback, --said)")
+    human.add_argument("--reason", dest="text", help=argparse.SUPPRESS)  # its name before --text
     human.add_argument("--said", help="feedback: the user's words, as they gave them")
     human.add_argument("--asked", help="feedback: the question the lead asked the user")
     human.add_argument("--item", action="append", help="feedback: an item the user's words cover (repeatable)")
@@ -15492,7 +15774,12 @@ def build_parser() -> argparse.ArgumentParser:
     quota.set_defaults(func=cmd_quota)
     prof = sub.add_parser("settings", aliases=["profile"], help="print the project settings, as the script reads them")
     prof.add_argument("--worktree", default=".")
-    prof.add_argument("--host", help="also check that host's loader (default: see above)")
+    prof.add_argument("--template", action="store_true", help="print a new ORCHESTRATE.md to fill in, with a note on "
+                      "each line the script reads, and exit")
+    prof.add_argument("--set", nargs=2, metavar=("LABEL", "VALUE"), help="set one settings line on the main branch, "
+                      "such as --set Builders 'two Claude builders'")
+    prof.add_argument("--said", help="with --set: the user's words, as they gave them in chat, kept in the commit")
+    prof.add_argument("--host", help="also check that host's loader (default: the settings' `Default host`, else the host this command runs inside, else the only one installed, else codex)")
     prof.set_defaults(func=cmd_settings)
     check = sub.add_parser("check", help="run a milestone's checks in a tree as it stands, saving nothing")
     check.add_argument("--module", required=True)
@@ -15525,7 +15812,7 @@ def build_parser() -> argparse.ArgumentParser:
     hist.add_argument("--json", action="store_true", help="the summary: totals, errors by kind, the latest errors and "
                                                           "the costliest milestones")
     hist.add_argument("--full", action="store_true", help="read every session file again from the start")
-    hist.add_argument("--budget", type=float, default=600.0, help="seconds to spend reading (default 600); a "
+    hist.add_argument("--budget", type=float, default=600.0, help="seconds to spend reading (default %(default)g); a "
                                                                   "later run carries on")
     hist.set_defaults(func=cmd_history)
     dash = sub.add_parser("dashboard", help="write the delivery dashboard: cost, agents, milestones, errors and "
@@ -15538,9 +15825,9 @@ def build_parser() -> argparse.ArgumentParser:
                                                               "sessions first")
     dash.add_argument("--budget", type=float, default=120.0, help="seconds to spend reading new sessions")
     dash.set_defaults(func=cmd_dashboard)
-    flow = sub.add_parser("flow", help="show how fast milestones moved beside commits, lock queueing and failed jobs")
+    flow = sub.add_parser("flow", help="show where delivery time goes: milestones moved, merge and test times, reviews, locks and jobs")
     flow.add_argument("--worktree", default=".")
-    flow.add_argument("--since", type=float, default=24.0, help="hours to cover (default 24)")
+    flow.add_argument("--since", type=float, default=24.0, help="hours to cover (default %(default)g)")
     flow.set_defaults(func=cmd_flow)
     main_check = sub.add_parser("main-check", help="run a slow check on the main branch's tip, once for every commit "
                                                    "merged since its last run, or say whether a commit is covered")
@@ -15606,6 +15893,13 @@ def build_parser() -> argparse.ArgumentParser:
                       f"(default {JOB_WAIT_S:.0f}, under Claude's ten-minute Bash limit)")
     wait.add_argument("--lines", type=int, default=JOB_TAIL_LINES, help="how many of the log's last lines to print")
     wait.set_defaults(func=cmd_wait)
+    # Old command names (owner, profile, loops) still run, but the help lists only the glossary's names.
+    sub.metavar = "{" + ",".join(a.dest for a in sub._choices_actions) + "}"
+    for p, action in ((sub.choices[a.dest], a) for a in sub._choices_actions):
+        action.metavar = action.dest
+        p.formatter_class = argparse.RawDescriptionHelpFormatter
+        p.description = action.help[:1].upper() + action.help[1:] + "."
+        p.epilog = COMMAND_HELP.get(action.dest)
     return parser
 
 

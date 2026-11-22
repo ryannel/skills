@@ -16,7 +16,8 @@ from support import Clean, agent_loop  # noqa: E402
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 LOOP = Path("/skills/orchestration/lead/scripts/agent_loop.py")
-PROF = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "merge": "push", "remote": "origin", "branch": "main",
+PROF = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "graded_examples": ".orchestrate/evidence/graded-examples.md",
+        "merge": "push", "remote": "origin", "branch": "main",
         "test_command": "./dev check", "exclusive resources": "gpu: timing runs and captures",
         "bounds": {"Licences and paths not to touch": "no GPL code", "Human decides": "spending and publishing"}}
 MILESTONE = {"id": "M2", "items": [
@@ -73,22 +74,23 @@ def prompts() -> dict[str, str]:
         ".orchestrate/evidence/APPLE-TILE/M2-review.md",
         {"id": "M2", "items": [{"id": "M2.1", "check": "./dev test tiles"}, {"id": "M2.2"}]},
         {"ready_for_review": {"checked": "b7c2e91d04aa"}, "reviews": [ROUND]}, FEEDBACK,
-        [{"why": "the reviews judged the capture tooling, not the tiles", "at": "2026-11-10T12:00:00Z"}])
+        [{"why": "the reviews judged the capture tooling, not the tiles", "at": "2026-11-10T12:00:00Z"}],
+        tree=Path("/repo"))
     out["review-restatement"] = agent_loop.binding(PROF, "review", done="docs/plans/APPLE-TILE/DONE.json",
                                                    review=".orchestrate/evidence/APPLE-TILE/M2-review.md")[0]
     out["design-review"] = agent_loop.review_prompt(
         "claude", PROF, "APPLE-TILE", "design", "HEAD", "docs/plans/APPLE-TILE/DONE.json",
         ".orchestrate/evidence/APPLE-TILE/design-review.md", None, {}, None, [],
         context="Since the last design review (.orchestrate/evidence/APPLE-TILE/design-review.md), M2.2 changed.",
-        design=True)
+        design=True, tree=Path("/repo"))
     out["plan"] = agent_loop.PLAN_TEMPLATE.format(
         task="Plan module APPLE-TILE. The user said on 9 November: \"tiles should load as you scroll, never "
              "all at once\".", skill=agent_loop.skill_note("planner", "claude"), kind=agent_loop.kind_text("module"), kind_name=agent_loop.PLAN_KINDS["module"], loop=LOOP,
-        glossary="docs/plans/GLOSSARY.md", scope="")
+        glossary="docs/plans/GLOSSARY.md", scope="", **agent_loop.paths_for_prompt(Path("/repo"), PROF))
     out["plan-diagnose"] = agent_loop.PLAN_TEMPLATE.format(
         task="Diagnose APPLE-TILE M2.", skill=agent_loop.skill_note("planner", "claude"),
         kind=agent_loop.kind_text("diagnose"), kind_name=agent_loop.PLAN_KINDS["diagnose"], loop=LOOP, glossary="docs/plans/GLOSSARY.md",
-        scope=agent_loop.scope_text("APPLE-TILE"))
+        scope=agent_loop.scope_text("APPLE-TILE"), **agent_loop.paths_for_prompt(Path("/repo"), PROF))
     with mock.patch.object(agent_loop, "review_history", lambda *a, **k: agent_loop.history_lines({"reviews": [ROUND]})), \
             mock.patch.object(agent_loop, "review_files", lambda *a, **k: (
                 [".orchestrate/evidence/APPLE-TILE/M2-review-1.md", ".orchestrate/evidence/APPLE-TILE/M2-review.md"], False)):

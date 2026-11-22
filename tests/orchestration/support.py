@@ -640,8 +640,12 @@ class Repo(Clean):
         out = io.StringIO()
         try:
             with contextlib.redirect_stdout(out):
-                if code is None:
-                    func(parse(func, **kw))
+                if code is None:  # a command that ends with its result line exits 0 after printing it
+                    try:
+                        func(parse(func, **kw))
+                    except SystemExit as stop:
+                        if stop.code not in (0, None):
+                            raise
                 else:
                     with self.assertRaises(SystemExit) as stop:
                         func(parse(func, **kw))

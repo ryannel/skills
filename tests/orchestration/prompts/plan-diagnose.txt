@@ -22,7 +22,7 @@ items may be too broad, or impossible to meet as written.
 
 The fault may also be outside the plan. A builder may fix the one place each review names while the same defect
 stays where no reviewer has looked yet, or a reviewer's findings may go beyond what the items ask. A new plan cures
-neither, and it costs a design review and a rebuild.
+neither.
 
 ## When the plan is at fault
 
@@ -33,29 +33,27 @@ When the fix belongs in another module, plan it as a milestone of that module an
 milestone's `depends_on`, because otherwise the script starts the diagnosed milestone's builder at once, before the
 fix exists, and it fails the same way.
 
-Give each milestone you split off a `diagnoses` count one higher than the one it came from shows, because the script
-adds one to that milestone when your turn merges, and can't tell which new milestone came from which. Leave the other
-counts and `findings` alone, because the script puts back any change a plan makes to them.
+Leave the counts and `findings` alone, because the script keeps them.
 
 ## When the plan is sound
 
 Change no file, and make your last line `KEEP <MODULE> <milestone>: builder|reviewer|human: <why>`, naming who has
 to act:
 
-- `builder`, when a builder keeps breaking something. The script starts a new builder session with your reasons.
+- `builder`, when a builder keeps breaking something. The lead starts a new builder session with your reasons.
 - `reviewer`, when the findings go beyond the items. A new builder session proves the items, and the script tells
   the next reviewer to judge them as written.
 - `human`, when only the user can decide. The script blocks the milestone as Too Many Failed Reviews, with your
   reasons, for the lead to take to the user.
 
-When your turn merges, the script records the diagnosis and resets the review counts itself. A milestone gets one
-diagnosis, so if it keeps failing review after that, the script blocks it for the user. The one exception is a
-later finding only a planner can settle, after a diagnosis for something else, which gets a diagnosis of its own.
+A milestone normally gets one diagnosis, and if it keeps failing review after that, the script blocks it for the user,
+so this is the last chance to change its plan before the user has to decide.
 
 About this session:
-- The `plan` command started this session, and it commits and merges the files you leave uncommitted when you end with `PLANNED`. A reviewer in a new session then reviews the design of each module that is owed one.
+- The `plan` command started this session, and it commits and merges the files you leave uncommitted when you end with `PLANNED`.
+- The project brief is /repo/docs/plans/BRIEF.md and the module list is /repo/docs/plans/ARCHITECTURE.md, in the plans folder /repo/docs/plans, if they exist.
 - The project's agreed names are in docs/plans/GLOSSARY.md, if that file exists.
-- This task is limited to APPLE-TILE, because planners of other modules may be working at the same time. Change APPLE-TILE's folder in the plans folder, the files outside the plans folder that APPLE-TILE owns, and the project files beside the module folders where you add to them, such as a glossary entry or a log line. Leave other modules' folders, which the script refuses, their files, and any interface in the module list that another module provides or uses, because that module's design is reviewed against it. If the task needs a change to any of those, say which and end with `BLOCKED: needs <MODULE>'s files`, and the lead gives the task to a planner for the whole project.
-- The script is `python3 /skills/orchestration/lead/scripts/agent_loop.py`. Its `check --module <M> --milestone <id> --worktree . --items-only` command tries a milestone's item checks without recording anything. It leaves out the project's test command, and runs each check under the item's lock, waiting while a builder holds it.
+- This task is limited to APPLE-TILE, because planners of other modules may be working at the same time. Change APPLE-TILE's folder in the plans folder, the files outside it that APPLE-TILE owns, and additions to the shared project files, such as a glossary entry. If the task needs another module's files, or an interface in the module list that another module provides or uses, end with `BLOCKED: needs <MODULE>'s files`, saying which change and what it must deliver; the lead then gives the task to a planner for the whole project.
+- The script is `python3 /skills/orchestration/lead/scripts/agent_loop.py`. Its `check --module <M> --milestone <id> --worktree . --items-only` command tries a milestone's item checks.
 
-To finish: say what changed and any decision the user must make, then end with `PLANNED` once the files are written. The script lists the files you changed itself. If the plan should stay as it is, change no file and end with the `KEEP` line your task gives, if it gives one. If you need an answer the brief and the files don't give, end with `NEEDS_CONTEXT: <the question>`, and the lead gets it answered. If you can't go on for another reason, end with `BLOCKED: ...`. On `KEEP`, `BLOCKED` or `NEEDS_CONTEXT` the script merges no file of yours.
+To finish, end with `PLANNED` once the files are written. The script lists the files you changed itself. If the plan should stay as it is, change no file and end with the `KEEP` line your task gives, if it gives one. If you need an answer the brief and the files don't give, end with `NEEDS_CONTEXT: <the question>`, and the lead gets it answered. If you can't go on for another reason, end with `BLOCKED: ...`. On `KEEP`, `BLOCKED` or `NEEDS_CONTEXT` the script merges no file of yours.

@@ -5,21 +5,14 @@ builder can go on, and change only what the block reaches.
 
 ## Something another module owns is missing
 
-The builder ended with `BLOCKED needs_dependency`. Decide from the module list who owns the missing thing:
-
-- If another module owns it, add the milestone that delivers it to that module, or move one earlier, and add a
-  `depends_on` entry to the blocked milestone here. A milestone you add waits for a design reviewer to read its
-  items.
-- If it is really this module's work, add it to this module's plan.
-- If the module list was wrong, fix the list and the interface first.
-
-Plan the missing part in the module that owns it, not in the blocked one, because otherwise two modules would own
-the same thing.
+The builder ended with `BLOCKED needs_dependency`. Plan the missing part in the module the module list says owns
+it, because otherwise two modules would own the same thing. If that is another module, add the milestone there that
+delivers it, or move one earlier, and add it to the blocked milestone's `depends_on`. If the module list had the
+owner wrong, fix the list and the interface first.
 
 When your change reaches the blocked milestone itself, such as its `depends_on` or an item, the script lifts the
-block, and the milestone waits only for any design review your change owes. When the plan already answers the block,
-change no file and end with `KEEP <MODULE> <milestone>: builder: <where the plan answers it>`. The script lifts the
-block, and the builder carries on with your reasons.
+block. When the plan already answers the block, change no file and end with `KEEP <MODULE> <milestone>: builder:
+<where the plan answers it>`. The script lifts the block, and the lead starts the builder again with your reasons.
 
 ## The builder asked a question about the plan
 
@@ -32,5 +25,5 @@ answers it>`. If only the user can answer it, end with `NEEDS_CONTEXT:` and the 
 
 The script stops a builder that isn't getting anywhere, and the builder may say an item can't be met as written. If
 an item really can't, change it and end with `PLANNED`. If every item can be met, change no file and end with
-`KEEP <MODULE> <milestone>: builder: <how the items can be met>`, and the script starts a new builder session with
+`KEEP <MODULE> <milestone>: builder: <how the items can be met>`, and the lead starts a new builder session with
 your reasons.

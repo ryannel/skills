@@ -1,80 +1,55 @@
 # Interview
 
 This stage runs when there is no approved brief and no plan, and when the user brings a feature big enough to need
-its own interview. A small change of mind goes straight to [start planning](2-start-planning.md). Interview the user
-and write the project brief that planning starts from. When the user says to plan straight away, skip this stage and
-plan from their words, and the planner lists what it assumed.
+its own interview. A small change of mind goes straight to [start planning](2-start-planning.md). When the user says
+to plan straight away, skip this stage and plan from their words, and the planner lists what it assumed.
 
 Contents:
-- [What the planner does with the brief](#what-the-planner-does-with-the-brief)
-- [When you're done](#when-youre-done)
-- [Research first, then ask](#research-first-then-ask)
-- [Map the dialogue](#map-the-dialogue)
-- [Check the brief before you show it](#check-the-brief-before-you-show-it)
+- [What the interview is for](#what-the-interview-is-for)
+- [What you own](#what-you-own)
 - [The brief](#the-brief)
 - [Handing over](#handing-over)
 
-## What the planner does with the brief
+## What the interview is for
 
-The planner is a new session that reads the brief as a description of what the user wants to accomplish, and
-designs the best way to get there: it breaks the work into modules and milestones, and writes the checks each
-milestone is judged by. The brief is all it knows of the goal, and a question the brief leaves open comes back to
-the user later, through you, often while they're away, so settle it here while they're in the chat.
+The outcome is a project brief the user has approved, from which a planner can plan without working around a hole
+in what the user wants.
 
-The brief says what the user wants and why. Where the user cares how something is built, that goes in too, as a
-decision the planner designs around. The rest of the how is the planner's to choose. What the planner can't work
-out is what only the user knows:
+The planner is a new session. The brief is all it knows of the goal, and it designs the best way there: the modules,
+the milestones and the checks each milestone is judged by. A question the brief leaves open comes back to the user
+later, through you, often while they're away. Worse, the planner may work around it, and each workaround is a choice
+about the goal the user didn't make. A few of those, carried through every module, are enough to build the wrong
+thing well.
 
-- Who the end users are, what they will do in the first release, and at what size: how many of them, how much
-  data, which devices.
-- Where the first release ends. The planner plans up to "What finishes this goal" and no further.
-- How the user will judge the result. Each check is made as strict as that, and a number goes into a check only if
-  the brief gives one.
-- The decisions already made. Once the user approves the brief, each is fixed, yours as much as theirs, so the
-  planner carries them into the design as written.
+So the brief says what the user wants and why, and holds what only the user knows:
 
-Every hole in the brief is a risk. The planner has to work around it, and each workaround is a choice about the
-goal that the user didn't make. A few of them, carried through every module and milestone, are enough for the
-project to drift and build the wrong thing, well and on time.
+- who the end users are, what they will do in the first release, and at what size: how many of them, how much
+  data, which devices;
+- where the first release ends, because the planner plans up to "What finishes this goal" and no further;
+- how the user will judge the result, each judgement pinned to a number a check can test or a shipped example an
+  inspection can use as its reference, because a check is made only as strict as the brief says;
+- the decisions already made, which become fixed once the brief is approved, yours as much as theirs.
 
-## When you're done
+Where the user cares how something is built, that goes in as a decision the planner designs around. The rest of
+the how is the planner's. Go as deep as the outcome takes and no deeper.
 
-You're done when the user has approved the brief, and the planner could do all of that without working around a
-hole in what the user wants. Go as deep as that takes and no deeper: the choices left to the planner should be how
-to build it, and anything the user said the planner may choose.
+## What you own
 
-A brief can hold everything the user said and still fall short:
+Finding things out is your job, and deciding is the user's. Before your first message, read the repository, any
+existing brief and the glossary, and look up how the field handles a project like this one: what shipped products
+do, what such a project usually has to decide, and what tends to go wrong. The user may not know what their project
+has to decide, so raise those questions yourself, each with the recommendation your research supports.
 
-- It contradicts itself: it says "never touch the monorepo" for a tool that has to live there.
-- A rule has a gap: it says "archive inactive accounts" but not how long an account must sit unused to count as
-  inactive.
-- A worry has no measure: it says "scrolling mustn't feel slow" but not how fast is fast enough.
-- It leaves out the size: a booking app for one shop and one for a chain of fifty need different plans.
+Ask only what would change what gets built and only the user can answer. Decide the rest yourself and say so, with
+your reason, so they can correct it. A number or a limit the project turns on, such as how old is too old, is the
+exception: ask for it rather than proposing one, because a sensible default keeps the user's own rule from being
+said. A technical choice the user names is their decision.
 
-## Research first, then ask
-
-Finding things out is your job. Deciding is the user's. Before your first message, read the repository, an existing
-brief and the plans folder's `GLOSSARY.md`. Then look up how the field handles a project like this one: what shipped
-products do, what such a project usually has to decide, and what tends to go wrong. The user may not know what their
-project has to decide, so raise those questions yourself, each with the recommendation your research supports.
-
-Ask the user only what would change what gets built and only they can answer. Decide everything else yourself and
-say so, with your reason, so the user can correct it. That includes how to work, such as where a file goes or
-whether to look further: do it and say so. A number or a limit the project turns on, such as how old is too old,
-does need the user, so ask for it rather than proposing a default, because a sensible default keeps the user's own
-rule from being said. Leave how it is built to the planner, unless the user shows they care. A technical choice
-the user names is their decision, and goes in the brief.
-
-## Map the dialogue
-
-Run the interview as dialogue mapping, with the brief's sections as the root questions.
-
-Ask the goal first, on its own and open, with no recommended answer, because once options are on the table the user
-picks one and the reason goes unsaid. After that, ask in numbered rounds of a few questions each (Q1, Q2 and on,
-never reused), so the user can answer quickly with "Q3 yes, Q4: weekly".
-
-With each choice, say what it would commit the project to, the way someone who has built one would, and then
-what you recommend. The user can't weigh a choice whose cost they can't see.
+How you run the conversation is yours. A few habits keep the user's answers quick and their reasons on record. Ask
+the goal first, open and with no recommendation, because once options are on the table the user picks one and the
+reason goes unsaid. Number the questions across the whole interview (Q1, Q2, never reused), so the user can answer
+"Q3 yes, Q4: weekly". With each choice, say what it commits the project to, the way someone who has built one would,
+then what you recommend, because the user can't weigh a cost they can't see:
 
 > **Q2: Which platforms should it run on?**
 >
@@ -83,41 +58,25 @@ what you recommend. The user can't weigh a choice whose cost they can't see.
 >
 > I recommend: Windows PC first, and PS5 later.
 
-Between rounds, join the dots. Work out what follows from the user's answers and say it, with the step that led
-there: "It's for your eight-year-old on an old iPad, so I've taken it that she plays by touch, with no accounts and
-no typing." Invite the user to overturn any of it, and record what they leave standing as your decisions. Each
-answer gives you more to reason from, so make bigger jumps as the interview goes on, and ask fewer questions. Keep
-asking where a jump would rest on your preference rather than on what the user said, such as their own numbers and
-how they will judge the result.
+Say what follows from the user's answers, with the step that led there, and record what they leave standing as your
+decisions: "It's for your eight-year-old on an old iPad, so I've taken it that she plays by touch, with no accounts
+and no typing." Make bigger jumps as the answers come in, and keep asking wherever a jump would rest on your
+preference rather than on what they said.
 
-Settle the scope: what the end users will be able to do in the first release, and what comes later. Recommend
-where the line falls, and ask what would make the user call this goal finished, because the planner plans to that
-line and no further.
-
-Run a pre-mortem: ask the user to imagine the first release has disappointed them, and say why. Their answers are how
-they will judge it. Pin each one to a number, which a check can test, or a shipped example, which the planner can
-choose as an inspection's reference.
-
-## Check the brief before you show it
-
-You're too close to the conversation to see what the brief leaves out, so have a fresh subagent read it as the
-planner would and list each question about what to build that it would still need answered. Give it only the
-brief's path, not your own view, so what it finds is its own reading. With no subagents, reread the brief as if new.
-
-Put each question to the user in another round, or decide it and mark it as yours. Repeat until the reader finds
-nothing that matters.
+You're too close to the conversation to see what the brief leaves out. Before you show it, have it read cold as a
+planner would, by a fresh subagent given only its path where you have one, so the questions it raises are its own.
+Settle each with the user or mark it yours, until a cold read finds nothing that matters.
 
 ## The brief
 
-Save the brief as `BRIEF.md` in the plans folder, from the first answer on, so a long conversation doesn't lose its
-early messages. If a brief is already there, the request is a feature of that project: add to the brief rather
-than replace it, and date the new request. The planner reads the brief by its headings, so keep them.
+Save the brief as `BRIEF.md` where `settings` says the brief goes, from the first answer on, so a long conversation
+doesn't lose its early messages. If a brief is already there, the request is a feature of that project: add to the
+brief rather than replace it, and date the new request. The planner reads the brief by its headings, so keep them.
 
 Quote the user's words wherever they give a number, a limit or a "never", because each later document softens
 them. With each decision, name the option it ruled out, so no one brings it back. Mark each decision you made
 yourself as the agent's. When the user leaves a choice to the agents, put it under "Still open", marked "the
-planner chooses". Add any name you settle to the plans folder's `GLOSSARY.md`, as the `domain-language` skill
-describes.
+planner chooses". Add any name you settle to the glossary, as the `domain-language` skill describes.
 
 ```markdown
 # Project brief: <name>
@@ -140,7 +99,7 @@ describes.
 2. <decision>, rather than <the option ruled out>. The agent's, because <reason>.
 
 ## How it will be judged
-<what would be a failure even if it works, from the pre-mortem, each with its number or shipped example>
+<what would be a failure even if it works, each with its number or shipped example>
 
 ## Never part of this
 
@@ -154,8 +113,5 @@ describes.
 
 ## Handing over
 
-Show the brief in the chat, with the decisions you made yourself listed above it. Approving the brief confirms
-them.
-
-Once the user approves, go on to [start planning](2-start-planning.md), which commits the brief and starts the
-planner.
+Show the brief in the chat, with the decisions you made yourself listed above it, so that approving the brief
+confirms them. Once the user approves, go on to [start planning](2-start-planning.md).

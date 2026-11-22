@@ -16,10 +16,7 @@ SCRIPT = DOMAIN / "lead" / "scripts" / "agent_loop.py"
 GLOSSARY = DOMAIN / "GLOSSARY.md"
 
 # Calls whose first string argument, or keyword `result`, is a result name.
-RESULT_CALLS = ("emit", "finish", "_result", "done_with", "stop_with", "main_check_out")
-# Results whose explanation in a skill is still being written. `main-check`'s results arrived in the script before the
-# build skill's text for them; remove each name here as a SKILL.md explains it.
-SKILL_TEXT_TO_COME: set[str] = set()
+RESULT_CALLS = ("emit", "finish", "_result", "done_with", "stop_with", "main_check_out", "own_status")
 # Words the glossary says to avoid, as they would appear inside a field name.
 AVOIDED_IN_FIELDS = ("land", "integrat", "park", "attend", "harness", "claim", "loop")
 # Old names the script may still read from files written by older versions, and where.
@@ -89,13 +86,17 @@ class ResultNames(unittest.TestCase):
         stale = sorted(names - printed_results() - {"NEEDS_CONTEXT"})  # passed through from the agent's last line
         self.assertEqual(stale, [], "the glossary lists results the script no longer prints")
 
-    def test_every_result_is_explained_in_a_skill(self):
+    def test_every_result_is_explained_in_the_commands_help(self):
+        # Results are the script's, so the help of the command that prints them says what they mean; the skills
+        # name only the ones that call for the agent's judgement.
+        # The help is read from the loaded script, because it builds its numbers from the constants they describe.
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from support import agent_loop
         names, _ = glossary_results()
-        # The lead's skill is a router, and its stage files and references explain the results.
-        skills = "".join(p.read_text() for p in [*DOMAIN.rglob("SKILL.md"), *DOMAIN.rglob("stages/*.md"),
-                                                 *DOMAIN.rglob("tasks/*.md"), *DOMAIN.rglob("references/*.md")])
-        unexplained = sorted(n for n in names if f"`{n}`" not in skills and n not in SKILL_TEXT_TO_COME)
-        self.assertEqual(unexplained, [], "the lead or an agent meets these results, but no skill says what they mean")
+        helps = agent_loop.__doc__ + "".join(agent_loop.COMMAND_HELP.values())
+        unexplained = sorted(n for n in names if n not in helps)
+        self.assertEqual(unexplained, [], "say what these results mean in the help of the command that prints them")
 
     def test_old_result_names_are_only_read_from_old_files(self):
         _, old = glossary_results()

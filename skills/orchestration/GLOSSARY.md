@@ -5,8 +5,9 @@ these names, and each skill defines the ones it uses before their first use, bec
 `Stored as` gives the name as it is written in a file, a command or the script's output, where that differs. An
 entry with a `Proposed:` line hasn't been agreed by the user yet; every other entry has.
 
-This file holds names and what they mean. How each thing works is in the skills and the script's help. This file is
-for the people and agents who write the set, and it is not installed with the skills.
+This file holds names and what they mean. How each thing works is in the script's `--help`, and where each file
+lives is what `settings` prints, so neither is repeated here. This file is for the people and agents who write the
+set. It is copied with the plugin, but no skill reads it or points agents at it.
 
 ## People and agents
 
@@ -76,7 +77,8 @@ What the user wants and why, written before any planning: the user's request wor
 left out, how the user will judge the result, and the decisions made so far.
 
 **Glossary**
-A project's file of agreed names, `GLOSSARY.md` in the plans folder. This file is the set's own glossary.
+A project's file of agreed names. This file is the set's own glossary.
+Stored as: `GLOSSARY.md`
 
 **Project settings**
 The facts about one project that every agent reads first: where the plans are, the test command, the targets and
@@ -184,6 +186,8 @@ Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 A second working copy of the repository. Each module is built in its own, so builders don't overwrite each other's
 files.
 Source: git's own term, from `git worktree`
+Stored as: the `Worktrees:` line of the project settings, with which the script gives each module its own on the
+branch `build/<module>`; the `worktree` field of `run`'s result
 
 ## Proving and judging
 
@@ -225,8 +229,7 @@ Stored as: the item's `evidence` field, which says where the proof is saved
 **Working folder**
 The one folder per repository where evidence, reviews and handoffs are kept, outside git, shared by every worktree.
 Avoid: evidence folder
-Stored as: `<git common dir>/orchestrate/evidence/`, linked into every worktree at the `Evidence:` path of the
-project settings (`.orchestrate/evidence` by default)
+Stored as: the `Evidence:` line of the project settings, which names where each worktree opens it
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Capture**
@@ -236,7 +239,6 @@ Avoid: captures, as a word for all evidence
 
 **Saved check output**
 The whole output of each check the script runs, kept in a file that the check's failure message names.
-Stored as: files under `<git common dir>/orchestrate/checks/`
 Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Reused check**
@@ -315,7 +317,7 @@ Stored as: the `KEEP` line that ends the planner's turn, and the `KEPT` result o
 What a builder that stops before the milestone is finished writes for the session that picks it up: what is
 finished, what was tried, and what to do first.
 Not: a handoff in the OpenAI Agents SDK, which passes the live conversation to another agent in the same run.
-Stored as: `<working folder>/<MODULE>/<milestone>-handoff.md`
+Stored as: `<milestone>-handoff.md` in the module's part of the working folder
 Proposed: by Claude, 2026-11-13. Not yet agreed by the user.
 
 ## Statuses
@@ -336,15 +338,16 @@ The reasons a milestone is Waiting:
 
 | Reason | Means | Stored as |
 |---|---|---|
-| On Dependency | It can't start until another module's milestone, already planned, is Done | `on_dependency` |
-| For Diagnosis | It keeps failing review, so a planner finds out why | `for_diagnosis`, with the `cause` |
+| On Dependency | It can't start until a milestone in another module is Done, whether or not that module has planned it yet | `on_dependency` |
+| For Planning | Every planned milestone of the module is Done, and the plan names more with no items yet, so a planner writes the next stretch | `for_planning`, with `later` |
+| For Diagnosis | It keeps failing review, or a review found something only a planner can settle, so a planner finds out why | `for_diagnosis`, with the `cause` |
 
 The reasons a milestone is Blocked:
 
 | Reason | Means | Stored as |
 |---|---|---|
 | Needs User Feedback | An item needs the user's judgement | `needs_human_feedback` |
-| Needs Access | A builder or a reviewer couldn't get a permission or an approval prompt, or couldn't reach the product | `needs_access`; a reviewer's `BLOCKED needs_access` ending |
+| Needs Access | The builder couldn't get a permission or an approval prompt, or couldn't reach the product | `needs_access` |
 | Needs Hardware | A device wasn't connected | `needs_hardware` |
 | Needs Context | The builder is missing a fact, which the lead supplies | `needs_context`, from the builder's `NEEDS_CONTEXT` ending |
 | Needs Dependency | It needs something another module owns that no plan provides yet | `needs_dependency` |
@@ -376,7 +379,7 @@ Branches that asked to merge while another merge was running, merged together wi
 broke it.
 Avoid: train, which in GitLab's merge trains means a queue that tests each request with the ones ahead of it
 Source: batching with bisection, as Bors does it
-Stored as: the `batch` field of `merge`'s result; the queue under `<git common dir>/orchestrate/merge-queue/`
+Stored as: the `batch` field of `merge`'s result
 Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
 
 **Run**
@@ -406,7 +409,7 @@ Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 **Builders count**
 How many builders the user wants running at once in the project.
 Avoid: parallelism, concurrency (in prose)
-Stored as: the `Builders:` line of the project settings; `run --more-builders '<the human's words>'` lets one more
+Stored as: the `Builders:` line of the project settings; `run --more-builders '<the user's words>'` lets one more
 start
 Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
@@ -446,8 +449,8 @@ Stored as: the `Lead check-in` line of the project settings, such as `3h`
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Warning sign**
-Something in the script's records that usually means delivery has slowed, such as a builder with no progress for
-two hours.
+Something in the script's records that usually means delivery has slowed, such as a builder that has stopped making
+progress.
 Stored as: `warning_signs` in `watch`'s result
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
@@ -460,7 +463,7 @@ Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
 
 **Usage ledger**
 The file where the script writes one row for each agent turn with the tokens it used.
-Stored as: `<git common dir>/orchestrate/usage.jsonl`; the `cost` and `report` commands add it up
+Stored as: `usage.jsonl`; the `cost` and `report` commands add it up
 Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Weighted tokens**
@@ -485,13 +488,13 @@ The figures the script copies out of the hosts' session files for one repository
 tokens, model, timing and how it ended, and the signals between them. It keeps no message text, and it outlives
 the hosts' own files.
 Avoid: telemetry, analytics, usage log
-Stored as: `~/.orchestrate/history/<repository>-<hash>/`; the `history` command
+Stored as: the `history` command, which reads it
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Dashboard**
 The page drawn from the delivery history, for the user's review and the lead's diagnosis.
 Not: Status page, which shows where the plan stands.
-Stored as: the `dashboard` command, which writes `dashboard.html` in the history folder
+Stored as: the `dashboard` command, which writes `dashboard.html`
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **What changed**
@@ -509,8 +512,8 @@ Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 ## Results
 
 Every command of the script ends by printing one JSON line, its result, whose `result` field is one of the names
-below. The `lead` skill's tables say what to do for each. A `reason` field, where there is one, says which of a
-result's causes it was.
+below. The help of the command that prints a result says what it means and what comes next. A `reason` field, where
+there is one, says which of a result's causes it was.
 
 | Result | Printed by | Means |
 |---|---|---|
@@ -518,30 +521,34 @@ result's causes it was.
 | `NEEDS_REVIEW` | `run` | The module's next milestone is already Ready for Review and needs its review |
 | `DESIGN_NOT_APPROVED` | `run` | The module's design is Design Ready for Review or Design Changes Requested |
 | `WAITING` | `run` | The milestone is Waiting, with the reason in `reason` |
-| `BLOCKED` | `run`, `plan`, `review` | The milestone is Blocked, the planner ended Blocked, or the reviewer couldn't reach the product |
+| `BLOCKED` | `run`, `plan`, `review` | The milestone is Blocked, the planner ended Blocked, or the reviewer couldn't reach the product (`reason` needs_access), which leaves the milestone Ready for Review |
 | `NEEDS_CONTEXT` | `run`, `plan` | The agent is missing a fact |
 | `IN_PROGRESS_ELSEWHERE` | `run` | Another lead or run is working on the module |
 | `FINISHED` | `run` | Every milestone of the module is Done |
-| `CHECKS_FAILED` | `run` | The builder said it had finished, and the script's checks disagreed |
+| `CHECKS_FAILED` | `run` | The builder said it had finished, and the script's checks disagreed, more times in a row than the script allows |
 | `NO_PROGRESS_FOR_HOURS` | `run` | No new item passed and the builder made no commit for the hours given |
-| `STALLED` | `run` | Three turns in a row changed nothing and reported nothing |
+| `STALLED` | `run` | Several turns in a row changed nothing and reported nothing |
 | `HOST_FAILED` | `run`, `review`, `plan` | The host failed, its program is missing, or its usage limit was reached |
 | `SCRIPT_FAILED` | any command | The script couldn't do a step of its own, or met an error in its own code |
 | `ERROR` | any command | The command stopped before doing what it was asked, with the reason in `error` |
 | `RUNNING` | `run`, `review`, `plan`, `unblock` | Only in a result file: the command that writes it hasn't finished |
 | `WRONG_MODEL_OR_EFFORT` | `run`, `review` | A turn ran on a model or effort other than the ones the command named |
-| `PAUSED` | `run`, `plan`, `pause` | `pause` or the user stopped it |
+| `PAUSED` | `run`, `review`, `plan`, `pause` | `pause` or the user stopped it |
 | `INVALID` | `run`, `review`, `plan` | A done-when file can't be read, or an agent changed what isn't its to change |
 | `REVIEWED` | `review` | The review was saved, with its verdict in `verdict` |
 | `PLANNED` | `plan` | The planner's files were checked and merged |
 | `KEPT` | `plan` | A planner asked to diagnose a milestone kept the plan as it is and named who has to act |
 | `UNFINISHED` | `plan` | The planner's turn ended without one of its endings, so nothing was merged |
 | `PLAN_NOT_MERGED` | `plan` | The planner finished, but its files couldn't be merged, so they are set aside for another planner |
+| `READY` | `ready` | What each module's next milestone is waiting for, grouped |
+| `ESCALATION` | `next` | What the counts call for after a failed review, with the command |
+| `SETTINGS` | `settings` | The settings as the script reads them, with the loader checks |
+| `SAVED` | `settings --set` | A settings line was set on the main branch, with the user's words in its commit |
 | `MERGED`, `FAILED` | `merge` | The work was merged, or wasn't, with the reason in `detail` |
 | `ADOPTED` | `adopt` | Plan files left uncommitted or unmerged were committed and merged |
 | `MIGRATED` | `migrate` | The plans, the evidence or a worktree's commits were moved to the current layout and names |
 | `WOULD_REMOVE`, `REMOVED` | `cleanup` | What `cleanup` would remove, or, with `--yes`, what it removed |
-| `NOTHING` | `adopt`, `migrate`, `main-check`, `pause`, `cleanup` | There was nothing to do |
+| `NOTHING` | `adopt`, `migrate`, `main-check`, `pause`, `cleanup`, `settings --set` | There was nothing to do |
 | `COVERED` | `main-check` | A main-branch check passed on a commit that contains the one asked about |
 | `FAILING_ON_MAIN` | `main-check` | A main-branch check fails on a commit that contains the one asked about, and no later pass covers it |
 | `NOT_ON_MAIN` | `main-check` | The commit asked about isn't on the main branch yet |
@@ -549,7 +556,7 @@ result's causes it was.
 | `STARTED`, `ALREADY_RUNNING` | `main-check` | A run on the main branch's tip started, or one was already in flight |
 | `MAIN_CHECKS` | `main-check` | The list of main-branch checks, each with its latest run and pass |
 | `RAN` | `main-check` | Only in a runner's log: one run of a main-branch check finished |
-| `REFUSED` | `adopt`, `migrate`, `run` | The command wouldn't act, with the reasons in `problems` |
+| `REFUSED` | `adopt`, `migrate`, `plan`, `run`, `settings --set` | The command wouldn't act, with the reasons in `problems` |
 | `UNBLOCKED` | `unblock` | The milestone is no longer Blocked |
 | `DONE`, `RELEASED`, `FAILED` | `human` | The user's decision was saved, or a milestone another lead started was taken out of In Progress, or it couldn't be saved |
 | `CHECK_IN` | `watch` | The lead check-in passed with no warning sign |
@@ -582,8 +589,7 @@ Old names, what replaced them and when. The script's `migrate` command rewrites 
 - `ACCEPTED.json` and `accepted`: now `RECORD.json` and `done` (2.2).
 - Claim, and the `claim` field: now Ready for Review record and `ready_for_review` (2.1.0). The git ref
   `refs/orchestrate/claims/` keeps the old name so leads on older versions still see it.
-- `loops`, the command: now `runs` (2.1.0). It is still accepted, and the runs' notes stay under
-  `~/.local/state/orchestrate/loops`.
+- `loops`, the command: now `runs` (2.1.0). It is still accepted, and the runs' notes keep the old folder name.
 - Evidence folder, a folder in git: now the working folder, outside git (2.6.0).
 - Waiting on you, the status page section: now Needs you now and Choices made for you.
 - The old result names are under Avoid in Results. The script still reads `PIN` in the state files of runs started

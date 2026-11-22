@@ -26,7 +26,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from support import (BASE_PROFILE, PROFILE, SCRIPTS, Clean, Repo, agent_loop, check_next_commands, done, item,  # noqa: E402
-                     milestone, parse, proved, put, release, shares)
+                     milestone, parse, proved, put, release, shares, COMMANDS, parse_argv)
 
 
 def too_many(mid, statuses, **kw):
@@ -424,14 +424,14 @@ class Profiles(Clean):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "ORCHESTRATE.md").write_text(
                 "- **Claude model:** claude-opus-5-5\n- **Effort:** high\n- **Gemini model:** g-2\n"
-                "- **Host gemini:** `gemini -p {prompt} -m {model}`\n- **Host bad:** gemini\n")
+                "- **Host gemini:** `gemini -p {prompt} -m {model} -e {effort}`\n- **Host bad:** gemini\n")
             with contextlib.redirect_stderr(io.StringIO()):
                 p = agent_loop.profile(Path(tmp))
             self.assertEqual((p["models"]["codex"], p["models"]["claude"], p["models"]["gemini"], p["effort"]),
                              ("gpt-6.2-sol", "claude-opus-5-5", "g-2", "high"))
-            self.assertEqual(p["hosts"], {"gemini": "gemini -p {prompt} -m {model}"})
+            self.assertEqual(p["hosts"], {"gemini": "gemini -p {prompt} -m {model} -e {effort}"})
             args, env = agent_loop.host_command("gemini", p, "g-2", "medium", Path(tmp), "do it now", None)
-            self.assertEqual(args, ["gemini", "-p", "do it now", "-m", "g-2"])
+            self.assertEqual(args, ["gemini", "-p", "do it now", "-m", "g-2", "-e", "medium"])
             self.assertEqual(env["ORCHESTRATE_ROLE"], "build")
             with mock.patch.object(agent_loop, "claude_supports", lambda flag: True):
                 new = agent_loop.host_command("claude", p, "m", "high", Path(tmp), "go", None, new_id="abc",
@@ -440,6 +440,22 @@ class Profiles(Clean):
                                                   title="thrum · WATER · M1 build")[0]
             self.assertEqual(new[new.index("--name") + 1], "thrum · WATER · M1 build")
             self.assertNotIn("--name", resumed)  # a resumed session keeps the name it started with
+
+    def test_a_host_line_needs_model_and_effort_placeholders_and_a_model(self):
+        base = "- **Merge:** local\n- **Test command:** none\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "ORCHESTRATE.md").write_text(base + "- **Host gemini:** gemini -p {prompt} -m {model}\n")
+            with self.assertRaises(SystemExit) as stop, contextlib.redirect_stderr(io.StringIO()):
+                agent_loop.profile(Path(tmp), strict=True)
+            self.assertIn("{effort}", str(stop.exception))
+            Path(tmp, "ORCHESTRATE.md").write_text(base + "- **Host gemini:** gemini -p {prompt} -m {model} -e {effort}\n")
+            p = agent_loop.profile(Path(tmp), strict=True)
+        ns = argparse.Namespace(host="gemini", model=None, effort=None)
+        with self.assertRaises(SystemExit) as stop:
+            agent_loop.resolve(ns, p, "build")
+        self.assertIn("Gemini model", str(stop.exception), "a launch never leaves the model to the host's default")
+        ns.model = "g-3"
+        self.assertEqual(agent_loop.resolve(ns, p, "build"), ("gemini", "g-3", "medium"))
 
     def test_planner_host_sends_planners_to_that_host_unless_the_lead_names_one(self):
         base = "- **Merge:** local\n- **Test command:** none\n- **Default host:** codex\n"
@@ -464,7 +480,7 @@ class Profiles(Clean):
                 "- **Claude planner:** `claude-fable-5-2` xhigh  *(script)*\n- **Codex planner:** gpt-6.2-astra\n"
                 "- **Codex reviewer:** high\n- **Claude design reviewer:** claude-fable-5-2\n"
                 "- **Builder:** medium\n- **Claude builder:** <model>\n"
-                "- **Host gemini:** gemini -p {prompt} -m {model}\n- **Gemini model:** g-3\n"
+                "- **Host gemini:** gemini -p {prompt} -m {model} -e {effort}\n- **Gemini model:** g-3\n"
                 "- **Gemini reviewer:** g-3-ultra, max\n")
             p = agent_loop.profile(Path(tmp), strict=True)
         json.dumps(p)  # the `profile` command prints the settings as JSON
@@ -536,8 +552,9 @@ class Profiles(Clean):
 
     def test_holistic_5_no_prompt_template_names_a_model_or_effort(self):
         values = dict(goal=agent_loop.GOAL_LINE, milestone="M1", module="W", done="d", loop="l", skill="s", commit="c", glossary="g",
-                      review="r", task="t", evidence="e", captures="r-captures", answers="", changed="", briefs="",
-                      lead="", feedback="", needs="", rules="", resources="", session="", handoff="h", earlier="", checks="", kind="", kind_name="", scope="")
+                      review="r", task="t", evidence="e", captures="r-captures", answers="", changed="", module_dir="m", graded="gr",
+                      lead="", feedback="", needs="", rules="", resources="", session="", handoff="h", earlier="", checks="", kind="", kind_name="", scope="",
+                      brief="b", architecture="a", plans="p")
         for name in ("BUILD_TEMPLATE", "REVIEW_TEMPLATE", "DESIGN_REVIEW_TEMPLATE", "PLAN_TEMPLATE",
                      "FINDINGS_TEMPLATE"):
             template = getattr(agent_loop, name)
@@ -1942,29 +1959,16 @@ class WhatTheLeadSees(Repo):
         with mock.patch.object(agent_loop, "QUOTA_WORKTREE", [self.wt]):
             first = self.call(lambda a: agent_loop.emit("NOTHING"))
             second = self.call(lambda a: agent_loop.emit("NOTHING"))
-        lines = first["changed"]["2.1.0"]
-        for words in ("Only the script sets a milestone to Ready for Review", "over 60% full", "HOST_FAILED",
-                      "`runs`", "--more-builders", "BLOCKED needs_access"):
-            self.assertTrue(any(words in l for l in lines), words)
-        for words in ("`migrate` brings a project's files to them", "one diagnosis", "`owner` command is now `human`",
-                      "`ready` is `can_start`", "--no-progress-hours"):
-            self.assertTrue(any(words in l for l in first["changed"]["2.2.0"]), words)
+        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertIn("From before 2.6.0", first["changed"]["2.5.0"][0])
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.1.0", "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.8.1", "2.8.2", "2.8.3", "2.9.0"])
-        note.write_text('{"version": "2.1.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.0", "2.3.1", "2.3.2", "2.3.3", "2.3.4", "2.3.5", "2.3.6", "2.3.7", "2.3.8", "2.3.9", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.8.1", "2.8.2", "2.8.3", "2.9.0"])
-        note.write_text('{"version": "2.2.0"}')
-        (line,) = agent_loop.version_change(self.wt)["2.2.1"]
-        note.write_text('{"version": "2.2.1"}')
-        (line2,) = agent_loop.version_change(self.wt)["2.2.2"]
-        self.assertIn("planner's task", line2)
-        note.write_text('{"version": "2.2.2"}')
-        (line3,) = agent_loop.version_change(self.wt)["2.2.3"]
-        self.assertIn("own background command", line3)
-        note.write_text('{"version": "2.2.3"}')
-        self.assertIn("exit status", agent_loop.version_change(self.wt)["2.2.4"][0])
-        self.assertIn("`turn_not_stopped`", line)
+        self.assertIn("2.5.0", agent_loop.version_change(self.wt))
+        note.write_text('{"version": "2.5.0"}')
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        note.write_text('{"version": "2.9.0"}')
+        (line, *_) = agent_loop.version_change(self.wt)["2.10.0"]
+        self.assertIn("Read the lead skill again", line)
 
     def test_a_blocked_message_gives_paths_in_the_repository_and_names_who_acts(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY=f"BLOCKED: the seam shows in {self.wt}/.orchestrate/evidence/WATER/f.png "
@@ -1973,7 +1977,7 @@ class WhatTheLeadSees(Repo):
         self.assertEqual((blocked["result"], blocked["reason"]), ("BLOCKED", "needs_context"), blocked)
         what = self.read_done()["milestones"][0]["blocked"]["what"]
         self.assertEqual(what, "the seam shows in .orchestrate/evidence/WATER/f.png and I don't know which constant sets it")
-        self.assertIn("Take it to the user only when only they can decide", blocked["next"]["why"])
+        self.assertIn("Answer it with `run --message`", blocked["next"]["why"])
         self.git("fetch", "-q", "origin")
         page = agent_loop.status_page(self.wt, agent_loop.profile(self.wt), "origin/main")
         now_next = page.split("### Now and next")[1].split("###")[0]
@@ -2305,6 +2309,17 @@ class VisibleCodex(Repo):
         self.assertEqual(result["result"], "WRONG_MODEL_OR_EFFORT")
         self.assertIn("gpt-6.2-sol/xhigh", result["mismatches"][0])
 
+    def test_a_wrong_model_reruns_as_set_and_asks_the_user_only_when_it_repeats(self):
+        os.environ.update(FAKE_PASS="0")  # the milestone stays open, so the rerun takes a turn of its own
+        with FakeCodexApp(self, effort_seen="xhigh").installed():
+            first = self.run_loop()
+            second = self.run_loop()
+        self.assertEqual((first["result"], second["result"]), ("WRONG_MODEL_OR_EFFORT", "WRONG_MODEL_OR_EFFORT"))
+        self.assertNotIn("decides", first["next"], "a rerun as set is the lead's call")
+        self.assertIn("mention it to the user", first["next"]["why"])
+        self.assertEqual(second["next"]["decides"], "human", "the same mismatch twice needs the user")
+        self.assertIn("twice", second["next"]["ask"])
+
     def test_decision_8_the_human_pressing_stop_in_the_app_is_PAUSED_not_a_failure(self):
         with FakeCodexApp(self, behaviour="owner_stop").installed() as app:
             result = self.run_loop()
@@ -2528,7 +2543,7 @@ class Fold(Repo):
         self.assertNotIn("The goal hasn't changed", first)
         message, _, restated = resumed.partition("\n\n")
         self.assertEqual(message, "Use the simulator.")
-        for part in ("In docs/plans/WATER/DONE.json, change only M1's items' `builder_result` and `evidence`, and its `status` only to in_progress.",
+        for part in ("In docs/plans/WATER/DONE.json, change only M1's items' `builder_result` and `evidence`; the script sets the status.",
                      f"`python3 {agent_loop.LOOP} merge --worktree .`",
                      "The project's rules are in ORCHESTRATE.md; re-read them"):
             self.assertIn(part, restated)
@@ -2565,7 +2580,7 @@ class Fold(Repo):
         host = self.root / "echo-host"
         host.write_text(ECHO_HOST)
         host.chmod(0o755)
-        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + f"- **Host echo:** {host} {{prompt}}\n- **Echo model:** m\n")
+        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + f"- **Host echo:** {host} {{model}} {{effort}} {{prompt}}\n- **Echo model:** m\n")
         self.commit_all()
         self.run_loop(host="echo")
         self.run_loop(host="echo", message="Use the simulator.")  # the missing fact lifts the block
@@ -2896,7 +2911,7 @@ class HolisticAlone(ProfileOnly):
 
     def test_holistic_8_review_skill_and_findings_message_separate_blocking_from_advisory(self):
         review = (agent_loop.SKILLS / "reviewer/tasks/milestone.md").read_text()
-        self.assertIn("A Suggestion never fails it.", review)
+        self.assertIn("is a Suggestion", review)
         self.assertIn("list every Must Fix in the milestone's `findings`", review)
         self.assertNotIn("If you think the defect doesn't matter, say so in the finding", review)
         self.assertIn("finished when every item is true as it is written", agent_loop.FINDINGS_TEMPLATE)
@@ -3302,8 +3317,8 @@ class FirstRuns(Repo):
                                                                            worktree=str(self.wt)))
         refused = self.adopt("ORCHESTRATE.md")
         self.assertEqual(refused["result"], "REFUSED")
-        self.assertIn("the lead commits and merges it with git once the user has agreed", refused["problems"][0])
-        self.assertIn("once the user has agreed to it", self.ready()["settings_differ"])
+        self.assertIn("settings --set LABEL VALUE --said", refused["problems"][0])
+        self.assertIn("lead changes each line with `settings --set`", self.ready()["settings_differ"])
         nothing = self.adopt()
         self.assertEqual(nothing["result"], "NOTHING")
         self.assertIn("settings_differ", nothing)
@@ -3469,9 +3484,9 @@ class FirstRuns(Repo):
         self.commit_all()
         claim = self.run_loop()
         passed = self.review(commit=claim["commit"])
-        self.assertIsNone(passed["next"]["command"])
+        self.assertIn(" ready --worktree ", passed["next"]["command"])
         self.assertIn("finished", passed["next"]["why"])
-        self.assertIn("git worktree remove", passed["next"]["why"])
+        self.assertIn("remove the worktree it was built in", passed["next"]["why"])
         # the loop's own checkout of a finished module is gone, and `ready` clears one left from before
         verify = agent_loop.loop_dir(self.wt) / "verify" / "WATER"
         self.assertFalse(verify.exists())
@@ -3509,6 +3524,59 @@ class FirstRuns(Repo):
         (self.wt / "ORCHESTRATE.md").write_text(PROFILE.replace("codex", "claude") + "- **Codex model:** gpt-x\n")
         prof = json.loads(self.printed(agent_loop.cmd_settings, worktree=str(self.wt), host=None))
         self.assertNotIn("model", prof)
+
+    def test_settings_reports_paths_agents_and_what_is_defaulted(self):
+        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Claude planner:** claude-fable-5-2 high\n")
+        self.write_done([milestone("M1", "not_started", ["open"])])
+        self.commit_all()
+        prof = json.loads(self.printed(agent_loop.cmd_settings, worktree=str(self.wt), host=None).splitlines()[-1])
+        self.assertEqual(prof["result"], "SETTINGS")
+        self.assertEqual(prof["paths"]["modules"], {"WATER": str(self.wt.resolve() / "docs/plans/WATER")})
+        self.assertTrue(prof["paths"]["working_folder"].endswith("/orchestrate/evidence"))
+        self.assertEqual(prof["agents"]["claude"]["planner"],
+                         {"model": "claude-fable-5-2", "model_from": "a line for this kind of agent",
+                          "effort": "high", "effort_from": "a line for this kind of agent"})
+        self.assertEqual(prof["agents"]["codex"]["planner"]["effort_from"], "the planners' default")
+        self.assertIn("lead check-in", prof["defaulted"])
+
+    def test_a_run_on_the_main_checkout_builds_in_the_modules_own_worktree(self):
+        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Worktrees:** .orchestrate/worktrees\n")
+        self.write_done([milestone("M1", "not_started", ["open"])])
+        self.commit_all()
+        self.git("push", "-q", "origin", "HEAD:main")
+        prof = agent_loop.profile(self.wt)
+        made, how = agent_loop.module_worktree(self.wt, prof, "WATER")
+        self.assertEqual((made, how), (self.wt.resolve() / ".orchestrate/worktrees/water", "made"))
+        self.assertEqual(self.git("rev-parse", "--abbrev-ref", "HEAD", where=made).stdout.strip(), "build/water")
+        self.assertIn(".orchestrate/worktrees", (Path(agent_loop.git_common_dir(self.wt)) / "info/exclude").read_text())
+        self.assertEqual(agent_loop.module_worktree(self.wt, prof, "WATER"), (made, "found"))
+        self.assertEqual(agent_loop.module_worktree(made, prof, "WATER"), (made, None))  # not the main branch
+        self.assertEqual(agent_loop.finished_worktrees(self.wt, prof, ["WATER"]), [str(made)])
+        self.assertFalse(made.exists())
+
+    def test_settings_template_is_a_file_the_script_reads(self):
+        out = self.printed(agent_loop.cmd_settings, worktree=str(self.wt), template=True)
+        self.assertIn("- **Test command:**", out)
+        self.assertIn("## Targets", out)
+
+    def test_settings_set_merges_one_line_with_the_users_words(self):
+        self.write_done([milestone("M1", "not_started", ["open"])])
+        self.commit_all()
+        args = parse_argv(COMMANDS[agent_loop.cmd_settings], ["--worktree", str(self.wt), "--set", "Builders",
+                                                              "two Claude builders", "--said", "use two Claude ones"])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as stop:
+            agent_loop.cmd_settings(args)
+        line = json.loads(out.getvalue().splitlines()[-1])
+        self.assertEqual((stop.exception.code, line["result"]), (0, "SAVED"), line)
+        body = subprocess.run(["git", "-C", str(self.wt), "log", "-1", "--format=%B", "origin/main"],
+                              capture_output=True, text=True).stdout + subprocess.run(
+            ["git", "-C", str(self.wt), "log", "-1", "--format=%B", "main"], capture_output=True, text=True).stdout
+        self.assertIn("The user said: use two Claude ones", body)
+        prof = json.loads(self.printed(agent_loop.cmd_settings, worktree=str(self.wt), host=None).splitlines()[-1])
+        self.assertEqual(prof["builders"], 2)
+        with mock.patch.dict(os.environ, {"ORCHESTRATE_ROLE": "build"}), self.assertRaises(SystemExit):
+            agent_loop.cmd_settings(args)
 
     # 8. Reviews on the right host
 
@@ -3892,7 +3960,7 @@ class FirstRuns(Repo):
         self.assertIn("The builder's note: M1.2 needs the user", nxt["ask"])
         self.assertIn(" human feedback --module WATER --milestone M1 --item M1.2 ", nxt["command"])
         self.assertIn("--said '<what the user said, in their words>'", nxt["command"])
-        self.assertIn("Ask the user in chat", nxt["why"])
+        self.assertIn("Run it with the user's reply in --said", nxt["why"])
         self.assertNotIn("alternative", nxt)
         for text in (json.dumps(blocked), json.dumps(self.ready())):
             self.assertNotIn("terminal", text)
@@ -4087,8 +4155,8 @@ class FirstRuns(Repo):
         self.assertIn("target web, WATER M1.1, WATER M2.1 need a browser", warning)
         self.assertNotIn("target cli", warning)
         self.assertNotIn("--host claude", warning)  # round eleven: never steer a lead off the user's host
-        self.assertIn("has to ask to run it outside the sandbox", warning)
-        self.assertIn("Codex sandbox: danger-full-access", warning)
+        self.assertIn("has to ask to run it there", warning)
+        self.assertNotIn("danger-full-access", warning)  # the lead grants the permission rather than widening the sandbox
         # N8: a run's warning names only the milestone it builds, not 18 items from other modules
         [m1] = agent_loop.browser_warnings(self.wt, "WATER", "M1")
         self.assertTrue(m1.startswith("WATER M1.1 need a browser"), m1)
@@ -4190,7 +4258,7 @@ class FirstRuns(Repo):
                          ("diagnosis", "planner", "reviews keep finding something new"))
         self.assertIn(" plan --worktree ", failed["next"]["command"])
         self.assertIn("Diagnose WATER M1", failed["next"]["command"])
-        self.assertIn("KEEP WATER M1: builder", failed["next"]["command"])
+        self.assertIn("KEEP WATER M1:", failed["next"]["command"])
         waiting = self.run_loop()
         self.assertEqual((waiting["result"], waiting["reason"]), ("WAITING", "for_diagnosis"), waiting)
         m1 = self.read_done()["milestones"][0]
@@ -4252,7 +4320,7 @@ class FirstRuns(Repo):
     @shares("four-fails")
     def test_a_kept_plan_after_repeated_findings_counts_as_the_diagnosis(self):
         failed = self.four_fails()
-        self.assertIn("KEEP WATER M1: builder", failed["next"]["command"])
+        self.assertIn("KEEP WATER M1:", failed["next"]["command"])
         self.assertNotIn("the plan is wrong", failed["next"]["command"])
         kept = self.diagnose("keep_builder")
         self.assertEqual((kept["result"], kept["who"], kept["next"]["by"]), ("KEPT", "builder", "lead"), kept)
@@ -5085,7 +5153,8 @@ class FirstRuns(Repo):
             self.assertEqual([w for w in agent_loop.preflight("codex", self.wt, "review") if "browser" in w], [])
             build = [w for w in agent_loop.preflight("codex", self.wt, "build", "WATER", "M1") if "browser" in w]
         self.assertEqual(len(build), 1, build)
-        self.assertIn("has to ask to run it outside the sandbox, and auto-review may refuse", build[0])
+        self.assertIn("has to ask to run it there", build[0])
+        self.assertIn("tell the agent with `run --message` that it may", build[0])
         self.assertNotIn("--host claude", build[0])
 
     def test_r11_an_archived_design_review_keeps_its_own_time_in_utc(self):
@@ -5280,7 +5349,7 @@ class FirstRunsAlone(ProfileOnly):
         with self.assertRaises(SystemExit) as stop:
             agent_loop.profile(self.wt, strict=True)
         self.assertIn("review host: 'codx'", str(stop.exception))
-        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Host pi:** pi run {prompt}\n- **Review host:** pi\n")
+        (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Host pi:** pi run {prompt} -m {model} -e {effort}\n- **Pi model:** p-1\n- **Review host:** pi\n")
         self.assertEqual(agent_loop.profile(self.wt, strict=True)["review_host"], "pi")
 
     def test_r9_loop_started_codex_shells_carry_the_role(self):
@@ -6008,7 +6077,7 @@ class OnlyTheScriptSetsReadyForReview(Repo):
         refused = self.merge()
         self.assertEqual(refused["result"], "FAILED")
         self.assertIn("Your commits set M1 to ready_for_review", refused["detail"])
-        self.assertIn("Set the status back to in_progress in docs/plans/WATER/DONE.json", refused["detail"])
+        self.assertIn("Put the status back to in_progress in docs/plans/WATER/DONE.json", refused["detail"])
         self.assertEqual(self.read_done()["milestones"][0]["status"], "in_progress")
         self.set_m1("in_progress")  # what the message says to do
         self.assertEqual(self.merge()["result"], "MERGED")
@@ -6033,8 +6102,8 @@ class OnlyTheScriptSetsReadyForReview(Repo):
         self.assertIn("Your commits set M1 to ready_for_review", result["reasons"][0])
         first = self.prompt(self.calls()[0])
         self.assertIn("From the script:\nCommits in this worktree that haven't merged yet set M1 to "
-                      "ready_for_review, as builders did before 2.1.0.", first)
-        self.assertIn("Set the status back to in_progress", self.prompt(self.calls()[1]))
+                      "ready_for_review.", first)
+        self.assertIn("Put the status back to in_progress", self.prompt(self.calls()[1]))
         self.assertEqual(self.read_done()["milestones"][0]["status"], "in_progress")
         self.set_m1("in_progress")
         self.assertEqual(self.merge()["result"], "MERGED")
@@ -6135,12 +6204,12 @@ class ScriptFactsTest(Clean):
         self.assertTrue(changed)
         self.assertIn("the design document (DESIGN.md)", text)
 
-    def test_the_planner_task_after_design_changes_counts_must_fix_and_frees_suggestions(self):
+    def test_the_planner_task_after_design_changes_counts_must_fix(self):
         out = {"verdict": "DESIGN CHANGES", "review": ".orchestrate/evidence/C/design-review.md",
                "line": "DESIGN CHANGES: 2 must_fix findings"}
         task = agent_loop.design_review_next(out, "C", Path("/tmp/x"), {"default_host": "codex"})["command"]
-        self.assertIn("Resolve its 2 Must Fix findings", task)
-        self.assertIn("Suggestions are yours to take or leave", task)
+        self.assertIn("asked for changes, with its 2 Must Fix findings", task)
+        self.assertNotIn("Suggestions", task, "revise.md says what to do with them")
 
     def test_a_block_records_where_the_builders_work_is(self):
         note = agent_loop.work_note({"work": {"branch": "build/atmosphere", "commit": "7911c75b" + "0" * 32}})
@@ -6148,7 +6217,7 @@ class ScriptFactsTest(Clean):
         self.assertIn("git show", note)
 
     def test_the_session_and_resource_rules(self):
-        self.assertIn("can't appear", agent_loop.session_rule(True, "codex"))
+        self.assertIn("no approval prompt", agent_loop.session_rule(True, "codex"))
         self.assertIn("visible in the Codex app", agent_loop.session_rule(False, "codex"))
         rule = agent_loop.resources_rule({"exclusive resources": "gpu"})
         self.assertIn("exclusive resources are: gpu", rule)

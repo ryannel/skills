@@ -2,6 +2,7 @@
 would, builder sessions kept across a script fix, a result line from `pause`, a CHANGES entry for every version, the
 review's bookkeeping worked out by the script, and graded examples from the user's overturned reviews."""
 
+import json
 import os
 import subprocess
 import sys
@@ -224,3 +225,90 @@ class GradedExamples(Repo):
         self.assertEqual(out["result"], "DONE", out)
         self.assertNotIn("graded_example", out)
         self.assertIsNone(self.examples())
+
+
+class SecondReviewScript(Repo):
+    """The script side of the second whole-set review (2026-11-22): prompts that name what only the script knows,
+    and `next` and `why` strings that point at the right command and leave the lead skill's judgement to it."""
+
+    def test_the_codex_note_follows_the_sandbox_setting_and_keeps_only_the_window_rule(self):
+        note = agent_loop.session_rule(True, "codex", {"sandbox": "workspace-write"})
+        self.assertIn("outside Codex's sandbox", note)
+        for gone in ("yield_time_ms", "apply_patch", "`ps`", "NEEDS_CONTEXT"):
+            self.assertNotIn(gone, note)
+        self.assertNotIn("sandbox", agent_loop.session_rule(True, "codex", {"sandbox": "danger-full-access"}))
+        self.assertNotIn("sandbox", agent_loop.session_rule(False, "claude", {"sandbox": "workspace-write"}))
+
+    def test_review_prompts_carry_the_session_note_and_the_design_review_names_the_brief(self):
+        prof = agent_loop.profile(self.wt)
+        doc = json.loads((self.wt / "docs/plans/WATER/DONE.json").read_text())
+        rec = json.loads((self.wt / "docs/plans/WATER/RECORD.json").read_text())
+        common = dict(host="codex", prof=prof, stem="WATER", mid="M1", commit="abc", done="docs/plans/WATER/DONE.json",
+                      review=".orchestrate/evidence/WATER/M1-review.md", milestone=doc["milestones"][0],
+                      entry=rec["milestones"]["M1"], feedback=None, judged=[], tree=self.wt)
+        review = agent_loop.review_prompt(**common)
+        design = agent_loop.review_prompt(**{**common, "mid": "design", "design": True})
+        for text in (review, design):
+            self.assertIn("This session runs in the background", text)
+            self.assertNotIn("the skill describes", text)
+        self.assertIn(f"The project brief is {self.wt / 'docs/plans/BRIEF.md'}", design)
+        self.assertIn(str(self.wt / "docs/plans/ARCHITECTURE.md"), design)
+
+    def test_plan_refuses_unmerged_plan_files_with_adopt_and_the_plan_command_after_it(self):
+        (self.wt / "docs/plans/BRIEF.md").write_text("# Brief\n")
+        refused = self.plan()
+        self.assertEqual(refused["result"], "REFUSED", refused)
+        self.assertIn("docs/plans/BRIEF.md", refused["unmerged_plans"]["uncommitted"])
+        self.assertIn(" adopt ", refused["next"]["command"])
+        self.assertIn(" plan ", refused["next"]["then"]["command"])
+
+    def test_settings_prints_the_default_paths_before_the_project_has_settings(self):
+        (self.wt / "ORCHESTRATE.md").unlink()
+        out = json.loads(self.printed(agent_loop.cmd_settings, code=1, worktree=str(self.wt)).splitlines()[-1])
+        self.assertFalse(out["planned"])
+        self.assertEqual(out["paths"]["brief"], str(self.wt.resolve() / "docs/plans/BRIEF.md"))
+
+    def test_messages_that_change_a_setting_name_settings_set(self):
+        self.assertIn("settings --set", agent_loop.adoptable(agent_loop.profile(self.wt), self.wt, "HEAD",
+                                                             "ORCHESTRATE.md"))
+        self.assertNotIn("ask the planner", agent_loop.hold_limit_note("gpu", 60, "make"))
+        (self.wt / "ORCHESTRATE.md").write_text(
+            (self.wt / "ORCHESTRATE.md").read_text().replace("- **Builders:**", "- **Old builders:**"))
+        self.commit_all()
+        refused = self.run_loop()
+        self.assertEqual(refused["result"], "REFUSED", refused)
+        self.assertIn("settings", refused["next"]["argv"])
+        self.assertIn("Builders", refused["next"]["argv"])
+        self.assertEqual(refused["next"]["decides"], "human")
+        self.assertIn(" run ", refused["next"]["then"])
+
+    def test_planner_tasks_give_facts_and_leave_the_instructions_to_the_task_file(self):
+        prof = agent_loop.profile(self.wt)
+        task = agent_loop.diagnosis_task("WATER", "M1", {"failed_reviews": 6}, prof)
+        self.assertNotIn("Read every review", task)
+        self.assertIn("KEEP WATER M1", task)
+        self.assertNotIn("change no file", agent_loop.answered_line("WATER", "M1"))
+
+    def test_the_build_prompt_names_the_commit_subject_and_promises_no_reviewer(self):
+        prof = agent_loop.profile(self.wt)
+        doc = json.loads((self.wt / "docs/plans/WATER/DONE.json").read_text())
+        text = agent_loop.build_prompt("claude", True, prof, "WATER", "M1", doc["milestones"][0])
+        self.assertIn("`WATER M1: `", text)
+        self.assertIn("Done, or Ready for Review when the milestone needs a reviewer", text)
+        self.assertNotIn("starts a reviewer", text)
+
+    def test_the_pick_between_options_is_reviewed(self):
+        pick = {"id": "M2", "items": [{"id": "M2.1", "needs": {"type": "human_feedback"}, "check": "true"}]}
+        doc = {"milestones": [{"id": "M1", "items": [{"id": "M1.1", "check": "true"}]}, pick]}
+        self.assertTrue(agent_loop.needs_review(pick, doc, {"ends_stretch": True}))
+        self.assertNotIn("closes without a reviewer", agent_loop.needs_review.__doc__)
+
+    def test_the_settings_template_carries_what_the_planner_files_no_longer_say(self):
+        t = agent_loop.SETTINGS_TEMPLATE
+        self.assertIn("- **Test command:** none", t)
+        self.assertIn("must pass before any test exists", t)
+        self.assertIn("into ignored folders, leaving tracked files as they were", t)
+        self.assertIn("with no `lock` of its own", t)
+        self.assertIn("else the only one installed, else codex", t)
+        self.assertEqual(t.count("Keep it on a new project"), 2)
+        self.assertIn("{prompt}, {model} and {effort}", t)

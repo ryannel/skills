@@ -1,17 +1,12 @@
 # Changing the plan
 
 Something has changed what the plan should say: the user's words, their answer to an assumption, or a builder's
-proposal to change an interface. Change only what it reaches, because the script sets back to Not Started each
-milestone whose items you change, and holds back each module whose design you change until a new design review
-passes.
+proposal to change an interface. Change only what it reaches.
 
 ## The user changed what they want
 
 The lead sends you what the user asked for, and has already added it to the brief. Change the plan to match, and
-quote their words in `LOG.md`. If you change what a milestone that is Waiting: For Diagnosis asks for, its items,
-quality bar or `depends_on`, the script counts your change as its diagnosis. If you change the items of a milestone
-Blocked with Too Many Failed Reviews, the script starts it again with its review counts cleared, because only the
-user sends one of those back to a planner.
+quote their words in `LOG.md`.
 
 Some changes reach many modules, such as a looser quality bar for all visual work. Change first the modules the
 lead's task names, and the milestones being built or Blocked on an item the change makes pointless, because that is
