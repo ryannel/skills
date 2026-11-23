@@ -257,9 +257,33 @@ class StartingBuilders(Clean):
         hot = {"load": 40.0, "cores": 14, "limit": 21.0}
         self.assertEqual(self.fill(look(steps, load=hot)), [])
         self.assertEqual(self.fill(look(steps, free=1, load={**hot, "load": 12.0})), ["A"])
-        self.assertIn("overloaded", agent_loop.watch_signs({**look(steps, load=hot), "waiting": [{"module": "A"}],
-                                                            "builds": [], "progress": {}, "since": {}, "stamp": 0.0,
-                                                            "disk": None, "tip": None, "proj": {}}))
+
+    def test_an_overload_wakes_the_lead_once_until_it_worsens_the_ready_work_changes_or_an_hour_passes(self):
+        def seen(load, since, stamp=100.0, waiting=("A",)):
+            signs = agent_loop.watch_signs({**look(load={"load": load, "cores": 14, "limit": 21.0}),
+                                            "waiting": [{"module": m} for m in waiting], "builds": [], "progress": {},
+                                            "since": since, "stamp": stamp, "disk": None, "tip": None, "proj": {}})
+            return (signs.get("overloaded") or {}).get("seen")
+        self.assertIsNone(seen(44.0, {}))
+        episode = {"overloaded": 0.0, "overload_peak": 2}
+        first = seen(44.0, episode)
+        self.assertEqual([seen(31.6, episode), seen(25.2, episode, stamp=1800.0)], [first, first])
+        self.assertNotEqual(seen(44.0, {**episode, "overload_peak": 3}), first)
+        self.assertNotEqual(seen(44.0, episode, waiting=("A", "B")), first)
+        self.assertNotEqual(seen(44.0, episode, stamp=3700.0), first)
+        self.assertIsNone(seen(44.0, episode, waiting=()))
+
+    def test_a_short_dip_under_the_limit_keeps_the_overload_and_a_long_one_ends_it(self):
+        since, loads = {}, iter([30.0, 10.0, 30.0, 10.0, 10.0])
+        clock = iter([0.0, 60.0, 120.0, 180.0, 180.0 + agent_loop.OVERLOAD_CLEAR_S + 1])
+        for _ in range(5):
+            with mock.patch.object(agent_loop, "machine_load", lambda: {"load": next(loads), "cores": 14,
+                                                                        "limit": 21.0}), \
+                    mock.patch.object(agent_loop.time, "time", lambda: next(clock)):
+                agent_loop.track_overload(since)
+            if _ < 4:
+                self.assertEqual(since.get("overloaded"), 0.0, since)
+        self.assertNotIn("overloaded", since)
 
     def test_a_builders_count_saved_while_it_waits_is_read_at_the_next_look(self):
         prof = {"builders": None, "check_in_s": 3600}

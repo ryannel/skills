@@ -6119,7 +6119,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.11.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.11.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6149,6 +6149,12 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.11.3": [
+        "The `overloaded` sign wakes you once per overload. It wakes you again only when the load passes another "
+        "multiple of the limit, when the ready work changes, or after another hour. A dip under the limit shorter "
+        "than 15 minutes doesn't end the overload, and the load falling back wakes nobody, because the supervisor "
+        "starts the builders itself then.",
+    ],
     "2.11.2": [
         "A main-branch check that fails while the machine is overloaded no longer counts as failing, because tests "
         "time out whatever the code: the attempt counts as unjudged and is tried again later. A bisect whose first "
@@ -15584,6 +15590,22 @@ def failed_items(review: dict) -> set:
     return items | {f.get("item") for f in review.get("findings") or [] if isinstance(f, dict) and f.get("item")}
 
 
+def track_overload(since: dict) -> dict | None:
+    """Reads the machine's load and keeps, in `since`, when the overload began and the worst multiple of the limit it
+    reached. One overload stays one through dips under the limit shorter than OVERLOAD_CLEAR_S, so a load hovering
+    near the limit doesn't wake the lead each time it crosses. Returns the load."""
+    stamp, load = time.time(), machine_load()
+    if overloaded(load):
+        if not isinstance(since.get("overloaded"), (int, float)):
+            since["overloaded"] = stamp
+        since.pop("overload_cleared", None)
+        since["overload_peak"] = max(since.get("overload_peak") or 1, int(load["load"] // load["limit"]))
+    elif "overloaded" in since and stamp - since.setdefault("overload_cleared", stamp) > OVERLOAD_CLEAR_S:
+        for key in ("overloaded", "overload_cleared", "overload_peak"):
+            since.pop(key, None)
+    return load
+
+
 def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
     """What `watch` reads each time it looks, from the records the script already keeps: the live runs, each
     module's next step at the main branch's tip, ready work with no builder, the disk and the main-branch checks.
@@ -15619,11 +15641,7 @@ def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
         since.setdefault("ready_waiting", stamp)
     else:
         since.pop("ready_waiting", None)
-    load = machine_load()
-    if overloaded(load):  # one overload, however long, is one sign
-        since.setdefault("overloaded", str(stamp))
-    else:
-        since.pop("overloaded", None)
+    load = track_overload(since)
     try:  # work a planner could plan now that none is planning: a module's next stretch, a module whose needs are
         # planned, or milestones to rewrite against the user's pick
         planning = {f"{r.get('module') or ''} {r.get('task') or ''}".upper() for r in loops if r.get("role") == "plan"}
@@ -15644,12 +15662,19 @@ def watch_signs(look: dict) -> dict:
     """The warning signs in what `watch` read, as {key: {"seen": what makes this sign new, "text": ...}}. The same key
     with the same `seen` is the same sign, which wakes the lead once."""
     signs, stamp = {}, look["stamp"]
-    if overloaded(look.get("load")) and look.get("waiting"):
+    first = look["since"].get("overloaded")
+    if isinstance(first, (int, float)) and look.get("waiting") and look.get("load"):
+        # The same overload wakes the lead again only when it gets worse (the load passes another multiple of the
+        # limit), the ready work changes, or it has lasted another OVERLOAD_REWAKE_S. A fall back under the limit
+        # wakes nobody, because the supervisor starts the builders itself then.
         load = look["load"]
-        signs["overloaded"] = {"seen": look["since"].get("overloaded") or str(stamp), "text": (
-            f"the machine is overloaded, with a load of {load['load']} on {load['cores']} cores, so the supervisor "
-            f"starts no builder while ready work waits; find what is using it, and hold the builders lower with "
-            f"`supervise --hold` if the builds themselves are the cause")}
+        ready = sorted(f"{w['module']} {w.get('milestone') or ''}".strip() for w in look["waiting"])
+        signs["overloaded"] = {"seen": json.dumps([int((stamp - first) // OVERLOAD_REWAKE_S),
+                                                   look["since"].get("overload_peak") or 1, ready]), "text": (
+            f"the machine has been overloaded for {ago(stamp - first)}, with a load of {load['load']} on "
+            f"{load['cores']} cores against a limit of {load['limit']}, so the supervisor starts no builder while "
+            f"ready work waits; find what is using it, and hold the builders lower with `supervise --hold` if the "
+            f"builds themselves are the cause")}
     for r in look["builds"]:
         state = look["progress"].get(r["pid"])
         if state and stamp - float(state["progress_at"]) > NO_PROGRESS_WARN_H * 3600:
@@ -15915,6 +15940,8 @@ HOLD_FILE = "builders-hold.json"  # a lower builder count the lead set with `sup
 # the supervisor starts no builder while the 1-minute load average is above this per core (the tests raise it, since
 # they load the machine themselves)
 LOAD_PER_CORE_LIMIT = float(os.environ.get("ORCHESTRATE_LOAD_PER_CORE") or 1.5)
+OVERLOAD_REWAKE_S = 3600.0  # an overload that goes on wakes the lead again after this long
+OVERLOAD_CLEAR_S = 900.0  # a load under the limit for this long ends the overload; a shorter dip doesn't
 WAKE_TEXT_LIMIT = 60000  # characters of the result a pushed wake carries
 # The commands the lead runs. A builder's commands (merge, check, lock, background, jobs, wait, main-check) start
 # the supervisor too, but never say how to reach the lead.
