@@ -465,6 +465,18 @@ even when nothing has gone wrong.
 Stored as: the `Lead check-in` line of the project settings, such as `3h`
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
+**Load limit**
+The machine's 1-minute load average per core above which the supervisor starts no builder, and a check that fails
+judges nothing, because tests time out on an overloaded machine whatever the code.
+Stored as: the `Load limit` line of the project settings, such as `1.5 per core`
+Proposed: by Claude, 2026-11-23. Not yet agreed by the user.
+
+**Builder hold**
+A lower number of builders the lead sets for a while, with its reason, below the user's Builders count, which it
+leaves unchanged.
+Stored as: `supervise --hold N --reason`, kept in `builders-hold.json`, and ended by `supervise --release`
+Proposed: by Claude, 2026-11-23. Not yet agreed by the user.
+
 **Warning sign**
 Something in the script's records that usually means delivery has slowed, such as a builder that has stopped making
 progress.

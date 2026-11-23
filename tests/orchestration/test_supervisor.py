@@ -282,7 +282,7 @@ class StartingBuilders(Clean):
         since, loads = {}, iter([30.0, 10.0, 30.0, 10.0, 10.0])
         clock = iter([0.0, 60.0, 120.0, 180.0, 180.0 + agent_loop.OVERLOAD_CLEAR_S + 1])
         for _ in range(5):
-            with mock.patch.object(agent_loop, "machine_load", lambda: {"load": next(loads), "cores": 14,
+            with mock.patch.object(agent_loop, "machine_load", lambda *a: {"load": next(loads), "cores": 14,
                                                                         "limit": 21.0}), \
                     mock.patch.object(agent_loop.time, "time", lambda: 0.0):
                 agent_loop.track_overload(since, next(clock))
@@ -290,9 +290,13 @@ class StartingBuilders(Clean):
                 self.assertEqual(since.get("overloaded"), 0.0, since)
         self.assertNotIn("overloaded", since)
         since = {"overloaded": "50.0"}  # as 2.11.1 and 2.11.2 kept it
-        with mock.patch.object(agent_loop, "machine_load", lambda: {"load": 30.0, "cores": 14, "limit": 21.0}):
+        with mock.patch.object(agent_loop, "machine_load", lambda *a: {"load": 30.0, "cores": 14, "limit": 21.0}):
             agent_loop.track_overload(since, 100.0)
         self.assertEqual(since["overloaded"], 50.0)
+        problems = []
+        self.assertEqual((agent_loop.load_limit("2 per core", problems), agent_loop.load_limit("", problems)),
+                         (2.0, agent_loop.LOAD_PER_CORE_LIMIT))
+        self.assertEqual((agent_loop.load_limit("lots", problems), len(problems)), (agent_loop.LOAD_PER_CORE_LIMIT, 1))
 
     def test_a_builders_count_saved_while_it_waits_is_read_at_the_next_look(self):
         prof = {"builders": None, "check_in_s": 3600}

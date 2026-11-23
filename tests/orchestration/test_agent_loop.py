@@ -1971,13 +1971,13 @@ class WhatTheLeadSees(Repo):
         with mock.patch.object(agent_loop, "QUOTA_WORKTREE", [self.wt]):
             first = self.call(lambda a: agent_loop.emit("NOTHING"))
             second = self.call(lambda a: agent_loop.emit("NOTHING"))
-        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         self.assertIn("From before 2.6.0", first["changed"]["2.5.0"][0])
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
         self.assertIn("2.5.0", agent_loop.version_change(self.wt))
         note.write_text('{"version": "2.5.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         note.write_text('{"version": "2.9.0"}')
         (line, *_) = agent_loop.version_change(self.wt)["2.10.0"]
         self.assertIn("Read the lead skill again", line)
@@ -4956,6 +4956,24 @@ class FirstRuns(Repo):
         self.assertEqual(len(self.calls()), calls, "no planner turn")
         self.assertIn("acceptance/test_pay.py", self.git("ls-tree", "-r", "--name-only", "origin/main").stdout)
 
+    def test_the_main_branch_fails_on_its_own_only_when_a_retry_fails_too_and_never_by_a_settings_commit(self):
+        flag = self.root / "flaked"
+        prof = {**agent_loop.profile(self.wt), "test_command": f"test -f {flag} || {{ touch {flag}; exit 1; }}"}
+        base = agent_loop.head_commit(self.wt)
+        self.assertIsNone(agent_loop.broken_base(agent_loop.verify_tree(self.wt, agent_loop.BATCH_TREE, base), prof,
+                                                 base), "a failure that passes on its retry is a flake")
+        put(self.wt / "broken", "x\n")
+        self.commit_all()
+        breaking = agent_loop.head_commit(self.wt)
+        (self.wt / "ORCHESTRATE.md").write_text((self.wt / "ORCHESTRATE.md").read_text() + "\n")
+        self.commit_all()
+        base = agent_loop.head_commit(self.wt)
+        prof = {**agent_loop.profile(self.wt), "test_command": "test ! -f broken"}
+        broken = agent_loop.broken_base(agent_loop.verify_tree(self.wt, agent_loop.BATCH_TREE, base), prof, base)
+        self.assertEqual(broken["culprit"]["commit"], breaking, broken)
+        self.assertFalse(agent_loop.changes_code(prof, ["ORCHESTRATE.md", "docs/plans/STATUS.md"]))
+        self.assertTrue(agent_loop.changes_code(prof, ["ORCHESTRATE.md", "src/a.txt"]))
+
     def test_a_planner_limited_to_a_module_merges_only_that_modules_files(self):
         planned = self.plan(module="PAY")
         self.assertEqual((planned["result"], planned["merged"]), ("PLANNED", True), planned)
@@ -7293,6 +7311,13 @@ class MainBranchChecks(Repo):
         calm.touch()
         code, line = self.ask(name="images")
         self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", tip), line)
+
+    def test_a_failure_an_older_version_judged_says_so_and_how_to_judge_it_again(self):
+        old = {"result": "fail", "check": "images"}
+        self.assertIn("main-check images --start", agent_loop.older_judge(old))
+        self.assertIn("before 2.12.0", agent_loop.older_judge(old))
+        self.assertEqual(agent_loop.older_judge({**old, "version": agent_loop.VERSION}), "")
+        self.assertEqual(agent_loop.older_judge({"result": "pass", "check": "images"}), "")
 
     def test_a_failure_on_an_overloaded_machine_judges_nothing(self):
         hot = {"load": 95.0, "cores": 14, "limit": 21.0}

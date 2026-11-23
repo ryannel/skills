@@ -23,7 +23,8 @@ background, and again when it ends, or a stopped run waits until you next look.
 When the user changes how the agents work, such as the number of builders, save it with `settings --set` and their
 words, so every later command follows it.
 
-The supervisor starts no builder while the machine's load is above one and a half times its cores, because each
+The supervisor starts no builder while the machine's load per core is above the settings' `Load limit` (1.5 unless the
+settings say otherwise), because each
 builder runs its own tests and an overloaded machine makes them all slow and some time out. When the builds
 themselves are the load, hold them lower with `supervise --hold <n> --reason "<why>"`. That is reversible relief and
 yours to take, while the user's Builders count stays theirs: release the hold once the cause is fixed, and bring the

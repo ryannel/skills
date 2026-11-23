@@ -277,7 +277,8 @@ PROFILE_FIELDS = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "t
                   "remote": "origin", "merge": None, "codex sandbox": "workspace-write", "writable roots": "",
                   "graded examples": "", "effort": "", "claude permissions": "auto", "default host": "",
                   "review host": "", "planner host": "", "exclusive resources": "", "setup command": "",
-                  "lead check-in": "", "test command lock": "", "worktrees": "", "lead wake": ""}
+                  "lead check-in": "", "test command lock": "", "worktrees": "", "lead wake": "",
+                  "load limit": ""}
 REQUIRED = {"test command": "the command that must pass before merging, or `none`",
             "merge": "push (standing permission to push) or local"}
 ONE_WORD = {"branch", "remote", "merge", "codex sandbox", "effort", "claude permissions", "default host",
@@ -494,6 +495,7 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
         out["planner_host"] = ""
     out["builders"] = builders_count(text)
     out["check_in_s"] = check_in_s(out.pop("lead check-in"), problems)
+    out["load_per_core"] = load_limit(out.pop("load limit"), problems)
     out["lead_wake"] = lead_wake_setting(out.pop("lead wake"), problems)
     locks =lock_settings_from(text)
     out["shared_resources"], out["lock_hold_limit_s"] = locks["shared"], locks["hold_limit_s"]
@@ -6119,7 +6121,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.11.4"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.12.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6149,6 +6151,16 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.12.0": [
+        "A merge no longer calls the main branch failing on one failed test run: it tests the main branch again, "
+        "after the machine's load falls if it was overloaded, and calls it failing only if that fails too. A commit "
+        "that changes only the plans folder or the settings is never named as the one that broke it, by a merge or "
+        "by a main-branch check's bisect. A branch's failure on an overloaded machine says so.",
+        "A new optional settings line, `Load limit` (such as `1.5 per core`), sets the load at which the "
+        "supervisor stops starting builders and a failing check judges nothing. Left out, it is 1.5 per core.",
+        "A main-branch check failure judged by an older orchestrate says so, with the command that judges it "
+        "again.",
+    ],
     "2.11.4": [
         "The `overloaded` sign measures the overload from the start of the look, so its duration is never negative, "
         "and it keeps an overload that began under 2.11.1 or 2.11.2 rather than starting it again.",
@@ -10244,6 +10256,7 @@ SETTINGS_TEMPLATE = """\
 - **Remote:** origin  *(script)*
 - **Builders:** <how many builders, on which hosts, as the user said: "one Claude builder", say>  *(script: the lead writes it before the first build; `run` starts no builder without a count, adds the counts up, and starts none past them unless `--more-builders` carries the user's words)*
 - **Lead check-in:** 3h  *(script: optional; how long the supervisor waits for a warning sign before it wakes the lead anyway, such as 3h or 90m; left out, 3 hours)*
+- **Load limit:** 1.5 per core  *(script: optional; the 1-minute load average per core above which the supervisor starts no builder, and a failing check judges nothing, because tests time out on an overloaded machine whatever the code; left out, 1.5)*
 - **Lead wake:** auto  *(script: optional; how the supervisor wakes the lead: `auto` the way the lead's host allows (a message to a Claude Code session, a queued message on a Codex app thread), else through the lead's own `watch`; `watch` only through `watch`; or a command with {message} (and {session} for the lead's session id) for a host the script doesn't know)*
 - **Default host:** <host>  *(script: optional; codex, claude or a `Host` line's name, for when the lead names none; left out, the host the script runs inside, else the only one installed, else codex, so a project that uses only Claude Code names `claude`)*
 - **Review host:** <same|other|host>  *(script: optional; the host for milestone reviews: `same` as the builder, `other` than the builder (a reviewer from another company shares fewer of its blind spots), or a host's name; left out, the builder's host)*
@@ -10924,6 +10937,7 @@ MERGE_QUEUE = "merge-queue"
 QUEUE_POLL_S = 0.5  # how often a waiting `merge` looks for its result, or for the queue to run
 BATCH_TREE = "_merge-batch"  # the script's checkout a batch is built and tested in, kept warm like a module's
 MERGE_TEST_TIMEOUT_S = 3600
+MERGE_LOAD_WAIT_S = 900  # how long a merge waits for an overloaded machine before it tests the main branch again
 
 
 def queue_folder(worktree: Path) -> Path:
@@ -11229,6 +11243,9 @@ def settle_batch(tree: Path, prof: dict, base: str, group: list[dict], results: 
             f"`{prof['setup_command'] if failed.get('problem') else command}` exited {failed['exit']} with your branch "
             f"on top of the main branch's tip and "
             f"the branches ahead of it in the merge queue, and passed without it, so nothing of yours landed.{whole} "
+            + (f"The machine was overloaded (a load of {load['load']} on {load['cores']} cores), which can time "
+               "tests out: if the failure is a timeout, run `merge` again once the load falls. "
+               if overloaded(load := machine_load(prof)) else "") +
             f"The end of its stdout: {failed['out'][-400:]} The end of its stderr: {failed['err'][-400:]}")}
         return base, []
     group = [r for r, _, _ in built]
@@ -11240,13 +11257,32 @@ def settle_batch(tree: Path, prof: dict, base: str, group: list[dict], results: 
     return after, kept_first + kept_rest
 
 
+def changes_code(prof: dict, files: list[str]) -> bool:
+    """Whether a commit's files can change what a check runs: any file outside the plans folder other than the
+    settings file, since the script reads the settings from the main branch's tip, not from the commit it tests."""
+    plans = (prof.get("plans") or PROFILE_FIELDS["plans"]).rstrip("/") + "/"
+    return any(not f.startswith(plans) and f != PROFILE_FILE for f in files)
+
+
+def wait_for_load(limit_s: float, what: str, prof: dict) -> None:
+    """Waits, up to `limit_s`, while the machine is overloaded, so a check tried again isn't judged under the same
+    load that may have failed it."""
+    deadline = time.time() + limit_s
+    while overloaded(machine_load(prof)) and time.time() < deadline and not _STOP:
+        loop_note(step=f"waiting for the machine's load to fall before {what}")
+        time.sleep(min(30.0, max(0.0, deadline - time.time())))
+
+
 def broken_base(tree: Path, prof: dict, base: str, runs: list | None = None) -> dict | None:
     """Whether the main branch at `base` fails the test command with no branch on it: None when it passes (a pass
     on the same files counts, as everywhere), or {commit, exit, culprit?}. The script lands its own commits (plans,
     reviews, adopted files, the user's decisions) without the test command, so the main branch can break with no
     builder's merge to blame. The culprit is the latest commit on `base` that changed files outside the plans folder,
     when its parent passes, or else the first such commit to fail, found by halving the last 50 commits when the
-    oldest of them passes. A commit whose setup command fails can't be told either way, so it counts as neither."""
+    oldest of them passes. A commit whose setup command fails can't be told either way, so it counts as neither.
+    A failure at `base` is tried once more before the main branch is called failing, after the machine's load has
+    fallen if it was overloaded, because a test that times out on a loaded machine, or fails now and then, says
+    nothing about the main branch, and calling it failing stops every builder's merge."""
     command = prof["test_command"]
 
     def passes(commit: str) -> dict | None:
@@ -11263,13 +11299,15 @@ def broken_base(tree: Path, prof: dict, base: str, runs: list | None = None) -> 
     r = passes(base)
     if r is None or r["exit"] == 0:
         return None
+    wait_for_load(MERGE_LOAD_WAIT_S, f"testing the main branch at {base[:12]} again", prof)
+    r = passes(base)
+    if r is None or r["exit"] == 0:
+        return None
     out = {"commit": base, "exit": r["exit"], **({"stdout": r["stdout"], "stderr": r["stderr"]} if r.get("stdout")
                                                  else {}), "err": r["err"][-400:]}
-    plans = prof["plans"].rstrip("/") + "/"
-    # Only commits outside the plans folder can change what the test command sees, newest first.
+    # Only commits that change code can change what the test command sees, newest first.
     code = [c for c in git(tree, "rev-list", "--first-parent", "--max-count=50", base).stdout.split()
-            if any(not f.startswith(plans) for f in
-                   git(tree, "diff-tree", "--no-commit-id", "--name-only", "-r", c).stdout.split())]
+            if changes_code(prof, git(tree, "diff-tree", "--no-commit-id", "--name-only", "-r", c).stdout.split())]
 
     def state(commit: str) -> bool | None:
         """True when the main branch passes after `commit`, False when it fails, None when it can't be told."""
@@ -14845,7 +14883,7 @@ def main_check_attempt(tree: Path, commit: str, spec: dict, folder: Path) -> dic
     git(tree, "checkout", "--quiet", "--force", "--detach", commit)
     git(tree, "clean", "-ffdq")
     started = time.time()
-    load_before = machine_load()
+    load_before = machine_load(spec)
     if setup := run_setup(tree, {"setup_command": spec.get("setup")}):
         # A failed setup says nothing about the commit, so the attempt is one that couldn't judge it, and is tried
         # again rather than counted as a failure and bisected.
@@ -14866,7 +14904,7 @@ def main_check_attempt(tree: Path, commit: str, spec: dict, folder: Path) -> dic
             saved[field] = str(path)
     except OSError:
         pass
-    hot = [x for x in (load_before, machine_load()) if overloaded(x)]
+    hot = [x for x in (load_before, machine_load(spec)) if overloaded(x)]
     return {"exit": code, "seconds": round(time.time() - started, 1), "at": now(), **saved,
             **({"timed_out": True} if code == 124 else {}),
             **({"overloaded": max(hot, key=lambda x: x["load"])} if hot and code != 0 else {}),
@@ -14903,7 +14941,7 @@ def main_check_row(worktree: Path, name: str, kind: str, commit: str, spec: dict
             "subject": git(worktree, "log", "-1", "--format=%s", commit).stdout.strip(), "result": result,
             "flaky": result == "pass" and len(attempts) > 1, "command": spec["command"], "attempts": attempts,
             "started": datetime.fromtimestamp(started, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "started_s": round(started, 1), "finished": now(), "finished_s": round(time.time(), 3)}
+            "started_s": round(started, 1), "finished": now(), "finished_s": round(time.time(), 3), "version": VERSION}
 
 
 def commit_modules(worktree: Path, prof: dict, commit: str) -> tuple[list[str], list[str]]:
@@ -14947,13 +14985,12 @@ def main_check_bisect(tree: Path, prof: dict, name: str, spec: dict, folder: Pat
         lo, hi = (mid, hi) if row["result"] == "pass" else (lo, mid)
     culprit = commits[hi]
     modules, files = commit_modules(tree, prof, culprit)
-    plans = (prof.get("plans") or "plans").rstrip("/") + "/"
-    if files and all(f.startswith(plans) for f in files):
-        # Plans, reviews and STATUS.md don't change what a check runs, so the same code failed and passed: the check
-        # is flaky or the machine was loaded, and no commit is to blame.
+    if files and not changes_code(prof, files):
+        # Plans, reviews, STATUS.md and the settings don't change what a check runs, so the same code failed and
+        # passed: the check is flaky or the machine was loaded, and no commit is to blame.
         return {"bisect": "no_culprit", "bisect_runs": tried, "flaky_commit": culprit, "bisect_why": (
             f"the first failing commit, {culprit[:12]} ({git(tree, 'log', '-1', '--format=%s', culprit).stdout.strip()}), "
-            f"changed only the plans folder, so the same code failed and passed: the check is flaky or the machine was "
+            f"changed only the plans folder or the settings, so the same code failed and passed: the check is flaky or the machine was "
             f"loaded, not broken by a commit. The failure is kept as unjudged, and the check runs again")}
     return {"bisect": "done", "bisect_runs": tried, "culprit": {
         "commit": culprit, "subject": git(tree, "log", "-1", "--format=%s", culprit).stdout.strip(),
@@ -14966,7 +15003,7 @@ def main_check_runner(worktree: Path, prof: dict, name: str, spec: dict, force: 
     """One flight of the check: wait out `every` since the last run on the tip started, run on the main branch's tip
     (unless it already has a run, or `force`), retry a failure once, and bisect a failure that holds. Returns at once,
     doing nothing, when another runner holds the check's lock."""
-    spec = {**spec, "setup": prof.get("setup_command") or ""}
+    spec = {**spec, "setup": prof.get("setup_command") or "", "load_per_core": prof.get("load_per_core")}
     folder = main_check_dir(worktree, name)
     handle = open(folder / "run.lock", "a+")
     try:
@@ -15029,12 +15066,22 @@ def main_check_runner(worktree: Path, prof: dict, name: str, spec: dict, force: 
         handle.close()
 
 
+def older_judge(row: dict) -> str:
+    """A note when an older orchestrate judged a failure, since a runner finishes the run it started on the version
+    it started with, and a later version may judge the same failure differently."""
+    v = version_tuple(row.get("version") or "0")
+    if row.get("result") != "fail" or (v and v >= (version_tuple(VERSION) or ())):
+        return ""
+    return (f" Orchestrate {row.get('version') or 'before 2.12.0'} judged this run, and {VERSION} may judge it "
+            f"differently; `main-check {row.get('check') or '<name>'} --start` runs it again on the tip.")
+
+
 def main_check_view(row: dict | None) -> dict | None:
     """A run as a result shows it: no saved output, which the run's file holds."""
     if not row:
         return None
     keep = ("kind", "commit", "subject", "result", "flaky", "started", "finished", "last_pass", "bisect", "bisect_why",
-            "culprit", "file")
+            "culprit", "file", "version")
     out = {k: row[k] for k in keep if row.get(k) not in (None, "")}
     out["attempts"] = len(row.get("attempts") or [])
     out["minutes"] = round(sum(a.get("seconds") or 0 for a in row.get("attempts") or []) / 60, 1)
@@ -15082,7 +15129,7 @@ def main_check_wait(worktree: Path, prof: dict, name: str, commit: str, wait_s: 
                      (f", in module {', '.join(culprit['modules'])}" if culprit.get("modules") else "") + "."
                      if culprit else " A bisect is finding the first failing commit; `main-check` lists it when it's "
                      "done." if bisecting else
-                     f" {row.get('bisect_why') or 'The bisect stopped before it named a commit'}.")
+                     f" {row.get('bisect_why') or 'The bisect stopped before it named a commit'}.") + older_judge(row)
             # A culprit whose module isn't known (a commit made by hand, or by a merge on another machine) isn't
             # this work's either, so it doesn't cost this builder a turn or a strike; the lead finds the owner.
             elsewhere = module and culprit and module not in (culprit.get("modules") or []) and \
@@ -15170,6 +15217,8 @@ def main_check_report_lines(worktree: Path) -> list[str]:
             if latest["result"] == "fail" and (culprit := latest.get("culprit")):
                 text += (f"; first failing commit {culprit['commit'][:12]} ({culprit['subject']})" +
                          (f", module {', '.join(culprit['modules'])}" if culprit.get("modules") else ""))
+            if latest["result"] == "fail" and (older := older_judge({**latest, "check": c.get("name")})):
+                text += ";" + older.rstrip(".")
             if c["commits_since_latest"]:
                 text += f"; {plural(c['commits_since_latest'], 'commit')} on the main branch since"
         if flight:
@@ -15555,6 +15604,17 @@ WATCH_WHY = ("start this command again in the background, so the next check-in o
              "`run --message`")
 
 
+def load_limit(value: str | None, problems: list) -> float:
+    """The settings' `Load limit`, as a 1-minute load average per core, such as "1.5 per core" or "2"."""
+    m = re.match(r"\s*(\d+(?:\.\d+)?)", value or "")
+    if not value:
+        return LOAD_PER_CORE_LIMIT
+    if not m or float(m.group(1)) <= 0:
+        problems.append(f"load limit: {value!r} (want a load per core, such as 1.5 per core)")
+        return LOAD_PER_CORE_LIMIT
+    return float(m.group(1))
+
+
 def check_in_s(value: str | None, problems: list) -> float:
     """The settings' `Lead check-in` in seconds: a time such as "3h", "90 minutes" or "2" (hours)."""
     if not value:
@@ -15594,12 +15654,12 @@ def failed_items(review: dict) -> set:
     return items | {f.get("item") for f in review.get("findings") or [] if isinstance(f, dict) and f.get("item")}
 
 
-def track_overload(since: dict, stamp: float) -> dict | None:
+def track_overload(since: dict, stamp: float, prof: dict | None = None) -> dict | None:
     """Reads the machine's load and keeps, in `since`, when the overload began and the worst multiple of the limit it
     reached. One overload stays one through dips under the limit shorter than OVERLOAD_CLEAR_S, so a load hovering
     near the limit doesn't wake the lead each time it crosses. `stamp` is the look's own time, which the sign
     measures the overload against. Returns the load."""
-    load = machine_load()
+    load = machine_load(prof)
     if overloaded(load):
         try:  # 2.11.1 and 2.11.2 kept the start as text
             since["overloaded"] = min(float(since["overloaded"]), stamp)
@@ -15648,7 +15708,7 @@ def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
         since.setdefault("ready_waiting", stamp)
     else:
         since.pop("ready_waiting", None)
-    load = track_overload(since, stamp)
+    load = track_overload(since, stamp, prof)
     try:  # work a planner could plan now that none is planning: a module's next stretch, a module whose needs are
         # planned, or milestones to rewrite against the user's pick
         planning = {f"{r.get('module') or ''} {r.get('task') or ''}".upper() for r in loops if r.get("role") == "plan"}
@@ -16252,13 +16312,15 @@ def builders_hold(folder: Path) -> dict | None:
     return hold if isinstance(hold.get("builders"), int) else None
 
 
-def machine_load() -> dict | None:
-    """The 1-minute load average beside the number of cores, or None where the system doesn't say."""
+def machine_load(prof: dict | None = None) -> dict | None:
+    """The 1-minute load average beside the number of cores and the limit the settings' `Load limit` sets, or None
+    where the system doesn't say."""
     try:
         load, cores = os.getloadavg()[0], os.cpu_count() or 1
     except (OSError, AttributeError):
         return None
-    return {"load": round(load, 1), "cores": cores, "limit": round(LOAD_PER_CORE_LIMIT * cores, 1)}
+    per_core = (prof or {}).get("load_per_core") or LOAD_PER_CORE_LIMIT
+    return {"load": round(load, 1), "cores": cores, "limit": round(per_core * cores, 1)}
 
 
 def overloaded(load: dict | None) -> bool:
@@ -16462,7 +16524,7 @@ def cmd_supervise(a: argparse.Namespace) -> None:
         status = {"running": supervisor_alive(folder), "supervisor": read_json_file(folder / SUPERVISOR_FILE) or {},
                   "lead": {k: v for k, v in lead.items() if k != "token"}, "lead_wake": setting, "push": way,
                   **({"no_push_because": why} if not way else {}), "watch_waiting": waiter_alive(folder),
-                  **({"hold": builders_hold(folder)} if builders_hold(folder) else {}), "load": machine_load()}
+                  **({"hold": builders_hold(folder)} if builders_hold(folder) else {}), "load": machine_load(profile(worktree, missing_ok=True))}
         if a.test_wake:
             if not way:
                 emit("WAKE_FAILED", **status, error=why)
@@ -16982,9 +17044,9 @@ main-check [NAME] [--worktree PATH] [--commit REV] [--wait {MAIN_CHECK_WAIT_S:.0
       the main branch's commits since the last pass, naming the first failing commit, its subject and the modules
       whose plans it changed. A command exits {MAIN_CHECK_UNJUDGED_EXIT} when it couldn't judge the commit (such as a
       capture that dropped frames): it is tried up to {MAIN_CHECK_TRIES} times, and a run it still can't judge fails
-      nothing. A failure while the 1-minute load average is above {LOAD_PER_CORE_LIMIT} per core counts the same
+      nothing. A failure while the 1-minute load average per core is above the settings' `Load limit` counts the same
       way, with the next attempt {MAIN_CHECK_LOAD_WAIT_S:.0f} s later, because tests time out on an overloaded
-      machine whatever the code. A bisect whose first failing commit changed only the plans folder names no culprit
+      machine whatever the code. A bisect whose first failing commit changed only the plans folder or the settings names no culprit
       (`bisect` no_culprit): the same code failed and passed, so the failure is kept as unjudged. With NAME it answers for a commit (default HEAD): COVERED (exit 0) when a pass exists on a main-branch
       commit that contains it; FAILING_ON_MAIN (exit 1) when a failure that held does and no pass does; NOT_ON_MAIN
       (exit 1) for a commit the main branch doesn't contain yet. Otherwise it joins the run in flight or starts one
@@ -17048,7 +17110,8 @@ supervise --worktree PATH [--status | --stop | --test-wake | --hold N --reason T
       --test-wake  WAKE_SENT or WAKE_FAILED (with `error`): a test message to the lead the way a wake would go.
       --hold N --reason TEXT  HELD: the supervisor starts no builder while N or more run, below the settings'
                 Builders count, until --release, which prints RELEASED (NOTHING with no hold). It also starts none
-                while the 1-minute load average is above {LOAD_PER_CORE_LIMIT} per core; `watch` shows both.
+                while the 1-minute load average per core is above the settings' `Load limit` ({LOAD_PER_CORE_LIMIT}
+                by default); `watch` shows both.
       Started bare, it is the supervisor itself, and ends SUPERVISOR_STOPPED with `reason`, or NOTHING when one
       already runs.
 """,
