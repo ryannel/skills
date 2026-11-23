@@ -44,7 +44,7 @@ user the parts that affect them.
 | `run` | To start a builder the supervisor can't choose for you: with a `--message`, `--fresh` or another host. It carries on through reviews and later milestones until something needs you |
 | `review` | For a milestone that is Ready for Review with no run going, or a design review on its own |
 | `watch` | When a result's `wake` asks for it, because your host gives the script no other way to wake you |
-| `supervise` | To see how the script wakes you and what it started (`--status`), or to check a wake reaches you (`--test-wake`) |
+| `supervise` | To see how the script wakes you and what it started (`--status`), to check a wake reaches you (`--test-wake`), or to hold the builders below the user's count for a while (`--hold N --reason`, ended by `--release`) |
 | `ready`, `status`, `runs` | To answer a question about the build: what can start, every milestone of a module, or every session running. The supervisor already starts what can |
 | `next`, `unblock` | To work out again what a failed review calls for, or to requeue a milestone once you've cleared its block |
 | `pause` | When the user asks you to stop sessions, or to steer a builder heading the wrong way |

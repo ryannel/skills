@@ -53,10 +53,10 @@ class FakeClaudeSession:
         return [m[-1]["message"]["content"] for m in self.messages]
 
 
-def look(steps=None, loops=(), limit=2, free=2, broken=(), running=(), ahead=()):
+def look(steps=None, loops=(), limit=2, free=2, broken=(), running=(), ahead=(), hold=None, load=None):
     """What `watch_look` returns, cut to what the supervisor reads."""
     return {"steps": steps or {}, "loops": list(loops), "limit": limit, "free": free, "broken": list(broken),
-            "running": set(running), "ahead": list(ahead)}
+            "running": set(running), "ahead": list(ahead), "hold": hold, "load": load}
 
 
 def step(module, status, **more):
@@ -248,6 +248,19 @@ class StartingBuilders(Clean):
         self.assertEqual(self.fill(look(steps, loops=[{"role": "review", "module": "A"}])), [])
         self.assertEqual(self.fill(look(steps), started={"A": time.time()}), [])
 
+    def test_a_lead_held_count_lowers_the_slots_and_an_overloaded_machine_starts_none(self):
+        steps = {k: step(k, "can_start") for k in ("A", "B", "C")}
+        busy = [{"role": "build", "module": "Z", "pid": 1}]
+        with mock.patch.object(agent_loop, "builder_runs", lambda loops: [r for r in loops if r["role"] == "build"]):
+            self.assertEqual(self.fill(look(steps, free=3, loops=busy, hold={"builders": 2})), ["A"])
+            self.assertEqual(self.fill(look(steps, free=3, loops=busy, hold={"builders": 1})), [])
+        hot = {"load": 40.0, "cores": 14, "limit": 21.0}
+        self.assertEqual(self.fill(look(steps, load=hot)), [])
+        self.assertEqual(self.fill(look(steps, free=1, load={**hot, "load": 12.0})), ["A"])
+        self.assertIn("overloaded", agent_loop.watch_signs({**look(steps, load=hot), "waiting": [{"module": "A"}],
+                                                            "builds": [], "progress": {}, "since": {}, "stamp": 0.0,
+                                                            "disk": None, "tip": None, "proj": {}}))
+
     def test_a_builders_count_saved_while_it_waits_is_read_at_the_next_look(self):
         prof = {"builders": None, "check_in_s": 3600}
         with mock.patch.object(agent_loop, "profile", lambda worktree: {"builders": 2, "check_in_s": 3600}):
@@ -379,3 +392,19 @@ class SupervisorLife(Repo):
 if __name__ == "__main__":
     import unittest
     unittest.main()
+
+
+class HoldingBuilders(Wiring):
+    """The lead holds the builders below the user's count, with a reason, and releases the hold."""
+
+    def test_a_hold_needs_a_reason_shows_in_status_and_a_release_ends_it(self):
+        call = lambda **kw: self.call(agent_loop.cmd_supervise, **{**dict(worktree=str(self.wt), stop=False,
+                                      status=False, test_wake=False, hold=None, release=False, reason=None), **kw})
+        self.assertEqual(call(hold=4)["result"], "INVALID")
+        self.assertEqual(call(hold=4, reason="the Mac is overloaded")["result"], "HELD")
+        self.assertEqual(agent_loop.builders_hold(self.folder)["builders"], 4)
+        with mock.patch.object(agent_loop, "supervisor_alive", lambda folder: False):
+            self.assertEqual(call(status=True)["hold"]["reason"], "the Mac is overloaded")
+        self.assertEqual(call(release=True)["result"], "RELEASED")
+        self.assertIsNone(agent_loop.builders_hold(self.folder))
+        self.assertEqual(call(release=True)["result"], "NOTHING")

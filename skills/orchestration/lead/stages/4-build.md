@@ -3,6 +3,15 @@
 This stage runs once the project is planned and the user has said how they want the agents to work, and lasts until
 every milestone is Done or nothing left can move without the user.
 
+Contents:
+- [Running the build](#running-the-build)
+- [You own delivery](#you-own-delivery)
+- [Results](#results)
+- [Writing for agents](#writing-for-agents)
+- [Questions](#questions)
+- [Telling the user](#telling-the-user)
+- [When to stop](#when-to-stop)
+
 ## Running the build
 
 The script's supervisor keeps the builders the settings allow busy: it takes every routine `next` step itself and
@@ -13,6 +22,12 @@ background, and again when it ends, or a stopped run waits until you next look.
 
 When the user changes how the agents work, such as the number of builders, save it with `settings --set` and their
 words, so every later command follows it.
+
+The supervisor starts no builder while the machine's load is above one and a half times its cores, because each
+builder runs its own tests and an overloaded machine makes them all slow and some time out. When the builds
+themselves are the load, hold them lower with `supervise --hold <n> --reason "<why>"`. That is reversible relief and
+yours to take, while the user's Builders count stays theirs: release the hold once the cause is fixed, and bring the
+cause to the user if it needs them.
 
 ## You own delivery
 

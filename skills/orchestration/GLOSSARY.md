@@ -584,7 +584,7 @@ there is one, says which of a result's causes it was.
 | `RUN_ENDED` | `watch` | A top-level `run`, `review` or `plan` ended, with its result in `results` |
 | `BUILD_FINISHED`, `WAITING_FOR_USER` | `watch` | Every module is finished, or nothing can move without the user; the supervisor stops after this wake |
 | `SUPERVISOR_FAILED` | `watch` | The supervisor couldn't read the records three times running |
-| `SUPERVISOR`, `STOPPING`, `SUPERVISOR_STOPPED`, `WAKE_SENT`, `WAKE_FAILED` | `supervise` | Its status; asked to stop; stopped, with `reason`; a test wake reached the lead or didn't |
+| `SUPERVISOR`, `STOPPING`, `SUPERVISOR_STOPPED`, `WAKE_SENT`, `WAKE_FAILED`, `HELD`, `RELEASED` | `supervise` | Its status; asked to stop; stopped, with `reason`; a test wake reached the lead or didn't; the builders held below the user's count; the hold ended |
 
 Avoid: `FLOOR` (now `HOST_FAILED` or `SCRIPT_FAILED`), `PIN` (now `WRONG_MODEL_OR_EFFORT`), `DESIGN_OWED` (now
 `DESIGN_NOT_APPROVED`), `NOT_READY` (now `CHECKS_FAILED`), `BUDGET` (now `NO_PROGRESS_FOR_HOURS`), `REVIEW_OWED` (now

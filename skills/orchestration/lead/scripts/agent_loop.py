@@ -6119,7 +6119,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.11.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.11.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6149,6 +6149,12 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.11.1": [
+        "The supervisor starts no builder while the machine's load is above one and a half times its cores, and "
+        "`watch` names it as a sign when ready work waits for that. To run fewer builders for a while without "
+        "changing the user's Builders count, run `supervise --hold <n> --reason \"<why>\"`, and "
+        "`supervise --release` when the cause is fixed.",
+    ],
     "2.11.0": [
         "The script now runs a supervisor for each repository, which any command starts again if it isn't running. "
         "It keeps the builders the settings allow busy on routine work and wakes you for the rest, so a result that "
@@ -15583,6 +15589,11 @@ def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
         since.setdefault("ready_waiting", stamp)
     else:
         since.pop("ready_waiting", None)
+    load = machine_load()
+    if overloaded(load):  # one overload, however long, is one sign
+        since.setdefault("overloaded", str(stamp))
+    else:
+        since.pop("overloaded", None)
     try:  # work a planner could plan now that none is planning: a module's next stretch, a module whose needs are
         # planned, or milestones to rewrite against the user's pick
         planning = {f"{r.get('module') or ''} {r.get('task') or ''}".upper() for r in loops if r.get("role") == "plan"}
@@ -15596,14 +15607,19 @@ def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
         disk = None
     return {"stamp": stamp, "tip": ref, "loops": loops, "builds": builds, "proj": proj, "steps": steps,
             "running": running, "waiting": waiting, "limit": limit, "free": max(free, 0), "disk": disk,
-            "broken": broken, "ahead": ahead, "since": since,
-            "progress": {r["pid"]: run_progress(r) for r in builds}}
+            "broken": broken, "ahead": ahead, "since": since, "hold": builders_hold(folder), "load": load, "progress": {r["pid"]: run_progress(r) for r in builds}}
 
 
 def watch_signs(look: dict) -> dict:
     """The warning signs in what `watch` read, as {key: {"seen": what makes this sign new, "text": ...}}. The same key
     with the same `seen` is the same sign, which wakes the lead once."""
     signs, stamp = {}, look["stamp"]
+    if overloaded(look.get("load")) and look.get("waiting"):
+        load = look["load"]
+        signs["overloaded"] = {"seen": look["since"].get("overloaded") or str(stamp), "text": (
+            f"the machine is overloaded, with a load of {load['load']} on {load['cores']} cores, so the supervisor "
+            f"starts no builder while ready work waits; find what is using it, and hold the builders lower with "
+            f"`supervise --hold` if the builds themselves are the cause")}
     for r in look["builds"]:
         state = look["progress"].get(r["pid"])
         if state and stamp - float(state["progress_at"]) > NO_PROGRESS_WARN_H * 3600:
@@ -15720,6 +15736,8 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dic
            "runs": [" ".join(x for x in (r.get("role"), r.get("module"), r.get("milestone"), r.get("step")) if x)
                     for r in look["loops"] if not r.get("steps_parent")],
            "builders": {"running": len(builder_runs(look["loops"])), "limit": look["limit"], "free": look["free"],
+                        **({"held_to": look["hold"]} if look.get("hold") else {}),
+                        **({"held_for_load": look["load"]} if overloaded(look.get("load")) else {}),
                         "ready_waiting": [f"{s['module']} {s.get('milestone') or ''}".strip() for s in look["waiting"]],
                         **({"waiting_for_a_slot": [f"{r.get('module')} {r.get('milestone') or ''} "
                                                    f"({ago(stamp - (r.get('waiting_since') or stamp))})".strip()
@@ -15863,6 +15881,10 @@ SUPERVISOR_SPAWN = "supervisor.spawn"  # the pid a command started, until it tak
 SUPERVISOR_START_S = 30.0  # how long a supervisor a command started counts as running before it takes its lock
 SUPERVISOR_RESTART_S = 120.0  # a module the supervisor started isn't started again by it sooner than this
 SUPERVISOR_RETRY_S = 60.0  # after the supervisor fails to read the records, how long before it tries again
+HOLD_FILE = "builders-hold.json"  # a lower builder count the lead set with `supervise --hold`, and why
+# the supervisor starts no builder while the 1-minute load average is above this per core (the tests raise it, since
+# they load the machine themselves)
+LOAD_PER_CORE_LIMIT = float(os.environ.get("ORCHESTRATE_LOAD_PER_CORE") or 1.5)
 WAKE_TEXT_LIMIT = 60000  # characters of the result a pushed wake carries
 # The commands the lead runs. A builder's commands (merge, check, lock, background, jobs, wait, main-check) start
 # the supervisor too, but never say how to reach the lead.
@@ -16159,12 +16181,38 @@ def start_run(worktree: Path, prof: dict, stem: str) -> None:
                          stderr=subprocess.STDOUT, start_new_session=True, close_fds=True)
 
 
+def builders_hold(folder: Path) -> dict | None:
+    """The hold the lead set with `supervise --hold`: {"builders", "reason", "at"}, or None."""
+    hold = read_json_file(folder / HOLD_FILE) or {}
+    return hold if isinstance(hold.get("builders"), int) else None
+
+
+def machine_load() -> dict | None:
+    """The 1-minute load average beside the number of cores, or None where the system doesn't say."""
+    try:
+        load, cores = os.getloadavg()[0], os.cpu_count() or 1
+    except (OSError, AttributeError):
+        return None
+    return {"load": round(load, 1), "cores": cores, "limit": round(LOAD_PER_CORE_LIMIT * cores, 1)}
+
+
+def overloaded(load: dict | None) -> bool:
+    return bool(load) and load["load"] > load["limit"]
+
+
 def fill_builders(worktree: Path, prof: dict, look: dict, started: dict) -> list[str]:
     """Starts a run for each module whose next step is routine, up to the free builder slots, and returns their
     names. With no Builders count it starts none, because the lead hasn't asked the user yet; while the test
-    command fails on the main branch, none either, because only the module that broke it can merge."""
-    if not look.get("limit") or look.get("free", 0) <= 0 or any(b["check"] == "test command" for b in look["broken"]):
+    command fails on the main branch, none either, because only the module that broke it can merge. A hold the
+    lead set lowers the count, and while the machine is overloaded it starts none, because each builder runs its
+    own tests and a machine past its cores makes every one of them slower and some of them time out."""
+    free = look.get("free", 0)
+    if look.get("hold"):
+        free = min(free, look["hold"]["builders"] - len(builder_runs(look["loops"])))
+    if not look.get("limit") or free <= 0 or any(b["check"] == "test command" for b in look["broken"]) or \
+            overloaded(look.get("load")):
         return []
+    look = {**look, "free": free}
     folder = loop_dir(worktree)
     busy = {(r.get("module") or "").upper() for r in look["loops"]}
     out = []
@@ -16331,13 +16379,25 @@ def cmd_supervise(a: argparse.Namespace) -> None:
         was = stop_supervisor(worktree, "user")
         emit("STOPPING" if was else "NOTHING", note="the supervisor stops within seconds, and no command starts it "
              "again until you run `run`, `plan`, `watch` or `supervise`" if was else "no supervisor was running")
+    if a.hold is not None:
+        if a.hold < 0 or not (a.reason or "").strip():
+            emit("INVALID", problems=["--hold takes a count of 0 or more and a --reason saying why"])
+        write_atomically(folder / HOLD_FILE, {"builders": a.hold, "reason": a.reason.strip(), "at": now()})
+        emit("HELD", builders=a.hold, note="the supervisor starts no new builder while this many or more run; runs "
+             "already going carry on. `supervise --release` ends the hold, which doesn't change the user's Builders "
+             "count")
+    if a.release:
+        had = builders_hold(folder)
+        (folder / HOLD_FILE).unlink(missing_ok=True)
+        emit("RELEASED" if had else "NOTHING", **({"was": had} if had else {"note": "no hold was set"}))
     if a.status or a.test_wake:
         lead = read_json_file(folder / LEAD_FILE) or {}
         setting = lead_wake_of(main_checkout(worktree))
         way, why = push_path(lead, setting)
         status = {"running": supervisor_alive(folder), "supervisor": read_json_file(folder / SUPERVISOR_FILE) or {},
                   "lead": {k: v for k, v in lead.items() if k != "token"}, "lead_wake": setting, "push": way,
-                  **({"no_push_because": why} if not way else {}), "watch_waiting": waiter_alive(folder)}
+                  **({"no_push_because": why} if not way else {}), "watch_waiting": waiter_alive(folder),
+                  **({"hold": builders_hold(folder)} if builders_hold(folder) else {}), "load": machine_load()}
         if a.test_wake:
             if not way:
                 emit("WAKE_FAILED", **status, error=why)
@@ -16894,7 +16954,7 @@ watch --worktree PATH [--runs]
       whichever step it is on), planners, disk, the main branch and the flow numbers.
 """,
     "supervise": f"""\
-supervise --worktree PATH [--status | --stop | --test-wake]
+supervise --worktree PATH [--status | --stop | --test-wake | --hold N --reason TEXT | --release]
       The repository's supervisor: one detached process per repository (it holds
       <git common dir>/orchestrate/{SUPERVISOR_LOCK}), which any command that names a worktree starts when none is
       running, so a reboot, a crash or a closed session mends itself at the next command any agent runs. It reads
@@ -16918,6 +16978,9 @@ supervise --worktree PATH [--status | --stop | --test-wake]
                 `no_push_because`) and `watch_waiting`.
       --stop    STOPPING, or NOTHING when none was running.
       --test-wake  WAKE_SENT or WAKE_FAILED (with `error`): a test message to the lead the way a wake would go.
+      --hold N --reason TEXT  HELD: the supervisor starts no builder while N or more run, below the settings'
+                Builders count, until --release, which prints RELEASED (NOTHING with no hold). It also starts none
+                while the 1-minute load average is above {LOAD_PER_CORE_LIMIT} per core; `watch` shows both.
       Started bare, it is the supervisor itself, and ends SUPERVISOR_STOPPED with `reason`, or NOTHING when one
       already runs.
 """,
@@ -17133,6 +17196,11 @@ def build_parser() -> argparse.ArgumentParser:
     sup_what.add_argument("--stop", action="store_true", help="stop it until the lead carries on")
     sup_what.add_argument("--test-wake", action="store_true", help="send the lead a test message the way the "
                           "supervisor would wake it")
+    sup_what.add_argument("--hold", type=int, metavar="N", help="start builders only up to N, below the settings' "
+                          "Builders count, until --release; needs --reason")
+    sup_what.add_argument("--release", action="store_true", help="end a --hold, so the supervisor fills to the "
+                          "settings' Builders count again")
+    sup.add_argument("--reason", help="why the builders are held lower, shown in `supervise --status` and `watch`")
     sup.set_defaults(func=cmd_supervise)
     merge_p = sub.add_parser("merge", help="queue this worktree's commits to be rebased, tested with the test "
                                            "command and merged, alone or in a batch with other waiting branches")
