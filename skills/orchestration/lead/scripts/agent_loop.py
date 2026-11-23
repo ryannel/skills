@@ -6119,7 +6119,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.11.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.11.4"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6149,6 +6149,10 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.11.4": [
+        "The `overloaded` sign measures the overload from the start of the look, so its duration is never negative, "
+        "and it keeps an overload that began under 2.11.1 or 2.11.2 rather than starting it again.",
+    ],
     "2.11.3": [
         "The `overloaded` sign wakes you once per overload. It wakes you again only when the load passes another "
         "multiple of the limit, when the ready work changes, or after another hour. A dip under the limit shorter "
@@ -15590,13 +15594,16 @@ def failed_items(review: dict) -> set:
     return items | {f.get("item") for f in review.get("findings") or [] if isinstance(f, dict) and f.get("item")}
 
 
-def track_overload(since: dict) -> dict | None:
+def track_overload(since: dict, stamp: float) -> dict | None:
     """Reads the machine's load and keeps, in `since`, when the overload began and the worst multiple of the limit it
     reached. One overload stays one through dips under the limit shorter than OVERLOAD_CLEAR_S, so a load hovering
-    near the limit doesn't wake the lead each time it crosses. Returns the load."""
-    stamp, load = time.time(), machine_load()
+    near the limit doesn't wake the lead each time it crosses. `stamp` is the look's own time, which the sign
+    measures the overload against. Returns the load."""
+    load = machine_load()
     if overloaded(load):
-        if not isinstance(since.get("overloaded"), (int, float)):
+        try:  # 2.11.1 and 2.11.2 kept the start as text
+            since["overloaded"] = min(float(since["overloaded"]), stamp)
+        except (KeyError, TypeError, ValueError):
             since["overloaded"] = stamp
         since.pop("overload_cleared", None)
         since["overload_peak"] = max(since.get("overload_peak") or 1, int(load["load"] // load["limit"]))
@@ -15641,7 +15648,7 @@ def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
         since.setdefault("ready_waiting", stamp)
     else:
         since.pop("ready_waiting", None)
-    load = track_overload(since)
+    load = track_overload(since, stamp)
     try:  # work a planner could plan now that none is planning: a module's next stretch, a module whose needs are
         # planned, or milestones to rewrite against the user's pick
         planning = {f"{r.get('module') or ''} {r.get('task') or ''}".upper() for r in loops if r.get("role") == "plan"}
@@ -15664,6 +15671,7 @@ def watch_signs(look: dict) -> dict:
     signs, stamp = {}, look["stamp"]
     first = look["since"].get("overloaded")
     if isinstance(first, (int, float)) and look.get("waiting") and look.get("load"):
+        first = min(first, stamp)
         # The same overload wakes the lead again only when it gets worse (the load passes another multiple of the
         # limit), the ready work changes, or it has lasted another OVERLOAD_REWAKE_S. A fall back under the limit
         # wakes nobody, because the supervisor starts the builders itself then.

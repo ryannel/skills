@@ -272,6 +272,11 @@ class StartingBuilders(Clean):
         self.assertNotEqual(seen(44.0, episode, waiting=("A", "B")), first)
         self.assertNotEqual(seen(44.0, episode, stamp=3700.0), first)
         self.assertIsNone(seen(44.0, episode, waiting=()))
+        signs = agent_loop.watch_signs({**look(load={"load": 30.0, "cores": 14, "limit": 21.0}),
+                                        "waiting": [{"module": "A"}], "builds": [], "progress": {},
+                                        "since": {"overloaded": 103.0}, "stamp": 100.0, "disk": None, "tip": None,
+                                        "proj": {}})
+        self.assertNotIn("for -", signs["overloaded"]["text"])
 
     def test_a_short_dip_under_the_limit_keeps_the_overload_and_a_long_one_ends_it(self):
         since, loads = {}, iter([30.0, 10.0, 30.0, 10.0, 10.0])
@@ -279,11 +284,15 @@ class StartingBuilders(Clean):
         for _ in range(5):
             with mock.patch.object(agent_loop, "machine_load", lambda: {"load": next(loads), "cores": 14,
                                                                         "limit": 21.0}), \
-                    mock.patch.object(agent_loop.time, "time", lambda: next(clock)):
-                agent_loop.track_overload(since)
+                    mock.patch.object(agent_loop.time, "time", lambda: 0.0):
+                agent_loop.track_overload(since, next(clock))
             if _ < 4:
                 self.assertEqual(since.get("overloaded"), 0.0, since)
         self.assertNotIn("overloaded", since)
+        since = {"overloaded": "50.0"}  # as 2.11.1 and 2.11.2 kept it
+        with mock.patch.object(agent_loop, "machine_load", lambda: {"load": 30.0, "cores": 14, "limit": 21.0}):
+            agent_loop.track_overload(since, 100.0)
+        self.assertEqual(since["overloaded"], 50.0)
 
     def test_a_builders_count_saved_while_it_waits_is_read_at_the_next_look(self):
         prof = {"builders": None, "check_in_s": 3600}
