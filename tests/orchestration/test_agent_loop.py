@@ -1971,13 +1971,13 @@ class WhatTheLeadSees(Repo):
         with mock.patch.object(agent_loop, "QUOTA_WORKTREE", [self.wt]):
             first = self.call(lambda a: agent_loop.emit("NOTHING"))
             second = self.call(lambda a: agent_loop.emit("NOTHING"))
-        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         self.assertIn("From before 2.6.0", first["changed"]["2.5.0"][0])
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
         self.assertIn("2.5.0", agent_loop.version_change(self.wt))
         note.write_text('{"version": "2.5.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         note.write_text('{"version": "2.9.0"}')
         (line, *_) = agent_loop.version_change(self.wt)["2.10.0"]
         self.assertIn("Read the lead skill again", line)
@@ -7273,6 +7273,34 @@ class MainBranchChecks(Repo):
         code, line = self.ask(name="images")
         self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", head), line)
         self.assertEqual(self.counted(), 4)
+
+    def test_a_bisect_that_blames_a_plans_only_commit_names_no_culprit_and_fails_nothing(self):
+        # The same code failed and passed, as when the machine was loaded: the check is flaky, not broken by a commit.
+        calm = self.root / "calm"
+        calm.touch()
+        self.declare(f"test -f {calm}")
+        self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
+        self.land("orchestrate: update STATUS.md", **{"docs/plans/STATUS.md": "# Status"})
+        tip = self.land("tidy the sky", **{"src/sky.txt": "1"})
+        calm.unlink()
+        self.ask(name="images")
+        self.settle()
+        [run] = [r for r in agent_loop.main_check_runs(self.folder(), unjudged=True) if r["commit"] == tip]
+        self.assertEqual((run["result"], run["bisect"]), ("unjudged", "no_culprit"), run)
+        self.assertNotIn("culprit", run)
+        self.assertIn("changed only the plans folder", run["bisect_why"])
+        self.assertEqual([r["result"] for r in self.runs()], ["pass"])
+        calm.touch()
+        code, line = self.ask(name="images")
+        self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", tip), line)
+
+    def test_a_failure_on_an_overloaded_machine_judges_nothing(self):
+        hot = {"load": 95.0, "cores": 14, "limit": 21.0}
+        self.assertEqual(agent_loop.main_check_result([{"exit": 1, "overloaded": hot}, {"exit": 1, "overloaded": hot}]),
+                         "unjudged")
+        self.assertEqual(agent_loop.main_check_result([{"exit": 1, "overloaded": hot}, {"exit": 1}, {"exit": 1}]),
+                         "fail")
+        self.assertEqual(agent_loop.main_check_result([{"exit": 1, "overloaded": hot}, {"exit": 0}]), "pass")
 
     def test_a_bisect_stops_at_a_commit_it_cant_judge_rather_than_guess(self):
         self.declare("test -f loaded && exit 75; test ! -f broken")

@@ -6119,7 +6119,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.11.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.11.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6149,6 +6149,12 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.11.2": [
+        "A main-branch check that fails while the machine is overloaded no longer counts as failing, because tests "
+        "time out whatever the code: the attempt counts as unjudged and is tried again later. A bisect whose first "
+        "failing commit changed only the plans folder, such as a STATUS.md update, now names no culprit (`bisect` "
+        "no_culprit) and keeps the failure as unjudged, because the same code both failed and passed.",
+    ],
     "2.11.1": [
         "The supervisor starts no builder while the machine's load is above one and a half times its cores, and "
         "`watch` names it as a sign when ready work waits for that. To run fewer builders for a while without "
@@ -14661,6 +14667,9 @@ MAIN_CHECK_LISTED = 200  # the most recent runs read when answering whether a co
 # again once `every` has passed.
 MAIN_CHECK_UNJUDGED_EXIT = 75
 MAIN_CHECK_TRIES = 3
+# A failure while the machine's load is above LOAD_PER_CORE_LIMIT judges nothing either: tests that time out on an
+# overloaded machine fail whatever the code. Such an attempt counts as unjudged, and the next waits this long first.
+MAIN_CHECK_LOAD_WAIT_S = float(os.environ.get("ORCHESTRATE_MAIN_CHECK_LOAD_WAIT_S") or 300)
 # `every` spaces out the runs nobody is waiting for. An item's check that asks about a commit no run covers yet starts
 # a run now, or wakes the runner waiting out `every`, by leaving this file in the check's folder: otherwise a milestone
 # sat idle for hours after merging, with no builder working, until the next scheduled run.
@@ -14826,6 +14835,7 @@ def main_check_attempt(tree: Path, commit: str, spec: dict, folder: Path) -> dic
     git(tree, "checkout", "--quiet", "--force", "--detach", commit)
     git(tree, "clean", "-ffdq")
     started = time.time()
+    load_before = machine_load()
     if setup := run_setup(tree, {"setup_command": spec.get("setup")}):
         # A failed setup says nothing about the commit, so the attempt is one that couldn't judge it, and is tried
         # again rather than counted as a failure and bisected.
@@ -14846,8 +14856,11 @@ def main_check_attempt(tree: Path, commit: str, spec: dict, folder: Path) -> dic
             saved[field] = str(path)
     except OSError:
         pass
+    hot = [x for x in (load_before, machine_load()) if overloaded(x)]
     return {"exit": code, "seconds": round(time.time() - started, 1), "at": now(), **saved,
-            **({"timed_out": True} if code == 124 else {}), "tail": stream_end(err or out, 8)}
+            **({"timed_out": True} if code == 124 else {}),
+            **({"overloaded": max(hot, key=lambda x: x["load"])} if hot and code != 0 else {}),
+            "tail": stream_end(err or out, 8)}
 
 
 def main_check_try(tree: Path, commit: str, spec: dict, folder: Path, current: dict) -> list[dict]:
@@ -14856,6 +14869,8 @@ def main_check_try(tree: Path, commit: str, spec: dict, folder: Path, current: d
     judge the commit is tried again without counting either way."""
     attempts = [main_check_attempt(tree, commit, spec, folder)]
     while main_check_result(attempts) == "unjudged" and len(attempts) < MAIN_CHECK_TRIES:
+        if attempts[-1].get("overloaded"):  # give the load time to fall before the next attempt
+            time.sleep(MAIN_CHECK_LOAD_WAIT_S)
         write_atomic(folder / "current.json", {**current, "state": "retrying", "pid": os.getpid()})
         attempts.append(main_check_attempt(tree, commit, spec, folder))
     return attempts
@@ -14863,10 +14878,11 @@ def main_check_try(tree: Path, commit: str, spec: dict, folder: Path, current: d
 
 def main_check_result(attempts: list[dict]) -> str:
     """pass when the last attempt passed, fail when two failed, else unjudged: one failure not yet retried, or
-    attempts that exited 75 because they couldn't judge the commit."""
+    attempts that couldn't judge the commit, because they exited 75 or failed while the machine was overloaded, when
+    tests time out whatever the code."""
     if attempts[-1]["exit"] == 0:
         return "pass"
-    fails = sum(a["exit"] not in (0, MAIN_CHECK_UNJUDGED_EXIT) for a in attempts)
+    fails = sum(a["exit"] not in (0, MAIN_CHECK_UNJUDGED_EXIT) and not a.get("overloaded") for a in attempts)
     return "fail" if fails >= 2 else "unjudged"
 
 
@@ -14921,6 +14937,14 @@ def main_check_bisect(tree: Path, prof: dict, name: str, spec: dict, folder: Pat
         lo, hi = (mid, hi) if row["result"] == "pass" else (lo, mid)
     culprit = commits[hi]
     modules, files = commit_modules(tree, prof, culprit)
+    plans = (prof.get("plans") or "plans").rstrip("/") + "/"
+    if files and all(f.startswith(plans) for f in files):
+        # Plans, reviews and STATUS.md don't change what a check runs, so the same code failed and passed: the check
+        # is flaky or the machine was loaded, and no commit is to blame.
+        return {"bisect": "no_culprit", "bisect_runs": tried, "flaky_commit": culprit, "bisect_why": (
+            f"the first failing commit, {culprit[:12]} ({git(tree, 'log', '-1', '--format=%s', culprit).stdout.strip()}), "
+            f"changed only the plans folder, so the same code failed and passed: the check is flaky or the machine was "
+            f"loaded, not broken by a commit. The failure is kept as unjudged, and the check runs again")}
     return {"bisect": "done", "bisect_runs": tried, "culprit": {
         "commit": culprit, "subject": git(tree, "log", "-1", "--format=%s", culprit).stdout.strip(),
         "modules": modules, "files": files[:20],
@@ -14978,6 +15002,12 @@ def main_check_runner(worktree: Path, prof: dict, name: str, spec: dict, force: 
         write_atomic(path, row)  # requests waiting on this run read it now; the bisect follows
         if row["result"] == "fail" and last_pass:
             row.update(main_check_bisect(tree, prof, name, spec, folder, last_pass["commit"], ref))
+            if row["bisect"] == "no_culprit":
+                row["result"] = "unjudged"  # covers nothing and fails nothing; the check runs again after `every`
+                for other in main_check_runs(folder):  # the bisect's failures were the same flake
+                    if other.get("kind") == "bisect" and other["result"] == "fail" and \
+                            (other.get("started_s") or 0) >= row["started_s"]:
+                        write_atomic(Path(other.pop("file")), {**other, "result": "unjudged"})
             write_atomic(path, row)
         return {"result": "RAN", **{k: row[k] for k in ("check", "commit", "result", "flaky")},
                 **({"culprit": row["culprit"]} if row.get("culprit") else {})}
@@ -16917,7 +16947,10 @@ main-check [NAME] [--worktree PATH] [--commit REV] [--wait {MAIN_CHECK_WAIT_S:.0
       the main branch's commits since the last pass, naming the first failing commit, its subject and the modules
       whose plans it changed. A command exits {MAIN_CHECK_UNJUDGED_EXIT} when it couldn't judge the commit (such as a
       capture that dropped frames): it is tried up to {MAIN_CHECK_TRIES} times, and a run it still can't judge fails
-      nothing. With NAME it answers for a commit (default HEAD): COVERED (exit 0) when a pass exists on a main-branch
+      nothing. A failure while the 1-minute load average is above {LOAD_PER_CORE_LIMIT} per core counts the same
+      way, with the next attempt {MAIN_CHECK_LOAD_WAIT_S:.0f} s later, because tests time out on an overloaded
+      machine whatever the code. A bisect whose first failing commit changed only the plans folder names no culprit
+      (`bisect` no_culprit): the same code failed and passed, so the failure is kept as unjudged. With NAME it answers for a commit (default HEAD): COVERED (exit 0) when a pass exists on a main-branch
       commit that contains it; FAILING_ON_MAIN (exit 1) when a failure that held does and no pass does; NOT_ON_MAIN
       (exit 1) for a commit the main branch doesn't contain yet. Otherwise it joins the run in flight or starts one
       now, in a process of its own that outlives the request, and waits up to --wait seconds, then says PENDING
