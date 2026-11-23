@@ -6121,7 +6121,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.12.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.12.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6151,6 +6151,10 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.12.2": [
+        "A command run inside Codex's sandbox no longer starts the supervisor, which would have kept the sandbox, "
+        "and the supervisor no longer passes the Codex turn that started it on to the runs it starts.",
+    ],
     "2.12.1": [
         "The supervisor starts a module's run in the worktree on its build/<module> branch, never in the main "
         "checkout. With no such worktree and no `Worktrees:` settings line, it leaves the module to you, and "
@@ -16236,9 +16240,11 @@ def main_checkout(worktree: Path) -> Path:
 
 
 def supervised_env() -> dict:
-    """The environment for the supervisor and the runs it starts: the lead's, less what marks a session the script
-    started or a step of a run, and marked as the supervisor's, so none of them records itself as the lead."""
-    env = {k: v for k, v in os.environ.items() if k not in ("ORCHESTRATE_ROLE", STEPS_ENV)}
+    """The environment for the supervisor and the runs it starts: that of the command that started it, less what
+    marks a session the script started, a step of a run, or the Codex turn the command ran in (a builder's merge
+    can start the supervisor), and marked as the supervisor's, so none of them records itself as the lead."""
+    env = {k: v for k, v in os.environ.items() if k not in ("ORCHESTRATE_ROLE", STEPS_ENV, "CODEX_THREAD_ID",
+                                                            "CODEX_SESSION_ID", "CODEX_TOOL_CALL_ID", "CODEX_CI")}
     return {**env, SUPERVISED_ENV: "1"}
 
 
@@ -16593,7 +16599,8 @@ def supervise_hook(command: str, worktree: Path) -> None:
     """Run before every command that names a worktree: a lead's command records how to reach the lead, and every
     command starts the supervisor when none is running. Never fails the command."""
     global WAKE_CONTEXT
-    if not SUPERVISOR_ON or STEPS_PARENT or os.environ.get(SUPERVISED_ENV) == "1":
+    if not SUPERVISOR_ON or STEPS_PARENT or os.environ.get(SUPERVISED_ENV) == "1" or \
+            os.environ.get("CODEX_SANDBOX"):  # a sandboxed command's children stay in its sandbox
         return
     try:
         lead_cmd = command in LEAD_COMMANDS and not os.environ.get("ORCHESTRATE_ROLE")

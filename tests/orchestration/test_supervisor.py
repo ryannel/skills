@@ -308,6 +308,12 @@ class StartingBuilders(Clean):
             self.assertIsNone(agent_loop.run_worktree(main, {}, "SKY"))
             self.assertEqual(agent_loop.run_worktree(main, {"worktrees": ".wt"}, "SKY"), main)
 
+    def test_the_supervisor_drops_the_codex_turn_that_started_it(self):
+        with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": "t1", "CODEX_CI": "1", "ORCHESTRATE_ROLE": "build"}):
+            env = agent_loop.supervised_env()
+        self.assertFalse({"CODEX_THREAD_ID", "CODEX_CI", "ORCHESTRATE_ROLE"} & set(env))
+        self.assertEqual(env[agent_loop.SUPERVISED_ENV], "1")
+
     def test_a_builders_count_saved_while_it_waits_is_read_at_the_next_look(self):
         prof = {"builders": None, "check_in_s": 3600}
         with mock.patch.object(agent_loop, "profile", lambda worktree: {"builders": 2, "check_in_s": 3600}):
