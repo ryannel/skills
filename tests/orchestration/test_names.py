@@ -52,6 +52,9 @@ def printed_results() -> set[str]:
                     names |= {s for s in string_values(v) if re.fullmatch(r"[A-Z][A-Z_]+", s)}
         if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "RUN_RESULTS" for t in node.targets):
             names |= {v.value for v in node.value.values if isinstance(v, ast.Constant)}
+        # the results a wake can carry, which `watch` prints and the supervisor pushes to the lead
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "WAKE_RESULTS" for t in node.targets):
+            names |= {v.value for v in node.value.elts if isinstance(v, ast.Constant)}
     return names
 
 

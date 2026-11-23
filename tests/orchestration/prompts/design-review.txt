@@ -41,7 +41,11 @@ on inputs the brief covers, such as output that is right only for the example in
 only on an input the brief never mentions isn't one.
 
 Growth beyond that scope is a Suggestion, however real: a wider range of input than the brief names, a proof stronger
-than its claim needs, an extra edge case, clearer wording or a name that drifts. The planner reads Suggestions on its
+than its claim needs, an extra edge case, clearer wording or a name that drifts. The range the brief names is the one
+"How it will be judged" and its examples describe, not every value a type allows: a brief that reads numbers with
+`float()` asks for ordinary numbers, not overflow to infinity. A finding that goes against an assumption or decision
+the user agreed is a Suggestion too, with the case for changing it, because only the user can reopen their own
+decision. The planner reads Suggestions on its
 next turn, and the user can ask for more, because the user, not the review, decides how much quality the project is
 worth, and a design that grows with each review never lets the build start.
 

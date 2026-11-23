@@ -156,10 +156,11 @@ findings are cleared.
     every planned milestone is Done and the plan names more, the module is Waiting: For Planning, and a planner
     writes the next stretch.
 19. These steps repeat until every milestone is Done, and the lead isn't needed for any of them. It is woken when a
-    command stops at something that needs judgement, and by `watch`, which ends at the lead check-in the settings
-    give, and sooner on a warning sign such as a builder that has stopped making progress. Each time, the lead looks
-    at whether the work is moving as fast as it could, and steers: it starts a builder on ready work, sends a builder
-    a message, starts a planner on a re-plan, changes the order of the work, or asks you.
+    command stops at something that needs judgement, and by the script's supervisor at the lead check-in the
+    settings give, and sooner on a warning sign such as a builder that has stopped making progress. The supervisor
+    also starts the builders on work whose next step is routine, so the build doesn't wait for the lead. Each time, the lead looks
+    at whether the work is moving as fast as it could, and steers: it sends a builder a message, starts a planner on a
+    re-plan, changes the order of the work, or asks you.
 
 ### When it needs you
 
@@ -396,8 +397,21 @@ and a pass moves on. Until 2.4 the script stopped after each, and the lead ran e
 36-hour build ran about 170 agent sessions, each costing the lead two turns, and that load got the lead's
 conversation shortened four times. So `run` and `plan` now carry on through those steps, and stop at anything that
 needs judgement. That frees the lead to see every run at once and notice what no single run can, such as builders
-all waiting on the same thing. The warning signs `watch` looks for are set where a sign would have caught a stall
-seen in a real build, not from any measurement.
+all waiting on the same thing. The warning signs the supervisor looks for are set where a sign would have caught a
+stall seen in a real build, not from any measurement.
+
+The steps between runs are routine too, so the script's supervisor takes them: one background process per repository
+that the lead's next command starts if it isn't running. It keeps the builders the settings allow busy, and wakes the
+lead for anything else: a run that ended, a warning sign, the check-in, a finished build, or a build waiting on you.
+It then stops itself. A lead that had to keep a `watch` running could fall idle with nothing set to wake it, and a
+host restart ended that `watch` silently. How the supervisor reaches the lead depends on the host:
+
+| Lead's host | How it is woken |
+|---|---|
+| Claude Code, command line or desktop app | A message on the session's own messaging socket, which starts a turn |
+| A Codex app thread | `codex queue --resume`, which starts a turn in the app |
+| The Codex command line, Antigravity, or anything else | No push reaches it, so results carry `wake` and the lead keeps `watch` running |
+| Any host, by the settings' `Lead wake:` line | A command of your own, given the message |
 
 ### A reviewer is a new session, and it uses the product
 
@@ -533,9 +547,9 @@ Four larger ideas came out of the review of a 36-hour build. Each needs a design
   none, so a budget would stop a build on the wrong numbers. `quota` forecasts Codex's weekly limit meanwhile.
 - Starting a module's next milestone while its last is with a reviewer, which would build on work that may fail.
   Instead, a run waiting on a reviewer or planner gives up its builder slot to another module.
-- Full support for a Codex lead. The lead skill is written around a host that runs commands in the background and
-  wakes the lead when one ends, as Claude Code does. `watch --runs` gives a Codex lead something to wait on, but the
-  skill hasn't been worked through for how Codex runs long commands.
+- Full support for a Codex lead in the command-line app. The supervisor wakes a lead in Claude Code or in a Codex
+  app thread by itself, but a message queued for a CLI thread waits until that thread next takes a turn, so a CLI
+  lead still waits on `watch`, and the skill hasn't been worked through for how Codex runs long commands.
 
 A check for free disk space before a build was considered and left out, because the script already removes
-checkouts nobody is using, sooner when the disk is low, and `watch` warns the lead.
+checkouts nobody is using, sooner when the disk is low, and the supervisor warns the lead.

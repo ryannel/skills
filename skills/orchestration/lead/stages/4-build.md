@@ -5,9 +5,11 @@ every milestone is Done or nothing left can move without the user.
 
 ## Running the build
 
-Start each module as its own background `run`, so you are woken each time one stops. Keep `watch` running in the
-background too, and start it again whenever it ends: it is what wakes you when nothing has stopped but something is
-wrong, such as a stalled builder or a broken main branch, so without it a quiet failure can last for hours.
+The script's supervisor keeps the builders the settings allow busy: it takes every routine `next` step itself and
+wakes you for the rest, so a wake is always something for your judgement, and a routine step in it is already
+started. Start a `run` yourself only for what the supervisor can't choose, such as a `--message`, `--fresh` or
+another host. When a result carries `wake`, your host gives the script no way to wake you: start its command in the
+background, and again when it ends, or a stopped run waits until you next look.
 
 When the user changes how the agents work, such as the number of builders, save it with `settings --set` and their
 words, so every later command follows it.
@@ -43,7 +45,9 @@ Follow each result's `next`. Where it says `decides: human`, put its `ask` to th
 - `PAUSED` because the user stopped a builder or opened its session means the session is theirs until they say to
   carry on.
 - After a failed review, follow the escalation the script gives, because the counts record what has been tried. Add
-  nothing about which findings to fix: a builder handed a list fixes that list and nothing more.
+  nothing about which findings to fix: a builder handed a list fixes that list and nothing more. Do read the Must Fix
+  findings against the brief, though: one that asks for more than the brief and the quality bar is a question of
+  scope, so take it to a planner, or to the user when it reopens their decision, rather than send the builder back.
 
 Items that need the user at the machine, for access or a device, stop the run `BLOCKED` with `needs_access` or
 `needs_hardware`. Gather them across modules so the user sits down once.
@@ -92,5 +96,5 @@ there are few graded examples, because their corrections teach reviewers how str
 
 ## When to stop
 
-Stop when the job is finished or nothing left can move without the user. Stop `watch`, and send the report with what
-is left and what would move it on.
+Stop when the job is finished or nothing left can move without the user. The supervisor stops itself then; stop any
+`watch` a `wake` had you start, and send the report with what is left and what would move it on.

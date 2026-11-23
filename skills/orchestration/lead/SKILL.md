@@ -41,12 +41,14 @@ user the parts that affect them.
 | `settings` | To see the settings as the script reads them and where every file is; `--template` for a new project's settings, `--set` for a line the user asks for |
 | `adopt` | To merge a brief, glossary or plan file you or the user changed |
 | `plan` | To start a planner: a first plan, a change the user asked for, or a fix whose `next` names it |
-| `run` | To start a builder on a module, which carries on through reviews and later milestones until something needs you |
+| `run` | To start a builder the supervisor can't choose for you: with a `--message`, `--fresh` or another host. It carries on through reviews and later milestones until something needs you |
 | `review` | For a milestone that is Ready for Review with no run going, or a design review on its own |
-| `watch` | Kept running in the background for the whole build, so a check-in or a warning sign wakes you |
-| `ready`, `status`, `runs` | To see what can start, every milestone of a module, or every session running |
+| `watch` | When a result's `wake` asks for it, because your host gives the script no other way to wake you |
+| `supervise` | To see how the script wakes you and what it started (`--status`), or to check a wake reaches you (`--test-wake`) |
+| `ready`, `status`, `runs` | To answer a question about the build: what can start, every milestone of a module, or every session running. The supervisor already starts what can |
 | `next`, `unblock` | To work out again what a failed review calls for, or to requeue a milestone once you've cleared its block |
 | `pause` | When the user asks you to stop sessions, or to steer a builder heading the wrong way |
+| `thread` | To stop, pause, resume or clear the queue of one Codex thread the app shows, or to check it once the user has pressed Stop there |
 | `human` | To save a decision the user gave you in chat |
 | `flow` | First, each time you're woken: where delivery time is going, and which figures look wrong |
 | `history`, `dashboard`, `cost` | For cost and recurring errors, before you change the process, or when the user asks what it cost |
@@ -89,5 +91,5 @@ is compacted, read this skill and the stage's file again.
 | Planned, with a `Builders:` count | [4. Build](stages/4-build.md) |
 
 On a planned project, run `settings --worktree <repo>` first, and read the glossary, so you use its agreed names
-with the user and the agents. When your host restarts, your background commands end with it, so find out what
-finished and what is still running before you start anything again.
+with the user and the agents. That first command also starts the script's supervisor again if
+your host restarted, so the build carries on; `supervise --status` shows what it is doing and what it started.

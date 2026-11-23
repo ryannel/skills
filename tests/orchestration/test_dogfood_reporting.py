@@ -53,6 +53,8 @@ class Escalation(Clean):
     def test_the_help_names_the_item_and_the_restart(self):
         text = agent_loop.COMMAND_HELP["next"]
         self.assertIn(f"{agent_loop.REPEATS_TO_DIAGNOSE} reviews with a repeat", text)
+        # a new builder session comes one repeat before the diagnosis, as `escalation` decides
+        self.assertIn(f"or {agent_loop.REPEATS_TO_DIAGNOSE - 1} with a repeat: a builder in a new session", text)
         self.assertIn("An item that fails again counts even when its finding is new", text)
         self.assertIn("after any plan that changes the milestone's items", text)
         self.assertIn("(`repeated_items` names", agent_loop.COMMAND_HELP["review"])

@@ -1,4 +1,5 @@
 """The script's own bookkeeping and `next` commands that took the place of steps the skills used to describe."""
+import shlex
 import sys
 import unittest
 from pathlib import Path
@@ -25,12 +26,20 @@ class MainCheckFix(unittest.TestCase):
         got = agent_loop.main_check_fix_next(Path("/repo"), "e2e", {"commit": "a" * 40, "subject": "add pay",
                                                                    "modules": ["PAY"]}, "it fails")
         self.assertIn(" plan --worktree /repo --module PAY --kind fix --task ", got["command"])
-        self.assertIn("git revert --no-edit aaaaaaaaaaaa", got["alternative"])
+        self.assertEqual(got["alternative"], "git -C /repo revert --no-edit aaaaaaaaaaaa")
+        self.assertIn("human rereview", got["why"])
 
-    def test_a_failing_check_no_module_owns_goes_to_the_lead(self):
+    def test_a_failing_check_no_module_owns_goes_to_a_planner_for_the_whole_project(self):
         got = agent_loop.main_check_fix_next(Path("/repo"), "e2e", {"commit": "b" * 40}, "it fails")
-        self.assertIsNone(got["command"])
-        self.assertIn("revert", got["why"])
+        self.assertIn(" plan --worktree /repo --kind fix --task ", got["command"])
+        self.assertNotIn("--module", got["command"])
+        self.assertIn("bbbbbbbbbbbb, which no module's merge made", shlex.split(got["command"])[-1])
+        self.assertEqual(got["alternative"], "git -C /repo revert --no-edit bbbbbbbbbbbb")
+
+    def test_a_failing_check_with_no_commit_found_yet_still_gives_a_command(self):
+        got = agent_loop.main_check_fix_next(Path("/repo"), "e2e", {}, "it fails")
+        self.assertIn("couldn't tell which commit broke it", shlex.split(got["command"])[-1])
+        self.assertNotIn("alternative", got)
 
 
 class Migrated(unittest.TestCase):

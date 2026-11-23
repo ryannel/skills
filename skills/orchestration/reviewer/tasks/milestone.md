@@ -16,8 +16,10 @@ faked. Judge each of these on the inputs the brief and the design cover: a crash
 though no item names that input, while a fault that only an input the brief never mentions can reach, such as a
 number thousands of digits long or an unusual spelling of an ordinary one, is a Suggestion. A defect of taste that no
 checklist line names is a Suggestion too, with a proposed checklist line, because work judged against a reference
-fails only on what the planner wrote down. A Must Fix in an item fails that item. A Must Fix outside the items fails
-the milestone too, and the review proposes an item that would have caught it.
+fails only on what the planner wrote down. A defect that a later milestone's item already covers, such as error handling the plan
+puts in M2, is a Suggestion in an earlier milestone's review, because the plan chose when that work is done. A Must
+Fix in an item fails that item. A Must Fix outside the items fails the milestone too, and the review proposes an item
+that would have caught it.
 
 Judge an item that lists what it covers, such as the behaviours a test suite must test, on that list. Hold an
 open-ended one, such as a lint that must catch "any violation" or a suite that must fail "when any behaviour is

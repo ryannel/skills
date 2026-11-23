@@ -436,15 +436,32 @@ A long command an agent starts with the script's `background` command, so that i
 turn ends.
 Stored as: the `background`, `wait` and `jobs` commands
 
+**Supervisor**
+The one process per repository that the script keeps running through a build. It starts the runs whose next step
+is routine, up to the builders count, and wakes the lead for everything else. Any command starts it when none is
+running.
+Source: a process supervisor, the field's name for a process that keeps others running and restarts them.
+Stored as: the `supervise` command; `supervisor.json` and `supervisor.lock` in the script's folder under the git
+common dir
+Proposed: by Claude, 2026-11-23. Not yet agreed by the user.
+
+**Wake**
+The supervisor telling the lead that something needs its judgement. It goes through the lead's host where the host
+allows it, such as a message to a Claude Code session or a queued message on a Codex app thread, and otherwise
+through `watch`.
+Stored as: `wake.json` in the script's folder; the `wake` field of a lead's results when nothing can wake it; the
+`Lead wake` line of the project settings
+Proposed: by Claude, 2026-11-23. Not yet agreed by the user.
+
 **Watch**
-The command the lead keeps running in the background through a build. It ends to wake the lead at the lead
-check-in, or when it sees a new warning sign.
+The command a lead whose host can't be woken by the script keeps running in the background. It ends when the
+supervisor wakes the lead.
 Stored as: the `watch` command
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Lead check-in**
-How long `watch` waits for a warning sign before it wakes the lead anyway, so the lead looks at delivery even when
-nothing has gone wrong.
+How long the supervisor waits for a warning sign before it wakes the lead anyway, so the lead looks at delivery
+even when nothing has gone wrong.
 Stored as: the `Lead check-in` line of the project settings, such as `3h`
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
@@ -548,7 +565,7 @@ there is one, says which of a result's causes it was.
 | `ADOPTED` | `adopt` | Plan files left uncommitted or unmerged were committed and merged |
 | `MIGRATED` | `migrate` | The plans, the evidence or a worktree's commits were moved to the current layout and names |
 | `WOULD_REMOVE`, `REMOVED` | `cleanup` | What `cleanup` would remove, or, with `--yes`, what it removed |
-| `NOTHING` | `adopt`, `migrate`, `main-check`, `pause`, `cleanup`, `settings --set` | There was nothing to do |
+| `NOTHING` | `adopt`, `migrate`, `main-check`, `pause`, `thread`, `cleanup`, `settings --set` | There was nothing to do |
 | `COVERED` | `main-check` | A main-branch check passed on a commit that contains the one asked about |
 | `FAILING_ON_MAIN` | `main-check` | A main-branch check fails on a commit that contains the one asked about, and no later pass covers it |
 | `NOT_ON_MAIN` | `main-check` | The commit asked about isn't on the main branch yet |
@@ -558,17 +575,24 @@ there is one, says which of a result's causes it was.
 | `RAN` | `main-check` | Only in a runner's log: one run of a main-branch check finished |
 | `REFUSED` | `adopt`, `migrate`, `plan`, `run`, `settings --set` | The command wouldn't act, with the reasons in `problems` |
 | `UNBLOCKED` | `unblock` | The milestone is no longer Blocked |
+| `THREAD` | `thread status` | A Codex thread's goal, running turn and queue, and whether the script can stop its turn |
+| `STOPPED`, `GOAL_PAUSED`, `GOAL_RESUMED`, `UNQUEUED` | `thread` | The thread's turn was stopped, its goal paused or resumed, or its queued messages removed |
+| `NOT_DONE` | `thread` | The script couldn't do it on this version of the Codex app, so the user does it in the app, with what to click in `next` |
 | `DONE`, `RELEASED`, `FAILED` | `human` | The user's decision was saved, or a milestone another lead started was taken out of In Progress, or it couldn't be saved |
 | `CHECK_IN` | `watch` | The lead check-in passed with no warning sign |
 | `WARNING_SIGNS` | `watch` | A warning sign appeared that the lead hasn't been told about |
-| `RUN_ENDED` | `watch` | With `--runs`, a top-level `run`, `review` or `plan` ended, with its result in `results` |
+| `RUN_ENDED` | `watch` | A top-level `run`, `review` or `plan` ended, with its result in `results` |
+| `BUILD_FINISHED`, `WAITING_FOR_USER` | `watch` | Every module is finished, or nothing can move without the user; the supervisor stops after this wake |
+| `SUPERVISOR_FAILED` | `watch` | The supervisor couldn't read the records three times running |
+| `SUPERVISOR`, `STOPPING`, `SUPERVISOR_STOPPED`, `WAKE_SENT`, `WAKE_FAILED` | `supervise` | Its status; asked to stop; stopped, with `reason`; a test wake reached the lead or didn't |
 
 Avoid: `FLOOR` (now `HOST_FAILED` or `SCRIPT_FAILED`), `PIN` (now `WRONG_MODEL_OR_EFFORT`), `DESIGN_OWED` (now
 `DESIGN_NOT_APPROVED`), `NOT_READY` (now `CHECKS_FAILED`), `BUDGET` (now `NO_PROGRESS_FOR_HOURS`), `REVIEW_OWED` (now
 `NEEDS_REVIEW`), `TAKEN` (now `IN_PROGRESS_ELSEWHERE`)
 
 Proposed: `ERROR` and `RUNNING`, by Claude, 2026-11-15; `CHECK_IN`, `WARNING_SIGNS`, `RUN_ENDED` and
-`PLAN_NOT_MERGED`, by Claude, 2026-11-18. Not yet agreed by the user.
+`PLAN_NOT_MERGED`, by Claude, 2026-11-18; `BUILD_FINISHED`, `WAITING_FOR_USER`, `SUPERVISOR_FAILED` and the
+`supervise` results, by Claude, 2026-11-23; the `thread` results, by Claude, 2026-11-23. Not yet agreed by the user.
 
 ## Open questions
 

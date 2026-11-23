@@ -47,10 +47,15 @@ os.environ.update(
     ORCHESTRATE_CLAUDE="/no/such/host",
     # The delivery history is read after every turn; only test_history turns it on, with its own folders.
     ORCHESTRATE_NO_HISTORY="1", ORCHESTRATE_HISTORY_DIR=str(PROCESS / "history"),
+    # No supervisor starts on its own; test_supervisor turns it on where it tests it.
+    ORCHESTRATE_NO_SUPERVISOR="1",
     # The user's git settings (pull.rebase, the LFS filters) never reach the test repositories. The file here
     # gives commits an author, as CI's global settings do.
     GIT_CONFIG_GLOBAL=str(PROCESS / "gitconfig"), GIT_CONFIG_NOSYSTEM="1")
-for key in [k for k in os.environ if k.startswith("FAKE_")] + ["ORCHESTRATE_ROLE", "ORCHESTRATE_VISIBLE"]:
+# The session that runs the tests is never taken for a lead, so no test can message it.
+for key in [k for k in os.environ if k.startswith("FAKE_")] + [
+        "ORCHESTRATE_ROLE", "ORCHESTRATE_VISIBLE", "ORCHESTRATE_SUPERVISED", "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"]:
     os.environ.pop(key, None)
 
 # No __pycache__ beside the scripts, where it would outlive a rename of their folder. The variable covers the
@@ -59,6 +64,11 @@ sys.dont_write_bytecode = True
 os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
 sys.path.insert(0, str(SCRIPTS))
 import agent_loop  # noqa: E402
+
+sys.path.insert(0, str(HERE))
+import invariants  # noqa: E402
+
+invariants.install(agent_loop)  # every `next` printed while a test runs is checked; see invariants.py
 
 agent_loop.AGENTS_HOME = PROCESS / "agents-home"
 agent_loop.CLAUDE_APP_STORE = PROCESS / "no-claude-desktop"
@@ -121,6 +131,16 @@ class Clean(unittest.TestCase):
     def setUp(self):
         reset()
         self.addCleanup(reset)
+        if not getattr(self, "_checks_nexts", False):  # a test that calls setUp again keeps what it found
+            self._checks_nexts = True
+            invariants.take()
+            self.addCleanup(self.check_nexts)
+
+    def check_nexts(self):
+        """Fails the test on any `next` it printed that breaks a rule in invariants.py."""
+        found = invariants.take()
+        if found:
+            self.fail(f"{len(found)} `next` field(s) break a rule:\n" + "\n".join(found[:20]))
 
 
 def put(path, text):
@@ -462,12 +482,28 @@ def loop_commands(text):
 def copy_case(source, target):
     """Copies a case folder, symbolic links as links. Copying files keeps their modification times."""
     partial = target.with_name(target.name + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)  # left by a copy that failed part way
     shutil.copytree(source, partial, symlinks=True)
     partial.rename(target)
 
 
+def stop_supervisors():
+    """Kills any supervisor a test started in this process's folders, and the runs it started, so neither can write
+    into the next test's case."""
+    pids = set()
+    for pattern in (f"supervise --worktree {PROCESS}", f"agent_loop.py .*{CASE}/"):  # and the runs it started
+        pids |= set(subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True).stdout.split())
+    pids.discard(str(os.getpid()))
+    for pid in pids:
+        try:
+            os.kill(int(pid), signal.SIGKILL)
+        except (OSError, ValueError):
+            pass
+
+
 def clear_case():
     """Removes the case folder. It is moved aside first, so a process a test left running can't stop it going."""
+    stop_supervisors()
     if CASE.exists():
         aside = Path(tempfile.mkdtemp(prefix="old-case-", dir=PROCESS))
         CASE.rename(aside / "case")

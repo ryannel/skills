@@ -16,7 +16,7 @@ hold", before the names spread into code.
 
 Delete the `Proposed:` line from each name the user agrees. Give everything else they change or answer to one change
 planner in their words, because only a planner changes the plan files. Once they agree, save the number of builders
-they give with `settings --set`.
+they give with `settings --set`; the supervisor starts the build from that count, so no `run` is needed.
 
 A build runs for days, and the more a session holds, the sooner and more often it is compacted. The conversation so
 far is saved in the brief and the plan, so tell the user that, and recommend they clear it (`/clear` in Claude Code,

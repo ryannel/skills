@@ -23,7 +23,9 @@ Hosts:
   or not running, Claude CLI signed out), they run headless. Every result line from a turn says which: `path` is
   `visible` or `headless`, with `path_reason` when headless. Stopping a turn in the app gives PAUSED, and `run` again
   carries on. A result with `turn_not_stopped` means the script tried to stop a Codex turn, on a pause, a hung tool
-  call or the turn limit, and the app didn't take the stop, so the turn may still be working in the thread it names.
+  call or the turn limit, and the app didn't take the stop, so the turn may still be working in the thread it names;
+  from Codex app 26.1117 only the app can stop a turn it runs, unless it runs on the shared app-server daemon.
+  `thread stop|pause|resume|unqueue|status` acts on one such Codex thread, and says when only the user can.
 
 Where the plans live. The settings' `Plans` line names the plans folder (default docs/plans; a project with no
 Plans line, no docs/plans and a docs/modules folder keeps docs/modules). Each module has a folder of its own there:
@@ -47,15 +49,20 @@ branch's tip. It pins the check strings, but a script a check calls can still be
 scripts.
 
 Results and exit status:
-  The commands a lead acts on (run, review, plan, ready, next, unblock, pause, watch, settings, adopt, migrate,
-  human, merge, main-check and cleanup) end with one JSON line, their result, as the last line on stdout, carrying
+  The commands a lead acts on (run, review, plan, ready, next, unblock, pause, thread, watch, settings, adopt,
+  migrate, human, merge, main-check and cleanup) end with one JSON line, their result, as the last line on stdout, carrying
   `result` and `version`, with `warnings` when there are any. Read that line and nothing else: `result` names what
   happened; `next`, when present, is {command, argv, by, why}, the exact command to run next and who runs it,
   which is the lead for every command of this script, a `plan` that starts a planner included (`argv` is the same
   command as a list of words, and it names the newest installed copy of the script); `decides: human` on a `next` marks a decision only the user may make, with `ask` the question to put to
   them in chat, and the script never runs that command itself; `changed` lists what changed in the script since
-  the version this repository last ran, once. `run --message` and `plan --task` can be given more than once; the
-  texts are joined, so a lead adds its own words to a printed `next` by adding the flag again.
+  the version this repository last ran, once; `wake`, on a lead's result, is there when nothing but the lead's own
+  `watch` can wake it (start its `command` in the background) or a wake reached nobody (`missed`). `run --message` and `plan --task` can be given more than once; the
+  texts are joined, so a lead adds its own words to a printed `next` by adding the flag again. A word in angle
+  brackets, such as '<what the user said, in their words>', is the lead's to fill in before it runs the command, and
+  appears only in a command with `decides: human`, in a `next`'s `human` (the `human` command that records the
+  user's decision, if they make one), and as `run --message '<the missing fact>'` for a builder's question, which
+  the lead answers or takes to a planner or the user.
   The exit status says what kind of line it is: 0 for the command's own result, 2 for ERROR when the command line
   was refused (with `usage`, and the closest command or flag when one was misspelt), 1 for ERROR when a check
   stopped the command, or SCRIPT_FAILED when the script failed (with `traceback`). `adopt`, `migrate` and `human`
@@ -270,7 +277,7 @@ PROFILE_FIELDS = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "t
                   "remote": "origin", "merge": None, "codex sandbox": "workspace-write", "writable roots": "",
                   "graded examples": "", "effort": "", "claude permissions": "auto", "default host": "",
                   "review host": "", "planner host": "", "exclusive resources": "", "setup command": "",
-                  "lead check-in": "", "test command lock": "", "worktrees": ""}
+                  "lead check-in": "", "test command lock": "", "worktrees": "", "lead wake": ""}
 REQUIRED = {"test command": "the command that must pass before merging, or `none`",
             "merge": "push (standing permission to push) or local"}
 ONE_WORD = {"branch", "remote", "merge", "codex sandbox", "effort", "claude permissions", "default host",
@@ -487,6 +494,7 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
         out["planner_host"] = ""
     out["builders"] = builders_count(text)
     out["check_in_s"] = check_in_s(out.pop("lead check-in"), problems)
+    out["lead_wake"] = lead_wake_setting(out.pop("lead wake"), problems)
     locks =lock_settings_from(text)
     out["shared_resources"], out["lock_hold_limit_s"] = locks["shared"], locks["hold_limit_s"]
     problems += locks["problems"]
@@ -596,8 +604,12 @@ def unplanned(worktree: Path) -> dict | None:
                           f"{ref} doesn't, so it can't simply be brought up to date. Use a worktree on {ref}, or "
                           "ask the user what this branch is for",
                 "behind": ref,
-                "next": next_cmd(None, "lead", "this worktree has diverged from the planned tip; the script leaves "
-                                               "merging it to whoever owns that branch")}
+                "next": next_cmd(f"git -C {shlex.quote(str(worktree))} rebase {shlex.quote(ref)}", "lead",
+                                 "this worktree has diverged from the planned tip, and what its own commits are for "
+                                 "is for whoever owns the branch to say; on the user's yes this rebases them onto "
+                                 "the tip, and otherwise use a worktree on it", decides="human",
+                                 ask=f"{worktree} has commits that {ref}, where the plan is, doesn't have. Should I "
+                                     f"rebase them onto {ref}, or is this branch for something else?")}
     return {"reason": f"the project isn't planned yet: there's no ORCHESTRATE.md in {worktree}",
             "next": next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task",
                                       "Plan the project: <what the user asked for, in their words>"), "lead",
@@ -1824,7 +1836,7 @@ def passing(milestone: dict) -> int:
 # brief does, or can't be proved as written. Both counts start again when a planner changes the milestone's
 # definitions, since the reviews they counted judged items that no longer exist.
 NEW_SESSION_AFTER_FAILED_REVIEWS = 3
-REPEATS_TO_DIAGNOSE = 4
+REPEATS_TO_DIAGNOSE = 3
 FAILED_REVIEWS_TO_DIAGNOSE = 6
 COUNTS = ("failed_reviews", "failed_reviews_with_repeat", "diagnoses")  # a milestone's counts, kept by the script
 # Set by the script on a milestone whose last diagnosis answered a finding only a planner could settle.
@@ -2336,6 +2348,16 @@ def fit_next(then):
                     out["argv"] = ["env", *out["argv"]]
         return out
     return then
+
+
+def fit_nexts(value):
+    """`fit_next` over every `next` in a result's fields, the ones nested in lists and other fields too (each of
+    `ready`'s `can_start`, a run's `design_review`), so each gets its `argv` and points at the newest copy."""
+    if isinstance(value, dict):
+        return {k: fit_next(v) if k == "next" and isinstance(v, dict) else fit_nexts(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [fit_nexts(v) for v in value]
+    return value
 
 
 def next_cmd(command: str | None, by: str, why: str, **more) -> dict:
@@ -2962,7 +2984,7 @@ def next_for(step: dict, worktree: Path, prof: dict, proj: dict | None = None, s
             return next_cmd(visible_run(mod, wt), "lead",
                             f"{mod} {mid} is Blocked: {reason.replace('_', ' ').replace('human', 'user').capitalize()} ({what}). The user "
                             f"has to be at the machine to {kind}; run this while they are." + work,
-                            ask=f"Are you at the machine to {kind} for {mod} {mid}? {what}")
+                            ask=f"Are you at the machine to {kind} for {mod} {mid}? {what}", decides="human")
         if reason == "needs_dependency":
             plan = loop_cmd("plan", "--worktree", wt, "--kind", "unblock", "--task",
                             f"{mod} {mid} needs something no plan provides yet. The builder wrote: {sentence(what)}"
@@ -3065,8 +3087,10 @@ def nothing_ready_next(steps: list[dict], worktree: Path, prof: dict, proj: dict
                         f"no done-when files at the main branch's tip, under {prof['plans']}")
     if ahead:
         return ahead[0]["next"]
-    return next_cmd(None, "lead", "every module is finished; plan more work with `plan` if the build order "
-                                  "isn't done")
+    return next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--task",
+                             "<what the user wants built next, in their words>"), "lead",
+                    "every module is finished; a planner plans more only if the user wants more built",
+                    decides="human", ask="Every module in the plan is finished. Is there more you want built?")
 
 
 NEED_FILLER = {"and", "or", "to", "of", "the", "last", "first", "module", "modules", "milestone", "milestones"}
@@ -4325,7 +4349,7 @@ def loop_line(v: dict) -> str:
         seen = f", last activity {ago(v['idle_s'])} ago" if v["idle_s"] is not None else ""
         return head + (f"\n    started {ago(v['running_s'])} ago{seen}; it keeps no record (an older copy of the "
                        f"loop, or one that couldn't write it), so turns and tokens aren't known"
-                       f"\n    worktree {v['worktree'] or '?'}\n    loop {v['loop']}")
+                       f"\n    worktree {v.get('worktree') or '?'}\n    loop {v.get('loop') or '?'}")
     turns = f"{v['turns']} turn" + ("" if v["turns"] == 1 else "s") + " done"
     if v.get("turn_running_s") is not None:
         turns += f", turn {v['turns'] + 1} running for {ago(v['turn_running_s'])}"
@@ -5952,10 +5976,10 @@ class HeadlessWatch:
                 if event.get("type") != "event_msg":
                     continue
                 if p.get("type") == "task_started":
-                    self.running.add(p.get("turn_id"))
+                    self.running.add(turn_id_of(p))
                     self.quiet = time.time()
                 elif p.get("type") in ("task_complete", "turn_complete", "turn_aborted"):
-                    self.running.discard(p.get("turn_id"))
+                    self.running.discard(turn_id_of(p))
                     self.completed, self.quiet = True, time.time()
                     self.message = p.get("last_agent_message") or self.message
                     for call_id in list(self.calls):  # a turn's end closes whatever it left open
@@ -6095,7 +6119,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.10.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.11.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6125,10 +6149,21 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.11.0": [
+        "The script now runs a supervisor for each repository, which any command starts again if it isn't running. "
+        "It keeps the builders the settings allow busy on routine work and wakes you for the rest, so a result that "
+        "reaches you needs your judgement. Read stage 4 of the lead skill again.",
+        "If a result carries `wake`, the script can't reach your session: start its `watch` command in the "
+        "background, and again when it ends. `supervise --status` shows how you are woken and what it started.",
+        "A planner now diagnoses a milestone after 3 failed reviews on an item or finding that failed before.",
+        "`thread stop|pause|resume|unqueue|status` manages a visible Codex builder's thread. On this Codex app a "
+        "running turn can't be stopped from outside; `thread stop` pauses the goal and tells you what to ask the "
+        "user to click.",
+    ],
     "2.10.1": [
         "A reviewer now holds a milestone to its items, the brief's \"How it will be judged\" and the quality bar; "
         "anything beyond them is a Suggestion. If reviews keep failing on demands the brief never made, look at the "
-        "Must Fix findings before you send the builder back.",
+        "Must Fix findings before you send the builder back, as stage 4 of the lead skill says.",
         "A failed review that fails an item an earlier review failed now counts as a repeat, even with a new finding, "
         "so a stuck milestone reaches a planner's diagnosis sooner. A milestone whose items a planner changes starts "
         "its review counts again.",
@@ -6339,8 +6374,7 @@ def stop_with(result: str, message: str, argv: list[str], code: int, worktree: s
     so neither a lead reading the file nor one checking the status takes an old result for this one."""
     target = argv_target(argv, worktree)
     message = re.sub(r"^error:\s*", "", message.strip())
-    if "next" in fields:
-        fields["next"] = fit_next(fields["next"])
+    fields = fit_nexts(fields)
     line = {"result": result, **{k: target[k] for k in ("module", "milestone") if target[k]},
             "error": message, **fields, "version": VERSION}
     paths = list(MARKED) or (results_to_mark(target) if target["command"] in MARKED_COMMANDS and
@@ -6369,10 +6403,22 @@ def emit(result: str, **fields) -> None:
         warnings.append(f"this is orchestrate {VERSION}, and a newer copy is installed at {newer}; run the next "
                         "command from that copy, and read the lead skill again, because its commands may have "
                         "changed")
+    if WAKE_CONTEXT and "wake" not in fields:
+        more_wake, loud = wake_fields()
+        fields.update(more_wake)
+        warnings += [loud] if loud else []
     extra = {"warnings": warnings} if warnings else {}
-    if "next" in fields:
-        fields["next"] = fit_next(fields["next"])
-    more = {k: v for k, v in EMIT_EXTRA.items() if k not in fields}
+    if result == "PAUSED" and SESSION_PATH.get("turn_not_stopped") and not (fields.get("next") or {}).get("decides"):
+        # the Codex app wouldn't take the stop, so only the user can end the turn, in the app
+        t = fields.get("thread") or fields.get("session")
+        where = QUOTA_WORKTREE[0] if QUOTA_WORKTREE else Path(".").resolve()
+        fields["next"] = next_cmd(
+            loop_cmd("thread", "status", "--thread", t, "--worktree", where) if t else loop_cmd("runs"), "lead",
+            "the paused run's turn may still be running in the Codex app; once the user says it has stopped, check "
+            "the thread", decides="human", ask=codex_stop_ask(t, None) if t else
+            "The script couldn't stop a Codex turn. Could you click Stop on the running thread in the Codex app?")
+    fields = fit_nexts(fields)
+    more = fit_nexts({k: v for k, v in EMIT_EXTRA.items() if k not in fields})
     codex = "codex" in HOSTS_USED or "codex" in LAUNCH_HOSTS
     worktree = QUOTA_WORKTREE[0] if QUOTA_WORKTREE else None
     changed = version_change(worktree) if worktree else None
@@ -6827,7 +6873,15 @@ def floor_reason(host: str, code: int, err: str) -> str:
 # app then held the queued message that resumes the thread, and the run waited out the 2-hour turn limit on it.
 HUNG_THREADS: dict = {}
 
-# `codex://threads/<id>` makes the app window own the thread, so the IPC router can stop it on a pause or timeout.
+# Stopping a turn, pausing or resuming a goal and clearing queued messages need the app-server that runs the thread.
+# Up to app 26.1103 the app's IPC router (`<CODEX_HOME>/ipc/ipc.sock`) forwarded `thread-follower-*` requests to the
+# window holding the thread, and `codex://threads/<id>` made the window hold it. From app 26.1117 nothing listens
+# there and the app's own app-server talks only to the app over stdio, so nothing outside the app can stop a turn it
+# runs: a second app-server answers `turn/interrupt` with "thread not found" and `thread/resume` with "already has an
+# active writer". The app can instead run on the shared app-server daemon (`codex app-server daemon start`, then the
+# app started with CODEX_APP_SERVER_USE_LOCAL_DAEMON=1), whose control socket every client can reach; the script uses
+# it when it holds the thread. A short-lived app-server can still change a goal's status and delete queued messages,
+# because both live in files every app-server shares (`goals_1.sqlite`, `queue_1.sqlite`).
 #
 # Claude: only the app can sign in a process it starts, so the script keeps running its own signed-in `claude -p` per
 # turn, under a session id it chooses, and imports the session into the app with `claude://resume?session=<id>`.
@@ -6857,10 +6911,8 @@ def visible_unavailable(host: str) -> str | None:
     if host == "codex":
         if not Path(CODEX_APP_CLI).exists():
             return "the Codex app isn't installed"
-        try:
-            CodexIpc(timeout=5).close()
-        except (OSError, RuntimeError, ValueError, KeyError) as e:
-            return f"the Codex app isn't running (no IPC router: {type(e).__name__})"
+        if not codex_app_running():
+            return "the Codex app isn't running"
         return None
     if not CLAUDE_APP_STORE.is_dir():
         return "Claude desktop isn't installed (no Code tab session store)"
@@ -7005,6 +7057,160 @@ class CodexIpc:
         self.s.close()
 
 
+CODEX_CONTROL_SOCK = CODEX_HOME / "app-server-control" / "app-server-control.sock"
+CODEX_WHY: dict = {}  # thread -> why the last stop, goal change or unqueue on it didn't happen, for the result
+
+
+class CodexSharedServer(CodexAppServer):
+    """A JSON-RPC client for the shared app-server daemon: a websocket at ws://localhost/rpc over its control socket,
+    which is how the Codex app reaches it when it runs on the daemon. Requests go to the server that runs the
+    thread's turns, so `turn/interrupt` stops a turn as the app's Stop button does."""
+
+    def __init__(self, timeout: float = 10.0):
+        import base64
+        path = os.path.realpath(CODEX_CONTROL_SOCK)
+        self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.s.settimeout(timeout)
+        try:
+            self.s.connect(path)
+            key = base64.b64encode(os.urandom(16)).decode()
+            self.s.sendall((f"GET /rpc HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                            f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+            head = b""
+            while b"\r\n\r\n" not in head:
+                chunk = self.s.recv(4096)
+                if not chunk:
+                    raise ConnectionError("the shared app-server closed the connection during the handshake")
+                head += chunk
+            head, self.buf = head.split(b"\r\n\r\n", 1)
+            if b" 101 " not in head.split(b"\r\n", 1)[0]:
+                raise ConnectionError(f"the shared app-server refused the websocket: {head[:120]!r}")
+            self.s.settimeout(None)
+        except BaseException:
+            self.s.close()
+            raise
+        self.q, self.n, self.notes, self.lock = queue.Queue(), 0, [], threading.Lock()
+        threading.Thread(target=self._read, daemon=True).start()
+        try:
+            self.call("initialize", {"clientInfo": {"name": "orchestrate", "title": "orchestrate", "version": "1"},
+                                     "capabilities": {"experimentalApi": True}}, timeout=timeout)
+            self._send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
+        except BaseException:
+            self.s.close()
+            raise
+
+    def _frame(self, opcode: int, data: bytes) -> None:
+        mask, n = os.urandom(4), len(data)
+        size = bytes([0x80 | n]) if n < 126 else bytes([0x80 | 126]) + struct.pack(">H", n) if n < 1 << 16 \
+            else bytes([0x80 | 127]) + struct.pack(">Q", n)
+        with self.lock:
+            self.s.sendall(bytes([0x80 | opcode]) + size + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+
+    def _send(self, obj):
+        self._frame(0x1, json.dumps(obj).encode())
+
+    def _take_frame(self) -> tuple[int, int, bytes] | None:
+        """(fin, opcode, data) of the first whole frame in the buffer, removed from it, or None. Server frames
+        aren't masked."""
+        if len(self.buf) < 2:
+            return None
+        n, at = self.buf[1] & 0x7F, 2
+        if n == 126:
+            if len(self.buf) < 4:
+                return None
+            n, at = struct.unpack(">H", self.buf[2:4])[0], 4
+        elif n == 127:
+            if len(self.buf) < 10:
+                return None
+            n, at = struct.unpack(">Q", self.buf[2:10])[0], 10
+        if len(self.buf) < at + n:
+            return None
+        head, data, self.buf = self.buf[0], self.buf[at:at + n], self.buf[at + n:]
+        return head & 0x80, head & 0x0F, data
+
+    def _read(self):
+        message = b""
+        try:
+            while True:
+                while (frame := self._take_frame()) is None:
+                    chunk = self.s.recv(65536)
+                    if not chunk:
+                        return
+                    self.buf += chunk
+                fin, opcode, data = frame
+                if opcode == 0x8:
+                    return
+                if opcode == 0x9:
+                    self._frame(0xA, data)
+                    continue
+                if opcode in (0x0, 0x1, 0x2):
+                    message += data
+                    if fin:
+                        try:
+                            self.q.put(json.loads(message))
+                        except ValueError:
+                            pass
+                        message = b""
+        except OSError:
+            return
+
+    def close(self):
+        try:
+            self.s.close()
+        except OSError:
+            pass
+
+
+def codex_ipc_why() -> str:
+    """"" when the Codex app's IPC router (app 26.1103 and earlier) takes a connection, else what refused it."""
+    try:
+        CodexIpc(timeout=5).close()
+        return ""
+    except (OSError, RuntimeError, ValueError, KeyError) as e:
+        return (f"the app's IPC router at {CODEX_HOME / 'ipc' / 'ipc.sock'}, which apps up to 26.1103 used, refused "
+                f"the connection ({type(e).__name__})")
+
+
+def codex_control(thread: str) -> tuple[CodexSharedServer | None, str]:
+    """(an open client for the shared app-server, when it runs `thread`; else None and why). The caller closes it."""
+    if not CODEX_CONTROL_SOCK.exists():
+        return None, ("the Codex app runs this thread in its own app-server, which only the app can reach, and no "
+                      f"shared app-server is running (no {CODEX_CONTROL_SOCK})")
+    try:
+        srv = CodexSharedServer()
+    except (OSError, RuntimeError, TimeoutError, ValueError) as e:
+        return None, f"the shared app-server at {CODEX_CONTROL_SOCK} refused the connection ({type(e).__name__}: {e})"
+    try:
+        loaded = srv.call("thread/loaded/list", {}, timeout=20).get("data") or []
+    except (OSError, RuntimeError, TimeoutError, ValueError, AttributeError) as e:
+        srv.close()
+        return None, f"the shared app-server didn't list its threads ({type(e).__name__}: {e})"
+    if thread not in loaded:
+        srv.close()
+        return None, ("the shared app-server doesn't hold this thread, so the Codex app runs it in its own "
+                      "app-server, which only the app can reach")
+    return srv, ""
+
+
+def turn_id_of(payload: dict) -> str | None:
+    """A rollout event's turn id: `turn_id`, or, on a task_started from app 26.1117, `turn_attribution.turn_id`."""
+    return payload.get("turn_id") or (payload.get("turn_attribution") or {}).get("turn_id")
+
+
+def codex_running_turn(thread: str) -> str | None:
+    """The id of the thread's turn that has started and not ended, from its rollout file, or None."""
+    path = rollout_for(thread)
+    if path is None:
+        return None
+    started = last_event(path, '"task_started"', lambda e: (e.get("payload") or {}).get("type") == "task_started")
+    turn = turn_id_of((started or {}).get("payload") or {})
+    if not turn:
+        return None
+    ended = last_event(path, turn, lambda e: (e.get("payload") or {}).get("type") in (
+        "task_complete", "turn_complete", "turn_aborted") and turn_id_of(e["payload"]) == turn)
+    return None if ended else turn
+
+
 def codex_project_for(projects: list[dict], paths: list[str]) -> str | None:
     """The id of the Codex project whose root is, or holds, the first of `paths` that one does: the worktree, then
     the repository it belongs to. The deepest root wins, so a project for a subfolder beats one for its parent."""
@@ -7077,8 +7283,8 @@ def codex_owner(thread: str) -> dict | None:
 
 
 def codex_interrupt_request(thread: str) -> str:
-    """Asks the app to stop the thread's turn, as its Stop button does. Returns "" when the app took the stop, and
-    otherwise why it didn't."""
+    """Asks the app's IPC router (apps up to 26.1103) to stop the thread's turn, as the Stop button does. Returns ""
+    when the app took the stop, and otherwise why it didn't."""
     try:
         ipc = CodexIpc()
         try:
@@ -7093,37 +7299,80 @@ def codex_interrupt_request(thread: str) -> str:
 REOPEN_TRIES = 30  # how many times, POLL_S apart, a reopened thread is asked to stop before the script gives up
 
 
-def codex_interrupt(thread: str) -> bool:
-    """The app's Stop button: interrupts the running turn and pauses the thread's goal. The app stops a thread only
-    while one of its windows holds it, and a window holds one thread at a time. The script opens the thread when its
-    turn starts, but the window may have moved to another thread since, and the app then answers `no-client-found`
-    while the turn works on. So the thread is opened again, and the stop is sent once the window holds it."""
+def codex_ipc_interrupt(thread: str) -> str:
+    """The Stop button through the IPC router of apps up to 26.1103: "" when the app took the stop, else why not. The
+    app stops a thread only while one of its windows holds it, and a window holds one thread at a time. The script
+    opens the thread when its turn starts, but the window may have moved to another thread since, and the app then
+    answers `no-client-found` while the turn works on. So the thread is opened again, and the stop is sent once the
+    window holds it."""
     why = codex_interrupt_request(thread)
     if not why:
-        return True
-    if "no-client-found" not in why or not open_link(f"codex://threads/{thread}"):
-        return False
+        return ""
+    if "no-client-found" not in why:
+        return (f"the app's IPC router at {CODEX_HOME / 'ipc' / 'ipc.sock'}, which apps up to 26.1103 used, refused "
+                f"the stop ({why})")
+    if not open_link(f"codex://threads/{thread}"):
+        return "no app window holds the thread, and the link that opens it failed"
     for _ in range(REOPEN_TRIES):
         time.sleep(POLL_S)
         if codex_owner(thread) is not None and not codex_interrupt_request(thread):
+            return ""
+    return "no app window took the thread after it was opened again"
+
+
+def codex_interrupt(thread: str) -> bool:
+    """The app's Stop button: interrupts the running turn and pauses the thread's goal, through the shared app-server
+    when it runs the thread, else through the IPC router of apps up to 26.1103. When neither can, it returns False and
+    CODEX_WHY[thread] says why; on app 26.1117 run on its own app-server, only the user can stop the turn, in the
+    app."""
+    CODEX_WHY.pop(thread, None)
+    srv, why = codex_control(thread)
+    if srv:
+        try:
+            if goal_status(thread) == "active":  # first, so no goal turn is chained after the stopped one
+                srv.call("thread/goal/set", {"threadId": thread, "status": "paused"})
+            if turn := codex_running_turn(thread):
+                srv.call("turn/interrupt", {"threadId": thread, "turnId": turn})
             return True
+        except (OSError, RuntimeError, TimeoutError, ValueError) as e:
+            why = f"the shared app-server refused the stop ({type(e).__name__}: {e})"
+        finally:
+            srv.close()
+    ipc = codex_ipc_interrupt(thread)
+    if not ipc:
+        return True
+    CODEX_WHY[thread] = f"{why}; {ipc}"
     return False
+
+
+def codex_with_server(thread: str, use) -> tuple[object, str]:
+    """(what `use(server)` returns, "") on the shared app-server when it runs the thread, else on a short-lived one;
+    (None, why) when that fails. Goal status and queued messages live in files every app-server shares, so a
+    short-lived server can change them while the app runs the thread."""
+    srv, _ = codex_control(thread)
+    try:
+        if srv is None:
+            srv = CodexAppServer()
+        return use(srv), ""
+    except (OSError, RuntimeError, TimeoutError, ValueError, KeyError, AttributeError) as e:
+        return None, f"{type(e).__name__}: {e}"
+    finally:
+        if srv is not None:
+            srv.close()
 
 
 def codex_goal_activate(thread: str, status: str = "active") -> bool:
     """The app's play button, minus the wake: a status-only goal change, which writes only the goal store (with an
     `origin` it would also write the rollout, which the app holds), picked up when the thread is next woken. With
     `status="paused"` it is the pause the script sets when a builder stops Blocked, so the goal doesn't go on
-    re-checking a block no build turn can change."""
-    try:
-        srv = CodexAppServer()
-        try:
-            srv.call("thread/goal/set", {"threadId": thread, "status": status})
-            return True
-        finally:
-            srv.close()
-    except (OSError, RuntimeError, TimeoutError, ValueError):
+    re-checking a block no build turn can change. A pause written while the app runs a turn doesn't stop that turn,
+    but the app chains no goal turn after it. False, with CODEX_WHY[thread], when the change failed."""
+    done, why = codex_with_server(thread, lambda srv: srv.call("thread/goal/set", {"threadId": thread,
+                                                                                   "status": status}))
+    if done is None:
+        CODEX_WHY[thread] = f"the goal couldn't be set {status}: {why}"
         return False
+    return True
 
 
 def codex_queue(thread: str, text: str) -> None:
@@ -7140,17 +7389,29 @@ def codex_queue(thread: str, text: str) -> None:
         raise RuntimeError(f"codex queue failed: {(out.stdout + out.stderr).strip()[-300:]}")
 
 
+def codex_clear_queue(thread: str) -> tuple[int | None, str]:
+    """Deletes the thread's queued messages: (how many, "") or (None, why)."""
+    def clear(srv) -> int:
+        removed = 0
+        for _ in range(20):  # pages; a thread rarely has more than one queued message
+            items = srv.call("thread/queue/list", {"threadId": thread, "limit": 100}).get("data") or []
+            if not items:
+                break
+            for item in items:
+                if srv.call("thread/queue/delete", {"threadId": thread, "queuedSubmissionId": item["id"]}).get(
+                        "deleted"):
+                    removed += 1
+        return removed
+    return codex_with_server(thread, clear)
+
+
 def codex_unqueue(thread: str) -> bool:
     """Removes the thread's queued messages, so a turn the script gave up on can't start later unwatched."""
-    try:
-        ipc = CodexIpc()
-        try:
-            ipc.request("thread-follower-clear-queued-messages", {"conversationId": thread})
-            return True
-        finally:
-            ipc.close()
-    except (OSError, RuntimeError, ValueError):
+    removed, why = codex_clear_queue(thread)
+    if removed is None:
+        CODEX_WHY[thread] = f"its queued messages couldn't be removed: {why}"
         return False
+    return True
 
 
 def codex_queued(thread: str) -> int:
@@ -7192,7 +7453,8 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
         if thread is None:
             thread = codex_thread_create(prof, model, effort, worktree, role, title)
         settings = codex_owner(thread)
-        if settings is None:  # the window must hold the thread for a pause or timeout to stop it
+        ipc = "" if settings is not None else codex_ipc_why()
+        if settings is None and not ipc:  # the IPC router stops a thread only while a window holds it
             open_link(f"codex://threads/{thread}")
             for _ in range(30):
                 if (settings := codex_owner(thread)) is not None:
@@ -7200,8 +7462,12 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
                 time.sleep(POLL_S)
         if settings:
             SESSION_PATH["app_settings"] = f"{settings.get('model')} {settings.get('reasoningEffort')}"
-        else:
+        elif not ipc:
             SESSION_PATH["path_note"] = "no app window holds the thread, so a pause or timeout can't stop its turn"
+        elif not CODEX_CONTROL_SOCK.exists():
+            SESSION_PATH["path_note"] = ("the script can't stop this thread's turns, because the Codex app runs them "
+                                         "in its own app-server and " + ipc + "; on a pause or timeout the user "
+                                         "stops the turn in the app")
         rollout = rollout_for(thread)
         offset = rollout.stat().st_size if rollout else 0
         loop_note(session=thread, transcript=str(rollout) if rollout else LIVE.get("transcript"))
@@ -7222,11 +7488,17 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
 
     def stop_turn() -> None:
         """Stops the turn in the app, and says so in the result when the app wouldn't, because the turn then works
-        on with nothing following it. An app that isn't running has no turn to stop."""
+        on with nothing following it. An app that isn't running has no turn to stop. When the turn can't be stopped
+        its goal is still paused, so the app chains no goal turn after it, and its queued messages are removed; `run`
+        sets the goal active again."""
         if not codex_interrupt(thread) and not visible_unavailable("codex"):
+            why = CODEX_WHY.get(thread)
+            if goal_status(thread) == "active":
+                codex_goal_activate(thread, "paused")
+            codex_unqueue(thread)
             SESSION_PATH["turn_not_stopped"] = (f"the Codex app didn't take the stop for thread {thread}, so its "
-                                                "turn may still be running: ask the user to open the thread in the "
-                                                "app and stop it there")
+                                                "turn may still be running" + (f" ({why})" if why else "") +
+                                                ": ask the user to open the thread in the app and stop it there")
     while True:
         rollout = rollout or rollout_for(thread)
         events, offset = new_events(rollout, offset)
@@ -7241,10 +7513,10 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
             if event.get("type") != "event_msg":
                 continue
             if kind == "task_started":
-                running.add(p.get("turn_id"))
+                running.add(turn_id_of(p))
                 started, aborted, quiet = True, False, time.time()
             elif kind in ("task_complete", "turn_complete", "turn_aborted"):
-                running.discard(p.get("turn_id"))
+                running.discard(turn_id_of(p))
                 aborted, quiet = kind == "turn_aborted", time.time()
                 message = p.get("last_agent_message") or message
                 for call_id in list(watch.calls):  # a turn's end closes whatever it left open
@@ -7294,6 +7566,19 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
                 return 130, thread, message, "the turn was stopped in the Codex app", None
             return (1 if error and not message else 0), thread, message, error, None
         time.sleep(POLL_S)
+
+
+def codex_app_running() -> bool:
+    """Whether the app that bundles CODEX_APP_CLI is running. Its IPC router used to say so, but from app 26.1117
+    nothing listens there, so the process table is read instead."""
+    app = next((p for p in Path(CODEX_APP_CLI).parents if p.suffix == ".app"), None)
+    if app is None:
+        return False
+    try:
+        out = subprocess.run(["ps", "-axo", "comm="], capture_output=True, text=True, timeout=30).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return any(line.strip().startswith(f"{app}/Contents/MacOS/") for line in out.splitlines())
 
 
 def claude_app_running() -> bool:
@@ -7650,12 +7935,15 @@ def builders_running(worktree: Path, waiting: bool = False) -> list[dict]:
 
 
 def run_again(a: argparse.Namespace, stem: str, worktree: Path, host: str | None = None) -> str:
-    """This `run` command as the lead typed it, optionally on another host, for a result's `next`."""
+    """This `run` command as the lead typed it, optionally on another host, for a result's `next`. `--one-step` stays
+    when the lead gave it; a step of a longer run leaves it to the command running the steps, as `plan_flags` does."""
     args = ["run", "--module", stem, "--worktree", str(worktree)]
-    for flag, value in (("--host", host or a.host), ("--model", None if host else a.model),
-                        ("--effort", None if host else a.effort)):
+    for flag, value in (("--host", host or a.host), ("--model", None if host else getattr(a, "model", None)),
+                        ("--effort", None if host else getattr(a, "effort", None))):
         if value:
             args += [flag, value]
+    if getattr(a, "one_step", False) and not STEPS_PARENT:
+        args.append("--one-step")
     return loop_cmd(*args)
 
 
@@ -8029,9 +8317,10 @@ def cmd_run(a: argparse.Namespace) -> None:
             # fixes it, and the milestone stays In Progress for this builder to merge once it passes.
             if host == "codex" and state.get("thread") and goal_status(state["thread"]) == "active":
                 codex_goal_activate(state["thread"], "paused")  # `run` sets it active again
-            then = saved["next"] if saved else next_cmd(None, "lead", (
-                f"the builder says the main branch fails the test command without its branch: {what}. Find the "
-                "commit that broke it and give the fix to whoever owns that work"))
+            then = saved["next"] if saved else unowned_fix_next(
+                worktree, f"The builder of {stem} {mid} says the main branch fails the test command without its "
+                          f"branch: {sentence(what)}", "",
+                "the builder says the main branch fails the test command without its branch")
             finish(state_path, state, "BLOCKED", reason="main_broken", report=tail(message, 1500),
                    **({"main_broken": saved["main_broken"]} if saved else {}),
                    next={**then, "alternative": run_again(a, stem, worktree)})
@@ -8111,7 +8400,7 @@ def cmd_run(a: argparse.Namespace) -> None:
                          f"{stem} {mid} is Ready for Review at {head[:12]}"
                          + (f", on {reviewer}, the review host" if reviewer != host else ""))
                 if review else
-                next_cmd(loop_cmd("run", "--module", stem, "--worktree", str(worktree)), "lead",
+                next_cmd(run_again(a, stem, worktree), "lead",
                          f"{stem} {mid} is Done on its checks alone (no item needs a reviewer); run "
                          "builds the module's next milestone"))
         finish(state_path, state, "READY_FOR_REVIEW", review=review, commit=head, checked=checked,
@@ -8726,17 +9015,13 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
     if forged:
         return _result("INVALID", **info, merged=False, problems=[
             f"while this review ran, {plural(len(forged), 'commit')} without the script's trailer changed a record "
-            f"file on the tip: {', '.join(forged)}"], session=out.get("session"), next=next_cmd(
-            None, "lead", "report it to the user, who decides what to do with those commits: they reached the "
-            "main branch's tip during a review, and only the script writes record files. Nothing from this review "
-            "was merged", decides="human"))
+            f"file on the tip: {', '.join(forged)}"], session=out.get("session"),
+            next=forged_next(worktree, forged, "this review", "Nothing from this review was merged"))
     if made := commits_made(tree, seen):
         return _result("INVALID", **info, merged=False, problems=[
             f"the reviewer committed in its checkout ({plural(len(made), 'commit')} in its reflog during the turn: "
             f"{'; '.join(made[:5])}); a reviewer leaves its verdict uncommitted and the script merges it"],
-            session=out.get("session"), next=next_cmd(
-                None, "lead", "nothing from this review was merged; any commit that reached the main branch's tip "
-                "is already there, so look at it, then review again"))
+            session=out.get("session"))  # cmd_review gives the review again, on the other host
     named, what = blocked_report(out["last_line"]) if not design else (None, "")
     if named == "needs_access":
         # In Thrum a reviewer that couldn't reach the Mac's locked screen failed the milestone on it, and the builder
@@ -8753,7 +9038,7 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
                            "review", "--module", stem, "--milestone", mid, "--commit", a.commit, "--worktree",
                            str(worktree), "--host", host), "lead", why,
                            ask=f"The review of {stem} {mid} needs you at the machine: {sentence(what)} Are you there "
-                               "now?"))
+                               "now?", decides="human"))
     # The review and its captures are in the working folder, which git ignores, so the only file a reviewer changes
     # in its checkout is the done-when file.
     allowed = set() if design else {done_path}
@@ -9466,24 +9751,23 @@ def cmd_plan(a: argparse.Namespace) -> None:
         kept = leave()
         emit("INVALID", **info, **out, merged=False, **kept, problems=[
             f"while this turn ran, {plural(len(forged), 'commit')} without the script's trailer changed a record "
-            f"file on the tip: {', '.join(forged)}"], next=next_cmd(
-            None, "lead", "report it to the user, who decides what to do with those commits: they reached the "
-            "main branch's tip during a planner turn, and only the script writes record files. The script doesn't take "
-            f"commits back out. Nothing from this turn was merged{kept_text(kept)}", decides="human"))
+            f"file on the tip: {', '.join(forged)}"],
+            next=forged_next(worktree, forged, "this planner turn", f"Nothing from this turn was merged{kept_text(kept)}"))
     if made := commits_made(tree, seen):  # read before the script makes its own commit here
         kept = leave()
         emit("INVALID", **info, **out, merged=False, **kept, problems=[
             f"the planner committed ({plural(len(made), 'commit')} in its checkout's reflog during the turn: "
             f"{'; '.join(made[:5])}); the script merges only what a planner leaves uncommitted"], next=next_cmd(
-            None, "lead", "nothing merged. Any commit that reached the main branch's tip is already there"
-            f"{kept_text(kept)}; look at what's there and keep or drop it yourself, then plan again"))
+            plan_again(COMMITTED_NOTE), "lead", "nothing merged. Any commit that reached the main branch's tip is "
+            f"already there{kept_text(kept)}; look at what's there and keep or drop it yourself, then give a planner "
+            "the task again"))
     if own := git(tree, "log", "--format=%h %s", f"{fresh}..HEAD").stdout.strip().splitlines():
         kept = leave()
         emit("INVALID", **info, **out, merged=False, **kept, problems=[
             f"the planner committed ({plural(len(own), 'commit')} the tip doesn't have: "
             f"{'; '.join(own[:5])}); the script merges only what a planner leaves uncommitted"], next=next_cmd(
-            None, "lead", f"nothing was merged{kept_text(kept)}; look at what's there and keep or drop it yourself, then "
-            "plan again"))
+            plan_again(COMMITTED_NOTE), "lead", f"nothing was merged{kept_text(kept)}; look at what's there and keep "
+            "or drop it yourself, then give a planner the task again"))
     start = head_commit(tree)
     before = done_docs_at(tree, prof, start)
     changed = changed_paths(tree, start)
@@ -9803,10 +10087,7 @@ def cmd_ready(a: argparse.Namespace) -> None:
     out.update(profile_note(drift, prof))
     if found := table_warnings(worktree, prof, ref, [e["stem"] for e in proj.values()]):
         out["module_table"] = found
-    for k in list(out):
-        if isinstance(out[k], list):
-            out[k] = [dict(x, next=fit_next(x["next"])) if isinstance(x, dict) and "next" in x else x for x in out[k]]
-    emit("READY", **out)
+    emit("READY", **out)  # emit fits each milestone's `next` as it does the result's own
 
 
 def cmd_status(a: argparse.Namespace) -> None:
@@ -9935,12 +10216,13 @@ SETTINGS_TEMPLATE = """\
 - **Worktrees:** .orchestrate/worktrees  *(script: optional; with this line, `run --worktree` given the main checkout builds the module in its own worktree on build/<module> in this folder, which git ignores, and `ready` removes it once the module is finished and merged; left out or `none`, each run builds in the worktree it is given. Keep it on a new project)*
 - **Graded examples:** .orchestrate/evidence/graded-examples.md  *(script: optional; with this line, `human accept` and `human rereview` add each review the user overturns to this file in the working folder, so later reviewers learn how strict the user is; left out, nothing is added. Keep it on a new project)*
 - **Test command:** none  *(script: required; the project's test command, which must pass before a merge, or `none` until the planner chooses one with the stack. It runs in a clean checkout after the setup command, and must pass before any test exists: `pytest`, for one, exits 5 when it finds no tests)*
-- **Setup command:** none  *(script: optional; installs what the tests and checks need in a fresh checkout, into ignored folders, leaving tracked files as they were, such as `npm ci` for a Node project or `pip install -e .` into a virtual environment for a Python one; `none` until the planner chooses one with the stack)*
+- **Setup command:** none  *(script: optional; installs what the tests and checks need in a fresh checkout, into ignored folders, leaving tracked files as they were, such as `npm ci` for a Node project or `pip install -e .` into a virtual environment for a Python one; `none` until the project has the files it installs from, because the script runs it on every merge, the planner's included, and a command that fails stops the merge)*
 - **Merge:** local  *(script: required; `push` rebases onto Remote/Branch and pushes without force; `local` fast-forwards the local Branch only)*
 - **Branch:** main  *(script: the main branch)*
 - **Remote:** origin  *(script)*
 - **Builders:** <how many builders, on which hosts, as the user said: "one Claude builder", say>  *(script: the lead writes it before the first build; `run` starts no builder without a count, adds the counts up, and starts none past them unless `--more-builders` carries the user's words)*
-- **Lead check-in:** 3h  *(script: optional; how long the lead's `watch` waits for a warning sign before it wakes the lead anyway, such as 3h or 90m; left out, 3 hours)*
+- **Lead check-in:** 3h  *(script: optional; how long the supervisor waits for a warning sign before it wakes the lead anyway, such as 3h or 90m; left out, 3 hours)*
+- **Lead wake:** auto  *(script: optional; how the supervisor wakes the lead: `auto` the way the lead's host allows (a message to a Claude Code session, a queued message on a Codex app thread), else through the lead's own `watch`; `watch` only through `watch`; or a command with {message} (and {session} for the lead's session id) for a host the script doesn't know)*
 - **Default host:** <host>  *(script: optional; codex, claude or a `Host` line's name, for when the lead names none; left out, the host the script runs inside, else the only one installed, else codex, so a project that uses only Claude Code names `claude`)*
 - **Review host:** <same|other|host>  *(script: optional; the host for milestone reviews: `same` as the builder, `other` than the builder (a reviewer from another company shares fewer of its blind spots), or a host's name; left out, the builder's host)*
 - **Planner host:** <host>  *(script: optional, and only if the user wants planners on another host; left out, the `Default host`)*
@@ -11026,18 +11308,15 @@ def main_broken_next(worktree: Path, prof: dict, broken: dict) -> dict:
                                  f"in {mods}'s plan, or plan the fix as {mods}'s next milestone."), "lead",
                         f"the main branch fails its test command on its own since {who['commit'][:12]}, which "
                         f"changed {mods}'s files; a planner fixes it, and builders merge again once it passes")
-    return next_cmd(None, "lead", f"the main branch fails its test command `{command}` at {broken['commit'][:12]} on "
-                                  "its own" + (f", since {who['commit'][:12]} ({who['subject']})" if who else
-                                               ", and the script couldn't tell which commit broke it") +
-                    ". Find the commit that broke it and give the fix to whoever owns that work; builders merge again "
-                    "once it passes")
+    return unowned_fix_next(worktree, f"The main branch fails its test command `{command}` at "
+                                      f"{broken['commit'][:12]} on its own", who.get("commit", ""),
+                            "builders merge again once it passes")
 
 
 def main_check_fix_next(worktree: Path, name: str, culprit: dict, why: str) -> dict:
     """`next` when a main-branch check fails since a commit: a planner for the module that made it, when the bisect
-    tied it to one, with reverting that commit as the alternative; else the lead, who finds the owner."""
+    tied it to one, else a planner for the whole project, with reverting that commit as the alternative."""
     commit = culprit.get("commit", "")
-    revert = f"git revert --no-edit {commit[:12]}" if commit else None
     if culprit.get("modules"):
         mods = " and ".join(culprit["modules"])
         return next_cmd(loop_cmd("plan", "--worktree", str(worktree),
@@ -11046,14 +11325,56 @@ def main_check_fix_next(worktree: Path, name: str, culprit: dict, why: str) -> d
                                  f"The main-branch check {name} fails since commit {commit[:12]} "
                                  f"({culprit.get('subject', '')}), which changed {mods}'s files. Find what in that "
                                  f"commit breaks it, and fix it in {mods}'s plan, or plan the fix as {mods}'s next "
-                                 "milestone."), "lead", why + "; a planner plans the fix",
-                        alternative=revert and (
-                            f"`{revert}` on the main branch, when the fix would take long; then tell that module's "
-                            "builder what was reverted (`run --message`), run `human rereview` on any Done milestone "
-                            f"whose work it removed, and `main-check {name} --start` on the new tip"))
-    return next_cmd(None, "lead", why + (f"; read the diff of {commit[:12]} and give the fix to the module whose "
-                                          f"code it changed, or revert it (`{revert}`)" if commit else
-                                          "; find the commit that broke it and give the fix to whoever owns it"))
+                                 "milestone."), "lead", why + "; a planner plans the fix" + revert_why(commit, name),
+                        **revert_alternative(worktree, commit))
+    return unowned_fix_next(worktree, f"The main-branch check {name} fails", commit, why, name)
+
+
+COMMITTED_NOTE = ("Your last turn on this was refused because you committed; leave your changes uncommitted, "
+                  "since the script commits and merges a planner's files itself.")
+
+
+def forged_next(worktree: Path, forged: list[str], during: str, nothing: str) -> dict:
+    """`next` when commits that aren't the script's changed record files on the main branch during a turn: the
+    user decides what becomes of them, and on their yes the lead reverts them."""
+    return next_cmd(shlex.join(["git", "-C", str(worktree), "revert", "--no-edit", *forged]), "lead",
+                    f"only the script writes record files, and these commits reached the main branch's tip during "
+                    f"{during}. {nothing}. Show the user what they changed (`git show --stat`); on their yes, this "
+                    "reverts them here, and you push the revert to the main branch. The script doesn't take commits "
+                    "back out itself", decides="human",
+                    ask=f"While {during} ran, {plural(len(forged), 'commit')} the script didn't make changed record "
+                        f"files on the main branch ({', '.join(forged)}). Only the script should write those. Shall "
+                        "I revert them?")
+
+
+def revert_alternative(worktree: Path, commit: str) -> dict:
+    """`alternative` for a failure on the main branch whose first failing commit is known: reverting it."""
+    return {"alternative": shlex.join(["git", "-C", str(worktree), "revert", "--no-edit", commit[:12]])} \
+        if commit else {}
+
+
+def revert_why(commit: str, check: str | None = None) -> str:
+    """What `why` adds about the revert in `alternative`, and what follows it."""
+    if not commit:
+        return ""
+    return (". When the fix would take long, `alternative` reverts the commit: push the revert to the main branch, "
+            "tell the builder of the module that made it what was reverted (`run --message`), and run "
+            "`human rereview` on any Done milestone whose work it removed" +
+            (f", then `main-check {check} --start` on the new tip" if check else ""))
+
+
+def unowned_fix_next(worktree: Path, what: str, commit: str, why: str, check: str | None = None) -> dict:
+    """`next` for a failure on the main branch that no module's merge can be tied to (a commit made by hand, or
+    one the script couldn't find): a planner for the whole project finds what breaks it and plans the fix in the
+    module whose code it is, and reverting the commit, when it is known, is the alternative."""
+    task = (what + (f" since commit {commit[:12]}, which no module's merge made" if commit else
+                    ", and the script couldn't tell which commit broke it") +
+            ". Find what breaks it, and plan the fix in the module whose code it is, in its plan or as its next "
+            "milestone.")
+    return next_cmd(loop_cmd("plan", "--worktree", str(worktree), "--kind", "fix", "--task", task), "lead",
+                    why + "; no module's merge made the commit that broke it, so a planner for the whole project "
+                          "finds whose code it is and plans the fix" + revert_why(commit, check),
+                    **revert_alternative(worktree, commit))
 
 
 def build_batch(tree: Path, base: str, group: list[dict], results: dict,
@@ -11162,6 +11483,8 @@ def cmd_loops(a: argparse.Namespace) -> None:
 def cmd_pause(a: argparse.Namespace) -> None:
     common = git_common_dir(Path(a.worktree).resolve())
     folder = Path(common) / "orchestrate"
+    if not a.module:  # the user stopping everything: the supervisor would otherwise start the builders again
+        stop_supervisor(Path(a.worktree).resolve(), "user")
     names = [a.module.upper()] if a.module else [p.name[len("run-"):-len(".lock")] for p in folder.glob("run-*.lock")]
     # A `run` or `plan` running its steps holds no run lock between steps, nor while its planner or reviewer works, so
     # it is stopped itself; it passes the stop on to the step it is running, and starts no other.
@@ -11188,6 +11511,136 @@ def cmd_pause(a: argparse.Namespace) -> None:
         emit("PAUSED", paused=paused, note="each run named stops its turn and ends with its own PAUSED result")
     emit("NOTHING", paused=[], note=f"no run of {a.module.upper()} was going" if a.module else
          "no run was going in this repository")
+
+
+CONTINUE_GOAL = "Continue the goal."  # what `thread resume` queues when the lead gives no --message
+
+
+def codex_stop_ask(thread: str, title: str | None) -> str:
+    """The user's part when the script can't stop a turn the Codex app runs: what to open and what to click."""
+    name = f'"{title}"' if title else thread
+    return (f"The script can't stop the turn of Codex thread {name}, because this version of the Codex app lets only "
+            f"the app itself stop a turn it runs. Could you open that thread in the Codex app (the link "
+            f"codex://threads/{thread} opens it) and click the Stop button in its message box, then tell me when the "
+            "turn has stopped?")
+
+
+def script_thread(worktree: Path, module: str | None, thread: str | None) -> dict:
+    """The Codex thread `thread` names, or the one the latest run of `module` used, as {thread, title, role, module,
+    path}. Refused for a thread this repository's runs didn't start, so the user's own threads are never touched."""
+    ledger = loop_dir(worktree) / "threads.jsonl"
+    rows = {}
+    try:
+        for line in ledger.read_text().splitlines():
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict) and row.get("thread"):
+                rows[row["thread"]] = row
+    except OSError:
+        pass
+    found = {}
+    if module:
+        common = Path(git_common_dir(worktree))
+        states = []
+        for path in [*common.glob("orchestrate/*.json"), *common.glob("worktrees/*/orchestrate/*.json")]:
+            if path.stem.upper() != module.upper():
+                continue
+            try:
+                state = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            if isinstance(state, dict) and state.get("thread") and (not thread or state["thread"] == thread):
+                states.append((path.stat().st_mtime, state))
+        if not states:
+            raise SystemExit(f"error: no run of {module.upper()} in this repository has a session to act on")
+        state = max(states, key=lambda s: s[0])[1]
+        if state.get("host", "codex") != "codex":
+            raise SystemExit(f"error: {module.upper()}'s latest run is on {state.get('host')}, not Codex; `pause "
+                             f"--module {module.upper()}` stops it")
+        found = {"thread": state["thread"], "module": state.get("module") or module.upper(), "path": state.get("path")}
+        thread = state["thread"]
+    if thread not in rows:
+        raise SystemExit(f"error: {thread} isn't a thread a run in this repository started (it isn't in {ledger}), "
+                         "so the script leaves it alone")
+    return {"thread": thread, "title": rows[thread].get("title"), "role": rows[thread].get("role"), **found}
+
+
+def cmd_thread(a: argparse.Namespace) -> None:
+    """Stops, pauses, resumes, clears or reports a Codex thread a run started in the Codex app."""
+    worktree = Path(a.worktree).resolve()
+    if not a.module and not a.thread:
+        raise SystemExit("error: name the thread with --module (its latest run's thread) or --thread")
+    info = script_thread(worktree, a.module, a.thread)
+    t, title = info["thread"], info.get("title")
+    fields = {k: v for k, v in info.items() if v and k != "path"}
+    named = ["--module", a.module] if a.module else ["--thread", t]
+    again = loop_cmd("thread", a.action, *named, "--worktree", str(worktree),
+                     *(["--message", a.message] if a.message else []))
+    status = loop_cmd("thread", "status", *named, "--worktree", str(worktree))
+    if info.get("path") == "headless":
+        emit("NOT_DONE", **fields, reason="this run's session is a headless `codex exec`, which the app doesn't "
+             "run; `pause` stops it", next=next_cmd(loop_cmd("pause", "--module", info["module"], "--worktree",
+                                                              str(worktree)), "lead", "pause stops a headless run"))
+    srv, why = codex_control(t)
+    if srv:
+        srv.close()
+    control = "the shared app-server runs this thread" if srv else why
+    if a.action == "status":
+        emit("THREAD", **fields, goal=goal_status(t) or "none", turn_running=codex_running_turn(t),
+             queued=codex_queued(t), app_running=codex_app_running(), control=control,
+             can_stop=bool(srv) or not codex_ipc_why())
+    if a.action == "stop":
+        if codex_interrupt(t):
+            emit("STOPPED", **fields, goal=goal_status(t) or "none", note="the turn stopped and the goal is paused, "
+                 "as the app's Stop button leaves them; `thread resume` or `run` starts it again")
+        stop_why = CODEX_WHY.get(t) or why
+        if goal_status(t) == "active":
+            codex_goal_activate(t, "paused")
+        paused = goal_status(t) == "paused"
+        emit("NOT_DONE", **fields, reason=f"the script couldn't stop the turn: {stop_why}",
+             goal=goal_status(t) or "none", turn_running=codex_running_turn(t),
+             note=("the goal is paused, so the app starts no goal turn after this one ends" if paused else
+                   "the turn runs on until it ends"),
+             next=next_cmd(status, "lead", "only the user can stop this turn, in the app; once they say it has "
+                           "stopped, check the thread", decides="human", ask=codex_stop_ask(t, title)))
+    if a.action == "pause":
+        if codex_goal_activate(t, "paused"):
+            running = codex_running_turn(t)
+            emit("GOAL_PAUSED", **fields, goal=goal_status(t) or "none", turn_running=running,
+                 note="the app starts no more goal turns; " + (
+                     "the turn running now goes on until it ends, and `thread stop` ends it now" if running else
+                     "no turn is running") + "; `thread resume` or `run` starts the goal again")
+    if a.action == "resume":
+        if goal_status(t) is None:
+            emit("NOTHING", **fields, goal="none", reason="the thread has no goal to resume: its goal was completed "
+                 "or cleared, and a new one comes only from the agent's create_goal tool", **({"next": next_cmd(
+                     loop_cmd("run", "--module", info["module"], "--worktree", str(worktree)), "lead",
+                     "a run gives the builder a new goal")} if info.get("module") else {}))
+        if codex_goal_activate(t, "active"):
+            try:
+                # a goal set active on the server that holds the thread starts its next turn there at once
+                if a.message or not (srv or codex_queued(t)):
+                    codex_queue(t, a.message or CONTINUE_GOAL)
+                woken = bool(srv) or open_link(f"codex://threads/wake/{t}")
+            except (OSError, RuntimeError, subprocess.SubprocessError) as e:
+                CODEX_WHY[t] = f"the goal is active again, but its next turn couldn't be queued: {e}"
+            else:
+                emit("GOAL_RESUMED", **fields, goal=goal_status(t) or "none", woken=woken,
+                     note="the app runs the goal again, unwatched by the script; `run` resumes it with the script "
+                          "watching each turn and checking the work")
+    if a.action == "unqueue":
+        removed, problem = codex_clear_queue(t)
+        if removed is not None:
+            emit("UNQUEUED", **fields, removed=removed, queued=codex_queued(t))
+        CODEX_WHY[t] = f"its queued messages couldn't be removed: {problem}"
+    emit("NOT_DONE", **fields, reason=f"the script couldn't {a.action} the thread: {CODEX_WHY.get(t)}",
+         goal=goal_status(t) or "none", next=next_cmd(again, "lead", "run it again once; if it fails the same way, "
+                                                     "ask the user to do it in the Codex app", decides="human",
+                                                     ask=f"The script couldn't {a.action} Codex thread "
+                                                         f"{title or t}. Could you open it in the Codex app "
+                                                         f"(codex://threads/{t}) and do it there?"))
 
 
 def cmd_unblock(a: argparse.Namespace) -> None:
@@ -14150,7 +14603,7 @@ def cmd_cleanup(a: argparse.Namespace) -> None:
                                                 if v["items"]) + "?")}
               if found and not a.yes else {})}
     if a.json:
-        print(json.dumps({**out, "found": found}, indent=1))
+        print(json.dumps(fit_nexts({**out, "found": found}), indent=1))
         return
     if not found:
         print("Nothing to remove" + (f" that is older than {a.older_than:g} days" if a.older_than else "") + ".")
@@ -14166,7 +14619,7 @@ def cmd_cleanup(a: argparse.Namespace) -> None:
         print(f"Kept: {line}")
     for line in failed:
         print(f"Not removed: {line}")
-    print(json.dumps({**out, "next": fit_next(out["next"])} if "next" in out else out))
+    print(json.dumps(fit_nexts(out)))
 
 
 # ------------------------------------------------------------------------------------------- main-branch checks
@@ -14684,8 +15137,7 @@ def main_check_report_lines(worktree: Path) -> list[str]:
 def own_status(result: str, code: int, **fields) -> None:
     """The result line of a command that keeps its own exit status (`adopt`, `migrate`, `human`, `main-check`):
     one JSON line as `emit` prints it, but exiting `code`, so a shell or a check can test the status."""
-    if "next" in fields:
-        fields["next"] = fit_next(fields["next"])
+    fields = fit_nexts(fields)
     warnings = list(WARNINGS)
     print(json.dumps({"result": result, **fields, **({"warnings": warnings} if warnings else {}), "version": VERSION}))
     sys.exit(code)
@@ -15325,10 +15777,26 @@ def results_since(worktree: Path, stamp: float) -> list[dict]:
 
 
 def cmd_watch(a: argparse.Namespace) -> None:
+    """Waits for the supervisor's next wake and prints it. With no supervisor to wait on (none can start, or the
+    tests turn it off), it reads the records itself, as `watch` did before the supervisor."""
     worktree = Path(a.worktree).resolve()
     if not_yet := unplanned(worktree):
         emit("INVALID", problems=[not_yet["reason"]], next=not_yet["next"])
     prof = profile(worktree)
+    again = next_cmd(loop_cmd("watch", "--worktree", str(worktree), *(["--runs"] if a.runs else [])), "lead",
+                     WATCH_WHY)
+    if SUPERVISOR_ON and ensure_supervisor(worktree, restart=True):
+        if got := wait_for_wake(worktree):
+            emit(got[0], **got[1], next=again)
+    word, fields = watch_wake(worktree, prof, a.runs)
+    emit(word, **fields, next=again)
+
+
+def watch_wake(worktree: Path, prof: dict, runs: bool = False, tick=None) -> tuple[str, dict]:
+    """Reads the records until something should wake the lead, and returns the result word and its fields: a new
+    warning sign, with `runs` a run that ended, or the check-in. `tick(look, fresh)` is the supervisor's: it is
+    called on every pass, and what it returns, ("STOP", {...}) or a word and the lines to wake the lead with, ends
+    the wait."""
     path = loop_dir(worktree) / WATCH_FILE
     state = read_json_file(path) or {}
     started = time.time()
@@ -15338,37 +15806,610 @@ def cmd_watch(a: argparse.Namespace) -> None:
     woke_at = started
     told = state.get("signs") or {}
     since = state.get("since") or {}
-    runs, ended = top_runs(worktree) if a.runs else {}, []
+    tracked, ended, ending = top_runs(worktree) if runs else {}, [], None
     look, signs, new, looked, fetched = None, {}, {}, 0.0, 0.0
     while True:
-        stamp = time.time()
-        if a.runs:
+        stamp, fresh = time.time(), False
+        if runs:
             now_running = top_runs(worktree)
-            ended += [r for pid, r in runs.items() if pid not in now_running]
-            runs = now_running
+            ended += [r for pid, r in tracked.items() if pid not in now_running]
+            tracked = now_running
         if look is None or stamp - looked >= WATCH_SIGNS_S:
             fetch = stamp - fetched >= WATCH_FETCH_S
             fetched = stamp if fetch else fetched
-            look, looked = watch_look(worktree, prof, since, fetch), stamp
+            look, looked, fresh = watch_look(worktree, prof, since, fetch), stamp, True
             signs = watch_signs(look)
             new = {k: s for k, s in signs.items() if told.get(k) != s["seen"]}
             write_atomically(path, {**state, "since": since})
+        if tick and (ending := tick(look, fresh)):
+            if ending[0] == "STOP":
+                return ending
+            break
         if new or ended or stamp >= woke_at + prof["check_in_s"]:
             break
         time.sleep(WATCH_POLL_S)
-    woke = [s["text"] for s in new.values()]
+    woke = list(ending[1]) if ending else []
+    woke += [s["text"] for s in new.values()]
     woke += [f"{' '.join(x for x in (r.get('role'), r.get('module'), r.get('milestone')) if x)} ended" for r in ended]
-    if not new and not ended:
+    if not woke:
         woke.append(f"check-in: {ago(stamp - woke_at)} since this watch started")
     write_atomically(path, {"woke_at": stamp, "signs": {k: s["seen"] for k, s in signs.items()}, "since": since})
-    emit("WARNING_SIGNS" if new else "RUN_ENDED" if ended else "CHECK_IN", woke_for=woke,
-         # each sign's whole text once, when it is new; the ones the lead was told before by name only, so a wake
-         # doesn't repeat paragraphs the lead has read
-         **({"earlier_signs": [k for k in signs if k not in new]} if any(k not in new for k in signs) else {}),
-         **({"results": results_since(worktree, started)} if ended else {}),
-         **watch_summary(worktree, prof, look, float(state.get("woke_at") or started - prof["check_in_s"])),
-         next=next_cmd(loop_cmd("watch", "--worktree", str(worktree), *(["--runs"] if a.runs else [])), "lead",
-                       WATCH_WHY))
+    word = ending[0] if ending else "WARNING_SIGNS" if new else "RUN_ENDED" if ended else "CHECK_IN"
+    return word, dict(
+        woke_for=woke,
+        # each sign's whole text once, when it is new; the ones the lead was told before by name only, so a wake
+        # doesn't repeat paragraphs the lead has read
+        **({"earlier_signs": [k for k in signs if k not in new]} if any(k not in new for k in signs) else {}),
+        **({"results": results_since(worktree, started)} if ended else {}),
+        **watch_summary(worktree, prof, look, float(state.get("woke_at") or started - prof["check_in_s"])))
+
+
+# ------------------------------------------------------------------------------------------------------ supervisor
+# One supervisor per repository keeps the build moving and wakes the lead, so neither depends on the lead
+# remembering to keep a background command running: on 23 Nov the Thrum lead sat idle with no builders and no
+# `watch`, and nothing would have woken it. Any command that names a worktree starts the supervisor when none is
+# running, so a reboot, a crash or a closed session mends itself at the next command any agent runs. The design and
+# what each host offers are in workbench/orchestrate-cleanup/lead-wake/design.md.
+
+SUPERVISOR_ON = os.environ.get("ORCHESTRATE_NO_SUPERVISOR") != "1"  # the tests turn it off, and on where they test it
+SUPERVISED_ENV = "ORCHESTRATE_SUPERVISED"  # set in the runs the supervisor starts, and in the supervisor itself
+SUPERVISOR_LOCK = "supervisor.lock"  # under <git common dir>/orchestrate: held by the live supervisor
+SUPERVISOR_FILE = "supervisor.json"  # its pid and version, what it started, its last wake, and why it stopped
+SUPERVISOR_STOP = "supervisor.stop"  # written to ask it to stop, holding the reason
+LEAD_FILE = "lead.json"  # how to reach the lead, from its last command (mode 600: it can hold a session token)
+WAKE_FILE = "wake.json"  # the latest wake, numbered, and whether it reached the lead
+WAITER_FILE = "waiter.json"  # the pid of the `watch` waiting on the supervisor, if one is
+SUPERVISOR_SPAWN = "supervisor.spawn"  # the pid a command started, until it takes the lock
+SUPERVISOR_START_S = 30.0  # how long a supervisor a command started counts as running before it takes its lock
+SUPERVISOR_RESTART_S = 120.0  # a module the supervisor started isn't started again by it sooner than this
+SUPERVISOR_RETRY_S = 60.0  # after the supervisor fails to read the records, how long before it tries again
+WAKE_TEXT_LIMIT = 60000  # characters of the result a pushed wake carries
+# The commands the lead runs. A builder's commands (merge, check, lock, background, jobs, wait, main-check) start
+# the supervisor too, but never say how to reach the lead.
+LEAD_COMMANDS = {"run", "review", "plan", "watch", "next", "ready", "status", "settings", "profile", "human", "owner",
+                 "adopt", "pause", "unblock", "report", "flow", "migrate", "history", "dashboard", "cost", "quota",
+                 "runs", "loops", "supervise"}
+LEAD_RESTARTS = {"run", "plan", "watch", "supervise"}  # the lead carrying on, which undoes the user's stop
+SETTLED_STOPS = ("finished", "waiting_for_user", "unplanned")  # no restart until a branch moves
+USER_BLOCKS = ("needs_human_feedback", "needs_access", "needs_hardware", "too_many_failed_reviews")
+WAKE_CONTEXT: dict = {}  # set in main for a lead's command: what emit needs to say whether the lead can be woken
+# What a wake can carry, which `watch` prints: from `watch_wake`, and from the supervisor's end of the build
+WAKE_RESULTS = ("CHECK_IN", "WARNING_SIGNS", "RUN_ENDED", "BUILD_FINISHED", "WAITING_FOR_USER", "SUPERVISOR_FAILED")
+
+
+def write_private(path: Path, data: dict) -> None:
+    """Writes `data` as JSON readable only by this user, because lead.json can hold the lead session's token."""
+    tmp = path.with_name(path.name + f".{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(json.dumps(data, indent=2))
+    os.replace(tmp, path)
+
+
+def lead_wake_setting(value: str | None, problems: list | None = None) -> str:
+    """The settings' `Lead wake`: `auto` (the default) wakes the lead the way its host allows, `watch` only through
+    its own `watch`, and a command holding {message} is run to wake a lead on a host the script doesn't know."""
+    raw = (value or "").replace("`", "").strip()
+    if not raw or raw.lower() == "auto" or PLACEHOLDER.fullmatch(raw):
+        return "auto"
+    if raw.lower() == "watch":
+        return "watch"
+    if "{message}" in raw:
+        return raw
+    if problems is not None:
+        problems.append(f"lead wake: {value!r} (want auto, watch, or a command with {{message}})")
+    return "auto"
+
+
+def lead_wake_of(worktree: Path) -> str:
+    try:
+        return lead_wake_setting(profile_value((worktree / "ORCHESTRATE.md").read_text(), "Lead wake"))
+    except OSError:
+        return "auto"
+
+
+def lead_from_env() -> dict:
+    """Who is running this command, from what its host sets: Claude Code exports the session's id and its inbox
+    socket and token to every Bash command; Codex sets CODEX_THREAD_ID in every shell command a turn runs."""
+    env = os.environ
+    if env.get("CLAUDECODE") == "1" and env.get("CLAUDE_CODE_SESSION_ID"):
+        return {"host": "claude", "session": env["CLAUDE_CODE_SESSION_ID"],
+                "socket": env.get("CLAUDE_CODE_MESSAGING_SOCKET") or None,
+                "token": env.get("CLAUDE_CODE_MESSAGING_TOKEN") or None,
+                "entrypoint": env.get("CLAUDE_CODE_ENTRYPOINT") or None}
+    if env.get("CODEX_THREAD_ID"):
+        return {"host": "codex", "session": env["CODEX_THREAD_ID"]}
+    return {"host": "other", "session": None, "agent": env.get("AI_AGENT") or None}
+
+
+def codex_app_thread(thread: str) -> bool:
+    """Whether the Codex desktop app holds `thread`, so a queued message runs as soon as the thread is idle. The
+    rollout's first line says where the thread came from: the app writes originator `codex_work_desktop` and source
+    `vscode` (the script's own visible threads too), the CLI `codex_exec` or its own. A queued message on a thread
+    the app doesn't hold waits until something resumes it."""
+    path = rollout_for(thread)
+    if not path:
+        return False
+    try:
+        with open(path) as handle:
+            meta = (json.loads(handle.readline() or "{}").get("payload") or {})
+    except (OSError, ValueError):
+        return False
+    origin = str(meta.get("originator") or "")
+    return "desktop" in origin or origin == "orchestrate" or meta.get("source") == "vscode"
+
+
+def note_lead(worktree: Path) -> dict:
+    """Records how to reach the lead running this command, in lead.json. A command from an unknown host (a person's
+    terminal, say) doesn't replace a lead the script knows how to reach, and a Codex thread the script started for a
+    builder is never taken for the lead."""
+    folder = loop_dir(worktree)
+    path = folder / LEAD_FILE
+    old = read_json_file(path) or {}
+    rec = lead_from_env()
+    if rec["host"] == "other" and old.get("host") in ("claude", "codex"):
+        return old
+    if rec["host"] == "codex":
+        try:
+            ours = (folder / "threads.jsonl").read_text()
+        except OSError:
+            ours = ""
+        if f'"{rec["session"]}"' in ours:
+            return old
+        rec["app_thread"] = old["app_thread"] if old.get("session") == rec["session"] and "app_thread" in old \
+            else codex_app_thread(rec["session"])
+    rec["worktree"] = str(worktree)
+    same = {k: v for k, v in old.items() if k != "at"} == rec
+    if not same or hours_since(old.get("at")) > 0.25:
+        write_private(path, {**rec, "at": now()})
+    return rec
+
+
+def push_path(lead: dict, setting: str) -> tuple[str | None, str]:
+    """(the adapter that can wake the lead without its help, or None; why not, when None)."""
+    if setting == "watch":
+        return None, "the settings' Lead wake line says watch, so only your own `watch` wakes you"
+    if setting != "auto":
+        return "command", ""
+    if lead.get("host") == "claude":
+        if lead.get("socket") and Path(lead["socket"]).exists():
+            return "claude", ""
+        return None, ("your Claude Code session has no inbox socket the script can reach (it needs Claude Code "
+                      "2.1.224 or later, not --bare, and the session that last ran a command)")
+    if lead.get("host") == "codex":
+        if lead.get("app_thread"):
+            return "codex", ""
+        return None, ("your Codex thread isn't one the desktop app holds, and a message queued for a CLI thread "
+                      "waits until it next takes a turn")
+    if not lead:
+        return None, "no lead has run a command in this repository yet"
+    return None, ("the script doesn't know how to wake a lead on this host; the settings' Lead wake line can give "
+                  "a command for it")
+
+
+def wake_claude(lead: dict, text: str, setting: str) -> str:
+    """Posts `text` to the lead session's inbox socket, as Claude Code's cross-session messaging does: an idle
+    session starts a turn with it, and a busy one reads it between tool calls. The token makes it count as the
+    session's own child, which the inbound rules deliver even to a session that bypasses permission prompts."""
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(10)
+            s.connect(lead["socket"])
+            lines = ([{"type": "auth", "token": lead["token"]}] if lead.get("token") else []) + \
+                [{"type": "user", "message": {"role": "user", "content": text}}]
+            s.sendall("".join(json.dumps(x) + "\n" for x in lines).encode())
+        return ""
+    except (OSError, KeyError, TypeError) as e:
+        return f"the lead's Claude session didn't take the message: {type(e).__name__}: {e}"
+
+
+def wake_codex(lead: dict, text: str, setting: str) -> str:
+    """Queues `text` on the lead's thread. The desktop app runs a queued message once the thread is idle, which is
+    how the script starts every visible builder turn too."""
+    try:
+        out = subprocess.run([CODEX_APP_CLI, "queue", "--thread", lead["session"], "--resume", "--message", text],
+                             capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError, KeyError) as e:
+        return f"codex queue didn't run: {e}"
+    said = (out.stdout + out.stderr).strip()
+    return "" if out.returncode == 0 and "Queued" in said else f"codex queue failed: {said[-300:]}"
+
+
+def wake_command(lead: dict, text: str, setting: str) -> str:
+    """Runs the settings' Lead wake command, with {message} and {session} filled in and quoted."""
+    command = setting.replace("{message}", shlex.quote(text)).replace("{session}", shlex.quote(lead.get("session")
+                                                                                                or ""))
+    try:
+        out = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"the Lead wake command didn't run: {e}"
+    return "" if out.returncode == 0 else f"the Lead wake command exited {out.returncode}: " \
+                                          f"{(out.stdout + out.stderr).strip()[-300:]}"
+
+
+# One place per host: how the supervisor wakes a lead without the lead's help. A host with no entry is woken only
+# by the lead's own `watch`, which every result then tells the lead to keep running.
+WAKE_ADAPTERS = {"claude": wake_claude, "codex": wake_codex, "command": wake_command}
+
+
+def supervisor_alive(folder: Path) -> bool:
+    """Whether a supervisor holds the lock, or one a command just started is still starting: the script takes a
+    few seconds to start, and commands don't wait for it."""
+    if lock_held(folder / SUPERVISOR_LOCK):
+        return True
+    spawn = read_json_file(folder / SUPERVISOR_SPAWN) or {}
+    return bool(spawn.get("pid")) and time.time() - float(spawn.get("at") or 0) < SUPERVISOR_START_S and \
+        pid_alive(spawn["pid"])
+
+
+def waiter_alive(folder: Path) -> bool:
+    w = read_json_file(folder / WAITER_FILE) or {}
+    return bool(w.get("pid")) and w["pid"] != os.getpid() and pid_alive(w["pid"])
+
+
+def refs_print(worktree: Path) -> str:
+    """A fingerprint of the main branch, here and on the remote, so a supervisor that stopped because nothing could
+    move is started again once something has: a decision the user gave, an adopt, a merged plan."""
+    try:
+        text = (main_checkout(worktree) / "ORCHESTRATE.md").read_text()
+    except OSError:
+        text = ""
+    branch = (profile_value(text, "Branch") or "main").replace("`", "").split()[0]
+    remote = (profile_value(text, "Remote") or "origin").replace("`", "").split()[0]
+    out = git(worktree, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}").stdout + \
+        git(worktree, "rev-parse", "--verify", "--quiet", f"refs/remotes/{remote}/{branch}").stdout
+    return text_hash(out)
+
+
+def main_checkout(worktree: Path) -> Path:
+    out = git(worktree, "worktree", "list", "--porcelain").stdout
+    first = next((line[len("worktree "):] for line in out.splitlines() if line.startswith("worktree ")), None)
+    return Path(first) if first else worktree
+
+
+def supervised_env() -> dict:
+    """The environment for the supervisor and the runs it starts: the lead's, less what marks a session the script
+    started or a step of a run, and marked as the supervisor's, so none of them records itself as the lead."""
+    env = {k: v for k, v in os.environ.items() if k not in ("ORCHESTRATE_ROLE", STEPS_ENV)}
+    return {**env, SUPERVISED_ENV: "1"}
+
+
+def ensure_supervisor(worktree: Path, restart: bool = False) -> bool:
+    """Starts the repository's supervisor if none is running, and says whether one is. One that stopped because the
+    user stopped everything is started again only when the lead carries on (`restart`); one that stopped because
+    the build finished or waits on the user, only once a branch has moved. A supervisor from an older copy of the
+    script is asked to stop, and the next command starts this copy's."""
+    folder = loop_dir(worktree)
+    info = read_json_file(folder / SUPERVISOR_FILE) or {}
+    if supervisor_alive(folder):
+        if info.get("version") not in (None, VERSION) and not (folder / SUPERVISOR_STOP).exists():
+            (folder / SUPERVISOR_STOP).write_text("newer")
+        return True
+    stopped = info.get("stopped") or {}
+    if not restart and (stopped.get("reason") == "user" or (stopped.get("reason") in SETTLED_STOPS and
+                                                            stopped.get("refs") == refs_print(worktree))):
+        return False
+    target = main_checkout(worktree)
+    if not (target / "ORCHESTRATE.md").exists():
+        return False
+    (folder / SUPERVISOR_STOP).unlink(missing_ok=True)  # an earlier stop, already obeyed
+    with open(folder / "supervisor.log", "a") as log:
+        proc = subprocess.Popen([sys.executable, str(LOOP), "supervise", "--worktree", str(target)],
+                                cwd=str(target), env=supervised_env(), stdin=subprocess.DEVNULL, stdout=log,
+                                stderr=subprocess.STDOUT, start_new_session=True, close_fds=True)
+    write_atomically(folder / SUPERVISOR_SPAWN, {"pid": proc.pid, "at": time.time()})
+    return True
+
+
+def stop_supervisor(worktree: Path, reason: str = "user") -> bool:
+    """Asks the supervisor to stop, and says whether one was running. Stopped by the user, it stays stopped until
+    the lead carries on."""
+    folder = loop_dir(worktree)
+    (folder / SUPERVISOR_STOP).write_text(reason)
+    if supervisor_alive(folder):
+        return True
+    info = read_json_file(folder / SUPERVISOR_FILE) or {}
+    write_atomically(folder / SUPERVISOR_FILE, {**info, "stopped": {"reason": reason, "at": now()}})
+    return False
+
+
+def latest_result(folder: Path, stem: str) -> dict | None:
+    """The newest result file of `stem`'s commands, or None."""
+    try:
+        files = [p for p in (folder / "results").glob(f"{stem}-*.json")]
+    except OSError:
+        return None
+    for path in sorted(files, key=lambda p: -p.stat().st_mtime):
+        line = read_json_file(path)
+        if isinstance(line, dict):
+            return line
+    return None
+
+
+def routine_start(line: dict | None, stem: str) -> bool:
+    """Whether the supervisor may start `stem`'s next run itself: the module's latest result left nothing for the
+    lead. That is no result yet, WAITING on another module, a passed review, or a `next` that is a plain `run` or
+    `review` of the module. A result that asks the lead or the user (Blocked, paused, stalled, a `--message`, a
+    `--fresh`, another host) waits for the lead, because those are its judgement."""
+    if not line:
+        return True
+    then = line.get("next") or {}
+    if line.get("result") == "RUNNING" or then.get("decides") or then.get("ask"):
+        return False
+    if line.get("result") == "WAITING" or (line.get("result") == "REVIEWED" and line.get("verdict") == "PASS"):
+        return True
+    words = step_words(then)
+    if not words or words[0] not in ("run", "review") or (argv_flag(words, "--module") or "").upper() != stem.upper():
+        return False
+    return not any(w in ("--message", "--fresh", "--human-rule", "--host", "--more-builders", "--clear-human-rules")
+                   for w in words)
+
+
+def start_run(worktree: Path, prof: dict, stem: str) -> None:
+    """Starts `run --module <stem>` from the main checkout, detached, logged beside the supervisor's log. With no
+    Default host in the settings, it runs on the lead's host, as a run the lead started would."""
+    folder = loop_dir(worktree)
+    argv = [sys.executable, str(LOOP), "run", "--module", stem, "--worktree", str(main_checkout(worktree))]
+    lead = read_json_file(folder / LEAD_FILE) or {}
+    if not prof.get("default_host") and lead.get("host") in ("codex", "claude"):
+        argv += ["--host", lead["host"]]
+    (folder / "supervisor").mkdir(exist_ok=True)
+    with open(folder / "supervisor" / f"{stem}.log", "a") as log:
+        subprocess.Popen(argv, cwd=str(worktree), env=supervised_env(), stdin=subprocess.DEVNULL, stdout=log,
+                         stderr=subprocess.STDOUT, start_new_session=True, close_fds=True)
+
+
+def fill_builders(worktree: Path, prof: dict, look: dict, started: dict) -> list[str]:
+    """Starts a run for each module whose next step is routine, up to the free builder slots, and returns their
+    names. With no Builders count it starts none, because the lead hasn't asked the user yet; while the test
+    command fails on the main branch, none either, because only the module that broke it can merge."""
+    if not look.get("limit") or look.get("free", 0) <= 0 or any(b["check"] == "test command" for b in look["broken"]):
+        return []
+    folder = loop_dir(worktree)
+    busy = {(r.get("module") or "").upper() for r in look["loops"]}
+    out = []
+    for key, step in sorted(look["steps"].items()):
+        stem = step.get("module") or key
+        if len(out) >= look["free"]:
+            break
+        if step.get("status") not in ("can_start", "ready_for_review") or key in look["running"] or \
+                stem.upper() in busy or time.time() - started.get(stem, 0.0) < SUPERVISOR_RESTART_S or \
+                not routine_start(latest_result(folder, stem), stem):
+            continue
+        start_run(worktree, prof, stem)
+        started[stem] = time.time()
+        out.append(stem)
+    return out
+
+
+def build_end(look: dict) -> tuple[str, list[str]] | None:
+    """BUILD_FINISHED when every module is finished, and WAITING_FOR_USER when nothing is running and nothing can
+    move without the user, so the supervisor wakes the lead once and stops rather than waking it at every check-in."""
+    steps = look.get("steps") or {}
+    live = [r for r in look["loops"] if r.get("role") in ("build", "review", "plan", "steps")]
+    if not steps or live or look.get("ahead"):
+        return None
+    if all(s.get("status") == "finished" for s in steps.values()):
+        return "BUILD_FINISHED", ["every module is finished"]
+    blocked = [s for s in steps.values() if s.get("status") == "blocked"]
+    if blocked and all(s.get("status") == "finished" or (s.get("status") == "blocked" and s.get("reason") in USER_BLOCKS)
+                       or (s.get("status") == "waiting" and s.get("reason") == "on_dependency")
+                       for s in steps.values()):
+        names = ", ".join(f"{s['module']} {s.get('milestone') or ''} ({s.get('reason')})" for s in blocked)
+        return "WAITING_FOR_USER", [f"nothing can move without the user: {names}"]
+    return None
+
+
+def wake_text(worktree: Path, word: str, fields: dict) -> str:
+    woke = "; ".join(fields.get("woke_for") or [])
+    whole = json.dumps({"result": word, **fields})
+    return (f"From orchestrate's supervisor for {repository_name(worktree)}, not from the user: {word}. {woke}\n"
+            "Act on it as the lead skill says, starting with `flow`. The script pushed this to you, so you need no "
+            "`watch` running to hear the next one. The whole result, as `watch` prints it:\n" +
+            (whole if len(whole) <= WAKE_TEXT_LIMIT else whole[:WAKE_TEXT_LIMIT] + " ...(cut)"))
+
+
+def deliver_wake(worktree: Path, prof: dict, word: str, fields: dict) -> dict:
+    """Wakes the lead: numbers the wake in wake.json, where a running `watch` picks it up and ends; with none
+    running, pushes it through the lead's host adapter. A wake that reaches nobody stays marked undelivered, and the
+    lead's next command carries it."""
+    folder = loop_dir(worktree)
+    rec = {"seq": int((read_json_file(folder / WAKE_FILE) or {}).get("seq") or 0) + 1, "at": now(), "result": word,
+           "fields": fields, "delivered": False}
+    write_atomically(folder / WAKE_FILE, rec)
+    if waiter_alive(folder):
+        rec["via"] = "watch"
+    else:
+        lead = read_json_file(folder / LEAD_FILE) or {}
+        setting = prof.get("lead_wake") or "auto"
+        way, why = push_path(lead, setting)
+        error = WAKE_ADAPTERS[way](lead, wake_text(worktree, word, fields), setting) if way else why
+        current = read_json_file(folder / WAKE_FILE) or {}
+        if current.get("seq") == rec["seq"] and current.get("delivered"):  # a `watch` took it meanwhile
+            rec = current
+        else:
+            rec.update(delivered=not error, via=way, **({"error": error} if error else {}))
+            write_atomically(folder / WAKE_FILE, rec)
+    info = read_json_file(folder / SUPERVISOR_FILE) or {}
+    write_atomically(folder / SUPERVISOR_FILE, {**info, "last_wake": {k: rec.get(k) for k in (
+        "seq", "at", "result", "delivered", "via", "error")}})
+    return rec
+
+
+def wait_for_wake(worktree: Path) -> tuple[str, dict] | None:
+    """`watch` with a supervisor: registers as the waiter, so the supervisor wakes the lead through it rather than
+    pushing, and returns the next wake. A wake that reached nobody before this watch started is returned at once.
+    Returns None when the supervisor has gone and can't be started again, so `watch` reads the records itself."""
+    folder = loop_dir(worktree)
+    write_atomically(folder / WAITER_FILE, {"pid": os.getpid(), "at": now()})
+    try:
+        last = read_json_file(folder / WAKE_FILE) or {}
+        start = int(last.get("seq") or 0)
+        if last.get("result") and last.get("delivered") is False:
+            start -= 1
+        while True:
+            current = read_json_file(folder / WAKE_FILE) or {}
+            if int(current.get("seq") or 0) > start and current.get("result") in WAKE_RESULTS:
+                write_atomically(folder / WAKE_FILE, {**current, "delivered": True, "via": "watch"})
+                return current["result"], current.get("fields") or {}
+            if not supervisor_alive(folder) and not ensure_supervisor(worktree):
+                return None
+            time.sleep(WATCH_POLL_S)
+    finally:
+        if (read_json_file(folder / WAITER_FILE) or {}).get("pid") == os.getpid():
+            (folder / WAITER_FILE).unlink(missing_ok=True)
+
+
+def supervise_tick(worktree: Path, prof: dict, look: dict, fresh: bool, started: dict):
+    """The supervisor's part of each pass of `watch_wake`: stop when asked, and after each fresh look start what is
+    routine and end the wait when the build is finished or waits on the user."""
+    folder = loop_dir(worktree)
+    try:
+        reason = (folder / SUPERVISOR_STOP).read_text().strip() or "user"
+        return "STOP", {"reason": reason}
+    except OSError:
+        pass
+    if _STOP:
+        return "STOP", {"reason": "signal"}
+    if not fresh:
+        return None
+    if look.get("tip") and not look.get("steps") and not look.get("loops"):  # no module planned yet
+        return "STOP", {"reason": "unplanned"}
+    try:  # the lead saves the user's Builders count while the supervisor waits, and the build starts on it
+        latest = profile(worktree)
+    except (Exception, SystemExit):
+        latest = prof
+    if latest.get("builders") != prof.get("builders"):
+        prof.update(latest)  # the dict `watch_wake` looks with, so its next look counts the new slots
+        return None
+    if begun := fill_builders(worktree, prof, look, started):
+        info = read_json_file(folder / SUPERVISOR_FILE) or {}
+        write_atomically(folder / SUPERVISOR_FILE, {**info, "started_runs": (info.get("started_runs") or [])[-50:] + [
+            {"module": m, "at": now()} for m in begun]})
+        return None
+    return build_end(look)
+
+
+def supervise_loop(worktree: Path) -> str:
+    """The supervisor's life: read the records, start the routine work, wake the lead, until it is told to stop or
+    the build no longer needs it. Returns why it stopped."""
+    folder = loop_dir(worktree)
+    started: dict = {}
+    failures = 0
+    while True:
+        try:
+            if unplanned(worktree):
+                return "unplanned"
+            prof = profile(worktree)
+            word, fields = watch_wake(worktree, prof, runs=True,
+                                      tick=lambda look, fresh: supervise_tick(worktree, prof, look, fresh, started))
+            failures = 0
+        except (Exception, SystemExit) as e:
+            failures += 1
+            print(f"{now()} supervisor: {type(e).__name__}: {e}", flush=True)
+            if failures == 3:
+                deliver_wake(worktree, {}, "SUPERVISOR_FAILED", {"woke_for": [
+                    f"the supervisor couldn't read the records three times in a row: {type(e).__name__}: {e}. "
+                    f"Its log is {folder / 'supervisor.log'}"]})
+            if (folder / SUPERVISOR_STOP).exists() or _STOP:
+                return "user"
+            time.sleep(SUPERVISOR_RETRY_S)
+            continue
+        if word == "STOP":
+            return fields["reason"]
+        deliver_wake(worktree, prof, word, fields)
+        if word == "BUILD_FINISHED":
+            return "finished"
+        if word == "WAITING_FOR_USER":
+            return "waiting_for_user"
+
+
+def cmd_supervise(a: argparse.Namespace) -> None:
+    worktree = Path(a.worktree).resolve()
+    folder = loop_dir(worktree)
+    if a.stop:
+        was = stop_supervisor(worktree, "user")
+        emit("STOPPING" if was else "NOTHING", note="the supervisor stops within seconds, and no command starts it "
+             "again until you run `run`, `plan`, `watch` or `supervise`" if was else "no supervisor was running")
+    if a.status or a.test_wake:
+        lead = read_json_file(folder / LEAD_FILE) or {}
+        setting = lead_wake_of(main_checkout(worktree))
+        way, why = push_path(lead, setting)
+        status = {"running": supervisor_alive(folder), "supervisor": read_json_file(folder / SUPERVISOR_FILE) or {},
+                  "lead": {k: v for k, v in lead.items() if k != "token"}, "lead_wake": setting, "push": way,
+                  **({"no_push_because": why} if not way else {}), "watch_waiting": waiter_alive(folder)}
+        if a.test_wake:
+            if not way:
+                emit("WAKE_FAILED", **status, error=why)
+            error = WAKE_ADAPTERS[way](lead, f"From orchestrate's supervisor for {repository_name(worktree)}, not "
+                                       "from the user: a test of waking you, which `supervise --test-wake` sent. "
+                                       "Nothing needs doing.", setting)
+            emit("WAKE_FAILED" if error else "WAKE_SENT", **status, **({"error": error} if error else {}))
+        emit("SUPERVISOR", **status)
+    handle = take_file_lock(folder / SUPERVISOR_LOCK)
+    if handle is None:
+        emit("NOTHING", note="a supervisor is already running for this repository")
+    _HELD.append(handle)
+    (folder / SUPERVISOR_SPAWN).unlink(missing_ok=True)  # the lock says it runs from here on
+    install_stop()
+    info = read_json_file(folder / SUPERVISOR_FILE) or {}
+    write_atomically(folder / SUPERVISOR_FILE, {"pid": os.getpid(), "version": VERSION, "worktree": str(worktree),
+                                                "started_at": now(), **({"last_wake": info["last_wake"]}
+                                                                        if info.get("last_wake") else {})})
+    reason = supervise_loop(worktree)
+    info = read_json_file(folder / SUPERVISOR_FILE) or {}
+    write_atomically(folder / SUPERVISOR_FILE, {**info, "stopped": {"reason": reason, "at": now(),
+                                                                     "refs": refs_print(worktree)}})
+    emit("SUPERVISOR_STOPPED", reason=reason)
+
+
+def supervise_hook(command: str, worktree: Path) -> None:
+    """Run before every command that names a worktree: a lead's command records how to reach the lead, and every
+    command starts the supervisor when none is running. Never fails the command."""
+    global WAKE_CONTEXT
+    if not SUPERVISOR_ON or STEPS_PARENT or os.environ.get(SUPERVISED_ENV) == "1":
+        return
+    try:
+        lead_cmd = command in LEAD_COMMANDS and not os.environ.get("ORCHESTRATE_ROLE")
+        if lead_cmd:
+            note_lead(worktree)
+        if command != "supervise":
+            ensure_supervisor(worktree, restart=lead_cmd and command in LEAD_RESTARTS)
+        if lead_cmd and command not in ("watch", "supervise"):
+            WAKE_CONTEXT = {"worktree": worktree, "setting": lead_wake_of(worktree)}
+    except Exception:
+        pass
+
+
+def wake_fields() -> tuple[dict, str | None]:
+    """({"wake": ...} or {}, a warning or None) for the result of a lead's command: when nothing can wake the lead
+    without its help, the `watch` to start in the background; and a wake that reached nobody."""
+    try:
+        worktree = WAKE_CONTEXT["worktree"]
+        folder = loop_dir(worktree)
+        watching = waiter_alive(folder)
+        wake, missed = read_json_file(folder / WAKE_FILE) or {}, {}
+        if wake.get("result") and wake.get("delivered") is False and not watching:
+            missed = {"missed": {"result": wake["result"], "at": wake.get("at"),
+                                 "woke_for": (wake.get("fields") or {}).get("woke_for")}}
+        watch = fit_command(loop_cmd("watch", "--worktree", str(worktree)))
+        stopped = ((read_json_file(folder / SUPERVISOR_FILE) or {}).get("stopped") or {}).get("reason")
+        if not supervisor_alive(folder) and stopped in (*SETTLED_STOPS, "user"):
+            return ({"wake": {**missed, "command": watch, "why": "a wake reached nobody; `watch` prints it"}}
+                    if missed else {}), None
+        way, why = push_path(read_json_file(folder / LEAD_FILE) or {}, WAKE_CONTEXT["setting"])
+        if not supervisor_alive(folder):
+            why = "the supervisor isn't running and didn't start; its log is " + str(folder / "supervisor.log")
+        elif way or watching:
+            return ({"wake": {**missed, "command": watch, "why": "a wake reached nobody; `watch` prints it"}}
+                    if missed else {}), None
+        return {"wake": {**missed, "command": watch, "run_in_background": True,
+                         "why": f"nothing can wake you: {why}. Start this command in the background now, and "
+                                "again whenever it ends, so the supervisor can wake you"}}, \
+            f"nothing can wake you when a run stops or something goes wrong: {why}. Start `{watch}` in the " \
+            "background now"
+    except Exception:
+        return {}, None
 
 
 ROUTINE_STEPS = f"""\
@@ -15679,7 +16720,7 @@ next  --module CORE --worktree PATH --milestone M2   ESCALATION: what to do afte
                                too_many_failed_reviews, for the user to decide (`human accept`, `human scope` or
                                `human reopen`). A planner finding after a diagnosis of something else gets a
                                diagnosis of its own.
-        new_builder_session    {NEW_SESSION_AFTER_FAILED_REVIEWS} failed reviews, or {NEW_SESSION_AFTER_FAILED_REVIEWS} with a repeat: a builder in a new session.
+        new_builder_session    {NEW_SESSION_AFTER_FAILED_REVIEWS} failed reviews, or {REPEATS_TO_DIAGNOSE - 1} with a repeat: a builder in a new session.
         same_builder           otherwise: the same builder, told to read the review.
       A diagnosis ends in a re-plan (PLANNED) or a kept plan (KEEP ... builder|reviewer|human), and adds 1 to
       `diagnoses`. The counts start again after either, after `human scope` or `human reopen`, which also clear
@@ -15695,6 +16736,31 @@ unblock --module CORE [--milestone M2] --worktree PATH   Puts a blocked mileston
 """,
     "pause": """\
 pause [--module CORE] --worktree PATH   Stops the runs in this repository, and their agents, cleanly.
+      PAUSED names each run it signalled; each run then ends with its own PAUSED result. A run on a thread the Codex
+      app runs stops the turn there when the script can (see `thread`). When it can't, the run's PAUSED carries
+      `turn_not_stopped`, and its `next` (decides: human) asks the user to press Stop in the app; the script has
+      still paused the thread's goal and removed its queued messages, so the app starts no turn after that one.
+""",
+    "thread": """\
+thread stop|pause|resume|unqueue|status (--module CORE | --thread ID) --worktree PATH [--message TEXT]
+      Acts on a Codex thread a run in this repository started in the Codex app (ORCHESTRATE_VISIBLE=1): --module
+      takes the latest run's thread, --thread any thread in the repository's thread ledger (a review's or a
+      planner's). A thread the runs didn't start is refused, so the user's own threads are never touched.
+      stop     ends the running turn and pauses the goal, as the app's Stop button does. STOPPED.
+      pause    pauses the goal: the app starts no more goal turns, and a turn already running goes on to its end.
+               GOAL_PAUSED, with `turn_running`.
+      resume   sets the goal active, queues --message (or "Continue the goal." when nothing is queued) and wakes
+               the thread, as the app's play button does. GOAL_RESUMED. The app then runs it without the script
+               watching; `run` resumes it with the script checking each turn.
+      unqueue  deletes the thread's queued messages. UNQUEUED, with `removed`.
+      status   THREAD: the goal's status, the running turn's id, the queued count, and in `control` and
+               `can_stop` whether the script can stop its turns.
+      Stopping a turn needs the app-server that runs it. Up to app 26.1103 the app's IPC router reached it; from
+      26.1117 the app runs threads in its own app-server, which only the app can reach, unless the app runs on the
+      shared daemon (`codex app-server daemon start`, then the app started with CODEX_APP_SERVER_USE_LOCAL_DAEMON=1).
+      Goal status and queued messages are shared files, so pause, resume and unqueue work either way.
+      NOT_DONE when the script can't do it, with the reason; its `next` (decides: human) asks the user to do it in
+      the app, and for stop its command is `thread status`, to check once they have.
 """,
     "human": """\
 human accept|rereview|reopen|scope|release --module CORE --milestone M2|design --worktree PATH --text TEXT
@@ -15803,17 +16869,57 @@ main-check [NAME] [--worktree PATH] [--commit REV] [--wait {MAIN_CHECK_WAIT_S:.0
 """,
     "watch": f"""\
 watch --worktree PATH [--runs]
-      Kept running in the background by the lead, and ends to wake it: at its check-in (the settings' `Lead
-      check-in`, {limit_text(LEAD_CHECK_IN_S)} by default, counted from when this watch started), at a new warning sign,
-      or with --runs when a run, review or plan of the repository ends. The signs are read from the script's own
-      records: a builder with no progress for {limit_text(NO_PROGRESS_WARN_H * 3600)}, a milestone whose last two reviews failed the same
-      items (whatever their findings), ready work with a free builder slot for {limit_text(READY_IDLE_WARN_S)}, a planner queued for {limit_text(PLANNER_QUEUE_WARN_S)}, a module with
-      one planned milestone left, a low disk, and a main-branch check failing on the tip. Each sign wakes the lead
-      once, until it changes or goes, and later results name it in `earlier_signs` without its text. The result (WARNING_SIGNS, RUN_ENDED or CHECK_IN) sums
-      up the build for a lead with no other context: what moved since the last watch, what hasn't, milestones going
-      back and forth between building and review (with their counts since their items last changed, and what those
-      call for), builder slots (a `run` going through its steps holds one, whichever step it is on), planners,
-      disk, the main branch and the flow numbers.
+      Waits for the supervisor's next wake and prints it, for a lead its host can't wake otherwise. Every result of
+      a lead's command says when the lead needs one: its `wake` field names this command to start in the
+      background, with a warning that nothing else can wake it. While a watch waits, the supervisor wakes the lead
+      through it rather than by a message, so the lead is never woken twice for one thing. It starts the supervisor
+      if none is running, and again if the one it waits on dies; a wake that reached nobody before it started is
+      printed at once. With no supervisor (none can start), it reads the records itself, and --runs then also ends
+      it when a run, review or plan of the repository ends.
+      The supervisor wakes the lead: when a run, review or plan of the repository ends (they end only at something
+      that isn't routine); at the check-in (the settings' `Lead check-in`, {limit_text(LEAD_CHECK_IN_S)} by default,
+      counted from the last wake); at a new warning sign; and once when the build is finished or nothing can move
+      without the user. The signs are read from the script's own records: a builder with no progress for
+      {limit_text(NO_PROGRESS_WARN_H * 3600)}, a milestone whose last two reviews failed the same items (whatever
+      their findings), ready work with a free builder slot for {limit_text(READY_IDLE_WARN_S)}, a planner queued for
+      {limit_text(PLANNER_QUEUE_WARN_S)}, a module with one planned milestone left, a low disk, and a main-branch
+      check failing on the tip. Each sign wakes the lead once, until it changes or goes, and later results name it in
+      `earlier_signs` without its text.
+      Results: WARNING_SIGNS, RUN_ENDED (with `results`, each ended command's result and `next`), CHECK_IN,
+      BUILD_FINISHED (every module is finished), WAITING_FOR_USER (nothing is running and every open milestone is
+      Blocked on the user or waits on one that is) and SUPERVISOR_FAILED (it couldn't read the records three times
+      running; its log is named). Each sums up the build for a lead with no other context: what moved since the last
+      wake, what hasn't, milestones going back and forth between building and review (with their counts since their
+      items last changed, and what those call for), builder slots (a `run` going through its steps holds one,
+      whichever step it is on), planners, disk, the main branch and the flow numbers.
+""",
+    "supervise": f"""\
+supervise --worktree PATH [--status | --stop | --test-wake]
+      The repository's supervisor: one detached process per repository (it holds
+      <git common dir>/orchestrate/{SUPERVISOR_LOCK}), which any command that names a worktree starts when none is
+      running, so a reboot, a crash or a closed session mends itself at the next command any agent runs. It reads
+      the records as `watch` describes and does two things.
+      It keeps the builders busy where the next step is routine: while the settings' Builders line has a count and
+      a slot is free, it starts `run --module M` from the main checkout for each module whose next milestone can
+      start or is Ready for Review, when the module's latest result left nothing for the lead (no result, WAITING,
+      a passed review, or a `next` that is a plain `run` or `review` of the module). A result that asks the lead
+      or the user (Blocked, PAUSED, stalled, a --message, --fresh or another host) waits for the lead. It starts
+      nothing with no Builders count, or while the test command fails on the main branch.
+      It wakes the lead, through `watch` when one waits, and otherwise through the lead's host: a message to the
+      Claude Code session's inbox socket (cross-session messaging, Claude Code 2.1.224 or later), a queued message
+      on a Codex thread the desktop app holds (`codex queue`), or the settings' `Lead wake` command. How to reach
+      the lead comes from the lead's last command, in {LEAD_FILE}. A lead its host can't wake this way is told in
+      the `wake` field of every result to keep `watch` running.
+      It stops when the build is finished, when nothing can move without the user (a command starts it again once
+      a branch moves), when `pause` stops every run or --stop asks (no command starts it again until the lead runs
+      `run`, `plan`, `watch` or `supervise`), and for a newer copy of the script (the next command starts that).
+      --status  SUPERVISOR: `running`, the record in {SUPERVISOR_FILE} (pid, version, runs it started, last wake,
+                why it stopped), `lead` (how it reaches the lead), `push` (claude, codex, command, or null with
+                `no_push_because`) and `watch_waiting`.
+      --stop    STOPPING, or NOTHING when none was running.
+      --test-wake  WAKE_SENT or WAKE_FAILED (with `error`): a test message to the lead the way a wake would go.
+      Started bare, it is the supervisor itself, and ends SUPERVISOR_STOPPED with `reason`, or NOTHING when one
+      already runs.
 """,
     "history": """\
 history --worktree PATH [--json] [--full] [--budget SECONDS]
@@ -16018,6 +17124,16 @@ def build_parser() -> argparse.ArgumentParser:
     watch.add_argument("--runs", action="store_true", help="also end when a run, review or plan of this repository "
                        "ends, for a lead whose host doesn't wake it when a background command ends")
     watch.set_defaults(func=cmd_watch)
+    sup = sub.add_parser("supervise", help="the repository's supervisor, which keeps the builders busy and wakes the "
+                                           "lead; every command starts it, so the lead runs it only to look or stop it")
+    sup.add_argument("--worktree", default=".")
+    sup_what = sup.add_mutually_exclusive_group()
+    sup_what.add_argument("--status", action="store_true", help="say whether it runs, how it reaches the lead, and "
+                          "its last wake")
+    sup_what.add_argument("--stop", action="store_true", help="stop it until the lead carries on")
+    sup_what.add_argument("--test-wake", action="store_true", help="send the lead a test message the way the "
+                          "supervisor would wake it")
+    sup.set_defaults(func=cmd_supervise)
     merge_p = sub.add_parser("merge", help="queue this worktree's commits to be rebased, tested with the test "
                                            "command and merged, alone or in a batch with other waiting branches")
     merge_p.add_argument("--worktree", default=".")
@@ -16065,6 +17181,15 @@ def build_parser() -> argparse.ArgumentParser:
     pause.add_argument("--module")
     pause.add_argument("--worktree", default=".")
     pause.set_defaults(func=cmd_pause)
+    thread_p = sub.add_parser("thread", help="stop, pause, resume or clear the queue of a Codex thread a run "
+                                             "started in the Codex app, or report its state")
+    thread_p.add_argument("action", choices=["stop", "pause", "resume", "unqueue", "status"])
+    thread_p.add_argument("--module", help="the module whose latest run's thread to act on")
+    thread_p.add_argument("--thread", help="the thread's id, for a review's or planner's thread")
+    thread_p.add_argument("--worktree", default=".")
+    thread_p.add_argument("--message", help="resume: the message the resumed goal starts from (default: "
+                                            f"{CONTINUE_GOAL!r})")
+    thread_p.set_defaults(func=cmd_thread)
     human = sub.add_parser("human", aliases=["owner"],  # `owner`: its name before 2.2
                            help="record a decision the user gave the lead in chat")
     human.add_argument("action", choices=["accept", "rereview", "reopen", "scope", "release", "feedback"])
@@ -16240,6 +17365,8 @@ def main() -> None:
     worktree = getattr(args, "worktree", None)
     if worktree and args.func is not cmd_quota:
         QUOTA_WORKTREE[:] = [Path(worktree).resolve()]
+    if worktree and getattr(args, "command", None):
+        supervise_hook(args.command, Path(worktree).resolve())
     if not STEPS_PARENT:
         mark_running(argv, worktree)
     try:
@@ -16272,8 +17399,8 @@ def stop_crashed(argv: list[str], worktree: str | None) -> None:
     print(text, file=sys.stderr)
     stop_with("SCRIPT_FAILED", text.strip().splitlines()[-1], argv, 1, worktree,
               traceback=text.strip().splitlines()[-6:], next=next_cmd(
-                  None, "lead", "this is a fault in the script, not in the project; run the command again once, and "
-                                "if it fails the same way, tell the user, with the traceback"))
+                  loop_cmd(*argv), "lead", "this is a fault in the script, not in the project; run the command again "
+                                           "once, and if it fails the same way, tell the user, with the traceback"))
 
 
 def stop_on_write(args: argparse.Namespace, e: WriteBlocked) -> None:
@@ -16285,6 +17412,7 @@ def stop_on_write(args: argparse.Namespace, e: WriteBlocked) -> None:
         line = {"result": "SCRIPT_FAILED", **e.fields(), "next": next_cmd(
             again, "lead", "the lock is held; run the command again once it's free" if e.held else
             "run the same command outside the sandbox, or with escalation")}
+    line = fit_nexts(line)
     for path in MARKED:  # the RUNNING line this command left would otherwise outlive it
         try:
             path.write_text(json.dumps(line) + "\n")
