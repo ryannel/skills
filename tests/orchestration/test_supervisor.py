@@ -468,6 +468,15 @@ class NewestCopyWins(Wiring):
             self.assertTrue(agent_loop.ensure_supervisor(self.wt))
         self.assertEqual(stop.read_text(), "newer")
 
+    def test_supervise_status_replaces_an_older_supervisor_too(self):
+        agent_loop.write_atomically(self.folder / agent_loop.SUPERVISOR_FILE, {"pid": 1, "version": "2.0.0"})
+        asked = []
+        with mock.patch.object(agent_loop, "supervisor_alive", lambda folder: True), \
+                mock.patch.object(agent_loop, "ensure_supervisor", lambda worktree, restart=False: asked.append(1)):
+            line = self.call(agent_loop.cmd_supervise, worktree=str(self.wt), stop=False, status=True,
+                             test_wake=False, hold=None, release=False, reason=None)
+        self.assertEqual((line["result"], asked), ("SUPERVISOR", [1]))
+
 
 class HoldingBuilders(Wiring):
     """The lead holds the builders below the user's count, with a reason, and releases the hold."""

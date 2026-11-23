@@ -6121,7 +6121,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.12.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.12.4"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6161,6 +6161,10 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.12.4": [
+        "`supervise`, with or without --status, now replaces an older supervisor with the newest copy too, as "
+        "every other command does.",
+    ],
     "2.12.3": [
         "Every command now starts the newest copy of the supervisor installed, and stops only an older one, so a "
         "run still going on an older copy can't put its supervisor back. A supervisor from 2.12.3 on ignores an "
@@ -16594,6 +16598,10 @@ def cmd_supervise(a: argparse.Namespace) -> None:
         had = builders_hold(folder)
         (folder / HOLD_FILE).unlink(missing_ok=True)
         emit("RELEASED" if had else "NOTHING", **({"was": had} if had else {"note": "no hold was set"}))
+    if SUPERVISOR_ON and os.environ.get(SUPERVISED_ENV) != "1" and supervisor_alive(folder):
+        # The hook leaves `supervise` alone, so an older supervisor is replaced here, in every form but --stop and
+        # the supervisor itself
+        ensure_supervisor(worktree)
     if a.status or a.test_wake:
         lead = read_json_file(folder / LEAD_FILE) or {}
         setting = lead_wake_of(main_checkout(worktree))
