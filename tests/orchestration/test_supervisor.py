@@ -445,6 +445,30 @@ class SupervisorLife(Repo):
         self.assertFalse(agent_loop.ensure_supervisor(self.wt))  # nothing has moved since
 
 
+class NewestCopyWins(Wiring):
+    """Runs started on an older copy keep running its commands for hours, so the newest copy's supervisor must win."""
+
+    def test_a_newer_supervisor_is_left_alone_and_ignores_an_older_copys_stop(self):
+        stop = self.folder / agent_loop.SUPERVISOR_STOP
+        agent_loop.write_atomically(self.folder / agent_loop.SUPERVISOR_FILE, {"pid": 1, "version": "99.0.0"})
+        with mock.patch.object(agent_loop, "supervisor_alive", lambda folder: True):
+            self.assertTrue(agent_loop.ensure_supervisor(self.wt))
+        self.assertFalse(stop.exists(), "an older copy never stops a newer supervisor")
+        stop.write_text("newer")  # as copies before 2.12.3 ask any other version to stop
+        self.assertIsNone(agent_loop.supervise_tick(self.wt, {}, {"tip": None, "steps": {}, "loops": []}, False, {}))
+        self.assertFalse(stop.exists())
+        stop.write_text("user")
+        self.assertEqual(agent_loop.supervise_tick(self.wt, {}, {}, False, {}), ("STOP", {"reason": "user"}))
+
+    def test_an_older_supervisor_is_asked_to_stop(self):
+        stop = self.folder / agent_loop.SUPERVISOR_STOP
+        agent_loop.write_atomically(self.folder / agent_loop.SUPERVISOR_FILE, {"pid": 1, "version": "2.0.0"})
+        with mock.patch.object(agent_loop, "supervisor_alive", lambda folder: True), \
+                mock.patch.object(agent_loop, "SUPERVISOR_HANDOVER_S", 0.0):
+            self.assertTrue(agent_loop.ensure_supervisor(self.wt))
+        self.assertEqual(stop.read_text(), "newer")
+
+
 class HoldingBuilders(Wiring):
     """The lead holds the builders below the user's count, with a reason, and releases the hold."""
 

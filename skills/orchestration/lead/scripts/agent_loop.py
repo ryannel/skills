@@ -6121,12 +6121,22 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.12.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.12.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
     m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", text)
     return tuple(int(x) for x in m.groups()) if m else None
+
+
+def script_version(path: Path) -> tuple[int, ...] | None:
+    """The version of the copy of this script at `path`, from its plugin cache folder (`.../orchestrate/<version>/`),
+    or None outside one."""
+    parts = path.parts
+    for i in range(len(parts) - 1, 0, -1):
+        if parts[i - 1] == "orchestrate" and (v := version_tuple(parts[i])):
+            return v
+    return None
 
 
 def newer_install() -> str | None:
@@ -6151,6 +6161,11 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.12.3": [
+        "Every command now starts the newest copy of the supervisor installed, and stops only an older one, so a "
+        "run still going on an older copy can't put its supervisor back. A supervisor from 2.12.3 on ignores an "
+        "older copy's request to stop.",
+    ],
     "2.12.2": [
         "A command run inside Codex's sandbox no longer starts the supervisor, which would have kept the sandbox, "
         "and the supervisor no longer passes the Codex turn that started it on to the runs it starts.",
@@ -16028,6 +16043,7 @@ SUPERVISOR_SPAWN = "supervisor.spawn"  # the pid a command started, until it tak
 SUPERVISOR_START_S = 30.0  # how long a supervisor a command started counts as running before it takes its lock
 SUPERVISOR_RESTART_S = 120.0  # a module the supervisor started isn't started again by it sooner than this
 SUPERVISOR_RETRY_S = 60.0  # after the supervisor fails to read the records, how long before it tries again
+SUPERVISOR_HANDOVER_S = 20.0  # how long a command waits for an older supervisor to stop before it starts the newest
 NO_WORKTREE: set = set()  # modules the supervisor couldn't start for want of a worktree, which `watch` names
 HOLD_FILE = "builders-hold.json"  # a lower builder count the lead set with `supervise --hold`, and why
 # the supervisor starts no builder while the 1-minute load average is above this per core (the tests raise it, since
@@ -16251,14 +16267,26 @@ def supervised_env() -> dict:
 def ensure_supervisor(worktree: Path, restart: bool = False) -> bool:
     """Starts the repository's supervisor if none is running, and says whether one is. One that stopped because the
     user stopped everything is started again only when the lead carries on (`restart`); one that stopped because
-    the build finished or waits on the user, only once a branch has moved. A supervisor from an older copy of the
-    script is asked to stop, and the next command starts this copy's."""
+    the build finished or waits on the user, only once a branch has moved. It always starts the newest copy
+    installed, because a run started on an older copy keeps running its commands from that copy for hours. A
+    supervisor older than that copy is asked to stop, and this command starts the newest in its place; a newer one
+    is left alone."""
     folder = loop_dir(worktree)
     info = read_json_file(folder / SUPERVISOR_FILE) or {}
+    script = Path(newer_install() or LOOP)
+    newest = script_version(script) or version_tuple(VERSION)
     if supervisor_alive(folder):
-        if info.get("version") not in (None, VERSION) and not (folder / SUPERVISOR_STOP).exists():
+        running = version_tuple(info.get("version") or "")
+        if not running or running >= newest:
+            return True
+        if not (folder / SUPERVISOR_STOP).exists():
             (folder / SUPERVISOR_STOP).write_text("newer")
-        return True
+        deadline = time.time() + SUPERVISOR_HANDOVER_S  # it stops within seconds; start the newest at once, before
+        while supervisor_alive(folder) and time.time() < deadline:  # an older copy's command starts its own
+            time.sleep(0.5)
+        if supervisor_alive(folder):
+            return True
+        info = read_json_file(folder / SUPERVISOR_FILE) or {}
     stopped = info.get("stopped") or {}
     if not restart and (stopped.get("reason") == "user" or (stopped.get("reason") in SETTLED_STOPS and
                                                             stopped.get("refs") == refs_print(worktree))):
@@ -16268,7 +16296,7 @@ def ensure_supervisor(worktree: Path, restart: bool = False) -> bool:
         return False
     (folder / SUPERVISOR_STOP).unlink(missing_ok=True)  # an earlier stop, already obeyed
     with open(folder / "supervisor.log", "a") as log:
-        proc = subprocess.Popen([sys.executable, str(LOOP), "supervise", "--worktree", str(target)],
+        proc = subprocess.Popen([sys.executable, str(script), "supervise", "--worktree", str(target)],
                                 cwd=str(target), env=supervised_env(), stdin=subprocess.DEVNULL, stdout=log,
                                 stderr=subprocess.STDOUT, start_new_session=True, close_fds=True)
     write_atomically(folder / SUPERVISOR_SPAWN, {"pid": proc.pid, "at": time.time()})
@@ -16486,7 +16514,11 @@ def supervise_tick(worktree: Path, prof: dict, look: dict, fresh: bool, started:
     folder = loop_dir(worktree)
     try:
         reason = (folder / SUPERVISOR_STOP).read_text().strip() or "user"
-        return "STOP", {"reason": reason}
+        if reason == "newer" and not newer_install():
+            # an older copy's command asked, as copies before 2.12.3 do for any other version: this is the newest
+            (folder / SUPERVISOR_STOP).unlink(missing_ok=True)
+        else:
+            return "STOP", {"reason": reason}
     except OSError:
         pass
     if _STOP:
@@ -17148,7 +17180,8 @@ supervise --worktree PATH [--status | --stop | --test-wake | --hold N --reason T
       the `wake` field of every result to keep `watch` running.
       It stops when the build is finished, when nothing can move without the user (a command starts it again once
       a branch moves), when `pause` stops every run or --stop asks (no command starts it again until the lead runs
-      `run`, `plan`, `watch` or `supervise`), and for a newer copy of the script (the next command starts that).
+      `run`, `plan`, `watch` or `supervise`), and for a newer copy of the script: every command starts the
+      newest copy installed, whichever copy it runs from, and an older copy's request to stop leaves it running.
       --status  SUPERVISOR: `running`, the record in {SUPERVISOR_FILE} (pid, version, runs it started, last wake,
                 why it stopped), `lead` (how it reaches the lead), `push` (claude, codex, command, or null with
                 `no_push_because`) and `watch_waiting`.
