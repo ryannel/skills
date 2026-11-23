@@ -6121,7 +6121,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.12.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.12.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6151,6 +6151,13 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.12.1": [
+        "The supervisor starts a module's run in the worktree on its build/<module> branch, never in the main "
+        "checkout. With no such worktree and no `Worktrees:` settings line, it leaves the module to you, and "
+        "`watch` names it in `no_worktree`.",
+        "The `overloaded` sign shows only while the load is over the limit, and an overload ends 15 minutes after "
+        "the load was last seen over it.",
+    ],
     "2.12.0": [
         "A merge no longer calls the main branch failing on one failed test run: it tests the main branch again, "
         "after the machine's load falls if it was overloaded, and calls it failing only if that fails too. A commit "
@@ -15660,16 +15667,23 @@ def track_overload(since: dict, stamp: float, prof: dict | None = None) -> dict 
     near the limit doesn't wake the lead each time it crosses. `stamp` is the look's own time, which the sign
     measures the overload against. Returns the load."""
     load = machine_load(prof)
+    since.pop("overload_cleared", None)  # 2.11.3 to 2.12.0 counted the dip from here, which a stale copy reset
     if overloaded(load):
         try:  # 2.11.1 and 2.11.2 kept the start as text
             since["overloaded"] = min(float(since["overloaded"]), stamp)
         except (KeyError, TypeError, ValueError):
             since["overloaded"] = stamp
-        since.pop("overload_cleared", None)
+        # when it was last seen overloaded: the overload ends OVERLOAD_CLEAR_S after this, whoever saw it
+        since["overload_last"] = max(float(since.get("overload_last") or 0), stamp)
         since["overload_peak"] = max(since.get("overload_peak") or 1, int(load["load"] // load["limit"]))
-    elif "overloaded" in since and stamp - since.setdefault("overload_cleared", stamp) > OVERLOAD_CLEAR_S:
-        for key in ("overloaded", "overload_cleared", "overload_peak"):
-            since.pop(key, None)
+    elif "overloaded" in since:
+        try:
+            last = float(since.get("overload_last") or since["overloaded"])
+        except (TypeError, ValueError):
+            last = 0.0
+        if stamp - last > OVERLOAD_CLEAR_S:
+            for key in ("overloaded", "overload_last", "overload_peak"):
+                since.pop(key, None)
     return load
 
 
@@ -15730,11 +15744,12 @@ def watch_signs(look: dict) -> dict:
     with the same `seen` is the same sign, which wakes the lead once."""
     signs, stamp = {}, look["stamp"]
     first = look["since"].get("overloaded")
-    if isinstance(first, (int, float)) and look.get("waiting") and look.get("load"):
+    if isinstance(first, (int, float)) and look.get("waiting") and overloaded(look.get("load")):
         first = min(first, stamp)
-        # The same overload wakes the lead again only when it gets worse (the load passes another multiple of the
-        # limit), the ready work changes, or it has lasted another OVERLOAD_REWAKE_S. A fall back under the limit
-        # wakes nobody, because the supervisor starts the builders itself then.
+        # The sign shows only while the load is over the limit. The same overload, which lasts through dips under
+        # the limit shorter than OVERLOAD_CLEAR_S, wakes the lead again only when it gets worse (the load passes
+        # another multiple of the limit), the ready work changes, or it has lasted another OVERLOAD_REWAKE_S. A fall
+        # back under the limit wakes nobody, because the supervisor starts the builders itself then.
         load = look["load"]
         ready = sorted(f"{w['module']} {w.get('milestone') or ''}".strip() for w in look["waiting"])
         signs["overloaded"] = {"seen": json.dumps([int((stamp - first) // OVERLOAD_REWAKE_S),
@@ -15862,6 +15877,11 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dic
                         **({"held_to": look["hold"]} if look.get("hold") else {}),
                         **({"held_for_load": look["load"]} if overloaded(look.get("load")) else {}),
                         "ready_waiting": [f"{s['module']} {s.get('milestone') or ''}".strip() for s in look["waiting"]],
+                        **({"no_worktree": (
+                            f"the supervisor can't start {', '.join(sorted(stuck))}: no worktree is on its "
+                            "build/<module> branch and the settings have no `Worktrees:` line, so start it yourself "
+                            "with `run --worktree` in its worktree, or add a `Worktrees:` folder")}
+                           if (stuck := NO_WORKTREE & {w["module"] for w in look["waiting"]}) else {}),
                         **({"waiting_for_a_slot": [f"{r.get('module')} {r.get('milestone') or ''} "
                                                    f"({ago(stamp - (r.get('waiting_since') or stamp))})".strip()
                                                    for r in slot_waiters(look["loops"])]}
@@ -16004,6 +16024,7 @@ SUPERVISOR_SPAWN = "supervisor.spawn"  # the pid a command started, until it tak
 SUPERVISOR_START_S = 30.0  # how long a supervisor a command started counts as running before it takes its lock
 SUPERVISOR_RESTART_S = 120.0  # a module the supervisor started isn't started again by it sooner than this
 SUPERVISOR_RETRY_S = 60.0  # after the supervisor fails to read the records, how long before it tries again
+NO_WORKTREE: set = set()  # modules the supervisor couldn't start for want of a worktree, which `watch` names
 HOLD_FILE = "builders-hold.json"  # a lower builder count the lead set with `supervise --hold`, and why
 # the supervisor starts no builder while the 1-minute load average is above this per core (the tests raise it, since
 # they load the machine themselves)
@@ -16292,18 +16313,34 @@ def routine_start(line: dict | None, stem: str) -> bool:
                    for w in words)
 
 
-def start_run(worktree: Path, prof: dict, stem: str) -> None:
-    """Starts `run --module <stem>` from the main checkout, detached, logged beside the supervisor's log. With no
-    Default host in the settings, it runs on the lead's host, as a run the lead started would."""
+def run_worktree(worktree: Path, prof: dict, stem: str) -> Path | None:
+    """Where the supervisor starts `stem`'s run: the worktree checked out on its build/<module> branch, or the main
+    checkout when the settings have a `Worktrees:` line, since `run` then makes the module's worktree itself. Else
+    None: a builder started in the main checkout would build there, in the checkout the script reads its settings
+    from, so the lead chooses where."""
+    found = worktrees_by_branch(worktree).get(build_branch(stem))
+    if found and found.exists() and found.resolve() != main_checkout(worktree).resolve():
+        return found.resolve()
+    return main_checkout(worktree) if prof.get("worktrees") else None
+
+
+def start_run(worktree: Path, prof: dict, stem: str) -> bool:
+    """Starts `run --module <stem>` in the module's worktree, detached, logged beside the supervisor's log, and says
+    whether it could. With no Default host in the settings, it runs on the lead's host, as a run the lead started
+    would."""
     folder = loop_dir(worktree)
-    argv = [sys.executable, str(LOOP), "run", "--module", stem, "--worktree", str(main_checkout(worktree))]
+    where = run_worktree(worktree, prof, stem)
+    if where is None:
+        return False
+    argv = [sys.executable, str(LOOP), "run", "--module", stem, "--worktree", str(where)]
     lead = read_json_file(folder / LEAD_FILE) or {}
     if not prof.get("default_host") and lead.get("host") in ("codex", "claude"):
         argv += ["--host", lead["host"]]
     (folder / "supervisor").mkdir(exist_ok=True)
     with open(folder / "supervisor" / f"{stem}.log", "a") as log:
-        subprocess.Popen(argv, cwd=str(worktree), env=supervised_env(), stdin=subprocess.DEVNULL, stdout=log,
+        subprocess.Popen(argv, cwd=str(where), env=supervised_env(), stdin=subprocess.DEVNULL, stdout=log,
                          stderr=subprocess.STDOUT, start_new_session=True, close_fds=True)
+    return True
 
 
 def builders_hold(folder: Path) -> dict | None:
@@ -16351,9 +16388,11 @@ def fill_builders(worktree: Path, prof: dict, look: dict, started: dict) -> list
                 stem.upper() in busy or time.time() - started.get(stem, 0.0) < SUPERVISOR_RESTART_S or \
                 not routine_start(latest_result(folder, stem), stem):
             continue
-        start_run(worktree, prof, stem)
         started[stem] = time.time()
-        out.append(stem)
+        if start_run(worktree, prof, stem):
+            out.append(stem)
+        else:
+            NO_WORKTREE.add(stem)
     return out
 
 
@@ -17108,6 +17147,9 @@ supervise --worktree PATH [--status | --stop | --test-wake | --hold N --reason T
                 `no_push_because`) and `watch_waiting`.
       --stop    STOPPING, or NOTHING when none was running.
       --test-wake  WAKE_SENT or WAKE_FAILED (with `error`): a test message to the lead the way a wake would go.
+      It starts a module's run in the worktree on its build/<module> branch, or from the main checkout when the
+      settings have a `Worktrees:` line, and never builds in the main checkout; a module with neither waits for
+      the lead, and `watch` names it in `no_worktree`.
       --hold N --reason TEXT  HELD: the supervisor starts no builder while N or more run, below the settings'
                 Builders count, until --release, which prints RELEASED (NOTHING with no hold). It also starts none
                 while the 1-minute load average per core is above the settings' `Load limit` ({LOAD_PER_CORE_LIMIT}

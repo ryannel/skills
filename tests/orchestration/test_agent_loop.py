@@ -1971,13 +1971,13 @@ class WhatTheLeadSees(Repo):
         with mock.patch.object(agent_loop, "QUOTA_WORKTREE", [self.wt]):
             first = self.call(lambda a: agent_loop.emit("NOTHING"))
             second = self.call(lambda a: agent_loop.emit("NOTHING"))
-        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         self.assertIn("From before 2.6.0", first["changed"]["2.5.0"][0])
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
         self.assertIn("2.5.0", agent_loop.version_change(self.wt))
         note.write_text('{"version": "2.5.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         note.write_text('{"version": "2.9.0"}')
         (line, *_) = agent_loop.version_change(self.wt)["2.10.0"]
         self.assertIn("Read the lead skill again", line)
@@ -5740,8 +5740,8 @@ class PlanFiles(Repo):
         self.assertNotIn("<<<<<<<", (tree / "docs/plans/WATER/DONE.json").read_text())
         self.assertNotIn(str(tree), json.dumps(self.migrate().get("worktrees_on_old_names") or []))
         ran = self.run_loop(worktree=str(tree))
-        # `run` accepts it and starts M2's builder; the fake builder never merges, so its checks fail
-        self.assertEqual((ran["result"], ran["milestone"]), ("CHECKS_FAILED", "M2"), ran)
+        # `run` accepts it, and M2's builder merges from the worktree and reaches Ready for Review
+        self.assertEqual((ran["result"], ran["milestone"]), ("READY_FOR_REVIEW", "M2"), ran)
 
     def test_r6_migrate_branch_leaves_later_conflicts_to_the_builders_next_merge(self):
         self.old_names()

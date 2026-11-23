@@ -224,7 +224,7 @@ class StartingBuilders(Clean):
         super().setUp()
         self.started = []
         self.results = {}
-        for name, value in (("start_run", lambda worktree, prof, stem: self.started.append(stem)),
+        for name, value in (("start_run", lambda worktree, prof, stem: self.started.append(stem) or True),
                             ("latest_result", lambda folder, stem: self.results.get(stem)),
                             ("loop_dir", lambda worktree: Path("/nowhere"))):
             patch = mock.patch.object(agent_loop, name, value)
@@ -272,6 +272,7 @@ class StartingBuilders(Clean):
         self.assertNotEqual(seen(44.0, episode, waiting=("A", "B")), first)
         self.assertNotEqual(seen(44.0, episode, stamp=3700.0), first)
         self.assertIsNone(seen(44.0, episode, waiting=()))
+        self.assertIsNone(seen(5.1, episode), "no sign while the load is under the limit")
         signs = agent_loop.watch_signs({**look(load={"load": 30.0, "cores": 14, "limit": 21.0}),
                                         "waiting": [{"module": "A"}], "builds": [], "progress": {},
                                         "since": {"overloaded": 103.0}, "stamp": 100.0, "disk": None, "tip": None,
@@ -297,6 +298,15 @@ class StartingBuilders(Clean):
         self.assertEqual((agent_loop.load_limit("2 per core", problems), agent_loop.load_limit("", problems)),
                          (2.0, agent_loop.LOAD_PER_CORE_LIMIT))
         self.assertEqual((agent_loop.load_limit("lots", problems), len(problems)), (agent_loop.LOAD_PER_CORE_LIMIT, 1))
+
+    def test_a_module_runs_in_its_own_worktree_and_never_in_the_main_checkout(self):
+        main, own = Path("/repo"), Path("/repo/.claude/worktrees/water")
+        with mock.patch.object(agent_loop, "main_checkout", lambda worktree: main), \
+                mock.patch.object(Path, "exists", lambda self: True), \
+                mock.patch.object(agent_loop, "worktrees_by_branch", lambda worktree: {"build/water": own}):
+            self.assertEqual(agent_loop.run_worktree(main, {}, "WATER").as_posix(), own.resolve().as_posix())
+            self.assertIsNone(agent_loop.run_worktree(main, {}, "SKY"))
+            self.assertEqual(agent_loop.run_worktree(main, {"worktrees": ".wt"}, "SKY"), main)
 
     def test_a_builders_count_saved_while_it_waits_is_read_at_the_next_look(self):
         prof = {"builders": None, "check_in_s": 3600}
@@ -406,6 +416,9 @@ class SupervisorLife(Repo):
         self.assertTrue(agent_loop.ensure_supervisor(self.wt, restart=True))
 
     def test_it_builds_the_module_wakes_the_lead_when_the_run_ends_and_stops_when_the_build_is_finished(self):
+        settings = self.wt / "ORCHESTRATE.md"  # the supervisor starts a module only in a worktree of its own
+        settings.write_text(settings.read_text().replace("- **Builders:**", "- **Worktrees:** .worktrees\n- **Builders:**"))
+        self.commit_all()
         session = FakeClaudeSession()
         self.addCleanup(session.close)
         agent_loop.write_private(self.folder / agent_loop.LEAD_FILE,
@@ -426,11 +439,6 @@ class SupervisorLife(Repo):
         self.assertFalse(agent_loop.ensure_supervisor(self.wt))  # nothing has moved since
 
 
-if __name__ == "__main__":
-    import unittest
-    unittest.main()
-
-
 class HoldingBuilders(Wiring):
     """The lead holds the builders below the user's count, with a reason, and releases the hold."""
 
@@ -445,3 +453,8 @@ class HoldingBuilders(Wiring):
         self.assertEqual(call(release=True)["result"], "RELEASED")
         self.assertIsNone(agent_loop.builders_hold(self.folder))
         self.assertEqual(call(release=True)["result"], "NOTHING")
+
+
+if __name__ == "__main__":
+    import unittest
+    unittest.main()

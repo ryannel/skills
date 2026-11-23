@@ -267,7 +267,7 @@ if role == "build" and os.environ.get("FAKE_PASS") == "1":
     if os.environ.get("FAKE_COMMIT", "1") == "1":
         git("commit", "-qam", "pass")
         git("pull", "-q", "--rebase", "origin", "main")
-        git("push", "-q", "origin", "main")
+        git("push", "-q", "origin", "HEAD:main")  # from the main checkout or a module's own worktree
     if os.environ.get("FAKE_UPSTREAM_BREAK"):
         (cwd / "broken").write_text("x")
         git("add", "broken")
