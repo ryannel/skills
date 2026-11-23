@@ -53,10 +53,10 @@ class FakeClaudeSession:
         return [m[-1]["message"]["content"] for m in self.messages]
 
 
-def look(steps=None, loops=(), limit=2, free=2, broken=(), running=(), ahead=(), hold=None, load=None):
+def look(steps=None, loops=(), limit=2, free=2, broken=(), running=(), ahead=()):
     """What `watch_look` returns, cut to what the supervisor reads."""
     return {"steps": steps or {}, "loops": list(loops), "limit": limit, "free": free, "broken": list(broken),
-            "running": set(running), "ahead": list(ahead), "hold": hold, "load": load}
+            "running": set(running), "ahead": list(ahead)}
 
 
 def step(module, status, **more):
@@ -248,57 +248,6 @@ class StartingBuilders(Clean):
         self.assertEqual(self.fill(look(steps, loops=[{"role": "review", "module": "A"}])), [])
         self.assertEqual(self.fill(look(steps), started={"A": time.time()}), [])
 
-    def test_a_lead_held_count_lowers_the_slots_and_an_overloaded_machine_starts_none(self):
-        steps = {k: step(k, "can_start") for k in ("A", "B", "C")}
-        busy = [{"role": "build", "module": "Z", "pid": 1}]
-        with mock.patch.object(agent_loop, "builder_runs", lambda loops: [r for r in loops if r["role"] == "build"]):
-            self.assertEqual(self.fill(look(steps, free=3, loops=busy, hold={"builders": 2})), ["A"])
-            self.assertEqual(self.fill(look(steps, free=3, loops=busy, hold={"builders": 1})), [])
-        hot = {"load": 40.0, "cores": 14, "limit": 21.0}
-        self.assertEqual(self.fill(look(steps, load=hot)), [])
-        self.assertEqual(self.fill(look(steps, free=1, load={**hot, "load": 12.0})), ["A"])
-
-    def test_an_overload_wakes_the_lead_once_until_it_worsens_the_ready_work_changes_or_an_hour_passes(self):
-        def seen(load, since, stamp=100.0, waiting=("A",)):
-            signs = agent_loop.watch_signs({**look(load={"load": load, "cores": 14, "limit": 21.0}),
-                                            "waiting": [{"module": m} for m in waiting], "builds": [], "progress": {},
-                                            "since": since, "stamp": stamp, "disk": None, "tip": None, "proj": {}})
-            return (signs.get("overloaded") or {}).get("seen")
-        self.assertIsNone(seen(44.0, {}))
-        episode = {"overloaded": 0.0, "overload_peak": 2}
-        first = seen(44.0, episode)
-        self.assertEqual([seen(31.6, episode), seen(25.2, episode, stamp=1800.0)], [first, first])
-        self.assertNotEqual(seen(44.0, {**episode, "overload_peak": 3}), first)
-        self.assertNotEqual(seen(44.0, episode, waiting=("A", "B")), first)
-        self.assertNotEqual(seen(44.0, episode, stamp=3700.0), first)
-        self.assertIsNone(seen(44.0, episode, waiting=()))
-        self.assertIsNone(seen(5.1, episode), "no sign while the load is under the limit")
-        signs = agent_loop.watch_signs({**look(load={"load": 30.0, "cores": 14, "limit": 21.0}),
-                                        "waiting": [{"module": "A"}], "builds": [], "progress": {},
-                                        "since": {"overloaded": 103.0}, "stamp": 100.0, "disk": None, "tip": None,
-                                        "proj": {}})
-        self.assertNotIn("for -", signs["overloaded"]["text"])
-
-    def test_a_short_dip_under_the_limit_keeps_the_overload_and_a_long_one_ends_it(self):
-        since, loads = {}, iter([30.0, 10.0, 30.0, 10.0, 10.0])
-        clock = iter([0.0, 60.0, 120.0, 180.0, 180.0 + agent_loop.OVERLOAD_CLEAR_S + 1])
-        for _ in range(5):
-            with mock.patch.object(agent_loop, "machine_load", lambda *a: {"load": next(loads), "cores": 14,
-                                                                        "limit": 21.0}), \
-                    mock.patch.object(agent_loop.time, "time", lambda: 0.0):
-                agent_loop.track_overload(since, next(clock))
-            if _ < 4:
-                self.assertEqual(since.get("overloaded"), 0.0, since)
-        self.assertNotIn("overloaded", since)
-        since = {"overloaded": "50.0"}  # as 2.11.1 and 2.11.2 kept it
-        with mock.patch.object(agent_loop, "machine_load", lambda *a: {"load": 30.0, "cores": 14, "limit": 21.0}):
-            agent_loop.track_overload(since, 100.0)
-        self.assertEqual(since["overloaded"], 50.0)
-        problems = []
-        self.assertEqual((agent_loop.load_limit("2 per core", problems), agent_loop.load_limit("", problems)),
-                         (2.0, agent_loop.LOAD_PER_CORE_LIMIT))
-        self.assertEqual((agent_loop.load_limit("lots", problems), len(problems)), (agent_loop.LOAD_PER_CORE_LIMIT, 1))
-
     def test_a_module_runs_in_its_own_worktree_and_never_in_the_main_checkout(self):
         main, own = Path("/repo"), Path("/repo/.claude/worktrees/water")
         with mock.patch.object(agent_loop, "main_checkout", lambda worktree: main), \
@@ -474,24 +423,73 @@ class NewestCopyWins(Wiring):
         with mock.patch.object(agent_loop, "supervisor_alive", lambda folder: True), \
                 mock.patch.object(agent_loop, "ensure_supervisor", lambda worktree, restart=False: asked.append(1)):
             line = self.call(agent_loop.cmd_supervise, worktree=str(self.wt), stop=False, status=True,
-                             test_wake=False, hold=None, release=False, reason=None)
+                             test_wake=False)
         self.assertEqual((line["result"], asked), ("SUPERVISOR", [1]))
 
 
-class HoldingBuilders(Wiring):
-    """The lead holds the builders below the user's count, with a reason, and releases the hold."""
+class MachineOverview(Repo):
 
-    def test_a_hold_needs_a_reason_shows_in_status_and_a_release_ends_it(self):
-        call = lambda **kw: self.call(agent_loop.cmd_supervise, **{**dict(worktree=str(self.wt), stop=False,
-                                      status=False, test_wake=False, hold=None, release=False, reason=None), **kw})
-        self.assertEqual(call(hold=4)["result"], "INVALID")
-        self.assertEqual(call(hold=4, reason="the Mac is overloaded")["result"], "HELD")
-        self.assertEqual(agent_loop.builders_hold(self.folder)["builders"], 4)
-        with mock.patch.object(agent_loop, "supervisor_alive", lambda folder: False):
-            self.assertEqual(call(status=True)["hold"]["reason"], "the Mac is overloaded")
-        self.assertEqual(call(release=True)["result"], "RELEASED")
-        self.assertIsNone(agent_loop.builders_hold(self.folder))
-        self.assertEqual(call(release=True)["result"], "NOTHING")
+    def test_flow_and_the_wake_show_cpu_share_and_check_health(self):
+        self.wt = self.wt.resolve()
+        prof = agent_loop.profile(self.wt)
+        prof["main_checks"] = {"images": {"command": "check-images"}}
+        folder = agent_loop.loop_dir(self.wt)
+        for seconds, code in ((8, 0), (12, 0), (20, 0)):
+            agent_loop.note_row(self.wt, agent_loop.CHECK_RUNS_FILE,
+                                {"command": "make test", "seconds": seconds, "exit": code,
+                                 "started_s": time.time(), "stdout": "/logs/test.stdout"})
+        main = agent_loop.main_check_dir(self.wt, "images")
+        for i, code in enumerate((0, 124), 1):
+            agent_loop.write_atomic(main / "runs" / f"{i}.json",
+                                    {"commit": "abc", "result": "fail" if code else "pass", "finished_s": i,
+                                     "command": "check-images", "attempts": [
+                                         {"seconds": 6 * i, "exit": code, "stderr": "/logs/images.stderr"}]})
+        snapshot = [(1, 0, 1, "launchd"), (10, 1, 0, "python3"), (11, 10, 8, "/bin/sh"),
+                    (12, 11, 150, "/tools/rustc"), (13, 1, 50, "rustc"),
+                    (20, 1, 300, "/Applications/Simulator.app/Contents/MacOS/Simulator"),
+                    (21, 20, 80, "/Applications/Simulator.app/Contents/Helper.app/Contents/MacOS/Helper"),
+                    (30, 1, 30, "/Applications/Codex.app/Contents/MacOS/Codex")]
+        stamp = time.time()
+        with mock.patch.object(agent_loop, "live_loops", return_value=([{"pid": 10, "role": "steps"}], [])), \
+                mock.patch.object(agent_loop, "start_due_checks"), \
+                mock.patch.object(agent_loop.shutil, "disk_usage", return_value=mock.Mock(free=10**10)), \
+                mock.patch.object(agent_loop, "profile", return_value=prof), \
+                mock.patch.object(agent_loop, "cpu_processes", return_value=snapshot) as ps, \
+                mock.patch.object(agent_loop, "memory_pressure", return_value="warning"), \
+                mock.patch.object(agent_loop.os, "getloadavg", return_value=(19.5, 12, 6.5)), \
+                mock.patch.object(agent_loop.os, "cpu_count", return_value=14), \
+                mock.patch.object(agent_loop.time, "time", return_value=stamp):
+            state = {"woke_at": stamp - 3600}
+            agent_loop.write_atomically(folder / agent_loop.WATCH_FILE, state)
+            _, wake = agent_loop.watch_wake(self.wt, prof, tick=lambda *_: ("CHECK_IN", ["test wake"]))
+            cli = json.loads(self.printed(agent_loop.cmd_flow, worktree=str(self.wt), since=None))
+        self.assertEqual(ps.call_count, 2)
+        for key, value in cli.items():
+            self.assertEqual(value, wake[key], key)
+        machine = wake["machine"]
+        self.assertEqual(machine["load"], {"1m": 19.5, "15m": 6.5})
+        self.assertEqual(machine["cores"], 14)
+        self.assertEqual(machine["memory_pressure"], "warning")
+        self.assertEqual(machine["cpu_by_app"][:3], [
+            {"app": "Simulator", "cpu_pct": 380, "orchestrate_cpu_pct": 0},
+            {"app": "rustc", "cpu_pct": 200, "orchestrate_cpu_pct": 150},
+            {"app": "Codex", "cpu_pct": 30, "orchestrate_cpu_pct": 0},
+        ])
+        self.assertEqual(machine["checks"]["commands"]["make test"],
+                         {"seconds": 20, "usual_seconds": 10, "exit": 0, "timed_out": False,
+                          "slow": True, "stdout": "/logs/test.stdout"})
+        self.assertEqual(machine["checks"]["main_branch"]["images"],
+                         {"command": "check-images", "seconds": 12, "usual_seconds": 6, "exit": 124,
+                          "timed_out": True, "slow": True, "stderr": "/logs/images.stderr"})
+
+    def test_the_overview_omits_machine_readings_that_fail(self):
+        folder = agent_loop.loop_dir(self.wt)
+        with mock.patch.object(agent_loop.subprocess, "run", side_effect=PermissionError), \
+                mock.patch.object(agent_loop, "loop_dir", return_value=folder), \
+                mock.patch.object(agent_loop.os, "getloadavg", side_effect=OSError), \
+                mock.patch.object(agent_loop.os, "cpu_count", return_value=None):
+            machine = agent_loop.machine_summary(self.wt, {}, {"loops": []})
+        self.assertEqual(machine, {"checks": {"commands": {}, "main_branch": {}}})
 
 
 if __name__ == "__main__":

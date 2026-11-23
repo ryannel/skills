@@ -83,9 +83,6 @@ FAILED from `merge`, exit 1. The script doesn't retry it or delete lock files.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from datetime import datetime, timezone
-
 import argparse
 import atexit
 import copy
@@ -110,7 +107,11 @@ import tempfile
 import threading
 import time
 import uuid
+from collections import deque
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
+from statistics import median
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_quota  # noqa: E402  (beside this file)
@@ -277,8 +278,7 @@ PROFILE_FIELDS = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "t
                   "remote": "origin", "merge": None, "codex sandbox": "workspace-write", "writable roots": "",
                   "graded examples": "", "effort": "", "claude permissions": "auto", "default host": "",
                   "review host": "", "planner host": "", "exclusive resources": "", "setup command": "",
-                  "lead check-in": "", "test command lock": "", "worktrees": "", "lead wake": "",
-                  "load limit": ""}
+                  "lead check-in": "", "test command lock": "", "worktrees": "", "lead wake": ""}
 REQUIRED = {"test command": "the command that must pass before merging, or `none`",
             "merge": "push (standing permission to push) or local"}
 ONE_WORD = {"branch", "remote", "merge", "codex sandbox", "effort", "claude permissions", "default host",
@@ -495,7 +495,6 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
         out["planner_host"] = ""
     out["builders"] = builders_count(text)
     out["check_in_s"] = check_in_s(out.pop("lead check-in"), problems)
-    out["load_per_core"] = load_limit(out.pop("load limit"), problems)
     out["lead_wake"] = lead_wake_setting(out.pop("lead wake"), problems)
     locks =lock_settings_from(text)
     out["shared_resources"], out["lock_hold_limit_s"] = locks["shared"], locks["hold_limit_s"]
@@ -4807,12 +4806,11 @@ def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plan
             use["exit"] = code
     else:
         code, out, err = run_proc(command, tree, timeout_s, shell=True, env=full_env)
-    note_row(tree, CHECK_RUNS_FILE, {"command": command[:300], "exit": code, "started_s": round(started, 1),
-                                     "seconds": round(time.time() - started, 1), "lock": lock,
-                                     "role": os.environ.get("ORCHESTRATE_ROLE") or "script"})
+    seconds = round(time.time() - started, 1)
     paths = {"stdout": None, "stderr": None}
     if folder:
-        stem = f"{(key or 'changed')[:24]}-{name}" + ("" if key else f"-{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}")
+        # A retry or a concurrent run on the same files must leave this run's logs intact.
+        stem = f"{(key or 'changed')[:24]}-{name}-{os.getpid()}-{time.time_ns()}"
         try:
             for field, text in (("stdout", out), ("stderr", err)):
                 path = folder / f"{stem}.{field}"
@@ -4820,6 +4818,9 @@ def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plan
                 paths[field] = str(path)
         except OSError:
             pass
+    note_row(tree, CHECK_RUNS_FILE, {"command": command, "exit": code, "started_s": round(started, 1),
+                                     "seconds": seconds, "lock": lock, **{k: v for k, v in paths.items() if v},
+                                     "role": os.environ.get("ORCHESTRATE_ROLE") or "script"})
     if memo and code == 0 and files_key(tree, plans, reads) == key and \
             (before is None or git(tree, "status", "--porcelain", "-z").stdout == before):
         try:
@@ -6121,7 +6122,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.12.4"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.13.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6161,6 +6162,14 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.13.0": [
+        "A wake and `flow` show the same overview of delivery, stalled work and where time goes, with the "
+        "builder count, disk space, Codex quota, and a machine snapshot with load, memory pressure, CPU by app "
+        "and check times beside their usual times.",
+        "The lead decides what to do about a busy machine, since work outside orchestrate can be the cause. "
+        "The supervisor no longer gates builders or wakes the lead on load, and the builder hold is gone. "
+        "Checks judge their exits as usual, and a merge retries a failing main branch right away.",
+    ],
     "2.12.4": [
         "`supervise`, with or without --status, now replaces an older supervisor with the newest copy too, as "
         "every other command does.",
@@ -6208,10 +6217,7 @@ CHANGES = {
         "no_culprit) and keeps the failure as unjudged, because the same code both failed and passed.",
     ],
     "2.11.1": [
-        "The supervisor starts no builder while the machine's load is above one and a half times its cores, and "
-        "`watch` names it as a sign when ready work waits for that. To run fewer builders for a while without "
-        "changing the user's Builders count, run `supervise --hold <n> --reason \"<why>\"`, and "
-        "`supervise --release` when the cause is fixed.",
+        "The supervisor gained a load gate and a builder hold, both retired in 2.13.0.",
     ],
     "2.11.0": [
         "The script now runs a supervisor for each repository, which any command starts again if it isn't running. "
@@ -10286,7 +10292,6 @@ SETTINGS_TEMPLATE = """\
 - **Remote:** origin  *(script)*
 - **Builders:** <how many builders, on which hosts, as the user said: "one Claude builder", say>  *(script: the lead writes it before the first build; `run` starts no builder without a count, adds the counts up, and starts none past them unless `--more-builders` carries the user's words)*
 - **Lead check-in:** 3h  *(script: optional; how long the supervisor waits for a warning sign before it wakes the lead anyway, such as 3h or 90m; left out, 3 hours)*
-- **Load limit:** 1.5 per core  *(script: optional; the 1-minute load average per core above which the supervisor starts no builder, and a failing check judges nothing, because tests time out on an overloaded machine whatever the code; left out, 1.5)*
 - **Lead wake:** auto  *(script: optional; how the supervisor wakes the lead: `auto` the way the lead's host allows (a message to a Claude Code session, a queued message on a Codex app thread), else through the lead's own `watch`; `watch` only through `watch`; or a command with {message} (and {session} for the lead's session id) for a host the script doesn't know)*
 - **Default host:** <host>  *(script: optional; codex, claude or a `Host` line's name, for when the lead names none; left out, the host the script runs inside, else the only one installed, else codex, so a project that uses only Claude Code names `claude`)*
 - **Review host:** <same|other|host>  *(script: optional; the host for milestone reviews: `same` as the builder, `other` than the builder (a reviewer from another company shares fewer of its blind spots), or a host's name; left out, the builder's host)*
@@ -10967,7 +10972,6 @@ MERGE_QUEUE = "merge-queue"
 QUEUE_POLL_S = 0.5  # how often a waiting `merge` looks for its result, or for the queue to run
 BATCH_TREE = "_merge-batch"  # the script's checkout a batch is built and tested in, kept warm like a module's
 MERGE_TEST_TIMEOUT_S = 3600
-MERGE_LOAD_WAIT_S = 900  # how long a merge waits for an overloaded machine before it tests the main branch again
 
 
 def queue_folder(worktree: Path) -> Path:
@@ -11273,9 +11277,6 @@ def settle_batch(tree: Path, prof: dict, base: str, group: list[dict], results: 
             f"`{prof['setup_command'] if failed.get('problem') else command}` exited {failed['exit']} with your branch "
             f"on top of the main branch's tip and "
             f"the branches ahead of it in the merge queue, and passed without it, so nothing of yours landed.{whole} "
-            + (f"The machine was overloaded (a load of {load['load']} on {load['cores']} cores), which can time "
-               "tests out: if the failure is a timeout, run `merge` again once the load falls. "
-               if overloaded(load := machine_load(prof)) else "") +
             f"The end of its stdout: {failed['out'][-400:]} The end of its stderr: {failed['err'][-400:]}")}
         return base, []
     group = [r for r, _, _ in built]
@@ -11294,15 +11295,6 @@ def changes_code(prof: dict, files: list[str]) -> bool:
     return any(not f.startswith(plans) and f != PROFILE_FILE for f in files)
 
 
-def wait_for_load(limit_s: float, what: str, prof: dict) -> None:
-    """Waits, up to `limit_s`, while the machine is overloaded, so a check tried again isn't judged under the same
-    load that may have failed it."""
-    deadline = time.time() + limit_s
-    while overloaded(machine_load(prof)) and time.time() < deadline and not _STOP:
-        loop_note(step=f"waiting for the machine's load to fall before {what}")
-        time.sleep(min(30.0, max(0.0, deadline - time.time())))
-
-
 def broken_base(tree: Path, prof: dict, base: str, runs: list | None = None) -> dict | None:
     """Whether the main branch at `base` fails the test command with no branch on it: None when it passes (a pass
     on the same files counts, as everywhere), or {commit, exit, culprit?}. The script lands its own commits (plans,
@@ -11310,9 +11302,8 @@ def broken_base(tree: Path, prof: dict, base: str, runs: list | None = None) -> 
     builder's merge to blame. The culprit is the latest commit on `base` that changed files outside the plans folder,
     when its parent passes, or else the first such commit to fail, found by halving the last 50 commits when the
     oldest of them passes. A commit whose setup command fails can't be told either way, so it counts as neither.
-    A failure at `base` is tried once more before the main branch is called failing, after the machine's load has
-    fallen if it was overloaded, because a test that times out on a loaded machine, or fails now and then, says
-    nothing about the main branch, and calling it failing stops every builder's merge."""
+    The script retries a failure at `base` right away. A single timeout or intermittent failure can happen even
+    when the main branch is sound, and calling it failing stops every builder's merge."""
     command = prof["test_command"]
 
     def passes(commit: str) -> dict | None:
@@ -11329,7 +11320,6 @@ def broken_base(tree: Path, prof: dict, base: str, runs: list | None = None) -> 
     r = passes(base)
     if r is None or r["exit"] == 0:
         return None
-    wait_for_load(MERGE_LOAD_WAIT_S, f"testing the main branch at {base[:12]} again", prof)
     r = passes(base)
     if r is None or r["exit"] == 0:
         return None
@@ -12258,12 +12248,14 @@ def report_text(worktree: Path, since=None) -> tuple[float, str]:
 # stopped: in Thrum, commits went from about 20 a day to over 300 while milestones passing review stayed at two to six,
 # because builders spent their time queued for one GPU lock and re-running proofs. These numbers put the two side by
 # side, from files the script already keeps, so a lead can see the gap the day it opens.
-def flow_numbers(worktree: Path, hours: float) -> dict:
+def flow_numbers(worktree: Path, hours: float, *, prof: dict | None = None,
+                 look: dict | None = None) -> dict:
     """Milestones that reached Ready for Review and Done, commits on the main branch, build sessions, each lock's
     holding, queueing and failures, and background jobs, over the last `hours`."""
-    prof = profile(worktree)
-    ref, proj = read_project(worktree, prof)
-    start, since = time.time() - hours * 3600, since_stamp(hours) or ""
+    prof = prof if prof is not None else profile(worktree)
+    ref, proj = (look["tip"], look["proj"]) if look is not None else read_project(worktree, prof)
+    start = (look["stamp"] if look is not None else time.time()) - hours * 3600
+    since = iso(start) or ""
     ready = done = 0
     for e in proj.values():
         for r in ((e.get("record") or {}).get("milestones") or {}).values():
@@ -12530,7 +12522,17 @@ def flow_text(f: dict) -> list[str]:
 
 
 def cmd_flow(a: argparse.Namespace) -> None:
-    print(json.dumps(flow_numbers(Path(a.worktree).resolve(), a.since)))
+    worktree = Path(a.worktree).resolve()
+    if a.since is not None and not (0 < a.since < float("inf")):
+        emit("INVALID", problems=["--since must be a positive number of hours"])
+    prof = profile(worktree)
+    state = read_json_file(loop_dir(worktree) / WATCH_FILE) or {}
+    look = watch_look(worktree, prof, dict(state.get("since") or {}), fetch=False)
+    hours = a.since if a.since is not None else FLOW_HOURS
+    start = look["stamp"] - hours * 3600
+    if a.since is None:
+        start = float(state.get("summary_since") or start)
+    print(json.dumps(watch_summary(worktree, prof, look, start, hours)))
 
 
 def design_reviews(worktree: Path, prof: dict, ref: str, stem: str, rec: dict) -> list[dict]:
@@ -14745,9 +14747,6 @@ MAIN_CHECK_LISTED = 200  # the most recent runs read when answering whether a co
 # again once `every` has passed.
 MAIN_CHECK_UNJUDGED_EXIT = 75
 MAIN_CHECK_TRIES = 3
-# A failure while the machine's load is above LOAD_PER_CORE_LIMIT judges nothing either: tests that time out on an
-# overloaded machine fail whatever the code. Such an attempt counts as unjudged, and the next waits this long first.
-MAIN_CHECK_LOAD_WAIT_S = float(os.environ.get("ORCHESTRATE_MAIN_CHECK_LOAD_WAIT_S") or 300)
 # `every` spaces out the runs nobody is waiting for. An item's check that asks about a commit no run covers yet starts
 # a run now, or wakes the runner waiting out `every`, by leaving this file in the check's folder: otherwise a milestone
 # sat idle for hours after merging, with no builder working, until the next scheduled run.
@@ -14913,7 +14912,6 @@ def main_check_attempt(tree: Path, commit: str, spec: dict, folder: Path) -> dic
     git(tree, "checkout", "--quiet", "--force", "--detach", commit)
     git(tree, "clean", "-ffdq")
     started = time.time()
-    load_before = machine_load(spec)
     if setup := run_setup(tree, {"setup_command": spec.get("setup")}):
         # A failed setup says nothing about the commit, so the attempt is one that couldn't judge it, and is tried
         # again rather than counted as a failure and bisected.
@@ -14934,10 +14932,8 @@ def main_check_attempt(tree: Path, commit: str, spec: dict, folder: Path) -> dic
             saved[field] = str(path)
     except OSError:
         pass
-    hot = [x for x in (load_before, machine_load(spec)) if overloaded(x)]
     return {"exit": code, "seconds": round(time.time() - started, 1), "at": now(), **saved,
             **({"timed_out": True} if code == 124 else {}),
-            **({"overloaded": max(hot, key=lambda x: x["load"])} if hot and code != 0 else {}),
             "tail": stream_end(err or out, 8)}
 
 
@@ -14947,8 +14943,6 @@ def main_check_try(tree: Path, commit: str, spec: dict, folder: Path, current: d
     judge the commit is tried again without counting either way."""
     attempts = [main_check_attempt(tree, commit, spec, folder)]
     while main_check_result(attempts) == "unjudged" and len(attempts) < MAIN_CHECK_TRIES:
-        if attempts[-1].get("overloaded"):  # give the load time to fall before the next attempt
-            time.sleep(MAIN_CHECK_LOAD_WAIT_S)
         write_atomic(folder / "current.json", {**current, "state": "retrying", "pid": os.getpid()})
         attempts.append(main_check_attempt(tree, commit, spec, folder))
     return attempts
@@ -14956,11 +14950,10 @@ def main_check_try(tree: Path, commit: str, spec: dict, folder: Path, current: d
 
 def main_check_result(attempts: list[dict]) -> str:
     """pass when the last attempt passed, fail when two failed, else unjudged: one failure not yet retried, or
-    attempts that couldn't judge the commit, because they exited 75 or failed while the machine was overloaded, when
-    tests time out whatever the code."""
+    attempts that couldn't judge the commit because they exited 75."""
     if attempts[-1]["exit"] == 0:
         return "pass"
-    fails = sum(a["exit"] not in (0, MAIN_CHECK_UNJUDGED_EXIT) and not a.get("overloaded") for a in attempts)
+    fails = sum(a["exit"] not in (0, MAIN_CHECK_UNJUDGED_EXIT) for a in attempts)
     return "fail" if fails >= 2 else "unjudged"
 
 
@@ -15033,7 +15026,7 @@ def main_check_runner(worktree: Path, prof: dict, name: str, spec: dict, force: 
     """One flight of the check: wait out `every` since the last run on the tip started, run on the main branch's tip
     (unless it already has a run, or `force`), retry a failure once, and bisect a failure that holds. Returns at once,
     doing nothing, when another runner holds the check's lock."""
-    spec = {**spec, "setup": prof.get("setup_command") or "", "load_per_core": prof.get("load_per_core")}
+    spec = {**spec, "setup": prof.get("setup_command") or ""}
     folder = main_check_dir(worktree, name)
     handle = open(folder / "run.lock", "a+")
     try:
@@ -15539,6 +15532,7 @@ def main_broken(worktree: Path, prof: dict | None = None) -> list[dict]:
             if since.returncode != 0 or since.stdout.strip():
                 raise KeyError("moved on")
         out.append({"check": "test command", "commit": b.get("commit"), "next": saved.get("next"),
+                    "since": iso(saved.get("at")),
                     "modules": who.get("modules") or [],
                     "text": f"the test command fails on the main branch at {(b.get('commit') or '?')[:12]} on its own"
                             + (f", since {who['commit'][:12]} ({who.get('subject')})" if who.get("commit") else "")
@@ -15553,6 +15547,7 @@ def main_broken(worktree: Path, prof: dict | None = None) -> list[dict]:
             if latest.get("result") == "fail":
                 culprit = latest.get("culprit") or {}
                 out.append({"check": c["name"], "commit": latest.get("commit"), "modules": culprit.get("modules") or [],
+                            "since": latest.get("finished") or latest.get("started"),
                             "next": main_check_fix_next(worktree, c["name"], culprit,
                                                         f"the main-branch check {c['name']} fails"),
                             "text": f"main-branch check `{c['name']}` failed on {(latest.get('commit') or '?')[:12]}"
@@ -15634,17 +15629,6 @@ WATCH_WHY = ("start this command again in the background, so the next check-in o
              "`run --message`")
 
 
-def load_limit(value: str | None, problems: list) -> float:
-    """The settings' `Load limit`, as a 1-minute load average per core, such as "1.5 per core" or "2"."""
-    m = re.match(r"\s*(\d+(?:\.\d+)?)", value or "")
-    if not value:
-        return LOAD_PER_CORE_LIMIT
-    if not m or float(m.group(1)) <= 0:
-        problems.append(f"load limit: {value!r} (want a load per core, such as 1.5 per core)")
-        return LOAD_PER_CORE_LIMIT
-    return float(m.group(1))
-
-
 def check_in_s(value: str | None, problems: list) -> float:
     """The settings' `Lead check-in` in seconds: a time such as "3h", "90 minutes" or "2" (hours)."""
     if not value:
@@ -15684,32 +15668,6 @@ def failed_items(review: dict) -> set:
     return items | {f.get("item") for f in review.get("findings") or [] if isinstance(f, dict) and f.get("item")}
 
 
-def track_overload(since: dict, stamp: float, prof: dict | None = None) -> dict | None:
-    """Reads the machine's load and keeps, in `since`, when the overload began and the worst multiple of the limit it
-    reached. One overload stays one through dips under the limit shorter than OVERLOAD_CLEAR_S, so a load hovering
-    near the limit doesn't wake the lead each time it crosses. `stamp` is the look's own time, which the sign
-    measures the overload against. Returns the load."""
-    load = machine_load(prof)
-    since.pop("overload_cleared", None)  # 2.11.3 to 2.12.0 counted the dip from here, which a stale copy reset
-    if overloaded(load):
-        try:  # 2.11.1 and 2.11.2 kept the start as text
-            since["overloaded"] = min(float(since["overloaded"]), stamp)
-        except (KeyError, TypeError, ValueError):
-            since["overloaded"] = stamp
-        # when it was last seen overloaded: the overload ends OVERLOAD_CLEAR_S after this, whoever saw it
-        since["overload_last"] = max(float(since.get("overload_last") or 0), stamp)
-        since["overload_peak"] = max(since.get("overload_peak") or 1, int(load["load"] // load["limit"]))
-    elif "overloaded" in since:
-        try:
-            last = float(since.get("overload_last") or since["overloaded"])
-        except (TypeError, ValueError):
-            last = 0.0
-        if stamp - last > OVERLOAD_CLEAR_S:
-            for key in ("overloaded", "overload_last", "overload_peak"):
-                since.pop(key, None)
-    return load
-
-
 def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
     """What `watch` reads each time it looks, from the records the script already keeps: the live runs, each
     module's next step at the main branch's tip, ready work with no builder, the disk and the main-branch checks.
@@ -15741,11 +15699,13 @@ def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
     broken = main_broken(worktree, prof)
     # while the test command fails on its own, only the module that broke it can merge, so other ready work waits
     unmergeable = any(b["check"] == "test command" for b in broken)
+    first_ready = since.get("ready_without_builder") or {}
+    names = [f"{s['module']} {s.get('milestone') or ''}".strip() for s in waiting]
+    since["ready_without_builder"] = {name: first_ready.get(name, stamp) for name in names}
     if waiting and free > 0 and not unmergeable:
         since.setdefault("ready_waiting", stamp)
     else:
         since.pop("ready_waiting", None)
-    load = track_overload(since, stamp, prof)
     try:  # work a planner could plan now that none is planning: a module's next stretch, a module whose needs are
         # planned, or milestones to rewrite against the user's pick
         planning = {f"{r.get('module') or ''} {r.get('task') or ''}".upper() for r in loops if r.get("role") == "plan"}
@@ -15759,28 +15719,14 @@ def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
         disk = None
     return {"stamp": stamp, "tip": ref, "loops": loops, "builds": builds, "proj": proj, "steps": steps,
             "running": running, "waiting": waiting, "limit": limit, "free": max(free, 0), "disk": disk,
-            "broken": broken, "ahead": ahead, "since": since, "hold": builders_hold(folder), "load": load, "progress": {r["pid"]: run_progress(r) for r in builds}}
+            "broken": broken, "ahead": ahead, "since": since,
+            "progress": {r["pid"]: run_progress(r) for r in builds}}
 
 
 def watch_signs(look: dict) -> dict:
     """The warning signs in what `watch` read, as {key: {"seen": what makes this sign new, "text": ...}}. The same key
     with the same `seen` is the same sign, which wakes the lead once."""
     signs, stamp = {}, look["stamp"]
-    first = look["since"].get("overloaded")
-    if isinstance(first, (int, float)) and look.get("waiting") and overloaded(look.get("load")):
-        first = min(first, stamp)
-        # The sign shows only while the load is over the limit. The same overload, which lasts through dips under
-        # the limit shorter than OVERLOAD_CLEAR_S, wakes the lead again only when it gets worse (the load passes
-        # another multiple of the limit), the ready work changes, or it has lasted another OVERLOAD_REWAKE_S. A fall
-        # back under the limit wakes nobody, because the supervisor starts the builders itself then.
-        load = look["load"]
-        ready = sorted(f"{w['module']} {w.get('milestone') or ''}".strip() for w in look["waiting"])
-        signs["overloaded"] = {"seen": json.dumps([int((stamp - first) // OVERLOAD_REWAKE_S),
-                                                   look["since"].get("overload_peak") or 1, ready]), "text": (
-            f"the machine has been overloaded for {ago(stamp - first)}, with a load of {load['load']} on "
-            f"{load['cores']} cores against a limit of {load['limit']}, so the supervisor starts no builder while "
-            f"ready work waits; find what is using it, and hold the builders lower with `supervise --hold` if the "
-            f"builds themselves are the cause")}
     for r in look["builds"]:
         state = look["progress"].get(r["pid"])
         if state and stamp - float(state["progress_at"]) > NO_PROGRESS_WARN_H * 3600:
@@ -15832,15 +15778,140 @@ def watch_signs(look: dict) -> dict:
     return signs
 
 
-def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dict:
-    """What a lead woken by `watch` needs to act without other context, from `look` and the flow numbers."""
-    since, stamp = iso(since_s), look["stamp"]
+FLOW_HOURS = 24.0
+CHECK_BASELINE_RUNS = 10
+
+
+def machine_command(*argv: str) -> str | None:
+    """A short, optional machine reading. An unavailable reading does not cost the overview. The timeout is
+    generous because the reading matters most when the machine is busiest, and `ps` slows down then."""
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, errors="replace", timeout=2)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def memory_pressure() -> str | None:
+    """The Darwin sysctl reports the pressure notification flags as its level."""
+    if sys.platform != "darwin":
+        return None
+    level = machine_command("sysctl", "-n", "kern.memorystatus_vm_pressure_level")
+    return {"1": "normal", "2": "warning", "4": "critical"}.get((level or "").strip())
+
+
+def cpu_processes() -> list[tuple[int, int, float, str]] | None:
+    """One process table with each process's PID, parent PID, CPU percentage and executable."""
+    listing = machine_command("ps", "-ww", "-axo", "pid=,ppid=,pcpu=,comm=")
+    if listing is None:
+        return None
+    rows = []
+    for line in listing.splitlines():
+        try:
+            pid, parent, cpu, command = line.split(maxsplit=3)
+            rows.append((int(pid), int(parent), float(cpu), command))
+        except ValueError:
+            continue
+    return rows
+
+
+def cpu_by_app(processes: list[tuple[int, int, float, str]], roots: set[int]) -> list[dict]:
+    """The largest groups by CPU percentage, with how much of each is in known run trees."""
+    children = {}
+    for pid, parent, _, _ in processes:
+        children.setdefault(parent, []).append(pid)
+    owned = set(roots)
+    pending = list(owned)
+    while pending:
+        for child in children.get(pending.pop(), ()):
+            if child not in owned:
+                owned.add(child)
+                pending.append(child)
+    apps = {}
+    for pid, _, cpu, command in processes:
+        # Use the outer bundle so an app's helper bundles count toward the same app.
+        bundle = re.search(r"(?:^|/)([^/]+)\.app/", command)
+        app = bundle[1] if bundle else os.path.basename(command)
+        group = apps.setdefault(app, {"app": app, "cpu_pct": 0.0, "orchestrate_cpu_pct": 0.0})
+        group["cpu_pct"] += cpu
+        if pid in owned:
+            group["orchestrate_cpu_pct"] += cpu
+    top = sorted(apps.values(), key=lambda group: (-group["cpu_pct"], group["app"]))[:5]
+    return [{"app": g["app"], "cpu_pct": round(g["cpu_pct"], 1),
+             "orchestrate_cpu_pct": round(g["orchestrate_cpu_pct"], 1)} for g in top if g["cpu_pct"] > 0]
+
+
+def check_health(folder: Path, main_checks: dict) -> dict:
+    """The latest completed attempt and its usual duration for each check, without reading the logs."""
+    latest, passing = {}, {}
+
+    def record(key, run):
+        seconds, code = run.get("seconds"), run.get("exit")
+        if not isinstance(seconds, (int, float)) or not isinstance(code, int):
+            return
+        history = passing.setdefault(key, deque(maxlen=CHECK_BASELINE_RUNS))
+        usual = median(history) if history else None
+        slow = usual is not None and seconds >= max(usual * 1.5, usual + 1)
+        latest[key] = {"seconds": seconds, "usual_seconds": round(usual, 2) if usual is not None else None,
+                       "exit": code, "timed_out": code == 124, "slow": slow}
+        if slow or code != 0:
+            latest[key].update({k: run[k] for k in ("stdout", "stderr") if run.get(k)})
+        if code == 0:
+            history.append(seconds)
+
+    try:
+        with (folder / CHECK_RUNS_FILE).open() as ledger:
+            for line in ledger:
+                try:
+                    run = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(run, dict) and isinstance(run.get("command"), str):
+                    record(run["command"], run)
+    except OSError:
+        pass
+    checks = dict(latest)
+    latest.clear()
+    passing.clear()
+    for name, spec in main_checks.items():
+        for row in main_check_runs(folder / MAIN_CHECKS_DIR / name, unjudged=True):
+            if row.get("command") == spec["command"]:
+                for attempt in row.get("attempts") or []:
+                    record(name, attempt)
+    return {"commands": checks,
+            "main_branch": {name: {"command": spec["command"], **latest.get(name, {})}
+                            for name, spec in main_checks.items()}}
+
+
+def machine_summary(worktree: Path, prof: dict, look: dict) -> dict:
+    out = {}
+    try:
+        one, _, fifteen = os.getloadavg()
+        out["load"] = {"1m": round(one, 2), "15m": round(fifteen, 2)}
+    except (AttributeError, OSError):
+        pass
+    if cores := os.cpu_count():
+        out["cores"] = cores
+    if pressure := memory_pressure():
+        out["memory_pressure"] = pressure
+    if (processes := cpu_processes()) is not None:
+        out["cpu_by_app"] = cpu_by_app(processes, {r["pid"] for r in look["loops"]})
+    out["checks"] = check_health(loop_dir(worktree), prof.get("main_checks") or {})
+    return out
+
+
+def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float, hours: float = FLOW_HOURS) -> dict:
+    """The overview carried by a wake and printed by `flow`."""
+    since, stamp = iso(since_s) or "", look["stamp"]
     moved = {"done": [], "ready_for_review": [], "reviews_passed": [], "reviews_failed": []}
-    not_moving, back_and_forth = [], []
+    not_moving, back_and_forth, actions, no_worktree = [], [], {}, []
     for key, e in look["proj"].items():
         stem = e["stem"]
+        step = look["steps"].get(key) or {}
         if e["problems"]:
             not_moving.append(f"{stem}: can't be read: {e['problems'][0]}")
+            if step and (then := next_for(step, worktree, prof, look["proj"])) and then.get("command"):
+                actions[stem] = {"command": then["command"]}
             continue
         for mid, r in (e["record"].get("milestones") or {}).items():
             if ((r.get("done") or {}).get("at") or "") >= since:
@@ -15859,20 +15930,30 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dic
             back_and_forth.append(f"{stem} {m['id']}: failed review {plural(counts['failed_reviews'], 'time')} since "
                                   f"its items last changed, {repeat_words(counts['failed_reviews_with_repeat'])}; "
                                   f"the counts now call for {escalation_of(m)}")
-        step = look["steps"].get(key) or {}
         name, status = f"{stem} {step.get('milestone') or ''}".strip(), step.get("status")
         if key in look["running"]:
             continue
         if status == "can_start":
-            first = look["since"].get("ready_waiting")
-            not_moving.append(f"{name}: ready to build, with no builder" + (f", for {ago(stamp - first)}" if first
-                                                                             else ""))
+            tree = None if stem in NO_WORKTREE else run_worktree(worktree, prof, stem)
+            if tree is None:
+                no_worktree.append(stem)
+            then = next_for(step, tree, prof, look["proj"]) if tree and look["free"] else None
+        else:
+            then = next_for(step, worktree, prof, look["proj"]) if status else None
+        if then and then.get("command"):
+            actions[name] = {k: then[k] for k in ("command", "decides", "ask") if k in then}
+        if status == "can_start":
+            first = (look["since"].get("ready_without_builder") or {}).get(name)
+            not_moving.append(f"{name}: ready to build, with no builder" +
+                              (f", for {ago(stamp - first)}" if first is not None else ""))
         elif status == "ready_for_review":
             at = ready_record((e["record"].get("milestones") or {}).get(step.get("milestone")) or {}).get("at")
             not_moving.append(f"{name}: Ready for Review with no review running" +
                               (f", for {ago(hours_since(at) * 3600)}" if at else ""))
         elif status == "blocked":
-            not_moving.append(f"{name}: Blocked, {step.get('reason')}")
+            at = (step.get("blocked") or {}).get("at")
+            not_moving.append(f"{name}: Blocked, {step.get('reason')}" +
+                              (f", for {ago(hours_since(at) * 3600)}" if at else ""))
         elif status == "waiting":
             not_moving.append(f"{name}: Waiting, " + (
                 "for a planner's diagnosis" if step.get("reason") == "for_diagnosis" else
@@ -15887,41 +15968,65 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dic
         # a run picks its milestone once it starts, so a builder seen in its first seconds has none yet
         head = f"{r.get('module')} {mid}: building for {took}" if mid else \
             f"{r.get('module')}: a builder starting, for {took}, its milestone not chosen yet"
-        not_moving.insert(0, head + (f", last progress {ago(stamp - float(state['progress_at']))} ago"
-                                     if state.get("progress_at") else "") +
-                          f", {plural(int(r.get('turns') or 0), 'turn')} done")
+        progress_at = state.get("progress_at")
+        idle = stamp - float(progress_at) if progress_at else None
+        stalled = idle is not None and idle > NO_PROGRESS_WARN_H * 3600
+        progress = f", no progress for {ago(idle)}" if stalled else (
+            f", last progress {ago(idle)} ago" if idle is not None else "")
+        not_moving.insert(0, head + progress + f", {plural(int(r.get('turns') or 0), 'turn')} done")
+        if stalled and r.get("module"):
+            actions[f"{r['module']} {mid or ''}".strip()] = {
+                "command": loop_cmd("runs", "--worktree", worktree)}
     planners = [r for r in look["loops"] if r.get("role") == "plan"]
+    main_branch = []
+    for broken in look["broken"]:
+        at = broken.get("since")
+        main_branch.append(broken["text"] + (f", failing for {ago(hours_since(at) * 3600)}" if at else ""))
+        then = broken.get("next") or {}
+        if then.get("command"):
+            actions[broken["check"]] = {k: then[k] for k in ("command", "decides", "ask") if k in then}
     out = {"since": since, "moved": {k: v for k, v in moved.items() if v} or "nothing reached Ready for Review, "
                                                                             "Done or a review",
            "not_moving": not_moving, "back_and_forth": back_and_forth,
+           **({"actions": actions} if actions else {}),
+           **({"plan_ahead": [{"module": x["module"], "next": x["next"].get("command")}
+                              for x in look.get("ahead") or []]} if look.get("ahead") else {}),
            "runs": [" ".join(x for x in (r.get("role"), r.get("module"), r.get("milestone"), r.get("step")) if x)
                     for r in look["loops"] if not r.get("steps_parent")],
            "builders": {"running": len(builder_runs(look["loops"])), "limit": look["limit"], "free": look["free"],
-                        **({"held_to": look["hold"]} if look.get("hold") else {}),
-                        **({"held_for_load": look["load"]} if overloaded(look.get("load")) else {}),
                         "ready_waiting": [f"{s['module']} {s.get('milestone') or ''}".strip() for s in look["waiting"]],
                         **({"no_worktree": (
-                            f"the supervisor can't start {', '.join(sorted(stuck))}: no worktree is on its "
+                            f"the supervisor can't start {', '.join(sorted(no_worktree))}: no worktree is on its "
                             "build/<module> branch and the settings have no `Worktrees:` line, so start it yourself "
                             "with `run --worktree` in its worktree, or add a `Worktrees:` folder")}
-                           if (stuck := NO_WORKTREE & {w["module"] for w in look["waiting"]}) else {}),
+                           if no_worktree else {}),
                         **({"waiting_for_a_slot": [f"{r.get('module')} {r.get('milestone') or ''} "
                                                    f"({ago(stamp - (r.get('waiting_since') or stamp))})".strip()
                                                    for r in slot_waiters(look["loops"])]}
                            if slot_waiters(look["loops"]) else {})},
            "planners": {"running": [r.get("task") or "a planner" for r in planners if not r.get("waiting_for")],
-                        "waiting": [f"{r.get('task') or 'a planner'} ({ago(stamp - r['started_at'])})"
-                                    for r in planners if r.get("waiting_for") and r.get("started_at")]},
+                        "waiting": [f"{r.get('task') or 'a planner'} waiting for {r['waiting_for']}"
+                                    + (f" for {ago(stamp - r['started_at'])}" if r.get("started_at") else "")
+                                    for r in planners if r.get("waiting_for")]},
            "disk": {"free_gb": round(look["disk"] / 1e9, 1) if look["disk"] is not None else None,
                     "low": look["disk"] is not None and look["disk"] < LOW_DISK_BYTES},
-           "main_branch": [b["text"] for b in look["broken"]] or "no main-branch check is failing"}
+           "main_branch": main_branch or "no main-branch check is failing",
+           "machine": machine_summary(worktree, prof, look),
+           "details": ["ready", "runs", "report", "locks", "jobs", "main-check", "quota"]}
     try:
-        f = flow_numbers(worktree, max(0.1, (stamp - since_s) / 3600))
+        f = flow_numbers(worktree, hours, prof=prof, look=look)
+        r = f["reviews"]
         out["flow"] = {k: f[k] for k in ("hours", "ready_for_review", "done", "commits", "code_commits",
-                                         "build_sessions", "signs")}
-        out["flow"]["hours"] = round(out["flow"]["hours"], 1)
-    except (Exception, SystemExit):
-        pass
+                                         "build_sessions", "turns", "merges", "checks", "background_jobs",
+                                         "reviews", "signs")}
+        out["flow"]["done_per_day"] = round(f["done"] * 24 / hours, 2)
+        out["flow"]["review_pass_rate"] = round(r["passed"] / r["count"], 2) if r["count"] else None
+        locks = sorted(f["locks"], key=lambda name: (-f["locks"][name]["queued_h"], -f["locks"][name]["busy"], name))
+        out["flow"]["locks"] = {name: f["locks"][name] for name in locks[:5]}
+        if len(locks) > 5:
+            out["flow"]["other_locks"] = len(locks) - 5
+    except (Exception, SystemExit) as e:
+        out["flow"] = {"unavailable": str(e)}
     codex = prof.get("default_host") == "codex" or any(
         (r.get("host") or "") == "codex" for r in look["loops"]) or any(
         r.get("host") == "codex" and (r.get("at") or "") >= since for r in ledger_rows(worktree)[-500:])
@@ -15989,7 +16094,7 @@ def watch_wake(worktree: Path, prof: dict, runs: bool = False, tick=None) -> tup
     # with nothing new to say
     woke_at = started
     told = state.get("signs") or {}
-    since = state.get("since") or {}
+    since = {k: v for k, v in (state.get("since") or {}).items() if k in ("ready_waiting", "ready_without_builder")}
     tracked, ended, ending = top_runs(worktree) if runs else {}, [], None
     look, signs, new, looked, fetched = None, {}, {}, 0.0, 0.0
     while True:
@@ -16017,7 +16122,9 @@ def watch_wake(worktree: Path, prof: dict, runs: bool = False, tick=None) -> tup
     woke += [f"{' '.join(x for x in (r.get('role'), r.get('module'), r.get('milestone')) if x)} ended" for r in ended]
     if not woke:
         woke.append(f"check-in: {ago(stamp - woke_at)} since this watch started")
-    write_atomically(path, {"woke_at": stamp, "signs": {k: s["seen"] for k, s in signs.items()}, "since": since})
+    summary_since = float(state.get("woke_at") or started - prof["check_in_s"])
+    write_atomically(path, {"woke_at": stamp, "summary_since": summary_since,
+                            "signs": {k: s["seen"] for k, s in signs.items()}, "since": since})
     word = ending[0] if ending else "WARNING_SIGNS" if new else "RUN_ENDED" if ended else "CHECK_IN"
     return word, dict(
         woke_for=woke,
@@ -16025,7 +16132,7 @@ def watch_wake(worktree: Path, prof: dict, runs: bool = False, tick=None) -> tup
         # doesn't repeat paragraphs the lead has read
         **({"earlier_signs": [k for k in signs if k not in new]} if any(k not in new for k in signs) else {}),
         **({"results": results_since(worktree, started)} if ended else {}),
-        **watch_summary(worktree, prof, look, float(state.get("woke_at") or started - prof["check_in_s"])))
+        **watch_summary(worktree, prof, look, summary_since))
 
 
 # ------------------------------------------------------------------------------------------------------ supervisor
@@ -16049,12 +16156,8 @@ SUPERVISOR_RESTART_S = 120.0  # a module the supervisor started isn't started ag
 SUPERVISOR_RETRY_S = 60.0  # after the supervisor fails to read the records, how long before it tries again
 SUPERVISOR_HANDOVER_S = 20.0  # how long a command waits for an older supervisor to stop before it starts the newest
 NO_WORKTREE: set = set()  # modules the supervisor couldn't start for want of a worktree, which `watch` names
-HOLD_FILE = "builders-hold.json"  # a lower builder count the lead set with `supervise --hold`, and why
 # the supervisor starts no builder while the 1-minute load average is above this per core (the tests raise it, since
 # they load the machine themselves)
-LOAD_PER_CORE_LIMIT = float(os.environ.get("ORCHESTRATE_LOAD_PER_CORE") or 1.5)
-OVERLOAD_REWAKE_S = 3600.0  # an overload that goes on wakes the lead again after this long
-OVERLOAD_CLEAR_S = 900.0  # a load under the limit for this long ends the overload; a shorter dip doesn't
 WAKE_TEXT_LIMIT = 60000  # characters of the result a pushed wake carries
 # The commands the lead runs. A builder's commands (merge, check, lock, background, jobs, wait, main-check) start
 # the supervisor too, but never say how to reach the lead.
@@ -16381,46 +16484,19 @@ def start_run(worktree: Path, prof: dict, stem: str) -> bool:
     return True
 
 
-def builders_hold(folder: Path) -> dict | None:
-    """The hold the lead set with `supervise --hold`: {"builders", "reason", "at"}, or None."""
-    hold = read_json_file(folder / HOLD_FILE) or {}
-    return hold if isinstance(hold.get("builders"), int) else None
-
-
-def machine_load(prof: dict | None = None) -> dict | None:
-    """The 1-minute load average beside the number of cores and the limit the settings' `Load limit` sets, or None
-    where the system doesn't say."""
-    try:
-        load, cores = os.getloadavg()[0], os.cpu_count() or 1
-    except (OSError, AttributeError):
-        return None
-    per_core = (prof or {}).get("load_per_core") or LOAD_PER_CORE_LIMIT
-    return {"load": round(load, 1), "cores": cores, "limit": round(per_core * cores, 1)}
-
-
-def overloaded(load: dict | None) -> bool:
-    return bool(load) and load["load"] > load["limit"]
-
-
 def fill_builders(worktree: Path, prof: dict, look: dict, started: dict) -> list[str]:
     """Starts a run for each module whose next step is routine, up to the free builder slots, and returns their
-    names. With no Builders count it starts none, because the lead hasn't asked the user yet; while the test
-    command fails on the main branch, none either, because only the module that broke it can merge. A hold the
-    lead set lowers the count, and while the machine is overloaded it starts none, because each builder runs its
-    own tests and a machine past its cores makes every one of them slower and some of them time out."""
+    names. With no Builders count it starts none, because the lead hasn't asked the user yet. While the test
+    command fails on the main branch, only the module that broke it can merge."""
     free = look.get("free", 0)
-    if look.get("hold"):
-        free = min(free, look["hold"]["builders"] - len(builder_runs(look["loops"])))
-    if not look.get("limit") or free <= 0 or any(b["check"] == "test command" for b in look["broken"]) or \
-            overloaded(look.get("load")):
+    if not look.get("limit") or free <= 0 or any(b["check"] == "test command" for b in look["broken"]):
         return []
-    look = {**look, "free": free}
     folder = loop_dir(worktree)
     busy = {(r.get("module") or "").upper() for r in look["loops"]}
     out = []
     for key, step in sorted(look["steps"].items()):
         stem = step.get("module") or key
-        if len(out) >= look["free"]:
+        if len(out) >= free:
             break
         if step.get("status") not in ("can_start", "ready_for_review") or key in look["running"] or \
                 stem.upper() in busy or time.time() - started.get(stem, 0.0) < SUPERVISOR_RESTART_S or \
@@ -16456,9 +16532,9 @@ def wake_text(worktree: Path, word: str, fields: dict) -> str:
     woke = "; ".join(fields.get("woke_for") or [])
     whole = json.dumps({"result": word, **fields})
     return (f"From orchestrate's supervisor for {repository_name(worktree)}, not from the user: {word}. {woke}\n"
-            "Act on it as the lead skill says, starting with `flow`. The script pushed this to you, so you need no "
-            "`watch` running to hear the next one. The whole result, as `watch` prints it:\n" +
-            (whole if len(whole) <= WAKE_TEXT_LIMIT else whole[:WAKE_TEXT_LIMIT] + " ...(cut)"))
+            "Read the overview before acting. The script pushed this to you, so you need no `watch` running to "
+            "hear the next one.\n" +
+            (whole if len(whole) <= WAKE_TEXT_LIMIT else "Run `flow` to read the overview in full."))
 
 
 def deliver_wake(worktree: Path, prof: dict, word: str, fields: dict) -> dict:
@@ -16587,17 +16663,6 @@ def cmd_supervise(a: argparse.Namespace) -> None:
         was = stop_supervisor(worktree, "user")
         emit("STOPPING" if was else "NOTHING", note="the supervisor stops within seconds, and no command starts it "
              "again until you run `run`, `plan`, `watch` or `supervise`" if was else "no supervisor was running")
-    if a.hold is not None:
-        if a.hold < 0 or not (a.reason or "").strip():
-            emit("INVALID", problems=["--hold takes a count of 0 or more and a --reason saying why"])
-        write_atomically(folder / HOLD_FILE, {"builders": a.hold, "reason": a.reason.strip(), "at": now()})
-        emit("HELD", builders=a.hold, note="the supervisor starts no new builder while this many or more run; runs "
-             "already going carry on. `supervise --release` ends the hold, which doesn't change the user's Builders "
-             "count")
-    if a.release:
-        had = builders_hold(folder)
-        (folder / HOLD_FILE).unlink(missing_ok=True)
-        emit("RELEASED" if had else "NOTHING", **({"was": had} if had else {"note": "no hold was set"}))
     if SUPERVISOR_ON and os.environ.get(SUPERVISED_ENV) != "1" and supervisor_alive(folder):
         # The hook leaves `supervise` alone, so an older supervisor is replaced here, in every form but --stop and
         # the supervisor itself
@@ -16608,8 +16673,7 @@ def cmd_supervise(a: argparse.Namespace) -> None:
         way, why = push_path(lead, setting)
         status = {"running": supervisor_alive(folder), "supervisor": read_json_file(folder / SUPERVISOR_FILE) or {},
                   "lead": {k: v for k, v in lead.items() if k != "token"}, "lead_wake": setting, "push": way,
-                  **({"no_push_because": why} if not way else {}), "watch_waiting": waiter_alive(folder),
-                  **({"hold": builders_hold(folder)} if builders_hold(folder) else {}), "load": machine_load(profile(worktree, missing_ok=True))}
+                  **({"no_push_because": why} if not way else {}), "watch_waiting": waiter_alive(folder)}
         if a.test_wake:
             if not way:
                 emit("WAKE_FAILED", **status, error=why)
@@ -17130,10 +17194,9 @@ main-check [NAME] [--worktree PATH] [--commit REV] [--wait {MAIN_CHECK_WAIT_S:.0
       the main branch's commits since the last pass, naming the first failing commit, its subject and the modules
       whose plans it changed. A command exits {MAIN_CHECK_UNJUDGED_EXIT} when it couldn't judge the commit (such as a
       capture that dropped frames): it is tried up to {MAIN_CHECK_TRIES} times, and a run it still can't judge fails
-      nothing. A failure while the 1-minute load average per core is above the settings' `Load limit` counts the same
-      way, with the next attempt {MAIN_CHECK_LOAD_WAIT_S:.0f} s later, because tests time out on an overloaded
-      machine whatever the code. A bisect whose first failing commit changed only the plans folder or the settings names no culprit
-      (`bisect` no_culprit): the same code failed and passed, so the failure is kept as unjudged. With NAME it answers for a commit (default HEAD): COVERED (exit 0) when a pass exists on a main-branch
+      nothing. A bisect names no culprit (`bisect` no_culprit) if its first failing commit changed only the plans
+      or settings. The same code failed and passed, so the failure is kept as unjudged. With NAME it answers
+      for a commit (default HEAD): COVERED (exit 0) when a pass exists on a main-branch
       commit that contains it; FAILING_ON_MAIN (exit 1) when a failure that held does and no pass does; NOT_ON_MAIN
       (exit 1) for a commit the main branch doesn't contain yet. Otherwise it joins the run in flight or starts one
       now, in a process of its own that outlives the request, and waits up to --wait seconds, then says PENDING
@@ -17170,7 +17233,7 @@ watch --worktree PATH [--runs]
       whichever step it is on), planners, disk, the main branch and the flow numbers.
 """,
     "supervise": f"""\
-supervise --worktree PATH [--status | --stop | --test-wake | --hold N --reason TEXT | --release]
+supervise --worktree PATH [--status | --stop | --test-wake]
       The repository's supervisor: one detached process per repository (it holds
       <git common dir>/orchestrate/{SUPERVISOR_LOCK}), which any command that names a worktree starts when none is
       running, so a reboot, a crash or a closed session mends itself at the next command any agent runs. It reads
@@ -17198,10 +17261,6 @@ supervise --worktree PATH [--status | --stop | --test-wake | --hold N --reason T
       It starts a module's run in the worktree on its build/<module> branch, or from the main checkout when the
       settings have a `Worktrees:` line, and never builds in the main checkout; a module with neither waits for
       the lead, and `watch` names it in `no_worktree`.
-      --hold N --reason TEXT  HELD: the supervisor starts no builder while N or more run, below the settings'
-                Builders count, until --release, which prints RELEASED (NOTHING with no hold). It also starts none
-                while the 1-minute load average per core is above the settings' `Load limit` ({LOAD_PER_CORE_LIMIT}
-                by default); `watch` shows both.
       Started bare, it is the supervisor itself, and ends SUPERVISOR_STOPPED with `reason`, or NOTHING when one
       already runs.
 """,
@@ -17230,18 +17289,16 @@ dashboard --worktree PATH [--out FILE] [--open] [--json] [--no-sweep] [--budget 
 """,
     "flow": """\
 flow --worktree PATH [--since HOURS]
-      One JSON line of flow numbers for the window (default 24 hours), for diagnosing where delivery time goes:
-      `ready_for_review`, how many times a milestone reached Ready for Review (each failed review and its fix count
-      again), and milestones that became Done (delivery), beside commits, build sessions, `turns` by kind (planner,
-      design review, builder, milestone review) and the `Builders:` limit (effort); `merges`, how long each took from joining the queue to its result (median, 90th
-      percentile, longest, total), with failures, conflicts and merges refused because the main branch failed on
-      its own; `checks`, the test command's run times and failures, and the five other checks that took longest;
-      `reviews`, how many passed, how many milestones passed their first review, and the items that failed most;
-      each lock's holding, queueing and failures; and background jobs. `signs` says in sentences which figures look
-      wrong and what to look at, as starting points to dig into, not conclusions: among them, fewer than a third of
-      at least four reviews passing, and planner and design-review turns at least matching builder turns once
-      there are six of them. `report` and `watch` include the same numbers; `history --json` has cost and
-      errors by host, model and kind of agent over the whole history.
+      The same JSON overview as a wake. Movement covers the latest wake's window and any work since, or the
+      last 24 hours when there has been no wake. The flow figures use the last 24 hours. --since sets both
+      windows in hours. See what moved, what is waiting and how to act, delivery and review rates, and time
+      spent on merges, checks, locks and jobs. The machine section shows load, core count, memory pressure,
+      and the top CPU users, including how much CPU is in this project's run trees. Code run by the Codex
+      desktop server appears under Codex. Readings the system can't supply are left out.
+      Check times compare the latest completed attempt with the median of up to ten earlier passing attempts.
+      A check is marked slow from 1.5 times its usual time and at least one second longer. Exit 124 marks a
+      timeout. Slow and failed attempts link to the stdout and stderr paths when the run recorded them.
+      The overview points to commands with more detail. --since takes a positive, finite number of hours.
 """,
     "cleanup": f"""\
 cleanup --worktree PATH [--kind KIND]... [--older-than DAYS] [--yes] [--json]
@@ -17417,11 +17474,6 @@ def build_parser() -> argparse.ArgumentParser:
     sup_what.add_argument("--stop", action="store_true", help="stop it until the lead carries on")
     sup_what.add_argument("--test-wake", action="store_true", help="send the lead a test message the way the "
                           "supervisor would wake it")
-    sup_what.add_argument("--hold", type=int, metavar="N", help="start builders only up to N, below the settings' "
-                          "Builders count, until --release; needs --reason")
-    sup_what.add_argument("--release", action="store_true", help="end a --hold, so the supervisor fills to the "
-                          "settings' Builders count again")
-    sup.add_argument("--reason", help="why the builders are held lower, shown in `supervise --status` and `watch`")
     sup.set_defaults(func=cmd_supervise)
     merge_p = sub.add_parser("merge", help="queue this worktree's commits to be rebased, tested with the test "
                                            "command and merged, alone or in a batch with other waiting branches")
@@ -17549,9 +17601,9 @@ def build_parser() -> argparse.ArgumentParser:
                                                               "sessions first")
     dash.add_argument("--budget", type=float, default=120.0, help="seconds to spend reading new sessions")
     dash.set_defaults(func=cmd_dashboard)
-    flow = sub.add_parser("flow", help="show where delivery time goes: milestones moved, merge and test times, reviews, locks and jobs")
+    flow = sub.add_parser("flow", help="show the wake overview of delivery, stalled work and resources")
     flow.add_argument("--worktree", default=".")
-    flow.add_argument("--since", type=float, default=24.0, help="hours to cover (default %(default)g)")
+    flow.add_argument("--since", type=float, help="set the movement and flow windows in hours")
     flow.set_defaults(func=cmd_flow)
     main_check = sub.add_parser("main-check", help="run a slow check on the main branch's tip, once for every commit "
                                                    "merged since its last run, or say whether a commit is covered")

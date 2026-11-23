@@ -311,7 +311,7 @@ report lists every decision saved in your name, so you can spot one you didn't m
 | what is running on this machine, in every repository | `runs` |
 | to stop cleanly and carry on later | `pause`, then `run` again |
 | what the build has cost, per milestone and kind of agent | `cost` |
-| how fast milestones moved, beside commits, lock queueing and failed jobs | `flow` |
+| the overview the lead sees on each wake, with delivery, stalled work, time spent and machine use | `flow` |
 | who holds each lock, and who is waiting for it | `locks` |
 | whether the Codex weekly usage limit will last | `quota` |
 | how the build is going | `report`, with its own reading on top |

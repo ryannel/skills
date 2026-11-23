@@ -1971,13 +1971,13 @@ class WhatTheLeadSees(Repo):
         with mock.patch.object(agent_loop, "QUOTA_WORKTREE", [self.wt]):
             first = self.call(lambda a: agent_loop.emit("NOTHING"))
             second = self.call(lambda a: agent_loop.emit("NOTHING"))
-        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         self.assertIn("From before 2.6.0", first["changed"]["2.5.0"][0])
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
         self.assertIn("2.5.0", agent_loop.version_change(self.wt))
         note.write_text('{"version": "2.5.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         note.write_text('{"version": "2.9.0"}')
         (line, *_) = agent_loop.version_change(self.wt)["2.10.0"]
         self.assertIn("Read the lead skill again", line)
@@ -3438,7 +3438,7 @@ class FirstRuns(Repo):
             agent_loop.cmd_lock(argparse.Namespace(name="gpu", worktree=None, command_args=[
                 "--worktree", str(self.wt), "--", "sh", "-c", "exit 4"]))
         self.assertEqual(exit_.exception.code, 4)
-        f = json.loads(self.printed(agent_loop.cmd_flow, worktree=str(self.wt), since=24.0))
+        f = json.loads(self.printed(agent_loop.cmd_flow, worktree=str(self.wt), since=24.0))["flow"]
         self.assertEqual((f["ready_for_review"], f["done"]), (1, 1))
         self.assertEqual((f["locks"]["gpu"]["holds"], f["locks"]["gpu"]["failed"]), (1, 1))
         self.assertIn("records", f["locks"])  # with no test command to run, the builder's merge took the short lock
@@ -7318,14 +7318,6 @@ class MainBranchChecks(Repo):
         self.assertIn("before 2.12.0", agent_loop.older_judge(old))
         self.assertEqual(agent_loop.older_judge({**old, "version": agent_loop.VERSION}), "")
         self.assertEqual(agent_loop.older_judge({"result": "pass", "check": "images"}), "")
-
-    def test_a_failure_on_an_overloaded_machine_judges_nothing(self):
-        hot = {"load": 95.0, "cores": 14, "limit": 21.0}
-        self.assertEqual(agent_loop.main_check_result([{"exit": 1, "overloaded": hot}, {"exit": 1, "overloaded": hot}]),
-                         "unjudged")
-        self.assertEqual(agent_loop.main_check_result([{"exit": 1, "overloaded": hot}, {"exit": 1}, {"exit": 1}]),
-                         "fail")
-        self.assertEqual(agent_loop.main_check_result([{"exit": 1, "overloaded": hot}, {"exit": 0}]), "pass")
 
     def test_a_bisect_stops_at_a_commit_it_cant_judge_rather_than_guess(self):
         self.declare("test -f loaded && exit 75; test ! -f broken")

@@ -23,12 +23,12 @@ background, and again when it ends, or a stopped run waits until you next look.
 When the user changes how the agents work, such as the number of builders, save it with `settings --set` and their
 words, so every later command follows it.
 
-The supervisor starts no builder while the machine's load per core is above the settings' `Load limit` (1.5 unless the
-settings say otherwise), because each
-builder runs its own tests and an overloaded machine makes them all slow and some time out. When the builds
-themselves are the load, hold them lower with `supervise --hold <n> --reason "<why>"`. That is reversible relief and
-yours to take, while the user's Builders count stays theirs: release the hold once the cause is fixed, and bring the
-cause to the user if it needs them.
+Read the overview whole each time you are woken. Run `flow` when you need a fresh copy. You decide what needs
+attention, so look at what moved, what is waiting and where time went before acting on the reason for the wake.
+The `machine` section shows what is using the Mac and whether checks are taking longer than usual. A simulator
+left running can slow every builder's tests. When the builds themselves are crowding the machine, lower the settings'
+`Builders:` line and tell the user why, since the number is theirs. When something else is using it, stop it if it is
+yours to stop, or ask the user.
 
 ## You own delivery
 
@@ -37,8 +37,7 @@ work: how the work is split, how it merges, how it is tested and reviewed, what 
 orchestrate itself runs. When part of that is slow or wrong, it is yours to find, to improve where you can, and to
 bring to the user where the answer is theirs. You don't need to be asked.
 
-So whatever woke you, start with `flow`, covering the time since you last looked, before the result in front of
-you. It sets delivery beside effort and shows where the time went; its `signs` name what looks wrong. Only you see
+The overview sets delivery beside effort, and its `signs` show which figures are worth a closer look. Only you see
 every session at once. A builder waiting on an hour-long merge or a thirty-minute test run looks normal from inside
 its session, and each of those is a cost every builder pays again and again, which more builders make worse.
 

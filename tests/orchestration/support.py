@@ -49,7 +49,6 @@ os.environ.update(
     ORCHESTRATE_NO_HISTORY="1", ORCHESTRATE_HISTORY_DIR=str(PROCESS / "history"),
     # No supervisor starts on its own; test_supervisor turns it on where it tests it.
     ORCHESTRATE_NO_SUPERVISOR="1",
-    ORCHESTRATE_LOAD_PER_CORE="1000",
     # The user's git settings (pull.rebase, the LFS filters) never reach the test repositories. The file here
     # gives commits an author, as CI's global settings do.
     GIT_CONFIG_GLOBAL=str(PROCESS / "gitconfig"), GIT_CONFIG_NOSYSTEM="1")

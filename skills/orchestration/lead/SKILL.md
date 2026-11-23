@@ -44,13 +44,13 @@ user the parts that affect them.
 | `run` | To start a builder the supervisor can't choose for you: with a `--message`, `--fresh` or another host. It carries on through reviews and later milestones until something needs you |
 | `review` | For a milestone that is Ready for Review with no run going, or a design review on its own |
 | `watch` | When a result's `wake` asks for it, because your host gives the script no other way to wake you |
-| `supervise` | To see how the script wakes you and what it started (`--status`), to check a wake reaches you (`--test-wake`), or to hold the builders below the user's count for a while (`--hold N --reason`, ended by `--release`) |
+| `supervise` | To see how the script wakes you and what it started (`--status`) or to check a wake reaches you (`--test-wake`) |
 | `ready`, `status`, `runs` | To answer a question about the build: what can start, every milestone of a module, or every session running. The supervisor already starts what can |
 | `next`, `unblock` | To work out again what a failed review calls for, or to requeue a milestone once you've cleared its block |
 | `pause` | When the user asks you to stop sessions, or to steer a builder heading the wrong way |
 | `thread` | To stop, pause, resume or clear the queue of one Codex thread the app shows, or to check it once the user has pressed Stop there |
 | `human` | To save a decision the user gave you in chat |
-| `flow` | First, each time you're woken: where delivery time is going, and which figures look wrong |
+| `flow` | To get the same overview a wake carries. Read it whole on each wake so you can judge delivery, stalled work and what's using the machine together |
 | `history`, `dashboard`, `cost` | For cost and recurring errors, before you change the process, or when the user asks what it cost |
 | `report`, `quota` | When the user asks how it's going, or to forecast the Codex usage limit |
 | `main-check`, `locks` | When the settings have main-branch checks or locks, and one of them is holding work back |

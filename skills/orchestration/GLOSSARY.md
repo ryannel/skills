@@ -465,18 +465,6 @@ even when nothing has gone wrong.
 Stored as: the `Lead check-in` line of the project settings, such as `3h`
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
-**Load limit**
-The machine's 1-minute load average per core above which the supervisor starts no builder, and a check that fails
-judges nothing, because tests time out on an overloaded machine whatever the code.
-Stored as: the `Load limit` line of the project settings, such as `1.5 per core`
-Proposed: by Claude, 2026-11-23. Not yet agreed by the user.
-
-**Builder hold**
-A lower number of builders the lead sets for a while, with its reason, below the user's Builders count, which it
-leaves unchanged.
-Stored as: `supervise --hold N --reason`, kept in `builders-hold.json`, and ended by `supervise --release`
-Proposed: by Claude, 2026-11-23. Not yet agreed by the user.
-
 **Warning sign**
 Something in the script's records that usually means delivery has slowed, such as a builder that has stopped making
 progress.
@@ -487,8 +475,13 @@ Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 How fast the work moves: milestones reaching Ready for Review and Done, set beside the effort spent on them.
 Source: flow and its metrics (throughput, cycle time, work in progress) as the Kanban Guide defines them. Setting
 them beside effort is the set's own addition
-Stored as: the `flow` command, and the `## Flow` part of the report
+Stored as: `flow` in the overview, and the `## Flow` part of the report
 Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
+
+**Overview**
+What moved, what is waiting, where time goes and what is using the machine, in one result for the lead.
+Stored as: the JSON from `flow`, also carried in each wake
+Proposed: by Codex, 2026-11-23. Not yet agreed by the user.
 
 **Usage ledger**
 The file where the script writes one row for each agent turn with the tokens it used.
@@ -596,7 +589,7 @@ there is one, says which of a result's causes it was.
 | `RUN_ENDED` | `watch` | A top-level `run`, `review` or `plan` ended, with its result in `results` |
 | `BUILD_FINISHED`, `WAITING_FOR_USER` | `watch` | Every module is finished, or nothing can move without the user; the supervisor stops after this wake |
 | `SUPERVISOR_FAILED` | `watch` | The supervisor couldn't read the records three times running |
-| `SUPERVISOR`, `STOPPING`, `SUPERVISOR_STOPPED`, `WAKE_SENT`, `WAKE_FAILED`, `HELD`, `RELEASED` | `supervise` | Its status; asked to stop; stopped, with `reason`; a test wake reached the lead or didn't; the builders held below the user's count; the hold ended |
+| `SUPERVISOR`, `STOPPING`, `SUPERVISOR_STOPPED`, `WAKE_SENT`, `WAKE_FAILED` | `supervise` | Its status; asked to stop; stopped, with `reason`; a test wake reached the lead or didn't |
 
 Avoid: `FLOOR` (now `HOST_FAILED` or `SCRIPT_FAILED`), `PIN` (now `WRONG_MODEL_OR_EFFORT`), `DESIGN_OWED` (now
 `DESIGN_NOT_APPROVED`), `NOT_READY` (now `CHECKS_FAILED`), `BUDGET` (now `NO_PROGRESS_FOR_HOURS`), `REVIEW_OWED` (now
