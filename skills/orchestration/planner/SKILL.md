@@ -31,7 +31,7 @@ Each heading of the brief tells you something about the plan:
 | The request, Goal | What to plan. Take the wider ordinary reading of the words when it costs little: "handle accents" means every letter with a mark on it, not only the easy ones. |
 | What finishes this goal | The first release. Plan up to it and no further. |
 | Decisions | Fixed, whoever made them. Carry each into the design in the same words, pointing at it by its number so a reviewer can trace it, and leave out the option it ruled out so no builder builds it. If one can't be built as decided, ask the lead, naming it and why. |
-| How it will be judged | How strict the items are, with the numbers and shipped examples they test against. |
+| How it will be judged | How strict the items are, and no stricter, with the numbers and shipped examples they test against, because with the settings' quality bar it is how much quality the user decided the project is worth. |
 | Never part of this, Must not change | Limits. Put each in the design it concerns, because builders read the design, not the brief. |
 | Still open | Plan with the answer the user agreed to work from for now. A question marked "the planner chooses" is yours. |
 
@@ -46,8 +46,9 @@ The settings give the quality bar, the targets and the project's rules.
 The glossary is the project's domain language: one agreed name for each thing, shared by the user, the plan and the
 code. Use its names in the design, the items and the interfaces, so every agent means the same thing by a word. A
 plan is where most of the project's concepts first get a name, so when you name something new, add it to the plans
-folder's `GLOSSARY.md` as the `domain-language` skill describes, preferring the field's own term and marking it
-proposed.
+folder's `GLOSSARY.md` as the `domain-language` skill describes, preferring the field's own term. Give the entry its
+own `###` heading and a `Proposed:` line, rather than a row or a status word, because the script finds the names the
+user hasn't agreed by that line, and the lead deletes it once they agree.
 
 ## How deep to go
 
@@ -107,6 +108,10 @@ milestones and what follows them.
 
 A few things hold for every item:
 
+- Write each item as a closed claim, one a reviewer can check once and be done with: a named list of behaviours,
+  cases or inputs, or a bound with its number, drawn from the brief and the design. An open claim, such as "the
+  suite fails when any behaviour is broken" or "handles every input", has no end, because each reviewer can find one
+  more case it misses, and the milestone never passes.
 - Say what will be observed, not how to arrange it, because the builder will learn things the plan didn't know.
 - Add an item only when the user's words or the design need it, because reviewers fail the build on every one.
 - An item can rely only on what exists when its milestone ends: this module's work, and what its `depends_on`

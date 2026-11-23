@@ -50,9 +50,9 @@ Results and exit status:
   The commands a lead acts on (run, review, plan, ready, next, unblock, pause, watch, settings, adopt, migrate,
   human, merge, main-check and cleanup) end with one JSON line, their result, as the last line on stdout, carrying
   `result` and `version`, with `warnings` when there are any. Read that line and nothing else: `result` names what
-  happened; `next`, when present, is {command, argv, by, why}, the exact command to run next, by `lead` or
-  `planner` (`argv` is the same command as a list of words, and it names the newest installed copy of the
-  script); `decides: human` on a `next` marks a decision only the user may make, with `ask` the question to put to
+  happened; `next`, when present, is {command, argv, by, why}, the exact command to run next and who runs it,
+  which is the lead for every command of this script, a `plan` that starts a planner included (`argv` is the same
+  command as a list of words, and it names the newest installed copy of the script); `decides: human` on a `next` marks a decision only the user may make, with `ask` the question to put to
   them in chat, and the script never runs that command itself; `changed` lists what changed in the script since
   the version this repository last ran, once. `run --message` and `plan --task` can be given more than once; the
   texts are joined, so a lead adds its own words to a printed `next` by adding the flag again.
@@ -210,6 +210,30 @@ def module_args(module: str | None) -> list[str]:
 def kind_args(kind: str | None) -> list[str]:
     """The `--kind` flag for a `plan` command, left out when the script can tell the kind from the project."""
     return ["--kind", kind] if kind else []
+
+
+TURN_TIMEOUT_HOURS = 2.0  # the --turn-timeout-hours a command gets when the lead names none
+
+
+def plan_flags(a: argparse.Namespace, on: str | None = None) -> list[str]:
+    """The flags the lead gave this `plan`, other than its task and module, for a `next` that gives a planner the task
+    again: its kind, host, model, effort, turn limit and `--one-step`. A lead runs `next` as it is printed, so a flag
+    left out changes what runs: without `--one-step`, a first plan would carry on into design reviews before the user
+    has seen it. A step of a longer `plan` gets `--one-step` from that command, not from the lead, so its `next`
+    leaves it out, as the lead's own command did. `on` names another host for the turn, which drops the model, since
+    one host's model doesn't run on another."""
+    host = on or getattr(a, "host", None)
+    out = [*kind_args(getattr(a, "kind", None)), *(["--host", host] if host else [])]
+    if getattr(a, "model", None) and not on:
+        out += ["--model", a.model]
+    if getattr(a, "effort", None):
+        out += ["--effort", a.effort]
+    hours = getattr(a, "turn_timeout_hours", None)
+    if hours is not None and hours != TURN_TIMEOUT_HOURS:
+        out += ["--turn-timeout-hours", f"{hours:g}"]
+    if getattr(a, "one_step", False) and not STEPS_PARENT:
+        out.append("--one-step")
+    return out
 
 
 def default_kind(tree: Path, prof: dict) -> str:
@@ -1791,10 +1815,14 @@ def passing(milestone: dict) -> int:
 
 
 # A failed review counts twice over. `failed_reviews` counts every failed review, and `failed_reviews_with_repeat`
-# those with a finding that repeats an earlier review's, so a builder that fixes each finding and is shown a new one
-# isn't treated as stuck as soon as one whose fixes don't hold. At REPEATS_TO_DIAGNOSE of the second, or
-# FAILED_REVIEWS_TO_DIAGNOSE of the first, a planner is asked once what keeps failing: reviews that keep finding new
-# things can mean the checks are too broad.
+# those that failed an item an earlier review failed, or repeated an earlier finding by name. A builder that fixes
+# each finding and is shown a new one on another item isn't stuck, so the first count alone waits for
+# FAILED_REVIEWS_TO_DIAGNOSE. But an item that fails again is not making progress, even when each review names a new
+# defect in it: in a dogfood run one open-ended item failed eight reviews in a row, each on a new defect, and a count
+# of repeated findings alone stayed at 0. So the second count takes the item too, and at REPEATS_TO_DIAGNOSE of it a
+# planner is asked once what keeps failing: an item that keeps failing on new defects usually asks for more than the
+# brief does, or can't be proved as written. Both counts start again when a planner changes the milestone's
+# definitions, since the reviews they counted judged items that no longer exist.
 NEW_SESSION_AFTER_FAILED_REVIEWS = 3
 REPEATS_TO_DIAGNOSE = 4
 FAILED_REVIEWS_TO_DIAGNOSE = 6
@@ -1805,8 +1833,8 @@ PLANNER_DIAGNOSED = "diagnosed_for_planner_finding"
 
 def escalation(failed_reviews: int, with_repeat: int = 0, diagnoses: int = 0, for_planner: bool = False,
                planner_diagnosed: bool = False) -> str:
-    """What a milestone's counts call for after a failed review. The first two start again at a re-plan, a kept plan
-    or a decision of the user's. A milestone gets one diagnosis, so the same counts after it block the milestone.
+    """What a milestone's counts call for after a failed review. The first two start again at a diagnosis, a plan
+    that changes the milestone's items, or a decision of the user's. A milestone gets one diagnosis, so the same counts after it block the milestone.
     `for_planner` means the last review has a finding only a planner can settle, such as an item its named proof
     can't prove, or items that contradict each other; another builder turn can't, so it goes to the diagnosis now.
     Such a finding after a diagnosis for something else is new to the planner, so it gets a diagnosis of its own;
@@ -1844,7 +1872,7 @@ def diagnosis_cause(counts: dict) -> str:
     """Why a milestone is owed a diagnosis, in the words the lead and the user read."""
     if planner_findings(counts):
         return "a reviewer found something only a planner can settle"
-    return ("a finding keeps coming back" if int(counts.get("failed_reviews_with_repeat", 0) or 0) >= REPEATS_TO_DIAGNOSE
+    return ("the same items or findings keep failing" if int(counts.get("failed_reviews_with_repeat", 0) or 0) >= REPEATS_TO_DIAGNOSE
             else "reviews keep finding something new")
 
 
@@ -1852,7 +1880,7 @@ def blocked_after_diagnosis(counts: dict) -> str:
     """Why the script blocked a milestone that reached the same counts again after its diagnosis."""
     if planner_findings(counts):
         return "a reviewer found something only a planner can settle again, after its diagnosis"
-    return ("a finding kept coming back after its diagnosis"
+    return ("the same items or findings kept failing after its diagnosis"
             if int(counts.get("failed_reviews_with_repeat", 0) or 0) >= REPEATS_TO_DIAGNOSE
             else "its reviews kept finding something new after its diagnosis")
 
@@ -1862,6 +1890,19 @@ def repeats(findings: list, earlier_names: set, earlier_items: set) -> list[str]
     that failed before, unless the reviewer said under `different` how it isn't the same defect."""
     return [f["name"] for f in findings if f["name"] in earlier_names
             or (f.get("item") in earlier_items and not f.get("different"))]
+
+
+def items_failed_again(verdicts: dict, findings: list, earlier_items: set) -> list[str]:
+    """The items this failed review didn't pass that an earlier counted review didn't pass either, whatever the
+    finding and whatever its `different` says: the item still isn't done, so the review counts as a repeat."""
+    now = {i for i, v in (verdicts or {}).items() if (v or "pass") != "pass"} | \
+        {f.get("item") for f in findings if isinstance(f, dict) and f.get("item")}
+    return sorted(now & set(earlier_items))
+
+
+def repeat_words(n: int) -> str:
+    """How `failed_reviews_with_repeat` reads in a sentence, so every place names the same thing."""
+    return f"{n} of them on an item or a finding an earlier review had failed"
 
 
 def reset_proof(milestone: dict, only_failed: bool = False) -> None:
@@ -2298,7 +2339,7 @@ def fit_next(then):
 
 
 def next_cmd(command: str | None, by: str, why: str, **more) -> dict:
-    """The `next` field: the exact command to run, who runs it (`lead` or `planner`), and why. A decision only the
+    """The `next` field: the exact command to run, who runs it (the lead, for every command of this script), and why. A decision only the
     user may make carries `decides: human` and an `ask`; the lead still runs its command, once they've answered."""
     return {"command": command, "by": by, "why": why, **more}
 
@@ -2414,8 +2455,9 @@ def diagnosis_task(module: str, mid: str, counts: dict, prof: dict, worktree: Pa
                 " | ".join(f"{f['name']}" + (f" ({f['item']})" if f.get("item") else "") + f": {f['planner']}"
                            for f in marked)[:1200])
     elif repeated >= REPEATS_TO_DIAGNOSE:
-        what = (f"It has failed review {plural(failed, 'time')}, and {repeated} of those reviews repeated a finding "
-                "that an earlier review had raised, so the fixes aren't holding")
+        what = (f"It has failed review {plural(failed, 'time')}, {repeat_words(repeated)}, so the same items keep "
+                "failing: the fixes aren't holding, or each fix meets a new defect in an item that may ask for more "
+                "than the brief does")
     else:
         what = (f"It has failed review {plural(failed, 'time')}, mostly on findings that no earlier review had "
                 "raised, so each fix held and the milestone still doesn't pass")
@@ -2600,7 +2642,8 @@ def keep_counts(before: dict | None, after: dict, settled: list[str], stem: str,
     diagnoses, and the escalation goes on where it was rather than starting again. A milestone Blocked with too many failed reviews whose definitions
     the plan changes, in a `change` task (`restart`), is the user's decision carried out by a planner: it starts
     again as `human scope` starts it, and joins `settled`. Any other task leaves it Blocked, since only the user sends
-    one of those back."""
+    one of those back. Any other milestone whose definitions the plan changes has its failed reviews counted from 0
+    and its last findings cleared, keeping its diagnoses."""
     old = {m.get("id"): m for m in (before or {}).get("milestones") or [] if isinstance(m, dict)}
     for m in after.get("milestones") or []:
         if f"{stem} {m.get('id')}" in settled:
@@ -2633,6 +2676,12 @@ def keep_counts(before: dict | None, after: dict, settled: list[str], stem: str,
                 m["blocked"] = was["blocked"]
             else:
                 m.pop("blocked", None)
+        elif run_free_definitions(was) != run_free_definitions(m):
+            # its reviews failed items that no longer exist, so they say nothing about whether the builder can meet
+            # the new ones, and the review history the counts cover starts at the new definitions too. `diagnoses`
+            # stays: a milestone that had its diagnosis is blocked at the next limit rather than diagnosed again
+            m.update(failed_reviews=0, failed_reviews_with_repeat=0)
+            m.pop("findings", None)
 
 
 def escalation_next(word: str, module: str, mid: str, counts: dict, worktree: Path, prof: dict) -> dict:
@@ -2642,8 +2691,7 @@ def escalation_next(word: str, module: str, mid: str, counts: dict, worktree: Pa
     failed = int(counts.get("failed_reviews", 0) or 0)
     repeated = int(counts.get("failed_reviews_with_repeat", 0) or 0)
     findings = FINDINGS_TEMPLATE.format(milestone=mid, module=module, evidence=prof["evidence"])
-    tally = (f"{module} {mid} has failed review {plural(failed, 'time')}, "
-             f"{plural(repeated, 'time')} on a finding an earlier review had raised")
+    tally = f"{module} {mid} has failed review {plural(failed, 'time')}, {repeat_words(repeated)}"
     if word == "same_builder":
         return next_cmd(loop_cmd("run", "--module", module, "--worktree", wt, "--message", findings), "lead",
                         f"{tally}: resume the builder with this message, which points it to the review",
@@ -2654,7 +2702,7 @@ def escalation_next(word: str, module: str, mid: str, counts: dict, worktree: Pa
                                 "it to the review", escalation=word)
     if word == "diagnosis":
         return next_cmd(loop_cmd("plan", "--worktree", wt, "--kind", "diagnose", "--task", diagnosis_task(module, mid, counts, prof, worktree)),
-                        "planner", f"{tally}, so a planner decides why before any more building: it changes the "
+                        "lead", f"{tally}, so a planner decides why before any more building: it changes the "
                                    "items, or keeps them and names who has to act; `run` won't start a builder "
                                    "on it until then",
                         escalation=word, cause=diagnosis_cause(counts),
@@ -2996,6 +3044,15 @@ def step_key(step: dict) -> str:
     return f"{s}:{reason}" if s == "waiting" or (s == "blocked" and reason == "too_many_failed_reviews") else s
 
 
+def can_start_next(can_start: list[dict]) -> dict:
+    """`ready`'s `next` when milestones can start: the first one's `run`. Each entry carries its own, and the lead
+    starts as many as the settings' Builders count allows, since `run` asks the user before going past it."""
+    first = can_start[0]["next"]
+    more = [f"{s['module']} {s.get('milestone') or ''}".strip() for s in can_start[1:]]
+    return {**first, "why": first["why"] + (f". {', '.join(more)} can start too, each with the `next` in its "
+                                            "`can_start` entry, up to the Builders count" if more else "")}
+
+
 def nothing_ready_next(steps: list[dict], worktree: Path, prof: dict, proj: dict, ahead: list[dict] = ()) -> dict:
     """For `ready` when nothing is: the most useful next command across the modules, or planning when there are
     none, or nothing when all are finished."""
@@ -3178,7 +3235,8 @@ def proof_only(worktree: Path, prof: dict, ref: str, rel: str) -> bool:
 def plan_drift(worktree: Path, prof: dict, ref: str) -> dict:
     """Plan files in this worktree that the main branch's tip doesn't have: uncommitted (edited, staged or untracked) or
     committed but not merged. `run` and `ready` read plans at the tip, so these are invisible to them. Committed files
-    that merge with a builder's work instead are under `with_work`. A settings file
+    that merge with a builder's work instead are under `with_work`, as are files in a module's folder that aren't
+    its plan files, such as check scripts, changed in a build worktree (on build/<module>). A settings file
     the tip doesn't have at all is part of a first plan, so it counts too. One the tip has in another form is only
     named, under `settings_differ`: the lead changes it with `settings --set` once the user has agreed."""
     out = folder_drift(worktree, prof["plans"], ref)
@@ -3196,6 +3254,16 @@ def plan_drift(worktree: Path, prof: dict, ref: str) -> dict:
     keep = [p for p in keep if not ((w := module_of(prof, p)) and w[1] == "log" and w[0] not in edited)]
     out["with_work"] = sorted(set(out["unmerged"]) - set(keep))
     out["unmerged"] = keep
+    if git(worktree, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip().startswith(build_branch("")):
+        # In a module's build worktree, a file in a module's folder that isn't one of its plan files, such as a
+        # check script in its checks folder, is the builder's to change. It is part of the builder's work,
+        # unreviewed until its milestone is, and merges with it; `adopt` would merge it to the main branch on its
+        # own, split from the code it goes with. A plan file proper, such as a design revised in chat, stays the
+        # lead's to adopt.
+        builders = lambda p: module_of(prof, p) is None and "/" in p[len(prof["plans"].rstrip("/")) + 1:]
+        for key in ("uncommitted", "unmerged"):
+            out["with_work"] = sorted(set(out["with_work"]) | {p for p in out[key] if builders(p)})
+            out[key] = [p for p in out[key] if not builders(p)]
     here, there = file_here(worktree, PROFILE_FILE), file_at(worktree, ref, PROFILE_FILE)
     if here is not None and there is None:
         key = "unmerged" if file_at(worktree, "HEAD", PROFILE_FILE) == here else "uncommitted"
@@ -3228,10 +3296,15 @@ def drift_fields(drift: dict, worktree: Path, step_next: dict | None = None) -> 
     note = (f"the script reads plans at the main branch's tip, and these plan files aren't there: {', '.join(files[:10])}"
             + (" (uncommitted)" if drift["uncommitted"] and not drift["unmerged"] else
                " (committed here, not merged)" if not drift["uncommitted"] else ""))
+    # `adopt --then` gives the command back as its own `next`, so a lead that follows each `next` doesn't have to
+    # remember it across the adopt. A decision of the user's stays under `then` only, where its ask is.
+    after = (step_next or {}).get("command")
+    carry = ["--then", after] if isinstance(after, str) and not (step_next.get("decides") or step_next.get("ask")) else []
     return {"unmerged_plans": {**drift, "note": note},
-            "next": next_cmd(loop_cmd("adopt", "--worktree", str(worktree)), "lead",
-                             f"{note}. `adopt` commits only those plan files and merges them; then run this "
-                             "again", **({"then": step_next} if step_next else {}))}
+            "next": next_cmd(loop_cmd("adopt", "--worktree", str(worktree), *carry), "lead",
+                             f"{note}. `adopt` commits only those plan files and merges them"
+                             + ("; its `next` is then this command again" if carry else "; then run this again"),
+                             **({"then": step_next} if step_next else {}))}
 
 
 # -------------------------------------------------------------------------------------------- processes and locks
@@ -3996,15 +4069,17 @@ def loop_processes() -> list[dict]:
     started by a copy of the script that doesn't keep one, or one that couldn't write it. ps doesn't quote
     arguments, so a value with spaces (a plan's task) isn't read."""
     try:
-        out = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "etime=", "-o", "args="], capture_output=True,
-                             text=True, timeout=10).stdout
+        out = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "ppid=", "-o", "etime=", "-o", "args="],
+                             capture_output=True, text=True, timeout=10).stdout
     except (OSError, subprocess.SubprocessError):
         return []
     found = []
     for line in out.splitlines():
-        parts = line.split(None, 2)
-        if len(parts) < 3 or not parts[0].isdigit() or int(parts[0]) == os.getpid():
+        parts = line.split(None, 3)
+        if len(parts) < 4 or not parts[0].isdigit() or int(parts[0]) == os.getpid():
             continue
+        ppid = int(parts[1]) if parts[1].isdigit() else None
+        parts = [parts[0], parts[2], parts[3]]
         argv = parts[2].split()
         if not Path(argv[0]).name.lower().startswith("python"):
             continue
@@ -4025,7 +4100,7 @@ def loop_processes() -> list[dict]:
         rec = {"pid": pid, "role": role, "script": argv[script], "repository": None, "worktree": worktree,
                "module": flags.get("module"), "milestone": flags.get("milestone"), "host": flags.get("host"),
                "model": flags.get("model"), "effort": flags.get("effort"),
-               "started_at": time.time() - running if running is not None else None}
+               "started_at": time.time() - running if running is not None else None, "ppid": ppid}
         if Path(worktree).is_absolute() and Path(worktree).is_dir():
             inside = subprocess.run(["git", "-C", worktree, "rev-parse", "--absolute-git-dir"], capture_output=True,
                                     text=True)
@@ -4096,9 +4171,33 @@ def live_loops(repo: str | None = None, clean: bool = True, processes: bool = Tr
             except OSError:
                 pass
         rec["activity_at"] = last
+    join_steps(loops)
     if repo:
         loops = [r for r in loops if r.get("repository") == repo]
     return sorted(loops, key=lambda r: (r.get("repository") or "~", r.get("module") or "", r["pid"])), removed
+
+
+def join_steps(loops: list[dict]) -> None:
+    """Ties each step to the `run` or `plan` going through its steps, in place. A step seen only in the process table,
+    in its first second before it writes its record, gets `steps_parent` from its parent process, so it isn't counted
+    as a builder of its own beside its parent. The parent, which runs no agent itself, shows its current step's host,
+    model, effort, milestone, turns and last activity, so `runs` doesn't show it idle while its step works."""
+    parents = {r.get("pid"): r for r in loops if r.get("role") == "steps"}
+    for r in loops:
+        if not r.get("registered") and not r.get("steps_parent") and r.get("ppid") in parents:
+            r["steps_parent"] = r["ppid"]
+    for pid, parent in parents.items():
+        steps = sorted((r for r in loops if r.get("steps_parent") == pid),
+                       key=lambda r: r.get("started_at") or 0)
+        if not steps:
+            continue
+        now = steps[-1]
+        for k in ("host", "model", "effort", "milestone", "turn_started_at", "open_tool_call"):
+            if now.get(k) is not None:
+                parent[k] = now[k]
+        parent["turns"] = now.get("turns") or 0
+        parent["activity_at"] = max([x for x in (parent.get("activity_at"), *(r.get("activity_at") for r in steps))
+                                     if x is not None], default=None)
 
 
 def planners_waiting(worktree: Path) -> list[dict]:
@@ -5996,7 +6095,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.10.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.10.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6026,6 +6125,17 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.10.1": [
+        "A reviewer now holds a milestone to its items, the brief's \"How it will be judged\" and the quality bar; "
+        "anything beyond them is a Suggestion. If reviews keep failing on demands the brief never made, look at the "
+        "Must Fix findings before you send the builder back.",
+        "A failed review that fails an item an earlier review failed now counts as a repeat, even with a new finding, "
+        "so a stuck milestone reaches a planner's diagnosis sooner. A milestone whose items a planner changes starts "
+        "its review counts again.",
+        "`flow` gives two new signs, a low review pass rate and planning that churns, and counts planner, design "
+        "review, builder and review turns. When a refused command sends you to `adopt`, run the `adopt` command as "
+        "given: its `next` brings you back to the command that refused.",
+    ],
     "2.10.0": [
         "Read the lead skill again. It is much shorter, because each command's --help now says what the command does, "
         "its results and its fields, and the top-level --help gives the result contract.",
@@ -7408,9 +7518,14 @@ def builder_runs(loops: list[dict]) -> list[dict]:
     def holding(r: dict) -> bool:
         return r.get("role") == "review" or r.get("role") == "build" and not r.get("checks_only") and \
             r.get("step") not in (WAITING_FOR_CHECK, WAITING_FOR_SLOT, WAITING_FOR_QUIET)
-    parents = {r.get("pid") for r in loops if r.get("role") == "steps" and r.get("module")}
+    # a `plan` going through its steps (a planner, then the design review) holds no builder slot, though its design
+    # review step is a review; records from before `origin` mark a plan's steps by its task
+    def builds(r: dict) -> bool:
+        return r.get("role") == "steps" and bool(r.get("module")) and \
+            (r.get("origin") or ("plan" if r.get("task") else "run")) == "run"
+    parents = {r.get("pid") for r in loops if builds(r)}
     step_of = {r.get("steps_parent"): r for r in loops if r.get("steps_parent") in parents}
-    return [r for r in loops if r.get("role") == "steps" and r.get("module") and
+    return [r for r in loops if builds(r) and
             (r.get("pid") not in step_of or holding(step_of[r.get("pid")])) or
             r.get("role") == "build" and holding(r) and r.get("steps_parent") not in parents]
 
@@ -7569,6 +7684,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     preflight(host, worktree, "build")
     stem = module_stem(worktree, prof, a.module)
     key = stem.upper()
+    lead_tree = worktree  # where the lead runs it, and where plan files it hasn't merged would be
     worktree, how = module_worktree(worktree, prof, stem)
     if how:
         a.worktree = str(worktree)
@@ -7596,7 +7712,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     def unlanded(then: dict | None) -> dict:
         """`next` for a run that stops short, or `adopt` when plan files haven't merged (only looked for here, since
         plans are read at the tip and a run that builds needn't pay for the look)."""
-        return drift_fields(plan_drift(worktree, prof, start_tip), worktree, then)
+        return drift_fields(plan_drift(lead_tree, prof, start_tip), lead_tree, then)
 
     # An owed design review runs here first, as `review --milestone design` would, unless the lead opted out; a
     # DESIGN OK carries on to build in the same run.
@@ -8738,6 +8854,8 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
                 items |= {i["id"] for i in under_review["items"] if (i.get("verdict") or "pass") != "pass"}
             found = [] if passed else [dict(f) for f in reviewed.get("findings") or []]  # a pass clears the last review's
             again = repeats(found, names, items) if not passed else []
+            verdicts = {i["id"]: i.get("verdict", "") for i in reviewed["items"]}
+            again_items = items_failed_again(verdicts, found, items) if not passed else []
             for f in found:
                 f["repeat"] = f["name"] in again
             target.update(status=reviewed["status"], findings=found)
@@ -8748,7 +8866,7 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
                 i["verdict"], i["review"] = by_id[i["id"]].get("verdict", ""), by_id[i["id"]].get("review", "")
             if not passed:
                 target["failed_reviews"] = int(target.get("failed_reviews", 0) or 0) + 1
-                target["failed_reviews_with_repeat"] = int(target.get("failed_reviews_with_repeat", 0) or 0) + (1 if again else 0)
+                target["failed_reviews_with_repeat"] = int(target.get("failed_reviews_with_repeat", 0) or 0) + (1 if again or again_items else 0)
                 reset_proof(target, only_failed=True)
                 if escalation_of(target) == "too_many_failed_reviews":
                     # it has had its diagnosis; only the user reopens it
@@ -8758,7 +8876,7 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
                     e["too_many_failed_reviews"] = {"why": why, "after": e.get("counted_after", 0), "at": now()}
             counts.update({k: int(target.get(k, 0) or 0) for k in COUNTS},
                           **({PLANNER_DIAGNOSED: True} if target.get(PLANNER_DIAGNOSED) else {}),
-                          repeated=again, status=target["status"],
+                          repeated=again, repeated_items=again_items, status=target["status"],
                           **({"findings": planner_findings(target)} if planner_findings(target) else {}))
             write_json(t / done_path, doc)
             write.append(done_path)
@@ -8806,7 +8924,8 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
         action = after_pass(worktree, prof, key)
     return _result("REVIEWED", **info, verdict=verdict, commit=start, review=review_path, review_commit=landed,
                    failed_reviews_with_repeat=with_repeat,
-                   **({"failed_reviews": counts["failed_reviews"], "repeated": counts["repeated"], "escalation": word,
+                   **({"failed_reviews": counts["failed_reviews"], "repeated": counts["repeated"],
+                       "repeated_items": counts["repeated_items"], "escalation": word,
                        "found": tally} if not passed and not design else {}),
                    **({"filled": filled} if filled else {}),
                    next=action, last_line=out["last_line"],
@@ -8877,12 +8996,12 @@ def design_review_next(out: dict, stem: str, worktree: Path, prof: dict) -> dict
         if rounds >= DESIGN_REVIEW_ROUNDS:
             task += (f" That makes {DESIGN_REVIEW_ROUNDS} design reviews in a row that asked for changes, so the "
                      "script approves the design you leave without another review, and building starts from it.")
-            return next_cmd(loop_cmd("plan", "--worktree", wt, *module_args(stem), "--kind", "revise", "--task", task), "planner",
+            return next_cmd(loop_cmd("plan", "--worktree", wt, *module_args(stem), "--kind", "revise", "--task", task), "lead",
                             f"{DESIGN_REVIEW_ROUNDS} design reviews in a row found Must Fix findings; send these to "
                             "the planner. The script approves its revision without another review, "
                             "and the module can be built after that. Report the module only if a finding needs a "
                             "user decision", findings=out.get("review"))
-        return next_cmd(loop_cmd("plan", "--worktree", wt, *module_args(stem), "--kind", "revise", "--task", task), "planner",
+        return next_cmd(loop_cmd("plan", "--worktree", wt, *module_args(stem), "--kind", "revise", "--task", task), "lead",
                         "the design review found Must Fix findings; send them to the planner, then review the design "
                         "again. Report the module only if a Must Fix finding returns after the planner fixed it, or "
                         "needs a user decision", findings=out.get("review"))
@@ -9180,8 +9299,8 @@ def cmd_plan(a: argparse.Namespace) -> None:
         # would be invisible to it. `run` refuses the same way.
         try:
             unmerged = drift_fields(plan_drift(worktree, prof, tip(worktree, prof)), worktree, next_cmd(loop_cmd(
-                "plan", "--worktree", str(worktree), *kind_args(a.kind), *module_args(scope), "--task", a.task,
-                *(["--host", a.host] if a.host else [])), "lead", "the planner then reads the merged files"))
+                "plan", "--worktree", str(worktree), *plan_flags(a), *module_args(scope), "--task", a.task), "lead",
+                "the planner then reads the merged files"))
         except TipError:
             unmerged = {}
         if unmerged.get("unmerged_plans"):
@@ -9237,9 +9356,8 @@ def cmd_plan(a: argparse.Namespace) -> None:
 
     def plan_again(note: str, on: str | None = None) -> str:
         """This `plan` with the same task and a note on how the last turn on it ended, optionally on another host."""
-        return loop_cmd("plan", "--worktree", str(worktree), *kind_args(a.kind), *module_args(scope),
-                        "--task", f"{a.task}\n\n{note}",
-                        *(["--host", on] if on else []))
+        return loop_cmd("plan", "--worktree", str(worktree), *plan_flags(a, on), *module_args(scope),
+                        "--task", f"{a.task}\n\n{note}")
 
     def planner_stopped(result: str, out: dict, kept: dict) -> dict:
         """`next` for a planner turn that ended without merging, so the lead isn't sent the same task as before."""
@@ -9249,7 +9367,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
             # The whole end of the report, because what the scoped planner found is what the next one starts from.
             found = (out.get("report") or "").strip()[-1500:]
             return {"next": next_cmd(loop_cmd(
-                "plan", "--worktree", str(worktree), *kind_args(a.kind), "--task",
+                "plan", "--worktree", str(worktree), *plan_flags(a), "--task",
                 f"{a.task}\n\nA planner limited to {scope} stopped. The end of its report:\n{found}"
                 + (f" What it wrote is kept in {where}; reuse what holds up." if where else "")), "lead",
                 f"the planner limited to {scope} needs another module's files ({line}); this gives the task to a "
@@ -9369,8 +9487,17 @@ def cmd_plan(a: argparse.Namespace) -> None:
     start = head_commit(tree)
     before = done_docs_at(tree, prof, start)
     changed = changed_paths(tree, start)
-    problems = [f"changed {p}; only the script writes record files" for p in changed
-                if (where := module_of(prof, p)) and where[1] == "record" or p.endswith(("-" + OLD_RECORD, "/" + OLD_RECORD))]
+    # A planner may drop a whole module that nothing has been built in, which deletes its record with its folder.
+    removed, problems = [], []
+    for p in changed:
+        where = module_of(prof, p)
+        if where and where[1] == "record" and not (tree / p).exists() and \
+                not (why := removal_problem(worktree, tree, prof, start, before, where[0])):
+            removed.append(where[0])
+        elif where and where[1] == "record" and not (tree / p).exists():
+            problems.append(why)
+        elif where and where[1] == "record" or p.endswith(("-" + OLD_RECORD, "/" + OLD_RECORD)):
+            problems.append(f"changed {p}; only the script writes record files")
     problems += [f"changed {p}, which the script writes from the records after each one it merges; leave it as it was"
                  for p in changed if p == status_rel(prof)]
     problems += flat_names(prof, changed)
@@ -9405,7 +9532,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
             kept = leave()
             command, where = "", kept.get("stash", "a git stash")
         emit("INVALID", **info, **out, merged=False, problems=problems[:20], **kept, next=next_cmd(
-            command + loop_cmd("plan", "--worktree", str(worktree), *kind_args(a.kind),
+            command + loop_cmd("plan", "--worktree", str(worktree), *plan_flags(a),
                                *([] if others else module_args(scope)), "--task",
                                f"{a.task}\n\nYour last turn on this was refused, for: {'; '.join(problems[:5])}. Its "
                                f"files are in {where} (`git stash list`, then `git stash show -p --include-untracked "
@@ -9459,7 +9586,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
         if broken:
             kept = leave()
             fix = main_broken_next(worktree, land_prof, broken)
-            later = loop_cmd("plan", "--worktree", str(worktree), *kind_args(a.kind), *module_args(scope),
+            later = loop_cmd("plan", "--worktree", str(worktree), *plan_flags(a), *module_args(scope),
                              "--merge-kept", kept.get("branch", ""), "--task", a.task)
             try:
                 write_json(loop_dir(worktree) / MAIN_BROKEN_FILE,
@@ -9569,9 +9696,18 @@ def cmd_plan(a: argparse.Namespace) -> None:
     owed.sort(key=lambda m: order.index(m.upper()) if m.upper() in order else len(order))
     if prof.get("builders") is None:
         # a first plan: the user sees it before anyone reviews or builds it, and says how many may build at once
-        then = next_cmd(None, "lead", "this is the first plan, and the settings have no `Builders:` line yet: show the "
-                                      "user the plan as the stage before the first build says, then write the line "
-                                      + (f"and review {owed[0]}'s design" if owed else "and start the builders"))
+        # the user sees it before anyone reviews or builds it, and says how many may build at once
+        start = loop_cmd("run", "--module", owed[0], "--worktree", str(worktree)) if owed else \
+            loop_cmd("ready", "--worktree", str(worktree))
+        then = next_cmd(
+            loop_cmd("settings", "--worktree", str(worktree), "--set", "Builders", "<their answer, in their words>",
+                     "--said", "<what the user said>"), "lead",
+            "this is the first plan, and the settings have no `Builders:` line yet. Show the user the plan as the "
+            "stage before the first build says, and once they agree it, save the number of builders they give; "
+            + (f"`then` builds {owed[0]}, the first module in build order, and `run` reviews its design first"
+               if owed else "`then` shows what's ready to build"),
+            decides="human", ask="Before the first build: is the plan right, and how many agents should build at "
+                                 "once, with which programs?", then=start)
     elif owed:
         reviewer = design_review_host(prof, proj[owed[0].upper()]["record"], host)
         then = next_cmd(loop_cmd("review", "--module", owed[0], "--milestone", "design", "--worktree", str(worktree),
@@ -9602,7 +9738,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
                 if m.get("status") == "blocked" and blocked_of(m)["reason"] == "too_many_failed_reviews":
                     still.append({"milestone": f"{stem} {m['id']}", "reopen": human_cmd("reopen", stem, m["id"], str(worktree))})
     emit("PLANNED", **info, **out, merged=True, commit=detail, modules=modules, design_review_owed=owed,
-         files=changed, **({"first_plan": True} if prof.get("builders") is None else {}),
+         files=changed, **({"removed": removed} if removed else {}), **({"first_plan": True} if prof.get("builders") is None else {}),
          **({"still_blocked": still,
              "still_blocked_why": "this change didn't touch these milestones' items, so they stay Blocked with too "
                                   "many failed reviews. If the user's words this change carried out answered them, "
@@ -9652,8 +9788,9 @@ def cmd_ready(a: argparse.Namespace) -> None:
         steps.append(dict(step))
         if step["status"] == "finished" and run_holder(folder, step["module"].upper()) is None:
             drop_tree(worktree, step["module"])  # also frees checkouts left from before this was done on finishing
-        if step_key(step) in ("waiting:for_diagnosis", "waiting:for_planning", "blocked:too_many_failed_reviews"):
-            step["next"] = next_for(step, worktree, prof, proj)  # not the builder's: say whose it is
+        if step_key(step) in ("waiting:for_diagnosis", "waiting:for_planning", "blocked:too_many_failed_reviews",
+                              "can_start"):
+            step["next"] = next_for(step, worktree, prof, proj)  # not the builder's, or the run that starts one
         out[step.pop("status")].append(step)
     if ahead := plan_ahead(worktree, prof, ref, proj):
         out["plan_ahead"] = ahead
@@ -9661,9 +9798,8 @@ def cmd_ready(a: argparse.Namespace) -> None:
                                                    if run_holder(folder, s["module"].upper()) is None]):
         out["worktrees_removed"] = gone
     drift = plan_drift(worktree, prof, ref)
-    if drift["uncommitted"] or drift["unmerged"] or not out["can_start"]:
-        out.update(drift_fields(drift, worktree, None if out["can_start"] else
-                                nothing_ready_next(steps, worktree, prof, proj, ahead)))
+    out.update(drift_fields(drift, worktree, can_start_next(out["can_start"]) if out["can_start"] else
+                            nothing_ready_next(steps, worktree, prof, proj, ahead)))
     out.update(profile_note(drift, prof))
     if found := table_warnings(worktree, prof, ref, [e["stem"] for e in proj.values()]):
         out["module_table"] = found
@@ -9736,7 +9872,7 @@ def cmd_status(a: argparse.Namespace) -> None:
             print(f"  invalid: {problem}")
         if step_key(step) == "waiting:for_diagnosis":
             print(f"  {step['milestone']} failed review {plural(step.get('failed_reviews', 0), 'time')}, "
-                  f"{step['failed_reviews_with_repeat']} on a repeated finding; a planner looks at it before any more building:\n"
+                  f"{repeat_words(step['failed_reviews_with_repeat'])}; a planner looks at it before any more building:\n"
                   f"    {next_for(step, worktree, prof, proj)['command']}")
         if e["problems"]:
             continue
@@ -9799,7 +9935,7 @@ SETTINGS_TEMPLATE = """\
 - **Worktrees:** .orchestrate/worktrees  *(script: optional; with this line, `run --worktree` given the main checkout builds the module in its own worktree on build/<module> in this folder, which git ignores, and `ready` removes it once the module is finished and merged; left out or `none`, each run builds in the worktree it is given. Keep it on a new project)*
 - **Graded examples:** .orchestrate/evidence/graded-examples.md  *(script: optional; with this line, `human accept` and `human rereview` add each review the user overturns to this file in the working folder, so later reviewers learn how strict the user is; left out, nothing is added. Keep it on a new project)*
 - **Test command:** none  *(script: required; the project's test command, which must pass before a merge, or `none` until the planner chooses one with the stack. It runs in a clean checkout after the setup command, and must pass before any test exists: `pytest`, for one, exits 5 when it finds no tests)*
-- **Setup command:** npm ci  *(script: optional; installs what the tests and checks need in a fresh checkout, into ignored folders, leaving tracked files as they were, as `npm ci` does; or `none`)*
+- **Setup command:** none  *(script: optional; installs what the tests and checks need in a fresh checkout, into ignored folders, leaving tracked files as they were, such as `npm ci` for a Node project or `pip install -e .` into a virtual environment for a Python one; `none` until the planner chooses one with the stack)*
 - **Merge:** local  *(script: required; `push` rebases onto Remote/Branch and pushes without force; `local` fast-forwards the local Branch only)*
 - **Branch:** main  *(script: the main branch)*
 - **Remote:** origin  *(script)*
@@ -11337,6 +11473,19 @@ def result_files_since(worktree: Path, start: float) -> list[tuple[float, str, d
     return sorted(out, key=lambda x: x[0])
 
 
+def paused_runs(worktree: Path, live: list[dict]) -> list[dict]:
+    """The modules whose latest `run` ended PAUSED and that nothing is running now, each with its milestone and when it
+    stopped. A paused run doesn't start again by itself, so the build stands still until someone says to go on, which
+    `status` doesn't show because the milestone's state is unchanged."""
+    latest: dict = {}
+    for at, command, line in result_files_since(worktree, 0):
+        if command == "run" and line.get("module"):
+            latest[str(line["module"]).upper()] = (at, line)  # oldest first, so the newest stays
+    going = {str(v.get("module") or "").upper() for v in live if v.get("role") in ("build", "steps", "review")}
+    return [{"module": line["module"], "milestone": line.get("milestone"), "at": at}
+            for key, (at, line) in sorted(latest.items()) if line.get("result") == "PAUSED" and key not in going]
+
+
 def report_text(worktree: Path, since=None) -> tuple[float, str]:
     """(the window's start, markdown): the factual half of the lead's report, read from the records at the main
     branch's tip, this machine's usage ledger and lock log, the result files and the runs going now. The lead adds
@@ -11397,7 +11546,10 @@ def report_text(worktree: Path, since=None) -> tuple[float, str]:
                 link = f", {md_link(acc['review'], acc['review'])}" if acc.get("review") else ""
                 done.append(f"- {stem} {m['id']} {name}".rstrip() + f": Done, by {acc.get('by')} "
                             f"{acc.get('at')}{link}")
-            elif not recorded_done(m, rec) and (ready_record(r).get("at") or "") >= stamp:
+            elif not recorded_done(m, rec) and (ready_record(r).get("at") or "") >= stamp and \
+                    m.get("status") == "ready_for_review" and ready_current(r):
+                # as `status` reads it: a Ready for Review that a failed review has since answered is listed under
+                # the verdicts, and the milestone is back In Progress
                 ready.append(f"- {stem} {m['id']} {name}".rstrip() + f": Ready for Review, {ready_record(r)['at']}")
             for v in r.get("reviews") or []:
                 if v.get("at", "") >= stamp:
@@ -11441,7 +11593,7 @@ def report_text(worktree: Path, since=None) -> tuple[float, str]:
                 latest = next((v["review"] for v in reversed(r.get("reviews") or []) if v.get("review")), None)
                 slowed.append(f"- {stem} {m['id']} has failed review {plural(c['failed_reviews'], 'time')} since its "
                               "definitions last changed" +
-                              (f", {c['failed_reviews_with_repeat']} of them with a finding that came back"
+                              (f", {repeat_words(c['failed_reviews_with_repeat'])}"
                                if c["failed_reviews_with_repeat"] else "") +
                               (f", and has had {plural(c['diagnoses'], 'diagnosis')}" if c["diagnoses"] else "") +
                               (f"; the latest review: {md_link(latest, latest)}" if latest else ""))
@@ -11462,6 +11614,15 @@ def report_text(worktree: Path, since=None) -> tuple[float, str]:
                           f"{passing} of {plural(len(items), 'item')} passing" +
                           (f", {plural(failed, 'failed review')} so far" if failed else "") +
                           f" · {md_link('done-when file', done_rel(prof, stem))}")
+    for p in paused_runs(worktree, live):
+        stem = proj.get(p["module"].upper(), {}).get("stem") or p["module"]
+        m = next((x for x in (proj.get(p["module"].upper(), {}).get("doc") or {}).get("milestones") or []
+                  if x.get("id") == p["milestone"]), None)
+        if m is not None and recorded_done(m, proj[p["module"].upper()]["record"]):
+            continue
+        needs_you.append(f"- {stem} {p['milestone'] or ''}".rstrip() + f": its run was paused at {local_time(p['at'])} "
+                         "and nothing is building it, so it stands still until you say to go on. The lead then "
+                         f"starts it again with `{loop_cmd('run', '--module', stem, '--worktree', str(worktree))}`")
     for v in live:
         what = (f"{v['module'] or '?'} {v['milestone'] or ''}".strip() if v["role"] != "plan" else
                 "a planner" + (f" ({v['task'][:120]})" if v.get("task") else ""))
@@ -11563,15 +11724,20 @@ def flow_numbers(worktree: Path, hours: float) -> dict:
     ready = done = 0
     for e in proj.values():
         for r in ((e.get("record") or {}).get("milestones") or {}).values():
-            ready += (ready_record(r).get("at") or "") >= since
+            ready += ready_events(r, since)
             done += ((r.get("done") or {}).get("at") or "") >= since
     after = f"--since=@{int(start)}"
     commits = git(worktree, "rev-list", "--count", after, ref).stdout.strip() if ref else ""
     code = git(worktree, "rev-list", "--count", after, ref, "--", ".",
                f":(exclude){prof['plans']}", f":(exclude){prof['evidence']}",
                *[f":(exclude){m}" for m in moved_evidence(worktree)]).stdout.strip() if ref else ""
-    builders = len({(r.get("module"), r.get("milestone"), r.get("session")) for r in ledger_rows(worktree)
-                    if r.get("role") == "build" and (r.get("at") or "") >= since})
+    rows = [r for r in ledger_rows(worktree) if (r.get("at") or "") >= since]
+    builders = len({(r.get("module"), r.get("milestone"), r.get("session")) for r in rows if r.get("role") == "build"})
+    turns = {"plan": 0, "design_review": 0, "build": 0, "review": 0}
+    for r in rows:
+        kind = "design_review" if r.get("role") == "review" and r.get("milestone") == "design" else r.get("role")
+        if kind in turns:
+            turns[kind] += 1
     locks: dict = {}
     spans: dict = {}
     path = loop_dir(worktree) / LOCKS_FILE
@@ -11626,7 +11792,7 @@ def flow_numbers(worktree: Path, hours: float) -> dict:
     out = {"hours": hours, "tip": ref, "ready_for_review": ready, "done": done,
            "commits": int(commits) if commits.isdigit() else None,
            "code_commits": int(code) if code.isdigit() else None,
-           "build_sessions": builders, "builders_allowed": prof.get("builders"), "locks": locks,
+           "build_sessions": builders, "turns": turns, "builders_allowed": prof.get("builders"), "locks": locks,
            "background_jobs": jobs, "merges": merge_times(worktree, start),
            "checks": check_times(worktree, start, prof.get("test_command")),
            "reviews": review_rates(proj, since)}
@@ -11698,12 +11864,23 @@ def check_times(worktree: Path, start: float, test_command: str | None) -> dict:
     return {"test_command": test, "slowest_other": [{"command": c, **s} for c, s in slowest]}
 
 
+def ready_events(entry: dict, since: str) -> int:
+    """How many times a milestone reached Ready for Review since `since`. The record keeps only the latest Ready for
+    Review, so each review in the window stands for the one before it, and a Ready for Review no review has answered
+    yet adds one. A milestone that came back three times counts three, as the work it took did."""
+    reviews = [v for v in entry.get("reviews") or [] if isinstance(v, dict) and (v.get("at") or "") >= since]
+    at = ready_record(entry).get("at") or ""
+    answered = any((v.get("at") or "") >= at for v in entry.get("reviews") or [] if isinstance(v, dict))
+    return len(reviews) + bool(at and at >= since and not answered)
+
+
 def review_rates(proj: dict, since: str) -> dict:
     """Reviews since `since`: how many, how many passed, and how many milestones passed their first review. A low
     first-pass rate means builders can't see what the reviewer sees, or the items ask for more than the user does."""
     total = passed = firsts = first_passes = 0
+    failing: dict = {}
     for e in proj.values():
-        for r in ((e.get("record") or {}).get("milestones") or {}).values():
+        for mid, r in ((e.get("record") or {}).get("milestones") or {}).items():
             reviews = [v for v in r.get("reviews") or [] if isinstance(v, dict)]
             for i, v in enumerate(reviews):
                 if (v.get("at") or "") < since:
@@ -11713,7 +11890,22 @@ def review_rates(proj: dict, since: str) -> dict:
                 if i == 0:
                     firsts += 1
                     first_passes += v.get("verdict") == "pass"
-    return {"count": total, "passed": passed, "first_reviews": firsts, "first_review_passes": first_passes}
+                if v.get("verdict") == "fail":
+                    for item in failed_items(v):
+                        name = f"{e.get('stem') or ''} {item}".strip()
+                        failing[name] = failing.get(name, 0) + 1
+    most = sorted(failing.items(), key=lambda kv: (-kv[1], kv[0]))[:3]
+    return {"count": total, "passed": passed, "first_reviews": firsts, "first_review_passes": first_passes,
+            "most_failed": [{"item": k, "failed": n} for k, n in most]}
+
+
+# A build whose reviews mostly fail, or whose planners and design reviewers take more turns than its builders, is
+# spending its time on something other than building, even when no merge or lock is slow. In a dogfood run of a
+# ~150-line tool, 1 of 8 reviews passed and planner turns outnumbered builder turns while `flow` named no sign.
+LOW_PASS_RATE = 1 / 3  # fewer reviews than this share passing is a sign; about half failing is usual
+LOW_PASS_MIN_REVIEWS = 4  # fewer reviews than this say too little about the rate
+PLANNING_CHURN_RATIO = 1.0  # planner and design-review turns at least this many times the builder turns is a sign
+PLANNING_CHURN_MIN_TURNS = 6  # fewer planning turns than this is a module or two being planned, not churn
 
 
 def flow_signs(f: dict) -> list[str]:
@@ -11739,20 +11931,38 @@ def flow_signs(f: dict) -> list[str]:
     r = f["reviews"]
     if r["first_reviews"] >= 4 and r["first_review_passes"] / r["first_reviews"] < 0.5:
         out.append(f"only {r['first_review_passes']} of {r['first_reviews']} milestones passed their first review")
+    if r.get("count", 0) >= LOW_PASS_MIN_REVIEWS and r["passed"] / r["count"] < LOW_PASS_RATE:
+        most = ", ".join(f"{x['item']} ({plural(x['failed'], 'failed review')})" for x in r.get("most_failed") or [])
+        out.append(f"only {r['passed']} of {r['count']} reviews passed" + (f", and most failures were on {most}"
+                                                                          if most else "") +
+                   ": read those reviews' Must Fix findings against the brief's `How it will be judged` and quality "
+                   "bar, since findings beyond them point to reviews that ask for more than the user did, and an "
+                   "item that keeps failing on new defects may be too open to prove")
+    t_ = f.get("turns") or {}
+    planning, building = t_.get("plan", 0) + t_.get("design_review", 0), t_.get("build", 0)
+    if building and planning >= PLANNING_CHURN_MIN_TURNS and planning >= PLANNING_CHURN_RATIO * building:
+        out.append(f"planning is churning: {t_.get('plan', 0)} planner turns and {t_.get('design_review', 0)} design "
+                   f"review turns beside {building} builder turns. Look at what keeps sending the plan back: design "
+                   "reviews that raise new Must Fix each round, changes that each cost a full design review, or "
+                   "diagnoses that keep rewriting the same items")
     j = f["background_jobs"]
     if j["started"] >= 10 and j["errors"] / j["started"] >= 0.1:
         out.append(f"{j['errors']} of {j['started']} background jobs failed with an error in the command itself")
     if f["build_sessions"] and f["ready_for_review"] * 2 < f["build_sessions"]:
-        out.append(f"{f['build_sessions']} build sessions brought {f['ready_for_review']} milestones to Ready for "
-                   "Review")
+        out.append(f"{f['build_sessions']} build sessions brought milestones to Ready for Review "
+                   f"{plural(f['ready_for_review'], 'time')}")
     return out
 
 
 def flow_text(f: dict) -> list[str]:
     """The flow numbers as lines for the report."""
-    out = [f"- milestones that reached Ready for Review: {f['ready_for_review']}; became Done: {f['done']}",
+    out = [f"- times a milestone reached Ready for Review: {f['ready_for_review']}; milestones that became Done: "
+           f"{f['done']}",
            f"- commits on the main branch: {f['commits']}, of which {f['code_commits']} change files outside the "
            f"plans and evidence; build sessions: {f['build_sessions']}"]
+    if t_ := f.get("turns"):
+        out.append(f"- turns: {t_.get('plan', 0)} planner, {t_.get('design_review', 0)} design review, "
+                   f"{t_.get('build', 0)} builder, {t_.get('review', 0)} milestone review")
     for name, s in sorted(f["locks"].items()):
         out.append(f"- `{name}` lock: held {s['held_h']} h ({s['busy']:.0%} of the window) over {s['holds']} holds, "
                    f"with {s['queued_h']} h spent queued for it and a longest wait of {s['longest_wait_h']} h; "
@@ -11790,6 +12000,16 @@ def design_reviews(worktree: Path, prof: dict, ref: str, stem: str, rec: dict) -
     listed = [p.name for p in here.iterdir()] if here.is_dir() else []
     kept = sorted((n for n in listed if re.fullmatch(r"design-review-\d+\.md", n)),
                   key=lambda n: int(re.sub(r"\D", "", n)))
+    # A review starting copies the latest to design-review-N.md, and the record names the copy only once the new
+    # review merges. Until then the copy and the file the record names hold the same text, and are one review.
+    recorded = set()
+    for d in out:
+        path = evidence_file(worktree, prof, d["review"]) if d.get("review") else None
+        try:
+            if path is not None and path.is_file():
+                recorded.add(path.read_text(errors="replace"))
+        except OSError:
+            pass
     older = []
     for name in kept:
         path = f"{folder}/{name}"
@@ -11797,6 +12017,8 @@ def design_reviews(worktree: Path, prof: dict, ref: str, stem: str, rec: dict) -
             continue
         try:
             text = (here / name).read_text(errors="replace")
+            if text in recorded:
+                continue
             stamp = (here / name).stat().st_mtime
         except OSError:
             continue
@@ -12111,6 +12333,53 @@ def log_text_problems(rel: str, text: str) -> list[str]:
     return [f"{rel} has {len(long)} {'entry' if len(long) == 1 else 'entries'} longer than {LOG_ENTRY_LINES} lines "
             f"(the first starts \"{long[0][0][:60]}\"). Keep each entry to a few lines, and put the detail in the "
             "evidence folder with a link to it"]
+
+
+def removal_problem(worktree: Path, tree: Path, prof: dict, start: str, before: dict, stem: str) -> str | None:
+    """Why a planner turn that deleted `stem`'s record may not drop the module, or None when it may. A module goes
+    whole: its folder, record included, and its row in the module table, and only while none of its milestones has
+    started, since a record of work begun or done is the only account of it. Another module that depends on it would
+    wait for it for ever."""
+    rec_text = show(worktree, start, record_rel(prof, stem))
+    try:
+        record = json.loads(rec_text) if rec_text else {}
+    except json.JSONDecodeError:
+        record = {}
+    doc = before.get(stem) or {}
+    begun = [m.get("id") for m in doc.get("milestones") or [] if isinstance(m, dict) and (
+        m.get("status") not in (None, "not_started") or any(i.get("builder_result") not in (None, "open")
+                                                              for i in m.get("items") or [] if isinstance(i, dict)))]
+    begun += [mid for mid, e in (record.get("milestones") or {}).items() if isinstance(e, dict) and (
+        e.get("reviews") or e.get("ready_for_review") or e.get("done")) and mid not in begun]
+    keep = (f"To leave {stem} out of the plan, keep its folder and record, and remove from its done-when file only "
+            "the milestones that haven't started; if the user wants the started work dropped too, tell them in your "
+            "report, since only they can decide that")
+    if begun:
+        return (f"deleted {record_rel(prof, stem)}, but {stem} {', '.join(begun)} "
+                f"{'has' if len(begun) == 1 else 'have'} started, and the record is the only account of that work. "
+                + keep)
+    if (tree / done_rel(prof, stem)).exists():
+        return (f"deleted {record_rel(prof, stem)} but not {stem}'s done-when file. Only the script writes record "
+                f"files; to drop {stem}, delete its whole folder and its row in the module table")
+    if run_holder(Path(git_common_dir(worktree)) / "orchestrate", stem.upper()) is not None:
+        return f"deleted {stem}'s folder while a run holds {stem}. " + keep
+    arch = project_file(prof, "architecture")
+    path = tree / arch
+    rows = module_table(path.read_text(encoding="utf-8", errors="replace")) if path.is_file() else None
+    if rows and any(r["module"].upper() == stem.upper() for r in rows):
+        return f"deleted {stem}'s folder but not its row in the module table in {arch}; remove the row too"
+    needing = []
+    for other in modules_here(tree, prof):
+        try:
+            milestones = json.loads((tree / done_rel(prof, other)).read_text()).get("milestones") or []
+        except (OSError, ValueError, AttributeError):
+            continue  # a file that doesn't parse has its own problem
+        needing += [f"{other} {m.get('id')}" for m in milestones if other.upper() != stem.upper()
+                    and isinstance(m, dict) and any(mod == stem.upper() for mod, _ in needs_of(m, other.upper()))]
+    if needing:
+        return (f"deleted {stem}'s folder, but {', '.join(needing)} {'depends' if len(needing) == 1 else 'depend'} "
+                f"on it; change {'its' if len(needing) == 1 else 'their'} `depends_on` too")
+    return None
 
 
 def plan_checks(tree: Path, prof: dict, paths: list[str]) -> list[str]:
@@ -12545,8 +12814,7 @@ def cmd_adopt(a: argparse.Namespace) -> None:
                                         f", other than {', '.join(drift['with_work'][:10])}, which merge with the "
                                         "builder's work: a builder's proof and log, and copies the tip has since "
                                         "changed, which a rebase replaces" if drift["with_work"] else ""),
-                  **profile_note(drift, prof),
-                  next=next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", "see what's ready"))
+                  **profile_note(drift, prof), next=adopted_next(a, worktree, "see what's ready"))
     base = git(worktree, "merge-base", "HEAD", ref).stdout.strip()
     found, authorise, refusal, run_only = adopt_problems(worktree, prof, ref, base, paths)
     problems += found
@@ -12660,7 +12928,15 @@ def cmd_adopt(a: argparse.Namespace) -> None:
                 "the fast-forward was refused by other local changes")
     done_with("ADOPTED", files=paths, commit=landed, worktree=here, **({"authorised": authorise} if authorise else {}),
               **profile_note(plan_drift(worktree, prof, tip(worktree, prof, fetch=False)), prof),
-              next=next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", "see what's ready now"))
+              next=adopted_next(a, worktree, "see what's ready now"))
+
+
+def adopted_next(a: argparse.Namespace, worktree: Path, why: str) -> dict:
+    """`next` once adopt has nothing left to merge: the command it was run for (`--then`), else `ready`."""
+    if getattr(a, "then", None):
+        return next_cmd(a.then, "lead", "the plan files are merged; this is the command adopt was run for, which "
+                                        "now reads them at the main branch's tip")
+    return next_cmd(loop_cmd("ready", "--worktree", str(worktree)), "lead", why)
 
 
 def settle_scoped(worktree: Path, prof: dict, rel: str) -> str:
@@ -14716,7 +14992,7 @@ def run_steps(a: argparse.Namespace, argv: list[str]) -> None:
     worktree = Path(a.worktree).resolve()
     origin = "run" if a.func is cmd_run else "plan"
     install_stop()
-    loop_register(worktree, "steps", module=getattr(a, "module", None),
+    loop_register(worktree, "steps", module=getattr(a, "module", None), origin=origin,
                   task=(a.task.splitlines()[0][:80] if origin == "plan" and a.task.strip() else None))
     steps = {"origin": origin, "worktree": str(worktree), "owed": [], "changes": {}, "last_run": None}
     STEPS_RUN.clear()
@@ -14897,8 +15173,8 @@ def watch_signs(look: dict) -> dict:
             if same:
                 signs[f"same_items {e['stem']} {m['id']}"] = {
                     "seen": str(reviews[-1].get("at")),
-                    "text": f"{e['stem']} {m['id']} failed its last two reviews on the same items "
-                            f"({', '.join(sorted(same))})"}
+                    "text": f"{e['stem']} {m['id']} failed the same items in its last two reviews "
+                            f"({', '.join(sorted(same))}), whether or not the findings were new"}
     first = look["since"].get("ready_waiting")
     if first and stamp - first >= READY_IDLE_WARN_S:
         names = ", ".join(f"{s['module']} {s.get('milestone') or ''}".strip() for s in look["waiting"])
@@ -14948,9 +15224,11 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dic
                         f"{stem} {mid}")
         m = next((m for m in e["doc"]["milestones"] if not recorded_done(m, e["record"])), None)
         if m and int(m.get("failed_reviews", 0) or 0) >= 2:
+            # read from the done-when file at the tip, so a plan that changed its items, which starts the counts
+            # again, drops the line
             counts = counts_of(m)
-            back_and_forth.append(f"{stem} {m['id']}: failed review {plural(counts['failed_reviews'], 'time')}, "
-                                  f"{counts['failed_reviews_with_repeat']} on a finding an earlier review raised; "
+            back_and_forth.append(f"{stem} {m['id']}: failed review {plural(counts['failed_reviews'], 'time')} since "
+                                  f"its items last changed, {repeat_words(counts['failed_reviews_with_repeat'])}; "
                                   f"the counts now call for {escalation_of(m)}")
         step = look["steps"].get(key) or {}
         name, status = f"{stem} {step.get('milestone') or ''}".strip(), step.get("status")
@@ -14976,10 +15254,13 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float) -> dic
     for r in look["builds"]:
         state = look["progress"].get(r["pid"]) or {}
         started = r.get("started_at")
-        not_moving.insert(0, f"{r.get('module')} {state.get('milestone') or r.get('milestone') or ''}: building "
-                             f"for {ago(stamp - started) if started else '?'}" +
-                          (f", last progress {ago(stamp - float(state['progress_at']))} ago" if state.get("progress_at")
-                           else "") + f", {plural(int(r.get('turns') or 0), 'turn')} done")
+        mid, took = state.get("milestone") or r.get("milestone"), ago(stamp - started) if started else "?"
+        # a run picks its milestone once it starts, so a builder seen in its first seconds has none yet
+        head = f"{r.get('module')} {mid}: building for {took}" if mid else \
+            f"{r.get('module')}: a builder starting, for {took}, its milestone not chosen yet"
+        not_moving.insert(0, head + (f", last progress {ago(stamp - float(state['progress_at']))} ago"
+                                     if state.get("progress_at") else "") +
+                          f", {plural(int(r.get('turns') or 0), 'turn')} done")
     planners = [r for r in look["loops"] if r.get("role") == "plan"]
     out = {"since": since, "moved": {k: v for k, v in moved.items() if v} or "nothing reached Ready for Review, "
                                                                             "Done or a review",
@@ -15051,7 +15332,10 @@ def cmd_watch(a: argparse.Namespace) -> None:
     path = loop_dir(worktree) / WATCH_FILE
     state = read_json_file(path) or {}
     started = time.time()
-    woke_at = float(state.get("woke_at") or started)  # the check-in counts from when a watch last woke the lead
+    # the check-in counts from when this watch started, which is just after the lead's last look: counted from when
+    # a watch last woke the lead, a watch started after a gap (a sleeping machine, a long chat) would wake at once
+    # with nothing new to say
+    woke_at = started
     told = state.get("signs") or {}
     since = state.get("since") or {}
     runs, ended = top_runs(worktree) if a.runs else {}, []
@@ -15075,8 +15359,7 @@ def cmd_watch(a: argparse.Namespace) -> None:
     woke = [s["text"] for s in new.values()]
     woke += [f"{' '.join(x for x in (r.get('role'), r.get('module'), r.get('milestone')) if x)} ended" for r in ended]
     if not new and not ended:
-        woke.append(f"check-in: {ago(stamp - woke_at)} since " + ("a watch last woke you" if state.get("woke_at")
-                                                                    else "this watch started"))
+        woke.append(f"check-in: {ago(stamp - woke_at)} since this watch started")
     write_atomically(path, {"woke_at": stamp, "signs": {k: s["seen"] for k, s in signs.items()}, "since": since})
     emit("WARNING_SIGNS" if new else "RUN_ENDED" if ended else "CHECK_IN", woke_for=woke,
          # each sign's whole text once, when it is new; the ones the lead was told before by name only, so a wake
@@ -15135,7 +15418,7 @@ run   --module CORE --worktree PATH [--host H] [--model M] [--effort E] [--miles
       NEEDS_REVIEW  the module's next milestone is Ready for Review and waiting for its review
       WAITING       `reason` on_dependency: the next milestone depends on milestones in other modules that aren't
                     Done yet (`depends_on` lists them). `reason` for_diagnosis: it failed review
-                    {REPEATS_TO_DIAGNOSE} times on a repeated finding, or {FAILED_REVIEWS_TO_DIAGNOSE} times in all,
+                    {REPEATS_TO_DIAGNOSE} times on an item or finding that failed before, or {FAILED_REVIEWS_TO_DIAGNOSE} times in all,
                     or a reviewer marked a finding for a planner (`cause` says which); `next` is the planner's task,
                     and no builder starts on it until the planner has changed its definitions or kept them.
                     `reason` for_planning: every milestone in the done-when file is Done, and the plan names more
@@ -15193,8 +15476,9 @@ review --module CORE --milestone M2|design --worktree PATH [--commit SHA] [--hos
       default host swapped).
       REVIEWED, with `next` the command that comes next: after a pass, the next ready milestone or "finished"; after
         DESIGN CHANGES, the planner's revision with `findings`; after a failed milestone review, what the counts call
-        for. `failed_reviews` counts the failed reviews since the last re-plan, kept plan or decision of the user's,
-        `failed_reviews_with_repeat` those with a finding an earlier review made (`repeated` names them), and
+        for. `failed_reviews` counts the failed reviews since the counts last started again (`next --help` says when),
+        `failed_reviews_with_repeat` those that failed an item an earlier review failed (`repeated_items` names
+        them) or repeated an earlier finding (`repeated` names those findings), and
         `escalation` (same_builder, new_builder_session, diagnosis, too_many_failed_reviews) says what they call
         for; `next --help` gives the counts.
       BLOCKED, with `reason` needs_access: the reviewer couldn't reach the product. Nothing merged, no review counted,
@@ -15216,8 +15500,13 @@ plan  --worktree PATH --task TEXT [--kind KIND] [--module CORE] [--host H] [--mo
       milestones whose definitions changed. Results:
       PLANNED       `files` lists what it changed, `design_review_owed` the modules whose design review is now
                     owed, `assumptions` the `Assumption:` lines per module, and `replanned` each milestone owed a
-                    diagnosis whose definitions changed (its counts start again). `next` is the owed design review,
-                    or `ready`.
+                    diagnosis whose definitions changed, and `removed` the modules it dropped. Every milestone
+                    whose items changed has its failed-review counts start again, owed a diagnosis or not; one that
+                    had its diagnosis keeps that count. `next` is the owed design review, or `ready`. After a first
+                    plan (`first_plan`), with no `Builders:` line yet, `next` is `settings --set Builders` with `decides: human`, and `then`
+                    runs the first module, whose design `run` reviews before building.
+                    A planner may drop a whole module, its folder with its record and its row in the module table,
+                    while none of its milestones has started and no other module depends on it.
       KEPT          the planner ended `KEEP <MODULE> <milestone>: builder|reviewer|human: <why>`. Naming the builder
                     for a milestone Blocked with Needs Dependency or Needs Context lifts the block (`unblocked`),
                     with `run` as `next`.
@@ -15229,11 +15518,15 @@ plan  --worktree PATH --task TEXT [--kind KIND] [--module CORE] [--host H] [--mo
                     the planner finished but its files couldn't merge; they are set aside the same way, and `next`
                     gives a planner the task again. A plan kept on a branch because the main branch failed its test
                     command on its own merges later with `plan --merge-kept <branch>`.
-      INVALID       the planner committed, or a record file changed on the tip without the script during the turn;
-                    `next` says who acts.
+      INVALID       the plan files have problems, the planner committed, or a record file changed on the tip
+                    without the script during the turn; `next` says who acts. A planner that deleted the record of a
+                    module that has started work is refused, and `next` gives a planner the task again with how to
+                    leave the module out instead.
       SCRIPT_FAILED in a repository with no commits, before any planner turn, with `next` giving the first commit.
       REFUSED       `unmerged_plans`: ORCHESTRATE.md or plan files in --worktree aren't on the main branch yet, so a
-                    planner would plan without them; `next` is `adopt`, with this plan command under `then`.
+                    planner would plan without them; `next` is `adopt --then` with this plan command, which adopt
+                    gives back as its own `next`. Every `next` that gives a planner the task again keeps the
+                    flags given here (--kind, --host, --model, --effort, --turn-timeout-hours, --one-step).
       `report` keeps the end of the planner's message, where the user's decisions go. The whole task is kept in the
       plan commit's body and in each module's record file under `briefs`, which design reviews are pointed at.
       `pause` doesn't reach a waiting planner, but stopping its process does (PAUSED). Without --one-step, plan
@@ -15256,8 +15549,9 @@ merge --worktree PATH [--no-check]
       The items' checks don't run here. `merge` refuses to run in a plan or review session.
 """,
     "ready": """\
-ready [--worktree PATH]       READY: what each module's next milestone is waiting for, read at the main branch's tip. When
-      nothing is ready it adds `next`. A milestone Waiting for a re-plan or diagnosis, or Blocked with too many
+ready [--worktree PATH]       READY: what each module's next milestone is waiting for, read at the main branch's tip. Each
+      `can_start` entry carries its `run` command in `next`, and the top-level `next` is the first one's; the lead
+      starts as many as the Builders count allows. When nothing is ready, `next` is the most useful other command. A milestone Waiting for a re-plan or diagnosis, or Blocked with too many
       failed reviews, carries its own `next` (the planner's or the user's command), never as ready. `plan_ahead`
       lists the module table's modules with no plan yet whose Needs are all planned, in build order, each with
       the `plan` command in its `next`. It names unmerged plan files (`unmerged_plans`) as `run` does, and
@@ -15275,7 +15569,7 @@ ready [--worktree PATH]       READY: what each module's next milestone is waitin
       the script can't read, or one changed by an agent that may not change it).
 """,
     "adopt": """\
-adopt [--worktree PATH] [--message TEXT] [PLAN FILE]...
+adopt [--worktree PATH] [--message TEXT] [--then COMMAND] [PLAN FILE]...
       Commits plan files that are uncommitted, or committed here but not merged, and merges them through a clean
       checkout of the tip, so nothing else in the worktree goes with them. Also merges a first ORCHESTRATE.md (one
       the tip doesn't have yet). Evidence is never merged: it stays in the working folder.
@@ -15288,7 +15582,12 @@ adopt [--worktree PATH] [--message TEXT] [PLAN FILE]...
       that's no longer a draft (with `next` naming `plan` and `human scope`), a changed ORCHESTRATE.md the tip
       already has (change a line with `settings --set` once the user agrees), anything `ready` would then call
       invalid, files the tip changed since, and any session the script started.
-      ADOPTED, NOTHING, REFUSED or FAILED (with `next` when the repository has no commits to build on).
+      A file in a module's folder that isn't one of its plan files, such as a check script, changed in the module's
+      build worktree (on build/<module>), is its builder's work, unreviewed until its milestone is, and merges with
+      that work, never through adopt.
+      ADOPTED, NOTHING, REFUSED or FAILED (with `next` when the repository has no commits to build on). After
+      ADOPTED or NOTHING, `next` is the command given with --then, which a result that sends the lead here sets to
+      the command it was refused for, else `ready`.
 """,
     "status": f"""\
 status [--module CORE] --worktree PATH [--format md]   Every milestone with its status, blockers and last verdict,
@@ -15351,9 +15650,10 @@ report [--since HOURS|TIME] --worktree PATH [--write [PATH]]
       The facts for the lead's answer when the user asks how the build is going, as markdown, read from the
       records at the main branch's tip, this machine's usage ledger and lock log, the result files and the runs
       going now. In order: what needs the user now (items that need user feedback, access or hardware, and
-      milestones Blocked with too many failed reviews, each with who acts); every decision recorded in the user's
-      name with their words (for the user to spot one they didn't make); what became Done or reached Ready for
-      Review; the verdicts with links (every design review in the window, DESIGN CHANGES ones included); the planner
+      milestones Blocked with too many failed reviews, and runs left paused that nothing has started again, each
+      with who acts); every decision recorded in the user's name with their words (for the user to spot one they
+      didn't make); what became Done, or reached Ready for Review and still waits for its review, as `status` reads
+      it; the verdicts with links (every design review in the window, DESIGN CHANGES ones included); the planner
       turns with the task each was given; what is under way and how far along; what has slowed down, with the
       cause the records show (repeated failed reviews and diagnoses, Waiting and Blocked milestones, runs that ended
       STALLED, NO_PROGRESS_FOR_HOURS, HOST_FAILED, SCRIPT_FAILED or WRONG_MODEL_OR_EFFORT, merges that failed, runs
@@ -15370,7 +15670,9 @@ next  --module CORE --worktree PATH --milestone M2   ESCALATION: what to do afte
       main branch's tip, where the review merged. `action` is what the counts call for, `message` what to send (the
       builder's message, or for `diagnosis` the planner's task), and `next` the command.
       The counts, kept by the script on each milestone: `failed_reviews`, and `failed_reviews_with_repeat` for
-      reviews with a finding an earlier review made. The first that applies:
+      failed reviews that failed an item an earlier counted review failed, or repeated an earlier finding by name.
+      An item that fails again counts even when its finding is new, since the item still isn't done. The first
+      that applies:
         diagnosis              a finding marked for the planner (an item its proof can't prove, items that
                                contradict each other), {REPEATS_TO_DIAGNOSE} reviews with a repeat, or {FAILED_REVIEWS_TO_DIAGNOSE} failed reviews.
                                A milestone gets one diagnosis; the same counts after it block it with
@@ -15380,8 +15682,10 @@ next  --module CORE --worktree PATH --milestone M2   ESCALATION: what to do afte
         new_builder_session    {NEW_SESSION_AFTER_FAILED_REVIEWS} failed reviews, or {NEW_SESSION_AFTER_FAILED_REVIEWS} with a repeat: a builder in a new session.
         same_builder           otherwise: the same builder, told to read the review.
       A diagnosis ends in a re-plan (PLANNED) or a kept plan (KEEP ... builder|reviewer|human), and adds 1 to
-      `diagnoses`. The counts start again after either, and after `human scope` or `human reopen`, which also clear
-      the diagnosis.
+      `diagnoses`. The counts start again after either, after `human scope` or `human reopen`, which also clear
+      the diagnosis, and after any plan that changes the milestone's items, since the reviews they counted judged
+      items that no longer exist. `diagnoses` stays then, so a milestone that had its diagnosis is still blocked
+      at the next limit.
 """,
     "unblock": """\
 unblock --module CORE [--milestone M2] --worktree PATH   Puts a blocked milestone back in the queue, in_progress,
@@ -15500,15 +15804,16 @@ main-check [NAME] [--worktree PATH] [--commit REV] [--wait {MAIN_CHECK_WAIT_S:.0
     "watch": f"""\
 watch --worktree PATH [--runs]
       Kept running in the background by the lead, and ends to wake it: at its check-in (the settings' `Lead
-      check-in`, {limit_text(LEAD_CHECK_IN_S)} by default, counted from when a watch last ended), at a new warning sign,
+      check-in`, {limit_text(LEAD_CHECK_IN_S)} by default, counted from when this watch started), at a new warning sign,
       or with --runs when a run, review or plan of the repository ends. The signs are read from the script's own
-      records: a builder with no progress for {limit_text(NO_PROGRESS_WARN_H * 3600)}, a milestone failing its last two reviews on the same
-      items, ready work with a free builder slot for {limit_text(READY_IDLE_WARN_S)}, a planner queued for {limit_text(PLANNER_QUEUE_WARN_S)}, a module with
+      records: a builder with no progress for {limit_text(NO_PROGRESS_WARN_H * 3600)}, a milestone whose last two reviews failed the same
+      items (whatever their findings), ready work with a free builder slot for {limit_text(READY_IDLE_WARN_S)}, a planner queued for {limit_text(PLANNER_QUEUE_WARN_S)}, a module with
       one planned milestone left, a low disk, and a main-branch check failing on the tip. Each sign wakes the lead
       once, until it changes or goes, and later results name it in `earlier_signs` without its text. The result (WARNING_SIGNS, RUN_ENDED or CHECK_IN) sums
       up the build for a lead with no other context: what moved since the last watch, what hasn't, milestones going
-      back and forth between building and review, builder slots, planners, disk, the main branch and the flow
-      numbers.
+      back and forth between building and review (with their counts since their items last changed, and what those
+      call for), builder slots (a `run` going through its steps holds one, whichever step it is on), planners,
+      disk, the main branch and the flow numbers.
 """,
     "history": """\
 history --worktree PATH [--json] [--full] [--budget SECONDS]
@@ -15536,13 +15841,16 @@ dashboard --worktree PATH [--out FILE] [--open] [--json] [--no-sweep] [--budget 
     "flow": """\
 flow --worktree PATH [--since HOURS]
       One JSON line of flow numbers for the window (default 24 hours), for diagnosing where delivery time goes:
-      milestones that reached Ready for Review and Done (delivery) beside commits, build sessions and the
-      `Builders:` limit (effort); `merges`, how long each took from joining the queue to its result (median, 90th
+      `ready_for_review`, how many times a milestone reached Ready for Review (each failed review and its fix count
+      again), and milestones that became Done (delivery), beside commits, build sessions, `turns` by kind (planner,
+      design review, builder, milestone review) and the `Builders:` limit (effort); `merges`, how long each took from joining the queue to its result (median, 90th
       percentile, longest, total), with failures, conflicts and merges refused because the main branch failed on
       its own; `checks`, the test command's run times and failures, and the five other checks that took longest;
-      `reviews`, how many passed and how many milestones passed their first review; each lock's holding, queueing
-      and failures; and background jobs. `signs` says in sentences which figures look wrong, as starting points to
-      dig into, not conclusions. `report` and `watch` include the same numbers; `history --json` has cost and
+      `reviews`, how many passed, how many milestones passed their first review, and the items that failed most;
+      each lock's holding, queueing and failures; and background jobs. `signs` says in sentences which figures look
+      wrong and what to look at, as starting points to dig into, not conclusions: among them, fewer than a third of
+      at least four reviews passing, and planner and design-review turns at least matching builder turns once
+      there are six of them. `report` and `watch` include the same numbers; `history --json` has cost and
       errors by host, model and kind of agent over the whole history.
 """,
     "cleanup": f"""\
@@ -15636,7 +15944,7 @@ def build_parser() -> argparse.ArgumentParser:
                                        "(e.g. 'Claude planner'), else its model for the host")
         p.add_argument("--effort", help="default: the settings' line for this kind of agent on the host, else high for a "
                                         "planner, else the settings' Effort, else medium")
-        p.add_argument("--turn-timeout-hours", type=float, default=2.0,
+        p.add_argument("--turn-timeout-hours", type=float, default=TURN_TIMEOUT_HOURS,
                        help="stop a turn that runs longer than this and count it as failed (default %(default)g)")
 
     run = sub.add_parser("run", help="build a module's next milestone with a builder, then check and review it")
@@ -15749,6 +16057,8 @@ def build_parser() -> argparse.ArgumentParser:
     adopt_p = sub.add_parser("adopt", help="commit and merge plan files, such as a changed brief or glossary")
     adopt_p.add_argument("--worktree", default=".")
     adopt_p.add_argument("--message", help="the commit message (default: names the files)")
+    adopt_p.add_argument("--then", metavar="COMMAND", help="the command adopt was run for, which it gives back as its "
+                         "`next` once the files are merged. A result that sends the lead to adopt sets it")
     adopt_p.add_argument("paths", nargs="*", help="plan files to merge (default: every unmerged one)")
     adopt_p.set_defaults(func=cmd_adopt)
     pause = sub.add_parser("pause", help="stop the runs in this repository, and their agents, cleanly")

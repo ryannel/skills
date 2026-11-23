@@ -132,7 +132,8 @@ Done. It is JSON because the script reads it. A new milestone starts like this, 
 
 The planner writes the fields that say what a milestone asks for:
 
-- `statement` says what must be true, in words a reviewer can judge.
+- `statement` says what must be true, as a closed claim a reviewer can judge once, as [the items](../SKILL.md#the-items)
+  describes.
 - `check`, `inspect` and `ask` say how the item is proved. An item uses at least one, and may use more. An `inspect`
   is a checklist drawn from the reference in `quality_bar`: a line saying what to look at, then numbered points the
   reviewer answers yes or no. [Ways to prove an item](proofs.md) describes each.

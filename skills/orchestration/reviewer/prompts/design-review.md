@@ -1,6 +1,6 @@
 Review the design of module {module}, using the reviewer skill ({skill}), which holds what every review shares. The instructions for reviewing a design follow.
 
-The goal: a review at {review} that says whether the design does what the user asked for.
+The goal: a review at {review} that says whether the design delivers what the brief asks of this module.
 {changed}
 {kind}
 

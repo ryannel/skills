@@ -127,8 +127,9 @@ test command, and a failing batch is split to find the branch that broke it.
 
 ### When a review fails
 
-The script keeps two counts on each milestone: every failed review, and the failed reviews that repeated a finding
-an earlier review had raised, which means fixes aren't holding. After each failed review, the first row that applies
+The script keeps two counts on each milestone: every failed review, and the failed reviews that failed an item an
+earlier review had failed, or repeated an earlier finding. The second means the milestone isn't making progress on
+that item, whether its fixes aren't holding or each fix meets a new defect. After each failed review, the first row that applies
 is the next step. `next --help` gives the counts at which each row applies.
 
 | After | What happens |
@@ -139,9 +140,10 @@ is the next step. `next --help` gives the counts at which each row applies.
 | The same counts again, after the diagnosis | The milestone is Blocked: Too Many Failed Reviews. The lead asks you, with what failed in each review, whether to accept it, change its scope or reopen it for another try. |
 
 A milestone gets one diagnosis, so one that keeps failing reaches you after one planner turn. The counts start again
-after a diagnosis, and after you change the milestone's scope or reopen it. A repeated finding brings the diagnosis
-sooner than new findings do, because a milestone can fail review after review on something new each time while
-nothing is wrong with its plan.
+after a diagnosis, after a planner changes the milestone's items, and after you change the milestone's scope or
+reopen it. An item that fails again brings the diagnosis sooner than failures spread over different items do,
+because a milestone can fail review on something new in each item while nothing is wrong with its plan, but an item
+that keeps failing on new defects usually asks for more than the brief does.
 
 A builder told about a failed review is also told that a review shows what one reviewer tried, and the next reviewer
 starts again from the items. So the milestone is finished when every item is true as written, not when the review's

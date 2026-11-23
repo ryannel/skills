@@ -14,7 +14,7 @@ reference sets how good subjective work has to be, so the user should agree it b
 plan names most of the project's concepts, so this is also when the user can most cheaply say "we call that a
 hold", before the names spread into code.
 
-Take the `Proposed:` mark off each name the user agrees. Give everything else they change or answer to one change
+Delete the `Proposed:` line from each name the user agrees. Give everything else they change or answer to one change
 planner in their words, because only a planner changes the plan files. Once they agree, save the number of builders
 they give with `settings --set`.
 

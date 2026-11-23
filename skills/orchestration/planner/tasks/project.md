@@ -1,8 +1,8 @@
 # Planning a new project
 
 A new project has a brief and settings but no plan yet. Your first plan is the module list, then a plan for each
-module on the thin slice described under "The order", and for the acceptance module, each written as
-[planning a module](module.md) says. The other modules get a row in the module list, and a planner plans each when
+module on the thin slice described under "The order", and for the acceptance module when there is one, each written
+as [planning a module](module.md) says. The other modules get a row in the module list, and a planner plans each when
 its turn comes.
 
 ## The module list
@@ -31,11 +31,14 @@ milestone that lays down the project, so they can be built, and chosen from, whi
 ## The acceptance module
 
 Each module is judged on its own, so every part can pass and the whole can still miss what the user asked for. The
-acceptance module guards against that. Turn the brief's "What finishes this goal" into items about what an end user
-can do with the whole product, proved on a real target, meaning a device or platform the product runs on. Put them
-in a last module, `ACCEPTANCE`, the last row of the table, with one milestone whose `depends_on` names the milestone
-in each module that completes it. Write its items now, though it runs last, because they define done for the whole
-build.
+acceptance items guard against that. Turn the brief's "What finishes this goal" into items about what an end user
+can do with the whole product, proved on a real target, meaning a device or platform the product runs on. Write them
+now, though they run last, because they define done for the whole build.
+
+They usually go in a last module, `ACCEPTANCE`, the last row of the table, with one milestone whose `depends_on`
+names the milestone in each module that completes it. When the user or your task limits the number of modules, such
+as "plan it as one module", the limit wins, because it is the user's choice and the acceptance module is only the
+plan's habit: put the acceptance items in the last milestone of the last module instead.
 
 ## The settings
 

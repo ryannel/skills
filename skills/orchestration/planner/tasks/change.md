@@ -13,6 +13,14 @@ lead's task names, and the milestones being built or Blocked on an item the chan
 where the old wording costs most now. Make the whole change in each module you touch, and list in your report the
 modules you left, so the lead can start a planner for them.
 
+## The user dropped a module
+
+Delete the module's whole folder, its record file included, and its row in the module table, and change the
+`depends_on` of any milestone in another module that waits on it. The script merges that only while none of the
+module's milestones has started, because once one has, its record is the only account of that work. When one has,
+keep the folder and record, remove from its done-when file only the milestones that haven't started, and say in your
+report what started work stays, so the lead can ask the user.
+
 ## The user chose one of a set of options
 
 Rewrite the quality bar and the `inspect` checklists of the later milestones that carry the look against the chosen

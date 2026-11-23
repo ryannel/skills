@@ -1959,13 +1959,13 @@ class WhatTheLeadSees(Repo):
         with mock.patch.object(agent_loop, "QUOTA_WORKTREE", [self.wt]):
             first = self.call(lambda a: agent_loop.emit("NOTHING"))
             second = self.call(lambda a: agent_loop.emit("NOTHING"))
-        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         self.assertIn("From before 2.6.0", first["changed"]["2.5.0"][0])
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
         self.assertIn("2.5.0", agent_loop.version_change(self.wt))
         note.write_text('{"version": "2.5.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         note.write_text('{"version": "2.9.0"}')
         (line, *_) = agent_loop.version_change(self.wt)["2.10.0"]
         self.assertIn("Read the lead skill again", line)
@@ -3421,7 +3421,7 @@ class FirstRuns(Repo):
         self.assertIn("- WATER M1: Done, by review", body)
         self.assertIn("fewer than about ten, so spot-check every one", body)
         self.assertIn("## Flow", body)
-        self.assertIn("milestones that reached Ready for Review: 1; became Done: 1", body)
+        self.assertIn("times a milestone reached Ready for Review: 1; milestones that became Done: 1", body)
         with self.assertRaises(SystemExit) as exit_:  # a hold of an exclusive resource whose command fails
             agent_loop.cmd_lock(argparse.Namespace(name="gpu", worktree=None, command_args=[
                 "--worktree", str(self.wt), "--", "sh", "-c", "exit 4"]))
@@ -3457,7 +3457,7 @@ class FirstRuns(Repo):
         self.commit_all()
         os.environ.update(FAKE_REVIEW="design_changes")
         changes = self.review("design", commit=None)
-        self.assertEqual((changes["verdict"], changes["next"]["by"]), ("DESIGN CHANGES", "planner"))
+        self.assertEqual((changes["verdict"], changes["next"]["by"]), ("DESIGN CHANGES", "lead"))
         self.assertIn(" plan --worktree ", changes["next"]["command"])
         self.assertEqual(changes["next"]["findings"], ".orchestrate/evidence/WATER/design-review.md")
         self.revise_design()
@@ -3904,7 +3904,7 @@ class FirstRuns(Repo):
         failed = self.review(commit=claim["commit"])
         os.environ.pop("FAKE_REVIEW")
         self.assertEqual((failed["failed_reviews_with_repeat"], failed["escalation"]), (4, "diagnosis"))
-        self.assertEqual((failed["next"]["escalation"], failed["next"]["by"]), ("diagnosis", "planner"))
+        self.assertEqual((failed["next"]["escalation"], failed["next"]["by"]), ("diagnosis", "lead"))
         self.assertIn(" plan --worktree ", failed["next"]["command"])
         self.assertIn("Diagnose WATER M1", failed["next"]["command"])
         self.assertIn(".orchestrate/evidence/WATER/M1-review.md", failed["next"]["command"])
@@ -4194,7 +4194,7 @@ class FirstRuns(Repo):
     @shares("four-fails")
     def test_r8_every_review_is_kept_and_named(self):
         failed = self.four_fails()
-        self.assertEqual((failed["escalation"], failed["next"]["cause"]), ("diagnosis", "a finding keeps coming back"))
+        self.assertEqual((failed["escalation"], failed["next"]["cause"]), ("diagnosis", "the same items or findings keep failing"))
         kept = [r.get("review") for r in self.read_record()["milestones"]["M1"]["reviews"]]
         self.assertEqual(kept, [".orchestrate/evidence/WATER/M1-review-1.md", ".orchestrate/evidence/WATER/M1-review.md"])
         self.assertTrue(self.evidence("WATER/M1-review-1.md").exists())
@@ -4255,7 +4255,7 @@ class FirstRuns(Repo):
         self.assertEqual((failed["failed_reviews_with_repeat"], failed["failed_reviews"], failed["repeated"], failed["escalation"]),
                          (1, 6, [], "diagnosis"), failed)
         self.assertEqual((failed["next"]["escalation"], failed["next"]["by"], failed["next"]["cause"]),
-                         ("diagnosis", "planner", "reviews keep finding something new"))
+                         ("diagnosis", "lead", "reviews keep finding something new"))
         self.assertIn(" plan --worktree ", failed["next"]["command"])
         self.assertIn("Diagnose WATER M1", failed["next"]["command"])
         self.assertIn("KEEP WATER M1:", failed["next"]["command"])
@@ -4370,8 +4370,10 @@ class FirstRuns(Repo):
             claim = self.run_loop(**({"message": "FINDINGS"} if n else {}))
             os.environ.update(FAKE_REVIEW="fail")
             results.append(self.review(commit=claim["commit"]))
-        # round 2 fails the same item with a new name and no `different`: a repeat; round 3 says how it differs
-        self.assertEqual([(r["failed_reviews_with_repeat"], r["failed_reviews"]) for r in results], [(0, 1), (1, 2), (1, 3)])
+        # round 2 fails the same item with a new name and no `different`: a repeat; round 3 says how the finding
+        # differs, which keeps the finding new, but the same item failed again, so the review still counts as a repeat
+        self.assertEqual([(r["failed_reviews_with_repeat"], r["failed_reviews"]) for r in results], [(0, 1), (1, 2), (2, 3)])
+        self.assertEqual((results[2]["repeated"], results[2]["repeated_items"]), ([], ["M1.1"]))
         self.assertEqual(results[2]["escalation"], "new_builder_session")
 
     def test_a_pass_after_a_failed_review_clears_the_findings(self):
@@ -5274,9 +5276,9 @@ class FirstRunsAlone(ProfileOnly):
                 (1, 2, 0, "same_builder", "lead", "--message"),
                 (0, 3, 0, "new_builder_session", "lead", "--fresh"),
                 (3, 4, 0, "new_builder_session", "lead", "--fresh"),
-                (4, 4, 0, "diagnosis", "planner", " plan "),
+                (4, 4, 0, "diagnosis", "lead", " plan "),
                 (4, 5, 1, "too_many_failed_reviews", "human", " human reopen "),  # the lead runs it once the user decides
-                (1, 6, 0, "diagnosis", "planner", " plan "),
+                (1, 6, 0, "diagnosis", "lead", " plan "),
                 (1, 6, 1, "too_many_failed_reviews", "human", " human reopen ")):
             word_now = agent_loop.escalation(failed, with_repeat, diagnoses)
             counts = {"failed_reviews": failed, "failed_reviews_with_repeat": with_repeat, "diagnoses": diagnoses}

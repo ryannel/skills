@@ -350,7 +350,7 @@ class FindingsForAPlanner(Repo):
         os.environ.update(FAKE_REVIEW="fail", FAKE_FOR_PLANNER="a frame sequence can't show the latency the item asks")
         result = self.review("M1", commit=work)
         self.assertEqual((result["verdict"], result["escalation"]), ("FAIL", "diagnosis"), result)
-        self.assertEqual(result["next"]["by"], "planner")
+        self.assertEqual(result["next"]["by"], "lead")
         self.assertIn("only a planner can settle", command(result))
         self.assertIn("can't show the latency", command(result))
         os.environ.pop("FAKE_FOR_PLANNER")

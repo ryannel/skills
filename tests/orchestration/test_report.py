@@ -72,8 +72,8 @@ class Report(Repo):
         with mock.patch.object(agent_loop, "live_loops", lambda *a, **k: ([live], [])):
             report = self.report(since=24.0)
         slowed = section(report, "## What has slowed down")
-        self.assertIn("- WATER M1 has failed review 3 times since its definitions last changed, 2 of them with a "
-                      "finding that came back", slowed)
+        self.assertIn("- WATER M1 has failed review 3 times since its definitions last changed, 2 of them on an "
+                      "item or a finding an earlier review had failed", slowed)
         self.assertIn("- WATER M1: `run` ended STALLED at ", slowed)
         self.assertIn("open items: M1.1", slowed)
         self.assertNotIn("review` ended", slowed)  # a failed review is counted above, not as a slowed run

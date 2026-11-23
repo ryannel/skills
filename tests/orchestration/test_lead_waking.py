@@ -70,7 +70,7 @@ class RoutineSteps(Clean):
             line = result("REVIEWED", run_cmd("run", "--module", "WATER", "--worktree", WT, "--message", "read it"),
                           module="WATER", milestone="M1", verdict="FAIL", escalation=word)
             self.assertEqual(self.follows(line)[0][0], "run", word)
-        diagnosis = result("REVIEWED", run_cmd("plan", "--worktree", WT, "--task", "find out why"), by="planner",
+        diagnosis = result("REVIEWED", run_cmd("plan", "--worktree", WT, "--task", "find out why"), by="lead",
                            module="WATER", milestone="M1", verdict="FAIL", escalation="diagnosis")
         self.assertIsNone(self.follows(diagnosis)[0])
         human = result("REVIEWED", run_cmd("human", "reopen", "--module", "WATER", "--milestone", "M1", "--worktree",
@@ -101,7 +101,7 @@ class RoutineSteps(Clean):
     def test_a_run_whose_design_review_asks_for_changes_gets_a_revision_per_round_then_runs_again(self):
         state = steps("run")
         revise = run_cmd("plan", "--worktree", WT, "--task", "resolve the findings")
-        changes = result("DESIGN_NOT_APPROVED", revise, by="planner", module="WATER",
+        changes = result("DESIGN_NOT_APPROVED", revise, by="lead", module="WATER",
                          design_review={"verdict": "DESIGN CHANGES"})
         words, _ = self.follows(changes, state)
         self.assertEqual(words[0], "plan")
@@ -124,7 +124,7 @@ class RoutineSteps(Clean):
                     milestone="design", verdict="DESIGN OK")
         words, _ = self.follows(ok, state)
         self.assertEqual(words[:5], ["review", "--module", "PAY", "--milestone", "design"])
-        changes = result("REVIEWED", run_cmd("plan", "--worktree", WT, "--task", "resolve them"), by="planner",
+        changes = result("REVIEWED", run_cmd("plan", "--worktree", WT, "--task", "resolve them"), by="lead",
                          module="PAY", milestone="design", verdict="DESIGN CHANGES")
         self.assertEqual(self.follows(changes, state)[0][0], "plan")
         self.assertEqual(self.follows(changes, state)[0][0], "plan")  # the second round's revision is approved
@@ -197,7 +197,7 @@ class StepsInARepository(Repo):
         self.assertEqual([(s["step"], s["result"], s.get("escalation")) for s in line["steps_run"]],
                          [("run WATER M1", "READY_FOR_REVIEW", None), ("review WATER M1", "REVIEWED", "same_builder"),
                           ("run WATER M1", "READY_FOR_REVIEW", None), ("review WATER M1", "REVIEWED", "diagnosis")])
-        self.assertEqual((line["escalation"], line["next"]["by"]), ("diagnosis", "planner"))
+        self.assertEqual((line["escalation"], line["next"]["by"]), ("diagnosis", "lead"))
         self.assertIn("ended REVIEWED", line["stopped_because"])
 
     def test_a_plan_carries_on_into_the_design_review_it_left_owed(self):
@@ -288,7 +288,7 @@ class Watching(Repo):
         self.commit_all()
         line = self.watch()
         self.assertEqual(line["result"], "WARNING_SIGNS", line)
-        self.assertIn("WATER M1 failed its last two reviews on the same items (M1.1)", line["woke_for"])
+        self.assertIn("WATER M1 failed the same items in its last two reviews (M1.1), whether or not the findings were new", line["woke_for"])
         self.assertEqual(line["moved"]["reviews_failed"], ["WATER M1", "WATER M1"])
 
     def test_a_builder_without_progress_a_queued_planner_and_a_broken_main_branch(self):

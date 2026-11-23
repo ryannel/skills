@@ -18,8 +18,12 @@ instructions for that kind of review, which this skill calls your instructions.
 
 ## What you read
 
-The project settings are in `ORCHESTRATE.md`. They list the devices and platforms the product runs on, which the
-files call targets, and for each target the edge conditions to try, such as a slow network or an empty file.
+The project brief, `BRIEF.md` in the plans folder, is what the user asked for, in their words and the decisions made
+with them. Its "How it will be judged" says what would count as a failure.
+
+The project settings are in `ORCHESTRATE.md`. Their `Quality bar:` line says how good the work has to be. They also
+list the devices and platforms the product runs on, which the files call targets, and for each target the edge
+conditions to try, such as a slow network or an empty file.
 
 Earlier reviews and the builder's evidence are in the working folder, which every worktree on this computer shares.
 
@@ -39,10 +43,15 @@ each.
 
 ## How strict to be
 
-Your sense of whether a defect matters doesn't decide the result, because a real problem is easy to reason into
-"this is fine". The written items, the design and the brief decide it, and your instructions say which defects are
-Must Fix. Every other defect is a Suggestion. Report it too, because the user can still ask for it, but it
-doesn't hold anything up.
+The user decided how much quality this project is worth, and it is written down: in the items, in the brief's "How
+it will be judged", and in the quality bar, which is the settings' line made specific in each milestone's
+`quality_bar`. Those, with the design and the brief's decisions, decide the result, not your sense of whether a
+defect matters, because a real problem is easy to reason into "this is fine", and a real improvement is as easy to
+reason into "this must be fixed".
+
+A Must Fix is a defect that stops the work meeting them, however small its fix, and your instructions say which
+defects those are. Anything beyond them is a Suggestion, however real. Report it too, because the user can still ask
+for it, but it holds nothing up, because a bar that rises with each review means the work never finishes.
 
 Do the reading and the judging yourself rather than starting other agents, because a review whose reading went to a
 helper hasn't read the work. Leave the code as you found it, because a fix you made would have no independent check.

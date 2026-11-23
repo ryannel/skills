@@ -9,16 +9,21 @@ to see.
 
 ## What counts as a Must Fix
 
-A defect is a Must Fix when it breaks an item's statement or the milestone's quality bar. Outside the items, it is a
-Must Fix when it breaks something that worked before, breaks the design or an interface (what one module provides to
-the others), loses data, opens a security hole, or shows the work was faked. A defect of taste that no checklist line
-names is a Suggestion, with a proposed checklist line, because work judged against a reference fails only on what the
-planner wrote down. A Must Fix in an item fails that item. A Must Fix outside the items fails the milestone too, and
-the review proposes an item that would have caught it.
+A defect is a Must Fix when it breaks an item's statement, the milestone's quality bar or a line of the brief's "How
+it will be judged". Outside those, it is a Must Fix when it breaks something that worked before, breaks the design or
+an interface (what one module provides to the others), loses data, opens a security hole, or shows the work was
+faked. Judge each of these on the inputs the brief and the design cover: a crash on ordinary input is a Must Fix
+though no item names that input, while a fault that only an input the brief never mentions can reach, such as a
+number thousands of digits long or an unusual spelling of an ordinary one, is a Suggestion. A defect of taste that no
+checklist line names is a Suggestion too, with a proposed checklist line, because work judged against a reference
+fails only on what the planner wrote down. A Must Fix in an item fails that item. A Must Fix outside the items fails
+the milestone too, and the review proposes an item that would have caught it.
 
-Hold an open-ended item, such as a lint that must catch "any violation", to the range the design names and the inputs
-the product really has. A hole that only an input nothing in the product produces can reach is a Suggestion, because
-otherwise every review finds one more corner and sound work never passes.
+Judge an item that lists what it covers, such as the behaviours a test suite must test, on that list. Hold an
+open-ended one, such as a lint that must catch "any violation" or a suite that must fail "when any behaviour is
+broken", to the range the design names and the inputs the product really has. A hole outside them is a Suggestion to
+close the item to a list, which a planner can take up, because otherwise every review finds one more corner and sound
+work never passes.
 
 ## Judging the items
 
@@ -50,7 +55,8 @@ lead runs the review again while the user is there. A sandbox refusal isn't one 
 the command outside the sandbox.
 
 Read every changed line of the milestone, not only the files the items mention, and on a module's last milestone the
-whole module, for signs of work that only looks finished. Report an item too weak to catch a fake as a finding too.
+whole module, for signs of work that only looks finished. An item too weak to catch a fake is a Suggestion for its
+planner, unless this work is that fake, because the work, not the item, is what you are judging.
 
 ## Writing the review
 
@@ -79,9 +85,10 @@ When earlier reviews failed, your prompt says where they are. Judge the items as
 places are fixed, which is narrower than judging the items. Then read them, and say whether each Must Fix in the
 latest is still there.
 
-Repeated findings send a milestone to a planner sooner, so the names have to be truthful:
+Repeated failures send a milestone to a planner sooner, so the names have to be truthful:
 
 - A Must Fix that is still there, or is back, keeps its earlier `name` exactly.
 - A new defect gets a new name.
 - When an item that failed before fails again for a different reason, add `different`, saying how it isn't the same
-  defect, or the script counts it as a repeat.
+  defect. The finding is then listed as new, so the planner sees a new defect rather than a fix that didn't hold.
+  The script still counts the review as a repeat, because the item failed again either way.

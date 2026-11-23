@@ -16,8 +16,9 @@ describes.
 `DESIGN.md` says what the module's end users need to see, feel or get, and across what range. It names the mechanism
 that produces each of those, and says what the module provides to other modules.
 
-Check that each mechanism can produce its behaviour across the whole range before anyone builds on it, because a
-reviewer will try the edge of any range the design leaves open.
+Give each behaviour its range from the brief, and check that its mechanism can produce it across that range before
+anyone builds on it. A reviewer will try the edge of any range the design leaves open, and a range the design never
+states invites inputs the brief never meant.
 
 Use only numbers that are real: from the brief, from the user, or measured. A bound nobody measured becomes a target
 builders fail against, so make measuring it the milestone's first item, and set the bound from the result.

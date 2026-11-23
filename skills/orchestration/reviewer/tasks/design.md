@@ -24,12 +24,20 @@ new concept first gets a name.
 
 ## What counts as a Must Fix
 
-A finding is a Must Fix when building as designed would go wrong: a mechanism that can't produce the behaviour, a gap
-against the request or an interface, a reference below what the user asked for, two modules that would read an
-interface differently, or an item that no reviewer could judge, that its milestone can't prove, that a convincing fake
-would pass, or that work meeting the quality bar would fail, such as a cheaper method that looks the same. A sharper
-proof, an extra edge case, clearer wording or a name that drifts is a Suggestion, which the planner reads on its next
-turn.
+Judge the design against the brief and the module's scope, meaning what its entry in the module list gives it to do.
+A finding is a Must Fix when building as designed would miss what the brief asks of the module: a mechanism that
+can't produce the behaviour across the range the brief covers, a gap against the request or an interface, a reference
+below what the user asked for, two modules that would read an interface differently, or an item that no reviewer
+could judge, that its milestone can't prove, that a convincing fake would pass, that work meeting the quality bar
+would fail, such as a cheaper method that looks the same, or that is open-ended enough that no work could be shown to
+meet it, such as a suite that must fail "when any behaviour is broken". A convincing fake skips what the item claims
+on inputs the brief covers, such as output that is right only for the example in the check; a version that differs
+only on an input the brief never mentions isn't one.
+
+Growth beyond that scope is a Suggestion, however real: a wider range of input than the brief names, a proof stronger
+than its claim needs, an extra edge case, clearer wording or a name that drifts. The planner reads Suggestions on its
+next turn, and the user can ask for more, because the user, not the review, decides how much quality the project is
+worth, and a design that grows with each review never lets the build start.
 
 A proof that scripts step by step how the builder must test is a Suggestion to shorten it, not to add more steps. An
 item says what has to be true and how it is shown, and leaves the route to the builder, because an item that grows
@@ -37,11 +45,14 @@ prohibitions turns into a procedure each builder has to untangle.
 
 ## A design reviewed before
 
-When your prompt names a previous review of this design, say first whether each of its Must Fix findings is
-resolved. Then read every item that has changed since, because a revision can make a proof easier to pass as well as
-sharper. Raise a new Must Fix only for something the revision broke, or something missed last time that really is
-one. What is left of an earlier Must Fix, when it changes nothing the user would see and nothing another module
-relies on, is a Suggestion, because reviews that each find one more refinement never let the build start.
+When your prompt names a previous review of this design, judge what has changed since and what those changes touch, not
+the whole design again. The rest was judged last time, and a review that reads it all afresh finds new refinements each
+round, so even a small wording change would restart the design's reviews. Your prompt lists what changed, or, when the
+script couldn't compare, where to start. Say first whether each Must Fix of the previous review is resolved. Then read
+each changed part, and the parts that rely on it, because a revision can make a proof easier to pass as well as sharper.
+Raise a new Must Fix only for something the change broke. What is left of an earlier Must Fix, when it changes nothing
+the user would see and nothing another module relies on, is a Suggestion, and so is anything you notice in a part
+nothing changed, unless building it would miss the brief outright.
 
 ## Finishing
 
