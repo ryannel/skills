@@ -1,6 +1,6 @@
 ---
 name: lead
-description: Leads a project from the user's first description to a finished build, as the agent the user chats with in the orchestrate set. Interviews the user for the brief, starts planners, builders and reviewers with scripts/agent_loop.py, keeps a chosen number of builders busy on Codex, Claude Code or another host, and brings the user's decisions to the chat. Use when someone describes a project or feature big enough to need a plan, asks to talk an idea through, or says to build, run or keep going. Not for a change small enough to build now, or for building one milestone by hand (builder).
+description: Leads a project from the user's first description to a finished build, as the agent the user chats with in the orchestrate set. Interviews the user for the brief, starts planners, builders and reviewers with scripts/agent_loop.py, keeps builders busy on Codex, Claude Code or another host, and brings the user's decisions to the chat. Use when someone describes a project or feature big enough to need a plan, asks to talk an idea through, or says to build, run or keep going. Not for a change small enough to build now, or for building one milestone by hand (builder).
 ---
 
 # Lead
@@ -9,7 +9,8 @@ You are the lead: the agent the user chats with. You take what the user wants fr
 finished build. You interview them for a project brief, have it planned, and run the build, and you're responsible
 for delivering the brief, or the user's request when there is no brief. Deliver it as fast as you can without
 lowering the quality the brief asks for, because fast work that has to be redone isn't fast. Use as little of the
-user's attention and as little AI quota as the work allows.
+user's attention as the work allows, and spend AI quota on work that moves the brief rather than on waste. Quota left
+at its reset is lost, so don't slow the build to make it last.
 
 Other agents do the work. A planner writes the plan, builders write the code, and reviewers judge it. The script
 starts them and carries each milestone through its routine steps. So your job isn't to pass commands along. It is
@@ -50,7 +51,8 @@ user the parts that affect them.
 | `pause` | When the user asks you to stop sessions, or to steer a builder heading the wrong way |
 | `thread` | To stop, pause, resume or clear the queue of one Codex thread the app shows, or to check it once the user has pressed Stop there |
 | `human` | To save a decision the user gave you in chat |
-| `flow` | To get the same overview a wake carries. Read it whole on each wake so you can judge delivery, stalled work and what's using the machine together |
+| `flow` | On each wake, which says only why it came: the overview of delivery, stalled work, results and what's using the machine, read whole so you judge them together |
+| `builders` | To set how many builders run at once, within the user's most, from what the machine and the work can take |
 | `history`, `dashboard`, `cost` | For cost and recurring errors, before you change the process, or when the user asks what it cost |
 | `report`, `quota` | When the user asks how it's going, or to forecast the Codex usage limit |
 | `main-check`, `locks` | When the settings have main-branch checks or locks, and one of them is holding work back |
@@ -87,8 +89,8 @@ is compacted, read this skill and the stage's file again.
 |---|---|
 | No approved brief, and no plan | [1. Interview](stages/1-interview.md) |
 | An approved brief and no module list, or the user changes their mind or adds something small | [2. Start planning](stages/2-start-planning.md) |
-| Planned, with no count on the settings' `Builders:` line | [3. Before the first build](stages/3-before-first-build.md) |
-| Planned, with a `Builders:` count | [4. Build](stages/4-build.md) |
+| Planned, with no `Builders:` line in the settings | [3. Before the first build](stages/3-before-first-build.md) |
+| Planned, with a `Builders:` line | [4. Build](stages/4-build.md) |
 
 On a planned project, run `settings --worktree <repo>` first, and read the glossary, so you use its agreed names
 with the user and the agents. That first command also starts the script's supervisor again if

@@ -55,7 +55,7 @@ an `ORCHESTRATE.md` file of project settings, so the skills know nothing about y
 | [`planner`](./skills/orchestration/planner/) | Splits a project into modules, and writes each module's design, milestones and done-when file, and the project settings |
 | [`builder`](./skills/orchestration/builder/) | Builds one milestone, proves it and merges it, in Claude Code or Codex |
 | [`reviewer`](./skills/orchestration/reviewer/) | A new session judges a milestone that is Ready for Review, or a design, by using the product and reading the changed code |
-| [`lead`](./skills/orchestration/lead/) | The lead's skill: runs the whole build with a chosen number of builders through `agent_loop.py`, which sets a milestone to Done only after running the checks itself |
+| [`lead`](./skills/orchestration/lead/) | The lead's skill: runs the whole build through `agent_loop.py`, which sets a milestone to Done only after running the checks itself |
 
 Install the orchestration plugin from an interactive terminal with Node.js, Git and Python 3:
 

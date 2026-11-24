@@ -2,6 +2,9 @@
 would, builder sessions kept across a script fix, a result line from `pause`, a CHANGES entry for every version, the
 review's bookkeeping worked out by the script, and graded examples from the user's overturned reviews."""
 
+import argparse
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -9,7 +12,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import Clean, Repo, agent_loop  # noqa: E402  (first: points the script's homes at this process's folder)
+from support import Clean, Repo, agent_loop, put, release  # noqa: E402  (first: points the script's homes at this process's folder)
 
 
 class SetupCommand(Repo):
@@ -47,23 +50,37 @@ class SetupCommand(Repo):
     def test_a_failed_setup_is_the_checks_failure_and_is_tried_again(self):
         tree = agent_loop.verify_tree(self.wt, "WATER", "HEAD")
         prof = {"setup_command": "echo no registry >&2; exit 3", "test_command": "true", "plans": "docs/plans"}
-        failed = agent_loop.check_failures(tree, prof, {"id": "M1", "items": []})
+        m = {"id": "M1", "items": [{"id": "M1.1", "check": "true"}]}
+        self.assertEqual(agent_loop.check_failures(tree, prof, {"id": "M1", "items": []}), [],
+                         "with no item check to run there is nothing to set up for")
+        failed = agent_loop.check_failures(tree, prof, m)
         self.assertEqual(len(failed), 1)
         self.assertIn("Setup command `echo no registry >&2; exit 3` exited 3", failed[0])
         self.assertIn("no registry", failed[0])
         prof["setup_command"] = "true"
-        self.assertEqual(agent_loop.check_failures(tree, prof, {"id": "M1", "items": []}), [])
+        self.assertEqual(agent_loop.check_failures(tree, prof, m), [])
+
+    def merge(self):
+        put(self.wt / "src.txt", "code\n")
+        self.commit_all()
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+                agent_loop.cmd_merge(argparse.Namespace(worktree=str(self.wt), no_check=False))
+        finally:
+            release()
+        return json.loads(out.getvalue().splitlines()[-1])
 
     def test_a_merge_tests_the_work_after_setup_installs_what_the_test_needs(self):
         # The test command needs a file only the setup makes, in a folder git ignores, as node_modules is.
-        self.settings("mkdir -p deps && touch deps/installed", test="test -f deps/installed")
-        out = self.run_loop()
-        self.assertEqual(out["result"], "READY_FOR_REVIEW", out)
+        self.settings("mkdir -p deps && touch deps/installed", test="`test -f deps/installed`")
+        out = self.merge()
+        self.assertEqual(out["result"], "MERGED", out)
 
-    def test_without_setup_the_same_merge_fails_its_checks(self):
-        self.settings("none", test="test -f deps/installed")
-        out = self.run_loop()
-        self.assertNotEqual(out["result"], "READY_FOR_REVIEW", out)
+    def test_without_setup_the_same_merge_fails_its_test_command(self):
+        self.settings("none", test="`test -f deps/installed`")
+        out = self.merge()
+        self.assertNotEqual(out["result"], "MERGED", out)
 
 
 class BuildersLine(Clean):
@@ -308,7 +325,7 @@ class SecondReviewScript(Repo):
         self.assertIn("- **Test command:** none", t)
         self.assertIn("must pass before any test exists", t)
         self.assertIn("into ignored folders, leaving tracked files as they were", t)
-        self.assertIn("with no `lock` of its own", t)
+        self.assertIn("gates no milestone", t)
         self.assertIn("else the only one installed, else codex", t)
         self.assertEqual(t.count("Keep it on a new project"), 2)
         self.assertIn("{prompt}, {model} and {effort}", t)

@@ -167,20 +167,6 @@ class AStuckRunsPlanner(Repo):
         self.assertIn("refused", command(result))
 
 
-class MainCheckThatNeverJudges(Repo):
-    """Script 8: a run that waited out its hours on a main-branch check was sent to `run --fresh`, which waits again."""
-
-    def test_the_next_points_at_the_main_branch_check(self):
-        agent_loop.PENDING_CHECK_POLL_S = 0.01
-        self.write_done([milestone("M1", "not_started", ["open"], check="exit 75"),
-                         milestone("M2", "not_started", ["open"])])
-        self.commit_all()
-        result = self.run_loop(no_progress_hours=0.00001)
-        self.assertEqual(result["result"], "NO_PROGRESS_FOR_HOURS", result)
-        self.assertIn(" main-check ", command(result))
-        self.assertNotIn("--fresh", command(result))
-
-
 class MainCheckSetup(Repo):
     """Script 9: a setup command that failed was recorded as the main-branch check failing, which led to a bisect and
     a broken main branch."""
@@ -192,9 +178,9 @@ class MainCheckSetup(Repo):
         self.assertEqual(agent_loop.main_check_result([got, got]), "unjudged")
 
 
-class MainCheckRequestRunsNow(Repo):
-    """Delivery Lead: an item's `main-check` waited for the check's next scheduled run, so with `every 4h` a merged
-    milestone sat idle for hours with no builder working."""
+class MainCheckStartRunsNow(Repo):
+    """Delivery Lead: a main-branch check waited for its next scheduled run, so with `every 4h` a run asked for by hand
+    sat idle for hours."""
 
     def setUp(self):
         super().setUp()
@@ -204,28 +190,13 @@ class MainCheckRequestRunsNow(Repo):
         self.prof = agent_loop.profile(self.wt)
         self.folder = agent_loop.main_check_dir(self.wt, "soak")
 
-    def test_a_request_starts_a_run_without_waiting_out_every(self):
-        spawned = []
-        with mock.patch.object(agent_loop, "main_check_spawn",
-                               lambda wt, name, force=False: spawned.append(force) or mock.Mock(poll=lambda: None)):
-            got = agent_loop.main_check_wait(self.wt, self.prof, "soak", agent_loop.head_commit(self.wt), 0)
-        self.assertEqual(got["result"], "PENDING")
-        self.assertEqual(spawned, [True])
-
-    def test_a_request_wakes_a_runner_waiting_out_every(self):
-        with mock.patch.object(agent_loop, "main_check_flight", lambda folder: {"state": "scheduled"}):
-            agent_loop.main_check_wait(self.wt, self.prof, "soak", agent_loop.head_commit(self.wt), 0)
-        self.assertTrue((self.folder / agent_loop.MAIN_CHECK_REQUEST).exists())
-
-    def test_a_scheduled_runner_starts_at_once_when_asked(self):
+    def test_a_run_started_by_hand_doesnt_wait_out_every(self):
         head = agent_loop.head_commit(self.wt)
         (self.folder / "runs").mkdir(parents=True, exist_ok=True)
         (self.folder / "runs" / "1-old.json").write_text(json.dumps(
             {"kind": "tip", "commit": "0" * 40, "result": "pass", "started_s": time.time(), "finished_s": time.time()}))
-        (self.folder / agent_loop.MAIN_CHECK_REQUEST).touch()
-        got = agent_loop.main_check_runner(self.wt, self.prof, "soak", self.prof["main_checks"]["soak"])
-        self.assertFalse((self.folder / agent_loop.MAIN_CHECK_REQUEST).exists())
-        self.assertEqual(agent_loop.main_check_wait(self.wt, self.prof, "soak", head, 0)["result"], "COVERED", got)
+        got = agent_loop.main_check_runner(self.wt, self.prof, "soak", self.prof["main_checks"]["soak"], force=True)
+        self.assertEqual((got["result"], got["commit"]), ("pass", head), got)
 
 
 class PlannerFindingsAfterADiagnosis(Repo):
@@ -335,17 +306,18 @@ class WatchStartsDueChecks(Repo):
 
 
 class WatchWording(Clean):
-    """Skills 6: messaging a builder means pausing it first, and a number of builders agreed in chat stands."""
+    """Skills 6: messaging a builder means pausing it first, and the free-slot sign names the builders allowed."""
 
     def test_watch_says_to_pause_before_messaging(self):
         self.assertIn("pause --module", agent_loop.WATCH_WHY)
 
-    def test_the_free_slot_sign_leaves_room_for_a_number_agreed_in_chat(self):
+    def test_the_free_slot_sign_names_the_builders_allowed(self):
         look = {"stamp": 2000.0, "builds": [], "progress": {}, "proj": {}, "loops": [], "disk": None, "broken": [],
                 "since": {"ready_waiting": 1.0}, "limit": 3, "waiting": [{"module": "WATER", "milestone": "M1"}]}
         text = agent_loop.watch_signs(look)["ready_waiting"]["text"]
-        self.assertIn("Builders line", text)
-        self.assertIn("agreed a lower number with the user in chat", text)
+        self.assertIn("fewer than the 3 builders allowed are running: WATER M1", text)
+        text = agent_loop.watch_signs({**look, "limit": None})["ready_waiting"]["text"]
+        self.assertIn("no number limits the builders", text)
 
 
 class StaleTemplateLines(Clean):

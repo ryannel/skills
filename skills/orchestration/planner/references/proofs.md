@@ -46,7 +46,8 @@ and tests, goes on the `Shared resources` line with how many runs it can serve a
 The project's test command costs more again, because every merge waits for it, and its length caps how many merges
 an hour the whole project gets. Keep it quick, and keep work that needs a shared resource, such as GPU tests, in item
 checks or main-branch checks that take the lock. When the test command has to use the device, name its lock on the
-`Test command lock` line, and merges then wait for the device as well as for each other.
+`Test command lock` line, and merges then wait for the device as well as for each other. No item needs to run the test
+command itself, because the merge already ran it on the merged work.
 
 When a project has history, its past reviews show which proofs found real faults. Often most were found by reading
 the code or by a quick test on the CPU, and those deserve the most items.
@@ -59,8 +60,9 @@ Where a proof runs follows from who a fault would hurt:
 - A fault that would cost only its own module an hour or two, such as an image that moved or a slower frame, is
   cheaper to find after the merge. One run on the main branch covers everything merged since the last run, whoever
   merged it, and a failure is fixed by the module that caused it while the others carry on. Write such a check as a
-  `Main-branch check` line in the project settings, whose note in `settings --template` says how the line and the
-  items that rely on it are written. Such a check runs while builders are busy, so if load can spoil a run without
+  `Main-branch check` line in the project settings, whose note in `settings --template` says how the line is
+  written. No item waits on it, because a milestone is done on what it can show before the merge, and a builder
+  waiting on a slow shared check holds up its module for nothing. Such a check runs while builders are busy, so if load can spoil a run without
   saying anything about the code, as when a capture drops frames, have the check notice and exit 75. That tells the
   script the run couldn't judge the commit, so it tries again and doesn't blame whichever commit happened to run on
   a busy machine.

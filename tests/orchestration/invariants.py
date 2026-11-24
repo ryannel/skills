@@ -254,8 +254,10 @@ def check_command(agent_loop, text: str, nxt: dict | None, decides, given, step:
 def documented_placeholder(words: list[str], holes: list[str]) -> bool:
     """A placeholder in a position the script's help (`agent_loop.py --help`, under Results) documents as the lead's
     to fill without the user: `run --message '<the missing fact>'`, the answer to a builder's Needs Context question,
-    which the lead gives from what it knows, or takes to a planner or the user."""
-    return all(h == "<the missing fact>" and n > 0 and words[n - 1] == "--message" and "run" in words[:n]
+    which the lead gives from what it knows, or takes to a planner or the user, and `builders --why '<...>'`, the
+    lead's own reason for raising its working number."""
+    return all((h == "<the missing fact>" and n > 0 and words[n - 1] == "--message" and "run" in words[:n]) or
+               (n > 0 and words[n - 1] == "--why" and "builders" in words[:n])
                for h in holes for n in [words.index(h)])
 
 

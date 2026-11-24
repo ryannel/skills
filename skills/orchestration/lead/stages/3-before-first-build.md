@@ -1,6 +1,6 @@
 # Before the first build
 
-This stage runs once the project is planned, while the settings' `Builders:` line has no count.
+This stage runs once the project is planned, while the settings have no `Builders:` line.
 
 Before any builder starts, get the user's agreement to what the plan will deliver and to every choice made in their
 name. This is the cheapest moment to correct any of it: no design has been reviewed and nothing is built, so a
@@ -15,8 +15,9 @@ plan names most of the project's concepts, so this is also when the user can mos
 hold", before the names spread into code.
 
 Delete the `Proposed:` line from each name the user agrees. Give everything else they change or answer to one change
-planner in their words, because only a planner changes the plan files. Once they agree, save the number of builders
-they give with `settings --set`; the supervisor starts the build from that count, so no `run` is needed.
+planner in their words, because only a planner changes the plan files. Once they agree, save how they want the agents
+to work with `settings --set`: the programs, and the most builders at once if they want a limit, or no limit. The
+supervisor starts the build from that line, so no `run` is needed.
 
 A build runs for days, and the more a session holds, the sooner and more often it is compacted. The conversation so
 far is saved in the brief and the plan, so tell the user that, and recommend they clear it (`/clear` in Claude Code,

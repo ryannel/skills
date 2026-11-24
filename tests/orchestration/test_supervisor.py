@@ -218,7 +218,7 @@ class WakingTheLead(Wiring):
 
 
 class StartingBuilders(Clean):
-    """The supervisor starts the routine runs, up to the builders count, and leaves the lead's judgement alone."""
+    """The supervisor starts the routine runs, up to the builder limit, and leaves the lead's judgement alone."""
 
     def setUp(self):
         super().setUp()
@@ -231,8 +231,9 @@ class StartingBuilders(Clean):
             patch.start()
             self.addCleanup(patch.stop)
 
-    def fill(self, seen, started=None):
-        return agent_loop.fill_builders(Path("/repo"), {}, seen, started if started is not None else {})
+    def fill(self, seen, started=None, prof=None):
+        return agent_loop.fill_builders(Path("/repo"), {"builders_set": True} if prof is None else prof, seen,
+                                        started if started is not None else {})
 
     def test_it_fills_the_free_slots_with_modules_that_can_start(self):
         steps = {k: step(k, "can_start") for k in ("A", "B", "C")}
@@ -241,9 +242,11 @@ class StartingBuilders(Clean):
         steps["B"] = step("B", "ready_for_review")
         self.assertEqual(self.fill(look(steps, free=5, running={"A"})), ["B", "C"])
 
-    def test_no_builders_count_a_broken_test_command_or_a_busy_module_starts_nothing(self):
+    def test_no_builders_line_a_broken_test_command_or_a_busy_module_starts_nothing(self):
         steps = {"A": step("A", "can_start")}
-        self.assertEqual(self.fill(look(steps, limit=None)), [])
+        self.assertEqual(self.fill(look(steps), prof={}), [])  # the user hasn't agreed the first build
+        self.assertEqual(self.fill(look(steps, limit=None, free=1)), ["A"])  # a line with no number: no limit
+        self.started.clear()
         self.assertEqual(self.fill(look(steps, broken=[{"check": "test command"}])), [])
         self.assertEqual(self.fill(look(steps, loops=[{"role": "review", "module": "A"}])), [])
         self.assertEqual(self.fill(look(steps), started={"A": time.time()}), [])
@@ -382,11 +385,14 @@ class SupervisorLife(Repo):
         self.assertTrue(self.until(lambda: any("BUILD_FINISHED" in t for t in session.texts()), limit=150),
                         session.texts() or (self.folder / "supervisor.log").read_text())
         # the run's end wakes the lead, on its own or with the end of the build when both are seen at once
-        words = [t.split(": ", 1)[1].split(".")[0] for t in session.texts()]
+        # (a machine short of disk adds a warning sign of its own, which says nothing about the build)
+        words = [t.split(": ", 1)[1].split(".")[0] for t in session.texts() if "the disk holding" not in t]
         self.assertEqual(words[-1], "BUILD_FINISHED", session.texts())
-        self.assertEqual(set(words[:-1]) - {"RUN_ENDED"}, set())
+        self.assertEqual(set(words[:-1]) - {"RUN_ENDED"}, set(), session.texts())
         self.assertIn("steps WATER", " ".join(session.texts()))
-        self.assertIn('"result": "REVIEWED"', " ".join(session.texts()))
+        self.assertIn(" flow --worktree ", session.texts()[-1])  # a wake is a nudge to look; `flow` has the results
+        flow = json.loads(self.printed(agent_loop.cmd_flow, worktree=str(self.wt), since=1))
+        self.assertIn("REVIEWED", [r["result"] for r in flow["results"]], flow["results"])
         self.assertTrue(agent_loop.recorded_done(self.read_done()["milestones"][1], self.read_record()))
         self.assertTrue(self.until(self.gone))
         stopped = json.loads((self.folder / agent_loop.SUPERVISOR_FILE).read_text())["stopped"]
@@ -429,7 +435,7 @@ class NewestCopyWins(Wiring):
 
 class MachineOverview(Repo):
 
-    def test_flow_and_the_wake_show_cpu_share_and_check_health(self):
+    def test_flow_shows_cpu_share_and_check_health_and_the_wake_points_at_it(self):
         self.wt = self.wt.resolve()
         prof = agent_loop.profile(self.wt)
         prof["main_checks"] = {"images": {"command": "check-images"}}
@@ -463,10 +469,10 @@ class MachineOverview(Repo):
             agent_loop.write_atomically(folder / agent_loop.WATCH_FILE, state)
             _, wake = agent_loop.watch_wake(self.wt, prof, tick=lambda *_: ("CHECK_IN", ["test wake"]))
             cli = json.loads(self.printed(agent_loop.cmd_flow, worktree=str(self.wt), since=None))
-        self.assertEqual(ps.call_count, 2)
-        for key, value in cli.items():
-            self.assertEqual(value, wake[key], key)
-        machine = wake["machine"]
+        self.assertEqual(ps.call_count, 1)  # the wake only points at `flow`, which reads the machine
+        self.assertEqual(set(wake), {"woke_for", "look"})
+        self.assertIn(" flow --worktree ", wake["look"])
+        machine = cli["machine"]
         self.assertEqual(machine["load"], {"1m": 19.5, "15m": 6.5})
         self.assertEqual(machine["cores"], 14)
         self.assertEqual(machine["memory_pressure"], "warning")

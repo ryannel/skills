@@ -108,8 +108,8 @@ The set ships skills and no agent files. The script starts each planner and revi
 prompt names its skill, and passes the host's flag that stops it starting agents of its own, so an agent file would
 add nothing. The `lead` skill loads by itself, because it is the way into a project: someone describing what they
 want built starts with its interview. That is safe because nothing runs for hours before the user has approved a
-brief and said how they want the agents to work, and `run` refuses to start a builder until the settings'
-`Builders:` line has a count.
+brief and said how they want the agents to work, and `run` refuses to start a builder until the settings
+have a `Builders:` line.
 
 ## The script and its tests
 

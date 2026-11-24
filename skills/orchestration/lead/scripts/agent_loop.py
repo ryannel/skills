@@ -61,8 +61,9 @@ Results and exit status:
   texts are joined, so a lead adds its own words to a printed `next` by adding the flag again. A word in angle
   brackets, such as '<what the user said, in their words>', is the lead's to fill in before it runs the command, and
   appears only in a command with `decides: human`, in a `next`'s `human` (the `human` command that records the
-  user's decision, if they make one), and as `run --message '<the missing fact>'` for a builder's question, which
-  the lead answers or takes to a planner or the user.
+  user's decision, if they make one), as `run --message '<the missing fact>'` for a builder's question, which
+  the lead answers or takes to a planner or the user, and as `builders --why '<why the machine has room for one
+  more>'`, the lead's own reason for raising its working number.
   The exit status says what kind of line it is: 0 for the command's own result, 2 for ERROR when the command line
   was refused (with `usage`, and the closest command or flag when one was misspelt), 1 for ERROR when a check
   stopped the command, or SCRIPT_FAILED when the script failed (with `traceback`). `adopt`, `migrate` and `human`
@@ -371,8 +372,8 @@ NUMBER_WORDS = {w: n for n, w in enumerate(("one", "two", "three", "four", "five
 
 
 def builders_count(text: str) -> int | None:
-    """How many builders the settings' `Builders:` line allows, read as a person would, which `run` keeps to; None
-    when the line has no number, which sets no limit. Each number, as a digit or a word, that comes a few words before
+    """The most builders the settings' `Builders:` line allows, read as a person would, which `run` keeps to; None
+    when the line has no number ("no limit", say), which sets no most. Each number, as a digit or a word, that comes a few words before
     "builder", or a few words before a host's name, is a count, and the counts add up: "two Claude builders and one
     Codex builder" and "2 Codex, 1 Claude" are three. A count with no host's name followed by a colon or a bracket is a
     total with its breakdown after it ("three builders: two Codex and one Claude"), and is taken alone. A line with numbers but no "builder" after any of them takes its first number. In Thrum four to six
@@ -494,6 +495,9 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
         problems.append(f"planner host: {out['planner_host']!r} (want codex, claude or a host these settings names)")
         out["planner_host"] = ""
     out["builders"] = builders_count(text)
+    # the line itself is the user's agreement to the first build; a line with no number sets no most
+    value = profile_value(text, "builders")
+    out["builders_set"] = bool(value and not PLACEHOLDER.search(value))
     out["check_in_s"] = check_in_s(out.pop("lead check-in"), problems)
     out["lead_wake"] = lead_wake_setting(out.pop("lead wake"), problems)
     locks =lock_settings_from(text)
@@ -2254,18 +2258,14 @@ def loop_cmd(*args) -> str:
     return shlex.join(["python3", str(LOOP), *[str(x) for x in args]])
 
 
-MORE_BUILDERS_HOURS = 24  # how long the user's --more-builders words carry to the module's later runs
-RUNS_FILE = "last-runs.json"  # per module: the host, review host and --more-builders words of its latest build run
+RUNS_FILE = "last-runs.json"  # per module: the host and review host of its latest build run
 RUN_HERE: dict = {}  # this process's own run, which outranks the file
 
 
-def note_run(worktree: Path, module: str, host: str, review: str, more_builders: str | None = None,
-             said_at: str | None = None) -> None:
-    """Records the host and review host this build run of `module` uses, and the user's words that let it start past
-    the Builders count, so a `next` printed later, by any command in any worktree of the repository, keeps them, and a
-    later run of the module reuses the words. Local to this machine; never fails."""
-    entry = {"host": host, "review_host": review, "at": now(),
-             **({"more_builders": more_builders, "more_builders_at": said_at or now()} if more_builders else {})}
+def note_run(worktree: Path, module: str, host: str, review: str) -> None:
+    """Records the host and review host this build run of `module` uses, so a `next` printed later, by any command in
+    any worktree of the repository, keeps them. Local to this machine; never fails."""
+    entry = {"host": host, "review_host": review, "at": now()}
     RUN_HERE[module.upper()] = entry
     try:
         path = loop_dir(worktree) / RUNS_FILE
@@ -4779,11 +4779,8 @@ def run_check(tree: Path, command: str, lock: str | None, timeout_s: float, plan
             folder = None
     key = files_key(tree, plans, reads) if folder else None
     before = git(tree, "status", "--porcelain", "-z").stdout if key and reads else None
-    # `env` adds variables for the check: the commit and module a main-branch check answers for. Only a command that
-    # asks `main-check` reads them, so only its pass is remembered for those values alone, and any other check's pass
-    # is reused across commits as before.
-    keyed = env if env and "main-check" in command else None
-    name = text_hash(command + (json.dumps(keyed, sort_keys=True) if keyed else ""))[:16]
+    # `env` adds variables for the check, which don't change what it tests, so a pass is reused whatever they hold
+    name = text_hash(command)[:16]
     memo = folder / f"{key[:24]}-{name}.json" if key else None
     full_env = {**os.environ, **env} if env else None
     if memo and memo.exists():
@@ -4900,40 +4897,27 @@ def stream_end(text: str, lines: int = CHECK_TAIL_LINES) -> str:
     return "\n".join(text.rstrip().splitlines()[-lines:]) or "(nothing)"
 
 
-PENDING_CHECK = f"exited {75}: a main-branch check has no answer for this work yet"  # MAIN_CHECK_PENDING_EXIT
-PENDING_CHECK_POLL_S = 60.0  # how often a run whose only failing checks are waiting on a main-branch check asks again
-# the merged commit and module a main-branch check answers for, passed to item checks so `main-check` can read them
-CHECK_COMMIT_ENV, CHECK_MODULE_ENV = "ORCHESTRATE_CHECK_COMMIT", "ORCHESTRATE_CHECK_MODULE"
-
-
-def pending_only(reasons: list[str]) -> bool:
-    """Whether every reason the checks failed is a check still waiting for a main-branch check's answer."""
-    return bool(reasons) and all(PENDING_CHECK in r for r in reasons)
+# set in every item check the script runs, so `main-check` can tell an item check from a person or an agent asking
+ITEM_CHECK_ENV = "ORCHESTRATE_ITEM_CHECK"
 
 
 def check_failures(tree: Path, prof: dict, milestone: dict, timeout_s: float = 3600,
-                   reused: list | None = None, env: dict | None = None) -> list[str]:
-    """Runs the project's test command, then each item's check (under its lock, if it names one), in the script's
-    own process, never under the merge lock. Returns what failed, each with the end of its stdout and its stderr
-    shown apart and the files that hold them whole. A check that already passed on the same files isn't run again;
-    its label goes in `reused`. `env` goes to the items' checks."""
-    runs = [("Test command", prof.get("test_command"), prof.get("test_command_lock"), None)] \
-        if prof.get("test_command") else []
-    runs += [(i["id"], i["check"], i.get("lock"), i.get("reads")) for i in milestone["items"] if i.get("check")]
+                   reused: list | None = None) -> list[str]:
+    """Runs each item's check (under its lock, if it names one), in the script's own process, never under the merge
+    lock. The project's test command isn't run here: the merge ran it on the merged work, and that is its proof.
+    Returns what failed, each with the end of its stdout
+    and its stderr shown apart and the files that hold them whole. A check that already passed on the same files
+    isn't run again; its label goes in `reused`."""
+    runs = [(i["id"], i["check"], i.get("lock"), i.get("reads")) for i in milestone["items"] if i.get("check")]
     if runs and (setup := run_setup(tree, prof)):
         return [setup["problem"]]
     failed = []
     for label, command, lock, reads in runs:
-        loop_note(step=f"checking {milestone.get('id')}: " + ("the test command" if label == "Test command" else label))
-        r = run_check(tree, command, lock, timeout_s, prof.get("plans"), reads=reads,
-                      env=env if label != "Test command" else None, hold_limit=label != "Test command")
+        loop_note(step=f"checking {milestone.get('id')}: {label}")
+        r = run_check(tree, command, lock, timeout_s, prof.get("plans"), reads=reads, env={ITEM_CHECK_ENV: label})
         if r["reused"] and reused is not None:
             reused.append(label)
-        if r["exit"] == MAIN_CHECK_PENDING_EXIT:
-            # `main-check` exits 75 when the main-branch check hasn't judged this commit yet: nothing has failed, so
-            # the run asks again later, without a builder turn
-            failed.append(f"{label} `{command}` {PENDING_CHECK}.")
-        elif r["exit"] != 0:
+        if r["exit"] != 0:
             whole = (f" Its whole output is in {r['stdout']} (stdout) and {r['stderr']} (stderr)."
                      if r["stdout"] and r["stderr"] else "")
             failed.append(f"{label} `{command}` " + ("timed out" if r["exit"] == 124 else f"exited {r['exit']}") +
@@ -4993,15 +4977,11 @@ def authorised_at_tip(worktree: Path, prof: dict, stem: str, mid: str) -> str | 
 
 
 def ready_problems(worktree: Path, prof: dict, stem: str, milestone: dict, done: dict, authorised_hash: str,
-                   start_tip: str, reused: list | None = None, pinned: str | None = None) -> tuple[list[str], str | None]:
+                   start_tip: str, reused: list | None = None) -> tuple[list[str], str | None]:
     """Why the script can't set the milestone to Ready for Review yet, and the main branch's tip the checks ran on.
-    The builder merges its work with the milestone still in progress, and the script then runs the checks on the
-    tip in its own clean checkout. A milestone the tip already says is Ready for Review, from a builder before 2.1.0,
-    is checked the same way. `pinned` is a tip to check again instead of a fresh one: the one an earlier pass
-    waited on a main-branch check for, so the test command and the other checks reuse their passes there.
-
-    Each item's check gets the builder's merged commit and the module in ORCHESTRATE_CHECK_COMMIT and
-    ORCHESTRATE_CHECK_MODULE, so `main-check` answers for this work rather than for whatever tip it ran on."""
+    The builder merges its work with the milestone still in progress, and the script then runs the item checks on
+    the tip in its own clean checkout. A milestone the tip already says is Ready for Review, from a builder before
+    2.1.0, is checked the same way."""
     missing = [i["id"] for i in milestone["items"] if not i.get("evidence")]
     if missing:
         return ["items marked pass with no evidence: " + ", ".join(missing)], None
@@ -5009,16 +4989,7 @@ def ready_problems(worktree: Path, prof: dict, stem: str, milestone: dict, done:
     if status:
         return ["uncommitted or untracked files (commit, remove or ignore them): " + status[:300]], None
     try:
-        ref = fresh = tip(worktree, prof)
-        if pinned and is_ancestor(worktree, "HEAD", pinned):
-            # the pin holds only while the milestone's definitions at the fresh tip are still the authorised ones,
-            # because the result is recorded on the fresh tip
-            try:
-                now_there = find(json.loads(show(worktree, fresh, done_rel(prof, stem)) or "{}"), milestone["id"])
-            except (json.JSONDecodeError, KeyError, SystemExit):
-                now_there = None
-            if now_there is not None and definitions(now_there) == authorised_hash:
-                ref = pinned
+        ref = tip(worktree, prof)
     except TipError as e:
         return [f"{e}, so the merge can't be checked"], None
     if not is_ancestor(worktree, "HEAD", ref):
@@ -5038,8 +5009,7 @@ def ready_problems(worktree: Path, prof: dict, stem: str, milestone: dict, done:
         tree = verify_tree(worktree, stem, ref)
     except TipError as e:
         return [str(e)], None
-    failures = check_failures(tree, prof, milestone, reused=reused,
-                              env={CHECK_COMMIT_ENV: head_commit(worktree), CHECK_MODULE_ENV: stem})
+    failures = check_failures(tree, prof, milestone, reused=reused)
     if left := git(tree, "status", "--porcelain").stdout.strip():
         failures.append("running the checks left changes in a clean checkout of the tip (write outputs somewhere "
                         "git ignores): " + left[:300])
@@ -6122,7 +6092,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "2.13.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "2.14.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6162,6 +6132,18 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "2.14.0": [
+        "The settings' Builders line is the user's most, and a line with no number means no limit. Set the "
+        "working number yourself with `builders --set N --why TEXT`, from what the machine and the work can take; "
+        "`run --more-builders` is gone. Read the lead skill's build stage again.",
+        "A wake says only why it came, in `woke_for`, and names `flow` in `look`. Run `flow` on each wake: it now "
+        "carries the ended commands' results with their `next`, every warning sign in full, and `details`.",
+        "A main-branch check gates no milestone. An item's check that asks `main-check` is REFUSED, so have a "
+        "planner rewrite such items in open milestones, to check what the milestone can show before the merge or "
+        "be dropped. `run` no longer runs the test command again before Ready for Review, since the merge ran it.",
+        "A builder's commit inside a long turn counts as progress, so the no-progress sign no longer fires on a "
+        "builder that is committing.",
+    ],
     "2.13.0": [
         "A wake and `flow` show the same overview of delivery, stalled work and where time goes, with the "
         "builder count, disk space, Codex quota, and a machine snapshot with load, memory pressure, CPU by app "
@@ -7857,7 +7839,6 @@ def earlier_session_note(worktree: Path, milestone: dict | None, last_exit: int 
             + (" " + facts if facts else "") + "\n")
 
 
-WAITING_FOR_CHECK = "waiting for a main-branch check to judge the merged work"
 WAITING_FOR_SLOT = "waiting for a builder slot"
 WAITING_FOR_QUIET = "waiting for a quiet window to end, or to begin"
 SLOT_POLL_S = 5.0  # how often a run's builder that is due back looks for a free slot
@@ -7865,14 +7846,13 @@ SLOT_POLL_S = 5.0  # how often a run's builder that is due back looks for a free
 
 def builder_runs(loops: list[dict]) -> list[dict]:
     """The runs among `loops` that each hold a builder slot: a builder's run, less `run --checks-only`, which starts no
-    agent, and less one waiting on a main-branch check or for a slot, since no agent works then. A `run` carrying on
-    through its steps counts once: between steps, while its builder works and while a reviewer judges its milestone,
-    because about half of reviews fail and the fix should start at once. It gives up the slot while a planner has its
-    milestone, or while its merged work waits on a main-branch check, which can take hours; when its builder is due
-    back and every slot is taken, it waits for one, ahead of any new run."""
+    agent, and less one waiting for a slot, since no agent works then. A `run` carrying on through its steps counts
+    once: between steps, while its builder works and while a reviewer judges its milestone, because about half of
+    reviews fail and the fix should start at once. It gives up the slot while a planner has its milestone; when its
+    builder is due back and every slot is taken, it waits for one, ahead of any new run."""
     def holding(r: dict) -> bool:
         return r.get("role") == "review" or r.get("role") == "build" and not r.get("checks_only") and \
-            r.get("step") not in (WAITING_FOR_CHECK, WAITING_FOR_SLOT, WAITING_FOR_QUIET)
+            r.get("step") not in (WAITING_FOR_SLOT, WAITING_FOR_QUIET)
     # a `plan` going through its steps (a planner, then the design review) holds no builder slot, though its design
     # review step is a review; records from before `origin` mark a plan's steps by its task
     def builds(r: dict) -> bool:
@@ -7924,7 +7904,7 @@ def agents_working(worktree: Path, prof: dict) -> list[str]:
     busy = [f"{r.get('role')} {r.get('module') or ''} {r.get('milestone') or ''}".strip() for r in loops
             if r.get("pid") not in mine and r.get("step") != WAITING_FOR_QUIET and not r.get("waiting_for") and
             (r.get("role") in ("review", "plan") or r.get("role") == "build" and not r.get("checks_only") and
-             r.get("step") not in (WAITING_FOR_CHECK, WAITING_FOR_SLOT))]
+             r.get("step") != WAITING_FOR_SLOT)]
     for name in prof.get("main_checks") or {}:
         try:
             flight = main_check_flight(main_check_dir(worktree, name))
@@ -7988,6 +7968,22 @@ def file_lock(path: Path):
         yield
     finally:
         handle.close()
+
+
+BUILDERS_FILE = "builders.json"  # under <git common dir>/orchestrate: the lead's working number of builders
+
+
+def working_builders(worktree: Path) -> dict:
+    """The lead's working number of builders, set with `builders --set`: {count, why, at}, or {} when none is set."""
+    got = read_json_file(loop_dir(worktree) / BUILDERS_FILE) or {}
+    return got if isinstance(got.get("count"), int) and got["count"] > 0 else {}
+
+
+def builder_limit(worktree: Path, prof: dict) -> int | None:
+    """How many builders may run at once: the lead's working number, never past the user's most on the settings'
+    Builders line. None when neither sets one, and the work alone decides."""
+    counts = [n for n in (prof.get("builders"), working_builders(worktree).get("count")) if n]
+    return min(counts) if counts else None
 
 
 def builders_running(worktree: Path, waiting: bool = False) -> list[dict]:
@@ -8154,39 +8150,31 @@ def cmd_run(a: argparse.Namespace) -> None:
         for w in browser_warnings(worktree, stem, mid):
             print("warning: " + w, file=sys.stderr)
             WARNINGS.append(w)
-    if prof.get("builders") is None and not getattr(a, "checks_only", False):
+    if not prof.get("builders_set") and not getattr(a, "checks_only", False):
         # The planner leaves out how the user wants the agents to work; the lead asks before the first build.
-        why = ("the project settings have no Builders line with a count, so the user hasn't said yet how many "
-               "builders may work at once. Once they have seen the plan, ask them, and save their answer as the "
-               "Builders line; `then` starts this run")
+        why = ("the project settings have no Builders line, so the user hasn't agreed the plan and said how they want "
+               "the agents to work. Once they have seen the plan, ask them, and save their answer as the Builders "
+               "line, with the most builders they want or no limit; `then` starts this run")
         emit("REFUSED", module=stem, milestone=mid, problems=[why], next=next_cmd(
             loop_cmd("settings", "--worktree", str(worktree), "--set", "Builders", "<their answer, in their words>",
                      "--said", "<what the user said>"), "lead", why, decides="human",
-            ask="Before the first build: how many agents should build at once, and with which programs?",
-            then=again))
-    more = (getattr(a, "more_builders", None) or "").strip()
-    more_from = None
-    if prof.get("builders") and not getattr(a, "checks_only", False):
+            ask="Before the first build: which programs should the agents build with, and is there a most you want "
+                "running at once, or no limit?", then=again))
+    limit = builder_limit(worktree, prof)
+    if limit and not getattr(a, "checks_only", False):
         # A new run counts the builders waiting for a slot as holding one, so a builder coming back after a review or
-        # a planner goes first, and the user is asked only about a run past the count
+        # a planner goes first
         with slot_lock(worktree):
             others = builders_running(worktree, waiting=not STEP_RETURNING)
-        earlier = known_run(str(worktree), stem)
-        if len(others) >= prof["builders"] and not more and earlier.get("more_builders") and \
-                hours_since(earlier.get("more_builders_at")) < MORE_BUILDERS_HOURS:
-            # The user's words that let this module's last run start past the count still stand for a day: a
-            # restart after a failed review or a pause is the same builder, not one more.
-            more, more_from = earlier["more_builders"], earlier["more_builders_at"]
         since = time.time()
-        while STEP_RETURNING and not more:
-            # the builder of a run already under way, coming back after a planner or a main-branch check, whose slot
-            # went to another module's builder meanwhile: it waits for one, in the order the waiters came, rather than
-            # asking the user again
+        while STEP_RETURNING:
+            # the builder of a run already under way, coming back after a planner, whose slot went to another
+            # module's builder meanwhile: it waits for one, in the order the waiters came
             with slot_lock(worktree):
                 others = builders_running(worktree, waiting=True)
                 working = [r for r in others if "waiting_since" not in r]
                 ahead = [r for r in others if "waiting_since" in r and (r["waiting_since"], r["pid"]) < (since, os.getpid())]
-                if len(working) + len(ahead) < prof["builders"]:
+                if len(working) + len(ahead) < builder_limit(worktree, prof):
                     loop_note(step=None, waiting_since=None)
                     others = working
                     break
@@ -8194,21 +8182,23 @@ def cmd_run(a: argparse.Namespace) -> None:
             if _STOP:
                 emit("PAUSED", module=stem, milestone=mid, reason="stopped while waiting for a builder slot")
             time.sleep(SLOT_POLL_S)
-        if len(others) >= prof["builders"]:
-            if not more:
-                names = ", ".join(f"{r['module'] or '?'} {r['milestone'] or ''}".strip() for r in others)
-                be = "is" if len(others) == 1 else "are"
-                why = (f"{plural(len(others), 'builder')} {be} already running in this repository ({names}), and the "
-                       f"project settings' Builders line allows {prof['builders']}. The user decides whether to run "
-                       "one more: ask them, and if they say yes, run this command with their words in "
-                       "--more-builders. Otherwise start it when one of those builders stops")
+        if len(others) >= limit:
+            names = ", ".join(f"{r['module'] or '?'} {r['milestone'] or ''}".strip() for r in others)
+            be = "is" if len(others) == 1 else "are"
+            running = f"{plural(len(others), 'builder')} {be} already running in this repository ({names})"
+            if prof.get("builders") and limit >= prof["builders"]:
+                why = (f"{running}, the most the project settings' Builders line allows. Raising it is the user's "
+                       "call; otherwise start this when one of those builders stops")
                 emit("REFUSED", module=stem, milestone=mid, problems=[why], running=others, next=next_cmd(
-                    again + " --more-builders '<what the user said, in their words>'", "lead", why,
-                    decides="human", ask=f"{plural(len(others), 'builder')} {be} running ({names}), the number in the "
-                                         f"project settings. Shall I start one more, for {stem} {mid}?"))
-            # Kept with the run, so the result shows whose words started the extra builder.
-            EMIT_EXTRA["more_builders"] = {"said": more, "running": len(others), "at": now(),
-                                           **({"said_at": more_from} if more_from else {})}
+                    loop_cmd("settings", "--worktree", str(worktree), "--set", "Builders",
+                             "<their answer, in their words>", "--said", "<what the user said>"), "lead", why,
+                    decides="human", ask=f"{running}, the most the settings allow. Shall I raise the most, so "
+                                         f"{stem} {mid} can start?", then=again))
+            why = (f"{running}, the working number you set with `builders`. Raise it if the machine has room, or "
+                   "start this when one of those builders stops")
+            emit("REFUSED", module=stem, milestone=mid, problems=[why], running=others, next=next_cmd(
+                loop_cmd("builders", "--worktree", str(worktree), "--set", str(len(others) + 1), "--why",
+                         "<why the machine has room for one more>"), "lead", why, then=again))
     ok, holder = take_hold(worktree, prof, key, mid)
     if not ok:
         emit("IN_PROGRESS_ELSEWHERE", module=stem, milestone=mid, by=holder,
@@ -8262,7 +8252,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     # with `Review host: other` only a review host the lead named is kept: otherwise each review decides its own,
     # against the builder for a milestone and the planner for a design
     note_run(worktree, stem, host, getattr(a, "review_host", None) if prof.get("review_host") == "other" else
-             review_host(prof, host, getattr(a, "review_host", None)), more or None, more_from)
+             review_host(prof, host, getattr(a, "review_host", None)))
     state = json.loads(state_path.read_text()) if state_path.exists() else {}
     # "PIN" is the name before 2.1.0, still in the state files of runs started earlier.
     fresh = (a.fresh or state.get("milestone") != mid or state.get("result") in ("WRONG_MODEL_OR_EFFORT", "PIN")
@@ -8413,13 +8403,12 @@ def cmd_run(a: argparse.Namespace) -> None:
 
     def check_and_record(current: dict, done: dict) -> list[str]:
         """Steps 2 and 3 of finishing a milestone, once every item passes. The builder has merged its work with the
-        milestone in progress; the script runs the test command and the item checks on the main branch's tip, in
+        milestone in progress, and the merge has run the test command; the script runs the item checks on the tip, in
         its own clean checkout, outside the builder's sandbox and outside the merge lock. If they pass, it writes
         the Ready for Review record and sets the status in one commit, and the run ends READY_FOR_REVIEW. If not, it
         returns why, for the builder."""
         reused: list = []
-        reasons, checked = ready_problems(worktree, prof, stem, current, done, authorised_hash, start_tip, reused,
-                                          pinned=state.get("pinned_tip"))
+        reasons, checked = ready_problems(worktree, prof, stem, current, done, authorised_hash, start_tip, reused)
         state["reused_checks"] = reused
         state["last_checked"] = checked
         if reasons:
@@ -8476,38 +8465,6 @@ def cmd_run(a: argparse.Namespace) -> None:
         finish(state_path, state, "READY_FOR_REVIEW", review=review, commit=head, checked=checked,
                **({"reused_checks": reused} if reused else {}), next=then)
 
-    def judged_checks(current: dict, done: dict) -> list[str]:
-        """`check_and_record`, asked again while the only checks that fail are waiting on a main-branch check's
-        answer (exit 75). Nothing has failed then, so the builder gets no turn and the run counts no strike; the wait
-        ends when the answer comes, or with NO_PROGRESS_FOR_HOURS."""
-        while True:
-            state.pop("waiting_on_main_check", None)  # check_and_record ends the run itself when the checks pass
-            reasons = check_and_record(current, done)
-            if not pending_only(reasons):
-                state.pop("pinned_tip", None)
-                return reasons
-            # ask again on the same tip, so a busy main branch doesn't make every poll a new commit to cover and a
-            # new run of the test command
-            state["pinned_tip"] = state.get("last_checked")
-            state["waiting_on_main_check"] = reasons
-            state_path.write_text(json.dumps(state, indent=2))
-            if time.time() - state["progress_at"] > a.no_progress_hours * 3600:
-                # The builder can't make a main-branch check judge, and a new run would only wait again.
-                finish(state_path, state, "NO_PROGRESS_FOR_HOURS", hours=a.no_progress_hours, next=next_cmd(
-                    loop_cmd("main-check", "--worktree", str(worktree)), "lead",
-                    f"{stem} {mid}'s merged work has waited {a.no_progress_hours:g} hours on a main-branch check "
-                    f"({'; '.join(reasons)[:600]}). If the check fails because of another module's commit, this "
-                    "milestone waits for that module's fix, and nothing here needs doing until it lands. Otherwise "
-                    "the check hasn't judged the work: this lists each check with its latest run and what is "
-                    "running; read the check's runner.log for why, start it with `main-check <name> --start` if "
-                    "nothing runs. Once the fix has landed or the check has judged, run the module with "
-                    "--checks-only", alternative=run_again(a, stem, worktree) + " --checks-only"))
-            loop_note(step=WAITING_FOR_CHECK)
-            for _ in range(max(1, int(PENDING_CHECK_POLL_S / RUN_POLL_S))):
-                if _STOP:
-                    finish(state_path, state, "PAUSED")
-                time.sleep(min(RUN_POLL_S, PENDING_CHECK_POLL_S))
-
     def reopen_unchecked(checked: str) -> None:
         """Sets the milestone back to in_progress on the main branch when the tip says Ready for Review or Done
         without the script's record, and the script's checks have just failed it. A builder set that status before
@@ -8541,8 +8498,7 @@ def cmd_run(a: argparse.Namespace) -> None:
     script_note, reasons = "", []
     if passing(milestone) == len(milestone["items"]) and is_ancestor(worktree, "HEAD", start_tip) and \
             not git(worktree, "status", "--porcelain").stdout.strip():
-        reasons = check_and_record(milestone, done) if getattr(a, "checks_only", False) else \
-            judged_checks(milestone, done)
+        reasons = check_and_record(milestone, done)
         state["not_ready_reasons"] = "; ".join(reasons)
         ran = any("` exited " in r or "` timed out" in r for r in reasons)
         script_note = not_ready_message(state["not_ready_reasons"],
@@ -8740,7 +8696,7 @@ def cmd_run(a: argparse.Namespace) -> None:
 
         word = report_word(message)
         if now_passing == len(current["items"]):
-            reasons = judged_checks(current, done)
+            reasons = check_and_record(current, done)
         else:
             reasons = ["items not yet pass: " + ", ".join(i["id"] for i in current["items"]
                                                            if i.get("builder_result") != "pass")]
@@ -10048,20 +10004,21 @@ def cmd_plan(a: argparse.Namespace) -> None:
     # in build order, as the module table lists them, so the module the others build in is reviewed first
     order = [r["module"].upper() for r in module_table(show(worktree, ref, project_file(prof, "architecture"))) or []]
     owed.sort(key=lambda m: order.index(m.upper()) if m.upper() in order else len(order))
-    if prof.get("builders") is None:
-        # a first plan: the user sees it before anyone reviews or builds it, and says how many may build at once
-        # the user sees it before anyone reviews or builds it, and says how many may build at once
+    if not prof.get("builders_set"):
+        # a first plan: the user sees it before anyone reviews or builds it, and says how the agents should work
         start = loop_cmd("run", "--module", owed[0], "--worktree", str(worktree)) if owed else \
             loop_cmd("ready", "--worktree", str(worktree))
         then = next_cmd(
             loop_cmd("settings", "--worktree", str(worktree), "--set", "Builders", "<their answer, in their words>",
                      "--said", "<what the user said>"), "lead",
             "this is the first plan, and the settings have no `Builders:` line yet. Show the user the plan as the "
-            "stage before the first build says, and once they agree it, save the number of builders they give; "
+            "stage before the first build says, and once they agree it, save how they want the agents to work, "
+            "with the most builders at once or no limit; "
             + (f"`then` builds {owed[0]}, the first module in build order, and `run` reviews its design first"
                if owed else "`then` shows what's ready to build"),
-            decides="human", ask="Before the first build: is the plan right, and how many agents should build at "
-                                 "once, with which programs?", then=start)
+            decides="human", ask="Before the first build: is the plan right, which programs should the agents "
+                                 "build with, and is there a most you want running at once, or no limit?",
+            then=start)
     elif owed:
         reviewer = design_review_host(prof, proj[owed[0].upper()]["record"], host)
         then = next_cmd(loop_cmd("review", "--module", owed[0], "--milestone", "design", "--worktree", str(worktree),
@@ -10092,7 +10049,7 @@ def cmd_plan(a: argparse.Namespace) -> None:
                 if m.get("status") == "blocked" and blocked_of(m)["reason"] == "too_many_failed_reviews":
                     still.append({"milestone": f"{stem} {m['id']}", "reopen": human_cmd("reopen", stem, m["id"], str(worktree))})
     emit("PLANNED", **info, **out, merged=True, commit=detail, modules=modules, design_review_owed=owed,
-         files=changed, **({"removed": removed} if removed else {}), **({"first_plan": True} if prof.get("builders") is None else {}),
+         files=changed, **({"removed": removed} if removed else {}), **({"first_plan": True} if not prof.get("builders_set") else {}),
          **({"still_blocked": still,
              "still_blocked_why": "this change didn't touch these milestones' items, so they stay Blocked with too "
                                   "many failed reviews. If the user's words this change carried out answered them, "
@@ -10290,7 +10247,7 @@ SETTINGS_TEMPLATE = """\
 - **Merge:** local  *(script: required; `push` rebases onto Remote/Branch and pushes without force; `local` fast-forwards the local Branch only)*
 - **Branch:** main  *(script: the main branch)*
 - **Remote:** origin  *(script)*
-- **Builders:** <how many builders, on which hosts, as the user said: "one Claude builder", say>  *(script: the lead writes it before the first build; `run` starts no builder without a count, adds the counts up, and starts none past them unless `--more-builders` carries the user's words)*
+- **Builders:** <which programs build, and the most builders at once if the user wants one, as they said: "Codex, no limit" or "two Claude builders", say>  *(script: the lead writes it, with the user's words, before the first build, and `run` starts no builder until it does; a number is the most at once, the counts adding up, and no number means no most. Within it the lead sets the working number with `builders`)*
 - **Lead check-in:** 3h  *(script: optional; how long the supervisor waits for a warning sign before it wakes the lead anyway, such as 3h or 90m; left out, 3 hours)*
 - **Lead wake:** auto  *(script: optional; how the supervisor wakes the lead: `auto` the way the lead's host allows (a message to a Claude Code session, a queued message on a Codex app thread), else through the lead's own `watch`; `watch` only through `watch`; or a command with {message} (and {session} for the lead's session id) for a host the script doesn't know)*
 - **Default host:** <host>  *(script: optional; codex, claude or a `Host` line's name, for when the lead names none; left out, the host the script runs inside, else the only one installed, else codex, so a project that uses only Claude Code names `claude`)*
@@ -10322,7 +10279,7 @@ needs, where secrets come from, and how two worktrees avoid sharing a port or a 
 - **Shared resources:** <resources several runs may use at once, each with how many, such as "gpu: 3"; or none>  *(script: `lock gpu` shares it up to that number, and `lock gpu.alone` waits to have it alone, for a run that needs the whole device)*
 - **Test command lock:** none  *(script: a lock name, such as `gpu` or `gpu.alone`, that the script takes whenever it runs the test command, for a test command that uses a shared or exclusive resource)*
 - **Lock hold limit:** 30 minutes  *(script: the default; a command under `lock`, or a locked item check, that holds a lock longer is stopped; the test command isn't; or none)*
-- **Main-branch check <name>:** `<command>`; every <30m>; gap <leave out>; lock <resource names, or leave out>; timeout <2h>  *(script: optional, one line per check too slow to run before every merge; it runs on the main branch's tip after merges, and an item proves itself with `python3 "$ORCHESTRATE_SCRIPT" main-check <name>`, with no `lock` of its own, because an item lock held while it waits would block the run it waits for. `every` spaces out the runs nobody waits for; `gap` spaces out every run, even one an item waits for, for a check that takes a machine builders share)*
+- **Main-branch check <name>:** `<command>`; every <30m>; gap <leave out>; lock <resource names, or leave out>; timeout <2h>  *(script: optional, one line per check too slow to run before every merge; it runs on the main branch's tip after merges, one run covering everything merged since the last, and gates no milestone: a failure that holds is traced to its commit and fixed forward. `every` spaces out the runs; `gap` spaces out every run, even one started by hand, for a check that takes a machine builders share)*
 - **Human decides:** <for example: changing the goal; spending; publishing or deploying; anything that can't be undone>  *(script: sent again on resumed turns)*
 - **Licences and paths not to touch:** <for example: no GPL code, because the project ships under MIT; ../other-repo belongs to another team, so ask before changing it>  *(script: sent again on resumed turns)*
 
@@ -10458,6 +10415,35 @@ def settings_set(a: argparse.Namespace, worktree: Path) -> None:
 
 class SettingRefused(Exception):
     pass
+
+
+def cmd_builders(a: argparse.Namespace) -> None:
+    """The working number of builders is the lead's to set, since the lead sees what the machine and the work can
+    take; the user's most on the Builders line caps it. In Thrum the lead saw ten builders overload the Mac and asked
+    the user for six for six hours, unanswered, because only the user could change the settings line."""
+    worktree = Path(a.worktree).resolve()
+    prof = profile(worktree)
+    path = loop_dir(worktree) / BUILDERS_FILE
+    changed = None
+    if a.clear:
+        path.unlink(missing_ok=True)
+        changed = "cleared"
+    elif a.set is not None:
+        if a.set < 1:
+            emit("REFUSED", problems=["--set takes a number of builders, 1 or more; --clear sets none"])
+        if not (a.why or "").strip():
+            emit("REFUSED", problems=["--why says what the number is for, such as the machine's load or a timing "
+                                      "that needs a quiet machine, so the user and a later lead can read it"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_atomically(path, {"count": a.set, "why": a.why.strip(), "at": now()})
+        changed = "set"
+    loops, _ = live_loops(repository_of(git_common_dir(worktree)), clean=False)
+    most, working = prof.get("builders"), working_builders(worktree)
+    emit("BUILDERS", most=most, working=working or None, limit=builder_limit(worktree, prof),
+         running=len(builder_runs(loops)), waiting_for_a_slot=len(slot_waiters(loops)),
+         **({"changed": changed} if changed else {}),
+         **({"capped": f"the working number {working['count']} is past the user's most, {most}, so {most} holds"}
+            if working and most and working["count"] > most else {}))
 
 
 def cmd_quota(a: argparse.Namespace) -> None:
@@ -12327,7 +12313,7 @@ def flow_numbers(worktree: Path, hours: float, *, prof: dict | None = None,
     out = {"hours": hours, "tip": ref, "ready_for_review": ready, "done": done,
            "commits": int(commits) if commits.isdigit() else None,
            "code_commits": int(code) if code.isdigit() else None,
-           "build_sessions": builders, "turns": turns, "builders_allowed": prof.get("builders"), "locks": locks,
+           "build_sessions": builders, "turns": turns, "builders_allowed": builder_limit(worktree, prof), "locks": locks,
            "background_jobs": jobs, "merges": merge_times(worktree, start),
            "checks": check_times(worktree, start, prof.get("test_command")),
            "reviews": review_rates(proj, since)}
@@ -14735,11 +14721,7 @@ MAIN_CHECKS_DIR = "main-checks"
 MAIN_CHECK_LINE = re.compile(r"^\s*[-*]\s*\*\*Main-branch check ([^*:]+?):\*\*[ \t]*(.*)$", re.IGNORECASE | re.MULTILINE)
 DURATION = re.compile(r"([\d.]+)\s*(s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)", re.IGNORECASE)
 MAIN_CHECK_TIMEOUT_S = 2 * 3600.0  # one attempt's limit when the line gives no `timeout`
-MAIN_CHECK_WAIT_S = 3300.0  # under the hour the script gives each item's check, so a wait ends in PENDING, not a kill
-MAIN_CHECK_POLL_S = 5.0  # how often a waiting request reads the check's state
-MAIN_CHECK_GRACE_S = 30.0  # how long a request gives the runner it started to take the check's lock
-MAIN_CHECK_PENDING_EXIT = 75  # EX_TEMPFAIL: nothing has failed, the answer isn't in yet
-MAIN_CHECK_LISTED = 200  # the most recent runs read when answering whether a commit is covered
+MAIN_CHECK_POLL_S = 5.0  # how often a runner waiting out `every` looks again
 # A check's command exits 75 (EX_TEMPFAIL) when it couldn't judge the commit at all: a capture that dropped frames on a
 # busy machine, say, which says nothing about the code. Counted as a failure, such a run would fail the main branch and
 # start a bisect that names whichever commit happened to run under load. So the script tries it again, up to three
@@ -14747,10 +14729,6 @@ MAIN_CHECK_LISTED = 200  # the most recent runs read when answering whether a co
 # again once `every` has passed.
 MAIN_CHECK_UNJUDGED_EXIT = 75
 MAIN_CHECK_TRIES = 3
-# `every` spaces out the runs nobody is waiting for. An item's check that asks about a commit no run covers yet starts
-# a run now, or wakes the runner waiting out `every`, by leaving this file in the check's folder: otherwise a milestone
-# sat idle for hours after merging, with no builder working, until the next scheduled run.
-MAIN_CHECK_REQUEST = "requested"
 
 # The check's own subprocesses find the script here, so an item can write `python3 "$ORCHESTRATE_SCRIPT" main-check
 # <name>` without naming the folder this copy is installed in, which changes with each version.
@@ -15042,20 +15020,18 @@ def main_check_runner(worktree: Path, prof: dict, name: str, spec: dict, force: 
         tips = [r for r in main_check_runs(folder, unjudged=True) if r.get("kind") == "tip"]
         last = max((r.get("started_s") or 0 for r in tips), default=0.0)
         start_at = 0.0 if force or not tips else last + spec["every_s"]
-        while time.time() < start_at and not (folder / MAIN_CHECK_REQUEST).exists():
+        while time.time() < start_at:
             write_atomic(folder / "current.json", {"state": "scheduled", "pid": os.getpid(), "start_at_s": start_at,
                                                    "start_at": iso(start_at)})
             time.sleep(min(MAIN_CHECK_POLL_S, max(0.0, start_at - time.time())))
-        requested = (folder / MAIN_CHECK_REQUEST).exists()
-        (folder / MAIN_CHECK_REQUEST).unlink(missing_ok=True)
         gap_at = last + (spec.get("gap_s") or 0) if tips else 0.0
-        while time.time() < gap_at:  # even a run someone waits for keeps the settings' gap after the last
+        while time.time() < gap_at:  # a run started by hand keeps the settings' gap after the last too
             write_atomic(folder / "current.json", {"state": "scheduled", "pid": os.getpid(), "start_at_s": gap_at,
                                                    "start_at": iso(gap_at)})
             time.sleep(min(MAIN_CHECK_POLL_S, max(0.0, gap_at - time.time())))
         quiet_wait(worktree, prof, what=f"main-branch check {name}")
         ref = tip(worktree, prof)
-        if not (force or requested) and any(r["commit"] == ref and r["result"] != "unjudged" for r in tips):
+        if not force and any(r["commit"] == ref and r["result"] != "unjudged" for r in tips):
             return {"result": "NOTHING", "check": name, "commit": ref, "why": "the tip already has a run"}
         tree = main_check_tree(worktree, name, ref)
         started = time.time()
@@ -15109,93 +15085,6 @@ def main_check_view(row: dict | None) -> dict | None:
     out["attempts"] = len(row.get("attempts") or [])
     out["minutes"] = round(sum(a.get("seconds") or 0 for a in row.get("attempts") or []) / 60, 1)
     return out
-
-
-def main_check_wait(worktree: Path, prof: dict, name: str, commit: str, wait_s: float,
-                    module: str | None = None) -> dict:
-    """Whether `commit` is covered: its result, with `code`, the exit status. COVERED when a pass exists on a
-    main-branch commit that contains it. FAILING_ON_MAIN when a failure that held does, no pass does, and either it
-    failed on this very commit or its bisect has finished, so the break is in the commit or before it. Otherwise it waits for the run in flight, or starts one on the tip, until a
-    run answers or `wait_s` has passed (PENDING). NOT_ON_MAIN for a commit the main branch doesn't contain yet.
-    With `module`, a failure the bisect traced to another module's commit, or to a commit no module is known to own,
-    exits 75 like PENDING: the work it answers for didn't break it, so a run waits for the fix without giving its
-    builder a turn or a strike."""
-    folder = main_check_dir(worktree, name)
-    try:
-        ref = tip(worktree, prof)
-    except TipError as e:
-        raise SystemExit(f"error: {e}")
-    fields = {"check": name, "commit": commit}
-    if commit != ref and not is_ancestor(worktree, commit, ref):
-        return {"result": "NOT_ON_MAIN", "code": 1, **fields, "why": (
-            f"{commit[:12]} isn't on the main branch yet. The main-branch check {name} runs on the main branch's tip, "
-            "so it covers this work after the merge, when the script runs the item's check on the merged tip. A "
-            "builder needn't run it before merging")}
-    deadline, runner, started_at, spawns, polls = time.time() + wait_s, None, 0.0, 0, 0
-    while True:
-        rows = main_check_runs(folder, MAIN_CHECK_LISTED)
-        verdict, row = main_check_cover(worktree, rows, commit)
-        flight = main_check_flight(folder)
-        if verdict == "pass":
-            return {"result": "COVERED", "code": 0, **fields, "by": main_check_view(row), "why": (
-                f"the main-branch check {name} passed on {row['commit'][:12]}, which contains {commit[:12]}" +
-                (", on its retry" if row.get("flaky") else ""))}
-        # While a bisect runs, it alone can say whether the break came after an earlier commit; for the commit that
-        # failed itself, the answer is already in.
-        bisecting = row and row.get("bisect") == "running" and flight
-        if verdict == "fail" and (row["commit"] == commit or not bisecting):
-            ref = tip(worktree, prof, fetch=False)
-            if not flight and ref != row["commit"]:
-                main_check_spawn(worktree, name, force=True)  # the main branch has moved, perhaps with the fix: prove it
-            culprit = row.get("culprit") or {}
-            where = (f" The first failing commit is {culprit['commit'][:12]} ({culprit['subject']})" +
-                     (f", in module {', '.join(culprit['modules'])}" if culprit.get("modules") else "") + "."
-                     if culprit else " A bisect is finding the first failing commit; `main-check` lists it when it's "
-                     "done." if bisecting else
-                     f" {row.get('bisect_why') or 'The bisect stopped before it named a commit'}.") + older_judge(row)
-            # A culprit whose module isn't known (a commit made by hand, or by a merge on another machine) isn't
-            # this work's either, so it doesn't cost this builder a turn or a strike; the lead finds the owner.
-            elsewhere = module and culprit and module not in (culprit.get("modules") or []) and \
-                culprit.get("commit") != commit
-            if elsewhere:
-                whose = (f"in {', '.join(culprit['modules'])}, not {module}. That module fixes it"
-                         if culprit.get("modules") else
-                         f"which the script can't tie to a module, and isn't {module}'s. The lead finds who fixes it")
-                return {"result": "FAILING_ON_MAIN", "code": MAIN_CHECK_PENDING_EXIT, **fields,
-                        "by": main_check_view(row), "why": (
-                    f"the main-branch check {name} fails on {row['commit'][:12]}, and the first failing commit is "
-                    f"{culprit['commit'][:12]} ({culprit['subject']}), {whose}; this work waits for a pass on a "
-                    "commit that contains it, without a builder turn"), "next": main_check_fix_next(
-                        worktree, name, culprit, "the main branch fails this check because of " +
-                        ("another module's commit" if culprit.get("modules") else
-                         f"commit {culprit['commit'][:12]}, which no module's merge made"))}
-            return {"result": "FAILING_ON_MAIN", "code": 1, **fields, "by": main_check_view(row), "why": (
-                f"the main-branch check {name} fails on {row['commit'][:12]}, which contains {commit[:12]}, and no "
-                f"later pass covers it. It was tried twice, so it isn't a one-off.{where} The fix goes forward on the "
-                "main branch; once a run passes on a commit containing this one, this check passes. Its whole "
-                f"output is in {row['file']} and the files it names"), "next": main_check_fix_next(
-                    worktree, name, culprit, "the main branch fails this check")}
-        if flight and flight.get("state") == "scheduled":
-            (folder / MAIN_CHECK_REQUEST).touch()  # the runner is waiting out `every`: someone is waiting, so run now
-        if flight is None:
-            if runner is None or runner.poll() is not None or time.time() - started_at > MAIN_CHECK_GRACE_S:
-                if spawns >= 5:
-                    raise SystemExit(f"error: started a runner for {name} five times and none took its lock; read "
-                                     f"{folder / 'runner.log'}")
-                runner, started_at, spawns = main_check_spawn(worktree, name, force=True), time.time(), spawns + 1
-        if time.time() >= deadline:
-            tips = [r for r in rows if r.get("kind") == "tip"]
-            took = tips[-1]["finished_s"] - tips[-1]["started_s"] if tips else None
-            return {"result": "PENDING", "code": MAIN_CHECK_PENDING_EXIT, **fields,
-                    "in_flight": flight or {"state": "starting"},
-                    **({"last_run_minutes": round(took / 60, 1)} if took else {}), "why": (
-                f"no run of the main-branch check {name} covers {commit[:12]} yet, and one is under way. It carries "
-                f"on after this wait of {wait_s:.0f} s ends; run this check again later and it joins that run or "
-                "finds its result"), "next": next_cmd(
-                    loop_cmd("main-check", name, "--worktree", str(worktree), "--commit", commit), "lead",
-                    "the run carries on in the background; this waits for its answer again")}
-        time.sleep(min(MAIN_CHECK_POLL_S, 0.2 * 2 ** min(polls, 8), max(0.0, deadline - time.time())))
-        polls += 1
 
 
 def main_check_list(worktree: Path, prof: dict) -> list[dict]:
@@ -15262,7 +15151,7 @@ def own_status(result: str, code: int, **fields) -> None:
 
 
 def main_check_out(result: str, code: int, **fields) -> None:
-    """The result line of `main-check`, with the exit status an item's check needs: 0 only when it passes."""
+    """Prints the result line of `main-check`, with any reason on stderr, and exits with `code`."""
     if fields.get("why"):
         print(fields["why"], file=sys.stderr)
     own_status(result, code, **fields)
@@ -15306,14 +15195,18 @@ def cmd_main_check(a: argparse.Namespace) -> None:
                        started=started, running=running, why=(
             f"started {', '.join(started)} on the main branch's tip" if started else
             "a run is already in flight" if running else "no main-branch check is due"))
-    if not a.name:
-        main_check_out("MAIN_CHECKS", 0, checks=main_check_list(worktree, prof))
-    asked = a.commit or os.environ.get(CHECK_COMMIT_ENV) or "HEAD"
-    commit = git(worktree, "rev-parse", "--verify", "--quiet", f"{asked}^{{commit}}").stdout.strip()
-    if not commit:
-        raise SystemExit(f"error: {asked!r} isn't a commit in {worktree}")
-    main_check_out(**main_check_wait(worktree, prof, a.name, commit, a.wait,
-                                     module=None if a.commit else os.environ.get(CHECK_MODULE_ENV)))
+    if item := os.environ.get(ITEM_CHECK_ENV):
+        # Before 2.14.0 an item's check could wait here for a main-branch check to cover the merged work, and in
+        # Thrum most milestones ended waiting an hour or more on one serial GPU check. A main-branch check now guards
+        # the main branch after the merge and gates no milestone.
+        why = (
+            f"{item}'s check asks main-check, but a main-branch check no longer decides whether a milestone is done: "
+            "it runs on the main branch after merges, and a failure there is traced to its commit and fixed forward. "
+            "Only a planner can change the item: it should check what the milestone itself can show before the "
+            "merge, or be dropped, since the main-branch check still guards the main branch")
+        main_check_out("REFUSED", 1, problems=[why], why=why)
+    listed = main_check_list(worktree, prof)
+    main_check_out("MAIN_CHECKS", 0, checks=[c for c in listed if c["name"] == a.name] if a.name else listed)
 
 
 # ------------------------------------------------------------------------------------ routine steps, and watching
@@ -15658,7 +15551,29 @@ def run_progress(rec: dict) -> dict | None:
         except (OSError, ValueError):
             continue
         if isinstance(state, dict) and state.get("progress_at"):
+            # The run updates `progress_at` only between builder turns, and a Codex turn can last hours, so a commit
+            # the builder made inside its turn counts here too. Without it, every Thrum builder in a long turn was
+            # reported as making no progress.
+            made = last_commit_at(Path(tree), float(rec.get("started_at") or 0))
+            if made and made > float(state["progress_at"]):
+                state = {**state, "progress_at": made}
             return state
+    return None
+
+
+def last_commit_at(tree: Path, since: float) -> float | None:
+    """When the newest commit made in this checkout since `since` was made, from its reflog, leaving out the script's
+    own `orchestrate:` commits. None when there is none."""
+    lines = git(tree, "reflog", "-n", "200", "--date=unix", "--format=%gd%x09%gs", "HEAD").stdout.splitlines()
+    for line in lines:
+        ref, _, subject = line.partition("\t")
+        m = re.search(r"@\{(\d+)\}", ref)
+        if not m or float(m.group(1)) < since:
+            break
+        verb, _, message = subject.partition(": ")
+        if verb.split(" (")[0] in ("commit", "rebase", "cherry-pick", "revert") and \
+                not message.startswith("orchestrate:") and verb != "rebase (finish)":
+            return float(m.group(1))
     return None
 
 
@@ -15693,7 +15608,7 @@ def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
     steps = {key: next_step(key, proj, held, mine) for key in sorted(proj)}
     running = {key for key in steps if run_holder(folder, key) is not None}
     waiting = [s for key, s in steps.items() if s["status"] == "can_start" and key not in running]
-    limit = prof.get("builders")
+    limit = builder_limit(worktree, prof)
     # builders waiting to come back hold their slots too, so the lead isn't told to fill one they are owed
     free = (limit - len(builder_runs(loops)) - len(slot_waiters(loops))) if limit else len(waiting)
     broken = main_broken(worktree, prof)
@@ -15753,11 +15668,10 @@ def watch_signs(look: dict) -> dict:
     first = look["since"].get("ready_waiting")
     if first and stamp - first >= READY_IDLE_WARN_S:
         names = ", ".join(f"{s['module']} {s.get('milestone') or ''}".strip() for s in look["waiting"])
-        slots = (f"fewer than the {look['limit']} builders the settings' Builders line allows are running"
-                 if look["limit"] else "the settings have no Builders line to limit the builders")
+        slots = (f"fewer than the {look['limit']} builders allowed are running" if look["limit"] else
+                 "no number limits the builders")
         signs["ready_waiting"] = {"seen": str(first), "text": f"ready work has waited {ago(stamp - first)}, and "
-                                                              f"{slots}: {names}. If you agreed a lower number with "
-                                                              "the user in chat, that number stands"}
+                                                              f"{slots}: {names}"}
     for r in look["loops"]:
         if r.get("role") == "plan" and r.get("waiting_for") and stamp - (r.get("started_at") or stamp) > \
                 PLANNER_QUEUE_WARN_S:
@@ -15987,6 +15901,8 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float, hours:
             actions[broken["check"]] = {k: then[k] for k in ("command", "decides", "ask") if k in then}
     out = {"since": since, "moved": {k: v for k, v in moved.items() if v} or "nothing reached Ready for Review, "
                                                                             "Done or a review",
+           **({"results": got} if (got := results_since(worktree, since_s)) else {}),
+           **({"warning_signs": [x["text"] for x in signs.values()]} if (signs := watch_signs(look)) else {}),
            "not_moving": not_moving, "back_and_forth": back_and_forth,
            **({"actions": actions} if actions else {}),
            **({"plan_ahead": [{"module": x["module"], "next": x["next"].get("command")}
@@ -15994,6 +15910,7 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float, hours:
            "runs": [" ".join(x for x in (r.get("role"), r.get("module"), r.get("milestone"), r.get("step")) if x)
                     for r in look["loops"] if not r.get("steps_parent")],
            "builders": {"running": len(builder_runs(look["loops"])), "limit": look["limit"], "free": look["free"],
+                        "most": prof.get("builders"), "working": working_builders(worktree).get("count"),
                         "ready_waiting": [f"{s['module']} {s.get('milestone') or ''}".strip() for s in look["waiting"]],
                         **({"no_worktree": (
                             f"the supervisor can't start {', '.join(sorted(no_worktree))}: no worktree is on its "
@@ -16012,7 +15929,12 @@ def watch_summary(worktree: Path, prof: dict, look: dict, since_s: float, hours:
                     "low": look["disk"] is not None and look["disk"] < LOW_DISK_BYTES},
            "main_branch": main_branch or "no main-branch check is failing",
            "machine": machine_summary(worktree, prof, look),
-           "details": ["ready", "runs", "report", "locks", "jobs", "main-check", "quota"]}
+           "details": {"ready": "what can start, and why the rest can't", "runs": "each live session: host, model, "
+                       "turns, last activity, tokens", "report": "per module, where each milestone stands",
+                       "builders": "the most, the working number and the limit", "locks": "who holds and waits for "
+                       "each lock", "jobs": "builders' background jobs", "main-check": "each main-branch check's "
+                       "latest run and pass", "quota": "the Codex weekly limit and its forecast",
+                       "history": "delivery records over days, before a process change"}}
     try:
         f = flow_numbers(worktree, hours, prof=prof, look=look)
         r = f["reviews"]
@@ -16058,10 +15980,14 @@ def results_since(worktree: Path, stamp: float) -> list[dict]:
         except (OSError, ValueError):
             continue
         if isinstance(line, dict) and line.get("result") != "RUNNING":
-            out.append({"result_file": str(path), "result": line.get("result"),
-                        **{k: line[k] for k in ("module", "milestone", "stopped_because") if line.get(k)},
-                        **({"next": (line.get("next") or {}).get("command")} if isinstance(line.get("next"), dict)
-                           else {})})
+            one = {"result": line.get("result"),
+                   **{k: line[k] for k in ("module", "milestone", "stopped_because") if line.get(k)},
+                   **({"next": (line.get("next") or {}).get("command")} if isinstance(line.get("next"), dict)
+                      else {})}
+            # a run writes its result under several names (the module, its milestone, the run), so one result
+            # can sit in three files
+            if one not in [{k: v for k, v in o.items() if k != "result_file"} for o in out]:
+                out.append({"result_file": str(path), **one})
     return out[:10]
 
 
@@ -16126,13 +16052,9 @@ def watch_wake(worktree: Path, prof: dict, runs: bool = False, tick=None) -> tup
     write_atomically(path, {"woke_at": stamp, "summary_since": summary_since,
                             "signs": {k: s["seen"] for k, s in signs.items()}, "since": since})
     word = ending[0] if ending else "WARNING_SIGNS" if new else "RUN_ENDED" if ended else "CHECK_IN"
-    return word, dict(
-        woke_for=woke,
-        # each sign's whole text once, when it is new; the ones the lead was told before by name only, so a wake
-        # doesn't repeat paragraphs the lead has read
-        **({"earlier_signs": [k for k in signs if k not in new]} if any(k not in new for k in signs) else {}),
-        **({"results": results_since(worktree, started)} if ended else {}),
-        **watch_summary(worktree, prof, look, summary_since))
+    # A wake says only why it came, and `flow` gives the overview. When every wake carried the whole overview, the
+    # Thrum lead was compacted seven times in six hours, mostly by wakes repeating what it had read.
+    return word, dict(woke_for=woke, look=loop_cmd("flow", "--worktree", main_checkout(worktree)))
 
 
 # ------------------------------------------------------------------------------------------------------ supervisor
@@ -16158,10 +16080,10 @@ SUPERVISOR_HANDOVER_S = 20.0  # how long a command waits for an older supervisor
 NO_WORKTREE: set = set()  # modules the supervisor couldn't start for want of a worktree, which `watch` names
 # the supervisor starts no builder while the 1-minute load average is above this per core (the tests raise it, since
 # they load the machine themselves)
-WAKE_TEXT_LIMIT = 60000  # characters of the result a pushed wake carries
+WAKE_TEXT_LIMIT = 4000  # characters of a wake's other fields a pushed wake carries; the overview is `flow`
 # The commands the lead runs. A builder's commands (merge, check, lock, background, jobs, wait, main-check) start
 # the supervisor too, but never say how to reach the lead.
-LEAD_COMMANDS = {"run", "review", "plan", "watch", "next", "ready", "status", "settings", "profile", "human", "owner",
+LEAD_COMMANDS = {"run", "review", "plan", "watch", "builders", "next", "ready", "status", "settings", "profile", "human", "owner",
                  "adopt", "pause", "unblock", "report", "flow", "migrate", "history", "dashboard", "cost", "quota",
                  "runs", "loops", "supervise"}
 LEAD_RESTARTS = {"run", "plan", "watch", "supervise"}  # the lead carrying on, which undoes the user's stop
@@ -16450,7 +16372,7 @@ def routine_start(line: dict | None, stem: str) -> bool:
     words = step_words(then)
     if not words or words[0] not in ("run", "review") or (argv_flag(words, "--module") or "").upper() != stem.upper():
         return False
-    return not any(w in ("--message", "--fresh", "--human-rule", "--host", "--more-builders", "--clear-human-rules")
+    return not any(w in ("--message", "--fresh", "--human-rule", "--host", "--clear-human-rules")
                    for w in words)
 
 
@@ -16486,10 +16408,10 @@ def start_run(worktree: Path, prof: dict, stem: str) -> bool:
 
 def fill_builders(worktree: Path, prof: dict, look: dict, started: dict) -> list[str]:
     """Starts a run for each module whose next step is routine, up to the free builder slots, and returns their
-    names. With no Builders count it starts none, because the lead hasn't asked the user yet. While the test
+    names. With no Builders line it starts none, because the user hasn't agreed the first build yet. While the test
     command fails on the main branch, only the module that broke it can merge."""
     free = look.get("free", 0)
-    if not look.get("limit") or free <= 0 or any(b["check"] == "test command" for b in look["broken"]):
+    if not prof.get("builders_set") or free <= 0 or any(b["check"] == "test command" for b in look["broken"]):
         return []
     folder = loop_dir(worktree)
     busy = {(r.get("module") or "").upper() for r in look["loops"]}
@@ -16530,11 +16452,11 @@ def build_end(look: dict) -> tuple[str, list[str]] | None:
 
 def wake_text(worktree: Path, word: str, fields: dict) -> str:
     woke = "; ".join(fields.get("woke_for") or [])
-    whole = json.dumps({"result": word, **fields})
+    rest = {k: v for k, v in fields.items() if k != "woke_for"}
     return (f"From orchestrate's supervisor for {repository_name(worktree)}, not from the user: {word}. {woke}\n"
-            "Read the overview before acting. The script pushed this to you, so you need no `watch` running to "
-            "hear the next one.\n" +
-            (whole if len(whole) <= WAKE_TEXT_LIMIT else "Run `flow` to read the overview in full."))
+            f"Run `{loop_cmd('flow', '--worktree', main_checkout(worktree))}` to see how delivery stands before "
+            "acting. The script pushed this to you, so you need no `watch` running to hear the next one." +
+            (f"\n{json.dumps(rest)[:WAKE_TEXT_LIMIT]}" if rest else ""))
 
 
 def deliver_wake(worktree: Path, prof: dict, word: str, fields: dict) -> dict:
@@ -16607,11 +16529,11 @@ def supervise_tick(worktree: Path, prof: dict, look: dict, fresh: bool, started:
         return None
     if look.get("tip") and not look.get("steps") and not look.get("loops"):  # no module planned yet
         return "STOP", {"reason": "unplanned"}
-    try:  # the lead saves the user's Builders count while the supervisor waits, and the build starts on it
+    try:  # the lead saves the user's Builders line while the supervisor waits, and the build starts on it
         latest = profile(worktree)
     except (Exception, SystemExit):
         latest = prof
-    if latest.get("builders") != prof.get("builders"):
+    if (latest.get("builders"), latest.get("builders_set")) != (prof.get("builders"), prof.get("builders_set")):
         prof.update(latest)  # the dict `watch_wake` looks with, so its next look counts the new slots
         return None
     if begun := fill_builders(worktree, prof, look, started):
@@ -16789,9 +16711,7 @@ run   --module CORE --worktree PATH [--host H] [--model M] [--effort E] [--miles
       CHECKS_FAILED the builder said DONE (or its goal completed) three times without the work holding up. Its
                     `next`, as STALLED's and NO_PROGRESS_FOR_HOURS's, starts the builder again with --fresh and the
                     reasons in --message, with a planner's task as `alternative`; when the builder said an item
-                    can't be met, the planner's task comes first. A check that exits {MAIN_CHECK_PENDING_EXIT} (a
-                    main-branch check that hasn't judged the commit yet) isn't a failure: the run asks again, with
-                    no builder turn.
+                    can't be met, the planner's task comes first.
       INVALID       the done-when file is malformed, or something outside the builder's fields changed
       NEEDS_REVIEW  the module's next milestone is Ready for Review and waiting for its review
       WAITING       `reason` on_dependency: the next milestone depends on milestones in other modules that aren't
@@ -17119,6 +17039,16 @@ human feedback --module CORE --milestone M2 [--item M2.3]... --worktree PATH --a
       failed reviews back to in_progress.
       DONE, RELEASED for `release`, or FAILED (exit 1) with the reason in `detail`.
 """,
+    "builders": """\
+builders --worktree PATH [--set N --why TEXT | --clear]
+      BUILDERS: the builders that may run at once. `most` is the user's, from the settings' Builders line (null for
+      no most), and only `settings --set` with their words changes it. `working` is the lead's own number, set here
+      with what it is for, and kept on this machine; `limit` is the smaller of the two, which `run` and the
+      supervisor keep to, or null when neither sets one and the ready work alone decides. Also how many builders are
+      running and how many are waiting for a slot. --set N --why TEXT sets the working number, --clear removes it;
+      the supervisor starts builders up to the new limit on its next look, and a lower one stops nobody, so builders
+      finish what they are on. REFUSED for a number under 1 or no --why.
+""",
     "quota": """\
 quota [--worktree PATH] [--budget 120] [--json]
       A short readout leading with the verdict, saying whose use each figure counts; --json gives everything.
@@ -17187,7 +17117,7 @@ runs [--repo PATH] [--json]
       repository holding that path; --json is for a lead.
 """,
     "main-check": f"""\
-main-check [NAME] [--worktree PATH] [--commit REV] [--wait {MAIN_CHECK_WAIT_S:.0f}] [--start] [--due]
+main-check [NAME] [--worktree PATH] [--start] [--due]
       Main-branch checks: slow checks declared by `Main-branch check <name>:` lines in the project settings, run on
       the main branch's tip after merges, one run covering every commit merged since the last. One run at a time per
       check, for the whole repository; a failed run is tried again once, and a failure that holds is bisected over
@@ -17195,16 +17125,12 @@ main-check [NAME] [--worktree PATH] [--commit REV] [--wait {MAIN_CHECK_WAIT_S:.0
       whose plans it changed. A command exits {MAIN_CHECK_UNJUDGED_EXIT} when it couldn't judge the commit (such as a
       capture that dropped frames): it is tried up to {MAIN_CHECK_TRIES} times, and a run it still can't judge fails
       nothing. A bisect names no culprit (`bisect` no_culprit) if its first failing commit changed only the plans
-      or settings. The same code failed and passed, so the failure is kept as unjudged. With NAME it answers
-      for a commit (default HEAD): COVERED (exit 0) when a pass exists on a main-branch
-      commit that contains it; FAILING_ON_MAIN (exit 1) when a failure that held does and no pass does; NOT_ON_MAIN
-      (exit 1) for a commit the main branch doesn't contain yet. Otherwise it joins the run in flight or starts one
-      now, in a process of its own that outlives the request, and waits up to --wait seconds, then says PENDING
-      (exit {MAIN_CHECK_PENDING_EXIT}) while the run carries on. An item's check proves itself with
-      `python3 "$ORCHESTRATE_SCRIPT" main-check NAME`, which the script sets for every check it runs. --start
-      starts a run on the tip now; --due starts each check whose `every` has passed since its last run, if the
-      main branch has moved (STARTED, ALREADY_RUNNING or NOTHING). With no NAME it lists each check's latest
-      result (MAIN_CHECKS). A runner's log ends each run with RAN.
+      or settings. The same code failed and passed, so the failure is kept as unjudged. A main-branch check gates
+      no milestone: a milestone is done on its own items, and an item's check that asks `main-check` is REFUSED
+      (exit 1), since only a planner can rewrite that item. --start starts a run on the tip now; --due starts each
+      check whose `every` has passed since its last run, if the main branch has moved (STARTED, ALREADY_RUNNING or
+      NOTHING). Otherwise it lists each check, or the one NAME names, with its latest run, its latest pass and any
+      run in flight (MAIN_CHECKS). A runner's log ends each run with RAN.
 """,
     "watch": f"""\
 watch --worktree PATH [--runs]
@@ -17222,15 +17148,12 @@ watch --worktree PATH [--runs]
       {limit_text(NO_PROGRESS_WARN_H * 3600)}, a milestone whose last two reviews failed the same items (whatever
       their findings), ready work with a free builder slot for {limit_text(READY_IDLE_WARN_S)}, a planner queued for
       {limit_text(PLANNER_QUEUE_WARN_S)}, a module with one planned milestone left, a low disk, and a main-branch
-      check failing on the tip. Each sign wakes the lead once, until it changes or goes, and later results name it in
-      `earlier_signs` without its text.
-      Results: WARNING_SIGNS, RUN_ENDED (with `results`, each ended command's result and `next`), CHECK_IN,
-      BUILD_FINISHED (every module is finished), WAITING_FOR_USER (nothing is running and every open milestone is
-      Blocked on the user or waits on one that is) and SUPERVISOR_FAILED (it couldn't read the records three times
-      running; its log is named). Each sums up the build for a lead with no other context: what moved since the last
-      wake, what hasn't, milestones going back and forth between building and review (with their counts since their
-      items last changed, and what those call for), builder slots (a `run` going through its steps holds one,
-      whichever step it is on), planners, disk, the main branch and the flow numbers.
+      check failing on the tip. Each sign wakes the lead once, until it changes or goes.
+      Results: WARNING_SIGNS, RUN_ENDED, CHECK_IN, BUILD_FINISHED (every module is finished), WAITING_FOR_USER
+      (nothing is running and every open milestone is Blocked on the user or waits on one that is) and
+      SUPERVISOR_FAILED (it couldn't read the records three times running; its log is named). A wake is a nudge: it
+      carries `woke_for`, one short line per reason, and `look`, the `flow` command that gives the overview, so the
+      lead reads the state fresh rather than from a copy made when the wake was sent.
 """,
     "supervise": f"""\
 supervise --worktree PATH [--status | --stop | --test-wake]
@@ -17289,8 +17212,8 @@ dashboard --worktree PATH [--out FILE] [--open] [--json] [--no-sweep] [--budget 
 """,
     "flow": """\
 flow --worktree PATH [--since HOURS]
-      The same JSON overview as a wake. Movement covers the latest wake's window and any work since, or the
-      last 24 hours when there has been no wake. The flow figures use the last 24 hours. --since sets both
+      The overview of delivery, as JSON, which a wake points to. Movement and results cover the window since the
+      wake before the latest one, and any work since, or the last 24 hours when there has been no wake. The flow figures use the last 24 hours. --since sets both
       windows in hours. See what moved, what is waiting and how to act, delivery and review rates, and time
       spent on merges, checks, locks and jobs. The machine section shows load, core count, memory pressure,
       and the top CPU users, including how much CPU is in this project's run trees. Code run by the Codex
@@ -17298,7 +17221,12 @@ flow --worktree PATH [--since HOURS]
       Check times compare the latest completed attempt with the median of up to ten earlier passing attempts.
       A check is marked slow from 1.5 times its usual time and at least one second longer. Exit 124 marks a
       timeout. Slow and failed attempts link to the stdout and stderr paths when the run recorded them.
-      The overview points to commands with more detail. --since takes a positive, finite number of hours.
+      It has: what moved; the results of the commands that ended, each with its `next`, one line per result; every
+      warning sign now showing, in full; what isn't moving, each with how long; milestones going back and forth
+      through review; `actions`, the command for each thing waiting; the runs; builders (running, the user's most,
+      the working number, the limit, ready work waiting, builders waiting for a slot); planners; disk; failing
+      main-branch checks; the machine; the flow figures; and the Codex quota where Codex builds. `details` names the
+      command to run for more on each part. --since takes a positive, finite number of hours.
 """,
     "cleanup": f"""\
 cleanup --worktree PATH [--kind KIND]... [--older-than DAYS] [--yes] [--json]
@@ -17420,9 +17348,6 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--checks-only", action="store_true", help="start no agent: run the script's checks on the "
                      "milestone's merged work and set it Ready for Review if they pass (READY_FOR_REVIEW), or say why "
                      "not (CHECKS_FAILED). For a builder in a chat with no lead, after it merges")
-    run.add_argument("--more-builders", metavar="USER_WORDS", help="the user's words, as they gave them, for "
-                     "starting a builder past the count in the project settings' Builders line, where `run` "
-                     "otherwise prints REFUSED")
     run.add_argument("--review-host", help="the host for the owed design review run starts itself (default: the "
                      "settings' Review host, `other` meaning the host the planner turn that wrote the plan isn't on, "
                      "or the builder isn't on when the script doesn't know the planner; else the builder's host)")
@@ -17543,6 +17468,12 @@ def build_parser() -> argparse.ArgumentParser:
     human.add_argument("--asked", help="feedback: the question the lead asked the user")
     human.add_argument("--item", action="append", help="feedback: an item the user's words cover (repeatable)")
     human.set_defaults(func=cmd_human)
+    builders = sub.add_parser("builders", help="show or set how many builders may run at once")
+    builders.add_argument("--worktree", default=".")
+    builders.add_argument("--set", type=int, metavar="N", help="the lead's working number of builders")
+    builders.add_argument("--why", help="what the working number is for, such as the machine's load")
+    builders.add_argument("--clear", action="store_true", help="remove the working number")
+    builders.set_defaults(func=cmd_builders)
     quota = sub.add_parser("quota", help="show how much of the weekly Codex limit is used and forecast")
     quota.add_argument("--worktree", help="also forecast this repository's open milestones")
     quota.add_argument("--budget", type=float, default=120.0, help="seconds to spend reading rollouts")
@@ -17606,15 +17537,10 @@ def build_parser() -> argparse.ArgumentParser:
     flow.add_argument("--since", type=float, help="set the movement and flow windows in hours")
     flow.set_defaults(func=cmd_flow)
     main_check = sub.add_parser("main-check", help="run a slow check on the main branch's tip, once for every commit "
-                                                   "merged since its last run, or say whether a commit is covered")
+                                                   "merged since its last run, or list the checks")
     main_check.add_argument("name", nargs="?", help="the check, as a `Main-branch check <name>:` line declares it "
                                                     "(default: list every check's latest result)")
     main_check.add_argument("--worktree", default=".")
-    main_check.add_argument("--commit", default=None, help="the commit to answer for (default: the builder's merged "
-                            "commit when the script runs an item's check, else HEAD of --worktree)")
-    main_check.add_argument("--wait", type=float, default=MAIN_CHECK_WAIT_S,
-                            help=f"seconds to wait for a run that would cover it (default {MAIN_CHECK_WAIT_S:.0f}, "
-                                 "under the hour the script gives an item's check); then PENDING, exit 75")
     main_check.add_argument("--start", action="store_true", help="start a run on the main branch's tip now, unless "
                             "one is in flight, without waiting for it")
     main_check.add_argument("--due", action="store_true", help="start each check (or the one named) that is due: "

@@ -92,8 +92,9 @@ The example is a small money-tracking tool. It reads a file of transactions and 
 ### Building
 
 11. Before the first build, the lead shows you what the plan will give you and what the planner assumed for you, and
-    asks how many builders may run at once, on which hosts. It saves your answer in the settings' `Builders:` line,
-    and `run` starts no builder until that line has a count.
+    asks which hosts build and whether you want a most on how many builders run at once. It saves your answer in
+    the settings' `Builders:` line, and `run` starts no builder until that line is there. Within your most, or with
+    no most, the lead sets the working number with `builders`, from what the machine and the work can take.
 12. The lead runs `run` once for each module. With the settings' `Worktrees:` line, which the template has, the
     script builds each module in a worktree of its own on a `build/<module>` branch, so two builders never overwrite
     each other's files, and removes it once the module is finished and merged. Each run starts a builder on the
@@ -103,8 +104,9 @@ The example is a small money-tracking tool. It reads a file of transactions and 
     branch, with the milestone still In Progress, and says it has finished.
 14. `run` then tests the work itself, in a clean copy of the main branch and in its own process rather than the
     builder's sandbox. It checks that the builder changed only its own fields and left the items as approved, so a
-    builder can't reword an item to make it easier. Then it runs the test command and every Automated Check. A check
-    that already passed on exactly the same files isn't run again. If one fails, the builder gets the failure and
+    builder can't reword an item to make it easier. Then it runs every Automated Check. It doesn't run the test
+    command again, since the merge just ran it. A check that already passed on exactly the same files isn't run
+    again. If one fails, the builder gets the failure and
     carries on.
 15. If every check passes, `run` sets the milestone to Ready for Review: the builder has finished and the script's
     checks passed, but no reviewer has judged it yet. Only the script sets this status.
@@ -261,9 +263,10 @@ which a plan doesn't charge.
 A project without these settings lines never meets either. A lock lets runs share something the machine has only so
 much of: a simulator one run at a time, or a GPU three runs at once. A command that holds a lock too long is stopped,
 so one stuck run can't keep everyone waiting. A main-branch check is a check too slow to run before every merge. It
-runs on the main branch's tip after merges, one run covering everything merged since the last, and an item that
-depends on it waits for a run that covers its commit. A failure that holds is traced to the first commit that fails,
-and the lead starts a planner on a fix or reverts that commit. `lock --help` and `main-check --help` give the rest.
+runs on the main branch's tip after merges, one run covering everything merged since the last. It guards the main
+branch and gates no milestone, because builders waiting for a slow check to cover their work left most of Thrum's
+milestones idle for an hour or more. A failure that holds is traced to the first commit that fails, and the lead
+starts a planner on a fix or reverts that commit. `lock --help` and `main-check --help` give the rest.
 
 ## Changing the settings
 

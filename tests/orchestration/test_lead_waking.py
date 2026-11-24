@@ -238,10 +238,14 @@ class Watching(Repo):
 
     def setUp(self):
         super().setUp()
-        for name, value in (("WATCH_POLL_S", 0.01), ("WATCH_SIGNS_S", 0.0)):
+        # LOW_DISK_BYTES: a machine short of disk would add a warning sign of its own to every test
+        for name, value in (("WATCH_POLL_S", 0.01), ("WATCH_SIGNS_S", 0.0), ("LOW_DISK_BYTES", 0)):
             patch = mock.patch.object(agent_loop, name, value)
             patch.start()
             self.addCleanup(patch.stop)
+
+    def flow(self, since=1):
+        return json.loads(self.printed(agent_loop.cmd_flow, worktree=str(self.wt), since=since))
 
     def check_in(self, every="1s"):
         settings = self.wt / "ORCHESTRATE.md"
@@ -251,17 +255,20 @@ class Watching(Repo):
     def watch(self, runs=False):
         return self.call(agent_loop.cmd_watch, worktree=str(self.wt), runs=runs)
 
-    def test_the_check_in_wakes_the_lead_with_a_summary(self):
+    def test_the_check_in_wakes_the_lead_with_a_nudge_to_read_flow(self):
         self.check_in()
         started = time.time()
         line = self.watch()
         self.assertEqual(line["result"], "CHECK_IN", line)
         self.assertGreaterEqual(time.time() - started, 0.9)
         self.assertIn("check-in", line["woke_for"][0])
-        self.assertIn("WATER M1: ready to build, with no builder", line["not_moving"][0])
-        self.assertEqual(line["builders"]["ready_waiting"], ["WATER M1"])
+        self.assertIn(" flow --worktree ", line["look"])
+        self.assertNotIn("not_moving", line)  # the overview is `flow`'s, not the wake's
         self.assertIn("watch", line["next"]["argv"])
-        self.assertIn("flow", line)
+        flow = self.flow()
+        self.assertIn("WATER M1: ready to build, with no builder", flow["not_moving"][0])
+        self.assertEqual(flow["builders"]["ready_waiting"], ["WATER M1"])
+        self.assertIn("ready", flow["details"])
 
     def test_each_warning_sign_wakes_the_lead_once(self):
         self.check_in()
@@ -271,10 +278,12 @@ class Watching(Repo):
             self.assertEqual(first["result"], "WARNING_SIGNS", first)
             self.assertEqual(len(first["woke_for"]), 2, first)
             self.assertTrue(any("ready work has waited" in w for w in first["woke_for"]))
-            self.assertTrue(first["disk"]["low"])
             second = self.watch()
+            flow = self.flow()
         self.assertEqual(second["result"], "CHECK_IN", second)  # the same signs don't wake it again
-        self.assertEqual(len(second["earlier_signs"]), 2)  # named, without their text again
+        self.assertEqual(len(second["woke_for"]), 1, second)
+        self.assertTrue(flow["disk"]["low"])
+        self.assertEqual(len(flow["warning_signs"]), 2, flow["warning_signs"])  # `flow` still shows them
 
     def test_the_same_items_failing_two_reviews_in_a_row(self):
         self.check_in("1h")
@@ -289,7 +298,7 @@ class Watching(Repo):
         line = self.watch()
         self.assertEqual(line["result"], "WARNING_SIGNS", line)
         self.assertIn("WATER M1 failed the same items in its last two reviews (M1.1), whether or not the findings were new", line["woke_for"])
-        self.assertEqual(line["moved"]["reviews_failed"], ["WATER M1", "WATER M1"])
+        self.assertEqual(self.flow()["moved"]["reviews_failed"], ["WATER M1", "WATER M1"])
 
     def test_a_builder_without_progress_a_queued_planner_and_a_broken_main_branch(self):
         self.check_in("1h")
@@ -303,15 +312,42 @@ class Watching(Repo):
                  {"pid": 4343, "role": "plan", "task": "plan PAY", "waiting_for": "another planner",
                   "started_at": old, "repository": repo}]
         broken = [{"check": "e2e", "commit": "abc", "text": "main-branch check `e2e` failed on abc"}]
+        # the commits this test made count as the builder's when they are in its checkout; here they aren't
         with mock.patch.object(agent_loop, "live_loops", lambda *a, **k: (loops, [])), \
-                mock.patch.object(agent_loop, "main_broken", lambda *a, **k: broken):
+                mock.patch.object(agent_loop, "main_broken", lambda *a, **k: broken), \
+                mock.patch.object(agent_loop, "last_commit_at", lambda *a: None):
             line = self.watch()
+            flow = self.flow()
         self.assertEqual(line["result"], "WARNING_SIGNS", line)
         woke = " | ".join(line["woke_for"])
         for text in ("WATER M1: no item has newly passed", "a planner has waited 3h", "`e2e` failed on abc"):
             self.assertIn(text, woke)
-        self.assertEqual(line["builders"]["running"], 1)
-        self.assertEqual(line["main_branch"], ["main-branch check `e2e` failed on abc"])
+        self.assertEqual(flow["builders"]["running"], 1)
+        self.assertEqual(flow["main_branch"], ["main-branch check `e2e` failed on abc"])
+
+    def test_a_commit_made_during_the_turn_is_progress(self):
+        # In Thrum a builder committed fixes for hours inside one turn, and the lead was warned it had made none.
+        self.check_in("1h")  # a commit in the builder's checkout, made after its run started
+        repo = agent_loop.repository_of(agent_loop.git_common_dir(self.wt))
+        old = time.time() - 3 * 3600
+        state = self.wt / ".git/orchestrate/WATER.json"
+        state.parent.mkdir(exist_ok=True)
+        state.write_text(json.dumps({"milestone": "M1", "progress_at": old}))
+        loops = [{"pid": 4242, "role": "build", "module": "WATER", "milestone": "M1", "worktree": str(self.wt),
+                  "started_at": old - 60, "repository": repo, "turns": 1}]
+        with mock.patch.object(agent_loop, "live_loops", lambda *a, **k: (loops, [])):
+            signs = agent_loop.watch_signs(agent_loop.watch_look(self.wt, agent_loop.profile(self.wt), {}, fetch=False))
+        self.assertFalse([k for k in signs if "no item has newly passed" in signs[k]["text"]], signs)
+        time.sleep(1.1)  # reflog times are whole seconds: past the check-in's commit
+        stamp = float(int(time.time()))
+        (self.wt / "STATUS.md").write_text("status\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "orchestrate: update STATUS.md")
+        self.assertIsNone(agent_loop.last_commit_at(self.wt, stamp), "the script's own commits aren't progress")
+        (self.wt / "fix.txt").write_text("a fix\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "water M1: the fix")
+        self.assertIsNotNone(agent_loop.last_commit_at(self.wt, stamp))
 
     def test_with_runs_it_wakes_the_lead_when_a_run_ends(self):
         self.check_in("1h")

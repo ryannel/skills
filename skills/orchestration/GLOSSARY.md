@@ -210,15 +210,10 @@ Stored as: the `Test command:` line of the project settings
 
 **Main-branch check**
 A check too slow to run before every merge, which runs on the main branch's tip after merges instead. A failure
-that holds is traced to the first failing commit, which is fixed forward.
+that holds is traced to the first failing commit, which is fixed forward. It gates no milestone.
 Not: Test command, which runs before every merge.
 Avoid: trunk sentinel, sentinel
 Stored as: a `Main-branch check <name>:` line of the project settings; the `main-check` command
-Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
-
-**Covered**
-What a commit is when a main-branch check passed on a main-branch commit that contains it.
-Stored as: the `COVERED` result of `main-check`
 Proposed: by Claude, 2026-11-15. Not yet agreed by the user.
 
 **Evidence**
@@ -406,12 +401,16 @@ Ready for Review if they pass.
 Stored as: `run --checks-only`
 Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
-**Builders count**
-How many builders the user wants running at once in the project.
-Avoid: parallelism, concurrency (in prose)
-Stored as: the `Builders:` line of the project settings; `run --more-builders '<the user's words>'` lets one more
-start
-Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
+**Most builders**
+The most builders the user allows running at once in the project. With no number, there is no most.
+Avoid: Builders count, parallelism, concurrency (in prose)
+Stored as: the `Builders:` line of the project settings; the `most` field of `builders`
+Proposed: by Claude, 2026-11-24. Not yet agreed by the user.
+
+**Working number of builders**
+How many builders the lead runs at once, within the user's most, from what the machine and the work can take.
+Stored as: `builders --set N --why TEXT`; the `working` field of `builders`
+Proposed: by Claude, 2026-11-24. Not yet agreed by the user.
 
 **Exclusive resource**
 Something only one run at a time may use, such as a simulator. The script's `lock` command holds it.
@@ -565,20 +564,17 @@ there is one, says which of a result's causes it was.
 | `READY` | `ready` | What each module's next milestone is waiting for, grouped |
 | `ESCALATION` | `next` | What the counts call for after a failed review, with the command |
 | `SETTINGS` | `settings` | The settings as the script reads them, with the loader checks |
+| `BUILDERS` | `builders` | The most builders, the working number, the limit between them, and the builders running |
 | `SAVED` | `settings --set` | A settings line was set on the main branch, with the user's words in its commit |
 | `MERGED`, `FAILED` | `merge` | The work was merged, or wasn't, with the reason in `detail` |
 | `ADOPTED` | `adopt` | Plan files left uncommitted or unmerged were committed and merged |
 | `MIGRATED` | `migrate` | The plans, the evidence or a worktree's commits were moved to the current layout and names |
 | `WOULD_REMOVE`, `REMOVED` | `cleanup` | What `cleanup` would remove, or, with `--yes`, what it removed |
 | `NOTHING` | `adopt`, `migrate`, `main-check`, `pause`, `thread`, `cleanup`, `settings --set` | There was nothing to do |
-| `COVERED` | `main-check` | A main-branch check passed on a commit that contains the one asked about |
-| `FAILING_ON_MAIN` | `main-check` | A main-branch check fails on a commit that contains the one asked about, and no later pass covers it |
-| `NOT_ON_MAIN` | `main-check` | The commit asked about isn't on the main branch yet |
-| `PENDING` | `main-check` | No run covers the commit yet, and one is under way |
 | `STARTED`, `ALREADY_RUNNING` | `main-check` | A run on the main branch's tip started, or one was already in flight |
 | `MAIN_CHECKS` | `main-check` | The list of main-branch checks, each with its latest run and pass |
 | `RAN` | `main-check` | Only in a runner's log: one run of a main-branch check finished |
-| `REFUSED` | `adopt`, `migrate`, `plan`, `run`, `settings --set` | The command wouldn't act, with the reasons in `problems` |
+| `REFUSED` | `adopt`, `main-check`, `migrate`, `plan`, `run`, `settings --set` | The command wouldn't act, with the reasons in `problems` |
 | `UNBLOCKED` | `unblock` | The milestone is no longer Blocked |
 | `THREAD` | `thread status` | A Codex thread's goal, running turn and queue, and whether the script can stop its turn |
 | `STOPPED`, `GOAL_PAUSED`, `GOAL_RESUMED`, `UNQUEUED` | `thread` | The thread's turn was stopped, its goal paused or resumed, or its queued messages removed |

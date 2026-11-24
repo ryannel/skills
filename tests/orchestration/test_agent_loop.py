@@ -851,7 +851,6 @@ class Building(Repo):
             ("an uncommitted change", dict(leave=lambda: put(self.wt / "ORCHESTRATE.md", "changed")),
              "uncommitted"),
             ("an untracked file", dict(leave=lambda: (self.wt / "helper.sh").write_text("echo hi\n")), "untracked"),
-            ("a failing test command", dict(test_command="`sh -c 'exit 4'`"), "Test command `sh -c 'exit 4'` exited 4"),
             ("a check that leaves files", dict(), "left changes")]
         for name, kw, reason in cases:
             with self.subTest(name):
@@ -861,6 +860,9 @@ class Building(Repo):
         with self.subTest("all clear"):
             self.setUp()
             self.assertEqual(self.ready_problems(passed()), "")
+        with self.subTest("the test command is the merge's to run, not run again here"):
+            self.setUp()
+            self.assertEqual(self.ready_problems(passed(), test_command="`sh -c 'exit 4'`"), "")
 
     def test_claims_check_only_milestone_and_accepts_it_in_the_record(self):
         """The one plain headless Codex builder turn through to Ready for Review, and what it records."""
@@ -1466,16 +1468,11 @@ class Loops(Repo):
         signs = agent_loop.watch_signs(agent_loop.watch_look(self.wt, prof, {}, fetch=False))
         self.assertIn("one planned milestone", signs["plan_ahead WATER"]["text"])
 
-    def test_an_items_check_is_told_which_merged_work_it_answers_for(self):
+    def test_an_items_check_is_told_it_runs_as_an_items_check(self):
         m = milestone("M1", "in_progress", ["pass"])
-        # a check that asks main-check reads the variables; `: main-check` stands in for one here
-        m["items"][0]["check"] = (': main-check; test "$ORCHESTRATE_CHECK_COMMIT" = abc123 && '
-                                  'test "$ORCHESTRATE_CHECK_MODULE" = WATER')
+        m["items"][0]["check"] = 'test "$ORCHESTRATE_ITEM_CHECK" = M1.1'
         prof = agent_loop.profile(self.wt)
-        env = {agent_loop.CHECK_COMMIT_ENV: "abc123", agent_loop.CHECK_MODULE_ENV: "WATER"}
-        self.assertEqual(agent_loop.check_failures(self.wt, prof, m, env=env), [])
-        self.assertTrue(agent_loop.check_failures(self.wt, prof, m, env={**env, agent_loop.CHECK_COMMIT_ENV: "def456"}),
-                        "a pass for one commit isn't reused for another")
+        self.assertEqual(agent_loop.check_failures(self.wt, prof, m), [])
 
     def test_a_broken_test_command_is_seen_from_every_worktree_until_a_merge_lands(self):
         broken = {"main_broken": {"commit": agent_loop.head_commit(self.wt), "exit": 1,
@@ -1912,7 +1909,7 @@ class WhatTheLeadSees(Repo):
         self.assertEqual(refused["next"]["decides"], "human")
         self.assertIn("Before the first build", refused["next"]["ask"])
 
-    def test_run_refuses_a_builder_past_the_builders_count_without_the_humans_words(self):
+    def test_run_refuses_a_builder_past_the_users_most_and_past_the_leads_working_number(self):
         self.builders_line("one Codex builder")
         code = (f"import sys, time; sys.path.insert(0, {str(SCRIPTS)!r}); import agent_loop; from pathlib import Path\n"
                 f"wt = Path({str(self.wt)!r}); agent_loop.run_lock(wt, 'CORE')\n"
@@ -1924,40 +1921,45 @@ class WhatTheLeadSees(Repo):
             refused = self.run_loop()
             self.assertEqual(refused["result"], "REFUSED", refused)
             self.assertEqual(refused["running"], [{"module": "CORE", "milestone": "M4", "pid": other.pid}])
-            self.assertIn("Builders line allows 1", refused["problems"][0])
+            self.assertIn("the most the project settings' Builders line allows", refused["problems"][0])
             self.assertEqual(refused["next"]["decides"], "human")
-            self.assertIn("--more-builders", refused["next"]["command"])
+            self.assertIn(" settings ", refused["next"]["command"])
+            self.assertIn("Builders", refused["next"]["command"])
             self.assertEqual(self.calls() if self.log.exists() else [], [])  # no builder started
-            words = "Yes, run one more while I'm at the Mac"
-            more = self.run_loop(more_builders=words)
-            self.assertEqual(more["result"], "READY_FOR_REVIEW", more)
-            self.assertEqual((more["more_builders"]["said"], more["more_builders"]["running"]), (words, 1))
+            self.builders_line("three Codex builders")
+            self.call(agent_loop.cmd_builders, worktree=str(self.wt), set=1, why="the machine is loaded")
+            refused = self.run_loop()  # the lead's own number holds it now, and is the lead's to raise
+            self.assertEqual(refused["result"], "REFUSED", refused)
+            self.assertIn("the working number you set with `builders`", refused["problems"][0])
+            self.assertNotEqual(refused["next"].get("decides"), "human")
+            self.assertIn(" builders ", refused["next"]["command"])
+            self.assertIn("--set 2", refused["next"]["command"])
+            self.call(agent_loop.cmd_builders, worktree=str(self.wt), clear=True)
+            self.assertEqual(self.run_loop()["result"], "READY_FOR_REVIEW")
         finally:
             other.kill()
             other.wait()
-        self.builders_line("two Codex builders")
-        self.assertNotEqual(self.run_loop()["result"], "REFUSED")  # under the count, nothing to ask
 
-    def test_a_later_run_of_the_module_reuses_the_humans_words_for_one_more_builder(self):
-        self.write_done([milestone("M1", "not_started", ["open"]), milestone("M2", "not_started", ["open"])])
-        self.builders_line("one Codex builder")
-        code = (f"import sys, time; sys.path.insert(0, {str(SCRIPTS)!r}); import agent_loop; from pathlib import Path\n"
-                f"wt = Path({str(self.wt)!r}); agent_loop.run_lock(wt, 'CORE')\n"
-                "agent_loop.loop_register(wt, 'build', module='CORE', milestone='M4', host='codex', model='m', "
-                "effort='medium'); print('up', flush=True); time.sleep(60)\n")
-        other = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
-        try:
-            self.assertEqual(other.stdout.readline().strip(), "up")
-            words = "Start as many builders as you need tonight"
-            first = self.run_loop(more_builders=words)
-            self.assertEqual((first["result"], first["milestone"]), ("READY_FOR_REVIEW", "M1"), first)
-            again = self.run_loop()  # M2, after M1 closed on its checks: the same builder, not one more
-            self.assertEqual((again["result"], again["milestone"]), ("READY_FOR_REVIEW", "M2"), again)
-            self.assertEqual(again["more_builders"]["said"], words)
-            self.assertIn("said_at", again["more_builders"])
-        finally:
-            other.kill()
-            other.wait()
+    def test_builders_sets_the_working_number_within_the_users_most(self):
+        self.builders_line("three Codex builders")
+        prof = agent_loop.profile(self.wt)
+        self.assertEqual((prof["builders"], prof["builders_set"], agent_loop.builder_limit(self.wt, prof)),
+                         (3, True, 3))
+        refused = self.call(agent_loop.cmd_builders, worktree=str(self.wt), set=2)
+        self.assertEqual(refused["result"], "REFUSED", refused)
+        self.assertIn("--why", refused["problems"][0])
+        got = self.call(agent_loop.cmd_builders, worktree=str(self.wt), set=2, why="the GPU is shared")
+        self.assertEqual((got["result"], got["most"], got["working"]["count"], got["limit"], got["changed"]),
+                         ("BUILDERS", 3, 2, 2, "set"), got)
+        got = self.call(agent_loop.cmd_builders, worktree=str(self.wt), set=5, why="the machine has room")
+        self.assertEqual(got["limit"], 3)  # the user's most caps it
+        self.assertIn("capped", got)
+        got = self.call(agent_loop.cmd_builders, worktree=str(self.wt), clear=True)
+        self.assertEqual((got["working"], got["limit"], got["changed"]), (None, 3, "cleared"))
+        self.builders_line("Codex, no limit")
+        prof = agent_loop.profile(self.wt)
+        self.assertEqual((prof["builders"], prof["builders_set"], agent_loop.builder_limit(self.wt, prof)),
+                         (None, True, None))
 
     def test_the_first_result_after_a_version_change_says_what_changed(self):
         self.assertIsNone(agent_loop.version_change(self.wt))  # a new project: nothing changed for it
@@ -1971,13 +1973,13 @@ class WhatTheLeadSees(Repo):
         with mock.patch.object(agent_loop, "QUOTA_WORKTREE", [self.wt]):
             first = self.call(lambda a: agent_loop.emit("NOTHING"))
             second = self.call(lambda a: agent_loop.emit("NOTHING"))
-        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         self.assertIn("From before 2.6.0", first["changed"]["2.5.0"][0])
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
         self.assertIn("2.5.0", agent_loop.version_change(self.wt))
         note.write_text('{"version": "2.5.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0"])
         note.write_text('{"version": "2.9.0"}')
         (line, *_) = agent_loop.version_change(self.wt)["2.10.0"]
         self.assertIn("Read the lead skill again", line)
@@ -5000,13 +5002,11 @@ class FirstRuns(Repo):
         self.assertIn("builder entry", log)
         self.assertIn("planner entry", log)
 
-    def test_a_run_keeps_its_builder_slot_through_a_review_and_gives_it_up_on_a_long_wait(self):
+    def test_a_run_keeps_its_builder_slot_through_a_review(self):
         loops = [{"pid": 1, "role": "steps", "module": "WATER"}, {"pid": 2, "role": "review", "steps_parent": 1},
                  {"pid": 3, "role": "steps", "module": "SKY"}, {"pid": 4, "role": "build", "steps_parent": 3},
-                 {"pid": 5, "role": "steps", "module": "SAND"},
-                 {"pid": 6, "role": "build", "steps_parent": 5, "step": agent_loop.WAITING_FOR_CHECK},
                  {"pid": 7, "role": "build", "module": "ROCK"}, {"pid": 8, "role": "build", "checks_only": True}]
-        # the run under review keeps its slot, for the fix half of reviews need; one waiting on a check gives it up
+        # the run under review keeps its slot, for the fix half of reviews need; a checks-only run needs none
         self.assertEqual([r["pid"] for r in agent_loop.builder_runs(loops)], [1, 3, 7])
         loops.append({"pid": 9, "role": "build", "step": agent_loop.WAITING_FOR_SLOT, "waiting_since": 2.0})
         loops.append({"pid": 10, "role": "build", "step": agent_loop.WAITING_FOR_SLOT, "waiting_since": 1.0})
@@ -6053,19 +6053,19 @@ class OnlyTheScriptSetsReadyForReview(Repo):
         # the memo is in the git common directory, shared by every worktree
         self.assertTrue(list((self.wt / ".git/orchestrate/checks").glob("*.json")))
 
-    def test_the_scripts_checks_reuse_an_items_pass_but_key_the_test_command_on_the_whole_tree(self):
+    def test_the_scripts_checks_reuse_an_items_pass_and_leave_the_test_command_to_the_merge(self):
         count = self.root / "count"
         put(self.wt / "render/shader.txt", "v1")
         self.commit_all()
         m = milestone("M1", "in_progress", ["pass"], check=f"echo item >> {count}", reads=["render/"])
         prof = {"plans": "docs/plans", "test_command": f"echo tests >> {count}"}
-        for _ in range(2):
+        for n in range(2):
             reused = []
             self.assertEqual(agent_loop.check_failures(self.wt, prof, m, 30, reused), [])
-            put(self.wt / "other.txt", str(len(count.read_text())))  # another builder's merge moves the tip
+            put(self.wt / "other.txt", str(n))  # another builder's merge moves the tip
             self.commit_all()
         self.assertEqual(reused, ["M1.1"])
-        self.assertEqual(count.read_text().split(), ["tests", "item", "tests"])
+        self.assertEqual(count.read_text().split(), ["item"])
 
     def test_a_check_whose_named_inputs_cant_be_accounted_for_runs(self):
         count = self.root / "count"
@@ -6106,7 +6106,7 @@ class OnlyTheScriptSetsReadyForReview(Repo):
         os.environ.update(FAKE_PASS="0")
         result = self.run_loop(checks_only=True)
         self.assertEqual(result["result"], "READY_FOR_REVIEW", result)
-        self.assertEqual(result["reused_checks"], ["Test command"])
+        self.assertNotIn("Test command", result.get("reused_checks") or [])
         self.assertEqual(count.read_text(), "x\n")
         self.assertFalse(self.log.exists())  # no agent started
 
@@ -7155,120 +7155,85 @@ class MainBranchChecks(Repo):
         self.git("push", "-q", "origin", "main")
         return agent_loop.head_commit(self.wt)
 
+    def go(self, limit=60):
+        """Starts a run on the tip and waits for it, and any bisect it begins, to finish; returns the check's listing."""
+        before = len(agent_loop.main_check_runs(self.folder(), unjudged=True))
+        code, started = self.ask(name="images", start=True)
+        self.assertEqual((code, started["result"]), (0, "STARTED"), started)
+        end = time.time() + limit
+        while time.time() < end and (agent_loop.main_check_flight(self.folder()) or
+                                     len(agent_loop.main_check_runs(self.folder(), unjudged=True)) == before):
+            time.sleep(0.05)
+        log = self.folder() / "runner.log"
+        self.assertLess(time.time(), end, log.read_text() if log.exists() else "the runner never finished")
+        self.settle()
+        return self.listed()
+
+    def listed(self):
+        code, line = self.ask(name="images")
+        self.assertEqual((code, line["result"]), (0, "MAIN_CHECKS"), line)
+        [check] = line["checks"]
+        return check
+
     def test_a_run_on_the_tip_is_recorded_and_listed(self):
         self.declare(f"echo run >> {self.count}; test ! -f broken", "; lock gpu")
         head = agent_loop.head_commit(self.wt)
-        code, line = self.ask(name="images")
-        self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", head), line)
-        self.settle()
+        check = self.go()
         [run] = self.runs()
         self.assertEqual((run["kind"], run["commit"], run["result"], len(run["attempts"])), ("tip", head, "pass", 1))
         self.assertTrue(Path(run["attempts"][0]["stdout"]).exists())
         self.assertEqual(self.counted(), 1)
         self.assertIn('"lock": "gpu"', (agent_loop.loop_dir(self.wt) / agent_loop.LOCKS_FILE).read_text())
-        _, listed = self.ask()
-        [check] = listed["checks"]
-        self.assertEqual((listed["result"], check["name"], check["latest"]["result"], check["due"]),
-                         ("MAIN_CHECKS", "images", "pass", False))
+        self.assertEqual((check["name"], check["latest"]["result"], check["latest"]["commit"], check["due"]),
+                         ("images", "pass", head, False))
+        _, every = self.ask()
+        self.assertEqual([c["name"] for c in every["checks"]], ["images"])
         [report] = agent_loop.main_check_report_lines(self.wt)
         self.assertIn(f"main-branch check `images`: passed on {head[:12]}", report)
 
-    def test_a_second_request_joins_the_run_in_flight(self):
+    def test_a_second_start_finds_the_run_in_flight(self):
         self.declare(f"echo run >> {self.count}; sleep 2")
         code, started = self.ask(name="images", start=True)
         self.assertEqual((code, started["result"], started["started"]), (0, "STARTED", ["images"]))
         self.in_flight()
         self.assertEqual(self.ask(name="images", start=True)[1]["result"], "ALREADY_RUNNING")
-        code, line = self.ask(name="images")
-        self.assertEqual((code, line["result"]), (0, "COVERED"), line)
-        self.assertEqual(self.counted(), 1)
-
-    def test_a_pass_covers_every_commit_it_contains_and_nothing_after(self):
-        self.declare(f"echo run >> {self.count}")
-        first = agent_loop.head_commit(self.wt)
-        self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
-        later = self.land("another module's work", **{"src/a.txt": "a"})
-        code, line = self.ask(name="images", commit=first)
-        self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", first))
-        self.assertEqual(self.counted(), 1)
-        spec = agent_loop.profile(self.wt)["main_checks"]["images"]
-        self.assertTrue(agent_loop.main_check_due(spec, self.runs(), None, later))
-        code, line = self.ask(name="images")
-        self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", later))
-        self.assertEqual(self.counted(), 2)
-        self.git("commit", "-q", "--allow-empty", "-m", "a builder's own work, not merged")
-        side = agent_loop.head_commit(self.wt)
-        self.git("reset", "-q", "--hard", "HEAD~1")
-        code, line = self.ask(name="images", commit=side)
-        self.assertEqual((code, line["result"]), (1, "NOT_ON_MAIN"))
-        self.assertEqual(self.counted(), 2)
-
-    def test_a_wait_that_runs_out_says_pending_and_the_run_carries_on(self):
-        self.declare(f"sleep 1; echo run >> {self.count}")
-        code, line = self.ask(name="images", wait=0)
-        self.assertEqual((code, line["result"]), (agent_loop.MAIN_CHECK_PENDING_EXIT, "PENDING"), line)
-        self.assertIn("main-check images", line["next"]["command"])
-        self.in_flight()
         self.settle()
         self.assertEqual(self.counted(), 1)
-        self.assertEqual(self.ask(name="images", wait=0)[1]["result"], "COVERED")
+
+    def test_a_pass_holds_for_its_commit_and_the_check_is_due_once_the_main_branch_moves(self):
+        self.declare(f"echo run >> {self.count}")
+        first = agent_loop.head_commit(self.wt)
+        self.assertEqual(self.go()["latest"]["commit"], first)
+        later = self.land("another module's work", **{"src/a.txt": "a"})
+        spec = agent_loop.profile(self.wt)["main_checks"]["images"]
+        self.assertTrue(agent_loop.main_check_due(spec, self.runs(), None, later))
+        check = self.go()
+        self.assertEqual((check["latest"]["result"], check["latest"]["commit"]), ("pass", later))
+        self.assertEqual(self.counted(), 2)
 
     def test_a_failure_that_passes_on_its_retry_is_a_pass(self):
         flag = self.root / "flaked"
         self.declare(f"test -f {flag} || {{ touch {flag}; exit 1; }}")
-        code, line = self.ask(name="images")
-        self.assertEqual((code, line["result"], line["by"]["flaky"], line["by"]["attempts"]), (0, "COVERED", True, 2))
-        self.assertIn("on its retry", line["why"])
+        latest = self.go()["latest"]
+        self.assertEqual((latest["result"], latest["flaky"], latest["attempts"]), ("pass", True, 2), latest)
 
     def test_a_failure_that_holds_is_bisected_to_the_commit_that_broke_it(self):
         self.declare("test ! -f broken")
-        self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
-        c1 = self.land("tidy the camera", **{"src/camera.txt": "1"})
+        self.assertEqual(self.go()["latest"]["result"], "pass")
+        self.land("tidy the camera", **{"src/camera.txt": "1"})
         c2 = self.land("water: foam on the shore", **{"broken": "x", "docs/plans/WATER/LOG.md": "- 2026-11-18 foam"})
         self.land("tidy the sky", **{"src/sky.txt": "1"})
         c4 = self.land("tidy the sky again", **{"src/sky.txt": "2"})
-        code, line = self.ask(name="images")  # the tip's own answer doesn't wait for the bisect
-        self.assertEqual((code, line["result"], line["by"]["commit"]), (1, "FAILING_ON_MAIN", c4), line)
-        self.settle()
-        code, line = self.ask(name="images")
-        self.assertEqual((code, line["result"]), (1, "FAILING_ON_MAIN"), line)
-        culprit = line["by"]["culprit"]
+        latest = self.go()["latest"]
+        self.assertEqual((latest["result"], latest["commit"]), ("fail", c4), latest)
+        culprit = latest["culprit"]
         self.assertEqual((culprit["commit"], culprit["subject"], culprit["modules"]),
                          (c2, "water: foam on the shore", ["WATER"]))
-        self.assertIn(c2[:12], line["why"])
-        self.assertEqual(self.ask(name="images", commit=c1)[1]["result"], "COVERED")
-        self.assertEqual(self.ask(name="images", commit=c2)[1]["result"], "FAILING_ON_MAIN")
-        self.settle()
         self.assertEqual([(r["kind"], r["result"]) for r in self.runs()],
                          [("tip", "pass"), ("tip", "fail"), ("bisect", "fail"), ("bisect", "pass")])
         self.assertIn(f"first failing commit {c2[:12]}", agent_loop.main_check_report_lines(self.wt)[0])
-
-
-    def test_a_failure_another_modules_commit_caused_waits_without_failing_the_work(self):
-        self.declare("test ! -f broken")
-        self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
-        self.land("water: foam on the shore", **{"broken": "x", "docs/plans/WATER/LOG.md": "- 2026-11-18 foam"})
-        tip = self.land("tidy the sky", **{"src/sky.txt": "1"})
-        self.ask(name="images")
-        self.settle()
-        prof = agent_loop.profile(self.wt)
-        other = agent_loop.main_check_wait(self.wt, prof, "images", tip, 0, module="SHIPS")
-        self.assertEqual((other["result"], other["code"]), ("FAILING_ON_MAIN", agent_loop.MAIN_CHECK_PENDING_EXIT), other)
-        self.assertIn("in WATER, not SHIPS", other["why"])
-        own = agent_loop.main_check_wait(self.wt, prof, "images", tip, 0, module="WATER")
-        self.assertEqual((own["result"], own["code"]), ("FAILING_ON_MAIN", 1), own)
-        self.assertEqual(agent_loop.main_broken(self.wt, prof)[0]["modules"], ["WATER"])
-
-    def test_a_failure_from_a_commit_no_module_owns_waits_without_failing_the_work(self):
-        self.declare("test ! -f broken")
-        self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
-        self.land("a change made by hand", **{"broken": "x"})
-        tip = self.land("tidy the sky", **{"src/sky.txt": "1"})
-        self.ask(name="images")
-        self.settle()
-        got = agent_loop.main_check_wait(self.wt, agent_loop.profile(self.wt), "images", tip, 0, module="SHIPS")
-        self.assertEqual((got["result"], got["code"]), ("FAILING_ON_MAIN", agent_loop.MAIN_CHECK_PENDING_EXIT), got)
-        self.assertIn("can't tie to a module", got["why"])
+        [broken] = [b for b in agent_loop.main_broken(self.wt) if b["check"] == "images"]
+        self.assertEqual(broken["modules"], ["WATER"])
 
     def test_a_run_that_cant_judge_the_commit_fails_nothing_and_runs_again(self):
         # A capture that dropped frames on a busy machine says nothing about the code; it exits 75.
@@ -7276,20 +7241,16 @@ class MainBranchChecks(Repo):
         busy.touch()
         self.declare(f"echo run >> {self.count}; test -f {busy} && exit 75; true")
         head = agent_loop.head_commit(self.wt)
-        code, line = self.ask(name="images", wait=0)
-        self.assertEqual((code, line["result"]), (agent_loop.MAIN_CHECK_PENDING_EXIT, "PENDING"), line)
-        self.in_flight()
-        self.settle()
+        check = self.go()
         self.assertEqual(self.runs(), [])
         [run] = agent_loop.main_check_runs(self.folder(), unjudged=True)
         self.assertEqual((run["commit"], run["result"], len(run["attempts"])), (head, "unjudged", 3))
         self.assertNotIn("bisect", run)
         self.assertIn(f"couldn't judge {head[:12]}", agent_loop.main_check_report_lines(self.wt)[0])
-        _, listed = self.ask()
-        self.assertTrue(listed["checks"][0]["due"])
+        self.assertTrue(check["due"])
         busy.unlink()
-        code, line = self.ask(name="images")
-        self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", head), line)
+        latest = self.go()["latest"]
+        self.assertEqual((latest["result"], latest["commit"]), ("pass", head), latest)
         self.assertEqual(self.counted(), 4)
 
     def test_a_bisect_that_blames_a_plans_only_commit_names_no_culprit_and_fails_nothing(self):
@@ -7297,20 +7258,19 @@ class MainBranchChecks(Repo):
         calm = self.root / "calm"
         calm.touch()
         self.declare(f"test -f {calm}")
-        self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
+        self.assertEqual(self.go()["latest"]["result"], "pass")
         self.land("orchestrate: update STATUS.md", **{"docs/plans/STATUS.md": "# Status"})
         tip = self.land("tidy the sky", **{"src/sky.txt": "1"})
         calm.unlink()
-        self.ask(name="images")
-        self.settle()
+        self.go()
         [run] = [r for r in agent_loop.main_check_runs(self.folder(), unjudged=True) if r["commit"] == tip]
         self.assertEqual((run["result"], run["bisect"]), ("unjudged", "no_culprit"), run)
         self.assertNotIn("culprit", run)
         self.assertIn("changed only the plans folder", run["bisect_why"])
         self.assertEqual([r["result"] for r in self.runs()], ["pass"])
         calm.touch()
-        code, line = self.ask(name="images")
-        self.assertEqual((code, line["result"], line["by"]["commit"]), (0, "COVERED", tip), line)
+        latest = self.go()["latest"]
+        self.assertEqual((latest["result"], latest["commit"]), ("pass", tip), latest)
 
     def test_a_failure_an_older_version_judged_says_so_and_how_to_judge_it_again(self):
         old = {"result": "fail", "check": "images"}
@@ -7321,31 +7281,33 @@ class MainBranchChecks(Repo):
 
     def test_a_bisect_stops_at_a_commit_it_cant_judge_rather_than_guess(self):
         self.declare("test -f loaded && exit 75; test ! -f broken")
-        self.assertEqual(self.ask(name="images")[1]["result"], "COVERED")
+        self.assertEqual(self.go()["latest"]["result"], "pass")
         self.land("a busy hour", **{"loaded": "x"})
         (self.wt / "loaded").unlink()
         self.land("water: foam on the shore", **{"broken": "x"})
         self.land("tidy the sky", **{"src/sky.txt": "1"})
-        self.ask(name="images")
-        self.settle()
-        code, line = self.ask(name="images")
-        self.assertEqual((code, line["result"], line["by"]["bisect"]), (1, "FAILING_ON_MAIN", "stopped"), line)
-        self.assertNotIn("culprit", line["by"])
-        self.assertIn("couldn't judge", line["why"])
+        latest = self.go()["latest"]
+        self.assertEqual((latest["result"], latest["bisect"]), ("fail", "stopped"), latest)
+        self.assertNotIn("culprit", latest)
 
-    def test_an_item_proves_itself_from_the_shared_result_in_the_scripts_clean_checkout(self):
+    def test_an_items_check_that_asks_main_check_is_refused_and_fails(self):
+        # Before 2.14.0 an item could wait here for a main-branch check; in Thrum that held most milestones an hour.
         self.declare(f"echo run >> {self.count}")
-        check = 'python3 "$ORCHESTRATE_SCRIPT" main-check images --wait 60'
-        self.write_done([milestone("M1", "in_progress", ["pass"], check=check),
-                         milestone("M2", "in_progress", ["pass"], check=check)])
+        check = 'python3 "$ORCHESTRATE_SCRIPT" main-check images'
+        self.write_done([milestone("M1", "in_progress", ["pass"], check=check)])
         self.commit_all()
         prof = agent_loop.profile(self.wt)
         tree = agent_loop.verify_tree(self.wt, "WATER", agent_loop.tip(self.wt, prof))
         doc = agent_loop.load_done(self.wt, "WATER", prof)
-        for mid in ("M1", "M2"):
-            self.assertEqual(agent_loop.check_failures(tree, prof, agent_loop.find(doc, mid)), [])
-        self.assertEqual(self.git("status", "--porcelain", where=tree).stdout, "")
-        self.assertEqual(self.counted(), 1)
+        [failure] = agent_loop.check_failures(tree, prof, agent_loop.find(doc, "M1"))
+        self.assertIn("main-check", failure)
+        self.assertEqual(self.counted(), 0)
+        code, line = self.ask(name="images")  # outside an item's check it lists the check
+        self.assertEqual((code, line["result"]), (0, "MAIN_CHECKS"))
+        with mock.patch.dict(os.environ, {agent_loop.ITEM_CHECK_ENV: "M1.1"}):
+            code, line = self.ask(name="images")
+        self.assertEqual((code, line["result"]), (1, "REFUSED"), line)
+        self.assertIn("no longer decides", line["why"])
 
 
 if __name__ == "__main__":

@@ -76,34 +76,6 @@ class RunEndings(Repo):
         self.assertIn(" run ", command(result))
 
 
-class PendingMainCheck(Repo):
-    """An item's check that asks a main-branch check exits 75 while that check hasn't judged the commit. That used to
-    count as a failure: the builder got a turn to fix nothing, and the DONE counted towards CHECKS_FAILED."""
-
-    def test_a_check_waiting_on_a_main_branch_check_is_asked_again_without_a_builder_turn(self):
-        agent_loop.PENDING_CHECK_POLL_S = 0.01
-        judged = self.root / "judged"
-        check = f"test -f {judged} && exit 0; touch {judged}; exit 75"
-        self.write_done([milestone("M1", "not_started", ["open"], check=check),
-                         milestone("M2", "not_started", ["open"])])
-        self.commit_all()
-        result = self.run_loop()
-        self.assertEqual(result["result"], "READY_FOR_REVIEW", result)
-        self.assertEqual(len(self.calls()), 1)  # the one builder turn that did the work
-        self.assertEqual(self.state()["not_ready_turns"], 0)
-        self.assertNotIn("waiting_on_main_check", self.state())
-
-    def test_a_check_that_never_gets_its_answer_ends_with_no_progress(self):
-        agent_loop.PENDING_CHECK_POLL_S = 0.01
-        self.write_done([milestone("M1", "not_started", ["open"], check="exit 75"),
-                         milestone("M2", "not_started", ["open"])])
-        self.commit_all()
-        result = self.run_loop(no_progress_hours=0.00001)
-        self.assertEqual(result["result"], "NO_PROGRESS_FOR_HOURS", result)
-        self.assertEqual(len(self.calls()), 1)
-        self.assertIn("main-branch check", result["next"]["why"] + command(result))
-
-
 class ReplannedWhileBuilding(Repo):
     """A planner re-plans the milestone a run is building. The run kept the definitions it started with, so every
     DONE failed as "not the authorised ones" and the builder was told to fix what it couldn't."""
