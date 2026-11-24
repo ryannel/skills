@@ -4674,9 +4674,10 @@ def land(tree: Path, prof: dict, check: bool = False) -> tuple[bool, str]:
 
 
 def loop_write(worktree: Path, prof: dict, name: str, change, message: str,
-               trailer: bool = True, take_up_ok: bool = True) -> tuple[bool, str]:
+               trailer: bool = True, take_up_ok: bool = True, allow_empty=lambda: False) -> tuple[bool, str]:
     """Applies `change(tree)` to a clean checkout of the main branch's tip, commits it as the script, and merges it.
-    `change` returns the paths it wrote, or nothing to skip the commit. Without `trailer` the commit isn't marked as
+    `change` returns the paths it wrote. With no paths, it commits only if `allow_empty()` agrees. Without
+    `trailer` the commit isn't marked as
     the script's own record-keeping (used for files the script merges on someone's behalf). After a record merges (with
     `trailer`), STATUS.md is brought up to date in a commit of its own, which can't fail the record. Without
     `take_up_ok`, the first commit in a repository with no records doesn't write the records `take_up` would."""
@@ -4688,12 +4689,14 @@ def loop_write(worktree: Path, prof: dict, name: str, change, message: str,
             return False, str(e)
         legacy = trailer and take_up_ok and unrecorded(tree, prof, "HEAD")
         paths = [p for p in change(tree) or [] if not inside(p, prof.get("evidence") or EVIDENCE_DEFAULT)]  # evidence is never committed
-        if not paths:
+        if not paths and not allow_empty():
             return True, head_commit(tree)
         if legacy:
             paths = [*paths, *take_up(tree, prof)]
-        git(tree, "add", "-A", "--", *paths)
-        c = git(tree, *ident(tree), "commit", "--quiet", "-m", f"{message}\n\n{TRAILER}" if trailer else message)
+        if paths:
+            git(tree, "add", "-A", "--", *paths)
+        c = git(tree, *ident(tree), "commit", "--quiet", *([] if paths else ["--allow-empty"]),
+                "-m", f"{message}\n\n{TRAILER}" if trailer else message)
         if c.returncode != 0:
             return False, f"commit failed: {(c.stdout + c.stderr).strip()[-300:]}"
         ok, detail = land(tree, prof)
@@ -6213,7 +6216,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.0.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.0.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6253,6 +6256,10 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.0.2": [
+        "Run `migrate` once on projects migrated by 3.0 or 3.0.1 to finish renaming IDs in plan lists and ranges. "
+        "Pause any runs first.",
+    ],
     "3.0.1": [
         "If the module plans still call work packages milestones, pause every run and run `migrate` once "
         "to update their wording.",
@@ -14166,10 +14173,35 @@ def planned_ids(tree: Path, prof: dict) -> dict[str, set[str]]:
     return ids
 
 
-PLAN_ID = re.compile(r"(?<![\w-])(?P<base>[MW]\d+)(?!\w)(?:\.\d+)*")
-ID_QUALIFIER = re.compile(r"([\w.-]+)`?(?P<separator>[:/][ \t]*|[ \t]+)[`'\x22]?$")
+PLAN_ID = r"(?:WP|M)\d+(?:\.\d+)*(?!\w|\.\d)"
+OLD_W_ID = r"W\d+(?:\.\d+)*(?!\w|\.\d)"
+PLAN_ID_JOIN = r"[`'\"’]?(?:\s*[/–-]\s*|\s*,\s*(?:(?:and|or)\s+)?|\s+(?:to|and|or)\s+)[`'\"]?"
+ID_QUALIFIER = re.compile(r"([\w.-]+)[`'\x22]?(?P<separator>[:/][ \t]*|[ \t]+)[`'\x22]?\Z")
+LEGACY_EVIDENCE_FILE = re.compile(r"[MW]\d+(?:\.log|-(?:review(?:-\d+)?|handoff)\.md)$")
 PLAN_CODE_FILE = re.compile(r"(?<![\w.-])(?:(?P<module>[\w.-]+)/)?(?:RECORD|DONE)\.json\b")
 OLD_KEY_IN_CODE = re.compile(r"(['\x22`])" + OLD_WORK_PACKAGES + r"\1|(?<=\.)" + OLD_WORK_PACKAGES + r"\b")
+
+
+def plan_id_aliases(architecture: str, ids: dict) -> dict[str, str]:
+    """Recognize unique short module names and milestones assigned to one module in the architecture table."""
+    short, milestones = {}, {}
+    for module in ids:
+        parts = module.split("-")
+        if len(parts) > 1:
+            for name in {parts[0], parts[-1]}:
+                short.setdefault(name, set()).add(module)
+    in_table = False
+    for line in architecture.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if cells[:2] == ["Module", "Milestone or track"]:
+            in_table = True
+        elif not line.startswith("|"):
+            in_table = False
+        elif in_table and len(cells) >= 2:
+            module, label = cells[0].strip("`").upper(), cells[1].strip("`").upper()
+            if module in ids and re.fullmatch(r"[A-Z]+\d+[A-Z]*", label):
+                milestones.setdefault(label, set()).add(module)
+    return {name: next(iter(modules)) for name, modules in {**milestones, **short}.items() if len(modules) == 1}
 
 
 def migrate_plan_headings(text: str, note) -> str:
@@ -14186,39 +14218,83 @@ def migrate_plan_headings(text: str, note) -> str:
     return LATER_HEADING.sub(rename, text)
 
 
-def migrate_plan_text(text: str, module: str, ids: dict, note, *, check: bool = False) -> str:
-    """Rewrite known IDs in the module's own text or an explicitly named module's text.
+def migrate_plan_text(text: str, module: str, ids: dict, aliases: dict, note, unresolved, *,
+                      legacy_names: bool, evidence: str, check: bool = False) -> str:
+    """Rewrite lists and ranges in one module. Only the original migration also rewrites bare IDs.
 
     A check opening a record or done-when file uses that file's namespace for its bare keys.
     With multiple files, a bare key must resolve in exactly one of their modules.
     """
     files = list(PLAN_CODE_FILE.finditer(text))
     code_modules = {m["module"].upper() if m["module"] else module for m in files} if check else set()
+    evidence_path = rf"(?P<evidence>{re.escape(evidence.rstrip('/'))}/[^\s`'\"<>()[\]]+)"
+    member_id = re.compile(rf"{PLAN_ID}|{OLD_W_ID}" if legacy_names else PLAN_ID)
+    references = rf"{evidence_path}|(?<![\w-]){PLAN_ID}(?:{PLAN_ID_JOIN}{PLAN_ID})*"
+    if legacy_names:
+        references += rf"|(?<![\w-]){OLD_W_ID}"
 
-    def rename(match):
-        old = match[0]
-        new = work_package_id(old)
-        before, after = text[max(0, match.start() - 150):match.start()], text[match.end():match.end() + 16]
+    def rename(reference):
+        if reference["evidence"]:
+            if legacy_names:
+                # The original migration moves the work package's evidence directory too.
+                path = reference[0]
+                parent, sep, rest = path[len(evidence.rstrip("/")) + 1:].partition("/")
+                old, slash, tail = rest.partition("/")
+                match = OLD_ID.match(old)
+                if sep and match and work_package_id(match[0]) in ids.get(parent.upper(), ()) and (
+                        slash or match[0] == old or LEGACY_EVIDENCE_FILE.fullmatch(old)):
+                    new = work_package_id(old)
+                    note(match[0], work_package_id(match[0]))
+                    return path[:len(path) - len(rest)] + new + slash + tail
+            return reference[0]
+
+        members = list(member_id.finditer(reference[0]))
+        if len(members) == 1 and not legacy_names:
+            return reference[0]
+        before = text[max(0, reference.start() - 150):reference.start()]
         qualifier = ID_QUALIFIER.search(before)
         name = qualifier[1].upper() if qualifier else ""
-        if qualifier and (qualifier["separator"] in (":", "/") or name in ids):
+        separator = qualifier["separator"] if qualifier else ""
+        if name in ids or separator in (":", "/") or separator.startswith(":") and qualifier[1].isupper():
             candidates = {name}
+        elif len(members) > 1 and name in aliases and (not qualifier[1].islower() or any(c.isdigit() for c in name)):
+            candidates = {aliases[name]}
         else:
-            if re.search(r"\bApple[ \t]+$", before, re.I) or re.match(r"[ \t]+(?:Max|Pro|Ultra|Mac)\b", after, re.I):
-                return old
             candidates = code_modules or {module}
-        if sum(work_package_id(match["base"]) in ids.get(candidate, ()) for candidate in candidates) != 1:
-            return old
-        note(old, new)
-        return new
+
+        def matching(member):
+            base = work_package_id(member[0]).split(".", 1)[0]
+            return {candidate for candidate in candidates if base in ids.get(candidate, ())}
+
+        def hardware(member):
+            end = reference.start() + member.end()
+            return (member.start() == 0 and re.search(r"\bApple[ \t]+$", before, re.I)
+                    or re.match(r"[ \t]+(?:Max|Pro|Ultra|Mac)\b", text[end:end + 16], re.I))
+
+        if hardware(members[0]):
+            return reference[0]
+        # A known endpoint can identify a range even if the other endpoint was removed.
+        scope = next((known for member in members if (known := matching(member))), set())
+        out, start = [], 0
+        for member in members:
+            old = member[0]
+            new = work_package_id(old)
+            if old != new and not hardware(member):
+                if len(scope) == 1 and scope <= matching(member):
+                    note(old, new)
+                    out.extend((reference[0][start:member.start()], new))
+                    start = member.end()
+                elif len(members) > 1:
+                    unresolved(reference[0], old, scope or candidates)
+        return "".join(out) + reference[0][start:]
 
     def rename_key(match):
         quote = match[1] or ""
         note(OLD_WORK_PACKAGES, "work_packages")
         return quote + "work_packages" + quote
 
-    migrated = PLAN_ID.sub(rename, text)
-    return OLD_KEY_IN_CODE.sub(rename_key, migrated) if files else migrated
+    migrated = re.sub(references, rename, text)
+    return OLD_KEY_IN_CODE.sub(rename_key, migrated) if files and legacy_names else migrated
 
 
 def map_done_text(value, rewrite, field: str = ""):
@@ -14306,6 +14382,15 @@ def migration_audit(done: dict, rel: str):
     return note
 
 
+def migration_unresolved(done: dict, rel: str):
+    def note(reference, old, candidates):
+        entries = done.setdefault("unresolved_ids", {}).setdefault(rel, [])
+        entry = {"reference": reference, "id": old, "modules": sorted(filter(None, candidates))}
+        if entry not in entries:
+            entries.append(entry)
+    return note
+
+
 def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evidence: str | None = None) -> list[str]:
     """Moves the plans in a checkout from the flat layout into a folder per module, splits each plan's `## Log` into
     LOG.md, and with `to` moves the whole plans folder there and rewrites the Plans line. Updates the settings,
@@ -14314,8 +14399,11 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
     plans, paths = prof["plans"], []
     moved_plans = {}
     legacy_names = bool(flat_modules(tree, plans) or old_names_here(tree, plans, words=False))
+    repair_ids = legacy_names or id_repair_pending(tree)
     rewrite_words = word_migration_pending(tree, legacy_names)
-    project_words = rewrite_words and legacy_names and not has_word_migration(tree, MIGRATE_3_0_SUBJECT)
+    project_words = rewrite_words and legacy_names and not has_migration(tree, MIGRATE_3_0_SUBJECT)
+    if repair_ids:
+        done["id_repair"] = True
 
     def note(rel: str):
         return migration_audit(done, rel)
@@ -14417,8 +14505,10 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
             done.setdefault("renamed", []).append(PROFILE_FILE)
     designs = {}
     ids = planned_ids(tree, now_plans)
+    architecture = root / PROJECT_FILES["architecture"]
+    aliases = plan_id_aliases(architecture.read_text(), ids) if repair_ids and architecture.is_file() else {}
     texts = [p for p in module_plan_texts(root) if p.suffix == ".md"]
-    if legacy_names or to:
+    if repair_ids or to:
         texts.extend(root / PROJECT_FILES[kind] for kind in ("architecture", "vision"))
     if project_words:
         texts.append(root / PROJECT_FILES["glossary"])
@@ -14428,10 +14518,14 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
         rel = str(path.relative_to(tree))
         before = path.read_text()
         scope = "" if path.parent == root else path.parent.name.upper()
-        after = plan_links_3(before, rel, now_plans, ids, note(rel))
-        if path.name == "PLAN.md":
-            after = migrate_plan_headings(after, note(rel))
-        after = migrate_plan_text(after, scope, ids, note(rel))
+        after = before
+        if legacy_names:
+            after = plan_links_3(after, rel, now_plans, ids, note(rel))
+            if path.name == "PLAN.md":
+                after = migrate_plan_headings(after, note(rel))
+        if repair_ids:
+            after = migrate_plan_text(after, scope, ids, aliases, note(rel), migration_unresolved(done, rel),
+                                      legacy_names=legacy_names, evidence=prof["evidence"])
         if rewrite_words and (scope or project_words):
             after = migrate_plan_words(after, rel, now_plans["plans"], note(rel), project_words=project_words)
         if after != before:
@@ -14448,8 +14542,11 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
             continue
         doc_rel, rec_rel = done_rel(now_plans, stem), record_rel(now_plans, stem)
         def rewrite_done(value, field):
-            value = migrate_plan_text(move_paths(value, note(doc_rel)), stem.upper(), ids, note(doc_rel),
-                                      check=field == "check")
+            value = move_paths(value, note(doc_rel))
+            if repair_ids:
+                value = migrate_plan_text(value, stem.upper(), ids, aliases, note(doc_rel),
+                                          migration_unresolved(done, doc_rel), legacy_names=legacy_names,
+                                          evidence=prof["evidence"], check=field == "check")
             if rewrite_words:
                 value = migrate_plan_words(value, doc_rel, now_plans["plans"], note(doc_rel), project_words=project_words)
             return value
@@ -14460,7 +14557,7 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
             paths.append(done_rel(now_plans, stem))
             done.setdefault("renamed", []).append(done_rel(now_plans, stem))
         if old_rec is not None:
-            new_rec = upgrade_record(old_rec, old_doc, new_doc, prof["evidence"], note(rec_rel))
+            new_rec = upgrade_record(old_rec, old_doc, new_doc, prof["evidence"] if legacy_names else "", note(rec_rel))
             for entry in (new_rec.get("work_packages") or {}).values():
                 stamp = entry.get("authorised") if isinstance(entry, dict) else None
                 if isinstance(stamp, dict) and isinstance(stamp.get("files"), list):
@@ -14482,18 +14579,28 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
 
 MIGRATE_SUBJECTS = "orchestrate: migrate the plans to a folder per module and the names of "  # every version's
 MIGRATE_3_0_SUBJECT = MIGRATE_SUBJECTS + "3.0"
-MIGRATE_SUBJECT = MIGRATE_SUBJECTS + "3.0.1"
+MIGRATE_3_0_1_SUBJECT = MIGRATE_SUBJECTS + "3.0.1"
+MIGRATE_SUBJECT = MIGRATE_SUBJECTS + "3.0.2"
 
 
-def has_word_migration(tree: Path, subject: str = MIGRATE_SUBJECT) -> bool:
-    """The migration commit records which wording the project uses, including in other worktrees and clones."""
+def has_migration(tree: Path, subject: str) -> bool:
+    """The migration commit records which steps ran, including in other worktrees and clones."""
     subjects = git(tree, "log", "--format=%s", "-F", "--grep=" + subject).stdout.splitlines()
     return any(s == subject or s.startswith(subject + ", under ") for s in subjects)
 
 
 def word_migration_pending(tree: Path, legacy_names: bool) -> bool:
     """Only plans from the old layout or vocabulary need the one-time wording rewrite."""
-    return (legacy_names or has_word_migration(tree, MIGRATE_3_0_SUBJECT)) and not has_word_migration(tree)
+    return (legacy_names or has_migration(tree, MIGRATE_3_0_SUBJECT)) and not (
+        has_migration(tree, MIGRATE_3_0_1_SUBJECT) or has_migration(tree, MIGRATE_SUBJECT))
+
+
+def id_repair_pending(tree: Path) -> bool:
+    return migrated_before_id_repair(tree) and not has_migration(tree, MIGRATE_SUBJECT)
+
+
+def migrated_before_id_repair(tree: Path) -> bool:
+    return has_migration(tree, MIGRATE_3_0_1_SUBJECT) or has_migration(tree, MIGRATE_3_0_SUBJECT)
 
 
 def old_names_in_tree(tree: Path) -> tuple[list[str], dict]:
@@ -14577,11 +14684,12 @@ def migrate_branch(a: argparse.Namespace, worktree: Path, prof: dict, done_with)
     except TipError as e:
         done_with("FAILED", 1, detail=str(e))
     at_tip, tip_prof = old_names_in_tree(scratch)
-    if at_tip:
+    if at_tip or id_repair_pending(scratch):
         drop_tree(worktree, scratch_name)
+        pending = "; ".join(at_tip[:3]) if at_tip else "its plan IDs still need the 3.0.2 repair"
         done_with("REFUSED", 1, problems=[
-            f"{base_ref(prof)} still uses the old layout or names ({'; '.join(at_tip[:3])}). --branch brings a "
-            "worktree over once the main branch has been migrated, so migrate that first"],
+            f"{base_ref(prof)} still needs migration ({pending}). --branch brings a worktree over once the main "
+            "branch has been migrated, so migrate that first"],
             next=next_cmd(loop_cmd("migrate", "--worktree", wt), "lead",
                           "migrate the main branch first; it waits until no run is working in the repository"))
     if dirty := git(worktree, "status", "--porcelain").stdout.strip():
@@ -14610,7 +14718,8 @@ def migrate_branch(a: argparse.Namespace, worktree: Path, prof: dict, done_with)
         git(scratch, "add", "-A")
         trees.append(git(scratch, "write-tree").stdout.strip())
     drop_tree(worktree, scratch_name)
-    if all(t == git(worktree, "rev-parse", f"{c}^{{tree}}").stdout.strip() for c, t in zip([base, *own], trees)):
+    if not did.get("id_repair") and all(t == git(worktree, "rev-parse", f"{c}^{{tree}}").stdout.strip()
+                                        for c, t in zip([base, *own], trees)):
         done_with("NOTHING", detail="this worktree's commits already use the current layout and names",
                   worktree=bring_up(worktree, prof, ref))
 
@@ -14684,7 +14793,7 @@ def migrate_branch(a: argparse.Namespace, worktree: Path, prof: dict, done_with)
                 if migration else {}))
     renamed = sorted(set(did.get("renamed", [])) | {f"{tip_prof['plans']}/{m}/" for m in did.get("modules", [])})
     done_with("MIGRATED", module=stem, commit=head_commit(worktree), was=was, commits=len(own), renamed=renamed,
-              **({"rewrites": did["rewrites"]} if did.get("rewrites") else {}),
+              **{k: did[k] for k in ("rewrites", "unresolved_ids") if did.get(k)},
               worktree=f"its {plural(len(own), 'commit')} renamed and rebased{behind or ' onto ' + base_ref(prof)}; "
                        "they have new ids, and `was` is the old HEAD",
               **({"conflicts": conflicts} if behind else {}), **upstream_changes(worktree, base, len(own)),
@@ -14842,16 +14951,17 @@ def migrate_claims_3(worktree: Path, prof: dict, local: list, remote: list) -> N
         sync_holds(worktree, prof)
 
 
-def local_names_3(worktree: Path, prof: dict, ids: dict, done: dict | None = None):
+def local_names_3(worktree: Path, prof: dict, ids: dict, done: dict | None = None, *, rename_evidence: bool):
     """Yield changes in the shared working folder and script state, including each linked worktree's build state.
     The same scan detects unfinished local work after the main branch has already migrated."""
     evidence = evidence_root(worktree)
-    for module in sorted(evidence.iterdir()) if evidence.is_dir() else []:
+    for module in sorted(evidence.iterdir()) if rename_evidence and evidence.is_dir() else []:
         if module.is_symlink() or not module.is_dir():
             continue
         for path in sorted(module.iterdir()):
             match = OLD_ID.match(path.name)
-            if match and work_package_id(match[0]) in ids.get(module.name.upper(), ()):
+            if match and work_package_id(match[0]) in ids.get(module.name.upper(), ()) and (
+                    path.is_dir() or LEGACY_EVIDENCE_FILE.fullmatch(path.name)):
                 dest = path.with_name(work_package_id(path.name))
                 if done is not None:
                     migration_audit(done, str(dest))(path.name, dest.name)
@@ -14886,7 +14996,7 @@ def local_names_3(worktree: Path, prof: dict, ids: dict, done: dict | None = Non
                     except ValueError:
                         after.append(line)
                         continue
-                    new = stored_names_3(old, evidence=prof["evidence"], state=True, note=note)
+                    new = stored_names_3(old, evidence=prof["evidence"] if rename_evidence else "", state=True, note=note)
                     after.append(line if old == new else json.dumps(new, indent=None if path.suffix == ".jsonl" else 2) + "\n")
                 text = "".join(after)
                 if dest != path or text != before:
@@ -14948,18 +15058,25 @@ def cmd_migrate(a: argparse.Namespace) -> None:
         checked = verify_tree(worktree, "_migrate-tip", ref)
         at_tip, tip_prof = old_names_in_tree(checked)
         ids = planned_ids(checked, tip_prof)
+        migrated_before_repair = migrated_before_id_repair(checked)
+        repair_recorded = has_migration(checked, MIGRATE_SUBJECT)
+        repair_ids = migrated_before_repair and not repair_recorded
     except TipError as e:
         done_with("FAILED", 1, detail=str(e))
     drop_tree(worktree, "_migrate-tip")
     moving = evidence_to_move(worktree, ref)
+    # An original migration can be interrupted after committing but before moving its local evidence.
+    rename_evidence = bool(at_tip or moving or (repair_recorded and not migrated_before_repair))
     local_claims, remote_claims = claim_moves_3(worktree, tip_prof)
-    local_changes = next(local_names_3(worktree, tip_prof, ids), None) if not at_tip and not moving else None
-    if not at_tip and (not to or to == tip_prof["plans"]) and not (moving or local_changes or local_claims or remote_claims):
+    local_changes = (next(local_names_3(worktree, tip_prof, ids, rename_evidence=rename_evidence), None)
+                     if not at_tip and not moving else None)
+    if not (at_tip or repair_ids or moving or local_changes or local_claims or remote_claims or
+            to and to != tip_prof["plans"]):
         here = bring_up(worktree, prof, ref)
         behind = worktrees_on_old_names(worktree)
         link_worktrees(worktree, evidence_setting(show(worktree, ref, PROFILE_FILE) or ""))
         done_with("NOTHING", detail=f"the plans at {base_ref(prof)} already have a folder per module and the names "
-                                    "of 3.0.1, and the evidence is in the working folder", worktree=here,
+                                    f"of {VERSION}, and the evidence is in the working folder", worktree=here,
                   **left_behind(behind))
     folder = loop_dir(worktree)
     busy = [name for name in (p.name[len("run-"):-len(".lock")] for p in folder.glob("run-*.lock"))
@@ -14991,7 +15108,7 @@ def cmd_migrate(a: argparse.Namespace) -> None:
         validate_migration(t, done_with)
         if moving and not copied:
             copied = copy_evidence(worktree, ref, moving)
-        local_changes = list(local_names_3(worktree, tip_prof, ids, did))
+        local_changes = list(local_names_3(worktree, tip_prof, ids, did, rename_evidence=rename_evidence))
         seen, collisions = set(), set()
         for src, dest, _ in local_changes:
             if src != dest and (dest in seen or os.path.lexists(dest)):
@@ -15001,8 +15118,12 @@ def cmd_migrate(a: argparse.Namespace) -> None:
             done_with("REFUSED", 1, problems=[f"multiple files would use the same path: {', '.join(sorted(collisions)[:10])}"])
         return list(dict.fromkeys(written))
 
-    subject = MIGRATE_SUBJECT + (f", under {to}" if to else "") if at_tip or to else EVIDENCE_SUBJECT
-    ok, landed = loop_write(worktree, prof, "_migrate", change, subject, take_up_ok=False)
+    if at_tip or repair_ids:
+        subject = MIGRATE_SUBJECT + (f", under {to}" if to else "")
+    else:
+        subject = f"orchestrate: move the plans under {to}" if to else EVIDENCE_SUBJECT
+    ok, landed = loop_write(worktree, prof, "_migrate", change, subject, take_up_ok=False,
+                            allow_empty=lambda: did.get("id_repair", False))
     if not ok:
         done_with("FAILED", 1, detail=landed)
     migrate_local_files_3(local_changes)
@@ -15035,12 +15156,12 @@ def cmd_migrate(a: argparse.Namespace) -> None:
             "fresh clone")
     if not did:
         done_with("NOTHING", detail=f"the plans at {base_ref(prof)} already have a folder per module and the names "
-                                    "of 3.0.1", worktree=here, **left_behind(behind))
+                                    f"of {VERSION}", worktree=here, **left_behind(behind))
     done_with("MIGRATED", commit=landed, plans=did.get("plans", prof["plans"]), modules=did.get("modules", []),
               **({k: did[k] for k in ("local_files", "claim_refs") if k in did}),
               **({"logs_split": did["logs_split"]} if did.get("logs_split") else {}),
               **({"renamed": did["renamed"]} if did.get("renamed") else {}),
-              **({"rewrites": did["rewrites"]} if did.get("rewrites") else {}),
+              **{k: did[k] for k in ("rewrites", "unresolved_ids") if did.get(k)},
               **({"evidence": did["evidence"]} if did.get("evidence") else {}), worktree=here,
               **left_behind(behind, migrated_next(worktree, did)))
 
@@ -17510,6 +17631,8 @@ migrate --worktree PATH [--to docs/plans]
       done-when text from the old layout or names, including projects migrated by 3.0. An upgrade from 2.x also
       updates the project documents. Git history
       records that the word rewrite ran, so future references to project milestones keep their meaning.
+      For 3.0.2 it finishes lists and ranges of IDs once, including in projects migrated by 3.0 or 3.0.1.
+      `unresolved_ids` lists the references left for lack of a matching work package in a single module.
       Log entries, saved tasks, commit messages and evidence contents keep their wording.
       Commands that read old plans point you here. --to also moves
       the whole plans folder there and changes the Plans line. Refused while any run, review, plan or adopt is
