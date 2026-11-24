@@ -6216,7 +6216,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.0.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.0.4"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6256,6 +6256,10 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.0.4": [
+        "If `migrate` 3.0.3 failed because it changed a file under a folder evidence moved out of, run it again. "
+        "It now leaves those files as they are. Pause any runs first.",
+    ],
     "3.0.3": [
         "Run `migrate` once on projects migrated by 3.0 to 3.0.2. It points links at the headings the renames "
         "changed (`#leases-m1` to `#leases-wp1`) and at VISION.md in every markdown file, keeps design approvals "
@@ -14423,7 +14427,10 @@ def repair_anchors(tree: Path, prof: dict, note) -> dict[str, tuple[str, str]]:
     or wording was renamed (`#leases-m1` to `#leases-wp1`). A link changes only when it is broken now and the renamed
     form names a heading that exists. Returns {path: (text before, text after)} for each file it rewrote."""
     listed = git(tree, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.md").stdout
-    files = sorted({n for n in listed.split("\0") if n and (tree / n).is_file() and not (tree / n).is_symlink()})
+    # Files under the evidence folders stay as they are, because `merge` refuses any commit that changes them.
+    guarded = [prof.get("evidence") or EVIDENCE_DEFAULT, *moved_evidence(tree)]
+    files = sorted({n for n in listed.split("\0") if n and (tree / n).is_file() and not (tree / n).is_symlink()
+                    and not any(inside(n, folder) for folder in guarded)})
     old_vision, vision = f"{prof['plans']}/{OLD_VISION}", project_file(prof, "vision")
     cache: dict[str, set[str] | None] = {}
 
@@ -17792,7 +17799,8 @@ migrate --worktree PATH [--to docs/plans]
       For 3.0.2 it finishes lists and ranges of IDs once, including in projects migrated by 3.0 or 3.0.1.
       For 3.0.3 it repairs links once in every markdown file of the repository: an anchor that no longer matches
       a heading because the heading's ID or wording was renamed, and a link to the old vision and scope document's
-      path. A link changes only when it is broken and the renamed form exists. In the working folder it points
+      path. A link changes only when it is broken and the renamed form exists, and files under the evidence
+      folders git still tracks stay as they are. In the working folder it points
       handoff and review links at renamed work package folders.
       `unresolved_ids` lists the references left for lack of a matching work package in a single module.
       Log entries, saved tasks, commit messages and evidence contents keep their wording.

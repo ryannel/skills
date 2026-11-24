@@ -413,6 +413,9 @@ class AnchorRepair(Repo):
         put(plans / "VISION.md", "# Vision\n\n## Scope\n")
         put(plans / "ARCHITECTURE.md", "[Leases](WATER/DESIGN.md#leases-m1) and [code](`#x`).\n")
         put(self.wt / "docs/CAPTURE.md", "[harness](plans/WATER/DESIGN.md#leases-m1 \"t\")\n")
+        kept = self.wt / "docs/evidence/run.md"  # still in git from before 2.6.0, where merge refuses changes
+        put(kept, "[brief](../plans/BRIEF.md)\n")
+        put(agent_loop.loop_dir(self.wt) / agent_loop.EVIDENCE_MOVED_FILE, json.dumps({"from": ["docs/evidence"]}))
         record = plans / "WATER/RECORD.json"
         rec = json.loads(record.read_text())
         rec["design"] = {"verdict": "ok", "hash": agent_loop.text_hash(design)}
@@ -431,6 +434,7 @@ class AnchorRepair(Repo):
         self.assertIn("(WATER/DESIGN.md#leases-wp1)", (plans / "ARCHITECTURE.md").read_text())
         self.assertIn("(plans/WATER/DESIGN.md#leases-wp1 \"t\")", (self.wt / "docs/CAPTURE.md").read_text())
         self.assertEqual(self.read_record()["design"]["hash"], agent_loop.text_hash(after))
+        self.assertEqual(kept.read_text(), "[brief](../plans/BRIEF.md)\n")
         self.assertEqual(self.evidence("WATER/WP1-handoff.md").read_text(),
                          "[shot](WP1/shot.png) [kept](WP1/shot.png) [gone](M9/x.png) "
                          "[full](.orchestrate/evidence/WATER/WP1/shot.png)\n")
