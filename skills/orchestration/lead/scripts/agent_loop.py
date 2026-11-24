@@ -4764,28 +4764,37 @@ def holds(worktree: Path) -> dict[tuple[str, str], str]:
     return out
 
 
-def take_hold(worktree: Path, prof: dict, key: str, mid: str) -> tuple[bool, str]:
+HOLD_PUSH_TRIES = 3  # a push that fails with no holder found is tried again, after 1 s and 2 s
+
+
+def take_hold(worktree: Path, prof: dict, key: str, mid: str) -> tuple[bool, str, str]:
     """Holds the work package with a ref no other lead can create at the same time: a new ref on the remote (push),
-    or a local ref created only if absent (local). Two leads never start the same work package."""
+    or a local ref created only if absent (local). Two leads never start the same work package. Returns (held, the
+    holder, the push's error when it failed and no holder was found, so no other lead is named that doesn't exist)."""
     sync_holds(worktree, prof)
     mine = me(worktree)
     holder = holds(worktree).get((key, mid))
     if holder:
-        return holder == mine, holder
+        return holder == mine, holder, ""
     empty = git(worktree, "mktree", stdin="").stdout.strip()
     sha = git(worktree, *ident(worktree), "commit-tree", empty, "-m", mine).stdout.strip()
     ref = f"{HOLDS}/{key}/{mid}"
     if prof["merge"] == "push":
-        if git(worktree, "push", "--quiet", prof["remote"], f"{sha}:{ref}").returncode != 0:
+        for attempt in range(HOLD_PUSH_TRIES):
+            pushed = git(worktree, "push", "--quiet", prof["remote"], f"{sha}:{ref}")
+            if pushed.returncode == 0:
+                git(worktree, "update-ref", ref, sha)
+                return True, mine, ""
             sync_holds(worktree, prof)
-            holder = holds(worktree).get((key, mid), "another lead")
-            return holder == mine, holder
-        git(worktree, "update-ref", ref, sha)
-        return True, mine
+            if holder := holds(worktree).get((key, mid)):
+                return holder == mine, holder, ""
+            if attempt + 1 < HOLD_PUSH_TRIES:
+                time.sleep(attempt + 1)
+        return False, "", (pushed.stderr or pushed.stdout or "").strip()[-400:] or f"exit {pushed.returncode}"
     if git(worktree, "update-ref", ref, sha, "0" * 40).returncode != 0:
         holder = holds(worktree).get((key, mid), "another lead")
-        return holder == mine, holder
-    return True, mine
+        return holder == mine, holder, ""
+    return True, mine, ""
 
 
 def drop_hold(worktree: Path, prof: dict, key: str, mid: str) -> None:
@@ -6216,7 +6225,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.0.6"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.0.7"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6256,6 +6265,10 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.0.7": [
+        "A run whose hold push fails with no other lead holding the work package tries again, then ends "
+        "SCRIPT_FAILED with the push's error, rather than IN_PROGRESS_ELSEWHERE by \"another lead\".",
+    ],
     "3.0.6": [
         "The supervisor no longer starts a module again after an INVALID result. Read the refusal, and start the "
         "module yourself once what it names has changed.",
@@ -8372,7 +8385,13 @@ def cmd_run(a: argparse.Namespace) -> None:
             emit("REFUSED", module=stem, work_package=mid, problems=[why], running=others, next=next_cmd(
                 loop_cmd("builders", "--worktree", str(worktree), "--set", str(len(others) + 1), "--why",
                          "<why the machine has room for one more>"), "lead", why, then=again))
-    ok, holder = take_hold(worktree, prof, key, mid)
+    ok, holder, push_error = take_hold(worktree, prof, key, mid)
+    if push_error:
+        why = (f"pushing the hold on {mid} to {prof['remote']} failed {HOLD_PUSH_TRIES} times, and no other lead "
+               f"holds it: {push_error}")
+        emit("SCRIPT_FAILED", module=stem, work_package=mid, reason=why, next=next_cmd(
+            loop_cmd("run", "--module", stem, "--worktree", str(worktree)), "lead",
+            "run it again; if the push keeps failing, check the remote and tell the user"))
     if not ok:
         emit("IN_PROGRESS_ELSEWHERE", module=stem, work_package=mid, by=holder,
              next=next_for({**step, "status": "in_progress_elsewhere", "by": holder}, worktree, prof, proj))

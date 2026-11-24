@@ -1359,11 +1359,32 @@ class Leads(Repo):
         prof = agent_loop.profile(self.wt, strict=True)
         self.assertTrue(agent_loop.take_hold(self.wt, prof, "WATER", "WP1")[0])
         other = self.second_clone()
-        ok, holder = agent_loop.take_hold(other, prof, "WATER", "WP1")
+        ok, holder, _ = agent_loop.take_hold(other, prof, "WATER", "WP1")
         self.assertFalse(ok)
         self.assertEqual(holder, agent_loop.me(self.wt))
         self.assertEqual(self.ready(other)["in_progress_elsewhere"][0]["work_package"], "WP1")
         self.assertEqual(self.run_loop(worktree=str(other))["result"], "IN_PROGRESS_ELSEWHERE")
+
+    def test_a_failed_hold_push_with_no_holder_is_tried_again_and_never_names_another_lead(self):
+        prof = agent_loop.profile(self.wt, strict=True)
+        real, pushes = agent_loop.git, []
+
+        def flaky(worktree, *args, **kw):
+            if args[:1] == ("push",) and args[-1].endswith(":refs/orchestrate/claims/WATER/WP1"):
+                pushes.append(args)
+                if len(pushes) <= failures:
+                    return subprocess.CompletedProcess(args, 1, "", "error: failed to push some refs")
+            return real(worktree, *args, **kw)
+
+        with mock.patch.object(agent_loop, "git", flaky), mock.patch.object(agent_loop.time, "sleep"):
+            failures = 1
+            self.assertEqual(agent_loop.take_hold(self.wt, prof, "WATER", "WP1"), (True, agent_loop.me(self.wt), ""))
+            agent_loop.drop_hold(self.wt, prof, "WATER", "WP1")
+            pushes.clear()
+            failures = 99
+            ok, holder, error = agent_loop.take_hold(self.wt, prof, "WATER", "WP1")
+        self.assertEqual((ok, holder, len(pushes)), (False, "", agent_loop.HOLD_PUSH_TRIES))
+        self.assertIn("failed to push", error)
 
     def test_fable_6_pause_signals_the_running_loop(self):
         code = (f"import sys, time; sys.path.insert(0, {str(SCRIPTS)!r}); import agent_loop; from pathlib import Path\n"
@@ -1973,13 +1994,13 @@ class WhatTheLeadSees(Repo):
         with mock.patch.object(agent_loop, "QUOTA_WORKTREE", [self.wt]):
             first = self.call(lambda a: agent_loop.emit("NOTHING"))
             second = self.call(lambda a: agent_loop.emit("NOTHING"))
-        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5", "3.0.6"])
+        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5", "3.0.6", "3.0.7"])
         self.assertIn("From before 2.6.0", first["changed"]["2.5.0"][0])
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
         self.assertIn("2.5.0", agent_loop.version_change(self.wt))
         note.write_text('{"version": "2.5.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5", "3.0.6"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5", "3.0.6", "3.0.7"])
         note.write_text('{"version": "2.9.0"}')
         (line, *_) = agent_loop.version_change(self.wt)["2.10.0"]
         self.assertIn("Read the lead skill again", line)
