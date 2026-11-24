@@ -1299,9 +1299,8 @@ def rename_labels(text: str) -> str:
     return text
 
 
-def old_names_here(tree: Path, plans: str, settings: str | None = None) -> list[str]:
-    """What in this working copy still uses the names from before 2.0: the settings file's old labels, and each
-    module's done-when and record files, one phrase per file."""
+def old_names_here(tree: Path, plans: str, settings: str | None = None, *, words: bool = True) -> list[str]:
+    """Old settings, file names, fields, IDs and unmigrated module wording, one phrase per file."""
     if settings is None:
         path = tree / PROFILE_FILE
         settings = path.read_text() if path.exists() else ""
@@ -1324,12 +1323,24 @@ def old_names_here(tree: Path, plans: str, settings: str | None = None) -> list[
                 continue
             if names:
                 found.append(f"{p.relative_to(tree)}: {', '.join(names)}")
+    if words and word_migration_pending(tree, bool(found or flat_modules(tree, plans))):
+        for p in module_plan_texts(folder):
+            rel = str(p.relative_to(tree))
+            before = p.read_text(errors="replace")
+            if p.name == MODULE_FILES["done"]:
+                try:
+                    before = json.loads(before)
+                except ValueError:
+                    continue
+            after = map_done_text(before, lambda value, _: migrate_plan_words(value, rel, plans))
+            if after != before:
+                found.append(f"{rel} has old plan wording")
     return found
 
 
 def old_names_refusal(tree: Path, found: list[str]) -> str:
-    """The message a command stops with when the project still uses the names from before 2.0."""
-    return ("error: this project still uses names from before orchestrate 3.0: " + "; ".join(found[:6]) +
+    """The message a command stops with when the project still uses old names."""
+    return ("error: this project still uses names from before orchestrate 3.0.1: " + "; ".join(found[:6]) +
             ("; ..." if len(found) > 6 else "") + ". Bring it to the new names once, in one commit, with:\n  " +
             loop_cmd("migrate", "--worktree", str(tree)) +
             "\nIf the main branch has already been migrated, the same command fast-forwards this worktree instead, "
@@ -6202,7 +6213,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.0.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.0.1"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6242,6 +6253,10 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.0.1": [
+        "If the module plans still call work packages milestones, pause every run and run `migrate` once "
+        "to update their wording.",
+    ],
     "3.0.0": [
         "Pause every run and run `migrate` once. Work packages have WP IDs, planner instructions are stored in "
         "`tasks`, and the vision and scope document is VISION.md. Use --work-package to select a work package.",
@@ -14206,15 +14221,80 @@ def migrate_plan_text(text: str, module: str, ids: dict, note, *, check: bool = 
     return OLD_KEY_IN_CODE.sub(rename_key, migrated) if files else migrated
 
 
-def migrate_done_text(value, module: str, ids: dict, note, move_paths, field: str = ""):
-    """Translate every text value in a done-when file, leaving its field names for the schema migration."""
+def map_done_text(value, rewrite, field: str = ""):
+    """Apply a rewrite to the text values in a done-when file."""
     if isinstance(value, dict):
-        return {k: migrate_done_text(v, module, ids, note, move_paths, k) for k, v in value.items()}
+        return {k: map_done_text(v, rewrite, k) for k, v in value.items()}
     if isinstance(value, list):
-        return [migrate_done_text(v, module, ids, note, move_paths, field) for v in value]
+        return [map_done_text(v, rewrite, field) for v in value]
     if isinstance(value, str) and field not in ID_FIELDS:
-        return migrate_plan_text(move_paths(value, note), module, ids, note, check=field == "check")
+        return rewrite(value, field)
     return value
+
+
+def module_plan_texts(root: Path):
+    for kind in ("design", "plan", "done"):
+        yield from (p for p in sorted(root.glob(f"*/{MODULE_FILES[kind]}")) if p.is_file() and not p.is_symlink())
+
+
+OLD_PLAN_WORDS = re.compile(
+    r"(?P<reference>(?<![\w./-])(?:[\w+.-]+://[^\s\x22'`<>()[\]]+|"
+    r"(?:[\w.-]*/)+[\w.-]+(?:#[\w.-]+)?|[\w.-]+\.[a-z]+(?:#[\w.-]+)?|#[\w]+(?:-[\w]+)+))"
+    r"|(?P<placeholder><milestones?>)|(?<![\w-])--milestones?\b"
+    r"|\b(?P<word>milestones?|project[ \t\n]+brief)\b", re.I)
+
+
+def migrate_plan_words(text: str, rel: str, plans: str, note=None, *, project_words: bool = False) -> str:
+    """Rename plan wording and its references, keeping addresses outside the rewritten plans intact."""
+    def wording(old: str, separator: str = " ") -> str:
+        if old.lower().startswith("project"):
+            new = "vision and scope document"
+        else:
+            new = "work packages" if old.lower().endswith("s") else "work package"
+        if old.isupper():
+            new = new.upper()
+        elif old.istitle() and old.lower().startswith("project"):
+            new = "Vision and Scope Document"
+        elif old[0].isupper():
+            new = new.capitalize()
+        return new.replace(" ", separator)
+
+    def reference(old: str) -> str:
+        if "://" in old:
+            return old
+        path, sep, anchor = old.partition("#")
+        folder = os.path.dirname(rel)
+        full = os.path.normpath(os.path.join(folder, path)) if path else rel
+        if path.startswith("/") or path.startswith(plans + "/"):
+            full = path.lstrip("/")
+        if full == f"{plans}/{OLD_VISION}":
+            path = path[:-len(OLD_VISION)] + PROJECT_FILES["vision"]
+            full = f"{plans}/{PROJECT_FILES['vision']}"
+        module_doc = (os.path.dirname(os.path.dirname(full)) == plans
+                      and Path(full).name in (MODULE_FILES["design"], MODULE_FILES["plan"]))
+        project_doc = project_words and (full == PROFILE_FILE or full in {
+            f"{plans}/{PROJECT_FILES[kind]}" for kind in ("architecture", "vision", "glossary")})
+        if module_doc or project_doc:
+            anchor = re.sub(r"\b(?:milestones?|project-brief)\b", lambda m: wording(m[0], "-"), anchor, flags=re.I)
+        return path + sep + anchor
+
+    def rename(match):
+        old = match[0]
+        if match["reference"]:
+            new = reference(old)
+        elif match["placeholder"]:
+            new = "<" + wording(old[1:-1], "-") + ">"
+        elif match["word"]:
+            before, after = text[max(0, match.start() - 2):match.start()], text[match.end():match.end() + 2]
+            compound = (re.search(r"\w-$", before) or re.match(r"-\w", after))
+            new = wording(old, "-" if compound else " ")
+        else:
+            new = old
+        if note and new != old:
+            note(old, new)
+        return new
+
+    return OLD_PLAN_WORDS.sub(rename, text)
 
 
 def migration_audit(done: dict, rel: str):
@@ -14233,6 +14313,9 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
     written or removed, and fills `done` with what it did."""
     plans, paths = prof["plans"], []
     moved_plans = {}
+    legacy_names = bool(flat_modules(tree, plans) or old_names_here(tree, plans, words=False))
+    rewrite_words = word_migration_pending(tree, legacy_names)
+    project_words = rewrite_words and legacy_names and not has_word_migration(tree, MIGRATE_3_0_SUBJECT)
 
     def note(rel: str):
         return migration_audit(done, rel)
@@ -14325,14 +14408,20 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
                                  rf"\g<1>{vision}", renamed)
         if count:
             note(PROFILE_FILE)(purpose, vision)
+        if project_words:
+            renamed = migrate_plan_words(renamed, PROFILE_FILE, now_plans["plans"], note(PROFILE_FILE),
+                                         project_words=True)
         if renamed != before:
             settings.write_text(renamed)
             paths.append(PROFILE_FILE)
             done.setdefault("renamed", []).append(PROFILE_FILE)
     designs = {}
     ids = planned_ids(tree, now_plans)
-    texts = [root / PROJECT_FILES[kind] for kind in ("architecture", "vision")]
-    texts.extend(path for path in root.glob("*/*.md") if path.name in ("PLAN.md", "DESIGN.md"))
+    texts = [p for p in module_plan_texts(root) if p.suffix == ".md"]
+    if legacy_names or to:
+        texts.extend(root / PROJECT_FILES[kind] for kind in ("architecture", "vision"))
+    if project_words:
+        texts.append(root / PROJECT_FILES["glossary"])
     for path in sorted(texts):
         if path.is_symlink() or not path.is_file():
             continue
@@ -14343,6 +14432,8 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
         if path.name == "PLAN.md":
             after = migrate_plan_headings(after, note(rel))
         after = migrate_plan_text(after, scope, ids, note(rel))
+        if rewrite_words and (scope or project_words):
+            after = migrate_plan_words(after, rel, now_plans["plans"], note(rel), project_words=project_words)
         if after != before:
             path.write_text(after)
             paths.append(rel)
@@ -14356,7 +14447,14 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
         except json.JSONDecodeError:
             continue
         doc_rel, rec_rel = done_rel(now_plans, stem), record_rel(now_plans, stem)
-        new_doc = migrate_done_text(upgrade_doc(old_doc, note=note(doc_rel)), stem.upper(), ids, note(doc_rel), move_paths)
+        def rewrite_done(value, field):
+            value = migrate_plan_text(move_paths(value, note(doc_rel)), stem.upper(), ids, note(doc_rel),
+                                      check=field == "check")
+            if rewrite_words:
+                value = migrate_plan_words(value, doc_rel, now_plans["plans"], note(doc_rel), project_words=project_words)
+            return value
+
+        new_doc = map_done_text(upgrade_doc(old_doc, note=note(doc_rel)), rewrite_done)
         if new_doc != old_doc:
             write_json(doc_path, new_doc)
             paths.append(done_rel(now_plans, stem))
@@ -14383,7 +14481,19 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
 
 
 MIGRATE_SUBJECTS = "orchestrate: migrate the plans to a folder per module and the names of "  # every version's
-MIGRATE_SUBJECT = MIGRATE_SUBJECTS + "3.0"
+MIGRATE_3_0_SUBJECT = MIGRATE_SUBJECTS + "3.0"
+MIGRATE_SUBJECT = MIGRATE_SUBJECTS + "3.0.1"
+
+
+def has_word_migration(tree: Path, subject: str = MIGRATE_SUBJECT) -> bool:
+    """The migration commit records which wording the project uses, including in other worktrees and clones."""
+    subjects = git(tree, "log", "--format=%s", "-F", "--grep=" + subject).stdout.splitlines()
+    return any(s == subject or s.startswith(subject + ", under ") for s in subjects)
+
+
+def word_migration_pending(tree: Path, legacy_names: bool) -> bool:
+    """Only plans from the old layout or vocabulary need the one-time wording rewrite."""
+    return (legacy_names or has_word_migration(tree, MIGRATE_3_0_SUBJECT)) and not has_word_migration(tree)
 
 
 def old_names_in_tree(tree: Path) -> tuple[list[str], dict]:
@@ -14849,7 +14959,7 @@ def cmd_migrate(a: argparse.Namespace) -> None:
         behind = worktrees_on_old_names(worktree)
         link_worktrees(worktree, evidence_setting(show(worktree, ref, PROFILE_FILE) or ""))
         done_with("NOTHING", detail=f"the plans at {base_ref(prof)} already have a folder per module and the names "
-                                    "of 3.0, and the evidence is in the working folder", worktree=here,
+                                    "of 3.0.1, and the evidence is in the working folder", worktree=here,
                   **left_behind(behind))
     folder = loop_dir(worktree)
     busy = [name for name in (p.name[len("run-"):-len(".lock")] for p in folder.glob("run-*.lock"))
@@ -14925,7 +15035,7 @@ def cmd_migrate(a: argparse.Namespace) -> None:
             "fresh clone")
     if not did:
         done_with("NOTHING", detail=f"the plans at {base_ref(prof)} already have a folder per module and the names "
-                                    "of 3.0", worktree=here, **left_behind(behind))
+                                    "of 3.0.1", worktree=here, **left_behind(behind))
     done_with("MIGRATED", commit=landed, plans=did.get("plans", prof["plans"]), modules=did.get("modules", []),
               **({k: did[k] for k in ("local_files", "claim_refs") if k in did}),
               **({"logs_split": did["logs_split"]} if did.get("logs_split") else {}),
@@ -17396,8 +17506,12 @@ migrate --worktree PATH [--to docs/plans]
       folder. For 3.0 it uses IDs such as WP7 and WP7.3 in plan documents, done-when files, checks, records,
       evidence paths, claim refs and results. It rewrites text references that resolve in their own module or
       the module they name, and keeps matching definitions and design approvals current. Only the project-level
-      vision and scope document moves to VISION.md. Log entries, saved tasks, commit messages and evidence
-      contents keep their wording. Commands that read old plans point you here. --to also moves
+      vision and scope document moves to VISION.md. For 3.0.1 it updates wording once in module designs, plans and
+      done-when text from the old layout or names, including projects migrated by 3.0. An upgrade from 2.x also
+      updates the project documents. Git history
+      records that the word rewrite ran, so future references to project milestones keep their meaning.
+      Log entries, saved tasks, commit messages and evidence contents keep their wording.
+      Commands that read old plans point you here. --to also moves
       the whole plans folder there and changes the Plans line. Refused while any run, review, plan or adopt is
       running, and while plan files here differ from the tip, unless the tip is migrated already. MIGRATED
       (`renamed` lists files given new names and `rewrites` counts each substitution per file), NOTHING (the tip

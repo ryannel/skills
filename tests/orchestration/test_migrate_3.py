@@ -17,8 +17,8 @@ class WorkPackageMigration(Repo):
         self.plans = self.wt / "docs/plans"
         self.state_dir = agent_loop.loop_dir(self.wt)
         self.vision = "The team builds for the Apple M1.\n"
-        self.log_entry = "2026-11-21: M1 passed its first review.\n"
-        self.task = "Diagnose the disputed captures from the test on the Apple M1."
+        self.log_entry = "2026-11-21: Milestone M1 passed its first review.\n"
+        self.task = "Diagnose the milestone's disputed captures from the test on the Apple M1."
         rel = ".orchestrate/evidence/WATER/"
         put(self.plans / "BRIEF.md", self.vision)
         put(self.plans / "WATER/PLAN.md", "# Water\n\n## M1: Surface\n\n## M2: Foam\n")
@@ -199,22 +199,29 @@ class WorkPackageMigration(Repo):
         put(self.evidence("WATER/M1/check_loaded.py"), '# M1 runs on this M3 Max\nassert 3 == 3\n')
         brief = "# Water feature\nM1 predates migration.\n"
         put(self.plans / "WATER/BRIEF.md", brief)
+        put(self.plans / "GLOSSARY.md", "# Glossary\nA milestone is a unit of work.\n")
+        settings = self.wt / "ORCHESTRATE.md"
+        put(settings, settings.read_text() + "\nRead the project brief before starting a milestone.\n")
         put(self.plans / "ARCHITECTURE.md",
             "| # | Module | What it's for | Needs |\n|---|---|---|---|\n"
             "| 1 | CORE | Renderer | |\n| 2 | WATER | Surface | CORE M3 |\n"
-            "\nWATER M1 and CORE:M3.1 run on this M3 Max. UNKNOWN:M1 stays literal.\n")
-        put(self.plans / "BRIEF.md", "Goal: WATER M1 builds on CORE:M3.1 and runs on this M3 Max.\n")
-        design = "Measure M1.4 after CORE M3.1. Use this M3 Max. See [history](BRIEF.md).\n"
+            "\nWATER M1 and CORE:M3.1 run on this M3 Max. UNKNOWN:M1 stays literal.\n"
+            "See the [Project brief](BRIEF.md) before those milestones.\n")
+        put(self.plans / "BRIEF.md",
+            "Goal: WATER M1 builds on CORE:M3.1 and runs on this M3 Max. The milestone has a quality gate.\n")
+        design = ("## Milestone proof\nMeasure M1.4 after CORE M3.1. Use this M3 Max. See [history](BRIEF.md).\n"
+                  "See `../BRIEF.md` for the project brief and keep the per-milestone brief.\n")
         put(self.plans / "WATER/DESIGN.md", design)
         put(self.plans / "CORE/DESIGN.md", "M3.1 renders on this M3 Max, an Apple M3.\n")
-        put(self.plans / "WATER/PLAN.md", "## M1: Surface\nRun M1.4's check first.\n\n## M2: Foam\n")
+        put(self.plans / "WATER/PLAN.md",
+            "## M1: Surface\nRun M1.4's check first. [Milestone proof](DESIGN.md#milestone-proof).\n\n## M2: Foam\n")
         doc, rec = self.read_done(), self.read_record()
         [water] = doc["milestones"]
         water.update(failed_reviews=2, failed_reviews_with_repeat=1)
         water["quality_bar"] = "Compare to CORE:M3.1 and M2 on this M3 Max."
         item = water["items"][0]
         item.update(statement="M1.4 uses CORE M3.1 on this M3 Max; unmatched M99 stays literal.",
-                    inspect="Run M1.4 first, then CORE:M3.1.", ask="Is M1.4 ready after CORE M3?",
+                    inspect="Run M1.4 first, then CORE:M3.1.", ask="Is this milestone’s M1.4 ready after CORE M3?",
                     check=f"python3 {evidence_path}", reads=[evidence_path])
         record_check = 'python3 -c \'import json; r=json.load(open("docs/plans/CORE/RECORD.json"))["milestones"]; assert r.get("M3", {}).get("done")\''
         water["items"].append({"id": "M1.5", "statement": "CORE M3 is Done", "check": record_check,
@@ -240,23 +247,31 @@ class WorkPackageMigration(Repo):
         self.assertEqual(item["reads"], [evidence_path.replace("/M1/", "/WP1/")])
         self.assertEqual(item["statement"], "WP1.4 uses CORE WP3.1 on this M3 Max; unmatched M99 stays literal.")
         self.assertEqual(item["inspect"], "Run WP1.4 first, then CORE:WP3.1.")
-        self.assertEqual(item["ask"], "Is WP1.4 ready after CORE WP3?")
+        self.assertEqual(item["ask"], "Is this work package’s WP1.4 ready after CORE WP3?")
         self.assertIn('["work_packages"]; assert r.get("WP3"', dependency["check"])
         self.assertEqual(water["quality_bar"], "Compare to CORE:WP3.1 and WP2 on this M3 Max.")
         self.assertEqual((water["status"], water["failed_reviews"], water["failed_reviews_with_repeat"]),
                          ("in_progress", 2, 1))
         self.assertEqual([i["builder_result"] for i in water["items"]], ["pass", "pass"])
         new_design = (self.plans / "WATER/DESIGN.md").read_text()
-        self.assertEqual(new_design, design.replace("M1.4", "WP1.4").replace("CORE M3.1", "CORE WP3.1"))
+        self.assertEqual(new_design,
+                         "## Work package proof\nMeasure WP1.4 after CORE WP3.1. Use this M3 Max. See [history](BRIEF.md).\n"
+                         "See `../VISION.md` for the vision and scope document and keep the per-work-package brief.\n")
         self.assertEqual(self.read_record()["design"]["hash"], agent_loop.text_hash(new_design))
         self.assertEqual(self.read_record()["work_packages"]["WP1"]["definitions"], agent_loop.definitions(water))
         self.assertEqual((self.plans / "WATER/BRIEF.md").read_text(), brief)
         self.assertFalse((self.plans / "WATER/VISION.md").exists())
         self.assertIn("Run WP1.4's check first.", (self.plans / "WATER/PLAN.md").read_text())
+        self.assertIn("[Work package proof](DESIGN.md#work-package-proof)", (self.plans / "WATER/PLAN.md").read_text())
         self.assertIn("WATER WP1 and CORE:WP3.1 run on this M3 Max. UNKNOWN:M1 stays literal.",
                       (self.plans / "ARCHITECTURE.md").read_text())
         self.assertIn("WATER WP1 builds on CORE:WP3.1 and runs on this M3 Max",
                       (self.plans / "VISION.md").read_text())
+        self.assertIn("[Vision and scope document](VISION.md) before those work packages.",
+                      (self.plans / "ARCHITECTURE.md").read_text())
+        self.assertIn("The work package has a quality gate.", (self.plans / "VISION.md").read_text())
+        self.assertIn("A work package is a unit of work.", (self.plans / "GLOSSARY.md").read_text())
+        self.assertIn("Read the vision and scope document before starting a work package.", settings.read_text())
         self.assertEqual((self.plans / "CORE/DESIGN.md").read_text(),
                          "WP3.1 renders on this M3 Max, an Apple M3.\n")
         self.assertEqual(self.evidence("WATER/WP1/check_loaded.py").read_text(),
@@ -268,3 +283,62 @@ class WorkPackageMigration(Repo):
         before = agent_loop.head_commit(self.wt)
         self.assertEqual(self.migrate()["result"], "NOTHING")
         self.assertEqual(agent_loop.head_commit(self.wt), before)
+
+    def test_word_migration_preserves_3_0_project_documents_and_brings_over_a_branch(self):
+        with mock.patch.object(agent_loop, "MIGRATE_SUBJECT", agent_loop.MIGRATE_3_0_SUBJECT):
+            self.assertEqual(self.migrate()["result"], "MIGRATED")
+        project_docs = [self.wt / "ORCHESTRATE.md", *(self.plans / name for name in
+                        ("VISION.md", "ARCHITECTURE.md", "GLOSSARY.md"))]
+        for path in project_docs:
+            put(path, path.read_text() + "\nG4 is a project milestone.\n" if path.exists() else
+                "G4 is a project milestone.\n")
+        plan = self.plans / "WATER/PLAN.md"
+        put(plan, plan.read_text() + "\nThe milestone's proof is [here](proof-milestone.md#milestone-proof).\n")
+        self.commit_all()
+        saved = {p: p.read_bytes() for p in project_docs}
+        branch = self.wt.parent / "builder-water"
+        self.git("worktree", "add", "-qb", "build/water", str(branch))
+        self.addCleanup(self.git, "worktree", "remove", "--force", str(branch))
+        branch_plan = branch / plan.relative_to(self.wt)
+        put(branch_plan, branch_plan.read_text().replace("proof is", "per-milestone proof is"))
+        self.git("commit", "-qam", "Describe the milestone proof", where=branch)
+
+        self.assertTrue(any("old plan wording" in name for name in agent_loop.old_names_in_tree(self.wt)[0]))
+        result = self.migrate()
+        self.assertEqual(result["result"], "MIGRATED", result)
+        self.assertEqual({p: p.read_bytes() for p in project_docs}, saved)
+        self.assertIn("The work package's proof is [here](proof-milestone.md#milestone-proof).", plan.read_text())
+        self.assertEqual(result["rewrites"][str(plan.relative_to(self.wt))], {"milestone → work package": 1})
+
+        moved = self.call(agent_loop.cmd_migrate, worktree=str(branch), branch=True)
+        self.assertEqual(moved["result"], "MIGRATED", moved)
+        self.assertIn("The work package's per-work-package proof", branch_plan.read_text())
+        self.assertEqual(self.git("log", "-1", "--format=%s", where=branch).stdout.strip(),
+                         "Describe the milestone proof")
+        self.assertEqual(self.call(agent_loop.cmd_migrate, worktree=str(branch), branch=True)["result"], "NOTHING")
+
+        put(plan, plan.read_text() + "\nG4 is the next milestone.\n")
+        self.commit_all()
+        before = agent_loop.head_commit(self.wt)
+        self.assertEqual(self.migrate()["result"], "NOTHING")
+        self.assertEqual(agent_loop.head_commit(self.wt), before)
+        self.assertIn("G4 is the next milestone.", plan.read_text())
+
+
+class FreshProjectMigration(Repo):
+    def test_new_project_uses_milestone_in_its_design_without_migration(self):
+        rel = Path("docs/plans/WATER/DESIGN.md")
+        design = b"# Water\n\nThis work package closes milestone G4.\n"
+        put(self.wt / rel, design.decode())
+        self.commit_all()
+        before = agent_loop.head_commit(self.wt)
+
+        status = self.printed(agent_loop.cmd_status, module=None, worktree=str(self.wt))
+        self.assertIn("  WP1\tnot_started\t", status)
+        self.assertEqual(self.migrate()["result"], "NOTHING")
+        self.assertEqual(agent_loop.head_commit(self.wt), before)
+        self.assertEqual((self.wt / rel).read_bytes(), design)
+
+        moved = self.call(agent_loop.cmd_migrate, worktree=str(self.wt), to="plans")
+        self.assertEqual(moved["result"], "MIGRATED", moved)
+        self.assertEqual((self.wt / "plans/WATER/DESIGN.md").read_bytes(), design)
