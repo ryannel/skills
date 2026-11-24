@@ -1973,13 +1973,13 @@ class WhatTheLeadSees(Repo):
         with mock.patch.object(agent_loop, "QUOTA_WORKTREE", [self.wt]):
             first = self.call(lambda a: agent_loop.emit("NOTHING"))
             second = self.call(lambda a: agent_loop.emit("NOTHING"))
-        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4"])
+        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5"])
         self.assertIn("From before 2.6.0", first["changed"]["2.5.0"][0])
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
         self.assertIn("2.5.0", agent_loop.version_change(self.wt))
         note.write_text('{"version": "2.5.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5"])
         note.write_text('{"version": "2.9.0"}')
         (line, *_) = agent_loop.version_change(self.wt)["2.10.0"]
         self.assertIn("Read the lead skill again", line)
@@ -5673,6 +5673,32 @@ class PlanFiles(Repo):
         reviewed = self.review("WP2", commit=claimed)
         self.assertEqual(reviewed["result"], "REVIEWED", reviewed)
         self.assertIn("before `migrate` brought", " ".join(reviewed.get("warnings") or []))
+
+    def test_a_later_migrate_that_rewords_the_items_moves_the_review_on_again(self):
+        """Thrum: the 3.0.1 wording pass changed the items of work packages made Ready for Review before 3.0, and
+        restamped their authorisation, so the review at the 3.0 commit was refused as not the authorised ones."""
+        self.flatten()
+        doc, _ = self.old_module(work_package("M1", "done", ["pass"]), work_package("M2", "ready_for_review", ["pass"]))
+        (self.wt / "docs/plans/WATER-DONE.json").write_text(json.dumps(doc))
+        rec = json.loads((self.wt / "docs/plans/WATER-ACCEPTED.json").read_text())
+        rec["milestones"]["M2"]["claim"] = {"at": "2026-11-11T10:00:00Z", "checks": []}
+        (self.wt / "docs/plans/WATER-ACCEPTED.json").write_text(json.dumps(rec))
+        self.git("commit", "-qam", "claim M2", "-m", agent_loop.TRAILER)
+        self.git("push", "-q", "origin", "main")
+        claimed = self.git("rev-parse", "HEAD").stdout.strip()
+        self.assertEqual(self.call(agent_loop.cmd_migrate, worktree=str(self.wt), to=None)["result"], "MIGRATED")
+        self.git("pull", "-q", "--rebase", "origin", "main")
+        done_file, record_file = self.wt / "docs/plans/WATER/DONE.json", self.wt / "docs/plans/WATER/RECORD.json"
+        doc, rec = json.loads(done_file.read_text()), json.loads(record_file.read_text())
+        entry = doc["work_packages"][1]
+        entry["items"][0]["statement"] += " (work package wording)"
+        rec["work_packages"]["WP2"]["definitions"] = agent_loop.definitions(entry)
+        done_file.write_text(json.dumps(doc))
+        record_file.write_text(json.dumps(rec))
+        self.git("commit", "-qam", agent_loop.MIGRATE_3_0_1_SUBJECT)
+        self.git("push", "-q", "origin", "main")
+        reviewed = self.review("WP2", commit=claimed)
+        self.assertEqual(reviewed["result"], "REVIEWED", reviewed)
 
     def builder_branched_before_migrate(self):
         """A builder's worktree for WATER, branched before `migrate`, with two commits of its own on the old names:

@@ -6216,7 +6216,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.0.4"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.0.5"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6256,6 +6256,11 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.0.5": [
+        "A work package made Ready for Review before the 3.0 migrations is reviewed at the migrate commit where its "
+        "items match their authorisation. Run `review` again for any that gave INVALID with \"aren't the "
+        "authorised ones\".",
+    ],
     "3.0.4": [
         "If `migrate` 3.0.3 failed because it changed a file under a folder evidence moved out of, run it again. "
         "It now leaves those files as they are. Pause any runs first.",
@@ -9131,7 +9136,27 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
             start = set_at
             before_doc = upgrade_doc(json.loads(show(worktree, start, done_path) or ""))
             under_review = find(before_doc, mid)
-        if definitions(under_review) != (rec["work_packages"].get(mid) or {}).get("definitions"):
+        authorised = (rec["work_packages"].get(mid) or {}).get("definitions")
+        if definitions(under_review) != authorised:
+            # A later `migrate` (3.0.1 wording, 3.0.2 IDs) rewrote the definitions and restamped the record, so the
+            # work package matches its authorisation only from that commit on. The reviewer works there.
+            later = [line.split("\t", 1)[0] for line in git(
+                worktree, "log", "--reverse", "--format=%H%x09%s", "--ancestry-path", f"{start}..{ref}", "--",
+                done_path).stdout.splitlines() if line.partition("\t")[2].startswith(MIGRATE_SUBJECTS)]
+            for c in later:
+                try:
+                    doc_there = upgrade_doc(json.loads(show(worktree, c, done_path) or ""))
+                    there = find(doc_there, mid)
+                except (json.JSONDecodeError, SystemExit):
+                    continue
+                if there.get("status") == "ready_for_review" and definitions(there) == authorised:
+                    before_doc = doc_there
+                    moved_note += (f"\nA later `migrate` commit, {c[:12]}, renamed words in {mid}'s items, so you "
+                                   f"are on {c[:12]}, the first commit where they match their authorisation. To see "
+                                   f"the builder's own work, compare with `git show {start[:12]}`.\n")
+                    start, under_review = c, there
+                    break
+        if definitions(under_review) != authorised:
             return _result("INVALID", **info, problems=[f"{mid}'s definitions at {start[:12]} aren't the authorised ones"])
     try:
         tree = verify_tree(worktree, stem, start)
