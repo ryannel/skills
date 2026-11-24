@@ -303,6 +303,7 @@ class StartingBuilders(Clean):
                    {"result": "STALLED", "next": then("run", "--module", "A", "--fresh", "--message", "why")},
                    {"result": "HOST_FAILED", "next": then("run", "--module", "A", "--host", "claude")},
                    {"result": "PAUSED", "next": None},
+                   {"result": "INVALID", "next": then("review", "--module", "A", "--work-package", "WP1")},
                    {"result": "REVIEWED", "verdict": "FAIL", "next": then("plan", "--task", "diagnose")}]
         for line in allowed:
             self.assertTrue(agent_loop.routine_start(line, "A"), line)

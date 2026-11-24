@@ -6216,7 +6216,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.0.5"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.0.6"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6256,6 +6256,10 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.0.6": [
+        "The supervisor no longer starts a module again after an INVALID result. Read the refusal, and start the "
+        "module yourself once what it names has changed.",
+    ],
     "3.0.5": [
         "A work package made Ready for Review before the 3.0 migrations is reviewed at the migrate commit where its "
         "items match their authorisation. Run `review` again for any that gave INVALID with \"aren't the "
@@ -17265,11 +17269,12 @@ def routine_start(line: dict | None, stem: str) -> bool:
     """Whether the supervisor may start `stem`'s next run itself: the module's latest result left nothing for the
     lead. That is no result yet, WAITING on another module, a passed review, or a `next` that is a plain `run` or
     `review` of the module. A result that asks the lead or the user (Blocked, paused, stalled, a `--message`, a
-    `--fresh`, another host) waits for the lead, because those are its judgement."""
+    `--fresh`, another host) waits for the lead, because those are its judgement. So does INVALID: the script refused
+    the command before anything ran, and the same command meets the same refusal until someone changes something."""
     if not line:
         return True
     then = line.get("next") or {}
-    if line.get("result") == "RUNNING" or then.get("decides") or then.get("ask"):
+    if line.get("result") in ("RUNNING", "INVALID") or then.get("decides") or then.get("ask"):
         return False
     if line.get("result") == "WAITING" or (line.get("result") == "REVIEWED" and line.get("verdict") == "PASS"):
         return True
