@@ -401,3 +401,39 @@ class PlanIdRepair(Repo):
         self.assertEqual(moved["result"], "MIGRATED", moved)
         self.assertEqual((self.wt / "plans/WATER/DESIGN.md").read_bytes(), design)
         self.assertEqual(self.migrate()["result"], "NOTHING")
+
+
+class AnchorRepair(Repo):
+    def test_links_to_renamed_headings_and_folders_are_repaired_once(self):
+        self.git("commit", "--allow-empty", "-qm", agent_loop.MIGRATE_3_0_2_SUBJECT)
+        plans = self.wt / "docs/plans"
+        design = ("# Water\n\n## Leases (WP1)\n\nSee [leases](#leases-m1) and [foam](#foam-m2), "
+                  "[surface](#surface) and [the vision](../BRIEF.md#scope).\n\n## Surface\n")
+        put(plans / "WATER/DESIGN.md", design)
+        put(plans / "VISION.md", "# Vision\n\n## Scope\n")
+        put(plans / "ARCHITECTURE.md", "[Leases](WATER/DESIGN.md#leases-m1) and [code](`#x`).\n")
+        put(self.wt / "docs/CAPTURE.md", "[harness](plans/WATER/DESIGN.md#leases-m1 \"t\")\n")
+        record = plans / "WATER/RECORD.json"
+        rec = json.loads(record.read_text())
+        rec["design"] = {"verdict": "ok", "hash": agent_loop.text_hash(design)}
+        record.write_text(json.dumps(rec))
+        self.commit_all()
+        put(self.evidence("WATER/WP1/shot.png"), "capture")
+        put(self.evidence("WATER/WP1-handoff.md"),
+            "[shot](M1/shot.png) [kept](WP1/shot.png) [gone](M9/x.png) "
+            "[full](.orchestrate/evidence/WATER/M1/shot.png)\n")
+
+        result = self.migrate()
+        self.assertEqual(result["result"], "MIGRATED", result)
+        after = (plans / "WATER/DESIGN.md").read_text()
+        self.assertIn("[leases](#leases-wp1) and [foam](#foam-m2), [surface](#surface) and "
+                      "[the vision](../VISION.md#scope)", after)
+        self.assertIn("(WATER/DESIGN.md#leases-wp1)", (plans / "ARCHITECTURE.md").read_text())
+        self.assertIn("(plans/WATER/DESIGN.md#leases-wp1 \"t\")", (self.wt / "docs/CAPTURE.md").read_text())
+        self.assertEqual(self.read_record()["design"]["hash"], agent_loop.text_hash(after))
+        self.assertEqual(self.evidence("WATER/WP1-handoff.md").read_text(),
+                         "[shot](WP1/shot.png) [kept](WP1/shot.png) [gone](M9/x.png) "
+                         "[full](.orchestrate/evidence/WATER/WP1/shot.png)\n")
+        self.assertEqual(self.git("log", "-1", "--format=%s", result["commit"]).stdout.strip(),
+                         agent_loop.MIGRATE_SUBJECT)
+        self.assertEqual(self.migrate()["result"], "NOTHING")

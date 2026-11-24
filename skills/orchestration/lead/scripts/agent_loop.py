@@ -6216,7 +6216,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.0.2"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.0.3"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6256,6 +6256,12 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.0.3": [
+        "Run `migrate` once on projects migrated by 3.0 to 3.0.2. It points links at the headings the renames "
+        "changed (`#leases-m1` to `#leases-wp1`) and at VISION.md in every markdown file, keeps design approvals "
+        "current for the designs it touches, and fixes handoff and review links into renamed work package folders. "
+        "Pause any runs first.",
+    ],
     "3.0.2": [
         "Run `migrate` once on projects migrated by 3.0 or 3.0.1 to finish renaming IDs in plan lists and ranges. "
         "Pause any runs first.",
@@ -6537,6 +6543,23 @@ def mark_running(argv: list[str], worktree: str | None) -> None:
             MARKED.pop(path, None)
 
 
+def steps_result_for(marked: Path, final: dict, written: Path | None) -> str:
+    """What a file marked RUNNING by a command that ran several steps gets: the last result, when it is about the
+    file's module, or else the last result of a step about that module, so a file named for one module never holds
+    another's result. The steps after it went on to other modules, and `continued_in` names where the last one is."""
+    def about(line: dict) -> bool:
+        module = re.sub(r"[^A-Za-z0-9._-]", "_", str(line.get("module") or ""))
+        return bool(module) and re.fullmatch(re.escape(module) + r"(?:-design|-WP[\d.]+)?-(?:"
+                                             + "|".join(MARKED_COMMANDS) + r")\.json", marked.name) is not None
+
+    if about(final) or not STEP_LINES:
+        return json.dumps(final)
+    own = next((l for l in reversed(STEP_LINES) if about(l)), None)
+    if own is None:
+        return json.dumps(final)
+    return json.dumps({**own, "version": VERSION, **({"continued_in": str(written)} if written else {})})
+
+
 def unmark(written: Path | None) -> None:
     """Puts back the result files this command marked but didn't write its result to: the other work packages' files of
     a `run` that found its own work package."""
@@ -6627,7 +6650,7 @@ def emit(result: str, **fields) -> None:
     if STEPS_RUN:  # a command that ran several steps: every file it marked RUNNING gets its last result
         for marked in list(MARKED):
             try:
-                marked.write_text(text + "\n")
+                marked.write_text(steps_result_for(marked, line, path) + "\n")
             except OSError:
                 pass
         MARKED.clear()
@@ -14373,6 +14396,75 @@ def migrate_plan_words(text: str, rel: str, plans: str, note=None, *, project_wo
     return OLD_PLAN_WORDS.sub(rename, text)
 
 
+MARKDOWN_HEADING = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$")
+OLD_ANCHOR_ID = re.compile(r"(?<![a-z0-9])[mw](\d+)(?=$|[-.])")
+
+
+def heading_anchors(text: str) -> set[str]:
+    """The anchors a markdown file's headings get on GitHub, and any `<a id>` it declares."""
+    found = set(re.findall(r"<a\s+(?:name|id)=[\x22']([^\x22']+)", text))
+    counts, fence = {}, None
+    for line in text.splitlines():
+        if m := re.match(r"[ \t]{0,3}(`{3,}|~{3,})", line):
+            fence = None if fence and m[1][0] == fence[0] and len(m[1]) >= len(fence) else (fence or m[1])
+            continue
+        if fence or not (m := MARKDOWN_HEADING.match(line)):
+            continue
+        name = re.sub(r"[^\w\- ]", "", m[1].lower()).replace(" ", "-")
+        count = counts.get(name, 0)
+        counts[name] = count + 1
+        found.add(name if count == 0 else f"{name}-{count}")
+    return found
+
+
+def repair_anchors(tree: Path, prof: dict, note) -> dict[str, tuple[str, str]]:
+    """Point links that the 3.0 renames broke at their new target, in every markdown file of the checkout: a link to
+    the old vision and scope document's path, and an anchor that no longer matches a heading because its title's ID
+    or wording was renamed (`#leases-m1` to `#leases-wp1`). A link changes only when it is broken now and the renamed
+    form names a heading that exists. Returns {path: (text before, text after)} for each file it rewrote."""
+    listed = git(tree, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.md").stdout
+    files = sorted({n for n in listed.split("\0") if n and (tree / n).is_file() and not (tree / n).is_symlink()})
+    old_vision, vision = f"{prof['plans']}/{OLD_VISION}", project_file(prof, "vision")
+    cache: dict[str, set[str] | None] = {}
+
+    def anchors_of(rel: str) -> set[str] | None:
+        if rel not in cache:
+            path = tree / rel
+            cache[rel] = heading_anchors(path.read_text(errors="replace")) if path.is_file() else None
+        return cache[rel]
+
+    out = {}
+    for rel in files:
+        folder = os.path.dirname(rel)
+
+        def target(m: re.Match) -> str:
+            dest = m.group(3)
+            if re.match(r"^[a-z][a-z0-9+.-]*:", dest, re.I):
+                return m.group(0)
+            path, sep, anchor = dest.partition("#")
+            full = (os.path.normpath(path.lstrip("/") if path.startswith("/") else os.path.join(folder, path))
+                    if path else rel)
+            if full == old_vision and not (tree / full).exists() and (tree / vision).is_file():
+                new_path = "/" + vision if path.startswith("/") else os.path.relpath(vision, folder)
+                note(rel)(path, new_path)
+                path, full = new_path, vision
+            known = anchors_of(full) if anchor and full.endswith(".md") else None
+            if known is not None and anchor not in known:
+                renamed = OLD_ANCHOR_ID.sub(r"wp\1", anchor)
+                renamed = re.sub(r"(?<![a-z0-9])milestone(s?)(?![a-z0-9])", r"work-package\1", renamed)
+                if renamed != anchor and renamed in known:
+                    note(rel)("#" + anchor, "#" + renamed)
+                    anchor = renamed
+            return f"{m[1]}[{m[2]}]({path}{sep}{anchor}{m[4] or ''})"
+
+        before = (tree / rel).read_text(errors="replace")
+        after = LINK.sub(target, before)
+        if after != before:
+            (tree / rel).write_text(after)
+            out[rel] = (before, after)
+    return out
+
+
 def migration_audit(done: dict, rel: str):
     def note(old: str, new: str):
         if old != new:
@@ -14402,7 +14494,8 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
     repair_ids = legacy_names or id_repair_pending(tree)
     rewrite_words = word_migration_pending(tree, legacy_names)
     project_words = rewrite_words and legacy_names and not has_migration(tree, MIGRATE_3_0_SUBJECT)
-    if repair_ids:
+    fix_anchors = legacy_names or repair_ids or anchor_repair_pending(tree)
+    if repair_ids or fix_anchors:
         done["id_repair"] = True
 
     def note(rel: str):
@@ -14533,6 +14626,11 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
             paths.append(rel)
             done.setdefault("renamed", []).append(rel)
             designs[rel] = (text_hash(before), text_hash(after))
+    if fix_anchors:
+        for rel, (before, after) in repair_anchors(tree, now_plans, note).items():
+            paths.append(rel)
+            done.setdefault("renamed", []).append(rel)
+            designs[rel] = (designs[rel][0] if rel in designs else text_hash(before), text_hash(after))
     for stem in stems:
         doc_path, rec_path = tree / done_rel(now_plans, stem), tree / record_rel(now_plans, stem)
         try:
@@ -14580,7 +14678,8 @@ def migrate_tree(tree: Path, prof: dict, to: str | None, done: dict, moving_evid
 MIGRATE_SUBJECTS = "orchestrate: migrate the plans to a folder per module and the names of "  # every version's
 MIGRATE_3_0_SUBJECT = MIGRATE_SUBJECTS + "3.0"
 MIGRATE_3_0_1_SUBJECT = MIGRATE_SUBJECTS + "3.0.1"
-MIGRATE_SUBJECT = MIGRATE_SUBJECTS + "3.0.2"
+MIGRATE_3_0_2_SUBJECT = MIGRATE_SUBJECTS + "3.0.2"
+MIGRATE_SUBJECT = MIGRATE_SUBJECTS + "3.0.3"
 
 
 def has_migration(tree: Path, subject: str) -> bool:
@@ -14592,11 +14691,19 @@ def has_migration(tree: Path, subject: str) -> bool:
 def word_migration_pending(tree: Path, legacy_names: bool) -> bool:
     """Only plans from the old layout or vocabulary need the one-time wording rewrite."""
     return (legacy_names or has_migration(tree, MIGRATE_3_0_SUBJECT)) and not (
-        has_migration(tree, MIGRATE_3_0_1_SUBJECT) or has_migration(tree, MIGRATE_SUBJECT))
+        has_migration(tree, MIGRATE_3_0_1_SUBJECT) or has_migration(tree, MIGRATE_3_0_2_SUBJECT)
+        or has_migration(tree, MIGRATE_SUBJECT))
 
 
 def id_repair_pending(tree: Path) -> bool:
-    return migrated_before_id_repair(tree) and not has_migration(tree, MIGRATE_SUBJECT)
+    return migrated_before_id_repair(tree) and not (
+        has_migration(tree, MIGRATE_3_0_2_SUBJECT) or has_migration(tree, MIGRATE_SUBJECT))
+
+
+def anchor_repair_pending(tree: Path) -> bool:
+    """Plans migrated before 3.0.3 kept links to the headings and the vision and scope document the renames moved."""
+    return (migrated_before_id_repair(tree) or has_migration(tree, MIGRATE_3_0_2_SUBJECT)) and not has_migration(
+        tree, MIGRATE_SUBJECT)
 
 
 def migrated_before_id_repair(tree: Path) -> bool:
@@ -14684,9 +14791,10 @@ def migrate_branch(a: argparse.Namespace, worktree: Path, prof: dict, done_with)
     except TipError as e:
         done_with("FAILED", 1, detail=str(e))
     at_tip, tip_prof = old_names_in_tree(scratch)
-    if at_tip or id_repair_pending(scratch):
+    if at_tip or id_repair_pending(scratch) or anchor_repair_pending(scratch):
         drop_tree(worktree, scratch_name)
-        pending = "; ".join(at_tip[:3]) if at_tip else "its plan IDs still need the 3.0.2 repair"
+        pending = ("; ".join(at_tip[:3]) if at_tip else "its plan IDs still need the 3.0.2 repair"
+                   if id_repair_pending(scratch) else "its links to renamed headings still need the 3.0.3 repair")
         done_with("REFUSED", 1, problems=[
             f"{base_ref(prof)} still needs migration ({pending}). --branch brings a worktree over once the main "
             "branch has been migrated, so migrate that first"],
@@ -14966,6 +15074,23 @@ def local_names_3(worktree: Path, prof: dict, ids: dict, done: dict | None = Non
                 if done is not None:
                     migration_audit(done, str(dest))(path.name, dest.name)
                 yield path, dest, None
+    # Handoffs and reviews link into the work package folders that the 3.0 renames moved (M7/ to WP7/). Builders
+    # read a handoff first, so a link left pointing at the old folder sends them to nothing.
+    for module in sorted(evidence.iterdir()) if evidence.is_dir() else []:
+        if module.is_symlink() or not module.is_dir():
+            continue
+        for path in sorted(module.glob("*.md")):
+            if path.is_symlink() or not path.is_file():
+                continue
+            try:
+                before = path.read_text()
+            except (OSError, UnicodeDecodeError):
+                continue
+            after = evidence_links_3(before, path, evidence, prof["evidence"])
+            if after != before:
+                if done is not None:
+                    migration_audit(done, str(path))("links to old work package folders", "WP folders")
+                yield path, path, after
     common = Path(git_common_dir(worktree))
     for folder in [loop_dir(worktree), *sorted(common.glob("worktrees/*/orchestrate"))]:
         if not folder.is_dir():
@@ -15001,6 +15126,34 @@ def local_names_3(worktree: Path, prof: dict, ids: dict, done: dict | None = Non
                 text = "".join(after)
                 if dest != path or text != before:
                     yield path, dest, text if text != before else None
+
+
+def evidence_links_3(text: str, path: Path, evidence: Path, setting: str) -> str:
+    """Point a working-folder document's broken links into renamed work package folders (M7/ to WP7/), when the
+    renamed path exists. Links that resolve already, or that the rename doesn't fix, stay as they are."""
+    setting = setting.rstrip("/")
+
+    def renamed(rest: str) -> str:
+        return "/".join(work_package_id(part) if OLD_ID.fullmatch(part) or LEGACY_EVIDENCE_FILE.fullmatch(part)
+                        else part for part in rest.split("/"))
+
+    def target(m: re.Match) -> str:
+        dest = m.group(3)
+        if re.match(r"^[a-z][a-z0-9+.-]*:", dest, re.I) or dest.startswith("#"):
+            return m.group(0)
+        where, sep, anchor = dest.partition("#")
+        if setting and where.startswith(setting + "/"):
+            base, rest, prefix = evidence, where[len(setting) + 1:], setting + "/"
+        elif not where.startswith("/"):
+            base, rest, prefix = path.parent, where, ""
+        else:
+            return m.group(0)
+        new = renamed(rest)
+        if new == rest or (base / rest).exists() or not (base / new).exists():
+            return m.group(0)
+        return f"{m[1]}[{m[2]}]({prefix}{new}{sep}{anchor}{m[4] or ''})"
+
+    return LINK.sub(target, text)
 
 
 def result_filename_3(name: str) -> str:
@@ -15059,8 +15212,8 @@ def cmd_migrate(a: argparse.Namespace) -> None:
         at_tip, tip_prof = old_names_in_tree(checked)
         ids = planned_ids(checked, tip_prof)
         migrated_before_repair = migrated_before_id_repair(checked)
-        repair_recorded = has_migration(checked, MIGRATE_SUBJECT)
-        repair_ids = migrated_before_repair and not repair_recorded
+        repair_recorded = has_migration(checked, MIGRATE_SUBJECT) or has_migration(checked, MIGRATE_3_0_2_SUBJECT)
+        repair_ids = (migrated_before_repair and not repair_recorded) or anchor_repair_pending(checked)
     except TipError as e:
         done_with("FAILED", 1, detail=str(e))
     drop_tree(worktree, "_migrate-tip")
@@ -15939,6 +16092,7 @@ STEPS_PARENT = os.environ.pop(STEPS_ENV, None)  # in a step's process, the pid o
 RETURNING_ENV = "ORCHESTRATE_STEP_RETURNING"
 STEP_RETURNING = bool(os.environ.pop(RETURNING_ENV, None))  # a `run` step after the steps' first: its builder is back
 STEPS_RUN: list = []  # the steps this process ran, each with its result, for its own result line
+STEP_LINES: list = []  # each step's whole result line, for the result files of the modules the steps passed through
 STEPS_MAX = 40  # a stop for safety: a work package takes two steps, and each failed review two more
 ROUTINE_ESCALATIONS = ("same_builder", "new_builder_session")  # the counts send the work package back to its builder
 STEP_FIELDS = ("verdict", "escalation", "failed_reviews", "reason", "review", "commit", "modules",
@@ -16178,7 +16332,8 @@ def run_steps(a: argparse.Namespace, argv: list[str]) -> None:
                   task=(a.task.splitlines()[0][:80] if origin == "plan" and a.task.strip() else None))
     steps = {"origin": origin, "worktree": str(worktree), "owed": [], "changes": {}, "last_run": None}
     STEPS_RUN.clear()
-    lines: list[dict] = []
+    STEP_LINES.clear()
+    lines: list[dict] = STEP_LINES
     words = list(argv)
     stop = ""
     while True:
@@ -16186,7 +16341,8 @@ def run_steps(a: argparse.Namespace, argv: list[str]) -> None:
         if words[0] == "run":
             steps["last_run"] = words
         named = [w for w in (argv_flag(words, "--module"), argv_flag(words, "--work-package")) if w]
-        loop_note(step=f"step {len(STEPS_RUN) + 1}: {' '.join([words[0], *named])}")
+        loop_note(step=f"step {len(STEPS_RUN) + 1}: {' '.join([words[0], *named])}",
+                  **({"module": named[0]} if argv_flag(words, "--module") else {}))
         started = time.time()
         # a `run` step after an earlier one is the same builder coming back, which waits for a slot
         line = run_step(words, returning=words[0] == "run" and any(e["step"].startswith("run ") for e in STEPS_RUN))
@@ -17405,7 +17561,9 @@ of each module the plan left owed one, and a planner revision each time a design
 another review, and PLANNED names the module under `design_approved_at_limit`. They stop at anything else: a `next`
 the user decides or with an `ask`, Blocked, a diagnosis or another escalation, HOST_FAILED, KEPT, PAUSED or a stop
 signal, a finished module, a next work package that can't start, a failing main-branch check, a newer copy of the
-script, or any `next` that isn't a plain command for the step.
+script, or any `next` that isn't a plain command for the step. When the steps went on to another module, the result
+file of the module the command started on keeps that module's last step, with `continued_in` naming the file that
+holds the command's last result.
 """
 
 COMMAND_HELP = {  # each command's --help, after its flags: what it does, its results and its fields
@@ -17632,6 +17790,10 @@ migrate --worktree PATH [--to docs/plans]
       updates the project documents. Git history
       records that the word rewrite ran, so future references to project milestones keep their meaning.
       For 3.0.2 it finishes lists and ranges of IDs once, including in projects migrated by 3.0 or 3.0.1.
+      For 3.0.3 it repairs links once in every markdown file of the repository: an anchor that no longer matches
+      a heading because the heading's ID or wording was renamed, and a link to the old vision and scope document's
+      path. A link changes only when it is broken and the renamed form exists. In the working folder it points
+      handoff and review links at renamed work package folders.
       `unresolved_ids` lists the references left for lack of a matching work package in a single module.
       Log entries, saved tasks, commit messages and evidence contents keep their wording.
       Commands that read old plans point you here. --to also moves

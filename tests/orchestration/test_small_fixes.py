@@ -329,3 +329,18 @@ class SecondReviewScript(Repo):
         self.assertIn("else the only one installed, else codex", t)
         self.assertEqual(t.count("Keep it on a new project"), 2)
         self.assertIn("{prompt}, {model} and {effort}", t)
+
+
+class StepsResultFiles(Clean):
+    def test_a_file_named_for_one_module_keeps_that_modules_last_step(self):
+        folder = Path(self.id().replace(".", "_"))
+        first = {"result": "PLANNED", "module": "WATERS", "commit": "abc"}
+        later = {"result": "INVALID", "module": "REPO-RULES", "work_package": "design"}
+        agent_loop.STEP_LINES[:] = [first, {"result": "DESIGN_OK", "module": "RENDER"}, later]
+        self.addCleanup(agent_loop.STEP_LINES.clear)
+        written = folder / "REPO-RULES-design-plan.json"
+        own = json.loads(agent_loop.steps_result_for(folder / "WATERS-design-plan.json", later, written))
+        self.assertEqual((own["result"], own["module"], own["continued_in"]), ("PLANNED", "WATERS", str(written)))
+        self.assertEqual(json.loads(agent_loop.steps_result_for(written, later, written)), later)
+        # RENDER is a prefix of RENDER-2D, but this file is RENDER-2D's, which no step was about
+        self.assertEqual(json.loads(agent_loop.steps_result_for(folder / "RENDER-2D-plan.json", later, written)), later)

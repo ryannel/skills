@@ -88,7 +88,7 @@ SETTINGS = {module: {name: value for name, value in vars(module).items()
 STATE = {name: getattr(agent_loop, name) for name in (
     "RUN_HERE", "LIVE", "_LIVE_LOCK", "_RUN_LOCKS", "CONTEXT", "HOSTS_USED", "_COMMON", "QUOTA_WORKTREE",
     "TURN_USAGE", "TURN_SIZE", "TURN_STOP", "WARNINGS", "EMIT_EXTRA", "LAUNCH_HOSTS", "_VERSIONS", "SESSION_PATH",
-    "_IMPORTS_SENT", "_HELP", "STEPS_RUN", "EVIDENCE_HERE")}
+    "_IMPORTS_SENT", "_HELP", "STEPS_RUN", "STEP_LINES", "EVIDENCE_HERE")}
 assert not any(STATE.values()), "the script's per-process state starts empty"
 
 # The settings without a Builders line, as the planner writes them before the lead asks the user how they want
