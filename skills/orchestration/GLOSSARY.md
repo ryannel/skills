@@ -42,19 +42,26 @@ Source: the lead agent of Anthropic's multi-agent research system, which plans t
 **Planner**
 An agent that writes the plan: the module list, and each module's design, plan file and done-when file.
 
-**Kind of planner task**
-Which of the planner's instructions a task needs: a new project, a module, a change, unblocking, a diagnosis, a
-design revision or a fix. Each has its file in the planner skill's `tasks/` folder. The reviewer has two kinds, a
-milestone review and a design review, in its own `tasks/` folder.
+**Task**
+What one agent session is asked to do, such as planning a change or building a work package. The lead writes a
+planner's task; the script writes a builder's and a reviewer's.
+Not: Work package, which is a piece of the plan; a builder's task names the work package it builds.
+Avoid: brief, which is the prompting-agents skill's word for any text written for an agent
+Source: the agent field's word for what a lead hands a subagent (Anthropic's multi-agent research system)
+Stored as: `plan --task`; the `briefs` list in the record file (a name from before this entry)
+
+**Kind of task**
+Which of an agent's instructions a task needs. The planner's kinds are a new project, a module, a change,
+unblocking, a diagnosis, a design revision and a fix; the reviewer's are a work package review and a design review.
+Each has its file in that skill's `tasks/` folder.
 Stored as: `plan --kind`
-Proposed: by Claude, 2026-11-21. Not yet agreed by the user.
 
 **Builder**
-An agent that writes the code for one milestone, proves it and merges it.
+An agent that writes the code for one work package, proves it and merges it.
 Avoid: implementer, worker
 
 **Reviewer**
-An agent that judges a design or a milestone. Always a new session, so it has seen none of the work it judges.
+An agent that judges a design or a work package. Always a new session, so it has seen none of the work it judges.
 Avoid: evaluator
 
 **Design reviewer**
@@ -72,9 +79,21 @@ Avoid: the loop, the harness
 
 ## The plan
 
-**Project brief**
-What the user wants and why, written before any planning: the user's request word for word, the reason, what is
-left out, how the user will judge the result, and the decisions made so far.
+**Vision and scope document**
+What the user wants and why, written in the lead's interview before any planning, and kept for the life of the
+product: the user's requests word for word, the goal, who it is for, the milestones on the way, what the first
+release covers and what comes later, what is left out, how the user will judge the result, and the decisions made
+so far. Always written in full; "vision" alone is a single statement inside it.
+Avoid: project brief, brief (several meanings); project charter (a charter is for one project and closes with it);
+product requirements document (a list of requirements, which this is not)
+Source: Karl Wiegers, *Software Requirements*, the vision and scope document
+Stored as: `BRIEF.md` (a name from before this entry)
+
+**Goal**
+The one long-term aim the product is working toward now, set in the vision and scope document. When it is reached,
+the next goal replaces it.
+Not: Milestone, a point on the way to the goal.
+Source: Scrum's Product Goal, the long-term objective, one at a time
 
 **Glossary**
 A project's file of agreed names. This file is the set's own glossary.
@@ -99,7 +118,7 @@ Stored as: the `Human decides` line of the project settings
 
 **Target**
 A device or platform the product runs on, such as Chrome on a desktop or an iPhone.
-Not: a goal. "Target" never means what a milestone aims at.
+Not: a goal. "Target" never means what a work package aims at.
 Stored as: the `target` field of an item
 
 **Stand-in**
@@ -124,48 +143,60 @@ What one module provides to the others, such as a function that returns the bala
 A module's file saying what the module must do for the people who use it.
 
 **Plan file**
-A module's `PLAN.md`: what is left to build, milestone by milestone, and the assumptions open for the user.
+A module's `PLAN.md`: what is left to build, work package by work package, and the assumptions open for the user.
 
 **Builder's note**
-The few sentences under a milestone in the plan file, for its builder, on what the items and the design don't say.
-Stored as: the text under the milestone's heading in `PLAN.md`
+The few sentences under a work package in the plan file, for its builder, on what the items and the design don't say.
+Stored as: the text under the work package's heading in `PLAN.md`
 Proposed: by Claude, 2026-11-13. Not yet agreed by the user.
 
 **Log**
 A module's `LOG.md`: its history, one dated entry per event.
 
 **Milestone**
-A piece of a module small enough for one builder to finish in one session.
+A significant point on the way to the goal that the user cares about and that shapes the work, such as a first
+playable build. It is reached when the work packages it needs are Done.
+Not: Work package, which is work; a milestone is a point the work reaches.
+Source: PMI, "a significant point or event in a project"
+
+**Work package**
+A piece of a module small enough for one builder to finish in one session, with the items that must be true before
+it is Done. Always the full phrase, because "package" alone means a code package.
+Not: Task, which is what one agent session is asked to do; Milestone, which is a point the work reaches.
+Avoid: milestone (its name before this entry), story, task
+Source: PMBOK, the work package at the lowest level of the work breakdown
+Stored as: the `milestones` list in the done-when and record files, with ids such as `M3` (names from before this
+entry)
 
 **Depends on**
-A milestone depends on a milestone in another module when it can't start until that one is Done.
-Stored as: the milestone's `depends_on` list, such as `["CORE:M3"]`
+A work package depends on a work package in another module when it can't start until that one is Done.
+Stored as: the work package's `depends_on` list, such as `["CORE:M3"]`
 
 **Done-when file**
-A module's file that lists, for each milestone, the items, how each is proved and its quality bar. It is written
+A module's file that lists, for each work package, the items, how each is proved and its quality bar. It is written
 before building, and the builder can't change what it requires.
 Avoid: acceptance file, DONE file
 Stored as: `DONE.json`
 
 **Item**
-One thing that must be true before a milestone is Done.
+One thing that must be true before a work package is Done.
 Avoid: criterion, requirement
 
 **Quality bar**
-The standard a milestone's work is judged against, with a real example to point at: "help text as clear as
+The standard a work package is judged against, with a real example to point at: "help text as clear as
 ripgrep's".
-Stored as: the milestone's `quality_bar` field
+Stored as: the work package's `quality_bar` field
 
 **Record file**
-A module's file that only the script writes. It records which milestones are Done and what approved the design.
+A module's file that only the script writes. It records which work packages are Done and what approved the design.
 Avoid: acceptance record
-Stored as: `RECORD.json`; a milestone that is Done has `done` in its entry there
+Stored as: `RECORD.json`; a work package that is Done has `done` in its entry there
 
 **Ready for Review record**
-The script's record that a builder finished a milestone and the script's checks passed on the merged work: the
+The script's record that a builder finished a work package and the script's checks passed on the merged work: the
 builder's commit, the main branch's tip the checks ran on, and the tokens the builder used.
 Avoid: claim, claim record
-Stored as: `ready_for_review` in the milestone's entry in the record file
+Stored as: `ready_for_review` in the work package's entry in the record file
 
 **Status page**
 The file in the plans folder, which only the script writes, with an overview for the user and every module in
@@ -210,7 +241,7 @@ Stored as: the `Test command:` line of the project settings
 
 **Main-branch check**
 A check too slow to run before every merge, which runs on the main branch's tip after merges instead. A failure
-that holds is traced to the first failing commit, which is fixed forward. It gates no milestone.
+that holds is traced to the first failing commit, which is fixed forward. It gates no work package.
 Not: Test command, which runs before every merge.
 Avoid: trunk sentinel, sentinel
 Stored as: a `Main-branch check <name>:` line of the project settings; the `main-check` command
@@ -243,13 +274,13 @@ Stored as: `reused` on an item in `check`'s output, and `reused_checks` in `run`
 Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Review**
-A reviewer's written judgement of a design or a milestone.
+A reviewer's written judgement of a design or a work package.
 
 **Finding**
 One problem a review reports, with where it is.
 
 **Must Fix**
-A finding that fails the milestone or the design.
+A finding that fails the work package or the design.
 Avoid: blocking
 Stored as: `must_fix`
 
@@ -282,25 +313,25 @@ Avoid: owner answer
 Stored as: `human_feedback` in the record file; the `human feedback` command
 
 **Failed review**
-A review that the milestone didn't pass.
+A review that the work package didn't pass.
 Avoid: round, as a name for one review
 Stored as: `failed_reviews`
 
 **Escalation**
 What happens after a failed review, worked out from the counts of failed reviews. In order as the counts rise: the
-same builder carries on, a new builder session starts, a planner makes a Diagnosis, and the milestone is Blocked:
+same builder carries on, a new builder session starts, a planner makes a Diagnosis, and the work package is Blocked:
 Too Many Failed Reviews.
 Avoid: ladder
 Stored as: `escalation` in a result, one of `same_builder`, `new_builder_session`, `diagnosis` or
 `too_many_failed_reviews`
 
 **Diagnosis**
-A planner's reading of every review of a milestone that keeps failing, to decide why. It ends in a Re-plan or in
+A planner's reading of every review of a work package that keeps failing, to decide why. It ends in a Re-plan or in
 Plan Kept.
-Stored as: `diagnoses` on the milestone; `escalation: diagnosis` in a result, with a `cause`
+Stored as: `diagnoses` on the work package; `escalation: diagnosis` in a result, with a `cause`
 
 **Re-plan**
-The end of a Diagnosis in which the planner changes the milestone's items.
+The end of a Diagnosis in which the planner changes the work package's items.
 Avoid: rewrite, for a change to a plan
 Stored as: `replanned` in the result of `plan`
 
@@ -309,7 +340,7 @@ The end of a Diagnosis in which the planner leaves the plan as it is and names w
 Stored as: the `KEEP` line that ends the planner's turn, and the `KEPT` result of `plan`
 
 **Handoff**
-What a builder that stops before the milestone is finished writes for the session that picks it up: what is
+What a builder that stops before the work package is finished writes for the session that picks it up: what is
 finished, what was tried, and what to do first.
 Not: a handoff in the OpenAI Agents SDK, which passes the live conversation to another agent in the same run.
 Stored as: `<milestone>-handoff.md` in the module's part of the working folder
@@ -317,7 +348,7 @@ Proposed: by Claude, 2026-11-13. Not yet agreed by the user.
 
 ## Statuses
 
-A milestone's status, in the order a milestone usually meets them, stored in its `status` field in the done-when
+A work package's status, in the order a work package usually meets them, stored in its `status` field in the done-when
 file. Waiting and Blocked each carry a reason, written after a colon, such as "Blocked: Needs Access".
 
 | Status | Means | Stored as |
@@ -326,18 +357,18 @@ file. Waiting and Blocked each carry a reason, written after a colon, such as "B
 | In Progress | A builder is working on it | `in_progress`, or `in_progress_elsewhere` when another lead started it; the mark other leads see is the git ref `refs/orchestrate/claims/<MODULE>/<milestone>` |
 | Ready for Review | The builder says it is finished, the script's checks passed on the merged work, and no reviewer has judged it yet. Only the script sets it | `ready_for_review` |
 | Waiting | It isn't stuck. The next step is already lined up, and happens without anyone stepping in | `waiting`, in the script's output, with its `reason` |
-| Blocked | It can't move until someone steps in | `blocked`, with the milestone's `blocked` field giving `reason`, `items` and `what` |
+| Blocked | It can't move until someone steps in | `blocked`, with the work package's `blocked` field giving `reason`, `items` and `what` |
 | Done | Every check and review has passed | `done`, in the done-when file and in the record file |
 
-The reasons a milestone is Waiting:
+The reasons a work package is Waiting:
 
 | Reason | Means | Stored as |
 |---|---|---|
-| On Dependency | It can't start until a milestone in another module is Done, whether or not that module has planned it yet | `on_dependency` |
-| For Planning | Every planned milestone of the module is Done, and the plan names more with no items yet, so a planner writes the next stretch | `for_planning`, with `later` |
+| On Dependency | It can't start until a work package in another module is Done, whether or not that module has planned it yet | `on_dependency` |
+| For Planning | Every planned work package of the module is Done, and the plan names more with no items yet, so a planner writes the next stretch | `for_planning`, with `later` |
 | For Diagnosis | It keeps failing review, or a review found something only a planner can settle, so a planner finds out why | `for_diagnosis`, with the `cause` |
 
-The reasons a milestone is Blocked:
+The reasons a work package is Blocked:
 
 | Reason | Means | Stored as |
 |---|---|---|
@@ -389,14 +420,14 @@ Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
 **Routine steps**
 The steps a `run` or `plan` command carries on through by itself, because the process settles them without
-judgement, such as the review of a milestone that reached Ready for Review. The command stops at anything else and
+judgement, such as the review of a work package that reached Ready for Review. The command stops at anything else and
 wakes the lead.
 Not: Step, which is what one run is doing now.
 Stored as: `steps_run` and `stopped_because` in the result of `run` and `plan`; `--one-step` for one step only
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Checks only**
-A `run` that starts no agent. It runs the script's checks on a milestone whose work is already merged, and sets it
+A `run` that starts no agent. It runs the script's checks on a work package whose work is already merged, and sets it
 Ready for Review if they pass.
 Stored as: `run --checks-only`
 Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
@@ -471,7 +502,7 @@ Stored as: `warning_signs` in `watch`'s result
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
 **Flow**
-How fast the work moves: milestones reaching Ready for Review and Done, set beside the effort spent on them.
+How fast the work moves: work packages reaching Ready for Review and Done, set beside the effort spent on them.
 Source: flow and its metrics (throughput, cycle time, work in progress) as the Kanban Guide defines them. Setting
 them beside effort is the set's own addition
 Stored as: `flow` in the overview, and the `## Flow` part of the report
@@ -538,14 +569,14 @@ there is one, says which of a result's causes it was.
 
 | Result | Printed by | Means |
 |---|---|---|
-| `READY_FOR_REVIEW` | `run` | The builder finished, the script's checks passed on the merged work, and the milestone is Ready for Review. With `review: false` it needed no reviewer, so it is Done |
-| `NEEDS_REVIEW` | `run` | The module's next milestone is already Ready for Review and needs its review |
+| `READY_FOR_REVIEW` | `run` | The builder finished, the script's checks passed on the merged work, and the work package is Ready for Review. With `review: false` it needed no reviewer, so it is Done |
+| `NEEDS_REVIEW` | `run` | The module's next work package is already Ready for Review and needs its review |
 | `DESIGN_NOT_APPROVED` | `run` | The module's design is Design Ready for Review or Design Changes Requested |
-| `WAITING` | `run` | The milestone is Waiting, with the reason in `reason` |
-| `BLOCKED` | `run`, `plan`, `review` | The milestone is Blocked, the planner ended Blocked, or the reviewer couldn't reach the product (`reason` needs_access), which leaves the milestone Ready for Review |
+| `WAITING` | `run` | The work package is Waiting, with the reason in `reason` |
+| `BLOCKED` | `run`, `plan`, `review` | The work package is Blocked, the planner ended Blocked, or the reviewer couldn't reach the product (`reason` needs_access), which leaves the work package Ready for Review |
 | `NEEDS_CONTEXT` | `run`, `plan` | The agent is missing a fact |
 | `IN_PROGRESS_ELSEWHERE` | `run` | Another lead or run is working on the module |
-| `FINISHED` | `run` | Every milestone of the module is Done |
+| `FINISHED` | `run` | Every work package of the module is Done |
 | `CHECKS_FAILED` | `run` | The builder said it had finished, and the script's checks disagreed, more times in a row than the script allows |
 | `NO_PROGRESS_FOR_HOURS` | `run` | No new item passed and the builder made no commit for the hours given |
 | `STALLED` | `run` | Several turns in a row changed nothing and reported nothing |
@@ -558,10 +589,10 @@ there is one, says which of a result's causes it was.
 | `INVALID` | `run`, `review`, `plan` | A done-when file can't be read, or an agent changed what isn't its to change |
 | `REVIEWED` | `review` | The review was saved, with its verdict in `verdict` |
 | `PLANNED` | `plan` | The planner's files were checked and merged |
-| `KEPT` | `plan` | A planner asked to diagnose a milestone kept the plan as it is and named who has to act |
+| `KEPT` | `plan` | A planner asked to diagnose a work package kept the plan as it is and named who has to act |
 | `UNFINISHED` | `plan` | The planner's turn ended without one of its endings, so nothing was merged |
 | `PLAN_NOT_MERGED` | `plan` | The planner finished, but its files couldn't be merged, so they are set aside for another planner |
-| `READY` | `ready` | What each module's next milestone is waiting for, grouped |
+| `READY` | `ready` | What each module's next work package is waiting for, grouped |
 | `ESCALATION` | `next` | What the counts call for after a failed review, with the command |
 | `SETTINGS` | `settings` | The settings as the script reads them, with the loader checks |
 | `BUILDERS` | `builders` | The most builders, the working number, the limit between them, and the builders running |
@@ -575,11 +606,11 @@ there is one, says which of a result's causes it was.
 | `MAIN_CHECKS` | `main-check` | The list of main-branch checks, each with its latest run and pass |
 | `RAN` | `main-check` | Only in a runner's log: one run of a main-branch check finished |
 | `REFUSED` | `adopt`, `main-check`, `migrate`, `plan`, `run`, `settings --set` | The command wouldn't act, with the reasons in `problems` |
-| `UNBLOCKED` | `unblock` | The milestone is no longer Blocked |
+| `UNBLOCKED` | `unblock` | The work package is no longer Blocked |
 | `THREAD` | `thread status` | A Codex thread's goal, running turn and queue, and whether the script can stop its turn |
 | `STOPPED`, `GOAL_PAUSED`, `GOAL_RESUMED`, `UNQUEUED` | `thread` | The thread's turn was stopped, its goal paused or resumed, or its queued messages removed |
 | `NOT_DONE` | `thread` | The script couldn't do it on this version of the Codex app, so the user does it in the app, with what to click in `next` |
-| `DONE`, `RELEASED`, `FAILED` | `human` | The user's decision was saved, or a milestone another lead started was taken out of In Progress, or it couldn't be saved |
+| `DONE`, `RELEASED`, `FAILED` | `human` | The user's decision was saved, or a work package another lead started was taken out of In Progress, or it couldn't be saved |
 | `CHECK_IN` | `watch` | The lead check-in passed with no warning sign |
 | `WARNING_SIGNS` | `watch` | A warning sign appeared that the lead hasn't been told about |
 | `RUN_ENDED` | `watch` | A top-level `run`, `review` or `plan` ended, with its result in `results` |
@@ -609,7 +640,7 @@ Old names, what replaced them and when. The script's `migrate` command rewrites 
 - Human, for the person the agents work with: now User (2.9.0), in prose and in what the script prints. The
   stored names keep `human`, as the User entry lists.
 - `owner` (everywhere it was stored, and the `Owner decides` line): now `human` and `Human decides` (2.2).
-- `state`: now `status`, the milestone's field (2.2).
+- `state`: now `status`, the work package's field (2.2).
 - `bar`: now `quality_bar` (2.2).
 - `ACCEPTED.json` and `accepted`: now `RECORD.json` and `done` (2.2).
 - Claim, and the `claim` field: now Ready for Review record and `ready_for_review` (2.1.0). The git ref
