@@ -1,7 +1,7 @@
 # Build
 
 This stage runs once the project is planned and the user has said how they want the agents to work, and lasts until
-every milestone is Done or nothing left can move without the user.
+every work package is Done or nothing left can move without the user.
 
 Contents:
 - [Running the build](#running-the-build)
@@ -32,9 +32,10 @@ stop, or ask the user.
 
 ## You own delivery
 
-Your job is not to keep builders busy. It is how fast and how well the whole system turns the brief into finished
-work: how the work is split, how many builders run (`builders` sets the number, within the user's most), how it
-merges, how it is tested and reviewed, what builders wait for, and how orchestrate itself runs. When part of that is slow or wrong, it is yours to find, to improve where you can, and to
+Your job is not to keep builders busy. It is how fast and how well the whole system turns the
+vision and scope document into finished work: how the work is split, how many builders run (`builders` sets the
+number, within the user's most), how it merges, how it is tested and reviewed, what builders wait for, and how
+orchestrate itself runs. When part of that is slow or wrong, it is yours to find, to improve where you can, and to
 bring to the user where the answer is theirs. You don't need to be asked.
 
 The overview sets delivery beside effort, and its `signs` show which figures are worth a closer look. Only you see
@@ -60,9 +61,9 @@ Follow each result's `next`. Where it says `decides: human`, put its `ask` to th
 - `PAUSED` because the user stopped a builder or opened its session means the session is theirs until they say to
   carry on.
 - After a failed review, follow the escalation the script gives, because the counts record what has been tried. Add
-  nothing about which findings to fix: a builder handed a list fixes that list and nothing more. Do read the Must Fix
-  findings against the brief, though: one that asks for more than the brief and the quality bar is a question of
-  scope, so take it to a planner, or to the user when it reopens their decision, rather than send the builder back.
+  nothing about which findings to fix: a builder handed a list fixes that list and nothing more. Read the Must Fix
+  findings against the vision and scope document and the quality bar. A finding that asks for more is a question
+  of scope, so take it to a planner, or to the user when it reopens their decision, rather than send the builder back.
 
 Items that need the user at the machine, for access or a device, stop the run `BLOCKED` with `needs_access` or
 `needs_hardware`. Gather them across modules so the user sits down once.
@@ -84,9 +85,9 @@ gives in conversation goes in `--human-rule`, so it holds on every turn.
 
 ## Questions
 
-When an agent asks something, answer it at the first level that can: you, from the brief, the plans and what the
-user has told you; then a planner, for anything about the plan; then the user, for what only they can decide. Keep
-the rest of the build moving while a question waits.
+When an agent asks something, answer it at the first level that can: you, from the vision and scope document, the
+plans and what the user has told you; then a planner, for anything about the plan; then the user, for what only
+they can decide. Keep the rest of the build moving while a question waits.
 
 The user is often away, and each question costs their attention. Where an answer has a sensible default that is
 cheap to change, have a planner plan with it as an assumption rather than waiting. Gather the rest into one message,
@@ -96,9 +97,10 @@ something about it changes or they ask how it's going, because the same question
 what is new.
 
 A user's answer goes back where the question came from. User Feedback and approvals go through `human feedback`,
-because a reviewer only counts the user's words recorded there. An answer that overturns the brief goes into the
-brief first, because planners and reviewers hold the plan to it. When the user turns down every option for a
-subjective milestone, give their words to a planner, because the reference may be the problem, not the builder.
+because a reviewer only counts the user's words recorded there. When an answer changes what the user wants, update
+the vision and scope document first, because planners and reviewers hold the plan to it. When the user turns down
+every option for a subjective work package, give their words to a planner, because the reference may be the
+problem, not the builder.
 
 ## Telling the user
 
@@ -107,8 +109,8 @@ something open. After that, write when something needs them or changes what they
 buries the one that matters. Quota running short before its reset is no reason to slow down, since what's left at
 the reset is lost. Tell them when it has run out and the build has to wait.
 
-When they ask how it's going, and when you stop, run `report` and lead with your own judgement: how close the brief
-is to delivered, whether the build is moving as fast as it could, and what you are doing about it. Then one list of
+When they ask how it's going, and when you stop, run `report` and lead with your own judgement: how much of the agreed scope
+has been delivered, whether the build is moving as fast as it could, and what you are doing about it. Then one list of
 everything that needs them. Ask them to check the decisions recorded in their name, and point them at reviews while
 there are few graded examples, because their corrections teach reviewers how strict to be.
 

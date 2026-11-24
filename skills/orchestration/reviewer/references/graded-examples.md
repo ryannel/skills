@@ -6,7 +6,7 @@ line of the project settings, adds real ones over time. Where the two disagree, 
 
 ## A real pass
 
-The milestone: a command-line tool reads a CSV from standard input or from a file and prints a summary, with a
+The work package: a command-line tool reads a CSV from standard input or from a file and prints a summary, with a
 useful exit code on bad input. Its items are a `check` over quoted fields, empty input and malformed rows, and
 an `ask` about whether both input routes use the same parser.
 
@@ -20,7 +20,7 @@ work and couldn't.
 
 ## A stub that looks finished
 
-The milestone: a new end user signs up and lands on an empty dashboard. The builder's screenshots showed every step.
+The work package: a new end user signs up and lands on an empty dashboard. The builder's screenshots showed every step.
 
 The reviewer signed up, reloaded the page, and was signed out. The changed code showed the sign-up handler
 returning a fixed user object, and nothing written to the database. The `check` passed, because it
@@ -33,7 +33,7 @@ code showed there was nothing behind them.
 
 ## Works on the easy path only
 
-The milestone: a chart's labels stay readable from one data point to ten thousand. The builder's screenshots
+The work package: a chart's labels stay readable from one data point to ten thousand. The builder's screenshots
 showed the chart with fifty points.
 
 The item's `inspect` checklist named the cases to look at: no data, one point, fifty, ten thousand, negative
@@ -45,19 +45,19 @@ Why it is here: the builder's screenshots were honest, but they showed only the 
 
 ## Couldn't reach the target
 
-The milestone includes an item proved on a physical iPhone, and the settings name none available to reviewers. The
+The work package includes an item proved on a physical iPhone, and the settings name none available to reviewers. The
 reviewer had only the simulator.
 
 That item got Could Not Judge (`could_not_judge`), not a Pass, with the reason: no device was available, and the
 simulator can't show performance. The review said what would settle it, which was a frame-time recording from the
-device. Everything else passed, so the milestone failed on that item alone, and the builder's next attempt knows
+device. Everything else passed, so the work package failed on that item alone, and the builder's next attempt knows
 exactly what evidence to bring.
 
 Why it is here: a result from a stand-in is useful, but it never becomes a Pass on the real target.
 
 ## Meets the numbers, misses the look
 
-The milestone: twelve harbour props for a low-poly sailing game, judged against the option the user chose, which
+The work package: twelve harbour props for a low-poly sailing game, judged against the option the user chose, which
 was hand-painted, chunky and slightly crooked. Every prop loaded, sat under its triangle budget and shared one
 texture atlas, so the `check`s passed.
 

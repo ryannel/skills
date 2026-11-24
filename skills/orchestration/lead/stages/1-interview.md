@@ -1,34 +1,31 @@
 # Interview
 
-This stage runs when there is no approved brief and no plan, and when the user brings a feature big enough to need
-its own interview. A small change of mind goes straight to [start planning](2-start-planning.md). When the user says
-to plan straight away, skip this stage and plan from their words, and the planner lists what it assumed.
+This stage runs when there is no approved vision and scope document and no plan, and when the user brings a feature
+big enough to need its own interview. A small change of mind goes straight to
+[start planning](2-start-planning.md). When the user says to plan straight away, skip this stage and plan from
+their words, and the planner lists what it assumed.
 
 Contents:
 - [What the interview is for](#what-the-interview-is-for)
 - [What you own](#what-you-own)
-- [The brief](#the-brief)
+- [The vision and scope document](#the-vision-and-scope-document)
 - [Handing over](#handing-over)
 
 ## What the interview is for
 
-The outcome is a project brief the user has approved, from which a planner can plan without working around a hole
-in what the user wants.
+The vision and scope document records what the user wants and why. It gives the planner, who joins after the
+interview, enough to design the modules, their work packages and the checks. A question left open here may come
+back to the user while they're away. If the planner guesses instead, that guess can change what gets built.
 
-The planner is a new session. The brief is all it knows of the goal, and it designs the best way there: the modules,
-the milestones and the checks each milestone is judged by. A question the brief leaves open comes back to the user
-later, through you, often while they're away. Worse, the planner may work around it, and each workaround is a choice
-about the goal the user didn't make. A few of those, carried through every module, are enough to build the wrong
-thing well.
+Find out what only the user knows:
 
-So the brief says what the user wants and why, and holds what only the user knows:
-
+- the goal, the one long-term aim the product is working toward, and any significant points along the way that
+  shape the work, such as a first playable build;
 - who the end users are, what they will do in the first release, and at what size: how many of them, how much
   data, which devices;
-- where the first release ends, because the planner plans up to "What finishes this goal" and no further;
-- how the user will judge the result, each judgement pinned to a number a check can test or a shipped example an
-  inspection can use as its reference, because a check is made only as strict as the brief says;
-- the decisions already made, which become fixed once the brief is approved, yours as much as theirs.
+- where the first release ends, because that is what the planner plans up to;
+- how the user will judge the result, with a number a check can test or a shipped example an inspection can use;
+- the decisions already made, yours as well as theirs, which become fixed once the user approves them.
 
 Where the user cares how something is built, that goes in as a decision the planner designs around. The rest of
 the how is the planner's. Go as deep as the outcome takes and no deeper.
@@ -36,9 +33,10 @@ the how is the planner's. Go as deep as the outcome takes and no deeper.
 ## What you own
 
 Finding things out is your job, and deciding is the user's. Before your first message, read the repository, any
-existing brief and the glossary, and look up how the field handles a project like this one: what shipped products
-do, what such a project usually has to decide, and what tends to go wrong. The user may not know what their project
-has to decide, so raise those questions yourself, each with the recommendation your research supports.
+existing vision and scope document and the glossary, and look up how the field handles a project like this one:
+what shipped products do, what such a project usually has to decide, and what tends to go wrong. The user may not
+know what their project has to decide, so raise those questions yourself, each with the recommendation your
+research supports.
 
 Ask only what would change what gets built and only the user can answer. Decide the rest yourself and say so, with
 your reason, so they can correct it. A number or a limit the project turns on, such as how old is too old, is the
@@ -63,15 +61,17 @@ decisions: "It's for your eight-year-old on an old iPad, so I've taken it that s
 and no typing." Make bigger jumps as the answers come in, and keep asking wherever a jump would rest on your
 preference rather than on what they said.
 
-You're too close to the conversation to see what the brief leaves out. Before you show it, have it read cold as a
-planner would, by a fresh subagent given only its path where you have one, so the questions it raises are its own.
-Settle each with the user or mark it yours, until a cold read finds nothing that matters.
+You're too close to the conversation to see what the vision and scope document leaves out. Before you show it, have
+it read cold as a planner would, by a fresh subagent given only its path where you have one, so the questions it
+raises are its own. Settle each with the user or mark it yours, until a cold read finds nothing that matters.
 
-## The brief
+## The vision and scope document
 
-Save the brief as `BRIEF.md` where `settings` says the brief goes, from the first answer on, so a long conversation
-doesn't lose its early messages. If a brief is already there, the request is a feature of that project: add to the
-brief rather than replace it, and date the new request. The planner reads the brief by its headings, so keep them.
+From the first answer on, save the vision and scope document to the path `settings` prints, so a long conversation
+doesn't lose its early messages. Keep it for the life of the product. When the user asks for a new feature, date
+their request and add it to the existing file. When they reach the goal, record the next goal they choose.
+
+Write it for the planner as the `prompting-agents` skill describes, using the headings below.
 
 Quote the user's words wherever they give a number, a limit or a "never", because each later document softens
 them. With each decision, name the option it ruled out, so no one brings it back. Mark each decision you made
@@ -79,16 +79,17 @@ yourself as the agent's. When the user leaves a choice to the agents, put it und
 planner chooses". Add any name you settle to the glossary, as the `domain-language` skill describes.
 
 ```markdown
-# Project brief: <name>
+# Vision and scope document: <name>
 
 ## The request
 > <the user's words, verbatim, and each later request with its date>
 
 ## Goal
+<the one long-term aim the product is working toward now>
 
 ## Who it is for, and what they will be able to do
 
-## What finishes this goal
+## First release
 <the first release: what the end users will be able to do when it is done>
 
 ## Later
@@ -113,5 +114,5 @@ planner chooses". Add any name you settle to the glossary, as the `domain-langua
 
 ## Handing over
 
-Show the brief in the chat, with the decisions you made yourself listed above it, so that approving the brief
-confirms them. Once the user approves, go on to [start planning](2-start-planning.md).
+Show the vision and scope document in the chat. List the decisions you made above it, so the user sees what
+they are agreeing to. Once the user approves, go on to [start planning](2-start-planning.md).

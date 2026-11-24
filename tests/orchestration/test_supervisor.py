@@ -2,6 +2,8 @@
 is finished, waits on the user or the user stops it; the builders it starts itself; and each host adapter that wakes
 the lead, against a fake host: a Claude Code inbox socket, the Codex app's queue, and a command from the settings."""
 
+import contextlib
+import io
 import json
 import os
 import signal
@@ -119,6 +121,21 @@ class RecordingTheLead(Wiring):
         with mock.patch.object(agent_loop, "ensure_supervisor", lambda *a, **k: True):
             agent_loop.supervise_hook("merge", self.wt)  # a builder's command
         self.assertFalse((self.folder / agent_loop.LEAD_FILE).exists())
+
+    def test_read_only_commands_do_not_replace_the_lead(self):
+        self.lead(host="claude", session="lead")
+        path = self.folder / agent_loop.LEAD_FILE
+        original = path.read_bytes(), path.stat().st_mtime_ns
+        os.environ.update(CLAUDECODE="1", CLAUDE_CODE_SESSION_ID="reader")
+        with mock.patch.object(agent_loop, "ensure_supervisor", return_value=True):
+            for command in ("status", "settings", "builders"):
+                with self.subTest(command=command), contextlib.redirect_stdout(io.StringIO()), \
+                        mock.patch.object(sys, "argv", ["agent_loop.py", command, "--worktree", str(self.wt)]):
+                    try:
+                        agent_loop.main()
+                    except SystemExit as stop:
+                        self.assertEqual(stop.code, 0)
+                    self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), original)
 
 
 class WakingTheLead(Wiring):
@@ -298,11 +315,11 @@ class EndingTheBuild(Clean):
         done = {"A": step("A", "finished"), "B": step("B", "finished")}
         self.assertEqual(agent_loop.build_end(look(done))[0], "BUILD_FINISHED")
         self.assertIsNone(agent_loop.build_end(look(done, loops=[{"role": "plan"}])))
-        user = {"A": step("A", "blocked", reason="needs_access", milestone="M2"),
+        user = {"A": step("A", "blocked", reason="needs_access", work_package="WP2"),
                 "B": step("B", "waiting", reason="on_dependency")}
         word, lines = agent_loop.build_end(look(user))
         self.assertEqual(word, "WAITING_FOR_USER")
-        self.assertIn("A M2 (needs_access)", lines[0])
+        self.assertIn("A WP2 (needs_access)", lines[0])
         # a Blocked needs_context is the lead's to answer, and work a planner could plan now is the lead's too
         self.assertIsNone(agent_loop.build_end(look({"A": step("A", "blocked", reason="needs_context")})))
         self.assertIsNone(agent_loop.build_end(look(user, ahead=[{"module": "C"}])))
@@ -327,12 +344,18 @@ class SupervisorLife(Repo):
         if info.get("pid") and agent_loop.pid_alive(info["pid"]):
             os.kill(info["pid"], signal.SIGKILL)
 
-    def pid(self):
+    def pid(self, previous=None):
         """The pid of the supervisor that holds the lock, once one does: it takes a few seconds to start."""
-        self.assertTrue(self.until(lambda: agent_loop.lock_held(self.folder / agent_loop.SUPERVISOR_LOCK) and
-                                   (self.folder / agent_loop.SUPERVISOR_FILE).exists() and
-                                   "pid" in json.loads((self.folder / agent_loop.SUPERVISOR_FILE).read_text())))
-        return json.loads((self.folder / agent_loop.SUPERVISOR_FILE).read_text())["pid"]
+        state = self.folder / agent_loop.SUPERVISOR_FILE
+
+        def published_pid():
+            if agent_loop.lock_held(self.folder / agent_loop.SUPERVISOR_LOCK) and state.exists():
+                pid = json.loads(state.read_text()).get("pid")
+                return pid if pid != previous else None
+            return None
+
+        self.assertTrue(self.until(published_pid))
+        return published_pid()
 
     def until(self, test, limit=30):
         deadline = time.time() + limit
@@ -361,7 +384,7 @@ class SupervisorLife(Repo):
         os.kill(first, signal.SIGKILL)
         self.assertTrue(self.until(lambda: not agent_loop.lock_held(self.folder / agent_loop.SUPERVISOR_LOCK)))
         self.assertTrue(agent_loop.ensure_supervisor(self.wt))  # any command starts it again
-        second = self.pid()
+        second = self.pid(previous=first)
         self.assertNotEqual(second, first)
         # the user stops everything: it goes, and no command but the lead carrying on starts it again
         self.pid()
@@ -393,7 +416,7 @@ class SupervisorLife(Repo):
         self.assertIn(" flow --worktree ", session.texts()[-1])  # a wake is a nudge to look; `flow` has the results
         flow = json.loads(self.printed(agent_loop.cmd_flow, worktree=str(self.wt), since=1))
         self.assertIn("REVIEWED", [r["result"] for r in flow["results"]], flow["results"])
-        self.assertTrue(agent_loop.recorded_done(self.read_done()["milestones"][1], self.read_record()))
+        self.assertTrue(agent_loop.recorded_done(self.read_done()["work_packages"][1], self.read_record()))
         self.assertTrue(self.until(self.gone))
         stopped = json.loads((self.folder / agent_loop.SUPERVISOR_FILE).read_text())["stopped"]
         self.assertEqual(stopped["reason"], "finished")

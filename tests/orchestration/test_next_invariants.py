@@ -8,7 +8,7 @@ the commands no other test runs on a plain repository, so their results are chec
 The rules: every `next` (its `then` and `alternative` too) has a non-empty command that the shell parses, whose `argv`
 is its words, and that runs this copy of the script with a subcommand and flags its parser takes, or one of the few
 programs a lead runs itself; `by` is the lead, `why` says why, `decides: human` comes with an `ask` and an `ask` only
-with it; a command run again for the same module and milestone keeps the caller's --one-step, --module, --host, --model and
+with it; a command run again for the same module and work package keeps the caller's --one-step, --module, --host, --model and
 --effort unless its `why` says why not, and gains no --one-step the caller didn't pass; a `--worktree` exists and
 belongs to the caller's repository; `adopt` given `--then` hands it back; a placeholder appears only in a command the
 user decides, in `human`, or as `run --message '<the missing fact>'`; and no `next` sends the lead to `adopt` a
@@ -26,7 +26,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import PROFILE, Clean, Repo, agent_loop, milestone, put  # noqa: E402
+from support import PROFILE, Clean, Repo, agent_loop, work_package, put  # noqa: E402
 import invariants  # noqa: E402
 
 LOOP = str(agent_loop.LOOP)
@@ -110,7 +110,7 @@ class EachCheckCatchesItsClass(Clean):
     def test_the_documented_exceptions_pass(self):
         # `human` is the command that records the user's decision, so its placeholder is the user's words
         line = {"result": "X", "next": dict(nxt("ready", "--worktree", self.wt), human=shlex.join(
-            ["python3", LOOP, "human", "release", "--module", "WATER", "--milestone", "M1", "--worktree", self.wt,
+            ["python3", LOOP, "human", "release", "--module", "WATER", "--work-package", "WP1", "--worktree", self.wt,
              "--text", "<what the user said, in their words>"]))}
         self.assertEqual(problems(line), [])
         # a builder's Needs Context question is the lead's to answer first, as the script's help says
@@ -152,14 +152,14 @@ class AdoptOfABuildersWork(Repo):
 
     def test_adopt_in_a_builders_worktree_with_its_own_commits_is_caught(self):
         (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Worktrees:** .orchestrate/worktrees\n")
-        self.write_done([milestone("M1", "not_started", ["open"])])
+        self.write_done([work_package("WP1", "not_started", ["open"])])
         self.commit_all()
         built, _ = agent_loop.module_worktree(self.wt, agent_loop.profile(self.wt), "WATER")
         line = {"result": "X", "next": nxt("adopt", "--worktree", str(built))}
         self.assertEqual(problems(line), [], "a builder's worktree with nothing of its own yet is harmless")
         put(built / "src/water.py", "print('water')\n")
         self.git("add", "-A", where=built)
-        self.git("commit", "-qm", "WATER M1: water", where=built)
+        self.git("commit", "-qm", "WATER WP1: water", where=built)
         self.assertTrue(any("adopt a builder's unreviewed work" in p for p in problems(line)), problems(line))
 
 
@@ -189,7 +189,7 @@ class EveryCommandOnAPlainRepository(Repo):
         wt = str(self.wt)
         for func, kw in ((agent_loop.cmd_ready, {}), (agent_loop.cmd_status, {}),
                          (agent_loop.cmd_next, {"module": "WATER"}),
-                         (agent_loop.cmd_next, {"module": "WATER", "milestone": "M1"}),
+                         (agent_loop.cmd_next, {"module": "WATER", "work_package": "WP1"}),
                          (agent_loop.cmd_settings, {}), (agent_loop.cmd_locks, {}),
                          (agent_loop.cmd_cleanup, {"json": True}), (agent_loop.cmd_main_check, {}),
                          (agent_loop.cmd_adopt, {"paths": []}), (agent_loop.cmd_migrate, {})):

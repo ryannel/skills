@@ -20,15 +20,15 @@ PROF = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "graded_exam
         "merge": "push", "remote": "origin", "branch": "main",
         "test_command": "./dev check", "exclusive resources": "gpu: timing runs and captures",
         "bounds": {"Licences and paths not to touch": "no GPL code", "Human decides": "spending and publishing"}}
-MILESTONE = {"id": "M2", "items": [
-    {"id": "M2.1", "builder_result": "pass"},
-    {"id": "M2.2", "builder_result": "open", "needs": {"type": "human_feedback", "what": "does the tile animation read as smooth"}},
-    {"id": "M2.3", "builder_result": "open", "needs": {"type": "hardware", "what": "an iPhone connected over USB"}}]}
-FEEDBACK = [{"at": "2026-11-10T08:37:00Z", "items": ["M2.2"], "asked": "Is the resize smooth enough to ship?",
+WORK_PACKAGE = {"id": "WP2", "items": [
+    {"id": "WP2.1", "builder_result": "pass"},
+    {"id": "WP2.2", "builder_result": "open", "needs": {"type": "human_feedback", "what": "does the tile animation read as smooth"}},
+    {"id": "WP2.3", "builder_result": "open", "needs": {"type": "hardware", "what": "an iPhone connected over USB"}}]}
+FEEDBACK = [{"at": "2026-11-10T08:37:00Z", "items": ["WP2.2"], "asked": "Is the resize smooth enough to ship?",
              "said": "Looks good to me, but the corners flicker once."}]
 ROUND = {"verdict": "fail", "at": "2026-11-09T21:00:00Z", "counts": True,
-         "review": ".orchestrate/evidence/APPLE-TILE/M2-review.md",
-         "findings": [{"name": "corner flicker on resize", "item": "M2.2"},
+         "review": ".orchestrate/evidence/APPLE-TILE/WP2-review.md",
+         "findings": [{"name": "corner flicker on resize", "item": "WP2.2"},
                       {"name": "log written to the worktree", "repeat": True}]}
 
 
@@ -36,8 +36,8 @@ def build_prompt(host: str, headless: bool, lead: str, feedback: bool, earlier: 
                  resources: bool, rules: list[str]) -> str:
     """A builder's first prompt, as the script builds it."""
     prof = {**PROF, "exclusive resources": PROF["exclusive resources"] if resources else ""}
-    note = agent_loop.handoff_note(agent_loop.handoff_rel(prof, "APPLE-TILE", "M2"), "M2") if earlier else ""
-    return agent_loop.build_prompt(host, headless, prof, "APPLE-TILE", "M2", MILESTONE if needs else None, lead=lead,
+    note = agent_loop.handoff_note(agent_loop.handoff_rel(prof, "APPLE-TILE", "WP2"), "WP2") if earlier else ""
+    return agent_loop.build_prompt(host, headless, prof, "APPLE-TILE", "WP2", WORK_PACKAGE if needs else None, lead=lead,
                                    feedback=FEEDBACK if feedback else None, earlier=note, rules=rules)
 
 
@@ -49,66 +49,66 @@ def prompts() -> dict[str, str]:
         "APPLE-PRESENTATION builder's capture; that is normal.", True, True, True, True, ["never modify Broadsides"])
     out["build-claude-visible-plain"] = build_prompt("claude", False, "", False, False, True, False, [])
     out["build-resumed-restatement"] = agent_loop.binding(
-        PROF, "build", "M2", MILESTONE, "docs/plans/APPLE-TILE/DONE.json", rules=["never modify Broadsides"])[0]
+        PROF, "build", "WP2", WORK_PACKAGE, "docs/plans/APPLE-TILE/DONE.json", rules=["never modify Broadsides"])[0]
     out["build-resumed-after-the-lead-wrote"] = "The console is unlocked now.\n\n" + agent_loop.binding(
-        PROF, "build", "M2", MILESTONE, "docs/plans/APPLE-TILE/DONE.json", lead_spoke=True)[0]
+        PROF, "build", "WP2", WORK_PACKAGE, "docs/plans/APPLE-TILE/DONE.json", lead_spoke=True)[0]
     with mock.patch.object(agent_loop, "git", lambda *a: mock.Mock(stdout="9f3c2a1 (\"Cache decoded tiles by zoom\")")), \
             mock.patch.object(agent_loop, "worktree_jobs", lambda *a, **k: [
                 {"id": "20261112-071500-4242", "age": "1h05m", "command": "./dev capture valley --realtime",
                  "log": "/repo/.git/orchestrate/jobs/20261112-071500-4242.log"}]):
-        out["build-resumed-after-turn-limit"] = "Carry on with M2." + agent_loop.open_items(MILESTONE) + " " + \
-            agent_loop.resume_facts(Path("/repo"), MILESTONE, 124, 2.0)
+        out["build-resumed-after-turn-limit"] = "Carry on with WP2." + agent_loop.open_items(WORK_PACKAGE) + " " + \
+            agent_loop.resume_facts(Path("/repo"), WORK_PACKAGE, 124, 2.0)
         # what a new session that takes over from a full or old one is told, in the first prompt's {earlier}
-        out["build-new-session-note"] = agent_loop.earlier_session_note(Path("/repo"), MILESTONE, 124, 2.0,
-                                                                        "origin/main", "M2")
+        out["build-new-session-note"] = agent_loop.earlier_session_note(Path("/repo"), WORK_PACKAGE, 124, 2.0,
+                                                                        "origin/main", "WP2")
     out["build-not-ready"] = agent_loop.not_ready_message(
         "`./dev check` exited 1: error: tile_cache.rs:88: index out of bounds",
         Path("/repo/.git/orchestrate/verify/APPLE-TILE"))
     # what `merge` prints, and what a builder's first prompt says, when a builder's commits set the state, which only
     # the script sets since 2.1.0
-    set_state = [("docs/plans/APPLE-TILE/DONE.json", "M2", "ready_for_review")]
+    set_state = [("docs/plans/APPLE-TILE/DONE.json", "WP2", "ready_for_review")]
     out["merge-refused-state"] = agent_loop.state_refusal(set_state)
     out["build-old-branch-note"] = agent_loop.state_refusal(set_state, old_branch=True)
     out["review"] = agent_loop.review_prompt(
-        "claude", PROF, "APPLE-TILE", "M2", "a6101020", "docs/plans/APPLE-TILE/DONE.json",
-        ".orchestrate/evidence/APPLE-TILE/M2-review.md",
-        {"id": "M2", "items": [{"id": "M2.1", "check": "./dev test tiles"}, {"id": "M2.2"}]},
+        "claude", PROF, "APPLE-TILE", "WP2", "a6101020", "docs/plans/APPLE-TILE/DONE.json",
+        ".orchestrate/evidence/APPLE-TILE/WP2-review.md",
+        {"id": "WP2", "items": [{"id": "WP2.1", "check": "./dev test tiles"}, {"id": "WP2.2"}]},
         {"ready_for_review": {"checked": "b7c2e91d04aa"}, "reviews": [ROUND]}, FEEDBACK,
         [{"why": "the reviews judged the capture tooling, not the tiles", "at": "2026-11-10T12:00:00Z"}],
         tree=Path("/repo"))
     out["review-restatement"] = agent_loop.binding(PROF, "review", done="docs/plans/APPLE-TILE/DONE.json",
-                                                   review=".orchestrate/evidence/APPLE-TILE/M2-review.md")[0]
+                                                   review=".orchestrate/evidence/APPLE-TILE/WP2-review.md")[0]
     out["design-review"] = agent_loop.review_prompt(
         "claude", PROF, "APPLE-TILE", "design", "HEAD", "docs/plans/APPLE-TILE/DONE.json",
         ".orchestrate/evidence/APPLE-TILE/design-review.md", None, {}, None, [],
-        context="Since the last design review (.orchestrate/evidence/APPLE-TILE/design-review.md), M2.2 changed.",
+        context="Since the last design review (.orchestrate/evidence/APPLE-TILE/design-review.md), WP2.2 changed.",
         design=True, tree=Path("/repo"))
     out["plan"] = agent_loop.PLAN_TEMPLATE.format(
         task="Plan module APPLE-TILE. The user said on 9 November: \"tiles should load as you scroll, never "
              "all at once\".", skill=agent_loop.skill_note("planner", "claude"), kind=agent_loop.kind_text("module"), kind_name=agent_loop.PLAN_KINDS["module"], loop=LOOP,
         glossary="docs/plans/GLOSSARY.md", scope="", **agent_loop.paths_for_prompt(Path("/repo"), PROF))
     out["plan-diagnose"] = agent_loop.PLAN_TEMPLATE.format(
-        task="Diagnose APPLE-TILE M2.", skill=agent_loop.skill_note("planner", "claude"),
+        task="Diagnose APPLE-TILE WP2.", skill=agent_loop.skill_note("planner", "claude"),
         kind=agent_loop.kind_text("diagnose"), kind_name=agent_loop.PLAN_KINDS["diagnose"], loop=LOOP, glossary="docs/plans/GLOSSARY.md",
         scope=agent_loop.scope_text("APPLE-TILE"), **agent_loop.paths_for_prompt(Path("/repo"), PROF))
     with mock.patch.object(agent_loop, "review_history", lambda *a, **k: agent_loop.history_lines({"reviews": [ROUND]})), \
             mock.patch.object(agent_loop, "review_files", lambda *a, **k: (
-                [".orchestrate/evidence/APPLE-TILE/M2-review-1.md", ".orchestrate/evidence/APPLE-TILE/M2-review.md"], False)):
+                [".orchestrate/evidence/APPLE-TILE/WP2-review-1.md", ".orchestrate/evidence/APPLE-TILE/WP2-review.md"], False)):
         out["planner-diagnosis-task-repeated-finding"] = agent_loop.diagnosis_task(
-            "APPLE-TILE", "M2", {"failed_reviews": 4, "failed_reviews_with_repeat": 4}, PROF, Path("/repo"))
+            "APPLE-TILE", "WP2", {"failed_reviews": 4, "failed_reviews_with_repeat": 4}, PROF, Path("/repo"))
         out["planner-diagnosis-task-new-findings"] = agent_loop.diagnosis_task(
-            "APPLE-TILE", "M2", {"failed_reviews": 6, "failed_reviews_with_repeat": 1}, PROF, Path("/repo"))
+            "APPLE-TILE", "WP2", {"failed_reviews": 6, "failed_reviews_with_repeat": 1}, PROF, Path("/repo"))
     out["planner-after-design-changes"] = agent_loop.design_review_next(
         {"verdict": "DESIGN CHANGES", "review": ".orchestrate/evidence/APPLE-TILE/design-review.md",
          "line": "DESIGN CHANGES: 2 must_fix findings"}, "APPLE-TILE", Path("/repo"), PROF)["command"]
     blocked = {"reason": "needs_dependency", "what": "CORE has no save API yet",
-               "handoff": ".orchestrate/evidence/APPLE-TILE/M2-handoff.md",
+               "handoff": ".orchestrate/evidence/APPLE-TILE/WP2-handoff.md",
                "work": {"branch": "build/apple-tile", "commit": "7911c75b" + "0" * 32}}
     out["planner-needs-dependency"] = agent_loop.next_for(
-        {"module": "APPLE-TILE", "milestone": "M2", "status": "blocked", "reason": "needs_dependency",
+        {"module": "APPLE-TILE", "work_package": "WP2", "status": "blocked", "reason": "needs_dependency",
          "blocked": blocked}, Path("/repo"), PROF)["command"]
     out["claude-review-or-plan-turn-note"] = agent_loop.CLAUDE_TURN_NOTE
-    out["findings"] = agent_loop.FINDINGS_TEMPLATE.format(milestone="M2", module="APPLE-TILE",
+    out["findings"] = agent_loop.FINDINGS_TEMPLATE.format(work_package="WP2", module="APPLE-TILE",
                                                           evidence=".orchestrate/evidence")
     return out
 

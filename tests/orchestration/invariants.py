@@ -273,7 +273,7 @@ SAID_WHY = {
 
 
 def check_carried(argv: list[str], given, step: bool, text: str, why: str = "") -> list[str]:
-    """3. A `next` that runs the command again, for the same module and milestone, keeps the flags that change what
+    """3. A `next` that runs the command again, for the same module and work package, keeps the flags that change what
     it does. A step of a longer run has `--one-step` added by the command running the steps, so its own `next` never
     carries it, and neither does a top-level command's `next` when the lead didn't pass it."""
     if not given:
@@ -283,7 +283,7 @@ def check_carried(argv: list[str], given, step: bool, text: str, why: str = "") 
         return []
     get = (lambda dest, f: getattr(a, dest, None)) if isinstance(a, argparse.Namespace) else \
         (lambda dest, f: flag(a, f))
-    module, milestone = get("module", "--module"), get("milestone", "--milestone")
+    module, work_package = get("module", "--module"), get("work_package", "--work-package")
     if isinstance(module, list):
         module = module[0] if len(module) == 1 else None
     nm = flag(argv, "--module")
@@ -292,7 +292,7 @@ def check_carried(argv: list[str], given, step: bool, text: str, why: str = "") 
         return [] if said("--module") else [f"drops --module {module} from the command it runs again: {text}"]
     if module and isinstance(nm, str) and nm.upper() != str(module).upper():
         return []  # another module's command, not this one again
-    if milestone and isinstance(flag(argv, "--milestone"), str) and flag(argv, "--milestone") != milestone:
+    if work_package and isinstance(flag(argv, "--work-package"), str) and flag(argv, "--work-package") != work_package:
         return []
     problems = []
     tree, theirs = get("worktree", "--worktree"), flag(argv, "--worktree")

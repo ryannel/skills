@@ -17,7 +17,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import (PROFILE, SCRIPTS, Repo, agent_loop, milestone, put, release)  # noqa: E402
+from support import (PROFILE, SCRIPTS, Repo, agent_loop, work_package, put, release)  # noqa: E402
 
 
 def command(result):
@@ -28,7 +28,7 @@ def command(result):
 
 class RunEndings(Repo):
     """CHECKS_FAILED, STALLED and NO_PROGRESS_FOR_HOURS used to end with no `next`, and the skill sent the lead to
-    `review`, which refuses a milestone that isn't Ready for Review."""
+    `review`, which refuses a work package that isn't Ready for Review."""
 
     def assert_fresh_run(self, result, *words):
         self.assertIn(" run ", command(result), result)
@@ -42,10 +42,10 @@ class RunEndings(Repo):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="DONE")
         result = self.run_loop()
         self.assertEqual(result["result"], "CHECKS_FAILED")
-        self.assert_fresh_run(result, "items not yet pass: M1.1")
+        self.assert_fresh_run(result, "items not yet pass: WP1.1")
 
     def test_a_builder_that_says_an_item_cant_be_met_is_sent_to_a_planner(self):
-        os.environ.update(FAKE_PASS="0", FAKE_REPLY="M1.1 can't be met as written: the target has no GPU.\nDONE")
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="WP1.1 can't be met as written: the target has no GPU.\nDONE")
         result = self.run_loop()
         self.assertEqual(result["result"], "CHECKS_FAILED")
         self.assertIn(" plan ", command(result))
@@ -56,7 +56,7 @@ class RunEndings(Repo):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="working on it")
         result = self.run_loop()
         self.assertEqual(result["result"], "STALLED")
-        self.assert_fresh_run(result, "M1.1")
+        self.assert_fresh_run(result, "WP1.1")
 
     def test_no_progress_restarts_the_builder(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="working on it")
@@ -69,34 +69,34 @@ class RunEndings(Repo):
         self.assertEqual(result["result"], "CHECKS_FAILED")
         self.assertIn("--checks-only", command(result))
 
-    def test_a_review_of_a_milestone_not_ready_for_review_points_to_the_module_not_back_at_itself(self):
-        result = self.review("M1", commit="HEAD")
+    def test_a_review_of_a_work_package_not_ready_for_review_points_to_the_module_not_back_at_itself(self):
+        result = self.review("WP1", commit="HEAD")
         self.assertEqual(result["result"], "INVALID")
         self.assertNotIn(" review ", command(result), result)
         self.assertIn(" run ", command(result))
 
 
 class ReplannedWhileBuilding(Repo):
-    """A planner re-plans the milestone a run is building. The run kept the definitions it started with, so every
+    """A planner re-plans the work package a run is building. The run kept the definitions it started with, so every
     DONE failed as "not the authorised ones" and the builder was told to fix what it couldn't."""
 
     def replan_on_origin(self):
-        """A planner's change to M1 lands on the main branch, with the record authorising it."""
+        """A planner's change to WP1 lands on the main branch, with the record authorising it."""
         other = Path(tempfile.mkdtemp(dir=self.root))
         self.sh("git", "clone", "-q", str(self.origin), str(other / "c"))
         where = other / "c"
         path = where / "docs/plans/WATER/DONE.json"
         doc = json.loads(path.read_text())
-        doc["milestones"][0]["items"][0]["statement"] = "a smaller first step"
+        doc["work_packages"][0]["items"][0]["statement"] = "a smaller first step"
         path.write_text(json.dumps(doc))
         rec_path = where / "docs/plans/WATER/RECORD.json"
         rec = json.loads(rec_path.read_text())
-        rec["milestones"]["M1"]["definitions"] = agent_loop.definitions(doc["milestones"][0])
+        rec["work_packages"]["WP1"]["definitions"] = agent_loop.definitions(doc["work_packages"][0])
         rec_path.write_text(json.dumps(rec))
         self.git("commit", "-qam", f"orchestrate: authorise the plan\n\n{agent_loop.TRAILER}", where=where)
         self.git("push", "-q", "origin", "main", where=where)
 
-    def test_a_run_stops_after_the_turn_in_which_its_milestone_was_replanned(self):
+    def test_a_run_stops_after_the_turn_in_which_its_work_package_was_replanned(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="working on it")
         original = agent_loop.wait_for_merges
         landed = []
@@ -108,14 +108,14 @@ class ReplannedWhileBuilding(Repo):
         with mock.patch.object(agent_loop, "wait_for_merges", during_turn):
             result = self.run_loop()
         self.assertEqual(result["result"], "INVALID", result)
-        self.assertIn("a planner changed M1's definitions", result["problems"][0])
+        self.assertIn("a planner changed WP1's definitions", result["problems"][0])
         self.assertIn(" run ", command(result))
         self.assertEqual(len(self.calls()), 1)
 
     def test_merge_refuses_a_branch_built_to_the_old_items(self):
         path = self.wt / "docs/plans/WATER/DONE.json"
         doc = json.loads(path.read_text())
-        doc["milestones"][0]["status"] = "in_progress"
+        doc["work_packages"][0]["status"] = "in_progress"
         path.write_text(json.dumps(doc))
         put(self.wt / "src/water.txt", "work")
         self.git("add", "-A")
@@ -128,7 +128,7 @@ class ReplannedWhileBuilding(Repo):
         self.assertEqual(stop.exception.code, 1)
         result = json.loads(out.getvalue().splitlines()[-1])
         self.assertEqual(result["result"], "FAILED")
-        self.assertIn("WATER M1", result["detail"])
+        self.assertIn("WATER WP1", result["detail"])
         self.assertIn("a planner has changed", result["detail"])
 
 
@@ -164,11 +164,11 @@ class PlannerEndings(Repo):
         self.assertNotIn("If nothing should change", agent_loop.PLAN_TEMPLATE)
 
     def block_on_dependency(self):
-        m1 = milestone("M1", "blocked", ["open"])
-        m1["blocked"] = {"reason": "needs_dependency", "what": "PAY's payment API"}
-        self.write_done([m1, milestone("M2", "not_started", ["open"])])
+        w1 = work_package("WP1", "blocked", ["open"])
+        w1["blocked"] = {"reason": "needs_dependency", "what": "PAY's payment API"}
+        self.write_done([w1, work_package("WP2", "not_started", ["open"])])
         self.git("add", "-A")
-        self.git("commit", "-qm", "orchestrate: WATER M1 blocked: needs_dependency")
+        self.git("commit", "-qm", "orchestrate: WATER WP1 blocked: needs_dependency")
         self.git("push", "-q", "origin", "main")
 
     def blocked_next(self):
@@ -180,7 +180,7 @@ class PlannerEndings(Repo):
         self.block_on_dependency()
         before = self.blocked_next()
         self.assertIn(" plan ", before["command"])
-        self.assertIn("KEEP WATER M1: builder:", before["command"])
+        self.assertIn("KEEP WATER WP1: builder:", before["command"])
         self.assertEqual(self.plan()["result"], "PLANNED")  # a planner adds the missing part to PAY
         after = self.blocked_next()
         self.assertIn(" unblock ", after["command"])
@@ -190,13 +190,13 @@ class PlannerEndings(Repo):
     def test_keep_on_a_block_the_plan_answers_lifts_it(self):
         self.block_on_dependency()
         os.environ.update(FAKE_PLAN="keep_builder")
-        result = self.plan(task="WATER M1 needs PAY's payment API")
+        result = self.plan(task="WATER WP1 needs PAY's payment API")
         self.assertEqual((result["result"], result.get("unblocked")), ("KEPT", True), result)
         self.assertIn(" run ", command(result))
-        m1 = self.read_done()["milestones"][0]
-        self.assertEqual(m1["status"], "in_progress")
-        self.assertNotIn("blocked", m1)
-        self.assertEqual(m1["diagnoses"], 0)  # an answered block isn't a diagnosis
+        w1 = self.read_done()["work_packages"][0]
+        self.assertEqual(w1["status"], "in_progress")
+        self.assertNotIn("blocked", w1)
+        self.assertEqual(w1["diagnoses"], 0)  # an answered block isn't a diagnosis
 
 
 class HumanDecisionsBesideAPlanner(Repo):
@@ -204,10 +204,10 @@ class HumanDecisionsBesideAPlanner(Repo):
     answers couldn't be recorded for hours."""
 
     def test_a_human_decision_is_recorded_while_a_planner_works_on_another_module(self):
-        m1 = milestone("M1", "blocked", ["open", "open"], inspect="frames")
-        m1["items"][1]["needs"] = {"type": "human_feedback", "what": "the user picks a direction"}
-        m1["blocked"] = {"reason": "needs_human_feedback", "items": ["M1.2"], "what": "M1.2 needs the user"}
-        self.write_done([m1, milestone("M2", "not_started", ["open"])])
+        w1 = work_package("WP1", "blocked", ["open", "open"], inspect="frames")
+        w1["items"][1]["needs"] = {"type": "human_feedback", "what": "the user picks a direction"}
+        w1["blocked"] = {"reason": "needs_human_feedback", "items": ["WP1.2"], "what": "WP1.2 needs the user"}
+        self.write_done([w1, work_package("WP2", "not_started", ["open"])])
         self.commit_all()
         code = (f"import sys, time; sys.path.insert(0, {str(SCRIPTS)!r}); import agent_loop\n"
                 f"from pathlib import Path; wt = Path({str(self.wt)!r}); agent_loop.run_lock(wt, '_plan')\n"
@@ -216,7 +216,7 @@ class HumanDecisionsBesideAPlanner(Repo):
         proc = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
         try:
             self.assertEqual(proc.stdout.readline().strip(), "up")
-            result = self.human("feedback", "M1", "Direction B.", item="M1.2")
+            result = self.human("feedback", "WP1", "Direction B.", item="WP1.2")
         finally:
             proc.kill()
             proc.wait()
@@ -320,7 +320,7 @@ class FindingsForAPlanner(Repo):
     def test_a_finding_for_a_planner_sends_the_review_to_the_diagnosis(self):
         work = self.ready_for_review()
         os.environ.update(FAKE_REVIEW="fail", FAKE_FOR_PLANNER="a frame sequence can't show the latency the item asks")
-        result = self.review("M1", commit=work)
+        result = self.review("WP1", commit=work)
         self.assertEqual((result["verdict"], result["escalation"]), ("FAIL", "diagnosis"), result)
         self.assertEqual(result["next"]["by"], "lead")
         self.assertIn("only a planner can settle", command(result))
@@ -331,16 +331,16 @@ class FindingsForAPlanner(Repo):
     def test_keep_after_a_planner_finding_lets_the_builder_carry_on(self):
         work = self.ready_for_review()
         os.environ.update(FAKE_REVIEW="fail", FAKE_FOR_PLANNER="the items contradict each other")
-        self.review("M1", commit=work)
+        self.review("WP1", commit=work)
         os.environ.pop("FAKE_FOR_PLANNER")
         os.environ.update(FAKE_PLAN="keep_builder")
-        self.assertEqual(self.plan(task="Diagnose WATER M1")["result"], "KEPT")
-        m1 = self.read_done()["milestones"][0]
-        self.assertFalse(agent_loop.planner_findings(m1))
-        self.assertEqual(agent_loop.escalation_of(m1), "none")
+        self.assertEqual(self.plan(task="Diagnose WATER WP1")["result"], "KEPT")
+        w1 = self.read_done()["work_packages"][0]
+        self.assertFalse(agent_loop.planner_findings(w1))
+        self.assertEqual(agent_loop.escalation_of(w1), "none")
 
     def test_old_findings_without_the_field_escalate_as_before(self):
-        self.assertEqual(agent_loop.escalation_of({"failed_reviews": 1, "findings": [{"name": "x", "item": "M1.1"}]}),
+        self.assertEqual(agent_loop.escalation_of({"failed_reviews": 1, "findings": [{"name": "x", "item": "WP1.1"}]}),
                          "same_builder")
-        self.assertEqual(agent_loop.findings_problems({"findings": [{"name": "x", "planner": ""}]}, "M1", []),
-                         ["M1: finding 'x': planner should say why only a planner can settle it"])
+        self.assertEqual(agent_loop.findings_problems({"findings": [{"name": "x", "planner": ""}]}, "WP1", []),
+                         ["WP1: finding 'x': planner should say why only a planner can settle it"])

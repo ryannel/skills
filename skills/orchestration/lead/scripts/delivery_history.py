@@ -11,7 +11,7 @@ from one typed prompt to the next. Model calls and tool calls inside a turn are 
 things that matter on their own, such as an error, a compaction or a change in the weekly limit, are events.
 
 Tokens come from the host files, never from the script's usage ledger, because the ledger's Codex rows before 2.1.0
-count a resumed session's earlier tokens again. The ledger tags sessions with the module, milestone and role they
+count a resumed session's earlier tokens again. The ledger tags sessions with the module, work package and role they
 served. A session whose host file is gone keeps the ledger's figures, marked `from_ledger`.
 
 Auto-review and subagent threads are sessions of their own that point to the session they served, so nothing is
@@ -22,11 +22,11 @@ Files, in `$ORCHESTRATE_HISTORY_DIR/<project>/` (default `~/.orchestrate/history
   sessions.jsonl    one row per host session
   turns.jsonl       one row per host turn
   events.jsonl      errors and signals
-  milestones.jsonl  one row per milestone, from the plan at the main branch's tip
+  work_packages.jsonl  one row per work package, from the plan at the main branch's tip
   checks.jsonl      one row per automated check run
   state.json        each source file's read position
 
-`agent_loop.py` calls `extract()` and writes the milestones. The CLI here prints a summary for a history folder.
+`agent_loop.py` calls `extract()` and writes the work packages. The CLI here prints a summary for a history folder.
 """
 
 from __future__ import annotations
@@ -615,6 +615,34 @@ def first_cwd(path: Path) -> str | None:
 
 # ------------------------------------------------------------------------------------------------------------ ledgers
 
+# A history folder may outlive its repository and all of its transcripts. Migrate each 2.x
+# row as it is read, before computing its key, so a later sweep updates the same event.
+OLD_HISTORY_FILE = "milestones.jsonl"
+
+
+def migrate_id(value):
+    if isinstance(value, str) and re.fullmatch(r"[MW]\d+(?:\.\d+)*", value):
+        return "WP" + value[1:]
+    return value
+
+
+def migrate_history_row(row: dict) -> dict:
+    if "milestone" in row:
+        row["work_package"] = row.pop("milestone")
+    wid = row.get("work_package")
+    if migrate_id(wid) != wid:
+        row["work_package"] = migrate_id(wid)
+        for review in row.get("reviews") or []:
+            for finding in review.get("findings") or []:
+                if "name" in finding:
+                    finding["name"] = migrate_id(finding["name"])
+            if review.get("review"):
+                review["review"] = re.sub(r"(^|/)[MW](?=\d+-review(?:-\d+)?\.md$)", r"\1WP", review["review"])
+        if row.get("kind") == "review_failed":
+            row["detail"] = re.sub(r"\b[MW](?=\d+\.\d+\b)", "WP", row.get("detail") or "")
+    return row
+
+
 def read_jsonl(path: Path) -> list[dict]:
     rows = []
     try:
@@ -625,7 +653,7 @@ def read_jsonl(path: Path) -> list[dict]:
                 except ValueError:
                     continue
                 if isinstance(row, dict):
-                    rows.append(row)
+                    rows.append(migrate_history_row(row))
     except OSError:
         pass
     return rows
@@ -658,13 +686,13 @@ def ledger_events(rows: list[dict]) -> list[dict]:
         out.append({"kind": kind, "at": r.get("at"), "host": r.get("host"), "session": r.get("session"),
                     "exit": code, "class": stderr_class(r.get("stderr")) if kind == "turn_failed" else None,
                     "detail": short(r.get("stderr"), 400) if r.get("stderr") else None,
-                    **{k: r.get(k) for k in ("role", "module", "milestone", "model", "effort", "path", "version")}})
+                    **{k: r.get(k) for k in ("role", "module", "work_package", "model", "effort", "path", "version")}})
     return out
 
 
 def result_events(orchestrate: Path) -> list[dict]:
     """Every result the script printed: the full list in results.jsonl where it exists (2.5.0 on), and the latest
-    one per milestone and command from results/ for older runs. Refusals are marked as errors."""
+    one per work package and command from results/ for older runs. Refusals are marked as errors."""
     rows = read_jsonl(orchestrate / "results.jsonl")
     seen = {(r.get("result"), r.get("at")) for r in rows}
     for f in sorted((orchestrate / "results").glob("*.json")) if (orchestrate / "results").is_dir() else []:
@@ -676,14 +704,14 @@ def result_events(orchestrate: Path) -> list[dict]:
             continue
         r.setdefault("at", iso(f.stat().st_mtime))
         if (r.get("result"), r.get("at")) not in seen:
-            rows.append(r)
+            rows.append(migrate_history_row(r))
     out = []
     for r in rows:
         word = r.get("result")
         if not word or word == "RUNNING":
             continue
         out.append({"kind": "script_refused" if word in REFUSALS else "result", "at": r.get("at"), "result": word,
-                    "module": r.get("module"), "milestone": r.get("milestone"), "host": r.get("host"),
+                    "module": r.get("module"), "work_package": r.get("work_package"), "host": r.get("host"),
                     "model": r.get("model"), "verdict": r.get("verdict"), "version": r.get("version"),
                     "detail": short(r.get("reason") or r.get("why") or r.get("blocked") or r.get("last_line"), 400)})
     return out
@@ -698,15 +726,16 @@ def check_rows(orchestrate: Path) -> list[dict]:
         except (OSError, ValueError):
             continue
         if isinstance(r, dict) and r.get("command"):
+            r = migrate_history_row(r)
             out.append({"command": short(r["command"], 160), "exit": r.get("exit"), "at": r.get("at"),
-                        "role": r.get("role"), "module": r.get("module"), "milestone": r.get("milestone"),
+                        "role": r.get("role"), "module": r.get("module"), "work_package": r.get("work_package"),
                         "seconds": r.get("seconds")})
     return out
 
 
 # -------------------------------------------------------------------------------------------------------------- store
 
-FILES = ("sessions", "turns", "events", "milestones", "checks")
+FILES = ("sessions", "turns", "events", "work_packages", "checks")
 
 
 def key_of(kind: str, row: dict) -> str:
@@ -714,17 +743,17 @@ def key_of(kind: str, row: dict) -> str:
         return f"{row.get('host')}:{row.get('session')}"
     if kind == "turns":
         return f"{row.get('host')}:{row.get('session')}:{row.get('turn')}"
-    if kind == "milestones":
-        return f"{row.get('module')}:{row.get('milestone')}"
+    if kind == "work_packages":
+        return f"{row.get('module')}:{row.get('work_package')}"
     if kind == "checks":
         return f"{row.get('command')}:{row.get('at')}"
     blob = json.dumps({k: row.get(k) for k in ("kind", "at", "session", "turn", "result", "limit", "used_percent",
-                                               "module", "milestone", "thread", "status")}, sort_keys=True)
+                                               "module", "work_package", "thread", "status")}, sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
 
 def load(folder: Path) -> dict:
-    data = {kind: {key_of(kind, r): r for r in read_jsonl(folder / f"{kind}.jsonl")} for kind in FILES}
+    data = {kind: {key_of(kind, r): r for r in records} for kind, records in rows(folder).items()}
     try:
         data["state"] = json.loads((folder / "state.json").read_text())
     except (OSError, ValueError):
@@ -760,6 +789,7 @@ def save(folder: Path, data: dict) -> None:
                                                           key_of(kind, r)))
         write_atomic(folder / f"{kind}.jsonl", "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in rows))
     write_atomic(folder / "state.json", json.dumps(data["state"], indent=0))
+    (folder / OLD_HISTORY_FILE).unlink(missing_ok=True)
 
 
 # ------------------------------------------------------------------------------------------------------------ extract
@@ -773,7 +803,7 @@ def tag_turns(turns: list[dict], rows: list[dict]) -> None:
     for t in turns:
         end = parse_time(t.get("end") or t.get("start")) or 0
         row = next((r for r in rows if (parse_time(r.get("at")) or 0) >= end - 300), rows[-1])
-        for k in ("role", "module", "milestone", "version", "path"):
+        for k in ("role", "module", "work_package", "version", "path"):
             if row.get(k) is not None:
                 t[k] = row[k]
         if row.get("task"):
@@ -909,7 +939,7 @@ def _extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=No
                 title = (script_threads.get(sid) or {}).get("title") or info.get("title")
                 parts = title_parts(title) if (title_parts and title) else None
                 if parts:
-                    t["role"], t["module"], t["milestone"] = parts
+                    t["role"], t["module"], t["work_package"] = parts
                 elif (script_threads.get(sid) or {}).get("role"):
                     t["role"] = script_threads[sid]["role"]
             t["weighted"] = round(weighted(host, t.get("tokens") or {}))
@@ -935,12 +965,12 @@ def _extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=No
             "weighted": round(sum(t.get("weighted", 0) for t in session_turns)),
             "usd": round(sum(t.get("usd", 0) for t in session_turns), 4) or None,
             "compactions": sum(t.get("compactions", 0) for t in session_turns),
-            **{k: session_turns[-1].get(k) for k in ("role", "module", "milestone") if session_turns}}.items()
+            **{k: session_turns[-1].get(k) for k in ("role", "module", "work_package") if session_turns}}.items()
             if v not in (None, {}, "")}
         for ev in got["events"]:
             ev.update(host=host, session=sid)
             match = next((t for t in session_turns if t.get("turn") == ev.get("turn")), None)
-            for k in ("role", "module", "milestone", "kind"):
+            for k in ("role", "module", "work_package", "kind"):
                 if match and match.get(k) and k != "kind":
                     ev[k] = match[k]
             ev["session_kind"] = kind
@@ -949,7 +979,7 @@ def _extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=No
             if t.get("pinned_model") and t.get("model") and not model_matches(t["pinned_model"], t["model"]):
                 ev = {"kind": "off_pinned_model", "at": t.get("start"), "host": host, "session": sid,
                       "turn": t.get("turn"), "detail": f"pinned {t['pinned_model']}, ran {t['model']}",
-                      **{k: t.get(k) for k in ("role", "module", "milestone")}}
+                      **{k: t.get(k) for k in ("role", "module", "work_package")}}
                 data["events"][key_of("events", ev)] = {k: v for k, v in ev.items() if v is not None}
 
     # Auto-review and subagent sessions take the tags of the session they served.
@@ -958,14 +988,14 @@ def _extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=No
     for s in sessions.values():
         if s.get("kind") in ("auto-review", "subagent") and s.get("parent") in by_id:
             p = by_id[s["parent"]]
-            for k in ("role", "module", "milestone"):
+            for k in ("role", "module", "work_package"):
                 if p.get(k) and not s.get(k):
                     s[k] = p[k]
             s["parent_kind"] = p.get("kind")
     for t in data["turns"].values():
         s = sessions.get(f"{t.get('host')}:{t.get('session')}") or {}
         if s.get("kind") in ("auto-review", "subagent"):
-            for k in ("role", "module", "milestone"):
+            for k in ("role", "module", "work_package"):
                 if s.get(k) and not t.get(k):
                     t[k] = s[k]
             t["parent_kind"] = s.get("parent_kind")
@@ -987,12 +1017,12 @@ def _extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=No
                  "model": r.get("model"), "effort": r.get("effort"), "tokens": tok, "kind": "script",
                  "from_ledger": True, "weighted": round(weighted(host, tok)), "ended": "complete" if not r.get("exit") else "failed",
                  **({"usd": u["cost_usd"]} if u.get("cost_usd") else {}),
-                 **{k: r.get(k) for k in ("role", "module", "milestone", "version", "path") if r.get(k) is not None}}
+                 **{k: r.get(k) for k in ("role", "module", "work_package", "version", "path") if r.get(k) is not None}}
             data["turns"][key_of("turns", t)] = t
         sessions[key] = {"host": host, "session": sid, "kind": "script", "from_ledger": True,
                          "start": rows[0].get("at"), "end": rows[-1].get("at"), "turns": len(rows),
                          "model": rows[-1].get("model"), "effort": rows[-1].get("effort"),
-                         **{k: rows[-1].get(k) for k in ("role", "module", "milestone") if rows[-1].get(k)}}
+                         **{k: rows[-1].get(k) for k in ("role", "module", "work_package") if rows[-1].get(k)}}
 
     if not only:
         for ev in ledger_events(ledger) + result_events(orchestrate):
@@ -1001,7 +1031,7 @@ def _extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=No
             data["checks"][key_of("checks", c)] = {k: v for k, v in c.items() if v is not None}
             if c.get("exit") not in (0, "0", None):
                 ev = {"kind": "check_failed", "at": c.get("at"), "detail": c["command"], "exit": c.get("exit"),
-                      **{k: c.get(k) for k in ("module", "milestone")}}
+                      **{k: c.get(k) for k in ("module", "work_package")}}
                 data["events"][key_of("events", ev)] = {k: v for k, v in ev.items() if v is not None}
         codex_ids = {s["session"] for s in sessions.values() if s.get("host") == "codex"}
         for g in codex_goals(codex_ids):
@@ -1009,7 +1039,7 @@ def _extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=No
                 s = sessions.get(f"codex:{g['thread']}") or {}
                 ev = {"kind": "goal_limited", "at": g["at"], "host": "codex", "session": g["thread"],
                       "status": g["status"], "detail": f"goal {g['status'].replace('_', ' ')}",
-                      **{k: s.get(k) for k in ("role", "module", "milestone")}}
+                      **{k: s.get(k) for k in ("role", "module", "work_package")}}
                 data["events"][key_of("events", ev)] = {k: v for k, v in ev.items() if v is not None}
         firsts: dict[str, str] = {}
         for t in data["turns"].values():
@@ -1029,14 +1059,14 @@ def _extract(repo: Path, orchestrate: Path, worktrees: list[str], title_parts=No
             "bytes": sum((folder / f"{k}.jsonl").stat().st_size for k in FILES if (folder / f"{k}.jsonl").exists())}
 
 
-def milestone_rows(proj: dict) -> list[dict]:
-    """One row per milestone from the plan at the main branch's tip, as agent_loop.project() reads it: status, size,
+def work_package_rows(proj: dict) -> list[dict]:
+    """One row per work package from the plan at the main branch's tip, as agent_loop.project() reads it: status, size,
     when it was authorised, Ready for Review and Done, and each review with the items it failed. An item that failed
-    an earlier review of the same milestone too is marked `repeat`."""
+    an earlier review of the same work package too is marked `repeat`."""
     out = []
     for key, e in sorted(proj.items()):
-        rec = (e.get("record") or {}).get("milestones") or {}
-        for m in (e.get("doc") or {}).get("milestones") or []:
+        rec = (e.get("record") or {}).get("work_packages") or {}
+        for m in (e.get("doc") or {}).get("work_packages") or []:
             if not isinstance(m, dict) or not m.get("id"):
                 continue
             r = rec.get(m["id"]) or {}
@@ -1050,7 +1080,7 @@ def milestone_rows(proj: dict) -> list[dict]:
                                              for i in fails]})
                 failed_before.update(fails)
             at = lambda k: (r.get(k) or {}).get("at") if isinstance(r.get(k), dict) else None
-            row = {"module": key, "milestone": m["id"], "name": (m.get("name") or "")[:160], "status": m.get("status"),
+            row = {"module": key, "work_package": m["id"], "name": (m.get("name") or "")[:160], "status": m.get("status"),
                    "size": len(m.get("items") or []), "failed_reviews": m.get("failed_reviews"),
                    "diagnoses": m.get("diagnoses"), "authorised": at("authorised"),
                    "ready_for_review": at("ready_for_review"), "done": at("done"), "reviews": reviews}
@@ -1058,19 +1088,19 @@ def milestone_rows(proj: dict) -> list[dict]:
     return out
 
 
-def write_milestones(repo: Path, rows: list[dict], wait_s: float = 60.0) -> None:
+def write_work_packages(repo: Path, rows: list[dict], wait_s: float = 60.0) -> None:
     folder = project_dir(repo)
     with locked(folder, wait_s):
-        _write_milestones(folder, rows)
+        _write_work_packages(folder, rows)
 
 
-def _write_milestones(folder: Path, rows: list[dict]) -> None:
+def _write_work_packages(folder: Path, rows: list[dict]) -> None:
     data = load(folder)
-    data["milestones"] = {key_of("milestones", r): r for r in rows}
+    data["work_packages"] = {key_of("work_packages", r): r for r in rows}
     for r in rows:
         for rv in r.get("reviews") or []:
             if rv.get("verdict") == "fail":
-                ev = {"kind": "review_failed", "at": rv.get("at"), "module": r["module"], "milestone": r["milestone"],
+                ev = {"kind": "review_failed", "at": rv.get("at"), "module": r["module"], "work_package": r["work_package"],
                       "host": rv.get("host"), "model": rv.get("model"),
                       "detail": ", ".join(f["name"] + (" (repeated)" if f.get("repeat") else "")
                                           for f in rv.get("findings") or [])[:400] or "failed review"}
@@ -1081,7 +1111,10 @@ def _write_milestones(folder: Path, rows: list[dict]) -> None:
 # ---------------------------------------------------------------------------------------------------------- summary
 
 def rows(folder: Path) -> dict:
-    return {kind: read_jsonl(folder / f"{kind}.jsonl") for kind in FILES}
+    data = {kind: read_jsonl(folder / f"{kind}.jsonl") for kind in FILES}
+    if not (folder / "work_packages.jsonl").exists():
+        data["work_packages"] = read_jsonl(folder / OLD_HISTORY_FILE)
+    return data
 
 
 ERROR_KINDS = ("turn_failed", "turn_timed_out", "turn_stopped", "host_error", "turn_aborted", "script_refused",
@@ -1090,7 +1123,7 @@ ERROR_KINDS = ("turn_failed", "turn_timed_out", "turn_stopped", "host_error", "t
 
 def summary(folder: Path, recent: int = 25) -> dict:
     """The figures an agent reads first: totals by host, role, kind and model, the errors by kind with the latest
-    ones, and the costliest milestones. The dashboard shows the same records in full."""
+    ones, and the costliest work packages. The dashboard shows the same records in full."""
     d = rows(folder)
     def group(key):
         out: dict = {}
@@ -1111,8 +1144,8 @@ def summary(folder: Path, recent: int = 25) -> dict:
         counts[k] = counts.get(k, 0) + 1
     ms = {}
     for t in d["turns"]:
-        if t.get("module") and t.get("milestone"):
-            g = ms.setdefault(f"{t['module']} {t['milestone']}", {"weighted": 0, "turns": 0})
+        if t.get("module") and t.get("work_package"):
+            g = ms.setdefault(f"{t['module']} {t['work_package']}", {"weighted": 0, "turns": 0})
             g["weighted"] += t.get("weighted", 0)
             g["turns"] += 1
     return {"folder": str(folder), "sessions": len(d["sessions"]), "turns": len(d["turns"]),
@@ -1120,16 +1153,16 @@ def summary(folder: Path, recent: int = 25) -> dict:
             "by_role": group(lambda t: t.get("role") or "-"), "by_model": group(lambda t: t.get("model") or "-"),
             "by_version": group(lambda t: t.get("version") or "-"),
             "errors": counts, "recent_errors": sorted(errors, key=lambda e: e.get("at") or "")[-recent:],
-            "costliest_milestones": sorted(ms.items(), key=lambda kv: -kv[1]["weighted"])[:10]}
+            "costliest_work_packages": sorted(ms.items(), key=lambda kv: -kv[1]["weighted"])[:10]}
 
 
 # -------------------------------------------------------------------------------------------------------- dashboard
 
 TOKEN_ORDER = ("prompt", "cache_read", "cache_write", "cache_write_1h", "output", "reasoning")
-TURN_COLUMNS = ("s", "role", "module", "milestone", "version", "start", "duration_ms", "model", "effort", "tokens",
+TURN_COLUMNS = ("s", "role", "module", "work_package", "version", "start", "duration_ms", "model", "effort", "tokens",
                 "weighted", "limit_pct", "usd", "compactions", "ended", "peak_context", "window", "tools",
                 "from_ledger", "path")
-SESSION_FIELDS = ("host", "session", "kind", "parent", "parent_kind", "role", "module", "milestone", "model", "start",
+SESSION_FIELDS = ("host", "session", "kind", "parent", "parent_kind", "role", "module", "work_package", "model", "start",
                   "end", "turns", "weighted", "compactions", "from_ledger", "title")
 
 
@@ -1157,7 +1190,7 @@ def dashboard_model(folder: Path, meta: dict | None = None) -> dict:
         table.append([row.get(c) for c in TURN_COLUMNS])
     return {"meta": {"folder": str(folder), "generated": iso(time.time()), "token_order": TOKEN_ORDER, **(meta or {})},
             "sessions": sessions, "turns": {"columns": TURN_COLUMNS, "rows": table}, "events": d["events"],
-            "milestones": d["milestones"], "checks": d["checks"]}
+            "work_packages": d["work_packages"], "checks": d["checks"]}
 
 
 def render(folder: Path, out: Path | None = None, meta: dict | None = None) -> Path:

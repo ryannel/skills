@@ -1,22 +1,22 @@
-Diagnose APPLE-TILE M2.
+Diagnose APPLE-TILE WP2.
 
-Use the planner skill (the file is /skills/orchestration/planner/SKILL.md), which holds what every planner task shares. This task is diagnosing a milestone, and its instructions follow.
+Use the planner skill (the file is /skills/orchestration/planner/SKILL.md), which holds what every planner task shares. This task is diagnosing a work package, and its instructions follow.
 
-# Diagnosing a milestone
+# Diagnosing a work package
 
-A milestone that keeps failing review is Waiting: For Diagnosis, and no builder works on it until you find out why.
+A work package that keeps failing review is Waiting: For Diagnosis, and no builder works on it until you find out why.
 Your task says how it got here:
 
 - The same finding keeps coming back, so the fixes aren't holding.
-- Each review finds something new, so each fix held and the milestone came no closer to passing.
+- Each review finds something new, so each fix held and the work package came no closer to passing.
 - A reviewer marked a finding as one only a planner can settle, such as an item whose proof can't show what it
   claims, or two items that contradict each other.
 
-Read every review your task lists and the code, and decide why the milestone keeps failing.
+Read every review your task lists and the code, and decide why the work package keeps failing.
 
 ## Where the fault is
 
-The fault may be in the plan. The milestone may be too big for one session and need splitting. It may depend on
+The fault may be in the plan. The work package may be too big for one session and need splitting. It may depend on
 something outside this module. Its mechanism may be unable to produce the behaviour, and need a new design. Its
 items may be too broad, or impossible to meet as written.
 
@@ -26,34 +26,34 @@ neither.
 
 ## When the plan is at fault
 
-Change what is at fault, whether that is the items, the split into milestones or the design. Write the reason, and
+Change what is at fault, whether that is the items, the split into work packages or the design. Write the reason, and
 each changed item's history, in `LOG.md`, and end with `PLANNED`.
 
-When the fix belongs in another module, plan it as a milestone of that module and add it to the diagnosed
-milestone's `depends_on`, because otherwise the script starts the diagnosed milestone's builder at once, before the
+When the fix belongs in another module, plan it as a work package of that module and add it to the diagnosed
+work package's `depends_on`, because otherwise the script starts the diagnosed work package's builder at once, before the
 fix exists, and it fails the same way.
 
 Leave the counts and `findings` alone, because the script keeps them.
 
 ## When the plan is sound
 
-Change no file, and make your last line `KEEP <MODULE> <milestone>: builder|reviewer|human: <why>`, naming who has
+Change no file, and make your last line `KEEP <MODULE> <work-package-id>: builder|reviewer|human: <why>`, naming who has
 to act:
 
 - `builder`, when a builder keeps breaking something. The lead starts a new builder session with your reasons.
 - `reviewer`, when the findings go beyond the items. A new builder session proves the items, and the script tells
   the next reviewer to judge them as written.
-- `human`, when only the user can decide. The script blocks the milestone as Too Many Failed Reviews, with your
+- `human`, when only the user can decide. The script blocks the work package as Too Many Failed Reviews, with your
   reasons, for the lead to take to the user.
 
-A milestone normally gets one diagnosis, and if it keeps failing review after that, the script blocks it for the user,
+A work package normally gets one diagnosis, and if it keeps failing review after that, the script blocks it for the user,
 so this is the last chance to change its plan before the user has to decide.
 
 About this session:
 - The `plan` command started this session, and it commits and merges the files you leave uncommitted when you end with `PLANNED`.
-- The project brief is /repo/docs/plans/BRIEF.md and the module list is /repo/docs/plans/ARCHITECTURE.md, in the plans folder /repo/docs/plans, if they exist.
+- The vision and scope document is /repo/docs/plans/VISION.md and the module list is /repo/docs/plans/ARCHITECTURE.md, in the plans folder /repo/docs/plans, if they exist.
 - The project's agreed names are in docs/plans/GLOSSARY.md, if that file exists.
 - This task is limited to APPLE-TILE, because planners of other modules may be working at the same time. Change APPLE-TILE's folder in the plans folder, the files outside it that APPLE-TILE owns, and additions to the shared project files, such as a glossary entry. If the task needs another module's files, or an interface in the module list that another module provides or uses, end with `BLOCKED: needs <MODULE>'s files`, saying which change and what it must deliver; the lead then gives the task to a planner for the whole project.
-- The script is `python3 /skills/orchestration/lead/scripts/agent_loop.py`. Its `check --module <M> --milestone <id> --worktree . --items-only` command tries a milestone's item checks.
+- The script is `python3 /skills/orchestration/lead/scripts/agent_loop.py`. Its `check --module <M> --work-package <id> --worktree . --items-only` command tries a work package's item checks.
 
-To finish, end with `PLANNED` once the files are written. The script lists the files you changed itself. If the plan should stay as it is, change no file and end with the `KEEP` line your task gives, if it gives one. If you need an answer the brief and the files don't give, end with `NEEDS_CONTEXT: <the question>`, and the lead gets it answered. If you can't go on for another reason, end with `BLOCKED: ...`. On `KEEP`, `BLOCKED` or `NEEDS_CONTEXT` the script merges no file of yours.
+To finish, end with `PLANNED` once the files are written. The script lists the files you changed itself. If the plan should stay as it is, change no file and end with the `KEEP` line your task gives, if it gives one. If you need an answer the vision and scope document and the files don't give, end with `NEEDS_CONTEXT: <the question>`, and the lead gets it answered. If you can't go on for another reason, end with `BLOCKED: ...`. On `KEEP`, `BLOCKED` or `NEEDS_CONTEXT` the script merges no file of yours.

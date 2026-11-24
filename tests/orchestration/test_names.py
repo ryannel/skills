@@ -127,10 +127,10 @@ class RenamedInOldProjects(unittest.TestCase):
         self.agent_loop = agent_loop
 
     def test_migrate_renames_claim_to_ready_for_review(self):
-        rec = {"milestones": {"M1": {"claim": {"commit": "abc", "checked": "def"}}}}
+        rec = {"work_packages": {"WP1": {"claim": {"commit": "abc", "checked": "def"}}}}
         self.assertIn("`claim` (now `ready_for_review`)", self.agent_loop.old_names_in_record(rec))
         new = self.agent_loop.upgrade_record(rec)
-        self.assertEqual(new["milestones"]["M1"], {"ready_for_review": {"commit": "abc", "checked": "def"}})
+        self.assertEqual(new["work_packages"]["WP1"], {"ready_for_review": {"commit": "abc", "checked": "def"}})
         self.assertEqual(self.agent_loop.old_names_in_record(new), [])
 
     def test_a_record_not_yet_migrated_still_reads(self):

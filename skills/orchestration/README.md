@@ -6,7 +6,7 @@ taste, such as a game's look or a set of icons, where you pick the look before t
 
 You talk to one agent. It starts the others, and it comes back to you when a decision is yours.
 
-The set's own names, such as milestone, item and Ready for Review, are listed with what they mean in the
+The set's own names, such as work package, item and Ready for Review, are listed with what they mean in the
 [glossary](GLOSSARY.md).
 
 ## Who and what is involved
@@ -19,10 +19,10 @@ so it has seen none of the work it judges. Each has a skill, in a folder named f
 
 | Skill | What it covers |
 |---|---|
-| [`lead`](lead/) | Leading the project: interviewing you for the brief, having it planned, running the build, and coming to you when a decision is yours |
-| [`planner`](planner/) | Splitting a project into modules, and writing each module's design, milestones and done-when file |
-| [`builder`](builder/) | Building one milestone, proving it, and merging it |
-| [`reviewer`](reviewer/) | Judging a design, or a milestone that is Ready for Review |
+| [`lead`](lead/) | Leading the project: interviewing you for the vision and scope document, having it planned, running the build, and coming to you when a decision is yours |
+| [`planner`](planner/) | Splitting a project into modules, and writing each module's design, work packages and done-when file |
+| [`builder`](builder/) | Building one work package, proving it, and merging it |
+| [`reviewer`](reviewer/) | Judging a design, or a work package that is Ready for Review |
 
 There is also one script, `lead/scripts/agent_loop.py`. It is not an agent. It is a set of commands, and the lead
 runs them the way you would run `git commit`. The commands start the other agents, run the tests and keep the
@@ -56,28 +56,29 @@ The example is a small money-tracking tool. It reads a file of transactions and 
 3. As names for things come up, the lead settles each one with you and writes it into the project's glossary. Here,
    you call the lines of the file "transactions" and the lead had been saying "entries", so the glossary says
    Transaction and lists "entry" as a name to avoid.
-4. The lead writes the project brief: your request word for word, the reason, what is left out, how you will judge
-   the result, and the decisions so far, each marked as yours or the lead's. You approve or correct it in the chat.
+4. The lead writes the vision and scope document. It keeps your request word for word, the goal your product is
+   working toward, what the first release covers, what is left out and how you will judge the result. Each decision
+   so far is marked as yours or the lead's. You approve or correct it in the chat and keep it as the product grows.
    No planner starts before that, unless you say to skip the conversation.
 
 ### Planning
 
 5. The lead writes the project settings, `ORCHESTRATE.md`, from the template: what the project is for, how good the
    work has to be, where it runs. Every agent reads them first, so the skills need to know nothing about your
-   project in advance. Then the lead runs `plan` with your words and the brief, which starts a planner.
+   project in advance. Then the lead runs `plan` with your words and the vision and scope document, which starts a planner.
 6. The planner splits the project into modules, each a part one builder can work on without touching the others.
    Here there are two: `core` reads the file and adds up the accounts, and `report` prints the balances. The module
    list names each in build order with what it provides to the others: `core` provides a function that returns the
    balances, and `report` calls it.
 7. For each module the planner writes a design, saying what the module must do for the people who use it; a plan
-   file, listing its milestones, each small enough for one builder session; and a done-when file, listing for each
-   milestone the items that must be true before it is Done, such as "a file with an unbalanced transaction is
-   refused". On a big module it writes items for the next stretch of one or two milestones only, and a planner
+   file, listing its work packages, each small enough for one builder session; and a done-when file, listing for each
+   work package the items that must be true before it is Done, such as "a file with an unbalanced transaction is
+   refused". On a big module it writes items for the next stretch of one or two work packages only, and a planner
    writes the rest as the module gets close to them.
 8. Each item says how it will be proved. An Automated Check is a shell command that passes or fails. A Reviewer
    Inspection means a reviewer runs the product and looks at it. A Reviewer Question is a question a reviewer
-   answers by reading the code. A milestone can also depend on one in another module: the second `report` milestone
-   needs the `core` milestone, because it needs real balances.
+   answers by reading the code. A work package can also depend on one in another module: the second `report` work package
+   needs the `core` work package, because it needs real balances.
 9. `plan` confirms the planner changed no record of finished work, and merges the plan into your main branch. A
    question the planner couldn't answer comes back to you through the lead.
 
@@ -98,66 +99,66 @@ The example is a small money-tracking tool. It reads a file of transactions and 
 12. The lead runs `run` once for each module. With the settings' `Worktrees:` line, which the template has, the
     script builds each module in a worktree of its own on a `build/<module>` branch, so two builders never overwrite
     each other's files, and removes it once the module is finished and merged. Each run starts a builder on the
-    module's first milestone, which becomes In Progress.
+    module's first work package, which becomes In Progress.
 13. Each builder writes the code and runs the Automated Checks. In the done-when file it marks each item as passed
     and notes where the evidence is saved, such as a screenshot or a test log. It merges its work into the main
-    branch, with the milestone still In Progress, and says it has finished.
+    branch, with the work package still In Progress, and says it has finished.
 14. `run` then tests the work itself, in a clean copy of the main branch and in its own process rather than the
     builder's sandbox. It checks that the builder changed only its own fields and left the items as approved, so a
     builder can't reword an item to make it easier. Then it runs every Automated Check. It doesn't run the test
     command again, since the merge just ran it. A check that already passed on exactly the same files isn't run
     again. If one fails, the builder gets the failure and
     carries on.
-15. If every check passes, `run` sets the milestone to Ready for Review: the builder has finished and the script's
+15. If every check passes, `run` sets the work package to Ready for Review: the builder has finished and the script's
     checks passed, but no reviewer has judged it yet. Only the script sets this status.
 
-A milestone needs a reviewer when any of its items is a Reviewer Inspection or a Reviewer Question, when it is the
-module's last milestone, whose review reads the whole module, or when it ends a stretch a planner wrote, so each
+A work package needs a reviewer when any of its items is a Reviewer Inspection or a Reviewer Question, when it is the
+module's last work package, whose review reads the whole module, or when it ends a stretch a planner wrote, so each
 stretch is read once before the next is built on it. Your pick between options is reviewed too, because a planner
-always ends its stretch at the pick. Any other milestone is Done as soon as its checks pass.
+always ends its stretch at the pick. Any other work package is Done as soon as its checks pass.
 
 Merges take turns. Branches that ask to merge while one is running merge together as a batch, with one run of the
 test command, and a failing batch is split to find the branch that broke it.
 
-### Reviewing a milestone
+### Reviewing a work package
 
 16. `run` goes on to the review, with a new reviewer, in a clean copy of the commit it judges. The reviewer runs the
     tool, tries it on its own files, reads the changed code, and gives each item a Pass, a Fail or a Could Not Judge,
-    which counts as a fail, because a milestone nobody could check is not Done.
+    which counts as a fail, because a work package nobody could check is not Done.
 17. The script confirms the reviewer changed only its review and its own fields, and saves the review. If every item
-    passed, it sets the milestone to Done. If not, the milestone goes back to In Progress.
+    passed, it sets the work package to Done. If not, the work package goes back to In Progress.
 
 ### When a review fails
 
-The script keeps two counts on each milestone: every failed review, and the failed reviews that failed an item an
-earlier review had failed, or repeated an earlier finding. The second means the milestone isn't making progress on
+The script keeps two counts on each work package: every failed review, and the failed reviews that failed an item an
+earlier review had failed, or repeated an earlier finding. The second means the work package isn't making progress on
 that item, whether its fixes aren't holding or each fix meets a new defect. After each failed review, the first row that applies
 is the next step. `next --help` gives the counts at which each row applies.
 
 | After | What happens |
 |---|---|
-| A finding only a planner can settle, such as an item its proof can't prove; or either count reaching its higher limit | The milestone is Waiting: For Diagnosis. A planner reads every review and decides why it keeps failing. It either changes the items, a Re-plan, or keeps the plan and names who has to act: the builder, the reviewer or you. |
+| A finding only a planner can settle, such as an item its proof can't prove; or either count reaching its higher limit | The work package is Waiting: For Diagnosis. A planner reads every review and decides why it keeps failing. It either changes the items, a Re-plan, or keeps the plan and names who has to act: the builder, the reviewer or you. |
 | Either count reaching its lower limit | A new builder session starts, with no memory of the first attempts, from the files and the review. |
 | Any other failed review | The same builder carries on in the same session, with the review. |
-| The same counts again, after the diagnosis | The milestone is Blocked: Too Many Failed Reviews. The lead asks you, with what failed in each review, whether to accept it, change its scope or reopen it for another try. |
+| The same counts again, after the diagnosis | The work package is Blocked: Too Many Failed Reviews. The lead asks you, with what failed in each review, whether to accept it, change its scope or reopen it for another try. |
 
-A milestone gets one diagnosis, so one that keeps failing reaches you after one planner turn. The counts start again
-after a diagnosis, after a planner changes the milestone's items, and after you change the milestone's scope or
+A work package gets one diagnosis, so one that keeps failing reaches you after one planner turn. The counts start again
+after a diagnosis, after a planner changes the work package's items, and after you change the work package's scope or
 reopen it. An item that fails again brings the diagnosis sooner than failures spread over different items do,
-because a milestone can fail review on something new in each item while nothing is wrong with its plan, but an item
-that keeps failing on new defects usually asks for more than the brief does.
+because a work package can fail review on something new in each item while nothing is wrong with its plan, but an item
+that keeps failing on new defects usually asks for more than the vision and scope document does.
 
 A builder told about a failed review is also told that a review shows what one reviewer tried, and the next reviewer
-starts again from the items. So the milestone is finished when every item is true as written, not when the review's
+starts again from the items. So the work package is finished when every item is true as written, not when the review's
 findings are cleared.
 
-### The next milestone
+### The next work package
 
-18. After a pass, `run` starts a builder on the module's next milestone. One that depends on another module waits:
-    if `report` reaches its second milestone before the `core` milestone is Done, it is Waiting: On Dependency. When
-    every planned milestone is Done and the plan names more, the module is Waiting: For Planning, and a planner
+18. After a pass, `run` starts a builder on the module's next work package. One that depends on another module waits:
+    if `report` reaches its second work package before the `core` work package is Done, it is Waiting: On Dependency. When
+    every planned work package is Done and the plan names more, the module is Waiting: For Planning, and a planner
     writes the next stretch.
-19. These steps repeat until every milestone is Done, and the lead isn't needed for any of them. It is woken when a
+19. These steps repeat until every work package is Done, and the lead isn't needed for any of them. It is woken when a
     command stops at something that needs judgement, and by the script's supervisor at the lead check-in the
     settings give, and sooner on a warning sign such as a builder that has stopped making progress. The supervisor
     also starts the builders on work whose next step is routine, so the build doesn't wait for the lead. Each time, the lead looks
@@ -167,29 +168,29 @@ findings are cleared.
 ### When it needs you
 
 20. Suppose `report` has the item "the layout is readable in a terminal", which no agent can judge, so the planner
-    marked it as needing user feedback. The builder does everything else and stops, and the milestone is Blocked:
+    marked it as needing user feedback. The builder does everything else and stops, and the work package is Blocked:
     Needs User Feedback, with the question.
 21. The lead asks you in the chat and shows you the output, and you reply, such as "looks good to me". It saves your
     words with `human feedback`, and runs `run` again. The builder reads your reply and carries on.
 
 An item can also need a permission approved, such as screen recording, or a device connected, such as a phone. The
-lead runs that milestone in a session you can see, at a time you are at the machine, and approving the prompt is all
-you do. A milestone missing something else, such as a login, is Blocked with a reason, and the result says what
+lead runs that work package in a session you can see, at a time you are at the machine, and approving the prompt is all
+you do. A work package missing something else, such as a login, is Blocked with a reason, and the result says what
 would unblock it.
 
 ### Reports
 
 22. When you ask how it's going, and when it stops, the lead runs `report`. It prints what waits for you, every
     decision saved in your name, what is Done, what each review said, what has slowed down and what the build cost.
-    The lead adds its own reading on top: how close the brief is to delivered, whether the build is moving as fast
+    The lead adds its own reading on top: how much of the agreed scope has been delivered, whether the build is moving as fast
     as it could, and what it is doing about anything that isn't.
 23. `dashboard --open` gives the longer view: what each kind of agent and each model cost per day, the costliest
-    milestones, every failed turn and review, how each version of the script compared with the last, and a retro.
+    work packages, every failed turn and review, how each version of the script compared with the last, and a retro.
 
 ## Statuses and who changes what
 
-The [glossary](GLOSSARY.md#statuses) lists every status with its stored name. A milestone is Waiting when its next
-step is lined up and needs nobody to step in, and Blocked when it can't move until someone does. A Blocked milestone
+The [glossary](GLOSSARY.md#statuses) lists every status with its stored name. A work package is Waiting when its next
+step is lined up and needs nobody to step in, and Blocked when it can't move until someone does. A Blocked work package
 moves again when its block is cleared: your reply lifts Needs User Feedback, a run with you at the machine or the
 device connected lifts Needs Access and Needs Hardware, the lead supplies the fact for Needs Context, a planner adds
 what Needs Dependency was missing, and Too Many Failed Reviews waits for your decision.
@@ -198,11 +199,11 @@ Each field of the done-when file has one owner at any time, and the script refus
 
 | Who | What they change |
 |---|---|
-| Planner | The milestones, their items and how each is proved. The script saves new items as the approved ones and clears the old proof. |
-| Builder | The milestone's status from Not Started to In Progress, and each item's result and evidence. |
+| Planner | The work packages, their items and how each is proved. The script saves new items as the approved ones and clears the old proof. |
+| Builder | The work package's status from Not Started to In Progress, and each item's result and evidence. |
 | Reviewer | Each item's verdict, and the review's findings. |
 | The script | Every other status, the counts of failed reviews, the record file and the status page. |
-| You, through the lead | The items, with `human scope`. A milestone's status, with `human accept`, `rereview` or `reopen`. Your answers, with `human feedback`. |
+| You, through the lead | The items, with `human scope`. A work package's status, with `human accept`, `rereview` or `reopen`. Your answers, with `human feedback`. |
 
 A builder leaves Ready for Review and Done to the script, because other builders rebase onto the main branch, and a
 status nobody had checked would claim checks that never ran. Planners and reviewers don't commit at all: the script
@@ -211,15 +212,15 @@ compares what they changed with this table, and either merges all of it or rejec
 ## The record file
 
 Beside each done-when file, the script keeps a record file, `RECORD.json`, written only in the script's own commits.
-It is committed, so every worktree, copy of the repository and lead reads the same one. For each milestone it holds a
+It is committed, so every worktree, copy of the repository and lead reads the same one. For each work package it holds a
 hash of the approved items, the commit the script tested and the main-branch commit it ran the checks on, every
-review, your decisions in your words, the tokens each builder run and review used, and whether the milestone is Done
-and what made it so: its checks, a reviewer or you. It also holds the module's design review.
+review, your decisions in your words, the tokens each builder run and review used, and whether the work package is Done
+and what made it so: its checks, a reviewer or you. It also holds the module's design review and the tasks given to its planners.
 
-A milestone is Done only when the record file says so, for the items as they are now. A `done` in the done-when file
+A work package is Done only when the record file says so, for the items as they are now. A `done` in the done-when file
 is not enough, which is what makes the done-when file safe for agents to edit.
 
-A milestone can start only when the milestones before it in its module, and those it depends on, are Done. When a
+A work package can start only when the work packages before it in its module, and those it depends on, are Done. When a
 lead starts one, the script marks it In Progress where every copy of the repository can see it, so a second lead is
 told. A plan counts only once it is merged, and `adopt` merges plan files left uncommitted.
 
@@ -231,7 +232,7 @@ each file is.
 ```
 ORCHESTRATE.md                  the project settings
 docs/plans/
-  STATUS.md  BRIEF.md  GLOSSARY.md  ARCHITECTURE.md
+  STATUS.md  VISION.md  GLOSSARY.md  ARCHITECTURE.md
   <MODULE>/  DESIGN.md  PLAN.md  LOG.md  DONE.json  RECORD.json
 ```
 
@@ -264,8 +265,8 @@ A project without these settings lines never meets either. A lock lets runs shar
 much of: a simulator one run at a time, or a GPU three runs at once. A command that holds a lock too long is stopped,
 so one stuck run can't keep everyone waiting. A main-branch check is a check too slow to run before every merge. It
 runs on the main branch's tip after merges, one run covering everything merged since the last. It guards the main
-branch and gates no milestone, because builders waiting for a slow check to cover their work left most of Thrum's
-milestones idle for an hour or more. A failure that holds is traced to the first commit that fails, and the lead
+branch and gates no work package, because builders waiting for a slow check to cover their work left most of Thrum's
+work packages idle for an hour or more. A failure that holds is traced to the first commit that fails, and the lead
 starts a planner on a fix or reverts that commit. `lock --help` and `main-check --help` give the rest.
 
 ## Changing the settings
@@ -283,10 +284,18 @@ kind of agent gets and why.
 A project planned by an older version of the set stops with a message naming `migrate`, which moves it to the current
 layout and names in one commit. It moves plans from the flat layout of before 2.0, with files such as
 `<MODULE>-PLAN.md`, into a folder per module. It renames the stored names that 2.0 and 2.2 changed, such as a
-milestone's `state` to `status` and `ACCEPTED.json` to `RECORD.json`. And it moves evidence that versions before
+work package's `state` to `status` and `ACCEPTED.json` to `RECORD.json`. And it moves evidence that versions before
 2.6.0 committed to git into the working folder, listing any item whose check names the old folder, for a planner to
-fix. A worktree with commits from before the migration is moved with `migrate --branch`, because a rebase by hand
-conflicts in exactly the files the renames rewrote. `migrate --help` lists every rename.
+fix.
+
+When upgrading from 2.x to 3.0, pause every run and run `migrate` once for the project. It renames the
+project's vision and scope document to `VISION.md`, saves planner instructions under `tasks`, and gives each work
+package a `WP` ID, such as `WP3`. It rewrites references to known IDs in plans, checks and records, and updates
+claim refs and working-folder evidence paths. The result lists the substitutions for each file. Project logs,
+commit messages, saved tasks and evidence contents keep their original wording.
+
+For a worktree with commits from before the migration, use `migrate --branch`, because a rebase by hand conflicts
+in the files the renames rewrote. `migrate --help` gives the details.
 
 ## Installing
 
@@ -304,7 +313,7 @@ conversation, say "just plan it", and a planner takes the safest reading of anyt
 assumed. Once the plan is approved, say "build it", or name the modules. You can switch hosts partway, because
 everything the next agent needs is in the files.
 
-Some decisions are yours: choosing between options, judging an item no agent can, accepting a milestone reviewers
+Some decisions are yours: choosing between options, judging an item no agent can, accepting a work package reviewers
 keep failing, changing the scope. The lead asks you in the chat and saves your answer in your own words, and the
 report lists every decision saved in your name, so you can spot one you didn't make.
 
@@ -313,7 +322,7 @@ report lists every decision saved in your name, so you can spot one you didn't m
 | what is planned, what is next, and what is running in this repository | `status` and `ready` |
 | what is running on this machine, in every repository | `runs` |
 | to stop cleanly and carry on later | `pause`, then `run` again |
-| what the build has cost, per milestone and kind of agent | `cost` |
+| what the build has cost, per work package and kind of agent | `cost` |
 | the overview the lead sees on each wake, with delivery, stalled work, time spent and machine use | `flow` |
 | who holds each lock, and who is waiting for it | `locks` |
 | whether the Codex weekly usage limit will last | `quota` |
@@ -376,7 +385,7 @@ instead, because:
 1. A subagent reports back in its own words, and the lead would have to believe it. A script command looks at what
    changed, and rejects a builder that edited an item, a reviewer that edited code, or a planner that marked
    something as passed.
-2. The script can start a session on either host, so a milestone built by Codex can be reviewed by Claude, which
+2. The script can start a session on either host, so a work package built by Codex can be reviewed by Claude, which
    should share fewer of the builder's blind spots, though nobody has measured that for code review.
 3. A build runs for days, longer than one chat stays useful. The host saves every session the script starts, and
    `run` resumes the same builder after the lead's own conversation has been shortened or replaced.
@@ -395,7 +404,7 @@ also work in a single chat with no lead, and a small job should be done that way
 
 ### The script runs the routine steps, and the lead watches delivery
 
-Most steps need no judgement: a milestone Ready for Review gets its review, a failed review goes back to its builder,
+Most steps need no judgement: a work package Ready for Review gets its review, a failed review goes back to its builder,
 and a pass moves on. Until 2.4 the script stopped after each, and the lead ran each printed command unchanged. One
 36-hour build ran about 170 agent sessions, each costing the lead two turns, and that load got the lead's
 conversation shortened four times. So `run` and `plan` now carry on through those steps, and stop at anything that
@@ -420,9 +429,9 @@ host restart ended that `watch` silently. How the supervisor reaches the lead de
 
 A reviewer has seen none of the building, and runs the product rather than judging from the code or the builder's
 screenshots. This rests on Anthropic's and Cognition's reports, not on measurements. The design review comes from the
-same Anthropic report: a reviewer that agreed what "done" meant up front judges it more fairly later. A milestone
+same Anthropic report: a reviewer that agreed what "done" meant up front judges it more fairly later. A work package
 proved only by Automated Checks is Done without a reviewer unless it ends a stretch or the module. Anthropic's rule
-for when a reviewer is worth its cost was how hard the task is, not how the work is proved, so this is a trade-off to
+for when a reviewer is worth its cost was how hard the work is, not how the work is proved, so this is a trade-off to
 revisit. Subjective work starts with options you choose from, and is judged against a quality bar in words and the
 option you chose, never one target image, because agents told to match an image copy its accidents too.
 
@@ -469,7 +478,7 @@ these rules and their sources.
 | Model and effort | Named when the session starts and on every turn, and checked each turn from the session file. | Named when the session starts and on every turn. The model is checked. The effort can't be. | Set in the command, and not checked. |
 | Resumed sessions | With an active Codex goal, only the rules you gave are sent again. Without one, all the rules are. | The rules are sent again on every resumed turn. | Every turn after the first carries them. |
 | Stopping reviewers and planners from starting agents | `-c features.multi_agent=false` | `--disallowedTools Agent` | Only the prompt says so. |
-| Goals and the usage limit | Goal status, and a forecast of the weekly usage limit, from Codex's local files. | Neither. The script does not use Claude's `/goal`. | Neither. |
+| Codex goals and the usage limit | Codex goal status, and a forecast of the weekly usage limit, from Codex's local files. | Neither. The script does not use Claude's `/goal`. | Neither. |
 | Tokens used | Saved from `codex exec`'s output. A turn that ran in the app reports none, so use `quota` for those. | Saved, with Claude's list-price estimate, which is not what a plan is charged. | None. |
 | How an agent finds its skill | By name, as `orchestrate:<skill>` from the plugin. The prompt also gives the file path. | By name. The prompt also gives the file path. | The prompt gives the file path. |
 
@@ -499,7 +508,7 @@ runs, or a session that forges the script's commit marker, and its check for com
 a session that merges from a different working copy. What remains is the main rule: nothing is Done unless the
 script's checks, a reviewer or you made it so, against the approved items.
 
-In a repository that has never had a record file, each module is taken as it stands, and its finished milestones
+In a repository that has never had a record file, each module is taken as it stands, and its finished work packages
 count as Done, so work built before the project used these skills isn't built again. On the first day, read what the
 first planner run merged. A commit that moves the plans folder by hand hides the record files, and every module
 disappears from `status`. Move it with `migrate --to` instead.
@@ -548,7 +557,7 @@ Four larger ideas came out of the review of a 36-hour build. Each needs a design
   branch, and a pull request adds a second place where a merge can wait, fail or be changed.
 - A spending budget. The token figures aren't charges: Claude's is a list price, and a turn in the Codex app reports
   none, so a budget would stop a build on the wrong numbers. `quota` forecasts Codex's weekly limit meanwhile.
-- Starting a module's next milestone while its last is with a reviewer, which would build on work that may fail.
+- Starting a module's next work package while its last is with a reviewer, which would build on work that may fail.
   Instead, a run waiting on a reviewer or planner gives up its builder slot to another module.
 - Full support for a Codex lead in the command-line app. The supervisor wakes a lead in Claude Code or in a Codex
   app thread by itself, but a message queued for a CLI thread waits until that thread next takes a turn, so a CLI

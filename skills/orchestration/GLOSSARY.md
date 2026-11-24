@@ -46,15 +46,15 @@ An agent that writes the plan: the module list, and each module's design, plan f
 What one agent session is asked to do, such as planning a change or building a work package. The lead writes a
 planner's task; the script writes a builder's and a reviewer's.
 Not: Work package, which is a piece of the plan; a builder's task names the work package it builds.
-Avoid: brief, which is the prompting-agents skill's word for any text written for an agent
+Avoid: brief (the prompting-agents skill's word for any text written for an agent), `briefs` (now `tasks`)
 Source: the agent field's word for what a lead hands a subagent (Anthropic's multi-agent research system)
-Stored as: `plan --task`; the `briefs` list in the record file (a name from before this entry)
+Stored as: `plan --task`; the `tasks` list in the record file
 
 **Kind of task**
 Which of an agent's instructions a task needs. The planner's kinds are a new project, a module, a change,
 unblocking, a diagnosis, a design revision and a fix; the reviewer's are a work package review and a design review.
 Each has its file in that skill's `tasks/` folder.
-Stored as: `plan --kind`
+Stored as: `plan --kind`; `review --kind work-package` or `review --kind design`
 
 **Builder**
 An agent that writes the code for one work package, proves it and merges it.
@@ -84,10 +84,10 @@ What the user wants and why, written in the lead's interview before any planning
 product: the user's requests word for word, the goal, who it is for, the milestones on the way, what the first
 release covers and what comes later, what is left out, how the user will judge the result, and the decisions made
 so far. Always written in full; "vision" alone is a single statement inside it.
-Avoid: project brief, brief (several meanings); project charter (a charter is for one project and closes with it);
+Avoid: project brief, brief (several meanings), `BRIEF.md` (now `VISION.md`); project charter (a charter is for one project and closes with it);
 product requirements document (a list of requirements, which this is not)
 Source: Karl Wiegers, *Software Requirements*, the vision and scope document
-Stored as: `BRIEF.md` (a name from before this entry)
+Stored as: `VISION.md`
 
 **Goal**
 The one long-term aim the product is working toward now, set in the vision and scope document. When it is reached,
@@ -163,14 +163,13 @@ Source: PMI, "a significant point or event in a project"
 A piece of a module small enough for one builder to finish in one session, with the items that must be true before
 it is Done. Always the full phrase, because "package" alone means a code package.
 Not: Task, which is what one agent session is asked to do; Milestone, which is a point the work reaches.
-Avoid: milestone (its name before this entry), story, task
+Avoid: milestone (its former name), `milestones` (now `work_packages`), `M3` (now `WP3`), story, task
 Source: PMBOK, the work package at the lowest level of the work breakdown
-Stored as: the `milestones` list in the done-when and record files, with ids such as `M3` (names from before this
-entry)
+Stored as: `work_packages` in the done-when and record files, with IDs such as `WP3`
 
 **Depends on**
 A work package depends on a work package in another module when it can't start until that one is Done.
-Stored as: the work package's `depends_on` list, such as `["CORE:M3"]`
+Stored as: the work package's `depends_on` list, such as `["CORE:WP3"]`
 
 **Done-when file**
 A module's file that lists, for each work package, the items, how each is proved and its quality bar. It is written
@@ -343,7 +342,7 @@ Stored as: the `KEEP` line that ends the planner's turn, and the `KEPT` result o
 What a builder that stops before the work package is finished writes for the session that picks it up: what is
 finished, what was tried, and what to do first.
 Not: a handoff in the OpenAI Agents SDK, which passes the live conversation to another agent in the same run.
-Stored as: `<milestone>-handoff.md` in the module's part of the working folder
+Stored as: `<work-package-id>-handoff.md` in the module's part of the working folder
 Proposed: by Claude, 2026-11-13. Not yet agreed by the user.
 
 ## Statuses
@@ -354,7 +353,7 @@ file. Waiting and Blocked each carry a reason, written after a colon, such as "B
 | Status | Means | Stored as |
 |---|---|---|
 | Not Started | No builder has worked on it yet | `not_started`; `ready` prints `can_start` when nothing stops it starting |
-| In Progress | A builder is working on it | `in_progress`, or `in_progress_elsewhere` when another lead started it; the mark other leads see is the git ref `refs/orchestrate/claims/<MODULE>/<milestone>` |
+| In Progress | A builder is working on it | `in_progress`, or `in_progress_elsewhere` when another lead started it; the mark other leads see is the git ref `refs/orchestrate/claims/<MODULE>/<work-package-id>` |
 | Ready for Review | The builder says it is finished, the script's checks passed on the merged work, and no reviewer has judged it yet. Only the script sets it | `ready_for_review` |
 | Waiting | It isn't stuck. The next step is already lined up, and happens without anyone stepping in | `waiting`, in the script's output, with its `reason` |
 | Blocked | It can't move until someone steps in | `blocked`, with the work package's `blocked` field giving `reason`, `items` and `what` |
@@ -644,7 +643,7 @@ Old names, what replaced them and when. The script's `migrate` command rewrites 
 - `bar`: now `quality_bar` (2.2).
 - `ACCEPTED.json` and `accepted`: now `RECORD.json` and `done` (2.2).
 - Claim, and the `claim` field: now Ready for Review record and `ready_for_review` (2.1.0). The git ref
-  `refs/orchestrate/claims/` keeps the old name so leads on older versions still see it.
+  `refs/orchestrate/claims/` keeps its original prefix.
 - `loops`, the command: now `runs` (2.1.0). It is still accepted, and the runs' notes keep the old folder name.
 - Evidence folder, a folder in git: now the working folder, outside git (2.6.0).
 - Waiting on you, the status page section: now Needs you now and Choices made for you.

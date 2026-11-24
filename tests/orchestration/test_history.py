@@ -108,27 +108,55 @@ class Readers(unittest.TestCase):
         self.assertEqual(sorted(e["at"] for e in events.values()), ["a1", "a3"])
 
 
-class Milestones(unittest.TestCase):
+class WorkPackages(unittest.TestCase):
 
     def test_an_item_failed_twice_is_a_repeated_finding(self):
-        proj = {"CORE": {"doc": {"milestones": [{"id": "M1", "name": "n", "status": "done",
-                                                  "items": [{"id": "M1.1"}, {"id": "M1.2"}]}]},
-                         "record": {"milestones": {"M1": {
+        proj = {"CORE": {"doc": {"work_packages": [{"id": "WP1", "name": "n", "status": "done",
+                                                  "items": [{"id": "WP1.1"}, {"id": "WP1.2"}]}]},
+                         "record": {"work_packages": {"WP1": {
                              "authorised": {"at": "2026-11-10T09:00:00Z"},
                              "done": {"at": "2026-11-11T09:00:00Z"},
                              "reviews": [
-                                 {"verdict": "fail", "at": "2026-11-10T12:00:00Z", "items": {"M1.1": "fail",
-                                                                                            "M1.2": "pass"}},
-                                 {"verdict": "fail", "at": "2026-11-10T15:00:00Z", "items": {"M1.1": "fail"}},
-                                 {"verdict": "pass", "at": "2026-11-11T09:00:00Z", "items": {"M1.1": "pass"}}]}}}}}
-        [row] = h.milestone_rows(proj)
+                                 {"verdict": "fail", "at": "2026-11-10T12:00:00Z", "items": {"WP1.1": "fail",
+                                                                                            "WP1.2": "pass"}},
+                                 {"verdict": "fail", "at": "2026-11-10T15:00:00Z", "items": {"WP1.1": "fail"}},
+                                 {"verdict": "pass", "at": "2026-11-11T09:00:00Z", "items": {"WP1.1": "pass"}}]}}}}}
+        [row] = h.work_package_rows(proj)
         self.assertEqual(row["size"], 2)
         self.assertEqual(row["done"], "2026-11-11T09:00:00Z")
         self.assertEqual([r["findings"] for r in row["reviews"]],
-                         [[{"name": "M1.1"}], [{"name": "M1.1", "repeat": True}], []])
+                         [[{"name": "WP1.1"}], [{"name": "WP1.1", "repeat": True}], []])
 
 
 class Dashboard(unittest.TestCase):
+
+    def test_existing_history_survives_the_3_0_names_and_the_next_sweep(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            labels = {"module": "CORE", "milestone": "M3"}
+            run = {"host": "codex", "session": "s1", "kind": "script", **labels}
+            jsonl(folder / "sessions.jsonl", [run])
+            jsonl(folder / "turns.jsonl", [{**run, "turn": "t1", "weighted": 13}])
+            at = "2026-11-01T12:00:00Z"
+            jsonl(folder / "events.jsonl", [{"kind": "review_failed", "at": at, **labels}])
+            jsonl(folder / "milestones.jsonl", [{**labels, "name": "Renderer", "status": "done", "size": 1}])
+            def check():
+                summary = h.summary(folder)
+                self.assertEqual(summary["costliest_work_packages"], [("CORE WP3", {"weighted": 13, "turns": 1})])
+                self.assertEqual(summary["errors"], {"review_failed": 1})
+                model = h.dashboard_model(folder)
+                [work_package] = model["work_packages"]
+                self.assertEqual((work_package["work_package"], work_package["name"]), ("WP3", "Renderer"))
+                self.assertEqual(model["events"][0]["work_package"], "WP3")
+                self.assertEqual(model["sessions"][0]["work_package"], "WP3")
+                [turn] = model["turns"]["rows"]
+                self.assertEqual(turn[model["turns"]["columns"].index("work_package")], "WP3")
+            check()
+            # The first sweep sees the same failed review in the migrated record. It must count just once.
+            row = {"module": "CORE", "work_package": "WP3", "name": "Renderer", "status": "done", "size": 1,
+                   "reviews": [{"verdict": "fail", "at": at, "findings": [{"name": "WP3.1"}]}]}
+            h._write_work_packages(folder, [row])
+            check()
 
     def test_page_embeds_the_records_and_cannot_be_closed_by_their_text(self):
         with tempfile.TemporaryDirectory() as d:
@@ -171,14 +199,14 @@ class Commands(Repo):
               codex_rollout(str(self.root)))
         folder = agent_loop.loop_dir(self.root)
         jsonl(folder / "usage.jsonl", [{"at": "2026-11-10T10:00:31Z", "role": "build", "module": "core",
-                                        "milestone": "M1", "host": "codex", "model": "gpt-test", "session": THREAD,
+                                        "work_package": "WP1", "host": "codex", "model": "gpt-test", "session": THREAD,
                                         "exit": 124, "version": "9.9", "usage": {}}])
         with mock.patch.object(agent_loop.codex_quota, "read", side_effect=RuntimeError):
             self.run_cmd(agent_loop.cmd_history, json=False, full=False, budget=60)
         records = h.rows(h.project_dir(self.root))
         [turn] = records["turns"]
-        self.assertEqual((turn["role"], turn["module"], turn["milestone"], turn["version"]),
-                         ("build", "core", "M1", "9.9"))
+        self.assertEqual((turn["role"], turn["module"], turn["work_package"], turn["version"]),
+                         ("build", "core", "WP1", "9.9"))
         self.assertEqual(records["sessions"][0]["kind"], "script")
         self.assertIn("turn_timed_out", [e["kind"] for e in records["events"]])
 

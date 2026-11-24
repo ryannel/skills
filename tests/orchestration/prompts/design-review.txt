@@ -1,27 +1,28 @@
 Review the design of module APPLE-TILE, using the reviewer skill (the file is /skills/orchestration/reviewer/SKILL.md), which holds what every review shares. The instructions for reviewing a design follow.
 
-The goal: a review at .orchestrate/evidence/APPLE-TILE/design-review.md that says whether the design delivers what the brief asks of this module.
+Write the review at .orchestrate/evidence/APPLE-TILE/design-review.md. Say whether the design delivers what the vision and scope document asks of this module.
 
-Since the last design review (.orchestrate/evidence/APPLE-TILE/design-review.md), M2.2 changed.
+Since the last design review (.orchestrate/evidence/APPLE-TILE/design-review.md), WP2.2 changed.
 
 # Reviewing a design
 
 A planner has written or changed a module's design and items, and no builder starts until a reviewer approves them.
-Agreeing the items before building is what makes the later milestone reviews fair.
+Agreeing the items before building is what makes the later work package reviews fair.
 
 ## What to read
 
-Work out what the module must do from the project brief, the module list's entry for it, and the tasks the planners
-were given, where your prompt names them. A decision in the brief counts as something the user asked for.
+Work out what the module must do from the vision and scope document, the module list's entry for it, and the tasks
+the planners were given, where your prompt names them. A decision in the vision and scope document counts as
+something the user asked for.
 
 Compare that with the design. Look for mechanisms nobody has shown can produce their behaviour, and try the task's
 own words on ordinary inputs the design's examples leave out. A design that reads the task more narrowly than its
 words, without listing that as an assumption for the user, has a gap.
 
-For each item in the done-when file, ask whether you could really judge it when its milestone ends, with only the
-milestones before it built, and whether a convincing fake would pass it. For an `inspect`, check that its reference
+For each item in the done-when file, ask whether you could really judge it when its work package ends, with only the
+work packages before it built, and whether a convincing fake would pass it. For an `inspect`, check that its reference
 matches what the user asked for, at the level they asked for, and that each checklist line comes from what the
-reference shows. A milestone of options for the user to choose from is the exception: its bar is the minimum
+reference shows. A work package of options for the user to choose from is the exception: its bar is the minimum
 requirements and being different in kind, because the user will turn most of them down. For an `ask`, check that it is
 about a part the architecture depends on.
 
@@ -30,20 +31,21 @@ new concept first gets a name.
 
 ## What counts as a Must Fix
 
-Judge the design against the brief and the module's scope, meaning what its entry in the module list gives it to do.
-A finding is a Must Fix when building as designed would miss what the brief asks of the module: a mechanism that
-can't produce the behaviour across the range the brief covers, a gap against the request or an interface, a reference
-below what the user asked for, two modules that would read an interface differently, or an item that no reviewer
-could judge, that its milestone can't prove, that a convincing fake would pass, that work meeting the quality bar
-would fail, such as a cheaper method that looks the same, or that is open-ended enough that no work could be shown to
-meet it, such as a suite that must fail "when any behaviour is broken". A convincing fake skips what the item claims
-on inputs the brief covers, such as output that is right only for the example in the check; a version that differs
-only on an input the brief never mentions isn't one.
+Judge the design against the vision and scope document and the module's scope, meaning what its entry in the module
+list gives it to do. A finding is a Must Fix when building as designed would miss what the user asked of this
+module: a mechanism that can't produce the behaviour across the agreed range, a gap against the request or an
+interface, a reference below what the user asked for, two modules that would read an interface differently, or an
+item that no reviewer could judge, that its work package can't prove, that a convincing fake would pass, that work
+meeting the quality bar would fail, such as a cheaper method that looks the same, or that is open-ended enough that
+no work could be shown to meet it, such as a suite that must fail "when any behaviour is broken". A convincing fake
+skips what the item claims on inputs the vision and scope document covers, such as output that is right only for
+the example in the check; a version that differs only on an input the vision and scope document never mentions
+isn't one.
 
-Growth beyond that scope is a Suggestion, however real: a wider range of input than the brief names, a proof stronger
-than its claim needs, an extra edge case, clearer wording or a name that drifts. The range the brief names is the one
-"How it will be judged" and its examples describe, not every value a type allows: a brief that reads numbers with
-`float()` asks for ordinary numbers, not overflow to infinity. A finding that goes against an assumption or decision
+Growth beyond that scope is a Suggestion, however real: a wider range of input, a proof stronger than its claim
+needs, an extra edge case, clearer wording or a name that drifts. Take the range from "How it will be judged" and its examples in
+the vision and scope document. For a request to read ordinary numbers with `float()`, try ordinary numbers.
+Overflow to infinity would need a request of its own. A finding that goes against an assumption or decision
 the user agreed is a Suggestion too, with the case for changing it, because only the user can reopen their own
 decision. The planner reads Suggestions on its
 next turn, and the user can ask for more, because the user, not the review, decides how much quality the project is
@@ -62,7 +64,7 @@ script couldn't compare, where to start. Say first whether each Must Fix of the 
 each changed part, and the parts that rely on it, because a revision can make a proof easier to pass as well as sharper.
 Raise a new Must Fix only for something the change broke. What is left of an earlier Must Fix, when it changes nothing
 the user would see and nothing another module relies on, is a Suggestion, and so is anything you notice in a part
-nothing changed, unless building it would miss the brief outright.
+nothing changed, unless building it would miss the vision and scope document outright.
 
 ## Finishing
 
@@ -76,7 +78,7 @@ last.
 About this session:
 - This folder is a clean checkout of the main branch's tip.
 - The script is `python3 /skills/orchestration/lead/scripts/agent_loop.py`, for the `background` and `wait` commands.
-- The project brief is /repo/docs/plans/BRIEF.md and the module list is /repo/docs/plans/ARCHITECTURE.md, in the plans folder /repo/docs/plans, if they exist.
+- The vision and scope document is /repo/docs/plans/VISION.md and the module list is /repo/docs/plans/ARCHITECTURE.md, in the plans folder /repo/docs/plans, if they exist.
 - The module's plan files are in docs/plans/APPLE-TILE/, and the project's agreed names are in docs/plans/GLOSSARY.md, if that file exists.
 - The graded examples, past reviews the user agreed with or overturned, are in .orchestrate/evidence/graded-examples.md, if that file exists.
 - Any captures go in .orchestrate/evidence/APPLE-TILE/design-review/. The review and that folder are in the working folder, which git ignores, so leave every other file as it is.

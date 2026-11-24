@@ -50,8 +50,8 @@ class SetupCommand(Repo):
     def test_a_failed_setup_is_the_checks_failure_and_is_tried_again(self):
         tree = agent_loop.verify_tree(self.wt, "WATER", "HEAD")
         prof = {"setup_command": "echo no registry >&2; exit 3", "test_command": "true", "plans": "docs/plans"}
-        m = {"id": "M1", "items": [{"id": "M1.1", "check": "true"}]}
-        self.assertEqual(agent_loop.check_failures(tree, prof, {"id": "M1", "items": []}), [],
+        m = {"id": "WP1", "items": [{"id": "WP1.1", "check": "true"}]}
+        self.assertEqual(agent_loop.check_failures(tree, prof, {"id": "WP1", "items": []}), [],
                          "with no item check to run there is nothing to set up for")
         failed = agent_loop.check_failures(tree, prof, m)
         self.assertEqual(len(failed), 1)
@@ -137,14 +137,14 @@ class Changes(Clean):
 
 
 # A reviewer that writes only what it judged: each item's verdict, the findings and the review file. It leaves the
-# milestone's status and the items' `review` fields as the builder left them, and gives no counts.
+# work package's status and the items' `review` fields as the builder left them, and gives no counts.
 BARE_REVIEWER = """#!/usr/bin/env python3
 import json, os
 from pathlib import Path
 cwd = Path(os.getcwd())
 path = cwd / "docs/plans/WATER/DONE.json"
 d = json.loads(path.read_text())
-m = next(m for m in d["milestones"] if m["status"] == "ready_for_review")
+m = next(m for m in d["work_packages"] if m["status"] == "ready_for_review")
 verdict = os.environ.get("BARE_VERDICT", "fail")
 for i in m["items"]:
     i["verdict"] = verdict
@@ -174,9 +174,9 @@ class ReviewBookkeeping(Repo):
         self.assertEqual(out["verdict"], "FAIL")
         self.assertEqual(out["found"], {"fail": 1, "could_not_judge": 0, "outside_the_items": 0})
         self.assertIn("status in_progress", out["filled"])
-        m1 = self.read_done()["milestones"][0]
-        self.assertEqual(m1["status"], "in_progress")
-        self.assertEqual({i["review"] for i in m1["items"]}, {".orchestrate/evidence/WATER/M1-review.md"})
+        w1 = self.read_done()["work_packages"][0]
+        self.assertEqual(w1["status"], "in_progress")
+        self.assertEqual({i["review"] for i in w1["items"]}, {".orchestrate/evidence/WATER/WP1-review.md"})
 
     def test_a_passed_review_with_only_verdicts_is_saved_as_done(self):
         self.ready_for_review()
@@ -184,7 +184,7 @@ class ReviewBookkeeping(Repo):
         os.environ["BARE_VERDICT"] = "pass"
         out = self.review()
         self.assertEqual(out["result"], "REVIEWED", out)
-        self.assertEqual(self.read_done()["milestones"][0]["status"], "done")
+        self.assertEqual(self.read_done()["work_packages"][0]["status"], "done")
 
     def test_a_review_written_the_old_way_is_saved_as_before(self):
         self.ready_for_review()
@@ -192,7 +192,7 @@ class ReviewBookkeeping(Repo):
         out = self.review()
         self.assertEqual(out["result"], "REVIEWED", out)
         self.assertNotIn("filled", out)
-        self.assertEqual(self.read_done()["milestones"][0]["status"], "in_progress")
+        self.assertEqual(self.read_done()["work_packages"][0]["status"], "in_progress")
 
 
 class GradedExamples(Repo):
@@ -213,24 +213,24 @@ class GradedExamples(Repo):
         self.assertNotIn("graded-examples.md", self.git("ls-tree", "-r", "--name-only", "origin/main").stdout)
         return path.read_text() if path.exists() else None
 
-    def test_accepting_a_failed_milestone_adds_the_case_with_the_humans_words(self):
+    def test_accepting_a_failed_work_package_adds_the_case_with_the_humans_words(self):
         self.name_the_file()
         self.failed_review()
-        out = self.human("accept", "M1", reason="The flat water is the style I asked for.")
+        out = self.human("accept", "WP1", reason="The flat water is the style I asked for.")
         self.assertEqual(out["result"], "DONE", out)
         self.assertEqual(out["graded_example"], ".orchestrate/evidence/graded-examples.md")
         text = self.examples()
-        self.assertIn("## WATER M1: the user overturned a review", text)
-        self.assertIn("- M1.1 (Fail): M1.1 works", text)
-        self.assertIn("the water is flat (M1.1)", text)
+        self.assertIn("## WATER WP1: the user overturned a review", text)
+        self.assertIn("- WP1.1 (Fail): WP1.1 works", text)
+        self.assertIn("the water is flat (WP1.1)", text)
         self.assertIn("> The flat water is the style I asked for.", text)
         self.assertIn("Why it is here:", text)
 
-    def test_re_reviewing_a_passed_milestone_adds_the_case(self):
+    def test_re_reviewing_a_passed_work_package_adds_the_case(self):
         self.name_the_file()
         self.ready_for_review()
         self.assertEqual(self.review()["result"], "REVIEWED")
-        out = self.human("rereview", "M1", reason="The foam doesn't move; that's not done.")
+        out = self.human("rereview", "WP1", reason="The foam doesn't move; that's not done.")
         self.assertEqual(out["result"], "DONE", out)
         text = self.examples()
         self.assertIn("passed it", text)
@@ -238,7 +238,7 @@ class GradedExamples(Repo):
 
     def test_no_file_is_written_when_the_settings_name_none(self):
         self.failed_review()
-        out = self.human("accept", "M1")
+        out = self.human("accept", "WP1")
         self.assertEqual(out["result"], "DONE", out)
         self.assertNotIn("graded_example", out)
         self.assertIsNone(self.examples())
@@ -256,26 +256,26 @@ class SecondReviewScript(Repo):
         self.assertNotIn("sandbox", agent_loop.session_rule(True, "codex", {"sandbox": "danger-full-access"}))
         self.assertNotIn("sandbox", agent_loop.session_rule(False, "claude", {"sandbox": "workspace-write"}))
 
-    def test_review_prompts_carry_the_session_note_and_the_design_review_names_the_brief(self):
+    def test_review_prompts_carry_the_session_note_and_the_design_review_names_the_vision(self):
         prof = agent_loop.profile(self.wt)
         doc = json.loads((self.wt / "docs/plans/WATER/DONE.json").read_text())
         rec = json.loads((self.wt / "docs/plans/WATER/RECORD.json").read_text())
-        common = dict(host="codex", prof=prof, stem="WATER", mid="M1", commit="abc", done="docs/plans/WATER/DONE.json",
-                      review=".orchestrate/evidence/WATER/M1-review.md", milestone=doc["milestones"][0],
-                      entry=rec["milestones"]["M1"], feedback=None, judged=[], tree=self.wt)
+        common = dict(host="codex", prof=prof, stem="WATER", mid="WP1", commit="abc", done="docs/plans/WATER/DONE.json",
+                      review=".orchestrate/evidence/WATER/WP1-review.md", work_package=doc["work_packages"][0],
+                      entry=rec["work_packages"]["WP1"], feedback=None, judged=[], tree=self.wt)
         review = agent_loop.review_prompt(**common)
         design = agent_loop.review_prompt(**{**common, "mid": "design", "design": True})
         for text in (review, design):
             self.assertIn("This session runs in the background", text)
             self.assertNotIn("the skill describes", text)
-        self.assertIn(f"The project brief is {self.wt / 'docs/plans/BRIEF.md'}", design)
+        self.assertIn(f"The vision and scope document is {self.wt / 'docs/plans/VISION.md'}", design)
         self.assertIn(str(self.wt / "docs/plans/ARCHITECTURE.md"), design)
 
     def test_plan_refuses_unmerged_plan_files_with_adopt_and_the_plan_command_after_it(self):
-        (self.wt / "docs/plans/BRIEF.md").write_text("# Brief\n")
+        (self.wt / "docs/plans/VISION.md").write_text("# Vision and scope document\n")
         refused = self.plan()
         self.assertEqual(refused["result"], "REFUSED", refused)
-        self.assertIn("docs/plans/BRIEF.md", refused["unmerged_plans"]["uncommitted"])
+        self.assertIn("docs/plans/VISION.md", refused["unmerged_plans"]["uncommitted"])
         self.assertIn(" adopt ", refused["next"]["command"])
         self.assertIn(" plan ", refused["next"]["then"]["command"])
 
@@ -283,7 +283,7 @@ class SecondReviewScript(Repo):
         (self.wt / "ORCHESTRATE.md").unlink()
         out = json.loads(self.printed(agent_loop.cmd_settings, code=1, worktree=str(self.wt)).splitlines()[-1])
         self.assertFalse(out["planned"])
-        self.assertEqual(out["paths"]["brief"], str(self.wt.resolve() / "docs/plans/BRIEF.md"))
+        self.assertEqual(out["paths"]["vision"], str(self.wt.resolve() / "docs/plans/VISION.md"))
 
     def test_messages_that_change_a_setting_name_settings_set(self):
         self.assertIn("settings --set", agent_loop.adoptable(agent_loop.profile(self.wt), self.wt, "HEAD",
@@ -301,22 +301,22 @@ class SecondReviewScript(Repo):
 
     def test_planner_tasks_give_facts_and_leave_the_instructions_to_the_task_file(self):
         prof = agent_loop.profile(self.wt)
-        task = agent_loop.diagnosis_task("WATER", "M1", {"failed_reviews": 6}, prof)
+        task = agent_loop.diagnosis_task("WATER", "WP1", {"failed_reviews": 6}, prof)
         self.assertNotIn("Read every review", task)
-        self.assertIn("KEEP WATER M1", task)
-        self.assertNotIn("change no file", agent_loop.answered_line("WATER", "M1"))
+        self.assertIn("KEEP WATER WP1", task)
+        self.assertNotIn("change no file", agent_loop.answered_line("WATER", "WP1"))
 
     def test_the_build_prompt_names_the_commit_subject_and_promises_no_reviewer(self):
         prof = agent_loop.profile(self.wt)
         doc = json.loads((self.wt / "docs/plans/WATER/DONE.json").read_text())
-        text = agent_loop.build_prompt("claude", True, prof, "WATER", "M1", doc["milestones"][0])
-        self.assertIn("`WATER M1: `", text)
-        self.assertIn("Done, or Ready for Review when the milestone needs a reviewer", text)
+        text = agent_loop.build_prompt("claude", True, prof, "WATER", "WP1", doc["work_packages"][0])
+        self.assertIn("`WATER WP1: `", text)
+        self.assertIn("Done, or Ready for Review when the work package needs a reviewer", text)
         self.assertNotIn("starts a reviewer", text)
 
     def test_the_pick_between_options_is_reviewed(self):
-        pick = {"id": "M2", "items": [{"id": "M2.1", "needs": {"type": "human_feedback"}, "check": "true"}]}
-        doc = {"milestones": [{"id": "M1", "items": [{"id": "M1.1", "check": "true"}]}, pick]}
+        pick = {"id": "WP2", "items": [{"id": "WP2.1", "needs": {"type": "human_feedback"}, "check": "true"}]}
+        doc = {"work_packages": [{"id": "WP1", "items": [{"id": "WP1.1", "check": "true"}]}, pick]}
         self.assertTrue(agent_loop.needs_review(pick, doc, {"ends_stretch": True}))
         self.assertNotIn("closes without a reviewer", agent_loop.needs_review.__doc__)
 
@@ -325,7 +325,7 @@ class SecondReviewScript(Repo):
         self.assertIn("- **Test command:** none", t)
         self.assertIn("must pass before any test exists", t)
         self.assertIn("into ignored folders, leaving tracked files as they were", t)
-        self.assertIn("gates no milestone", t)
+        self.assertIn("gates no work package", t)
         self.assertIn("else the only one installed, else codex", t)
         self.assertEqual(t.count("Keep it on a new project"), 2)
         self.assertIn("{prompt}, {model} and {effort}", t)

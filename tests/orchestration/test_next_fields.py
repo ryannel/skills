@@ -8,17 +8,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from support import agent_loop  # noqa: E402
 
 
-class SplitOffMilestones(unittest.TestCase):
-    def test_a_milestone_split_off_in_a_diagnosis_carries_the_diagnosed_count(self):
-        before = {"milestones": [{"id": "M2", "diagnoses": 1, "failed_reviews": 3}]}
-        after = {"milestones": [{"id": "M2", "diagnoses": 2, "failed_reviews": 0}, {"id": "M3", "diagnoses": 0}]}
-        agent_loop.keep_counts(before, after, ["CORE M2"], "CORE", diagnosed="M2")
-        self.assertEqual(after["milestones"][1]["diagnoses"], 2)
+class SplitOffWorkPackages(unittest.TestCase):
+    def test_a_work_package_split_off_in_a_diagnosis_carries_the_diagnosed_count(self):
+        before = {"work_packages": [{"id": "WP2", "diagnoses": 1, "failed_reviews": 3}]}
+        after = {"work_packages": [{"id": "WP2", "diagnoses": 2, "failed_reviews": 0}, {"id": "WP3", "diagnoses": 0}]}
+        agent_loop.keep_counts(before, after, ["CORE WP2"], "CORE", diagnosed="WP2")
+        self.assertEqual(after["work_packages"][1]["diagnoses"], 2)
 
-    def test_a_new_milestone_outside_a_diagnosis_keeps_what_the_planner_wrote(self):
-        after = {"milestones": [{"id": "M3"}]}
-        agent_loop.keep_counts({"milestones": []}, after, [], "CORE")
-        self.assertNotIn("diagnoses", after["milestones"][0])
+    def test_a_new_work_package_outside_a_diagnosis_keeps_what_the_planner_wrote(self):
+        after = {"work_packages": [{"id": "WP3"}]}
+        agent_loop.keep_counts({"work_packages": []}, after, [], "CORE")
+        self.assertNotIn("diagnoses", after["work_packages"][0])
 
 
 class MainCheckFix(unittest.TestCase):
@@ -45,9 +45,9 @@ class MainCheckFix(unittest.TestCase):
 class Migrated(unittest.TestCase):
     def test_definitions_naming_the_old_evidence_path_go_to_a_planner(self):
         got = agent_loop.migrated_next(Path("/repo"), {"evidence": {"from": "docs/evidence", "to": ".orchestrate/evidence",
-                                                                    "definitions_naming_it": ["CORE M1", "CORE M2"]}})
+                                                                    "definitions_naming_it": ["CORE WP1", "CORE WP2"]}})
         self.assertIn(" --module CORE --kind fix ", got["command"])
-        self.assertIn("CORE M1, CORE M2", got["command"])
+        self.assertIn("CORE WP1, CORE WP2", got["command"])
 
     def test_nothing_to_fix_points_at_status(self):
         self.assertIn(" status ", agent_loop.migrated_next(Path("/repo"), {})["command"])

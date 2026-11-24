@@ -16,14 +16,13 @@ Contents:
 
 | File | What it holds | Written for |
 |---|---|---|
-| `ARCHITECTURE.md` | The module list: the module table, then what each module owns and the interfaces between them | The user reads the table and milestone names, so write those in plain words, as what someone can see or do |
+| `ARCHITECTURE.md` | The module list: the module table, then what each module owns and the interfaces between them | The user reads the table and work package names, so write those in plain words, as what someone can see or do |
 | `<MODULE>/DESIGN.md` | The design: mechanisms, range and interfaces | Builders and reviewers, so write it precisely, with paths and IDs |
 | `<MODULE>/PLAN.md` | What is left to build | Builders |
 | `<MODULE>/LOG.md` | The module's history, oldest first | Planners and the lead, later |
-| `<MODULE>/DONE.json` | The done-when file: each milestone's items | Builders, reviewers and the script |
-| `<MODULE>/BRIEF.md` | Optional: the user's brief for this module alone | Planners |
+| `<MODULE>/DONE.json` | The done-when file: each work package's items | Builders, reviewers and the script |
 
-The plans folder also holds `BRIEF.md` and `GLOSSARY.md`, which the lead keeps with the user, and `STATUS.md`, the
+The plans folder also holds `VISION.md` and `GLOSSARY.md`, which the lead keeps with the user, and `STATUS.md`, the
 user's status page, which the script writes. Reviews, captures and other proof go in the working folder, which is
 never committed and is the same folder in every worktree.
 
@@ -49,7 +48,7 @@ page shows each module's status.
 ## `PLAN.md`
 
 The plan file says what is left to build, and nothing else. It holds no status, because the script knows each
-milestone's status, and status written by hand goes stale.
+work package's status, and status written by hand goes stale.
 
 ```markdown
 # <Module> plan
@@ -57,25 +56,25 @@ milestone's status, and status written by hand goes stale.
 ## Open for the user
 - Assumption: <a reading of the user's words the planner chose, which the user can overturn>
 
-## M1 <what someone can see or do>: done
-[review](<link to M1-review.md in the working folder>)
+## WP1 <what someone can see or do>: done
+[review](<link to WP1-review.md in the working folder>)
 
-## M2 <what someone can see or do>
+## WP2 <what someone can see or do>
 <A few sentences for the builder, on what the items and the design don't say. Nothing, when there is nothing.>
 
-## M3 <what someone can see or do>
+## WP3 <what someone can see or do>
 
-## M4 <what someone can see or do>
+## WP4 <what someone can see or do>
 ```
 
-A milestone with no items yet, such as M4, has only its heading. A Done milestone shrinks to its heading and one
+A work package with no items yet, such as WP4, has only its heading. A Done work package shrinks to its heading and one
 link to its review, because the detail stays in the review, the log and git. `Open for the user` holds only open
-assumptions. [Planning a module](../tasks/module.md#the-milestones) says how to name a milestone and what goes in the
+assumptions. [Planning a module](../tasks/module.md#the-work-packages) says how to name a work package and what goes in the
 note under one.
 
 A limit on what a builder may do goes where it holds, with its reason beside it. One that is true of every module,
 such as how a browser is started or a path nobody edits, goes in the project settings or the guidance their `Project
-guidance` section links to. One about this module goes in the design. Only a limit on this one milestone goes in its
+guidance` section links to. One about this module goes in the design. Only a limit on this one work package goes in its
 note.
 
 ## `LOG.md`
@@ -86,28 +85,28 @@ detail goes in the working folder, with a link. Nobody reads the log to find out
 grow.
 
 ```markdown
-- 2026-11-03 M2: review failed on the empty state; fixed, and the second review passed.
+- 2026-11-03 WP2: review failed on the empty state; fixed, and the second review passed.
 - 2026-11-05 User: "keep the old URL working" (quoted from chat).
 ```
 
 ## `DONE.json`
 
-The done-when file lists, for each milestone, its items: the things that must be true before the milestone is
-Done. It is JSON because the script reads it. A new milestone starts like this, with every item open:
+The done-when file lists, for each work package, its items: the things that must be true before the work package is
+Done. It is JSON because the script reads it. A new work package starts like this, with every item open:
 
 ```json
 {
   "module": "ONBOARDING",
-  "milestones": [
+  "work_packages": [
     {
-      "id": "M2",
+      "id": "WP2",
       "name": "A new end user signs up and lands on an empty dashboard",
       "status": "not_started",
-      "depends_on": ["AUTH:M1"],
+      "depends_on": ["AUTH:WP1"],
       "quality_bar": "As quick and calm as Linear's sign-up, with an empty state as clear as Things'",
       "items": [
         {
-          "id": "M2.1",
+          "id": "WP2.1",
           "statement": "A valid email reaches the dashboard in three screens or fewer; invalid input is rejected inline",
           "check": "npx playwright test e2e/signup.spec.ts",
           "target": "web-chrome",
@@ -115,7 +114,7 @@ Done. It is JSON because the script reads it. A new milestone starts like this, 
           "evidence": ""
         },
         {
-          "id": "M2.2",
+          "id": "WP2.2",
           "statement": "Every step is readable and tappable at 375 px with no layout shift as fields validate",
           "inspect": "From screenshots of each step and each validation state at 375 px: 1. every label and error reads without zooming; 2. every button and field is at least 44 px tall; 3. nothing moves when an error appears or clears.",
           "target": "web-mobile-safari",
@@ -130,7 +129,7 @@ Done. It is JSON because the script reads it. A new milestone starts like this, 
 }
 ```
 
-The planner writes the fields that say what a milestone asks for:
+The planner writes the fields that say what a work package asks for:
 
 - `statement` says what must be true, as a closed claim a reviewer can judge once, as [the items](../SKILL.md#the-items)
   describes.
@@ -139,13 +138,13 @@ The planner writes the fields that say what a milestone asks for:
   reviewer answers yes or no. [Ways to prove an item](proofs.md) describes each.
 - `target` is one of the targets in the project settings, meaning a device or platform the product runs on. When
   the proof runs on a stand-in, it is `stand_in:<what it stands in for>`.
-- `quality_bar` is how good the milestone has to be. It makes the settings' quality bar specific to this milestone,
+- `quality_bar` is how good the work package has to be. It makes the settings' quality bar specific to this work package,
   and names the reference each `inspect` is drawn from. For a mix it names several, each saying what it is the
   reference for.
-- `depends_on` is optional. It lists the milestones in other modules that must be Done before this one starts,
-  written `"AUTH:M1"`. Milestones inside one module already run in order, so leave out earlier ones from the same
-  module. An entry may name a milestone that so far has only a heading in the other module's plan file, so a
-  milestone's ID stays the same once written.
+- `depends_on` is optional. It lists the work packages in other modules that must be Done before this one starts,
+  written `"AUTH:WP1"`. Work packages inside one module already run in order, so leave out earlier ones from the same
+  module. An entry may name a work package that so far has only a heading in the other module's plan file, so a
+  work package's ID stays the same once written.
 - `lock` is optional. It names a resource from the settings' `Exclusive resources` or `Shared resources` line that
   the item's `check` needs, and the script takes that lock while the check runs. For a shared resource, `gpu` shares
   it with other runs, and `gpu.alone` waits to have it alone, which only a run that needs the whole device calls for.
@@ -159,7 +158,7 @@ The planner writes the fields that say what a milestone asks for:
   - `access`: the user has to approve a permission or a prompt, such as Computer Use for an app, so the builder can
     finish it only in a visible session with the user at the machine.
   - `hardware`: a device has to be connected, such as an iPhone.
-- `alone` is optional, `true` for a milestone measured with no other agent working, such as precise timings.
+- `alone` is optional, `true` for a work package measured with no other agent working, such as precise timings.
 
 Once approved, those fields are fixed: only a planner that `plan` started, or the user through `human scope`,
 changes them, because a builder who could edit them could pass anything.
@@ -168,11 +167,11 @@ changes them, because a builder who could edit them could pass anything.
 
 Each field of the done-when file has one owner, and the script refuses a change from anyone else:
 
-- The planner writes the fields above, and starts a new milestone at `not_started` with its items open.
+- The planner writes the fields above, and starts a new work package at `not_started` with its items open.
 - A builder sets `status` to `in_progress` when it starts, and each item's `builder_result` (`open` or `pass`) and
   `evidence`, the path to its proof, while it builds.
-- A reviewer sets each item's `verdict` (`pass`, `fail` or `could_not_judge`) and the milestone's `findings`.
+- A reviewer sets each item's `verdict` (`pass`, `fail` or `could_not_judge`) and the work package's `findings`.
 - The script sets every other status, the review counts, `review` and the `blocked` field, and keeps the record file
-  beside the done-when file. A milestone is Done only when the record file says so.
+  beside the done-when file. A work package is Done only when the record file says so.
 
-A planner leaves the counts, `findings` and the record file alone, and changes `status` only on a milestone it adds.
+A planner leaves the counts, `findings` and the record file alone, and changes `status` only on a work package it adds.

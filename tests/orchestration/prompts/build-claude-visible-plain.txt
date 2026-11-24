@@ -1,16 +1,16 @@
-Build milestone M2 of module APPLE-TILE, using the builder skill (the file is /skills/orchestration/builder/SKILL.md).
+Build work package WP2 of module APPLE-TILE, using the builder skill (the file is /skills/orchestration/builder/SKILL.md).
 
-The goal: every item of M2 in docs/plans/APPLE-TILE/DONE.json has builder_result pass, with evidence from the item's target, and the work is merged, with M2's status left as in_progress. When you end with DONE, the script runs the checks on the merged work and sets the status itself: Done, or Ready for Review when the milestone needs a reviewer.
+Finish the work package by merging the work with WP2's status left as in_progress. Every item of WP2 in docs/plans/APPLE-TILE/DONE.json must have builder_result pass with evidence from the item's target. When you end with DONE, the script runs the checks on the merged work and sets the status itself: Done, or Ready for Review when the work package needs a reviewer.
 
 About this session:
-- This worktree is yours for the milestone. Other builders work in their own, so keep your changes inside this one.
+- This worktree is yours for the work package. Other builders work in their own, so keep your changes inside this one.
 - A lead is running this build.
-- Start each commit's subject with `APPLE-TILE M2: `, because that is one way the script tells whose commit broke a check on the main branch.
+- Start each commit's subject with `APPLE-TILE WP2: `, because that is one way the script tells whose commit broke a check on the main branch.
 - The script is `python3 /skills/orchestration/lead/scripts/agent_loop.py`.
 - The module's plan files are in docs/plans/APPLE-TILE/, and the project's agreed names are in docs/plans/GLOSSARY.md, if that file exists.
-- Evidence files, such as captures and logs, go under .orchestrate/evidence/APPLE-TILE/M2/.
+- Evidence files, such as captures and logs, go under .orchestrate/evidence/APPLE-TILE/WP2/.
 - This session is visible in the Claude app, so an approval prompt can appear in it if someone is there to answer it.
-- M2.2 (does the tile animation read as smooth) needs user feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the user to look at, then end with `BLOCKED needs_human_feedback: <the question for the user>`.
-- M2.3 (an iPhone connected over USB) needs hardware. Check the device is connected before other work. If it isn't, do the rest and end with `BLOCKED needs_hardware: <the device>`.
+- WP2.2 (does the tile animation read as smooth) needs user feedback: someone has to look at the result and judge it. Do every other item first and save the evidence for the user to look at, then end with `BLOCKED needs_human_feedback: <the question for the user>`.
+- WP2.3 (an iPhone connected over USB) needs hardware. Check the device is connected before other work. If it isn't, do the rest and end with `BLOCKED needs_hardware: <the device>`.
 
-When the goal is met, end with DONE and the evidence. If you can't go on, write your handoff to .orchestrate/evidence/APPLE-TILE/M2-handoff.md, in the working folder too, then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, or with `NEEDS_CONTEXT: <the question>` when you are missing a fact or a choice, and the lead gets it answered. The skill lists the reasons.
+When the work is merged and proved, end with DONE and the evidence. If you can't go on, write your handoff to .orchestrate/evidence/APPLE-TILE/WP2-handoff.md, in the working folder too, then end with `BLOCKED <reason>: <one sentence on what would unblock it>`, or with `NEEDS_CONTEXT: <the question>` when you are missing a fact or a choice, and the lead gets it answered. The skill lists the reasons.

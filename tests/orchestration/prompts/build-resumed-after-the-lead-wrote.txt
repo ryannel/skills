@@ -1,3 +1,3 @@
 The console is unlocked now.
 
-The goal hasn't changed. Every item of M2 has to pass with evidence, and the work has to be merged with `python3 /skills/orchestration/lead/scripts/agent_loop.py merge --worktree .`. In docs/plans/APPLE-TILE/DONE.json, change only M2's items' `builder_result` and `evidence`; the script sets the status. The project's rules are in ORCHESTRATE.md; re-read them if this conversation no longer holds them.
+Every item of WP2 has to pass with evidence, and the work has to be merged with `python3 /skills/orchestration/lead/scripts/agent_loop.py merge --worktree .`. In docs/plans/APPLE-TILE/DONE.json, change only WP2's items' `builder_result` and `evidence`; the script sets the status. The project's rules are in ORCHESTRATE.md; re-read them if this conversation no longer holds them.

@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import (PARSER, Clean, Repo, agent_loop, check_next_commands, milestone, release)  # noqa: E402
+from support import (PARSER, Clean, Repo, agent_loop, check_next_commands, work_package, release)  # noqa: E402
 
 WT = "/repo/wt"
 
@@ -43,38 +43,38 @@ class RoutineSteps(Clean):
         words, why = agent_loop.routine_next(line, state if state is not None else steps())
         return words, why
 
-    def test_ready_for_review_goes_on_to_its_review_and_a_milestone_done_on_its_checks_to_the_next(self):
-        words, _ = self.follows(result("READY_FOR_REVIEW", run_cmd("review", "--module", "WATER", "--milestone", "M1",
+    def test_ready_for_review_goes_on_to_its_review_and_a_work_package_done_on_its_checks_to_the_next(self):
+        words, _ = self.follows(result("READY_FOR_REVIEW", run_cmd("review", "--module", "WATER", "--work-package", "WP1",
                                                                      "--commit", "abc", "--worktree", WT),
-                                       module="WATER", milestone="M1", review=True))
-        self.assertEqual(words[:5], ["review", "--module", "WATER", "--milestone", "M1"])
+                                       module="WATER", work_package="WP1", review=True))
+        self.assertEqual(words[:5], ["review", "--module", "WATER", "--work-package", "WP1"])
         words, _ = self.follows(result("READY_FOR_REVIEW", run_cmd("run", "--module", "WATER", "--worktree", WT),
-                                       module="WATER", milestone="M1", review=False))
+                                       module="WATER", work_package="WP1", review=False))
         self.assertEqual(words[0], "run")
 
-    def test_a_pass_goes_on_to_the_modules_next_milestone_and_stops_when_the_module_is_finished(self):
+    def test_a_pass_goes_on_to_the_modules_next_work_package_and_stops_when_the_module_is_finished(self):
         words, _ = self.follows(result("REVIEWED", run_cmd("run", "--module", "WATER", "--worktree", WT),
-                                       module="WATER", milestone="M1", verdict="PASS"))
+                                       module="WATER", work_package="WP1", verdict="PASS"))
         self.assertEqual(words[0], "run")
-        words, why = self.follows(result("REVIEWED", None, module="WATER", milestone="M2", verdict="PASS"))
+        words, why = self.follows(result("REVIEWED", None, module="WATER", work_package="WP2", verdict="PASS"))
         self.assertIsNone(words)
         self.assertIn("the reason", why)
-        # the next milestone waits on another module: that is the lead's to arrange
+        # the next work package waits on another module: that is the lead's to arrange
         words, why = self.follows(result("REVIEWED", run_cmd("run", "--module", "PAY", "--worktree", WT),
-                                         module="WATER", milestone="M1", verdict="PASS"))
+                                         module="WATER", work_package="WP1", verdict="PASS"))
         self.assertIsNone(words)
         self.assertIn("can't start here", why)
 
     def test_a_failed_review_goes_back_to_the_builder_until_the_counts_call_for_more(self):
         for word in ("same_builder", "new_builder_session"):
             line = result("REVIEWED", run_cmd("run", "--module", "WATER", "--worktree", WT, "--message", "read it"),
-                          module="WATER", milestone="M1", verdict="FAIL", escalation=word)
+                          module="WATER", work_package="WP1", verdict="FAIL", escalation=word)
             self.assertEqual(self.follows(line)[0][0], "run", word)
         diagnosis = result("REVIEWED", run_cmd("plan", "--worktree", WT, "--task", "find out why"), by="lead",
-                           module="WATER", milestone="M1", verdict="FAIL", escalation="diagnosis")
+                           module="WATER", work_package="WP1", verdict="FAIL", escalation="diagnosis")
         self.assertIsNone(self.follows(diagnosis)[0])
-        human = result("REVIEWED", run_cmd("human", "reopen", "--module", "WATER", "--milestone", "M1", "--worktree",
-                                           WT, "--text", "x"), module="WATER", milestone="M1", verdict="FAIL",
+        human = result("REVIEWED", run_cmd("human", "reopen", "--module", "WATER", "--work-package", "WP1", "--worktree",
+                                           WT, "--text", "x"), module="WATER", work_package="WP1", verdict="FAIL",
                        escalation="too_many_failed_reviews", decides="human", ask="Reopen it?")
         words, why = self.follows(human)
         self.assertIsNone(words)
@@ -85,15 +85,15 @@ class RoutineSteps(Clean):
         for word in ("BLOCKED", "NEEDS_CONTEXT", "HOST_FAILED", "PAUSED", "KEPT", "WAITING", "FINISHED", "INVALID",
                      "CHECKS_FAILED", "NO_PROGRESS_FOR_HOURS", "STALLED", "REFUSED", "SCRIPT_FAILED",
                      "IN_PROGRESS_ELSEWHERE", "WRONG_MODEL_OR_EFFORT"):
-            words, why = self.follows(result(word, again, module="WATER", milestone="M1"))
+            words, why = self.follows(result(word, again, module="WATER", work_package="WP1"))
             self.assertIsNone(words, word)
             self.assertIn(word, why)
         # a next that isn't a plain command of this script: a visible run, an ask, the main branch broken
-        visible = result("READY_FOR_REVIEW", "ORCHESTRATE_VISIBLE=1 " + again, module="WATER", milestone="M1")
+        visible = result("READY_FOR_REVIEW", "ORCHESTRATE_VISIBLE=1 " + again, module="WATER", work_package="WP1")
         self.assertIsNone(self.follows(visible)[0])
-        asked = result("READY_FOR_REVIEW", again, module="WATER", milestone="M1", ask="Are you there?")
+        asked = result("READY_FOR_REVIEW", again, module="WATER", work_package="WP1", ask="Are you there?")
         self.assertIsNone(self.follows(asked)[0])
-        broken = result("READY_FOR_REVIEW", again, module="WATER", milestone="M1", main_broken="e2e fails on abc")
+        broken = result("READY_FOR_REVIEW", again, module="WATER", work_package="WP1", main_broken="e2e fails on abc")
         words, why = self.follows(broken)
         self.assertIsNone(words)
         self.assertIn("main branch is broken", why)
@@ -116,16 +116,16 @@ class RoutineSteps(Clean):
 
     def test_a_plan_goes_on_to_each_design_review_it_left_owed(self):
         state = steps("plan")
-        planned = result("PLANNED", run_cmd("review", "--module", "WATER", "--milestone", "design", "--worktree", WT),
+        planned = result("PLANNED", run_cmd("review", "--module", "WATER", "--work-package", "design", "--worktree", WT),
                          merged=True, design_review_owed=["WATER", "PAY"], modules=["WATER", "PAY"])
         words, _ = self.follows(planned, state)
         self.assertEqual(words[:3], ["review", "--module", "WATER"])
         ok = result("REVIEWED", run_cmd("run", "--module", "WATER", "--worktree", WT), module="WATER",
-                    milestone="design", verdict="DESIGN OK")
+                    work_package="design", verdict="DESIGN OK")
         words, _ = self.follows(ok, state)
-        self.assertEqual(words[:5], ["review", "--module", "PAY", "--milestone", "design"])
+        self.assertEqual(words[:5], ["review", "--module", "PAY", "--work-package", "design"])
         changes = result("REVIEWED", run_cmd("plan", "--worktree", WT, "--task", "resolve them"), by="lead",
-                         module="PAY", milestone="design", verdict="DESIGN CHANGES")
+                         module="PAY", work_package="design", verdict="DESIGN CHANGES")
         self.assertEqual(self.follows(changes, state)[0][0], "plan")
         self.assertEqual(self.follows(changes, state)[0][0], "plan")  # the second round's revision is approved
         self.assertIsNone(self.follows(changes, state)[0])  # changes after that are the lead's to look at
@@ -142,7 +142,7 @@ class RoutineSteps(Clean):
         self.assertEqual(words[words.index("--model") + 1], "m")
         self.assertEqual(float(words[words.index("--turn-timeout-hours") + 1]), 3.0)
         self.assertIn("--one-step", words)
-        review = agent_loop.carried(["review", "--module", "WATER", "--milestone", "M1", "--worktree", WT], a, "run")
+        review = agent_loop.carried(["review", "--module", "WATER", "--work-package", "WP1", "--worktree", WT], a, "run")
         self.assertNotIn("--model", review)  # the builder's model isn't the reviewer's
         self.assertNotIn("--one-step", review)
         for words in (words, review):
@@ -181,28 +181,28 @@ class StepsInARepository(Repo):
     def test_a_run_carries_on_through_the_module_and_stops_when_it_is_finished(self):
         line = self.steps("run", "--module", "WATER", "--worktree", str(self.wt))
         self.assertEqual([(s["step"], s["result"]) for s in line["steps_run"]],
-                         [("run WATER M1", "READY_FOR_REVIEW"), ("run WATER M2", "READY_FOR_REVIEW"),
-                          ("review WATER M2", "REVIEWED")], line)
+                         [("run WATER WP1", "READY_FOR_REVIEW"), ("run WATER WP2", "READY_FOR_REVIEW"),
+                          ("review WATER WP2", "REVIEWED")], line)
         self.assertEqual((line["result"], line["verdict"]), ("REVIEWED", "PASS"))
         self.assertIn("finished", line["stopped_because"])
-        self.assertTrue(agent_loop.recorded_done(self.read_done()["milestones"][1], self.read_record()))
+        self.assertTrue(agent_loop.recorded_done(self.read_done()["work_packages"][1], self.read_record()))
 
     def test_a_failed_review_restarts_the_builder_and_a_diagnosis_stops_the_steps(self):
-        m1 = milestone("M1", "not_started", ["open"], inspect="captures")
-        m1["failed_reviews"] = 4  # the next failure leaves the builder at it; the one after calls for a diagnosis
-        self.write_done([m1, milestone("M2", "not_started", ["open"])])
+        w1 = work_package("WP1", "not_started", ["open"], inspect="captures")
+        w1["failed_reviews"] = 4  # the next failure leaves the builder at it; the one after calls for a diagnosis
+        self.write_done([w1, work_package("WP2", "not_started", ["open"])])
         self.commit_all()
         os.environ["FAKE_REVIEW"] = "fail"
         line = self.steps("run", "--module", "WATER", "--worktree", str(self.wt))
         self.assertEqual([(s["step"], s["result"], s.get("escalation")) for s in line["steps_run"]],
-                         [("run WATER M1", "READY_FOR_REVIEW", None), ("review WATER M1", "REVIEWED", "same_builder"),
-                          ("run WATER M1", "READY_FOR_REVIEW", None), ("review WATER M1", "REVIEWED", "diagnosis")])
+                         [("run WATER WP1", "READY_FOR_REVIEW", None), ("review WATER WP1", "REVIEWED", "same_builder"),
+                          ("run WATER WP1", "READY_FOR_REVIEW", None), ("review WATER WP1", "REVIEWED", "diagnosis")])
         self.assertEqual((line["escalation"], line["next"]["by"]), ("diagnosis", "lead"))
         self.assertIn("ended REVIEWED", line["stopped_because"])
 
     def test_a_plan_carries_on_into_the_design_review_it_left_owed(self):
         os.environ.update(FAKE_PLAN="replan", FAKE_REVIEW="design")
-        line = self.steps("plan", "--worktree", str(self.wt), "--task", "re-plan WATER M1")
+        line = self.steps("plan", "--worktree", str(self.wt), "--task", "re-plan WATER WP1")
         self.assertEqual([(s["step"], s["result"]) for s in line["steps_run"]],
                          [("plan", "PLANNED"), ("review WATER design", "REVIEWED")], line)
         self.assertEqual(line["verdict"], "DESIGN OK")
@@ -266,8 +266,8 @@ class Watching(Repo):
         self.assertNotIn("not_moving", line)  # the overview is `flow`'s, not the wake's
         self.assertIn("watch", line["next"]["argv"])
         flow = self.flow()
-        self.assertIn("WATER M1: ready to build, with no builder", flow["not_moving"][0])
-        self.assertEqual(flow["builders"]["ready_waiting"], ["WATER M1"])
+        self.assertIn("WATER WP1: ready to build, with no builder", flow["not_moving"][0])
+        self.assertEqual(flow["builders"]["ready_waiting"], ["WATER WP1"])
         self.assertIn("ready", flow["details"])
 
     def test_each_warning_sign_wakes_the_lead_once(self):
@@ -289,16 +289,16 @@ class Watching(Repo):
         self.check_in("1h")
         record = self.wt / "docs/plans/WATER/RECORD.json"
         rec = json.loads(record.read_text())
-        rec["milestones"]["M1"]["reviews"] = [
-            {"verdict": "fail", "at": agent_loop.now(), "items": {"M1.1": "fail"}},
-            {"verdict": "fail", "at": agent_loop.now(), "items": {"M1.1": "pass"},
-             "findings": [{"name": "flat water", "item": "M1.1"}]}]
+        rec["work_packages"]["WP1"]["reviews"] = [
+            {"verdict": "fail", "at": agent_loop.now(), "items": {"WP1.1": "fail"}},
+            {"verdict": "fail", "at": agent_loop.now(), "items": {"WP1.1": "pass"},
+             "findings": [{"name": "flat water", "item": "WP1.1"}]}]
         record.write_text(json.dumps(rec))
         self.commit_all()
         line = self.watch()
         self.assertEqual(line["result"], "WARNING_SIGNS", line)
-        self.assertIn("WATER M1 failed the same items in its last two reviews (M1.1), whether or not the findings were new", line["woke_for"])
-        self.assertEqual(self.flow()["moved"]["reviews_failed"], ["WATER M1", "WATER M1"])
+        self.assertIn("WATER WP1 failed the same items in its last two reviews (WP1.1), whether or not the findings were new", line["woke_for"])
+        self.assertEqual(self.flow()["moved"]["reviews_failed"], ["WATER WP1", "WATER WP1"])
 
     def test_a_builder_without_progress_a_queued_planner_and_a_broken_main_branch(self):
         self.check_in("1h")
@@ -306,8 +306,8 @@ class Watching(Repo):
         old = time.time() - 3 * 3600
         state = self.wt / ".git/orchestrate/WATER.json"
         state.parent.mkdir(exist_ok=True)
-        state.write_text(json.dumps({"milestone": "M1", "progress_at": old}))
-        loops = [{"pid": 4242, "role": "build", "module": "WATER", "milestone": "M1", "worktree": str(self.wt),
+        state.write_text(json.dumps({"work_package": "WP1", "progress_at": old}))
+        loops = [{"pid": 4242, "role": "build", "module": "WATER", "work_package": "WP1", "worktree": str(self.wt),
                   "started_at": old - 60, "repository": repo, "turns": 5},
                  {"pid": 4343, "role": "plan", "task": "plan PAY", "waiting_for": "another planner",
                   "started_at": old, "repository": repo}]
@@ -320,7 +320,7 @@ class Watching(Repo):
             flow = self.flow()
         self.assertEqual(line["result"], "WARNING_SIGNS", line)
         woke = " | ".join(line["woke_for"])
-        for text in ("WATER M1: no item has newly passed", "a planner has waited 3h", "`e2e` failed on abc"):
+        for text in ("WATER WP1: no item has newly passed", "a planner has waited 3h", "`e2e` failed on abc"):
             self.assertIn(text, woke)
         self.assertEqual(flow["builders"]["running"], 1)
         self.assertEqual(flow["main_branch"], ["main-branch check `e2e` failed on abc"])
@@ -332,8 +332,8 @@ class Watching(Repo):
         old = time.time() - 3 * 3600
         state = self.wt / ".git/orchestrate/WATER.json"
         state.parent.mkdir(exist_ok=True)
-        state.write_text(json.dumps({"milestone": "M1", "progress_at": old}))
-        loops = [{"pid": 4242, "role": "build", "module": "WATER", "milestone": "M1", "worktree": str(self.wt),
+        state.write_text(json.dumps({"work_package": "WP1", "progress_at": old}))
+        loops = [{"pid": 4242, "role": "build", "module": "WATER", "work_package": "WP1", "worktree": str(self.wt),
                   "started_at": old - 60, "repository": repo, "turns": 1}]
         with mock.patch.object(agent_loop, "live_loops", lambda *a, **k: (loops, [])):
             signs = agent_loop.watch_signs(agent_loop.watch_look(self.wt, agent_loop.profile(self.wt), {}, fetch=False))
@@ -346,12 +346,12 @@ class Watching(Repo):
         self.assertIsNone(agent_loop.last_commit_at(self.wt, stamp), "the script's own commits aren't progress")
         (self.wt / "fix.txt").write_text("a fix\n")
         self.git("add", "-A")
-        self.git("commit", "-qm", "water M1: the fix")
+        self.git("commit", "-qm", "water WP1: the fix")
         self.assertIsNotNone(agent_loop.last_commit_at(self.wt, stamp))
 
     def test_with_runs_it_wakes_the_lead_when_a_run_ends(self):
         self.check_in("1h")
-        ended = {"pid": 4242, "role": "steps", "module": "WATER", "milestone": None}
+        ended = {"pid": 4242, "role": "steps", "module": "WATER", "work_package": None}
         seen = iter([{4242: ended}])
         with mock.patch.object(agent_loop, "top_runs", lambda worktree: next(seen, {})):
             line = self.watch(runs=True)

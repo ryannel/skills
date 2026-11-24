@@ -1,7 +1,7 @@
-A reviewer has judged {milestone}, and it isn't finished yet. The review is at {evidence}/{module}/{milestone}-review.md.
+A reviewer has judged {work_package}, and it isn't finished yet. The review is at {evidence}/{module}/{work_package}-review.md.
 
 A review describes what one reviewer happened to try. Where it says an item failed, it shows one thing that makes the item's statement untrue, and there may be others like it the reviewer never reached. The next review is done by a new reviewer, who starts again from the items.
 
-So the milestone is finished when every item is true as it is written, the same test as before the review, and when every Must Fix the review raises outside the items, such as something that used to work, is gone. The script has set the items that didn't pass back to open, and each needs new evidence. An item marked could_not_judge is one the reviewer couldn't see for itself, so it needs evidence a reviewer can reach. The Suggestions are yours to take or leave.
+So the work package is finished when every item is true as it is written, the same test as before the review, and when every Must Fix the review raises outside the items, such as something that used to work, is gone. The script has set the items that didn't pass back to open, and each needs new evidence. An item marked could_not_judge is one the reviewer couldn't see for itself, so it needs evidence a reviewer can reach. The Suggestions are yours to take or leave.
 
 The `findings` list in the done-when file marks with `repeat` anything an earlier review also found.

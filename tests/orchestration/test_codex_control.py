@@ -257,7 +257,7 @@ class SharedServerPath(Clean):
         agent_loop.SESSION_PATH["turn_not_stopped"] = "the Codex app didn't take the stop for thread " + T1
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
-            agent_loop.emit("PAUSED", module="WATER", milestone="M1", thread=T1)
+            agent_loop.emit("PAUSED", module="WATER", work_package="WP1", thread=T1)
         line = json.loads(out.getvalue().splitlines()[-1])
         self.assertEqual(line["next"]["decides"], "human")
         self.assertIn(f"codex://threads/{T1}", line["next"]["ask"])
@@ -276,10 +276,10 @@ class ThreadCommand(Repo):
             p.start()
             self.addCleanup(p.stop)
         self.home.mkdir(parents=True, exist_ok=True)
-        agent_loop.note_thread(self.wt, "codex", T1, "build", "case · WATER · M1 build")
+        agent_loop.note_thread(self.wt, "codex", T1, "build", "case · WATER · WP1 build")
         state = self.wt / ".git/orchestrate/WATER.json"
         state.parent.mkdir(parents=True, exist_ok=True)
-        state.write_text(json.dumps({"module": "WATER", "milestone": "M1", "thread": T1, "host": "codex",
+        state.write_text(json.dumps({"module": "WATER", "work_package": "WP1", "thread": T1, "host": "codex",
                                      "path": "visible"}))
         set_goal(self.home, T1, "active")
         started(self.home, T1, "turn-1")
@@ -322,7 +322,7 @@ class ThreadCommand(Repo):
         self.assertIn("no goal turn after this one", result["note"])
         nxt = result["next"]
         self.assertEqual(nxt["decides"], "human")
-        self.assertIn('"case · WATER · M1 build"', nxt["ask"])
+        self.assertIn('"case · WATER · WP1 build"', nxt["ask"])
         self.assertIn(f"codex://threads/{T1}", nxt["ask"])
         self.assertEqual(nxt["argv"][2:4], ["thread", "status"])
 

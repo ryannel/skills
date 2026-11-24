@@ -1,6 +1,6 @@
-# Reviewing a milestone
+# Reviewing a work package
 
-A builder merged the milestone and said it was finished, and the script's checks passed on it, so it is Ready for
+A builder merged the work package and said it was finished, and the script's checks passed on it, so it is Ready for
 Review: nobody has judged it yet.
 
 Form your own view of each item from the item, the design, the changed code and the running product before you read
@@ -9,17 +9,17 @@ to see.
 
 ## What counts as a Must Fix
 
-A defect is a Must Fix when it breaks an item's statement, the milestone's quality bar or a line of the brief's "How
-it will be judged". Outside those, it is a Must Fix when it breaks something that worked before, breaks the design or
-an interface (what one module provides to the others), loses data, opens a security hole, or shows the work was
-faked. Judge each of these on the inputs the brief and the design cover: a crash on ordinary input is a Must Fix
-though no item names that input, while a fault that only an input the brief never mentions can reach, such as a
-number thousands of digits long or an unusual spelling of an ordinary one, is a Suggestion. A defect of taste that no
-checklist line names is a Suggestion too, with a proposed checklist line, because work judged against a reference
-fails only on what the planner wrote down. A defect that a later milestone's item already covers, such as error handling the plan
-puts in M2, is a Suggestion in an earlier milestone's review, because the plan chose when that work is done. A Must
-Fix in an item fails that item. A Must Fix outside the items fails the milestone too, and the review proposes an item
-that would have caught it.
+A defect is a Must Fix when it breaks an item's statement, the work package's quality bar or a line of the
+vision and scope document's "How it will be judged". Outside those, it is a Must Fix when it breaks something that
+worked before, breaks the design or an interface (what one module provides to the others), loses data, opens a
+security hole, or shows the work was faked. Judge each of these on the inputs the vision and scope document and the
+design cover: a crash on ordinary input is a Must Fix though no item names that input, while a fault that only an
+input outside the agreed range can reach, such as a number thousands of digits long or an unusual spelling of an
+ordinary one, is a Suggestion. A defect of taste that no checklist line names is a Suggestion too, with a proposed
+checklist line, because work judged against a reference fails only on what the planner wrote down. A defect that a
+later work package's item already covers, such as error handling the plan puts in WP2, is a Suggestion in an earlier
+work package's review, because the plan chose when that work is done. A Must Fix in an item fails that item. A Must
+Fix outside the items fails the work package too, and the review proposes an item that would have caught it.
 
 Judge an item that lists what it covers, such as the behaviours a test suite must test, on that list. Hold an
 open-ended one, such as a lint that must catch "any violation" or a suite that must fail "when any behaviour is
@@ -39,7 +39,7 @@ Give each item a `verdict`: `pass`, `fail`, or `could_not_judge`. An item passes
 - For a `check`, read the command and judge whether it tests what the item says, because a check a fake would pass
   proves nothing.
 - For an `inspect`, work down the item's checklist, in the views, conditions and moments it names, side by side with
-  the reference in the milestone's `quality_bar` and any reference sets the settings' `References:` line points to.
+  the reference in the work package's `quality_bar` and any reference sets the settings' `References:` line points to.
   [How to inspect](../../planner/references/proofs.md#how-to-inspect) says how. Answer each line yes or no in the
   review, so a failure names the line it failed.
 - For an `ask`, read the code the question is about, on both sides of an interface when it asks about one, and
@@ -56,7 +56,7 @@ screen, an operating-system permission or a device that isn't connected, judge n
 lead runs the review again while the user is there. A sandbox refusal isn't one of these, because you can ask to run
 the command outside the sandbox.
 
-Read every changed line of the milestone, not only the files the items mention, and on a module's last milestone the
+Read every changed line of the work package, not only the files the items mention, and on a module's last work package the
 whole module, for signs of work that only looks finished. An item too weak to catch a fake is a Suggestion for its
 planner, unless this work is that fake, because the work, not the item, is what you are judging.
 
@@ -64,7 +64,7 @@ planner, unless this work is that fake, because the work, not the item, is what 
 
 Write the full review, with each inspection's checklist answered, where your prompt says, and put screenshots and
 recordings in the folder it names. In the done-when file, set each item's `verdict`. If any result isn't `pass`, or a
-Must Fix lies outside the items, list every Must Fix in the milestone's `findings`, one entry each: a short `name`,
+Must Fix lies outside the items, list every Must Fix in the work package's `findings`, one entry each: a short `name`,
 and the `item` it fails, left out for a finding outside the items. Every item that didn't pass needs a finding.
 
 Change only the done-when file in your checkout, and only those fields, because the `review` command rejects a review
@@ -74,20 +74,20 @@ that changes anything else. Leave the done-when file, the review and its folder 
 Most findings go back to the builder. A few no builder can fix, because the fault is in the items: a proof that can't
 show what the item claims, such as an item about what a new end user can follow alone, given to a reviewer who has
 read the design. Or two items may contradict each other. For such a finding, add a `planner` field saying why only a
-planner can settle it, and the script sends the milestone straight to a planner. Keep the field for faults in the
+planner can settle it, and the script sends the work package straight to a planner. Keep the field for faults in the
 items, because after a planner has settled one such finding, the next goes to the user.
 
-Your last line is `PASS <milestone>` or `FAIL <milestone>`, which the script reads. The review file carries the
+Your last line is `PASS <work-package-id>` or `FAIL <work-package-id>`, which the script reads. The review file carries the
 findings, so keep your reply short: the result, the worst finding, and anything the lead must act on, because the
 script keeps only the end of a long reply.
 
-## A milestone reviewed before
+## A work package reviewed before
 
 When earlier reviews failed, your prompt says where they are. Judge the items as written before you read them, because a reviewer who reads an earlier review first ends up checking that its
 places are fixed, which is narrower than judging the items. Then read them, and say whether each Must Fix in the
 latest is still there.
 
-Repeated failures send a milestone to a planner sooner, so the names have to be truthful:
+Repeated failures send a work package to a planner sooner, so the names have to be truthful:
 
 - A Must Fix that is still there, or is back, keeps its earlier `name` exactly.
 - A new defect gets a new name.

@@ -1,20 +1,20 @@
 # Start planning
 
-This stage runs when there is an approved brief and no plan yet, and again whenever the user adds something small
-or changes their mind.
+This stage runs when there is an approved vision and scope document and no plan yet, and again whenever the user
+adds something small or changes their mind.
 
 ## The project settings
 
 On a new project, you write the project settings, `ORCHESTRATE.md` at the repository's root, before the first plan.
-You write them rather than the planner because you know the brief best: its purpose, its quality bar, where it runs,
-and what is out of bounds. `settings --template` gives every line with a note on what it does. Your judgement is in
-which of those choices to bring to the user, and in what words.
+You write them rather than the planner because you know the vision and scope document best: its purpose, its
+quality bar, where it runs, and what is out of bounds. `settings --template` gives every line with a note on what
+it does. Your judgement is in which of those choices to bring to the user, and in what words.
 
-Most lines are yours to fill from the brief or leave at the template's value. Bring the user only the choices that
-are theirs: which programs they build with, whether finished work may merge without them looking, what they want to
-decide themselves, and how many agents may build at once. Ask in words they know, choose what they
-can't, and tell them what you chose. Leave out any host or model line they named nothing for, so the script's own
-defaults apply; `settings` shows what each kind of agent gets.
+Most lines are yours to fill from the vision and scope document or leave at the template's value. Bring the user
+only the choices that are theirs: which programs they build with, whether finished work may merge without them
+looking, what they want to decide themselves, and how many agents may build at once. Ask in words they know, choose
+what they can't, and tell them what you chose. Leave out any host or model line they named nothing for, so the
+script's own defaults apply; `settings` shows what each kind of agent gets.
 
 A few lines carry the user's permission, so only their words can fill them. `Merge: push` is standing permission to
 push verified work to the main branch, so write `Merge: local` unless they allowed pushing. If the project's
@@ -33,7 +33,7 @@ there is no `Builders:` line yet and the planner needs the number to plan enough
 
 ## Later changes
 
-When the user adds something or changes their mind, add their words to the brief with the date, change the
+When the user adds something or changes their mind, add their words to the vision and scope document with the date, change the
 decisions their words affect, and run `plan --kind change` with their words as the task. A change planner changes
 only what their words reach. A change of mind doesn't count as a failed review.
 

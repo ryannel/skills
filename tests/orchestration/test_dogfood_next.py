@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import BASE_PROFILE, PROFILE, Repo, agent_loop, milestone, put  # noqa: E402
+from support import BASE_PROFILE, PROFILE, Repo, agent_loop, work_package, put  # noqa: E402
 
 
 def words(result, key="command"):
@@ -24,11 +24,11 @@ class PlanFlags(Repo):
     """Finding 3: a `next` that gave a planner the task again dropped `--one-step`, so following it ran the design
     reviews before the user had seen the plan."""
 
-    def unmerged_brief(self):
-        put(self.wt / "docs/plans/BRIEF.md", "# Brief\n\nA small tool.\n")
+    def unmerged_vision(self):
+        put(self.wt / "docs/plans/VISION.md", "# Vision and scope document\n\nA small tool.\n")
 
     def test_a_refused_one_step_plan_keeps_its_flags_in_then_and_in_adopts_then(self):
-        self.unmerged_brief()
+        self.unmerged_vision()
         result = self.plan(one_step=True, model="m-1", effort="low")
         self.assertEqual(result["result"], "REFUSED", result)
         then = shlex.split(result["next"]["then"]["command"])
@@ -39,7 +39,7 @@ class PlanFlags(Repo):
         self.assertEqual(adopt[adopt.index("--then") + 1], result["next"]["then"]["command"])
 
     def test_adopt_gives_back_the_command_it_was_run_for(self):
-        self.unmerged_brief()
+        self.unmerged_vision()
         refused = self.plan(one_step=True)
         adopt = words(refused)
         result = self.call(agent_loop.cmd_adopt, worktree=str(self.wt), paths=[],
@@ -49,7 +49,7 @@ class PlanFlags(Repo):
         self.assertEqual(result["next"]["by"], "lead")
 
     def test_adopt_without_then_still_points_at_ready(self):
-        self.unmerged_brief()
+        self.unmerged_vision()
         result = self.call(agent_loop.cmd_adopt, worktree=str(self.wt), paths=[])
         self.assertIn("ready", words(result))
 
@@ -70,7 +70,7 @@ class PlanFlags(Repo):
 
 
 class FirstPlanAndReady(Repo):
-    """Finding 5: the first plan's PLANNED and `ready` with milestones that can start had no command in `next`."""
+    """Finding 5: the first plan's PLANNED and `ready` with work packages that can start had no command in `next`."""
 
     def test_the_first_plan_asks_for_the_builders_line_then_runs_the_first_module(self):
         (self.wt / "ORCHESTRATE.md").write_text(BASE_PROFILE)
@@ -86,7 +86,7 @@ class FirstPlanAndReady(Repo):
         self.assertEqual(then[2], "run")
         self.assertEqual(then[then.index("--module") + 1], "PAY")
 
-    def test_ready_gives_each_milestone_that_can_start_its_run(self):
+    def test_ready_gives_each_work_package_that_can_start_its_run(self):
         ready = self.ready()
         self.assertEqual([s["module"] for s in ready["can_start"]], ["WATER"])
         self.assertIn("run", words(ready["can_start"][0]))
@@ -100,13 +100,13 @@ class BuildWorktreePlanFiles(Repo):
 
     def worktree_profile(self):
         (self.wt / "ORCHESTRATE.md").write_text(PROFILE + "- **Worktrees:** .orchestrate/worktrees\n")
-        self.write_done([milestone("M1", "not_started", ["open"])], design_ok=False)
+        self.write_done([work_package("WP1", "not_started", ["open"])], design_ok=False)
         self.commit_all()
         prof = agent_loop.profile(self.wt)
         built, _ = agent_loop.module_worktree(self.wt, prof, "WATER")
         put(built / "docs/plans/WATER/checks/suite_guard.py", "print('guard')\n")
         self.git("add", "-A", where=built)
-        self.git("commit", "-qm", "WATER M1: tests and a guard", where=built)
+        self.git("commit", "-qm", "WATER WP1: tests and a guard", where=built)
         return prof, built
 
     def test_plan_files_a_builder_committed_in_its_worktree_go_with_its_work(self):
@@ -131,7 +131,7 @@ class BuildWorktreePlanFiles(Repo):
         then = agent_loop.design_review_next({"verdict": "DESIGN CHANGES", "review": "r.md"}, "WATER", self.wt, prof)
         self.assertEqual(then["by"], "lead")
         counts = {"failed_reviews": 3, "failed_reviews_with_repeat": 2}
-        self.assertEqual(agent_loop.escalation_next("diagnosis", "WATER", "M1", counts, self.wt, prof)["by"], "lead")
+        self.assertEqual(agent_loop.escalation_next("diagnosis", "WATER", "WP1", counts, self.wt, prof)["by"], "lead")
 
 
 class SettingsTemplate(Repo):
@@ -149,7 +149,7 @@ class DropAModule(Repo):
     same task again, which failed the same way."""
 
     def second_module(self, started=False):
-        doc = {"module": "ACC", "milestones": [milestone("M1", "in_progress" if started else "not_started",
+        doc = {"module": "ACC", "work_packages": [work_package("WP1", "in_progress" if started else "not_started",
                                                          ["pass" if started else "open"])]}
         put(self.wt / "docs/plans/ACC/DONE.json", json.dumps(doc))
         put(self.wt / "docs/plans/ACC/RECORD.json", json.dumps(agent_loop.adopt(doc, agent_loop.text_hash(None))))
@@ -185,7 +185,7 @@ class DropAModule(Repo):
         self.drop()
         result = self.plan(task="Drop ACC", kind="change", one_step=True)
         self.assertEqual(result["result"], "INVALID", result)
-        self.assertTrue(any("ACC M1 has started" in p for p in result["problems"]), result["problems"])
+        self.assertTrue(any("ACC WP1 has started" in p for p in result["problems"]), result["problems"])
         task = words(result)[words(result).index("--task") + 1]
         self.assertIn("keep its folder and record", task)
         self.assertIn("--one-step", words(result))

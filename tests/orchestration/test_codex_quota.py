@@ -106,11 +106,11 @@ class Base(Clean):
 
 class Reading(Base):
     def test_reads_turns_tokens_and_samples(self):
-        self.steady(name="build CORE M1")
+        self.steady(name="build CORE WP1")
         reading = self.read()
         self.assertTrue(reading["complete"])
         self.assertEqual(len(reading["turns"]), 4)
-        self.assertEqual(reading["threads"]["t1"]["name"], "build CORE M1")
+        self.assertEqual(reading["threads"]["t1"]["name"], "build CORE WP1")
         self.assertEqual(reading["threads"]["t1"]["prompts"], ["hello"])
         self.assertEqual(sum(r["uncached"] for r in reading["recs"]), 80_000_000)
         self.assertEqual(reading["latest"][1], 40.0)

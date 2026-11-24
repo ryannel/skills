@@ -216,7 +216,7 @@ tr.click:hover td { background: var(--wash); }
 <script id="history-data" type="application/json">/*__DATA__*/null</script>
 <script>
 "use strict";
-const RAW = JSON.parse(document.getElementById("history-data").textContent) || {sessions: [], turns: [], events: [], milestones: [], checks: [], meta: {}};
+const RAW = JSON.parse(document.getElementById("history-data").textContent) || {sessions: [], turns: [], events: [], work_packages: [], checks: [], meta: {}};
 // Turns arrive as columns, with the session as an index into RAW.sessions and tokens as a list in token_order.
 (() => {
   const tt = RAW.turns, order = RAW.meta.token_order || ["prompt", "cache_read", "cache_write", "cache_write_1h", "output", "reasoning"];
@@ -336,8 +336,8 @@ function F() {
     && (S.module === "all" || (e.module || "").toUpperCase() === S.module)
     && (S.interactive || e.session_kind !== "interactive" || S.lane === "interactive")
     && (S.lane === "all" || !e.session || sessionsOf.has(e.host + ":" + e.session) || (e.role === S.lane)));
-  const milestones = RAW.milestones.filter(m => S.module === "all" || (m.module || "").toUpperCase() === S.module);
-  return {turns, events, milestones, sessions: RAW.sessions.filter(s => sessionsOf.has(s.host + ":" + s.session))};
+  const work_packages = RAW.work_packages.filter(m => S.module === "all" || (m.module || "").toUpperCase() === S.module);
+  return {turns, events, work_packages, sessions: RAW.sessions.filter(s => sessionsOf.has(s.host + ":" + s.session))};
 }
 
 // ---------------------------------------------------------------------------------------------- tooltip & drawer
@@ -583,7 +583,7 @@ function strip(host, events, kinds) {
     for (const e of events.filter(e => e.kind === k && isFinite(e._t))) {
       const x = L + pw * (e._t - lo) / (hi - lo);
       const c = sv("circle", {cx: x, cy: y, r: 4, fill: color, stroke: "var(--surface)", "stroke-width": 2, class: "mark", style: "cursor:pointer"});
-      c.addEventListener("pointermove", ev => showTip(ev, when(e.at), [[(ERR[k] || [k])[0], [e.module, e.milestone].filter(Boolean).join(" ") || e.result || ""], ["", (e.detail || "").slice(0, 90)]]));
+      c.addEventListener("pointermove", ev => showTip(ev, when(e.at), [[(ERR[k] || [k])[0], [e.module, e.work_package].filter(Boolean).join(" ") || e.result || ""], ["", (e.detail || "").slice(0, 90)]]));
       c.addEventListener("pointerleave", hideTip);
       c.addEventListener("click", () => eventDrawer(e));
       svg.append(c);
@@ -658,10 +658,10 @@ function laneStats(turns, sessions, events) {
       models: [...groupBy(ts, t => t.model || "?").entries()].sort((a, b) => b[1].length - a[1].length).map(([m]) => m).slice(0, 2).join(", ")};
   }).filter(Boolean);
 }
-function milestoneRows(F) {
-  const byMs = groupBy(F.turns.filter(t => t.module && t.milestone), t => (t.module || "").toUpperCase() + " " + t.milestone);
-  return F.milestones.map(m => {
-    const key = (m.module || "").toUpperCase() + " " + m.milestone;
+function workPackageRows(F) {
+  const byMs = groupBy(F.turns.filter(t => t.module && t.work_package), t => (t.module || "").toUpperCase() + " " + t.work_package);
+  return F.work_packages.map(m => {
+    const key = (m.module || "").toUpperCase() + " " + m.work_package;
     const ts = byMs.get(key) || [];
     const reviews = m.reviews || [];
     const fails = reviews.filter(r => r.verdict === "fail").length;
@@ -674,13 +674,13 @@ function milestoneRows(F) {
 }
 function versionRows(F) {
   const byV = groupBy(F.turns.filter(t => t.version), t => t.version);
-  const ms = milestoneRows(F);
+  const ms = workPackageRows(F);
   return [...byV.entries()].map(([v, ts]) => {
     const ss = new Set(ts.map(t => t.host + ":" + t.session));
     const errs = F.events.filter(e => isErr(e) && (e.version === v || ss.has(e.host + ":" + e.session)));
     const lo = Math.min(...ts.map(t => t._t)), hi = Math.max(...ts.map(t => t._t));
     const done = ms.filter(m => isFinite(T(m.done)) && T(m.done) >= lo && T(m.done) <= hi);
-    const reviews = F.milestones.flatMap(m => m.reviews || []).filter(r => T(r.at) >= lo && T(r.at) <= hi);
+    const reviews = F.work_packages.flatMap(m => m.reviews || []).filter(r => T(r.at) >= lo && T(r.at) <= hi);
     return {version: v, first: new Date(lo).toISOString(), turns: ts.length, sessions: ss.size, cost: sum(ts, U().f),
       perTurn: sum(ts, U().f) / ts.length, turnMs: median(ts.map(t => t.duration_ms).filter(x => x > 0)),
       errRate: errs.length / ts.length * 100, timeouts: errs.filter(e => e.kind === "turn_timed_out").length / ts.length * 100,
@@ -694,13 +694,13 @@ function kv(pairs) { return el("div", {class: "kv"}, pairs.filter(p => p[1] != n
 function eventDrawer(e) {
   const clean = Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith("_")));
   openDrawer((ERR[e.kind] || [SIGNALS[e.kind] || e.kind])[0], when(e.at), [
-    kv([["Module", e.module], ["Milestone", e.milestone], ["Role", e.role], ["Host", e.host], ["Model", e.model], ["Session", e.session && el("span", {class: "mono"}, e.session)],
+    kv([["Module", e.module], ["Work package", e.work_package], ["Role", e.role], ["Host", e.host], ["Model", e.model], ["Session", e.session && el("span", {class: "mono"}, e.session)],
       ["Turn", e.turn && el("span", {class: "mono"}, e.turn)], ["Exit", e.exit], ["Class", e.class], ["Result", e.result], ["Version", e.version]]),
     e.detail ? el("pre", {}, e.detail) : null,
     el("h4", {}, "Record"), el("pre", {class: "mono"}, JSON.stringify(clean, null, 1))], clean);
 }
-function milestoneDrawer(m) {
-  const evs = evAll.filter(e => (e.module || "").toUpperCase() === (m.module || "").toUpperCase() && e.milestone === m.milestone);
+function workPackageDrawer(m) {
+  const evs = evAll.filter(e => (e.module || "").toUpperCase() === (m.module || "").toUpperCase() && e.work_package === m.work_package);
   const tl = [];
   if (m.authorised) tl.push([m.authorised, "Authorised to build", "var(--s3)"]);
   if (m.ready_for_review) tl.push([m.ready_for_review, "Ready for Review", "var(--s1)"]);
@@ -710,7 +710,7 @@ function milestoneDrawer(m) {
   for (const e of evs.filter(isErr)) if (e.kind !== "review_failed") tl.push([e.at, (ERR[e.kind] || [e.kind])[0] + (e.detail ? " · " + e.detail.slice(0, 80) : ""), "var(--serious)"]);
   tl.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
   const byLane = groupBy(m._turns, t => t.lane);
-  openDrawer(`${m.module} ${m.milestone}`, m.name || "", [
+  openDrawer(`${m.module} ${m.work_package}`, m.name || "", [
     kv([["Status", m.status], ["Size", m.size ? m.size + " done-when items" : null], ["Cost", U().fmt(m.cost) + " " + U().name.toLowerCase()],
       ["Agent time", hours(m.agentMs)], ["Reviews", `${m.reviews} (${m.fails} failed)`], ["Took", m.days != null ? m.days.toFixed(1) + " days" : null]]),
     el("h4", {}, "Spend by kind of agent"),
@@ -749,12 +749,12 @@ function insights(F) {
     const cls = [...groupBy(fails, e => e.class || "other").entries()].sort((a, b) => b[1].length - a[1].length)[0];
     out.push(["critical", "Failed turns", `<b>${fails.length}</b> turns failed. The commonest cause was <b>${cls[0].replace("_", " ")}</b> (${cls[1].length}).`]);
   }
-  const ms = milestoneRows(F).filter(m => m.cost > 0).sort((a, b) => b.cost - a.cost);
+  const ms = workPackageRows(F).filter(m => m.cost > 0).sort((a, b) => b.cost - a.cost);
   if (ms.length) {
     const top = ms.slice(0, 3), share = sum(top, m => m.cost) / sum(ms, m => m.cost);
-    out.push(["info", "Concentration", `The three costliest milestones (<b>${top.map(m => m.key).join(", ")}</b>) took <b>${pct(share)}</b> of milestone spend.`]);
+    out.push(["info", "Concentration", `The three costliest work packages (<b>${top.map(m => m.key).join(", ")}</b>) took <b>${pct(share)}</b> of work package spend.`]);
     const failed = ms.filter(m => m.fails > 0);
-    if (failed.length) out.push(["warning", "Rework", `<b>${failed.length}</b> milestones failed review at least once; they hold <b>${pct(sum(failed, m => m.cost) / sum(ms, m => m.cost))}</b> of milestone spend.`]);
+    if (failed.length) out.push(["warning", "Rework", `<b>${failed.length}</b> work packages failed review at least once; they hold <b>${pct(sum(failed, m => m.cost) / sum(ms, m => m.cost))}</b> of work package spend.`]);
   }
   const comp = sum(F.turns, t => t.compactions);
   if (comp) {
@@ -778,12 +778,12 @@ function insightCards(list) {
 
 // ---------------------------------------------------------------------------------------------- views
 const VIEWS = [
-  ["overview", "Overview"], ["agents", "Agents"], ["spend", "Spend"], ["milestones", "Milestones"], ["errors", "Errors"], ["versions", "Versions"], ["retro", "Retro"], ["data", "Data"],
+  ["overview", "Overview"], ["agents", "Agents"], ["spend", "Spend"], ["work_packages", "Work packages"], ["errors", "Errors"], ["versions", "Versions"], ["retro", "Retro"], ["data", "Data"],
 ];
 const V = {};
 
 V.overview = f => {
-  const ms = f.milestones, done = ms.filter(m => m.status === "done" || m.done).length;
+  const ms = f.work_packages, done = ms.filter(m => m.status === "done" || m.done).length;
   const errs = f.events.filter(isErr);
   const total = sum(f.turns, U().f);
   const ds = days(f.turns);
@@ -797,7 +797,7 @@ V.overview = f => {
   const vers = f.events.filter(e => e.kind === "version_seen").map(e => ({key: dayKey(e._t), label: e.version})).sort((a, b) => a.key.localeCompare(b.key));
   const cum = (key) => ds.map(d => ms.filter(m => m[key] && dayKey(T(m[key])) <= d).length);
   const hero = el("div", {class: "card hero"},
-    el("div", {}, el("div", {class: "lbl"}, "Milestones Done"), el("div", {class: "big"}, `${done}`, el("span", {style: "font-size:24px;color:var(--muted);font-weight:550"}, ` of ${ms.length}`)),
+    el("div", {}, el("div", {class: "lbl"}, "Work packages Done"), el("div", {class: "big"}, `${done}`, el("span", {style: "font-size:24px;color:var(--muted);font-weight:550"}, ` of ${ms.length}`)),
       el("div", {class: "foot"}, ms.length ? `${pct(done / ms.length)} of the plan · ${ms.filter(m => m.status === "blocked").length} blocked` : "No plan read yet")),
     el("div", {style: "flex:1"}),
     el("div", {}, el("div", {class: "lbl"}, U().name), el("div", {style: "font-size:32px;font-weight:650;letter-spacing:-.02em"}, U().fmt(total)),
@@ -821,7 +821,7 @@ V.overview = f => {
         [{key: "day", name: "Day"}, ...lanesHere.map(l => ({key: l, name: LANE_NAME[l], num: true, fmt: mFmt}))])),
     el("div", {style: "height:16px"}),
     el("div", {class: "grid g-2"},
-      card("Milestones over time", "Each day's running total.", legend([["Ready for Review", "var(--s1)"], ["Done", "var(--s3)"]], true),
+      card("Work packages over time", "Each day's running total.", legend([["Ready for Review", "var(--s1)"], ["Done", "var(--s3)"]], true),
         chartHost(h => lines(h, ds.map(dayLabel), [{name: "Ready for Review", color: "var(--s1)", values: cum("ready_for_review")}, {name: "Done", color: "var(--s3)", values: cum("done")}], compact))),
       card("When agents worked", "Agent time in each hour of the day. A stronger blue means more agents running at once.", chartHost(h => heat(h, f.turns)))),
     el("div", {style: "height:16px"}),
@@ -861,13 +861,13 @@ V.agents = f => {
 
 V.spend = f => {
   const byMod = groupBy(f.turns.filter(t => t.module), t => (t.module || "").toUpperCase());
-  const modRows = [...byMod.entries()].map(([m, ts]) => ({name: m, value: sum(ts, U().f), sub: `${ts.length} turns`, onclick: () => { S.module = m; save(); go("milestones"); }}));
-  const ms = milestoneRows(f);
+  const modRows = [...byMod.entries()].map(([m, ts]) => ({name: m, value: sum(ts, U().f), sub: `${ts.length} turns`, onclick: () => { S.module = m; save(); go("work_packages"); }}));
+  const ms = workPackageRows(f);
   const failedKeys = new Set(ms.filter(m => m.fails).map(m => m.key));
   const parts = [
-    {name: "Milestones that passed first time", value: sum(f.turns.filter(t => t.module && t.milestone && !failedKeys.has((t.module || "").toUpperCase() + " " + t.milestone) && t.kind === "script"), U().f), color: "var(--s3)"},
-    {name: "Milestones with a failed review", value: sum(f.turns.filter(t => failedKeys.has((t.module || "").toUpperCase() + " " + t.milestone) && t.kind === "script"), U().f), color: "var(--s4)", dark: true},
-    {name: "Planning not tied to a milestone", value: sum(f.turns.filter(t => t.kind === "script" && !t.milestone), U().f), color: "var(--s1)"},
+    {name: "Work packages that passed first time", value: sum(f.turns.filter(t => t.module && t.work_package && !failedKeys.has((t.module || "").toUpperCase() + " " + t.work_package) && t.kind === "script"), U().f), color: "var(--s3)"},
+    {name: "Work packages with a failed review", value: sum(f.turns.filter(t => failedKeys.has((t.module || "").toUpperCase() + " " + t.work_package) && t.kind === "script"), U().f), color: "var(--s4)", dark: true},
+    {name: "Planning not tied to a work package", value: sum(f.turns.filter(t => t.kind === "script" && !t.work_package), U().f), color: "var(--s1)"},
     {name: "Auto-review", value: sum(f.turns.filter(t => t.lane === "auto-review"), U().f), color: "var(--s2)"},
     {name: "Subagents", value: sum(f.turns.filter(t => t.lane === "subagent"), U().f), color: "var(--s5)"},
     {name: "Interactive", value: sum(f.turns.filter(t => t.lane === "interactive"), U().f), color: "var(--s6)"},
@@ -879,7 +879,7 @@ V.spend = f => {
     card("Where the spend went", "The whole slice in parts.", chartHost(h => segmented(h, parts, U().fmt))),
     el("div", {style: "height:16px"}),
     el("div", {class: "grid g-2"},
-      card("By module", "Click a module to see its milestones.", chartHost(h => rankedBars(h, modRows, U().fmt, 14))),
+      card("By module", "Click a module to see its work packages.", chartHost(h => rankedBars(h, modRows, U().fmt, 14))),
       card("Tokens by kind", "Raw tokens across both hosts. Cache reads dominate the count but cost a tenth as much.",
         chartHost(h => rankedBars(h, [
           {name: "Cache reads", value: tok.cache_read || 0, color: "var(--s1)"}, {name: "Fresh input", value: fresh, color: "var(--s2)"},
@@ -889,19 +889,19 @@ V.spend = f => {
   ];
 };
 
-V.milestones = f => {
-  const rows = milestoneRows(f);
+V.work_packages = f => {
+  const rows = workPackageRows(f);
   const statusPill = s => el("span", {class: "pill " + (s === "done" ? "good" : s === "blocked" ? "crit" : s === "ready_for_review" ? "warn" : "")}, (s || "–").replace(/_/g, " "));
   const max = Math.max(...rows.map(r => r.cost), 1);
-  return [card("Milestones", "Every milestone in the plan at the main branch's tip. Click one for its timeline.", table("milestones", rows, [
-    {key: "key", name: "Milestone", render: r => el("span", {}, el("b", {}, r.key), el("div", {class: "dim", style: "font-size:12px;max-width:340px"}, r.name || ""))},
+  return [card("Work packages", "Every work package in the plan at the main branch's tip. Click one for its timeline.", table("work_packages", rows, [
+    {key: "key", name: "Work package", render: r => el("span", {}, el("b", {}, r.key), el("div", {class: "dim", style: "font-size:12px;max-width:340px"}, r.name || ""))},
     {key: "status", name: "Status", render: r => statusPill(r.status)}, {key: "size", name: "Items", num: true},
     {key: "cost", name: U().name, num: true, render: r => el("div", {class: "bar-cell", style: "justify-content:flex-end"}, el("div", {class: "b", style: `width:${Math.round(80 * r.cost / max)}px`}), U().fmt(r.cost))},
     {key: "turns", name: "Turns", num: true}, {key: "reviews", name: "Reviews", num: true},
     {key: "fails", name: "Failed", num: true, render: r => r.fails ? el("span", {class: "pill crit"}, r.fails) : "0"},
     {key: "repeats", name: "Repeated findings", num: true}, {key: "agentMs", name: "Agent time", num: true, fmt: hours},
     {key: "days", name: "Days to Done", num: true, fmt: x => x == null ? "–" : x.toFixed(1)}],
-    milestoneDrawer, {key: "cost", dir: -1}))];
+    workPackageDrawer, {key: "cost", dir: -1}))];
 };
 
 V.errors = f => {
@@ -929,7 +929,7 @@ V.errors = f => {
       table("errors", shown, [
         {key: "at", name: "When", get: r => r.at || "", fmt: when},
         {key: "kind", name: "Kind", render: r => el("span", {class: "pill " + (ERR[r.kind][1])}, ERR[r.kind][0])},
-        {key: "where", name: "Where", get: r => [r.module, r.milestone].filter(Boolean).join(" ") || r.result || "", render: r => [r.module, r.milestone].filter(Boolean).join(" ") || el("span", {class: "dim"}, r.role || "–")},
+        {key: "where", name: "Where", get: r => [r.module, r.work_package].filter(Boolean).join(" ") || r.result || "", render: r => [r.module, r.work_package].filter(Boolean).join(" ") || el("span", {class: "dim"}, r.role || "–")},
         {key: "host", name: "Host", get: r => r.host || ""},
         {key: "detail", name: "Detail", render: r => el("span", {class: "dim", style: "font-size:12.5px"}, (r.detail || r.class || "").slice(0, 140))}],
         eventDrawer, {key: "at", dir: -1})),
@@ -943,10 +943,10 @@ V.versions = f => {
   const metric = (key, name, fmt, desc) => card(name, desc + ` Versions with 20 or more turns, oldest first.`,
     chartHost(h => rankedBars(h, steady.map(r => ({name: `${r.version} · ${r.turns} turns`, value: r[key], sub: `${r.turns} turns`})), fmt, 30, true)));
   return [
-    card("Each version of the script", "Measured over the turns each version ran. Projects and milestones differ between versions, so read differences beside the turn and milestone counts.",
+    card("Each version of the script", "Measured over the turns each version ran. Projects and work packages differ between versions, so read differences beside the turn and work package counts.",
       table("versions", rows, [
         {key: "version", name: "Version", render: r => el("b", {}, r.version)}, {key: "first", name: "First ran", fmt: when},
-        {key: "turns", name: "Turns", num: true}, {key: "sessions", name: "Sessions", num: true}, {key: "done", name: "Milestones Done", num: true},
+        {key: "turns", name: "Turns", num: true}, {key: "sessions", name: "Sessions", num: true}, {key: "done", name: "Work packages Done", num: true},
         {key: "perTurn", name: U().name + " per turn", num: true, fmt: U().fmt}, {key: "turnMs", name: "Turn length", num: true, fmt: mins},
         {key: "errRate", name: "Errors per 100 turns", num: true, fmt: x => x.toFixed(1)}, {key: "timeouts", name: "Time limits per 100", num: true, fmt: x => x.toFixed(1)},
         {key: "compactions", name: "Compactions per 100", num: true, fmt: x => x.toFixed(1)},
@@ -961,7 +961,7 @@ V.versions = f => {
 };
 
 V.retro = f => {
-  const ms = milestoneRows(f).sort((a, b) => b.cost - a.cost);
+  const ms = workPackageRows(f).sort((a, b) => b.cost - a.cost);
   const total = sum(f.turns, U().f), lanes = laneStats(f.turns, f.sessions, f.events);
   const errs = f.events.filter(isErr);
   const done = ms.filter(m => m.status === "done" || m.done);
@@ -974,8 +974,8 @@ V.retro = f => {
       `Codex turns used about ${UNITS.limit.fmt(sum(f.turns, UNITS.limit.f))} of the weekly limit in total; Claude turns would cost ${usd(sum(f.turns, UNITS.usd.f))} at list price.`),
     el("ul", {}, lanes.sort((a, b) => b.cost - a.cost).map(l => el("li", {}, `${l.name}: ${pct(l.cost / (total || 1))} of spend, ${l.sessions} sessions, median turn ${mins(l.turnMs)}.`))),
     el("h3", {}, "What it delivered"),
-    p(`${done.length} of ${ms.length} milestones Done. ${ms.filter(m => m.fails).length} failed review at least once, with ${sum(ms, m => m.repeats)} repeated findings.`),
-    el("h3", {}, "The costliest milestones"),
+    p(`${done.length} of ${ms.length} work packages Done. ${ms.filter(m => m.fails).length} failed review at least once, with ${sum(ms, m => m.repeats)} repeated findings.`),
+    el("h3", {}, "The costliest work packages"),
     el("ul", {}, ms.slice(0, 5).map(m => el("li", {}, `${m.key}: ${U().fmt(m.cost)}, ${m.turns} turns, ${m.reviews} reviews (${m.fails} failed)` + (m.days != null ? `, ${m.days.toFixed(1)} days.` : ".")))),
     el("h3", {}, "What went wrong"),
     errs.length ? el("ul", {}, Object.keys(ERR).filter(k => errs.some(e => e.kind === k)).map(k => el("li", {}, `${ERR[k][0]}: ${errs.filter(e => e.kind === k).length}`))) : p("No errors recorded."),
@@ -989,10 +989,10 @@ V.data = () => [card("The records", "Everything this page shows, as the files th
     el("div", {}, "Sessions"), el("div", {}, compact(RAW.sessions.length)),
     el("div", {}, "Turns"), el("div", {}, compact(RAW.turns.length)),
     el("div", {}, "Events"), el("div", {}, compact(RAW.events.length)),
-    el("div", {}, "Milestones"), el("div", {}, compact(RAW.milestones.length)),
+    el("div", {}, "Work packages"), el("div", {}, compact(RAW.work_packages.length)),
     el("div", {}, "Written"), el("div", {}, when(RAW.meta.generated))),
   el("pre", {class: "mono"}, `python3 ${RAW.meta.script || "agent_loop.py"} history --worktree <repo> --json\npython3 ${RAW.meta.script || "agent_loop.py"} dashboard --worktree <repo> --json`),
-  el("div", {style: "display:flex;gap:8px;flex-wrap:wrap"}, ["sessions", "turns", "events", "milestones"].map(k =>
+  el("div", {style: "display:flex;gap:8px;flex-wrap:wrap"}, ["sessions", "turns", "events", "work_packages"].map(k =>
     el("button", {class: "iconbtn", onclick: () => { const b = new Blob([RAW[k].map(r => JSON.stringify(r)).join("\n") + "\n"], {type: "application/x-ndjson"});
       const a = el("a", {href: URL.createObjectURL(b), download: k + ".jsonl"}); document.body.append(a); a.click(); a.remove(); }}, `Download ${k}.jsonl`))))];
 
@@ -1005,7 +1005,7 @@ function buildFilters() {
   const opts = (id, all, values, cur, names = {}) => { $(id).replaceChildren(el("option", {value: "all"}, all), ...values.map(v => el("option", {value: v, selected: v === cur}, names[v] || v))); };
   opts("#fHost", "Both hosts", [...new Set(turnsAll.map(t => t.host))].sort(), S.host, {codex: "Codex", claude: "Claude"});
   opts("#fLane", "Every kind of agent", LANES.concat(["other"]).filter(l => turnsAll.some(t => t.lane === l)), S.lane, LANE_NAME);
-  opts("#fModule", "Every module", [...new Set([...RAW.milestones.map(m => (m.module || "").toUpperCase()), ...turnsAll.map(t => (t.module || "").toUpperCase())].filter(Boolean))].sort(), S.module);
+  opts("#fModule", "Every module", [...new Set([...RAW.work_packages.map(m => (m.module || "").toUpperCase()), ...turnsAll.map(t => (t.module || "").toUpperCase())].filter(Boolean))].sort(), S.module);
   $("#fHost").onchange = e => { S.host = e.target.value; save(); render(); };
   $("#fLane").onchange = e => { S.lane = e.target.value; save(); render(); };
   $("#fModule").onchange = e => { S.module = e.target.value; save(); render(); };
@@ -1018,7 +1018,7 @@ function summaryFor(f) {
     lanes: laneStats(f.turns, f.sessions, f.events), insights: insights(f).map(([s, k, h]) => ({severity: s, topic: k, text: h.replace(/<\/?b>/g, "")})),
     errors_by_kind: Object.fromEntries(Object.keys(ERR).map(k => [k, f.events.filter(e => e.kind === k).length]).filter(([, n]) => n)),
     latest_errors: f.events.filter(isErr).sort((a, b) => (b.at || "").localeCompare(a.at || "")).slice(0, 30).map(e => Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith("_")))),
-    milestones: milestoneRows(f).map(m => ({milestone: m.key, status: m.status, spend: m.cost, turns: m.turns, reviews: m.reviews, failed: m.fails, days: m.days})),
+    work_packages: workPackageRows(f).map(m => ({work_package: m.key, status: m.status, spend: m.cost, turns: m.turns, reviews: m.reviews, failed: m.fails, days: m.days})),
     versions: versionRows(f)};
 }
 $("#copyAll").onclick = () => copy(summaryFor(F()));
@@ -1028,7 +1028,7 @@ function render() {
   const f = F();
   const errCount = f.events.filter(isErr).length;
   $("#tabs").replaceChildren(...VIEWS.map(([k, n]) => el("a", {href: "#" + k, "aria-current": S.view === k ? "page" : null, onclick: e => { e.preventDefault(); go(k); }},
-    n, k === "errors" && errCount ? el("span", {class: "count hot"}, compact(errCount)) : k === "milestones" ? el("span", {class: "count"}, compact(f.milestones.length)) : null)));
+    n, k === "errors" && errCount ? el("span", {class: "count hot"}, compact(errCount)) : k === "work_packages" ? el("span", {class: "count"}, compact(f.work_packages.length)) : null)));
   if (!V[S.view]) S.view = "overview";
   $("#views").replaceChildren(el("section", {class: "view on"}, V[S.view](f)));
   requestAnimationFrame(() => later.splice(0).forEach(fn => fn()));

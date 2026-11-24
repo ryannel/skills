@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import (BASE_PROFILE, PROFILE, SCRIPTS, Clean, Repo, agent_loop, milestone, put)  # noqa: E402
+from support import (BASE_PROFILE, PROFILE, SCRIPTS, Clean, Repo, agent_loop, work_package, put)  # noqa: E402
 import test_dead_ends as dead_ends  # noqa: E402  (a module, so its test classes don't run again here)
 
 command = dead_ends.command
@@ -80,7 +80,7 @@ class AnotherModulesReplan(Repo):
     def test_a_branch_of_another_module_behind_a_replan_merges(self):
         path = self.wt / "docs/plans/WATER/DONE.json"
         doc = json.loads(path.read_text())
-        doc["milestones"][0]["status"] = "in_progress"
+        doc["work_packages"][0]["status"] = "in_progress"
         path.write_text(json.dumps(doc))
         self.commit_all()
         other = self.root / "pay-builder"
@@ -118,20 +118,20 @@ class PauseAChain(Repo):
 
 
 class DiagnosisThatChangesSomethingElse(Repo):
-    """Script 6: a diagnosis that fixed the fault outside the milestone's items left it Waiting for Diagnosis."""
+    """Script 6: a diagnosis that fixed the fault outside the work package's items left it Waiting for Diagnosis."""
 
-    def test_planned_on_a_diagnosis_settles_the_milestone(self):
-        m1 = milestone("M1", "in_progress", ["open"])
-        m1["failed_reviews"] = agent_loop.FAILED_REVIEWS_TO_DIAGNOSE
-        self.write_done([m1, milestone("M2", "not_started", ["open"])])
+    def test_planned_on_a_diagnosis_settles_the_work_package(self):
+        w1 = work_package("WP1", "in_progress", ["open"])
+        w1["failed_reviews"] = agent_loop.FAILED_REVIEWS_TO_DIAGNOSE
+        self.write_done([w1, work_package("WP2", "not_started", ["open"])])
         self.commit_all()
-        self.assertEqual(agent_loop.escalation_of(self.read_done()["milestones"][0]), "diagnosis")
-        result = self.plan(task="Diagnose WATER M1. It has failed review six times.")  # the planner changes PAY
+        self.assertEqual(agent_loop.escalation_of(self.read_done()["work_packages"][0]), "diagnosis")
+        result = self.plan(task="Diagnose WATER WP1. It has failed review six times.")  # the planner changes PAY
         self.assertEqual(result["result"], "PLANNED", result)
-        self.assertIn("WATER M1", result.get("replanned", []))
-        m1 = self.read_done()["milestones"][0]
-        self.assertEqual((m1["failed_reviews"], m1["diagnoses"], m1["status"]), (0, 1, "in_progress"))
-        self.assertEqual(agent_loop.escalation_of(m1), "none")
+        self.assertIn("WATER WP1", result.get("replanned", []))
+        w1 = self.read_done()["work_packages"][0]
+        self.assertEqual((w1["failed_reviews"], w1["diagnoses"], w1["status"]), (0, 1, "in_progress"))
+        self.assertEqual(agent_loop.escalation_of(w1), "none")
 
 
 class AStuckRunsPlanner(Repo):
@@ -139,29 +139,29 @@ class AStuckRunsPlanner(Repo):
     be met, and a refused KEEP left the lead with no `next`."""
 
     def stuck(self):
-        m1 = milestone("M1", "in_progress", ["open"])
-        self.write_done([m1, milestone("M2", "not_started", ["open"])])
+        w1 = work_package("WP1", "in_progress", ["open"])
+        self.write_done([w1, work_package("WP2", "not_started", ["open"])])
         self.commit_all()
 
     def test_the_planners_task_gives_the_keep_line(self):
-        os.environ.update(FAKE_PASS="0", FAKE_REPLY="M1.1 can't be met as written: no GPU.\nDONE")
+        os.environ.update(FAKE_PASS="0", FAKE_REPLY="WP1.1 can't be met as written: no GPU.\nDONE")
         result = self.run_loop()
         self.assertEqual(result["result"], "CHECKS_FAILED", result)
-        self.assertIn("KEEP WATER M1: builder:", command(result))
+        self.assertIn("KEEP WATER WP1: builder:", command(result))
 
     def test_keep_for_the_builder_after_a_stuck_run_restarts_it(self):
         self.stuck()
         os.environ.update(FAKE_PLAN="keep_builder")
-        result = self.plan(task="WATER M1: its run stopped")
+        result = self.plan(task="WATER WP1: its run stopped")
         self.assertEqual(result["result"], "KEPT", result)
         self.assertIn(" run ", command(result))
         self.assertIn("--fresh", command(result))
-        self.assertEqual(self.read_done()["milestones"][0]["diagnoses"], 0)
+        self.assertEqual(self.read_done()["work_packages"][0]["diagnoses"], 0)
 
     def test_a_refused_keep_gives_the_planner_the_task_again(self):
         self.stuck()
         os.environ.update(FAKE_PLAN="keep_reviewer")
-        result = self.plan(task="WATER M1: its run stopped")
+        result = self.plan(task="WATER WP1: its run stopped")
         self.assertEqual(result["result"], "INVALID", result)
         self.assertIn(" plan ", command(result))
         self.assertIn("refused", command(result))
@@ -210,13 +210,13 @@ class PlannerFindingsAfterADiagnosis(Repo):
     def test_after_a_diagnosis_for_a_planner_finding_too_it_goes_to_the_human(self):
         work = self.ready_for_review()
         os.environ.update(FAKE_REVIEW="fail", FAKE_FOR_PLANNER="the items contradict each other")
-        self.review("M1", commit=work)
+        self.review("WP1", commit=work)
         os.environ.update(FAKE_PLAN="keep_builder")
-        self.assertEqual(self.plan(task="Diagnose WATER M1")["result"], "KEPT")
-        m1 = self.read_done()["milestones"][0]
-        self.assertTrue(m1[agent_loop.PLANNER_DIAGNOSED])
-        m1["findings"] = [{"name": "y", "planner": "still contradictory"}]
-        self.assertEqual(agent_loop.escalation_of(m1), "too_many_failed_reviews")
+        self.assertEqual(self.plan(task="Diagnose WATER WP1")["result"], "KEPT")
+        w1 = self.read_done()["work_packages"][0]
+        self.assertTrue(w1[agent_loop.PLANNER_DIAGNOSED])
+        w1["findings"] = [{"name": "y", "planner": "still contradictory"}]
+        self.assertEqual(agent_loop.escalation_of(w1), "too_many_failed_reviews")
 
 
 class BuildersLine(Clean):
@@ -264,7 +264,7 @@ class MainBrokenReachesTheLead(Repo):
         result = self.run_loop()
         self.assertEqual((result["result"], result["reason"]), ("BLOCKED", "main_broken"), result)
         self.assertEqual(result["next"]["by"], "lead")
-        self.assertNotEqual(self.read_done()["milestones"][0]["status"], "blocked")
+        self.assertNotEqual(self.read_done()["work_packages"][0]["status"], "blocked")
 
     def test_the_merges_main_broken_and_next_come_through(self):
         saved = self.wt / ".git/orchestrate" / agent_loop.MAIN_BROKEN_FILE
@@ -313,9 +313,9 @@ class WatchWording(Clean):
 
     def test_the_free_slot_sign_names_the_builders_allowed(self):
         look = {"stamp": 2000.0, "builds": [], "progress": {}, "proj": {}, "loops": [], "disk": None, "broken": [],
-                "since": {"ready_waiting": 1.0}, "limit": 3, "waiting": [{"module": "WATER", "milestone": "M1"}]}
+                "since": {"ready_waiting": 1.0}, "limit": 3, "waiting": [{"module": "WATER", "work_package": "WP1"}]}
         text = agent_loop.watch_signs(look)["ready_waiting"]["text"]
-        self.assertIn("fewer than the 3 builders allowed are running: WATER M1", text)
+        self.assertIn("fewer than the 3 builders allowed are running: WATER WP1", text)
         text = agent_loop.watch_signs({**look, "limit": None})["ready_waiting"]["text"]
         self.assertIn("no number limits the builders", text)
 

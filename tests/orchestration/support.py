@@ -149,8 +149,8 @@ def put(path, text):
     path.write_text(text)
 
 
-def done(*milestones, module="WATER"):
-    return {"module": module, "milestones": list(milestones)}
+def done(*work_packages, module="WATER"):
+    return {"module": module, "work_packages": list(work_packages)}
 
 
 def item(iid, status="open", **proof):
@@ -158,14 +158,14 @@ def item(iid, status="open", **proof):
     return {"id": iid, "statement": f"{iid} works", **proof, "builder_result": status, "evidence": ""}
 
 
-def milestone(mid, state, statuses, failed_reviews_with_repeat=0, **proof):
+def work_package(mid, state, statuses, failed_reviews_with_repeat=0, **proof):
     items = [item(f"{mid}.{i}", s, **proof) for i, s in enumerate(statuses, 1)]
     return {"id": mid, "name": mid, "status": state, "failed_reviews_with_repeat": failed_reviews_with_repeat, "diagnoses": 0,
             "items": items}
 
 
 def proved(m):
-    """The milestone with evidence on every item that passes."""
+    """The work package with evidence on every item that passes."""
     for i in m["items"]:
         if i["builder_result"] == "pass":
             i["evidence"] = ".orchestrate/evidence/WATER/run.log"
@@ -173,7 +173,7 @@ def proved(m):
 
 
 # The fake host. It is installed as `codex` and as `claude`, and acts as the name it was started under. What it does
-# is set by FAKE_ variables: FAKE_PASS passes every item of the first open milestone and merges it, FAKE_REVIEW picks
+# is set by FAKE_ variables: FAKE_PASS passes every item of the first open work package and merges it, FAKE_REVIEW picks
 # a reviewer's verdict, FAKE_PLAN a planner's, and so on below.
 FAKE_HOST = """#!/usr/bin/env python3
 import json, os, subprocess, sys
@@ -242,10 +242,10 @@ reply = os.environ.get("FAKE_REPLY", "DONE")
 path = cwd / "docs/plans/WATER/DONE.json"
 if role == "build" and os.environ.get("FAKE_HANDOFF"):
     (cwd / ".orchestrate/evidence/WATER").mkdir(parents=True, exist_ok=True)
-    (cwd / ".orchestrate/evidence/WATER/M1-handoff.md").write_text(os.environ["FAKE_HANDOFF"])
+    (cwd / ".orchestrate/evidence/WATER/WP1-handoff.md").write_text(os.environ["FAKE_HANDOFF"])
 if role == "build" and os.environ.get("FAKE_PASS") == "1":
     d = json.loads(path.read_text())
-    for m in d["milestones"]:
+    for m in d["work_packages"]:
         if m["status"] in ("not_started", "in_progress"):
             m["status"] = os.environ.get("FAKE_STATE", "in_progress")
             for i in m["items"]:
@@ -258,7 +258,7 @@ if role == "build" and os.environ.get("FAKE_PASS") == "1":
                 m["diagnoses"] = m.get("diagnoses", 0) + 1
             break
     if os.environ.get("FAKE_FORGE"):
-        last = d["milestones"][-1]
+        last = d["work_packages"][-1]
         last["status"] = "done"
         for i in last["items"]:
             i.update(builder_result="pass", evidence="x", verdict="pass", review="x")
@@ -278,7 +278,7 @@ elif role == "review":
     if os.environ.get("FAKE_DURING"):  # something lands on the tip while the review runs
         subprocess.run(os.environ["FAKE_DURING"], shell=True, check=True, capture_output=True)
     d = json.loads(path.read_text())
-    target = next((m for m in d["milestones"] if m["status"] == "ready_for_review"), None)
+    target = next((m for m in d["work_packages"] if m["status"] == "ready_for_review"), None)
     ev = cwd / ".orchestrate/evidence/WATER"
     ev.mkdir(parents=True, exist_ok=True)
     if mode == "design":
@@ -290,7 +290,7 @@ elif role == "review":
                                             (f" (review {rounds})" if rounds > 1 else ""))
         reply = "DESIGN CHANGES: the water surface has no LOD plan"
     elif mode == "nothing":
-        reply = "PASS M999"
+        reply = "PASS WP999"
     elif mode == "needs_access":  # a reviewer that can't reach the product, and judges nothing
         (ev / f"{target['id']}-review.md").write_text("couldn't reach the app")
         reply = "The console is locked.\\nBLOCKED needs_access: unlock the Mac's console and approve Computer Use"
@@ -315,7 +315,7 @@ elif role == "review":
             if os.environ.get("FAKE_NO_FINDINGS"):
                 target.pop("findings")
         if mode == "delete":
-            d["milestones"] = [m for m in d["milestones"] if m is target or m["status"] != "not_started"]
+            d["work_packages"] = [m for m in d["work_packages"] if m is target or m["status"] != "not_started"]
         path.write_text(json.dumps(d))
         n = int(target.get("failed_reviews", 0) or 0) + (verdict != "pass")  # the loop counts this round after the fake
         text = f"review of {mid}: {verdict}, failed round {n}"
@@ -347,19 +347,19 @@ elif role == "plan":
         (cwd / "docs/plans/WATER/RECORD.json").write_text("{}")
         reply = "PLANNED: docs/plans/WATER/RECORD.json"
     elif mode == "progress" or (mode == "late" and turn == 1):
-        reply = "I've read the brief. Next I'll write the PAY design and its done-when file."
-    elif mode in ("replan", "replan_counted"):  # re-plans WATER M1; `replan_counted` also does the bookkeeping
+        reply = "I've read the vision and scope document. Next I'll write the PAY design and its done-when file."
+    elif mode in ("replan", "replan_counted"):  # re-plans WATER WP1; `replan_counted` also does the bookkeeping
         water = cwd / "docs/plans/WATER/DONE.json"
         d = json.loads(water.read_text())
-        m = d["milestones"][0]
+        m = d["work_packages"][0]
         m["items"][0]["statement"] = "a smaller first step"
         if mode == "replan_counted":
             m.update(failed_reviews_with_repeat=0, diagnoses=m.get("diagnoses", 0) + 1, status="not_started")
         water.write_text(json.dumps(d))
         (cwd / "docs/plans/WATER/DESIGN.md").write_text("# Water design, re-planned")
-        reply = "Re-planned M1.\\nPLANNED: docs/plans/WATER/DONE.json, docs/plans/WATER/DESIGN.md"
-    elif mode.startswith("keep_"):  # a diagnosis that keeps WATER M1's plan and names who acts
-        reply = f"Read every round.\\nKEEP WATER M1: {mode[5:]}: the {mode[5:]} has to act"
+        reply = "Re-planned WP1.\\nPLANNED: docs/plans/WATER/DONE.json, docs/plans/WATER/DESIGN.md"
+    elif mode.startswith("keep_"):  # a diagnosis that keeps WATER WP1's plan and names who acts
+        reply = f"Read every round.\\nKEEP WATER WP1: {mode[5:]}: the {mode[5:]} has to act"
     elif mode == "blocked":
         (cwd / "docs/plans/PAY/DESIGN.md").write_text("# Pay design, half done")
         reply = "BLOCKED: the user must choose the payment provider"
@@ -367,9 +367,9 @@ elif role == "plan":
         if mode != "nodesign":
             (cwd / "docs/plans/PAY/DESIGN.md").write_text("# Pay design")
             (cwd / "docs/plans/PAY/PLAN.md").write_text("# Pay plan" + os.environ.get("FAKE_ASSUME", ""))
-        (cwd / "docs/plans/PAY/DONE.json").write_text(json.dumps({"module": "PAY", "milestones": [
-            {"id": "M1", "name": "pay", "status": "not_started", "failed_reviews_with_repeat": 0, "diagnoses": 0,
-             "items": [{"id": "M1.1", "statement": "pays", "check": "true", "builder_result": "open", "evidence": ""}]}]}))
+        (cwd / "docs/plans/PAY/DONE.json").write_text(json.dumps({"module": "PAY", "work_packages": [
+            {"id": "WP1", "name": "pay", "status": "not_started", "failed_reviews_with_repeat": 0, "diagnoses": 0,
+             "items": [{"id": "WP1.1", "statement": "pays", "check": "true", "builder_result": "open", "evidence": ""}]}]}))
         reply = "Planned PAY. Nothing for the user to decide.\\nPLANNED" + ("" if os.environ.get("FAKE_PLAN_BARE") else ": " + ", ".join(files))
         side = os.environ.get("FAKE_PLAN_SIDE")
         if side:  # a planner that forges a record, commits it and puts it on the tip itself, or fakes the tip
@@ -526,7 +526,7 @@ def build_base():
     sh("git", "-C", str(wt), "config", "user.email", "t@t")
     (wt / "docs/plans").mkdir(parents=True)
     (wt / "ORCHESTRATE.md").write_text(PROFILE)
-    doc = done(milestone("M1", "not_started", ["open"]), milestone("M2", "not_started", ["open"]))
+    doc = done(work_package("WP1", "not_started", ["open"]), work_package("WP2", "not_started", ["open"]))
     put(wt / "docs/plans/WATER/DONE.json", json.dumps(doc))
     rec = agent_loop.adopt(doc, agent_loop.text_hash(None))
     rec["design"] = {"verdict": "ok", "hash": agent_loop.text_hash(None)}
@@ -607,33 +607,33 @@ class Repo(Clean):
     def git(self, *args, where=None):
         return self.sh("git", "-C", str(where or self.wt), *args)
 
-    def write_done(self, milestones, design_ok=True, authorise=True, module="WATER", where=None, ready=()):
+    def write_done(self, work_packages, design_ok=True, authorise=True, module="WATER", where=None, ready=()):
         """Writes the done-when file and, as a planner turn through the loop would, its acceptance record. Each
-        milestone named in `ready` also gets the Ready for Review record the script writes after its checks pass."""
+        work package named in `ready` also gets the Ready for Review record the script writes after its checks pass."""
         where = where or self.wt
-        doc = done(*milestones, module=module)
+        doc = done(*work_packages, module=module)
         put(where / f"docs/plans/{module}/DONE.json", json.dumps(doc))
         if authorise:
             rec = agent_loop.adopt(doc, agent_loop.text_hash(None))
             rec["design"] = {"verdict": "ok", "hash": agent_loop.text_hash(None)} if design_ok else None
             for mid in ready:
-                rec["milestones"][mid]["ready_for_review"] = {"at": agent_loop.now(), "checks": []}
+                rec["work_packages"][mid]["ready_for_review"] = {"at": agent_loop.now(), "checks": []}
             put(where / f"docs/plans/{module}/RECORD.json", json.dumps(rec))
 
-    def ready_for_review(self, m1=None):
-        """Merges M1 as the script leaves it once its checks pass: Ready for Review, every item passing with
+    def ready_for_review(self, w1=None):
+        """Merges WP1 as the script leaves it once its checks pass: Ready for Review, every item passing with
         evidence, and the record saying so. Returns the commit, for a review. It stands in for a builder turn
         (1.9 s) where a test only needs something to review (0.2 s)."""
-        m1 = m1 or milestone("M1", "ready_for_review", ["pass"], inspect="frame sequence")
-        m1["status"] = "ready_for_review"
-        for i in m1["items"]:
+        w1 = w1 or work_package("WP1", "ready_for_review", ["pass"], inspect="frame sequence")
+        w1["status"] = "ready_for_review"
+        for i in w1["items"]:
             i["builder_result"] = "pass"
-        self.write_done([proved(m1), milestone("M2", "not_started", ["open"])], ready=("M1",))
+        self.write_done([proved(w1), work_package("WP2", "not_started", ["open"])], ready=("WP1",))
         self.commit_all()
         work = agent_loop.head_commit(self.wt)
         record = self.wt / "docs/plans/WATER/RECORD.json"
         rec = json.loads(record.read_text())
-        rec["milestones"]["M1"]["ready_for_review"]["commit"] = work
+        rec["work_packages"]["WP1"]["ready_for_review"]["commit"] = work
         record.write_text(json.dumps(rec))
         self.commit_all()
         return work
@@ -695,8 +695,8 @@ class Repo(Clean):
         args.update(kw)
         return self.call(agent_loop.cmd_run, **args)
 
-    def review(self, milestone_id="M1", commit="HEAD", **kw):
-        args = dict(module="WATER", milestone=milestone_id, commit=commit, worktree=str(self.wt),
+    def review(self, work_package_id="WP1", commit="HEAD", **kw):
+        args = dict(module="WATER", work_package=work_package_id, commit=commit, worktree=str(self.wt),
                     turn_timeout_hours=0.1)
         args.update(kw)
         return self.call(agent_loop.cmd_review, **args)
@@ -712,10 +712,10 @@ class Repo(Clean):
     def ready(self, where=None):
         return json.loads(self.printed(agent_loop.cmd_ready, worktree=str(where or self.wt)))
 
-    def human(self, action, milestone_id, reason="the user said so", where=None, item=None, asked=None):
+    def human(self, action, work_package_id, reason="the user said so", where=None, item=None, asked=None):
         """A human command. For `feedback`, `reason` is what the user said and `asked` the lead's question."""
         feedback = action == "feedback"
-        return self.call(agent_loop.cmd_human, action=action, module="WATER", milestone=milestone_id,
+        return self.call(agent_loop.cmd_human, action=action, module="WATER", work_package=work_package_id,
                          item=[item] if isinstance(item, str) else item, worktree=str(where or self.wt),
                          text=None if feedback else reason, said=reason if feedback else None,
                          asked=(asked or "Which direction do you want?") if feedback else None)
@@ -724,7 +724,7 @@ class Repo(Clean):
         """The error `human feedback` stops with."""
         try:
             with self.assertRaises(SystemExit) as stop, contextlib.redirect_stdout(io.StringIO()):
-                agent_loop.cmd_human(parse(agent_loop.cmd_human, action="feedback", module="WATER", milestone=mid,
+                agent_loop.cmd_human(parse(agent_loop.cmd_human, action="feedback", module="WATER", work_package=mid,
                                            item=items, said=said, asked="Is it right?", worktree=str(self.wt)))
         finally:
             release()
