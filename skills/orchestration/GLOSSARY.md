@@ -129,6 +129,7 @@ Stored as: `stand_in:<what it stands in for>` in an item's `target`
 **Module**
 A part of the project that one builder can work on without touching the other parts.
 Avoid: component, package (unless the code uses the word)
+Stored as: its folder in the plans, in capitals, such as `APPLE-TILE`; its reference is `module/apple-tile`
 
 **Module list**
 The file that names each module and what each provides to the others.
@@ -156,8 +157,18 @@ A module's `LOG.md`: its history, one dated entry per event.
 **Milestone**
 A significant point on the way to the goal that the user cares about and that shapes the work, such as a first
 playable build. It is reached when the work packages it needs are Done.
+Each has a name the user would say and a slug made from it, which the plans use to refer to it.
 Not: Work package, which is work; a milestone is a point the work reaches.
+Avoid: gate; codes such as `G4` or `M2`, which mean nothing to a reader without the plan open
 Source: PMI, "a significant point or event in a project"
+Stored as: a line under `## Milestones` in `VISION.md`, `- **<Name>** (`milestone/<slug>`)`
+
+**Reference**
+How the plans and the agents point at a milestone, module or work package where its kind isn't plain from the
+place: the kind, a slash, then its ID, such as `milestone/sky-and-atmosphere`, `module/apple-tile` or
+`work-package/atmosphere/6`. Shown after the name, never instead of it. Where the kind is fixed, such as a
+`depends_on` list or a module's own plan, the ID is written alone.
+Source: the `kind/name` form Kubernetes uses, as in `deployment/web`
 
 **Work package**
 A piece of a module small enough for one builder to finish in one session, with the items that must be true before
@@ -165,7 +176,8 @@ it is Done. Always the full phrase, because "package" alone means a code package
 Not: Task, which is what one agent session is asked to do; Milestone, which is a point the work reaches.
 Avoid: milestone (its former name), `milestones` (now `work_packages`), `M3` (now `WP3`), story, task
 Source: PMBOK, the work package at the lowest level of the work breakdown
-Stored as: `work_packages` in the done-when and record files, with IDs such as `WP3`
+Stored as: `work_packages` in the done-when and record files, with IDs such as `WP3`; its reference is
+`work-package/core/3`
 
 **Depends on**
 A work package depends on a work package in another module when it can't start until that one is Done.
@@ -599,6 +611,7 @@ there is one, says which of a result's causes it was.
 | `MERGED`, `FAILED` | `merge` | The work was merged, or wasn't, with the reason in `detail` |
 | `ADOPTED` | `adopt` | Plan files left uncommitted or unmerged were committed and merged |
 | `MIGRATED` | `migrate` | The plans, the evidence or a worktree's commits were moved to the current layout and names |
+| `RENAMED` | `rename` | The milestone IDs in the plans were replaced with their new references |
 | `WOULD_REMOVE`, `REMOVED` | `cleanup` | What `cleanup` would remove, or, with `--yes`, what it removed |
 | `NOTHING` | `adopt`, `migrate`, `main-check`, `pause`, `thread`, `cleanup`, `settings --set` | There was nothing to do |
 | `STARTED`, `ALREADY_RUNNING` | `main-check` | A run on the main branch's tip started, or one was already in flight |

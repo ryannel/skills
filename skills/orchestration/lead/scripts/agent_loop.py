@@ -6225,7 +6225,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.0.7"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.0.8"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6265,6 +6265,12 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.0.8": [
+        "Milestones have names the user would say and slugs made from them, referred to as `milestone/<slug>`. Talk "
+        "about a milestone, module or work package by its name, with any ID after it. When the plans call "
+        "milestones by codes, agree names with the user, write each as `- **<Name>** (`milestone/<slug>`)` under "
+        "`## Milestones` in the vision and scope document with `adopt`, then run `rename` once the runs have stopped.",
+    ],
     "3.0.7": [
         "A run whose hold push fails with no other lead holding the work package tries again, then ends "
         "SCRIPT_FAILED with the push's error, rather than IN_PROGRESS_ELSEWHERE by \"another lead\".",
@@ -9165,7 +9171,7 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
             # work package matches its authorisation only from that commit on. The reviewer works there.
             later = [line.split("\t", 1)[0] for line in git(
                 worktree, "log", "--reverse", "--format=%H%x09%s", "--ancestry-path", f"{start}..{ref}", "--",
-                done_path).stdout.splitlines() if line.partition("\t")[2].startswith(MIGRATE_SUBJECTS)]
+                done_path).stdout.splitlines() if line.partition("\t")[2].startswith((MIGRATE_SUBJECTS, RENAME_SUBJECT))]
             for c in later:
                 try:
                     doc_there = upgrade_doc(json.loads(show(worktree, c, done_path) or ""))
@@ -9174,7 +9180,7 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
                     continue
                 if there.get("status") == "ready_for_review" and definitions(there) == authorised:
                     before_doc = doc_there
-                    moved_note += (f"\nA later `migrate` commit, {c[:12]}, renamed words in {mid}'s items, so you "
+                    moved_note += (f"\nA later `migrate` or `rename` commit, {c[:12]}, renamed words in {mid}'s items, so you "
                                    f"are on {c[:12]}, the first commit where they match their authorisation. To see "
                                    f"the builder's own work, compare with `git show {start[:12]}`.\n")
                     start, under_review = c, there
@@ -15234,6 +15240,125 @@ def migrate_local_files_3(changes: list) -> None:
             path.rename(dest)
 
 
+RENAME_SUBJECT = "orchestrate: rename milestones"
+MILESTONE_SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+# A path, link target, URL or heading anchor keeps its old name: those files and headings weren't renamed.
+RENAME_SKIP = re.compile(r"(?<![\w./-])(?:[\w+.-]+://[^\s\x22'`<>()[\]]+|(?:[\w.-]*/)+[\w.-]+(?:#[\w.-]+)?"
+                         r"|[\w.-]+\.[a-z]+(?:#[\w.-]+)?|#[\w]+(?:-[\w]+)+|\]\([^)\s]*\))")
+
+
+def rename_milestones_text(text: str, names: dict, note=None) -> str:
+    """Replace each old milestone ID with its typed reference, `milestone/<slug>`, outside paths, links and anchors.
+    An ID already in backticks keeps one pair of them."""
+    olds = sorted({v for old in names for v in (old, old.upper())}, key=len, reverse=True)
+    if not olds:
+        return text
+    lookup = {**{old.upper(): new for old, new in names.items()}, **names}
+    pattern = re.compile(RENAME_SKIP.pattern + r"|(?P<tick>`)?(?<![\w./#-])(?P<old>" + "|".join(map(re.escape, olds))
+                         + r")(?![\w-])(?(tick)`)")
+
+    def swap(match):
+        if not match["old"]:
+            return match[0]
+        new = f"`milestone/{lookup[match['old']]}`"
+        if note:
+            note(match["old"], new)
+        return new
+
+    return pattern.sub(swap, text)
+
+
+def rename_milestones_tree(tree: Path, prof: dict, names: dict, done: dict) -> list[str]:
+    """Rename milestone IDs in the vision and scope document, the glossary, the module list and every module's design,
+    plan and done-when file, re-stamping each record's design hash and definitions so the rename alone never reads
+    as a planner's change. Logs, records and evidence keep the old IDs, as history."""
+    root, paths, designs = tree / prof["plans"], [], {}
+    texts = [p for p in module_plan_texts(root) if p.suffix == ".md"]
+    texts += [root / PROJECT_FILES[kind] for kind in ("vision", "glossary", "architecture")]
+    for path in sorted(texts):
+        if path.is_symlink() or not path.is_file():
+            continue
+        rel = str(path.relative_to(tree))
+        before = path.read_text()
+        after = rename_milestones_text(before, names, migration_audit(done, rel))
+        if after != before:
+            path.write_text(after)
+            paths.append(rel)
+            designs[rel] = (text_hash(before), text_hash(after))
+    for stem in modules_here(tree, prof):
+        doc_path, rec_path = tree / done_rel(prof, stem), tree / record_rel(prof, stem)
+        try:
+            old_doc = json.loads(doc_path.read_text()) if doc_path.is_file() else None
+            rec = json.loads(rec_path.read_text()) if rec_path.is_file() else None
+        except json.JSONDecodeError:
+            continue
+        if old_doc is None:
+            continue
+        audit = migration_audit(done, done_rel(prof, stem))
+        new_doc = map_done_text(old_doc, lambda value, field: rename_milestones_text(value, names, audit))
+        if new_doc != old_doc:
+            write_json(doc_path, new_doc)
+            paths.append(done_rel(prof, stem))
+        if rec is None:
+            continue
+        before_rec = json.dumps(rec, sort_keys=True)
+        old_wps = {m.get("id"): m for m in old_doc.get("work_packages") or [] if isinstance(m, dict)}
+        new_wps = {m.get("id"): m for m in new_doc.get("work_packages") or [] if isinstance(m, dict)}
+        for mid, entry in (rec.get("work_packages") or {}).items():
+            if isinstance(entry, dict) and mid in old_wps and entry.get("definitions") == definitions(old_wps[mid]):
+                entry["definitions"] = definitions(new_wps[mid])
+        design = designs.get(design_rel(prof, stem))
+        if design and (rec.get("design") or {}).get("hash") == design[0]:
+            rec["design"]["hash"] = design[1]
+        if json.dumps(rec, sort_keys=True) != before_rec:
+            write_json(rec_path, rec)
+            paths.append(record_rel(prof, stem))
+    return paths
+
+
+def cmd_rename(a: argparse.Namespace) -> None:
+    """Renames milestone IDs across the plans on the main branch, once every run has stopped."""
+    worktree = Path(a.worktree).resolve()
+    prof = profile(worktree, strict=True)
+    if os.environ.get("ORCHESTRATE_ROLE"):
+        raise SystemExit("error: rename can't run inside a session the script started; the lead runs it")
+    names = {}
+    for pair in a.milestone or []:
+        old, sep, new = pair.partition("=")
+        old, new = old.strip(), new.strip().removeprefix("milestone/")
+        if not sep or not old or not MILESTONE_SLUG.fullmatch(new):
+            raise SystemExit(f"error: --milestone {pair!r} should be OLD=new-slug, such as G4=apple-reconstruction: "
+                             "lowercase words joined by hyphens")
+        names[old] = new
+    if not names:
+        raise SystemExit("error: name at least one --milestone OLD=new-slug")
+    folder = loop_dir(worktree)
+    busy = [name for name in (p.name[len("run-"):-len(".lock")] for p in folder.glob("run-*.lock"))
+            if run_holder(folder, name) not in (None, os.getpid())]
+    if busy or not run_lock(worktree, "_plan"):
+        own_status("REFUSED", 1, problems=[
+            f"a run, review, plan or adopt is running here ({', '.join(busy) or '_plan'}). rename changes every "
+            "module's files on the main branch, so run it once they've stopped (`runs --repo` shows them, `pause` "
+            "stops them)"])
+    for name in modules_here(worktree, prof):
+        run_lock(worktree, name.upper())
+    did: dict = {}
+
+    def change(t):
+        did.clear()
+        return rename_milestones_tree(t, profile(t, missing_ok=True), names, did)
+
+    pairs = ", ".join(f"{old} to milestone/{new}" for old, new in names.items())
+    ok, landed = loop_write(worktree, prof, "_rename", change, f"{RENAME_SUBJECT}: {pairs}", take_up_ok=False)
+    if not ok:
+        own_status("FAILED", 1, detail=landed)
+    if not did.get("rewrites"):
+        own_status("NOTHING", 0, detail="no plan file names those milestones outside paths and links")
+    own_status("RENAMED", 0, commit=landed, rewrites=did["rewrites"],
+               detail="logs, records and evidence keep the old IDs as history; files outside the plans folder, "
+                      "such as code and design notes, aren't changed")
+
+
 def cmd_migrate(a: argparse.Namespace) -> None:
     """Updates the plans in a clean checkout of the tip, moving evidence out of git (2.6.0) and updating names
     in the plans, shared working folder, script state and claim refs (3.0). With --branch, brings one worktree's
@@ -17876,6 +18001,18 @@ migrate --branch --worktree PATH [--module CORE]
       migrated, the worktree has uncommitted changes or merge commits, a run holds the module, or its commits
       conflict with the main branch's, named in `conflicts`; the worktree is left as it was) or FAILED.
 """,
+    "rename": """\
+rename --milestone OLD=new-slug [--milestone OLD=new-slug]... [--worktree PATH]
+      Renames milestone IDs in one commit on the main branch, for when the user gives milestones new names. Each old
+      ID, such as G4, becomes its typed reference, `milestone/apple-reconstruction`, in the vision and scope document,
+      the glossary, the module list and every module's design, plan and done-when text. Paths, link targets, URLs
+      and heading anchors keep the old ID, because those files and headings keep their names. Matching definitions
+      and design approvals stay current, and a review of a work package Ready for Review before the rename moves
+      past the rename commit. Logs, records, evidence and files outside the plans folder keep the old IDs. Write
+      each milestone's name and new reference in the vision and scope document first, with `adopt`, so the rename
+      leaves a list of what each old ID now means. Refused while any run, review, plan or adopt is running. RENAMED
+      (`rewrites` counts each substitution per file), NOTHING, REFUSED or FAILED.
+""",
     "check": """\
 check --module CORE --work-package WP2 [--worktree PATH] [--plans-from PATH] [--timeout 600] [--items-only] [--json]
       Runs the work package's checks (each item's `check` under its `lock`, then the test command, which
@@ -18385,6 +18522,12 @@ def build_parser() -> argparse.ArgumentParser:
                                               "(such as .git/filter-repo/commit-map): point the records and the run "
                                               "state at the new hashes")
     migrate.set_defaults(func=cmd_migrate)
+    rename = sub.add_parser("rename", help="rename milestone IDs across the plans, such as G4 to "
+                                           "milestone/apple-reconstruction")
+    rename.add_argument("--worktree", default=".")
+    rename.add_argument("--milestone", action="append", metavar="OLD=new-slug",
+                        help="an old milestone ID and its new slug; repeat for each milestone")
+    rename.set_defaults(func=cmd_rename)
     nxt = sub.add_parser("next", help="say what to do after a failed review, and print the command")
     for flag in ("--module", "--worktree", "--work-package"):
         nxt.add_argument(flag, required=True)

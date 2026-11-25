@@ -76,7 +76,9 @@ Write it for the planner as the `prompting-agents` skill describes, using the he
 Quote the user's words wherever they give a number, a limit or a "never", because each later document softens
 them. With each decision, name the option it ruled out, so no one brings it back. Mark each decision you made
 yourself as the agent's. When the user leaves a choice to the agents, put it under "Still open", marked "the
-planner chooses". Add any name you settle to the glossary, as the `domain-language` skill describes.
+planner chooses". Give each milestone a name the user would say, such as "First playable build", and a slug
+made from it, `first-playable-build`, which the plans use to refer to it. A code such as `M2` or `G4` saves a few
+characters and costs every later reader a lookup. Add any name you settle to the glossary, as the `domain-language` skill describes.
 
 ```markdown
 # Vision and scope document: <name>
@@ -86,6 +88,9 @@ planner chooses". Add any name you settle to the glossary, as the `domain-langua
 
 ## Goal
 <the one long-term aim the product is working toward now>
+
+## Milestones
+- **<Name>** (`milestone/<slug>`). <what is true when it is reached>
 
 ## Who it is for, and what they will be able to do
 

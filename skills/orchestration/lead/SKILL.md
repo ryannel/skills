@@ -59,6 +59,7 @@ user the parts that affect them.
 | `report`, `quota` | When the user asks how it's going, or to forecast the Codex usage limit |
 | `main-check`, `locks` | When the settings have main-branch checks or locks, and one of them is holding work back |
 | `cleanup` | When the disk fills or the build ends, to show the user what could be cleared |
+| `rename` | When the user renames milestones, or the plans call them by codes rather than names |
 | `migrate` | When a command stops naming it, because the project comes from an older version of this set |
 
 `merge`, `check`, `lock`, `background`, `jobs` and `wait` are the builders' commands.
@@ -94,5 +95,7 @@ is compacted, read this skill and the stage's file again.
 | Planned, with a `Builders:` line | [4. Build](stages/4-build.md) |
 
 On a planned project, run `settings --worktree <repo>` first, and read the glossary, so you use its agreed names
-with the user and the agents. That first command also starts the script's supervisor again if
+with the user and the agents. Talk about a milestone, module or work package by its name, the way the user knows it,
+such as "Sky and atmosphere". An ID like `WP7` or `milestone/sky-and-atmosphere` means nothing to someone who
+doesn't read the plans, so it goes after the name, when it's needed at all, and never stands in for it. That first command also starts the script's supervisor again if
 your host restarted, so the build carries on; `supervise --status` shows what it is doing and what it started.
