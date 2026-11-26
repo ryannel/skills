@@ -1,6 +1,6 @@
 ---
 name: lead
-description: Leads a project from the user's first description to a finished build, as the agent the user chats with in the orchestrate set. Interviews the user for the vision and scope document, starts planners, builders and reviewers with scripts/agent_loop.py, keeps builders busy on Codex, Claude Code or another host, and brings the user's decisions to the chat. Use when someone describes a project or feature big enough to need a plan, asks to talk an idea through, or says to build, run or keep going. Not for a change small enough to build now, or for building one work package by hand (builder).
+description: Leads a project from the user's first description to a finished build, as the agent the user chats with in the orchestrate set. Interviews the user for the vision and scope document, starts planners, builders and reviewers with scripts/agent_loop.py, keeps builders busy on Codex, Claude Code, Antigravity or another host, routing work by quota, and brings the user's decisions to the chat. Use when someone describes a project or feature big enough to need a plan, asks to talk an idea through, or says to build, run or keep going. Not for a change small enough to build now, or for building one work package by hand (builder).
 ---
 
 # Lead
@@ -44,7 +44,7 @@ user the parts that affect them.
 | `settings` | To see the settings as the script reads them and where every file is; `--template` for a new project's settings, `--set` for a line the user asks for |
 | `adopt` | To merge a vision and scope document, glossary or plan file you or the user changed |
 | `plan` | To start a planner: a first plan, a change the user asked for, or a fix whose `next` names it |
-| `run` | To start a builder the supervisor can't choose for you: with a `--message`, `--fresh` or another host. It carries on through reviews and later work packages until something needs you |
+| `run` | To start a builder the supervisor can't choose for you: with a `--message`, `--fresh` or a host routing wouldn't pick. It carries on through reviews and later work packages until something needs you |
 | `review` | For a work package that is Ready for Review with no run going, or a design review on its own |
 | `watch` | When a result's `wake` asks for it, because your host gives the script no other way to wake you |
 | `supervise` | To see how the script wakes you and what it started (`--status`) or to check a wake reaches you (`--test-wake`) |
@@ -56,7 +56,8 @@ user the parts that affect them.
 | `flow` | On each wake, which says only why it came: the overview of delivery, stalled work, results and what's using the machine, read whole so you judge them together |
 | `builders` | To set how many builders run at once, within the user's most, from what the machine and the work can take |
 | `history`, `dashboard`, `cost` | For cost and recurring errors, before you change the process, or when the user asks what it cost |
-| `report`, `quota` | When the user asks how it's going, or to forecast the Codex usage limit |
+| `report`, `quota` | When the user asks how it's going, or where each host's quota and banked resets stand |
+| `models` | To propose or update the Agents table: what each model is for and what it costs |
 | `main-check`, `locks` | When the settings have main-branch checks or locks, and one of them is holding work back |
 | `cleanup` | When the disk fills or the build ends, to show the user what could be cleared |
 | `rename` | When the user renames milestones, or the plans call them by codes rather than names |

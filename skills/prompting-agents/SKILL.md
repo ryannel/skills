@@ -1,6 +1,6 @@
 ---
 name: prompting-agents
-description: Helps you write text that another AI agent will act on, such as a brief for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt, or a CLAUDE.md or AGENTS.md. Use before you write or send one, when you move instructions to a newer model, or when an agent stopped early, asked for approval it didn't need or ignored an instruction. Covers Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra and GPT-6.2 Sol. Not for writing or testing a skill (skill-creator).
+description: Helps you write text that another AI agent will act on, such as a brief for a subagent or session, a goal for a long unattended run, a review request, a steer, a system prompt, or a CLAUDE.md or AGENTS.md. Use before you write or send one, when you move instructions to a newer model, or when an agent stopped early, asked for approval it didn't need or ignored an instruction. Covers Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra, GPT-6.2 Sol, Gemini 4 Neon and Gemini 4 Carbon. Not for writing or testing a skill (skill-creator).
 ---
 
 # Prompting agents
@@ -123,13 +123,14 @@ the wrong place. Move it further down the table, where less depends on the reade
 
 ## Write for the model that will read it
 
-The four current models respond differently to the same prompt: one stops too early where another pushes too
+The current models respond differently to the same prompt: one stops too early where another pushes too
 hard. Each has habits you can predict, so before you write, find out which model will run the prompt and read
 its file:
 
 - Claude Opus 5.5: [claude-opus-5-5.md](references/models/claude-opus-5-5.md)
 - Claude Fable 5.2: [claude-fable-5-2.md](references/models/claude-fable-5-2.md)
 - GPT-6.2 Astra and GPT-6.2 Sol: [gpt-6-2.md](references/models/gpt-6-2.md)
+- Gemini 4 Neon and Gemini 4 Carbon: [gemini-4.md](references/models/gemini-4.md)
 
 If the model is newer than these, read its vendor's prompting guide instead. These files go out of date faster
 than anything else in this skill.
@@ -141,7 +142,8 @@ When you move to a new model, re-read everything that carries over: system promp
 saved notes, and text the host adds to messages. Lines written to push an older model now push too hard, so
 check each one against "What to leave out" above. In Claude Code, `/doctor prompt-audit` does this reading for
 you and also reports files that contradict each other. In Codex, ask the model to audit your skills and
-`AGENTS.md` against OpenAI's migration guide.
+`AGENTS.md` against OpenAI's migration guide. In Antigravity, check that the always-on files fit its
+20,000-token budget, since it reads only pointers to the largest files once they don't.
 
 ## More
 

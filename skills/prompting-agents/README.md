@@ -19,13 +19,14 @@ It doesn't cover writing or testing skills, which is the job of [skill-creator](
   each need beyond that.
 - `references/instruction-files.md`: what belongs in a `CLAUDE.md` or `AGENTS.md`, and what doesn't.
 - `references/writing-style.md`: each writing habit shown on a real sentence.
-- `references/models/`: one file each for Claude Opus 5.5 and Claude Fable 5.2, and one shared by GPT-6.2 Astra
-  and GPT-6.2 Sol. Each says what that model tends to do and what to write to correct for it.
+- `references/models/`: one file each for Claude Opus 5.5 and Claude Fable 5.2, one shared by GPT-6.2 Astra
+  and GPT-6.2 Sol, and one shared by Gemini 4 Neon and Gemini 4 Carbon. Each says what that model tends to do and what to write to correct for it.
 
 ## Where the guidance comes from
 
-The guidance comes from what Anthropic and OpenAI published about prompting their current models, read on 10
-November 2026. The OpenAI file was re-checked on 17 November 2026, when GPT-6.2 Astra and GPT-6.2 Sol shipped.
+The guidance comes from what Anthropic, OpenAI and Google published about prompting their current models, read on 10
+November 2026. The OpenAI file was re-checked on 17 November 2026, when GPT-6.2 Astra and GPT-6.2 Sol shipped, and the Gemini 4 file was written on 26 November
+2026.
 The research summary, with a note on every page read, is in [workbench/prompting-agents](../../workbench/prompting-agents/README.md). The main sources are these:
 
 - **Anthropic:** [Prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices),
@@ -41,6 +42,10 @@ The research summary, with a note on every page read, is in [workbench/prompting
   [Maintaining software with the GPT-6 family](https://developers.openai.com/blog/maintaining-software-with-the-gpt-6-family),
   and Codex's pages on [prompting](https://developers.openai.com/codex/prompting) and
   [AGENTS.md](https://developers.openai.com/codex/agent-configuration/agents-md).
+- **Google:** the model guides for [Gemini 4 Neon](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-neon)
+  and [Gemini 4 Carbon](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-carbon),
+  and Antigravity's pages on [models](https://antigravity.google/docs/models/) and [rules](https://antigravity.google/docs/rules).
+  Google has published no prompting guide for Gemini 4, so that file marks what comes from developers' reports.
 - **The writing style:** Munroe's [Relativistic Baseball](https://what-if.xkcd.com/1/), plus corrections from
   the owner of this repository.
 

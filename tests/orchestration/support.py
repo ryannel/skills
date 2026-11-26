@@ -44,7 +44,10 @@ os.environ.update(
     CODEX_HOME=str(PROCESS / "codex-home"), CLAUDE_CONFIG_DIR=str(PROCESS / "claude-home"),
     XDG_STATE_HOME=str(PROCESS / "state"), XDG_CACHE_HOME=str(PROCESS / "cache"),
     ORCHESTRATE_LOOPS_DIR=str(PROCESS / "loops"), ORCHESTRATE_CODEX="/no/such/host",
-    ORCHESTRATE_CLAUDE="/no/such/host",
+    ORCHESTRATE_CLAUDE="/no/such/host", ORCHESTRATE_AGY="/no/such/host",
+    ORCHESTRATE_GEMINI_HOME=str(PROCESS / "gemini-home"),
+    # Quota is never read from a real host; tests that route write readings into the cache themselves.
+    ORCHESTRATE_NO_QUOTA_READ="1",
     # The delivery history is read after every turn; only test_history turns it on, with its own folders.
     ORCHESTRATE_NO_HISTORY="1", ORCHESTRATE_HISTORY_DIR=str(PROCESS / "history"),
     # No supervisor starts on its own; test_supervisor turns it on where it tests it.

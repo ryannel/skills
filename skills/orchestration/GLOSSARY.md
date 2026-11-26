@@ -572,6 +572,42 @@ branch, then rebasing them onto it.
 Stored as: `migrate --branch`
 Proposed: by Claude, 2026-11-12. Not yet agreed by the user.
 
+**Agents table**
+The `## Agents` section of the project settings: a row for each kind of agent (Planner, Builder, Reviewer, Design
+reviewer), a column for each host the project may use, and in each cell the model and effort that kind of agent runs
+on that host. A blank cell, or `-`, keeps that kind of agent off that host.
+Avoid: model matrix, role table
+Stored as: `agents_table` in `settings --json`; `--set 'Agents <Role> <Host>'`
+Proposed: by Claude, 2026-11-26. Not yet agreed by the user.
+
+**Routing**
+The script's choice of host for a run when none is named: among the hosts with a cell in the Agents table row, the
+one with most quota that would otherwise go unused at its reset. A work package stays on its host while that host
+has quota.
+Avoid: scheduling, load balancing
+Stored as: `route` in the script; the `routed` field of a result
+Proposed: by Claude, 2026-11-26. Not yet agreed by the user.
+
+**Banked reset**
+A reset of a usage window that a host grants to be redeemed later, before it expires, such as Codex's "Full reset" or
+Claude's limit reset. Only the user redeems one.
+Avoid: reset credit, token, for this meaning
+Source: Codex's own name is reset credit (`rateLimitResetCredits`); the plain name is kept because it says what it does
+Stored as: `banked` in `quota --json`; `quota --bank`, `quota --redeemed`
+Proposed: by Claude, 2026-11-26. Not yet agreed by the user.
+
+**Reset plan**
+The script's plan for a banked reset: how much quota to spend before it expires so redeeming it is worth most, and
+when to redeem. The lead proposes it to the user, and routing favours that host only once the user agrees.
+Stored as: `reset_plans` in `quota --json` and `flow`; `quota --plan agree|withdraw`
+Proposed: by Claude, 2026-11-26. Not yet agreed by the user.
+
+**Model catalogue**
+The list of models the Agents table can name, with what each is for, its efforts, list price, plans and retirement
+date. The models skill keeps it current.
+Stored as: `models.json` beside the script, and `~/.config/orchestrate/models.json` over it; the `models` command
+Proposed: by Claude, 2026-11-26. Not yet agreed by the user.
+
 ## Results
 
 Every command of the script ends by printing one JSON line, its result, whose `result` field is one of the names
@@ -606,6 +642,9 @@ there is one, says which of a result's causes it was.
 | `READY` | `ready` | What each module's next work package is waiting for, grouped |
 | `ESCALATION` | `next` | What the counts call for after a failed review, with the command |
 | `SETTINGS` | `settings` | The settings as the script reads them, with the loader checks |
+| `QUOTA_PLAN` | `quota --plan` | The user's agreement to a banked reset's plan was recorded, or withdrawn; routing favours that host while it stands. Nothing was redeemed |
+| `QUOTA_BANKED` | `quota --bank` | A banked reset the user told the lead about was recorded, for a host whose resets the script can't read |
+| `QUOTA_REDEEMED` | `quota --redeemed` | The user redeemed a banked reset they had told the lead about, and it was marked used |
 | `BUILDERS` | `builders` | The most builders, the working number, the limit between them, and the builders running |
 | `SAVED` | `settings --set` | A settings line was set on the main branch, with the user's words in its commit |
 | `MERGED`, `FAILED` | `merge` | The work was merged, or wasn't, with the reason in `detail` |

@@ -3,7 +3,7 @@
 
 Usage:
   python3 install.py                          # prompting-agents, orchestrate, skill-creator and domain-language,
-                                              # both hosts, user scope
+                                              # every installed host (Claude Code, Codex, Antigravity), user scope
   python3 install.py --replace-standalone     # the same, first moving aside earlier standalone copies and hook
   python3 install.py --plugins prompting-agents --host codex
   python3 install.py --repo ~/code/app        # also set up that repo (see below)
@@ -411,6 +411,63 @@ def setup_codex(plugins: list[str], source: str) -> None:
         remove_old_agents(codex_home() / "agents", ("orchestrate-reviewer.toml",))
 
 
+def agy_binary() -> str | None:
+    found = os.environ.get("AGY_BIN") or shutil.which("agy")
+    fallback = Path.home() / ".local/bin/agy"
+    return found or (str(fallback) if os.access(fallback, os.X_OK) else None)
+
+
+def gemini_skills() -> Path:
+    return Path(os.environ.get("ORCHESTRATE_GEMINI_HOME") or Path.home() / ".gemini") / "config" / "skills"
+
+
+AGY_MARK = ".installed-by-" + MARKETPLACE
+
+
+def plugin_root(plugin: str, source: str) -> Path | None:
+    """Where this plugin's files are on disk: a local marketplace source itself, else Claude Code's installed copy
+    of it (the published version), else None."""
+    local = Path(source).expanduser()
+    if local.exists():
+        return local.resolve()
+    claude = shutil.which("claude")
+    for x in (quiet_json([claude, "plugin", "list", "--json"]) or []) if claude else []:
+        if x.get("id") == f"{plugin}@{MARKETPLACE}" and (x.get("readFromFolder") or x.get("installPath")):
+            return Path(x.get("readFromFolder") or x["installPath"])
+    return None
+
+
+def setup_antigravity(plugins: list[str], source: str) -> None:
+    """Antigravity finds skills by name in ~/.gemini/config/skills, and its plugins need a manifest of their own,
+    so each skill is copied there from the plugin's files: the local source, or Claude Code's installed copy of the
+    published one. Only folders this installer wrote are replaced."""
+    if not agy_binary():
+        print("Antigravity: no `agy` on PATH or in ~/.local/bin; skipped.")
+        return
+    target = gemini_skills()
+    target.mkdir(parents=True, exist_ok=True)
+    for p in plugins:
+        root = plugin_root(p, source)
+        if root is None:
+            print(f"  {p}: no copy on disk to take skills from; install it for Claude Code first (--host all)")
+            failures.append(f"Antigravity: {p} not found on disk")
+            continue
+        for rel in ENTRIES[p].get("skills", []):
+            src = (root / rel).resolve()
+            if not (src / "SKILL.md").exists():
+                print(f"  {p}: {src} has no SKILL.md; skipped")
+                continue
+            dest = target / Path(rel).name
+            if dest.exists() or dest.is_symlink():
+                if not (dest / AGY_MARK).exists():
+                    print(f"  {dest} exists and wasn't installed here; left alone")
+                    continue
+                shutil.rmtree(dest) if dest.is_dir() and not dest.is_symlink() else dest.unlink()
+            shutil.copytree(src, dest, ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"))
+            (dest / AGY_MARK).write_text(f"{p} from {source}\n")
+            print(f"  {Path(rel).name} -> {dest}")
+
+
 # ---- one repository -------------------------------------------------------------------------------------------
 
 def imports_agents_md(path: Path, agents: Path) -> bool:
@@ -488,6 +545,8 @@ def choose_orchestration_install(a: argparse.Namespace) -> None:
         sys.exit("Install the Claude Code or Codex CLI before running this installer.")
     if len(hosts) == 2:
         hosts.append(("both", "Claude Code and Codex"))
+    if agy_binary() and shutil.which("claude"):
+        hosts.append(("all", "Claude Code, Codex and Antigravity (Antigravity copies Claude Code's install)"))
     try:
         a.host = choose("Which agents should get the full orchestration setup?", hosts)
         scopes = [("user", "Global (all projects)")]
@@ -522,7 +581,8 @@ def main() -> None:
 
 def parse_scripted_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--host", choices=["claude", "codex", "both"], default="both")
+    ap.add_argument("--host", choices=["claude", "codex", "antigravity", "both", "all"], default="all",
+                    help="both is Claude Code and Codex; all adds Antigravity where `agy` is installed")
     ap.add_argument("--plugins", default=",".join(DEFAULT_PLUGINS),
                     help="comma-separated plugin names from .claude-plugin/marketplace.json")
     ap.add_argument("--scope", choices=["user", "project", "local"], default="user",
@@ -545,7 +605,7 @@ def install(a: argparse.Namespace) -> None:
     if unknown:
         sys.exit(f"unknown plugin(s) {', '.join(unknown)}; choose from {', '.join(ENTRIES)}")
     repo = a.repo.expanduser().resolve() if a.repo else None
-    hosts = ["claude", "codex"] if a.host == "both" else [a.host]
+    hosts = {"both": ["claude", "codex"], "all": ["claude", "codex", "antigravity"]}.get(a.host, [a.host])
     migrate(plugins, hosts, a.replace_standalone)
     if "claude" in hosts:
         print("== Claude Code")
@@ -553,6 +613,9 @@ def install(a: argparse.Namespace) -> None:
     if "codex" in hosts:
         print("== Codex")
         setup_codex(plugins, a.source)
+    if "antigravity" in hosts:
+        print("== Antigravity")
+        setup_antigravity(plugins, a.source)
     if repo:
         print(f"== {repo}")
         setup_repo(repo, plugins)

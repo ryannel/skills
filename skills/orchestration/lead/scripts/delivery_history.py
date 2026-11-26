@@ -1198,7 +1198,7 @@ def render(folder: Path, out: Path | None = None, meta: dict | None = None) -> P
     are gone."""
     model = dashboard_model(folder, meta)
     template = (Path(__file__).with_name("dashboard.html")).read_text()
-    blob = json.dumps(model, separators=(",", ":")).replace("</", "<\\/")
+    blob = json.dumps(model, separators=(",", ":"), default=str).replace("</", "<\\/")
     html = template.replace("/*__DATA__*/null", blob, 1)
     out = out or folder / "dashboard.html"
     write_atomic(out, html)

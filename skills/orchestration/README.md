@@ -325,7 +325,8 @@ report lists every decision saved in your name, so you can spot one you didn't m
 | what the build has cost, per work package and kind of agent | `cost` |
 | the overview the lead sees on each wake, with delivery, stalled work, time spent and machine use | `flow` |
 | who holds each lock, and who is waiting for it | `locks` |
-| whether the Codex weekly usage limit will last | `quota` |
+| how much quota each host has left, its banked resets and when they expire, and where the next builder goes | `quota` |
+| what each model is for and costs, and whether the Agents table is current | `models` |
 | how the build is going | `report`, with its own reading on top |
 | to change a setting, such as the number of builders | `settings --set` |
 | to clear what the build keeps on this computer | `cleanup` |
@@ -469,18 +470,34 @@ started unable to start agents of their own, because a reviewer that hands its r
 work. The [`prompting-agents`](https://github.com/ryannel/skills/tree/main/skills/prompting-agents) skill explains
 these rules and their sources.
 
-## Claude Code and Codex
+## Claude Code, Codex and Antigravity
 
-| | Codex | Claude Code | Another command-line agent |
-|---|---|---|---|
-| How a session starts | With `codex exec --json`. With `ORCHESTRATE_VISIBLE=1` on a Mac with the Codex app running, as a thread the app runs itself instead, which the app lists under Recents rather than under the project. Either way it can be resumed. | With `claude -p`, and it can be resumed. With `ORCHESTRATE_VISIBLE=1` on a Mac with Claude desktop running and the CLI signed in, the session also appears in the Code tab. | With the `Host <name>:` command from the project settings, as one new process for each turn. The command must take `{prompt}`, `{model}` and `{effort}`, so the script can name the model and effort every time. |
-| What you can do in the app (with `ORCHESTRATE_VISIBLE=1`) | Watch it, type to steer it, and press Stop. After Stop the script reports the session as paused and leaves it to you. Running `run` again hands it back. | Watch the transcript. If you open the session to work in it, the script pauses and does not write to it at the same time. | Nothing. |
-| Model and effort | Named when the session starts and on every turn, and checked each turn from the session file. | Named when the session starts and on every turn. The model is checked. The effort can't be. | Set in the command, and not checked. |
-| Resumed sessions | With an active Codex goal, only the rules you gave are sent again. Without one, all the rules are. | The rules are sent again on every resumed turn. | Every turn after the first carries them. |
-| Stopping reviewers and planners from starting agents | `-c features.multi_agent=false` | `--disallowedTools Agent` | Only the prompt says so. |
-| Codex goals and the usage limit | Codex goal status, and a forecast of the weekly usage limit, from Codex's local files. | Neither. The script does not use Claude's `/goal`. | Neither. |
-| Tokens used | Saved from `codex exec`'s output. A turn that ran in the app reports none, so use `quota` for those. | Saved, with Claude's list-price estimate, which is not what a plan is charged. | None. |
-| How an agent finds its skill | By name, as `orchestrate:<skill>` from the plugin. The prompt also gives the file path. | By name. The prompt also gives the file path. | The prompt gives the file path. |
+| | Codex | Claude Code | Antigravity | Another command-line agent |
+|---|---|---|---|---|
+| How a session starts | With `codex exec --json`. With `ORCHESTRATE_VISIBLE=1` on a Mac with the Codex app running, as a thread the app runs itself instead, which the app lists under Recents rather than under the project. Either way it can be resumed. | With `claude -p`, and it can be resumed. With `ORCHESTRATE_VISIBLE=1` on a Mac with Claude desktop running and the CLI signed in, the session also appears in the Code tab. | With `agy -p --output-format stream-json`, signed in with Google, and it can be resumed. A tool call that needs approval is refused without stopping the run, so the script reports the refused tools as a warning. | With the `Host <name>:` command from the project settings, as one new process for each turn. The command must take `{prompt}`, `{model}` and `{effort}`, so the script can name the model and effort every time.  |
+| What you can do in the app (with `ORCHESTRATE_VISIBLE=1`) | Watch it, type to steer it, and press Stop. After Stop the script reports the session as paused and leaves it to you. Running `run` again hands it back. | Watch the transcript. If you open the session to work in it, the script pauses and does not write to it at the same time. | Nothing. | Nothing.  |
+| Model and effort | Named when the session starts and on every turn, and checked each turn from the session file. | Named when the session starts and on every turn. The model is checked. The effort can't be. | Named when the session starts and on every turn, and not checked. | Set in the command, and not checked.  |
+| Resumed sessions | With an active Codex goal, only the rules you gave are sent again. Without one, all the rules are. | The rules are sent again on every resumed turn. | The rules are sent again on every resumed turn. | Every turn after the first carries them.  |
+| Stopping reviewers and planners from starting agents | `-c features.multi_agent=false` | `--disallowedTools Agent` | Only the prompt says so. | Only the prompt says so.  |
+| Codex goals and the usage limit | Codex goal status, the usage windows and banked resets from the Codex app server, and a forecast of the weekly usage limit from Codex's local files. | No goals; the script does not use Claude's `/goal`. The usage windows, from each turn and from `claude -p /usage`. | No goals. The usage windows, from `agy /usage`. | Neither.  |
+| Tokens used | Saved from `codex exec`'s output. A turn that ran in the app reports none, so use `quota` for those. | Saved, with Claude's list-price estimate, which is not what a plan is charged. | Saved from the run's result, with thinking counted as output. | None.  |
+| How an agent finds its skill | By name, as `orchestrate:<skill>` from the plugin. The prompt also gives the file path. | By name. The prompt also gives the file path. | By name, from the skills the installer copies to `~/.gemini/config/skills`. The prompt also gives the file path. | The prompt gives the file path.  |
+
+### Which host does the work
+
+The `## Agents` table in the project settings names, for each kind of agent, the model and effort to run on each
+host. The lead agrees it with you before the first build, from what `models` says each model is for. When a run
+names no host, the script picks one from the row: of the hosts that are installed, have at least 5% left in every
+usage window and are under their builder cap, the one with most quota that would otherwise go unused at its next
+reset. A work package stays on its host while that host has quota, so its session can be resumed, and moves to
+another host in the row when it runs out. `--host` always wins.
+
+Codex and Claude can grant banked resets, which put a usage window back to empty when redeemed, and expire. The
+script reads Codex's from its app server; tell the lead about a Claude one and it records it with `quota --bank`.
+For each banked reset the script works out a plan: how fast to spend before it expires so that redeeming gives back
+the most, and when to redeem. When one expires within a week and the plan is behind, the lead brings the plan to
+you. Routing favours that host only once you agree. Redeeming can't be undone, so the script never redeems a reset:
+the lead tells you when, and you press the button in Codex's `/usage` or Claude's `/limit-reset`.
 
 ## Known limits
 

@@ -136,6 +136,15 @@ tr.click:hover td { background: var(--wash); }
 .pill.good { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good-ink); }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
 .dim { color: var(--muted); }
+.qbar { position: relative; height: 10px; border-radius: 5px; background: var(--wash); box-shadow: inset 0 0 0 1px var(--ring); overflow: hidden; margin: 6px 0 4px; }
+.qbar > i { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 5px; }
+.qbar > b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink-2); opacity: .55; }
+.qwin { padding: 10px 0; border-top: 1px solid var(--grid); }
+.qwin:first-of-type { border-top: 0; }
+.qrow { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.qrow .dim { font-size: 12px; }
+.qplan { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--wash); font-size: 13px; line-height: 1.45; }
+.qplan .chip { display: inline-block; font-size: 11px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase; padding: 1px 7px; border-radius: 8px; margin-right: 6px; }
 .bar-cell { display: flex; align-items: center; gap: 8px; min-width: 120px; }
 .bar-cell .b { height: 6px; border-radius: 3px; background: var(--s1); min-width: 2px; }
 .insights { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
@@ -778,9 +787,72 @@ function insightCards(list) {
 
 // ---------------------------------------------------------------------------------------------- views
 const VIEWS = [
-  ["overview", "Overview"], ["agents", "Agents"], ["spend", "Spend"], ["work_packages", "Work packages"], ["errors", "Errors"], ["versions", "Versions"], ["retro", "Retro"], ["data", "Data"],
+  ["overview", "Overview"], ["quota", "Quota"], ["agents", "Agents"], ["spend", "Spend"], ["work_packages", "Work packages"], ["errors", "Errors"], ["versions", "Versions"], ["retro", "Retro"], ["data", "Data"],
 ];
 const V = {};
+
+const HOST_NAME = {codex: "Codex", claude: "Claude", antigravity: "Antigravity"};
+const hostVar = h => ({codex: "var(--s1)", claude: "var(--s2)", antigravity: "var(--s3)"})[h] || "var(--s7)";
+const PLAN_SEV = {redeem_now: "good", on_track: "info", behind: "warning", will_be_lost: "critical", unmeasured: "info", expired: "info", unknown: "info"};
+const PLAN_NAME = {redeem_now: "Redeem now", on_track: "On track", behind: "Behind", will_be_lost: "Will be lost", unmeasured: "Pace unmeasured", expired: "Expired", unknown: "Unknown"};
+const untilText = ts => { if (!ts) return "–"; const h = (ts * 1000 - Date.now()) / 36e5; return h < 0 ? "passed" : h < 48 ? `in ${h.toFixed(h < 10 ? 1 : 0)} h` : `in ${(h / 24).toFixed(1)} days`; };
+const atText = ts => ts ? new Date(ts * 1000).toLocaleString("en", {weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"}) : "–";
+
+V.quota = () => {
+  const Q = RAW.meta.quota || {};
+  if (Q.error || !Q.hosts) return card("Quota", Q.error ? `The quota couldn't be read when this page was written: ${Q.error}` : "This page was written before the script read quota. Run `dashboard` again.");
+  const hosts = Q.hosts.filter(h => (h.windows || []).length || (h.plans || []).length);
+  const due = Q.plans_due || [];
+  const hostCard = h => {
+    const wins = (h.windows || []).map(w => {
+      const used = Math.max(0, Math.min(100, w.used_pct || 0));
+      const sev = used >= 95 ? "var(--critical)" : used >= 80 ? "var(--warning)" : hostVar(h.host);
+      const projected = w.pct_per_hour != null && w.hours_to_reset != null ? Math.min(100, used + w.pct_per_hour * w.hours_to_reset) : null;
+      return el("div", {class: "qwin"},
+        el("div", {class: "qrow"}, el("span", {}, el("b", {}, w.label || w.name), ` · ${used.toFixed(0)}% used`), el("span", {class: "dim"}, `resets ${untilText(w.resets_at)} · ${atText(w.resets_at)}`)),
+        el("div", {class: "qbar", title: projected != null ? `at this pace about ${projected.toFixed(0)}% by the reset` : ""},
+          el("i", {style: `width:${used}%;background:${sev}`}), projected != null ? el("b", {style: `left:calc(${projected}% - 1px)`}) : null),
+        el("div", {class: "qrow"}, el("span", {class: "dim"}, w.pct_per_hour != null ? `${w.pct_per_hour}%/h measured` : "pace not measured yet"),
+          el("span", {class: "dim"}, w.left_at_reset_pct != null ? `about ${w.left_at_reset_pct.toFixed(0)}% unused at the reset` : w.runs_out_in_h != null ? `runs out in ${w.runs_out_in_h} h` : "")));
+    });
+    const plans = (h.plans || []).map(p => el("div", {class: "qplan"},
+      el("span", {class: "chip", style: `background:color-mix(in srgb, ${SEV[PLAN_SEV[p.status]] || SEV.info} 18%, transparent);color:var(--ink)`}, PLAN_NAME[p.status] || p.status),
+      el("b", {}, `Banked reset, expires ${untilText(p.expires_at)}`), p.agreed ? el("span", {class: "dim"}, " · plan agreed") : null,
+      el("div", {style: "margin-top:4px"}, p.say || ""),
+      p.need_pct_per_hour != null ? el("div", {class: "dim", style: "margin-top:4px"}, `Burn target ${p.need_pct_per_hour}%/h against ${p.pct_per_hour}%/h measured · worth about ${(p.worth_pct || 0).toFixed(0)}% at best`) : null));
+    const age = h.age_s != null ? `read ${Math.round(h.age_s / 60)} min before this page was written` : "";
+    return card(el("span", {class: "status"}, el("i", {style: `background:${hostVar(h.host)}`}), HOST_NAME[h.host] || h.host, h.plan ? el("span", {class: "dim"}, ` · ${h.plan}`) : null),
+      [age, h.error ? `last read failed: ${h.error}` : ""].filter(Boolean).join(" · "), ...wins, ...plans);
+  };
+  const r = Q.routing;
+  const routeCard = card("Where the next builder goes", r ? "Routing picks among the Agents table's Builder row: the host that would otherwise lose the most quota at its next reset, or one with an agreed banked-reset plan." : "The settings have no Agents table, so every run goes to the host the lead names, or the Default host.",
+    r ? kv([["Host", HOST_NAME[r.host] || r.host], ["Model", [r.model, r.effort].filter(Boolean).join(" ")], ["Why", r.why], ...(r.others || []).map(o => [HOST_NAME[o.host] || o.host, `${o.open ? "open" : "closed"}: ${o.why}`])]) : null);
+  const H = Q.history || {labels: [], series: []};
+  const first = Math.min(...H.series.map(s => s.values.findIndex(v => v != null)).filter(i => i >= 0), H.labels.length);
+  const live = H.series.filter(s => s.values.some(v => v != null)).map(s => ({...s, values: s.values.slice(first)}));
+  const span = H.labels.slice(first);
+  const histCard = card("Use over the last week", "Each window's use, hour by hour, from the script's own readings. A drop is a reset: by itself, or a banked one redeemed.",
+    legend(live.map(s => [s.name, hostVar(s.host)]), true),
+    span.length >= 2 ? chartHost(h => lines(h, span.map(t => new Date(t * 1000).toLocaleString("en", span.length > 48 ? {weekday: "short"} : {hour: "2-digit"})),
+      live.map(s => { let last = s.values.find(v => v != null); return {name: s.name, color: hostVar(s.host), values: s.values.map(v => (last = v == null ? last : v))}; }), x => x.toFixed(0) + "%"))
+      : el("p", {class: "dim"}, "Not enough readings yet: the script reads each host when it routes work or shows quota, at most every ten minutes, and the chart starts once there are two hours of them."));
+  const KIND = {natural: "Reset by itself", early: "Reset early (a banked reset redeemed?)", banked_redeemed: "Banked reset redeemed", banked_expired: "Banked reset expired"};
+  const resets = (Q.resets || []).slice().sort((a, b) => b.at - a.at);
+  const resetCard = card("Resets and redemptions", "The last two weeks, as the readings showed them.",
+    resets.length ? el("table", {}, el("thead", {}, el("tr", {}, ["When", "Host", "What", "Window"].map(c => el("th", {}, c)))),
+      el("tbody", {}, resets.map(e => el("tr", {}, el("td", {}, atText(e.at)), el("td", {}, HOST_NAME[e.host] || e.host), el("td", {}, KIND[e.kind] || e.kind),
+        el("td", {}, e.window ? `${e.window}: ${e.used_before_pct ?? "?"}% → ${e.used_after_pct ?? "?"}%` : (e.title || "")))))) : el("p", {class: "dim"}, "None seen yet."));
+  const top = due.length ? insightCards(due.map(p => [PLAN_SEV[p.status] || "info", `${HOST_NAME[p.host] || p.host} banked reset`, (p.say || "").replace(/[<>&]/g, "")])) : null;
+  return [
+    top, top ? el("div", {style: "height:16px"}) : null,
+    el("div", {class: "grid g-2"}, ...hosts.map(hostCard)),
+    el("div", {style: "height:16px"}),
+    el("div", {class: "grid g-2"}, routeCard, resetCard),
+    el("div", {style: "height:16px"}),
+    histCard,
+    el("p", {class: "dim", style: "margin-top:12px"}, "Only you redeem a banked reset. The plan says when it is worth most; the script never redeems one."),
+  ].filter(Boolean);
+};
 
 V.overview = f => {
   const ms = f.work_packages, done = ms.filter(m => m.status === "done" || m.done).length;
@@ -832,7 +904,7 @@ V.overview = f => {
 V.agents = f => {
   const rows = laneStats(f.turns, f.sessions, f.events);
   const byModel = groupBy(f.turns, t => t.model || "unknown");
-  const modelRows = [...byModel.entries()].map(([m, ts]) => ({name: m, value: sum(ts, U().f), color: ts[0].host === "claude" ? "var(--s2)" : "var(--s1)", sub: `${ts[0].host} · ${ts.length} turns`}));
+  const modelRows = [...byModel.entries()].map(([m, ts]) => ({name: m, value: sum(ts, U().f), color: hostVar(ts[0].host), sub: `${ts[0].host} · ${ts.length} turns`}));
   const durBuckets = [[0, 1, "< 1 min"], [1, 5, "1–5 min"], [5, 15, "5–15 min"], [15, 30, "15–30 min"], [30, 60, "30–60 min"], [60, 120, "1–2 h"], [120, 1e9, "2 h +"]];
   const script = f.turns.filter(t => ["build", "review", "plan"].includes(t.lane));
   const hist = durBuckets.map(([a, b, label]) => ({key: label, label, values: Object.fromEntries(["build", "review", "plan"].map(l => [l, script.filter(t => t.lane === l && (t.duration_ms || 0) / 6e4 >= a && (t.duration_ms || 0) / 6e4 < b).length]))}));
@@ -851,7 +923,7 @@ V.agents = f => {
       r => laneDrawer(r, f), {key: "cost", dir: -1})),
     el("div", {style: "height:16px"}),
     el("div", {class: "grid g-2"},
-      card("Models", "Spend by model. Blue for Codex, orange for Claude.", legend([["Codex", "var(--s1)"], ["Claude", "var(--s2)"]]), chartHost(h => rankedBars(h, modelRows, U().fmt))),
+      card("Models", "Spend by model, coloured by host.", legend([["Codex", "var(--s1)"], ["Claude", "var(--s2)"], ["Antigravity", "var(--s3)"]]), chartHost(h => rankedBars(h, modelRows, U().fmt))),
       card("How long turns run", "The script's turns by length.", legend(three.map(s => [s.name, s.color])), chartHost(h => stackedColumns(h, hist, three, compact)))),
     el("div", {style: "height:16px"}),
     card("How full the context got", "Each turn's peak context as a share of its window. Turns near the top are where compactions start.", legend(three.map(s => [s.name, s.color])),
@@ -1003,7 +1075,7 @@ function buildFilters() {
   $("#unit").replaceChildren(...Object.entries(UNITS).map(([k, u]) => el("button", {"aria-pressed": String(S.unit === k), onclick: () => { S.unit = k; save(); render(); }}, u.name)));
   $("#unitNote").textContent = U().note;
   const opts = (id, all, values, cur, names = {}) => { $(id).replaceChildren(el("option", {value: "all"}, all), ...values.map(v => el("option", {value: v, selected: v === cur}, names[v] || v))); };
-  opts("#fHost", "Both hosts", [...new Set(turnsAll.map(t => t.host))].sort(), S.host, {codex: "Codex", claude: "Claude"});
+  opts("#fHost", "Every host", [...new Set(turnsAll.map(t => t.host))].sort(), S.host, {codex: "Codex", claude: "Claude", antigravity: "Antigravity"});
   opts("#fLane", "Every kind of agent", LANES.concat(["other"]).filter(l => turnsAll.some(t => t.lane === l)), S.lane, LANE_NAME);
   opts("#fModule", "Every module", [...new Set([...RAW.work_packages.map(m => (m.module || "").toUpperCase()), ...turnsAll.map(t => (t.module || "").toUpperCase())].filter(Boolean))].sort(), S.module);
   $("#fHost").onchange = e => { S.host = e.target.value; save(); render(); };

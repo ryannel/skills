@@ -1,0 +1,437 @@
+{
+  "about": "The models orchestrate's Agents table can name, per host, with what each is for and its list price per million tokens. Prices are the API list price, for comparing hosts only: a subscription is charged by its plan's quota, never by these. A copy at ~/.config/orchestrate/models.json overrides an entry with the same host and id, and adds new ones. The models skill keeps this file current. Default efforts are Claude Code's and Codex's, not the API's. Codex prices are for prompts up to 272K tokens; efforts left empty are ones OpenAI doesn't list per model.",
+  "checked": "2026-11-26",
+  "models": [
+    {
+      "host": "antigravity",
+      "id": "gemini-4-carbon",
+      "name": "Gemini 4 Carbon",
+      "for": "Google's model for deep, long-horizon work: architecture, hard debugging, security",
+      "roles": [
+        "plan",
+        "design"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default_effort": "medium",
+      "context": 1048576,
+      "price": {
+        "input": 2.0,
+        "cached": 0.1,
+        "output": 10.0
+      },
+      "price_changes": [
+        {
+          "from": "2026-12-01",
+          "input": 4.0,
+          "cached": 0.2,
+          "output": 20.0
+        }
+      ],
+      "plans": [
+        "Google AI Pro",
+        "Google AI Ultra",
+        "Enterprise"
+      ],
+      "retires": null,
+      "sources": [
+        "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-carbon",
+        "https://antigravity.google/docs/models/",
+        "https://aistudio.google.com/docs/pricing"
+      ]
+    },
+    {
+      "host": "antigravity",
+      "id": "gemini-4-neon",
+      "name": "Gemini 4 Neon",
+      "for": "Google's model for complex coding and production work; the default in Antigravity on paid plans, about a third cheaper per task than Carbon at high",
+      "roles": [
+        "build",
+        "review"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "default_effort": "high",
+      "context": 524288,
+      "price": {
+        "input": 3.0,
+        "cached": 0.15,
+        "output": 15.0
+      },
+      "plans": [
+        "Google AI Pro",
+        "Google AI Ultra",
+        "Enterprise"
+      ],
+      "retires": null,
+      "sources": [
+        "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-neon",
+        "https://discuss.ai.google.dev/t/gemini-4-neon-and-orchestrator-neon-are-now-available-in-google-antigravity/202301",
+        "https://aistudio.google.com/docs/pricing"
+      ]
+    },
+    {
+      "host": "antigravity",
+      "id": "gemini-4-hydrogen",
+      "name": "Gemini 4 Hydrogen",
+      "for": "Google's fast model, for boilerplate, upgrades, unit tests and docs; the executor in Antigravity's Orchestrator",
+      "roles": [],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "default_effort": null,
+      "context": 1048576,
+      "price": {
+        "input": 1.5,
+        "cached": 0.075,
+        "output": 7.5
+      },
+      "plans": [
+        "every Antigravity plan"
+      ],
+      "retires": null,
+      "sources": [
+        "https://antigravity.google/docs/models/",
+        "https://aistudio.google.com/docs/pricing"
+      ]
+    },
+    {
+      "host": "antigravity",
+      "id": "gemini-4-argon",
+      "name": "Gemini 4 Argon",
+      "for": "retiring: use Carbon",
+      "roles": [],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default_effort": "medium",
+      "context": null,
+      "price": {
+        "input": 2.0,
+        "cached": null,
+        "output": 10.0
+      },
+      "plans": [
+        "Google AI Pro",
+        "Google AI Ultra"
+      ],
+      "retires": "2026-11-30",
+      "sources": [
+        "https://antigravity.google/docs/models/"
+      ]
+    },
+    {
+      "host": "antigravity",
+      "id": "claude-opus-5-5",
+      "name": "Claude Opus 5.5 in Antigravity",
+      "for": "Anthropic's Opus 5.5 run by Antigravity, on its Claude and GPT quota group, separate from the Gemini one and from a Claude plan",
+      "roles": [
+        "plan",
+        "build",
+        "review",
+        "design"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default_effort": null,
+      "context": null,
+      "price": {
+        "input": 4.0,
+        "cached": 0.2,
+        "output": 20.0
+      },
+      "plans": [
+        "Google AI Pro",
+        "Google AI Ultra"
+      ],
+      "retires": null,
+      "sources": [
+        "https://antigravity.google/docs/models/",
+        "agy models (Antigravity CLI 1.5.18, 2026-11-26)"
+      ]
+    },
+    {
+      "host": "antigravity",
+      "id": "claude-sonnet-5-5",
+      "name": "Claude Sonnet 5.5 in Antigravity",
+      "for": "Anthropic's Sonnet 5.5 run by Antigravity, on its Claude and GPT quota group",
+      "roles": [
+        "build",
+        "review"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default_effort": null,
+      "context": null,
+      "price": {
+        "input": 2.0,
+        "cached": 0.1,
+        "output": 10.0
+      },
+      "plans": [
+        "Google AI Pro",
+        "Google AI Ultra"
+      ],
+      "retires": null,
+      "sources": [
+        "https://antigravity.google/docs/models/",
+        "agy models (Antigravity CLI 1.5.18, 2026-11-26)"
+      ]
+    },
+    {
+      "host": "claude",
+      "id": "claude-fable-5-2",
+      "name": "Claude Fable 5.2",
+      "for": "Anthropic's model for demanding reasoning and long-horizon agentic work; on Max and Ultra it may use up to half the weekly limit",
+      "roles": [
+        "plan",
+        "design"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default_effort": "medium",
+      "context": 1000000,
+      "price": {
+        "input": 8.0,
+        "cached": 0.2,
+        "output": 40.0
+      },
+      "plans": [
+        "Max",
+        "Ultra",
+        "Team (premium seats)",
+        "Enterprise",
+        "Pro (usage credits only)"
+      ],
+      "retires": null,
+      "sources": [
+        "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "https://platform.claude.com/docs/en/about-claude/pricing",
+        "https://code.claude.com/docs/en/model-config",
+        "https://claude.com/pricing"
+      ]
+    },
+    {
+      "host": "claude",
+      "id": "claude-opus-5-5",
+      "name": "Claude Opus 5.5",
+      "for": "Anthropic's model for long-running agentic coding and knowledge work; the default on every plan",
+      "roles": [
+        "plan",
+        "build",
+        "review",
+        "design"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default_effort": "medium",
+      "context": 1000000,
+      "price": {
+        "input": 4.0,
+        "cached": 0.2,
+        "output": 20.0
+      },
+      "plans": [
+        "Pro",
+        "Max",
+        "Ultra",
+        "Team",
+        "Enterprise"
+      ],
+      "retires": null,
+      "sources": [
+        "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "https://platform.claude.com/docs/en/about-claude/pricing",
+        "https://code.claude.com/docs/en/model-config"
+      ]
+    },
+    {
+      "host": "claude",
+      "id": "claude-sonnet-5-5",
+      "name": "Claude Sonnet 5.5",
+      "for": "Anthropic's balance of speed and intelligence, at half Opus's price",
+      "roles": [
+        "build",
+        "review"
+      ],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default_effort": "medium",
+      "context": 1000000,
+      "price": {
+        "input": 2.0,
+        "cached": 0.1,
+        "output": 10.0
+      },
+      "plans": [
+        "Pro",
+        "Max",
+        "Ultra",
+        "Team",
+        "Enterprise"
+      ],
+      "retires": null,
+      "sources": [
+        "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "https://platform.claude.com/docs/en/about-claude/pricing",
+        "https://code.claude.com/docs/en/model-config"
+      ]
+    },
+    {
+      "host": "claude",
+      "id": "claude-haiku-5-5",
+      "name": "Claude Haiku 5.5",
+      "for": "Anthropic's fast model for high-volume work: classification, extraction, routing",
+      "roles": [],
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default_effort": "medium",
+      "context": 1000000,
+      "price": {
+        "input": 0.1,
+        "cached": 0.01,
+        "output": 0.5
+      },
+      "plans": [
+        "Pro",
+        "Max",
+        "Ultra",
+        "Team",
+        "Enterprise"
+      ],
+      "retires": null,
+      "sources": [
+        "https://platform.claude.com/docs/en/about-claude/models/overview",
+        "https://platform.claude.com/docs/en/about-claude/pricing",
+        "https://code.claude.com/docs/en/model-config"
+      ]
+    },
+    {
+      "host": "codex",
+      "id": "gpt-6.2-sol",
+      "name": "GPT-6.2 Sol",
+      "for": "OpenAI's model for everyday coding and multi-source work, using fewer credits than Astra",
+      "roles": [
+        "plan",
+        "build",
+        "review",
+        "design"
+      ],
+      "efforts": [],
+      "default_effort": null,
+      "context": 500000,
+      "price": {
+        "input": 2.0,
+        "cached": 0.1,
+        "output": 10.0
+      },
+      "plans": [
+        "Plus",
+        "Pro",
+        "Business",
+        "Enterprise (once an admin enables it)"
+      ],
+      "retires": null,
+      "sources": [
+        "https://learn.chatgpt.com/docs/models",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://learn.chatgpt.com/docs/pricing"
+      ]
+    },
+    {
+      "host": "codex",
+      "id": "gpt-6.2-astra",
+      "name": "GPT-6.2 Astra",
+      "for": "OpenAI's model for the hardest end-to-end work, such as tracing a bug across services; about four times Sol's price",
+      "roles": [
+        "plan",
+        "design"
+      ],
+      "efforts": [],
+      "default_effort": null,
+      "context": 272000,
+      "price": {
+        "input": 8.0,
+        "cached": 0.4,
+        "output": 40.0
+      },
+      "plans": [
+        "Plus",
+        "Pro",
+        "Business",
+        "Enterprise (once an admin enables it)"
+      ],
+      "retires": null,
+      "sources": [
+        "https://learn.chatgpt.com/docs/models",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://learn.chatgpt.com/docs/pricing"
+      ]
+    },
+    {
+      "host": "codex",
+      "id": "gpt-6.1-terra",
+      "name": "GPT-6.1 Terra",
+      "for": "OpenAI's fast, efficient model for writing, vision and computer use",
+      "roles": [],
+      "efforts": [],
+      "default_effort": null,
+      "context": null,
+      "price": {
+        "input": 1.0,
+        "cached": 0.05,
+        "output": 5.0
+      },
+      "plans": [
+        "Plus",
+        "Pro",
+        "Business",
+        "Enterprise"
+      ],
+      "retires": null,
+      "sources": [
+        "https://learn.chatgpt.com/docs/models",
+        "https://developers.openai.com/api/docs/pricing",
+        "https://learn.chatgpt.com/docs/pricing"
+      ]
+    }
+  ]
+}

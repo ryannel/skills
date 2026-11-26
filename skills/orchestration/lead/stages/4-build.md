@@ -23,6 +23,23 @@ background, and again when it ends, or a stopped run waits until you next look.
 When the user changes how the agents work, such as the most builders they allow, save it with `settings --set` and
 their words, so every later command follows it.
 
+With an Agents table, choosing a host is the script's job: a run that names none goes where the most quota would
+otherwise be lost, stays on its host while that host has quota so the builder's session resumes, and moves to
+another host in its row when that one runs out. Its result says where it went and why, in `routed`. Name a host
+yourself only when you have a reason the script can't see. When every host is out, the result says so, and the
+choice to wait or to add a host is the user's.
+
+A banked reset is a reset of a usage window that Codex or Claude gives the user to redeem when they choose, and it
+expires. Only the user redeems one, so never try to. What you do is plan for it: when one nears its expiry and the
+pace of the work leaves it worth little, a wake carries its plan (`reset_plans` in `flow` and `quota`), with what it
+is worth at the current pace, the pace that makes it worth nearly a whole window, and when to redeem it. Bring that
+to the user as a proposal they can agree or change, for instance more builders on that host until a given day, and
+then the moment to redeem it and where. When they agree, record it with `quota --plan agree <id> --said '<their
+words>'`, which makes routing favour that host; `--plan withdraw` undoes it. A redemption is worth what the window
+has used when it happens, so long as there is time before the window's own reset to spend it, which is why the plan
+suggests a moment rather than "now". If the user tells you about a reset the script can't see, record it with `quota
+--bank <host> --expires <date>`.
+
 A wake says only why it came. Each time you are woken, run `flow` and read it whole, because you decide what needs
 attention: look at what moved, what is waiting and where time went before acting on the reason for the wake. Its
 `details` names the command for more on any part.

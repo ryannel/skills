@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-09",
+  "updated": "2026-11-26",
   "tiers": {
     "hot": 1,
     "active": 7,
@@ -2237,6 +2237,13 @@
           "claim": "Per-model behaviour and the prompt change for each symptom, for Claude Opus 5.5, Claude Fable 5.2, GPT-6.2 Astra and GPT-6.2 Sol (the GPT-6.2 file marks each line New in 6.2 or carried over from GPT-6 Astra / GPT-6.1 Sol); and host facts about instruction files (the 200-line and 32 KiB limits, how nested instruction files load).",
           "where": "skills/prompting-agents/references/models/*.md (one file per model; GPT-6.2 Astra and Sol share gpt-6-2.md) and instruction-files.md; the model list in SKILL.md",
           "check": "Re-read the vendor pages listed in workbench/prompting-agents/README.md (Anthropic's prompting pages for the current Fable and Opus models, OpenAI's Using GPT-6.2 guide (developers.openai.com/api/docs/guides/latest-model/gpt-6.2-astra.md), the Prompting GPT-6.2 in Codex guide (learn.chatgpt.com/guides/prompting-gpt-6-2-astra), the GPT-6 Astra skills blog post, the Claude Code memory page, OpenAI's AGENTS.md page). If a newer top model has shipped, add a file for it under references/models/, drop the oldest, and update the list in SKILL.md. Update the checked date at the top of each file you re-checked. In gpt-6-2.md, re-test or drop lines marked From GPT-6 Astra / From GPT-6.1 Sol once OpenAI publishes 6.2 guidance that covers them."
+        },
+        {
+          "id": "prompting-agents-gemini-4",
+          "type": "model-names",
+          "claim": "references/models/gemini-4.md: Gemini 4 Neon and Carbon efforts and defaults, Google's habits to write against (no length targets, sequential tool turns for Carbon, nothing before a tool call), lines marked Reported, and Antigravity's instruction-file limits (24,000 bytes per file, 20,000-token rules budget).",
+          "where": "skills/prompting-agents/references/models/gemini-4.md",
+          "check": "Has Google published a Gemini 4 prompting guide? If so, replace the Reported lines with what it says. Re-read the Neon and Carbon model guides and antigravity.google/docs/rules."
         }
       ]
     },
@@ -2280,6 +2287,24 @@
           "claim": "The glossary rules rest on mattpocock/skills domain-modeling (GLOSSARY.md) and EveryInc/compound-engineering CONCEPTS.md as read on 10 Nov 2026.",
           "where": "skills/domain-language",
           "check": "Have those libraries changed their glossary format or published evidence that a glossary helps agents?"
+        }
+      ]
+    },
+    "models": {
+      "path": "skills/orchestration/models",
+      "tier": "hot",
+      "cadence_days": 2,
+      "last_checked": "2026-11-26",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "Registered 2026-11-26. The shipped catalogue skills/orchestration/lead/scripts/models.json holds model IDs, efforts, list prices, plans and retirement dates for Codex, Claude and Antigravity, which change within days of a launch (Argon retires 2026-11-30; Carbon's price doubles 2026-12-01).",
+      "watchlist": [
+        {
+          "id": "model-catalogue",
+          "type": "model-names",
+          "claim": "models.json lists the current agent models on each host with their IDs, CLI efforts and defaults, context, list prices, announced price changes, plans and retirement dates.",
+          "where": "skills/orchestration/lead/scripts/models.json; the vendor pages named in skills/orchestration/models/SKILL.md",
+          "check": "Re-read each vendor's model and pricing pages. Add launched models, mark retirements, apply price changes, and check the SETTINGS_TEMPLATE Agents table in agent_loop.py still names current models (test_hosts.Catalogue checks this)."
         }
       ]
     }

@@ -109,15 +109,18 @@ import time
 import uuid
 from collections import deque
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_quota  # noqa: E402  (beside this file)
 import delivery_history  # noqa: E402  (beside this file)
+import host_quota  # noqa: E402  (beside this file)
 
-DEFAULT_MODELS = {"codex": "gpt-6.2-sol", "claude": "claude-opus-5-5"}
+DEFAULT_MODELS = {"codex": "gpt-6.2-sol", "claude": "claude-opus-5-5", "antigravity": "gemini-4-neon"}
+BUILT_IN_HOSTS = ("codex", "claude", "antigravity")  # the hosts the script has adapters for: sessions, tokens, pins
+APP_HOSTS = ("codex", "claude")  # the hosts whose desktop apps can show the script's sessions
 DEFAULT_MODEL = DEFAULT_MODELS["codex"]
 # The settings' word for each kind of agent -> the role a launch resolves. A settings line names a kind, with or
 # without a host in front: "- **Claude planner:** claude-fable-5-2 high" or "- **Reviewer:** high".
@@ -128,6 +131,7 @@ EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 CODEX = os.environ.get("ORCHESTRATE_CODEX") or shutil.which("codex") or \
     "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
 CLAUDE = os.environ.get("ORCHESTRATE_CLAUDE") or shutil.which("claude") or "claude"
+AGY = os.environ.get("ORCHESTRATE_AGY") or shutil.which("agy") or str(Path.home() / ".local/bin/agy")  # Antigravity's CLI
 CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
 REPORT_WORDS = ("DONE", "BLOCKED", "NEEDS_CONTEXT")
 STATUSES = {"not_started", "in_progress", "ready_for_review", "done", "blocked"}
@@ -278,13 +282,15 @@ PROFILE_FIELDS = {"plans": "docs/plans", "evidence": ".orchestrate/evidence", "t
                   "remote": "origin", "merge": None, "codex sandbox": "workspace-write", "writable roots": "",
                   "graded examples": "", "effort": "", "claude permissions": "auto", "default host": "",
                   "review host": "", "planner host": "", "exclusive resources": "", "setup command": "",
-                  "lead check-in": "", "test command lock": "", "worktrees": "", "lead wake": ""}
+                  "lead check-in": "", "test command lock": "", "worktrees": "", "lead wake": "",
+                  "antigravity permissions": "auto"}
 REQUIRED = {"test command": "the command that must pass before merging, or `none`",
             "merge": "push (standing permission to push) or local"}
 ONE_WORD = {"branch", "remote", "merge", "codex sandbox", "effort", "claude permissions", "default host",
-            "review host", "planner host"}
+            "review host", "planner host", "antigravity permissions"}
 ALLOWED = {"codex sandbox": {"workspace-write", "danger-full-access"}, "merge": {"push", "local"},
-           "effort": EFFORTS, "claude permissions": {"auto", "acceptEdits", "bypassPermissions", "dontAsk"}}
+           "effort": EFFORTS, "claude permissions": {"auto", "acceptEdits", "bypassPermissions", "dontAsk"},
+           "antigravity permissions": {"auto", "accept-edits", "skip-permissions"}}
 PLACEHOLDER = re.compile(r"<[A-Za-z][^<>]*>")  # "<where review files go>", not "cmd < input"
 BOUNDS = ("Licences and paths not to touch", "Human decides")  # the settings' out-of-bounds lines
 
@@ -338,8 +344,8 @@ def role_lines(text: str, hosts: set, problems: list) -> dict:
         if len(efforts) > 1 or len(models) > 1:
             problems.append(f"{label}: {raw!r} (want one model, one effort, or both)")
         elif host and host not in hosts:
-            problems.append(f"{label}: {host!r} isn't a host these settings can start (codex, claude, or one with a "
-                            f"'Host {host}:' line)")
+            problems.append(f"{label}: {host!r} isn't a host these settings can start (codex, claude, antigravity, or "
+                            f"one with a 'Host {host}:' line)")
         elif models and not host:
             problems.append(f"{label}: {raw!r} (a model belongs to one host, so name the host: "
                             f"'<Host> {kind}: {models[0]}'. With no host the line takes an effort only)")
@@ -350,6 +356,76 @@ def role_lines(text: str, hosts: set, problems: list) -> dict:
                 entry["hosts"][host] = {"model": models[0] if models else None, "effort": effort}
             else:
                 entry["effort"] = effort
+    return out
+
+
+AGENTS_SECTION = re.compile(r"^##[ \t]+Agents[ \t]*$(.*?)(?=^##[ \t]|\Z)", re.M | re.S)
+NO_CELL = {"", "-", "\u2014", "\u2013", "none", "no", "n/a"}
+
+
+def agents_table(text: str, hosts: set, problems: list) -> dict:
+    """The settings' `## Agents` table: one row for each kind of agent (Planner, Builder, Reviewer, Design reviewer),
+    one column for each host the project may use, and in each cell the model and effort that kind of agent runs on
+    that host. A blank cell, or `-`, keeps that kind of agent off that host. Returns {"roles": {role: {"effort":
+    None, "hosts": {host: {model, effort}}}}, "hosts": [the columns in order], "allowed": {role: [hosts in column
+    order]}}: `roles` has the shape `role_lines` gives, so the old per-host lines and the table read the same way,
+    and `allowed` is what `route` chooses among. Empty when there's no table."""
+    section = AGENTS_SECTION.search(text)
+    if not section:
+        return {}
+    rows = [line.strip() for line in section.group(1).splitlines() if line.strip().startswith("|")]
+    if len(rows) < 2:
+        return {}
+
+    def cells(row: str) -> list[str]:
+        return [re.sub(r"\*\(.*?\)\*", "", c).replace("`", "").strip() for c in row.strip().strip("|").split("|")]
+    head = [c.lower() for c in cells(rows[0])]
+    columns = head[1:]
+    for host in columns:
+        if host not in hosts:
+            problems.append(f"Agents table: column {host!r} isn't a host these settings can start (codex, claude, "
+                            f"antigravity, or one with a 'Host {host}:' line)")
+    out = {"roles": {}, "hosts": [h for h in columns if h in hosts], "allowed": {}}
+    kinds = {"planner": "plan", "planners": "plan", "builder": "build", "builders": "build", "reviewer": "review",
+             "reviewers": "review", "design reviewer": "design", "design reviewers": "design"}
+    for row in rows[1:]:
+        parts = cells(row)
+        if not parts or set(parts[0]) <= set("-: "):
+            continue
+        role = kinds.get(parts[0].lower())
+        if not role:
+            problems.append(f"Agents table: row {parts[0]!r} isn't a kind of agent (Planner, Builder, Reviewer or "
+                            "Design reviewer)")
+            continue
+        entry = out["roles"].setdefault(role, {"effort": None, "hosts": {}})
+        allowed = out["allowed"].setdefault(role, [])
+        for host, cell in zip(columns, parts[1:]):
+            if host not in hosts:
+                continue
+            raw = cell.replace(",", " ").strip()
+            if raw.lower() in NO_CELL or PLACEHOLDER.search(raw):
+                continue
+            efforts = [t for t in raw.split() if t.lower() in EFFORTS]
+            models = [t for t in raw.split() if t.lower() not in EFFORTS]
+            if len(efforts) > 1 or len(models) != 1:
+                problems.append(f"Agents table: {parts[0]} on {host}: {raw!r} (want one model and an optional effort, "
+                                "such as 'gpt-6.2-sol medium')")
+                continue
+            entry["hosts"][host] = {"model": models[0], "effort": efforts[0].lower() if efforts else None}
+            allowed.append(host)
+    if "design" not in out["allowed"] and "review" in out["allowed"]:
+        out["allowed"]["design"] = list(out["allowed"]["review"])  # a design review with no row uses the reviewer's
+    return out
+
+
+def merge_roles(lines: dict, table: dict) -> dict:
+    """The per-host lines' settings with the table's on top: the table wins for any host it gives a cell."""
+    out = copy.deepcopy(lines)
+    for role, entry in (table.get("roles") or {}).items():
+        mine = out.setdefault(role, {"effort": None, "hosts": {}})
+        for host, cell in entry["hosts"].items():
+            mine["hosts"][host] = {"model": cell["model"] or (mine["hosts"].get(host) or {}).get("model"),
+                                   "effort": cell["effort"] or (mine["hosts"].get(host) or {}).get("effort")}
     return out
 
 
@@ -386,7 +462,7 @@ def builders_count(text: str) -> int | None:
         return int(word) if word.isdigit() else NUMBER_WORDS[word.lower()]
     found = list(re.finditer(number + r"((?:\s+(?!(?:and|or|\d+|" + "|".join(NUMBER_WORDS) +
                              r")\b)[\w.-]+){0,3}?\s+builders?\b)(\s*[:(\u2014])?", value, re.IGNORECASE))
-    hosts = r"(?:codex|claude)"
+    hosts = r"(?:codex|claude|antigravity)"
     if found and found[0].group(3) and not re.search(rf"\b{hosts}\b", found[0].group(2), re.IGNORECASE):
         return count(found[0].group(1)) or None
     # A number with a host's name within the three words after it counts builders on that host ("2 Codex, 1 Claude",
@@ -461,8 +537,9 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
     for m in re.finditer(r"^\s*[-*]\s*\*\*Host ([\w.-]+):\*\*[ \t]*(.*)$", text, re.IGNORECASE | re.MULTILINE):
         name, command = m.group(1).lower(), re.sub(r"\*\(.*?\)\*", "", m.group(2)).replace("`", "").strip()
         missing = [f"{{{k}}}" for k in ("prompt", "model", "effort") if f"{{{k}}}" not in command]
-        if name in ("codex", "claude"):
-            problems.append(f"host {name}: {command!r} (codex and claude are built in, so they take no Host line)")
+        if name in BUILT_IN_HOSTS:
+            problems.append(f"host {name}: {command!r} (codex, claude and antigravity are built in, so they take no "
+                            "Host line)")
         elif missing:
             # Every launch names its model and effort, so a host whose command can't take them would run on its
             # own default, which the settings didn't choose.
@@ -471,7 +548,9 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
                             "every launch, so none is left to the host's own default)")
         else:
             out["hosts"][name] = command
-    out["roles"] = role_lines(text, {"codex", "claude", *out["hosts"]}, problems)
+    out["roles"] = role_lines(text, {*BUILT_IN_HOSTS, *out["hosts"]}, problems)
+    out["agents_table"] = agents_table(text, {*BUILT_IN_HOSTS, *out["hosts"]}, problems)
+    out["roles"] = merge_roles(out["roles"], out["agents_table"])
     gen = re.search(r"\*\*Codex generator:\*\*[ \t]*(.*)$", text, re.MULTILINE)  # older profiles
     if gen:
         m = re.match(r"`?([\w.\-]+)`?[ ,]+`?(\w+)`?", re.sub(r"\*\(.*?\)\*", "", gen.group(1)).strip())
@@ -483,17 +562,24 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
     out["model"] = out["models"]["codex"]
     out["sandbox"] = out.pop("codex sandbox")
     out["claude_permissions"] = out.pop("claude permissions")
+    out["antigravity_permissions"] = out.pop("antigravity permissions")
+    if (out["antigravity_permissions"] or "").lower() not in ("", "auto", "accept-edits", "plan", "turbo",
+                                                              "skip-permissions"):
+        problems.append(f"antigravity permissions: {out['antigravity_permissions']!r} (want auto, accept-edits, plan, "
+                        "turbo or skip-permissions)")
     out["default_host"] = out.pop("default host").lower()
     out["review_host"] = out.pop("review host").lower()
-    if out["review_host"] not in ("", "same", "other", "codex", "claude", *out["hosts"]):
-        problems.append(f"review host: {out['review_host']!r} (want same, other, codex, claude or a host these settings "
-                        "names)")
+    if out["review_host"] not in ("", "same", "other", *BUILT_IN_HOSTS, *out["hosts"]):
+        problems.append(f"review host: {out['review_host']!r} (want same, other, codex, claude, antigravity or a host "
+                        "these settings names)")
         out["review_host"] = ""
     out["planner_host"] = out.pop("planner host").lower()
-    if out["planner_host"] not in ("", "codex", "claude", *out["hosts"]):
-        problems.append(f"planner host: {out['planner_host']!r} (want codex, claude or a host these settings names)")
+    if out["planner_host"] not in ("", *BUILT_IN_HOSTS, *out["hosts"]):
+        problems.append(f"planner host: {out['planner_host']!r} (want codex, claude, antigravity or a host these "
+                        "settings names)")
         out["planner_host"] = ""
     out["builders"] = builders_count(text)
+    out["builders_by_host"] = builders_by_host(text, {*BUILT_IN_HOSTS, *out["hosts"]})
     # the line itself is the user's agreement to the first build; a line with no number sets no most
     value = profile_value(text, "builders")
     out["builders_set"] = bool(value and not PLACEHOLDER.search(value))
@@ -544,7 +630,11 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
             raise SystemExit(message)
         if not (missing_ok and not path.exists()):
             print("warning: " + message, file=sys.stderr)
+    LAST_PROFILE["prof"] = out
     return out
+
+
+LAST_PROFILE: dict = {}  # the settings this process read last, for `other_host` where a caller has none to hand
 
 
 def settings_at_tip(worktree: Path, text: str) -> str:
@@ -3544,6 +3634,55 @@ def run_proc(args, cwd: Path | None, timeout_s: float, shell: bool = False,
                     return (130 if _STOP else 124), out, err + ("\n(stopped)" if _STOP else "\n(timed out)")
 
 
+def run_in_pty(args: list[str], cwd: Path | None, timeout_s: float, env: dict | None = None) -> tuple[int, str, str]:
+    """`run_proc` for a CLI that writes nothing unless its output is a terminal: the command gets a pseudo-terminal
+    for stdout and stderr, both read back as one stream. Lines that parse as JSON are the stdout; the rest is
+    returned as stderr. Same exit codes as `run_proc`."""
+    import pty
+    master, slave = pty.openpty()
+    try:
+        proc = subprocess.Popen(args, cwd=cwd, stdin=subprocess.DEVNULL, stdout=slave, stderr=slave,
+                                start_new_session=True, env=env)
+    except OSError as e:
+        os.close(master)
+        os.close(slave)
+        return 127, "", f"couldn't start {args[0]}: {e}"
+    os.close(slave)
+    chunks, deadline, code = [], time.time() + timeout_s, None
+    import select
+    while True:
+        ready, _, _ = select.select([master], [], [], RUN_POLL_S)
+        if ready:
+            try:
+                data = os.read(master, 1 << 16)
+            except OSError:
+                data = b""
+            if data:
+                chunks.append(data)
+                continue
+        if proc.poll() is not None and not ready:
+            code = proc.returncode
+            break
+        if ready and proc.poll() is not None:
+            code = proc.returncode
+            break
+        if _STOP or time.time() > deadline:
+            kill_group(proc)
+            code = 130 if _STOP else 124
+            break
+    os.close(master)
+    stop_leftovers(proc.pid)
+    text = b"".join(chunks).decode(errors="replace").replace("\r\n", "\n")
+    out, err = [], []
+    for line in text.splitlines():
+        try:
+            json.loads(line)
+            out.append(line)
+        except json.JSONDecodeError:
+            err.append(line)
+    return code, "\n".join(out), "\n".join(err)
+
+
 # Each hold of a lock adds a line to locks.jsonl: when it was asked for, when it was got and released, and the
 # exit status of the command it covered when the caller knows it. `flow` reads them, so the lead can see how long
 # work queues for a resource and how much of the holding ends in failure. In Thrum, builders spent 42% of
@@ -5770,7 +5909,8 @@ def default_host(prof: dict) -> str:
         return "claude"
     if os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SANDBOX"):
         return "codex"
-    installed = [h for h, exe in (("codex", CODEX), ("claude", CLAUDE)) if shutil.which(exe) or Path(exe).exists()]
+    installed = [h for h, exe in (("codex", CODEX), ("claude", CLAUDE), ("antigravity", AGY))
+                 if shutil.which(exe) or Path(exe).exists()]
     return installed[0] if len(installed) == 1 else "codex"
 
 
@@ -5799,17 +5939,95 @@ def host_command(host: str, prof: dict, model: str, effort: str, worktree: Path,
         if title and not session and claude_supports("--name"):  # the name the Code tab lists it under
             args += ["--name", title]
         return args, clean_env(role)
+    if host == "antigravity":
+        args = [AGY, "-p", prompt, "--model", model, "--effort", effort, "--output-format", "stream-json",
+                "--add-dir", git_common_dir(worktree)]
+        mode = (prof.get("antigravity_permissions") or "auto").lower()
+        if mode == "skip-permissions":  # only the user chooses it, in the settings
+            args += ["--dangerously-skip-permissions"]
+        elif mode != "turbo":
+            # Named through --settings, not --mode: in print mode agy 1.5.18 checks --mode before its sign-in finishes,
+            # calls auto "not available for this account" and falls back to the account's default, which can be Turbo
+            args += ["--settings", json.dumps({"agentMode": mode})]
+        if session:
+            args += ["--conversation", session]
+        return args, agy_env(role)
     template = prof.get("hosts", {}).get(host)
     if not template:
-        raise SystemExit(f"error: unknown host {host!r}; use codex, claude, or add a '- **Host {host}:** <command>' "
-                         "line to ORCHESTRATE.md")
+        raise SystemExit(f"error: unknown host {host!r}; use codex, claude, antigravity, or add a "
+                         f"'- **Host {host}:** <command>' line to ORCHESTRATE.md")
     values = {"prompt": prompt, "model": model, "effort": effort, "cwd": str(worktree)}
     return [token.format(**values) for token in shlex.split(template)], env
 
 
+def agy_env(role: str = "build") -> dict:
+    """The environment for an Antigravity run: no Gemini API key or custom endpoint, so `agy` uses the signed-in plan
+    and never bills an API account, and no self-update while the script depends on how it behaves."""
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "AGY_ADC_AUTH", "GOOGLE_GEMINI_BASE_URL",
+                        "GOOGLE_APPLICATION_CREDENTIALS")}
+    return {**env, "AGY_CLI_DISABLE_AUTO_UPDATE": "true", "ORCHESTRATE_ROLE": role}
+
+
+def agy_events(stdout: str):
+    """Antigravity's stream-json lines as (event name, payload). Each line names its event under `event` and carries
+    the payload under a key of the same name; a line from `--output-format json` is one envelope, read as `result`."""
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        name = event.get("event") or event.get("type")
+        if not name and "conversation_id" in event and "status" in event:
+            name = "result"
+        body = event.get(name) if isinstance(event.get(name), dict) else event
+        yield name, body
+
+
+AGY_FAILED = {"ERROR", "INVALID"}  # a result status that means the turn failed; CANCELED and INTERRUPTED are stops
+
+
+def parse_agy(stdout: str) -> tuple[str | None, str, str | None, bool]:
+    session, message, model, error, deltas = None, "", None, False, []
+    for name, body in agy_events(stdout):
+        session = body.get("conversation_id") or session
+        if name == "init":
+            model = body.get("model") or model
+        elif name == "step_update":
+            if body.get("step_type") == "agent_response" and body.get("text_delta"):
+                deltas.append(body["text_delta"])
+            if body.get("step_type") == "agent_response" and body.get("state") == "DONE" and deltas:
+                message, deltas = "".join(deltas), []
+        elif name == "result":
+            message = body.get("response") or message or "".join(deltas)
+            error = str(body.get("status") or "").upper() in AGY_FAILED or bool(body.get("error"))
+            if body.get("error") and not body.get("response"):
+                message = str(body["error"])
+    return session, message or "".join(deltas), model, error
+
+
+AGY_DENIED = re.compile(r"(soft[- ]?denied|denied|not approved|blocked)\b.*", re.IGNORECASE)
+
+
+def agy_denials(stderr: str) -> list[str]:
+    """The tool calls an Antigravity turn had soft-denied, from its stderr: in print mode a request that needs approval
+    is refused without stopping the turn, which still exits 0, so a builder that couldn't run its tests would look
+    like one that chose not to."""
+    found = []
+    for line in stderr.splitlines():
+        m = AGY_DENIED.search(line)
+        if m and line.strip() not in found:
+            found.append(line.strip()[:200])
+    return found[:5]
+
+
 def parse_output(host: str, stdout: str) -> tuple[str | None, str, str | None, bool]:
     """(session id, last agent message, model the host reported, whether the host reported an error)."""
-    session, message, model, error = None, "", None, False
+    session, message, model, error, limits = None, "", None, False, None
+    if host == "antigravity":
+        return parse_agy(stdout)
     if host not in ("codex", "claude"):
         return None, stdout.strip()[-4000:], None, False
     for line in stdout.splitlines():
@@ -5835,6 +6053,13 @@ def parse_output(host: str, stdout: str) -> tuple[str | None, str, str | None, b
             elif event.get("type") == "result":
                 message = event.get("result") or message
                 error = bool(event.get("is_error"))
+            elif event.get("type") == "rate_limit_event":
+                limits = event
+    if host == "claude" and limits:
+        try:  # each Claude turn says how full the plan's windows are; routing reads it, for free
+            host_quota.note_claude_event(limits)
+        except Exception:
+            pass
     return session, message, model, error
 
 
@@ -5853,8 +6078,18 @@ def usage_of(host: str, stdout: str) -> dict:
     `run_turn` replaces these figures with the turn's rise in the session's rollout file whenever it can read one
     (see `session_tokens`), and they are used only when it can't."""
     out: dict = {}
+    if host == "antigravity":
+        for name, body in agy_events(stdout):
+            use = body.get("usage") if name == "result" else None
+            if isinstance(use, dict):
+                cached = use.get("cache_read_tokens") or 0
+                given = use.get("input_tokens") or 0
+                # Gemini counts cached tokens inside the prompt's count, as Codex does
+                out = add_usage(out, {"input": max(given - cached, 0) if given >= cached else given, "cached": cached,
+                                      "output": (use.get("output_tokens") or 0) + (use.get("thinking_tokens") or 0)})
+        return out
     partial: dict = {}  # Claude's per-message usage, by message id, for a turn that never reached its result
-    for line in stdout.splitlines() if host in ("codex", "claude") else []:
+    for line in stdout.splitlines() if host in APP_HOSTS else []:
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
@@ -5950,7 +6185,7 @@ def run_turn(host: str, prof: dict, model: str, effort: str, worktree: Path, pro
             TURN_USAGE.clear()
             if any(rise.values()):
                 TURN_USAGE.update(rise, turns=1)
-    if host in ("codex", "claude") and not any(k in TURN_USAGE for k in TOKEN_KEYS):
+    if host in BUILT_IN_HOSTS and not any(k in TURN_USAGE for k in TOKEN_KEYS):
         TURN_USAGE["incomplete_turns"] = 1  # it ran, but its host showed no tokens (the app, a stop, a failure)
     session_cost = None
     if host == "claude" and isinstance(TURN_USAGE.get("cost_usd"), (int, float)) and out[1]:
@@ -6116,8 +6351,8 @@ def _run_turn(host: str, prof: dict, model: str, effort: str, worktree: Path, pr
     TURN_USAGE.clear()
     TURN_SIZE.clear()
     TURN_STOP.clear()
-    why = visible_unavailable(host) if host in ("codex", "claude") else "not an app host"
-    if host in ("codex", "claude"):
+    why = visible_unavailable(host) if host in APP_HOSTS else "not an app host"
+    if host in BUILT_IN_HOSTS:
         SESSION_PATH.update(path="headless" if why else "visible", **({"path_reason": why} if why else {}))
         loop_note(path=SESSION_PATH["path"])
     if host == "codex" and not why:
@@ -6133,8 +6368,16 @@ def _run_turn(host: str, prof: dict, model: str, effort: str, worktree: Path, pr
     tick = None
     if host == "claude" and not why:
         tick = lambda: claude_import(sid)  # noqa: E731
-    watch = HeadlessWatch(host, session or new_id) if host in ("codex", "claude") else None
+    watch = HeadlessWatch(host, session or new_id) if host in APP_HOSTS else None
     code, stdout, stderr = run_proc(args, worktree, timeout_s, env=env, tick=tick, watch=watch)
+    if host == "antigravity":
+        if code == 0 and not stdout.strip():
+            # `agy -p` is reported to print nothing when its stdout isn't a terminal; run the turn again in a pty
+            code, stdout, stderr = run_in_pty(args, worktree, timeout_s, env)
+        for line in agy_denials(stderr):
+            WARNINGS.append(f"Antigravity refused a tool call this turn without stopping it: {line}. Allow it with "
+                            "`Antigravity permissions:` in the settings, or a `permissions.allow` rule in agy's "
+                            "settings.json")
     TURN_STOP.update(stopped_turn(watch, code, timeout_s))
     new_session, message, seen, error = parse_output(host, stdout)
     message = message or (watch.message if watch else "")
@@ -6225,7 +6468,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.0.8"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.1.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6265,6 +6508,16 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.1.0": [
+        "Antigravity (`agy`) is a third built-in host. The settings can have an `## Agents` table naming, for each kind "
+        "of agent, the model and effort on each host; with a Builder row, a run that names no host is routed to the "
+        "host with most quota that would otherwise go unused, and `routed` in its result says where and why. Agree a "
+        "table with the user from `models`, and write each cell with `settings --set 'Agents <Role> <Host>'`.",
+        "`quota` covers every host: usage windows, banked resets and when they expire, and a reset plan for each. When "
+        "a plan is due, bring it to the user; record what they agree with `quota --plan agree ID --said TEXT`. Never "
+        "redeem a banked reset: tell the user when, and they redeem it. Read stages 3 and 4 of the lead skill again.",
+        "The new models skill keeps the model catalogue and the Agents table current when models launch or retire.",
+    ],
     "3.0.8": [
         "Milestones have names the user would say and slugs made from them, referred to as `milestone/<slug>`. Talk "
         "about a milestone, module or work package by its name, with any ID after it. When the plans call "
@@ -6723,7 +6976,10 @@ def resolve(a: argparse.Namespace, prof: dict, role: str) -> tuple[str, str, str
     the settings' line for the host (`Codex model`) or for every agent (`Effort`); the built-in default. A planner's
     default effort is high. `role` is plan, build, review or design. A planner with no --host runs on the settings'
     `Planner host`, if it names one."""
-    host = (a.host or (prof.get("planner_host") if role == "plan" else None) or default_host(prof)).lower()
+    host = (a.host or (prof.get("planner_host") if role == "plan" else None) or "").lower()
+    if not host and (routed := routed_host(a, prof, role)):
+        host = routed["host"]
+    host = host or default_host(prof)
     line_model, line_effort = role_setting(prof, role, host)
     model = a.model or line_model or prof["models"].get(host) or ""
     if not model:  # never left to the host's own default
@@ -6738,6 +6994,28 @@ def resolve(a: argparse.Namespace, prof: dict, role: str) -> tuple[str, str, str
     return host, model, effort
 
 
+def routed_host(a: argparse.Namespace, prof: dict, role: str) -> dict | None:
+    """Routing's choice for a launch that names no host, when the settings have an Agents table row for `role`; it
+    goes on the result line as `routed`. A build stays on the host its module's last run used while that host is
+    open, so the builder's session resumes."""
+    worktree = getattr(a, "worktree", None)
+    module = getattr(a, "module", None)
+    stick = known_run(str(worktree), module).get("host") if worktree and module and role == "build" else None
+    try:
+        picked = route(prof, role, worktree=Path(worktree) if worktree else None, stick=stick)
+    except Exception as e:  # quota reading must never stop a launch
+        WARNINGS.append(f"routing failed ({e}); this run uses the default host")
+        return None
+    if not picked or not picked.get("host"):
+        return None
+    EMIT_EXTRA.setdefault("routed", {k: picked.get(k) for k in ("host", "model", "effort", "why", "others")
+                                     if picked.get(k)})
+    if picked.get("all_out"):
+        WARNINGS.append("every host in the Agents table is out of quota or unavailable, so this run uses the default "
+                        "host; `quota` shows when each resets")
+    return picked
+
+
 def review_host(prof: dict, builder: str, explicit: str | None = None) -> str:
     """The host a review runs on: the one named (`--host`, or `run --review-host`), else the settings'
     `Review host` (a host, or `other` for the built-in host the builder didn't use), else the builder's own host."""
@@ -6745,7 +7023,7 @@ def review_host(prof: dict, builder: str, explicit: str | None = None) -> str:
         return explicit.lower()
     wanted = prof.get("review_host") or ""
     if wanted == "other":
-        return other_host(builder) if builder in ("codex", "claude") else builder
+        return other_host(builder, prof, "review") if builder in BUILT_IN_HOSTS else builder
     return wanted if wanted and wanted != "same" else builder
 
 
@@ -7003,9 +7281,21 @@ def skill_warnings(host: str, worktree: Path, role: str) -> list[str]:
     """Whether the role's skill is installed where `host` finds skills by name. The prompt names the skill's file
     either way, so a miss is a warning: the agent can still read it."""
     name = ROLE_SKILLS.get(role)
-    if not name or host not in ("codex", "claude"):
+    if not name or host not in BUILT_IN_HOSTS:
         return []
     dirs = (worktree, *worktree.parents)
+    if host == "antigravity":
+        gemini = Path(os.environ.get("ORCHESTRATE_GEMINI_HOME") or Path.home() / ".gemini")
+        places = [gemini / "config/skills", gemini / "skills", gemini / "antigravity-cli/skills",
+                  *(d / ".agents/skills" for d in dirs)]
+        found = any((p / name / "SKILL.md").exists() for p in places) or \
+            any(gemini.glob(f"config/plugins/*/skills/{name}/SKILL.md")) or \
+            any(gemini.glob(f"config/plugins/*/*/skills/{name}/SKILL.md"))
+        if found:
+            return []
+        return [f"{name} isn't installed where antigravity finds skills by name ({gemini}/config/skills, "
+                ".agents/skills or a plugin under ~/.gemini/config/plugins); install.py installs it, and the prompt "
+                "gives its file path, so the agent can still read it"]
     if host == "claude":
         places = [CLAUDE_HOME / "skills", *(d / ".claude/skills" for d in dirs)]
         found = any((p / name / "SKILL.md").exists() for p in places) or name in plugin_components(CLAUDE_HOME, "skills")
@@ -7027,6 +7317,9 @@ def preflight(host: str, worktree: Path, role: str, module: str | None = None, w
     and none stops the launch. The browser warning needs the work package, so `run` adds it once it knows which one
     it builds (see `browser_warnings`)."""
     found = skill_warnings(host, worktree, role)
+    if host == "antigravity" and not (shutil.which(AGY) or Path(AGY).exists()):
+        found = [f"the Antigravity CLI isn't installed ({AGY}); install it with `curl -fsSL "
+                 "https://antigravity.google/cli/install.sh | bash`, then run `agy` once to sign in"] + found
     if host == "claude":
         found = instruction_warnings(worktree, cli_version("claude")) + found
     if host == "codex" and role == "build" and work_package:  # a reviewer that needs one asks for it, and gets it
@@ -7096,6 +7389,10 @@ def browser_warnings(worktree: Path, module: str | None = None, work_package: st
 def floor_reason(host: str, code: int, err: str) -> str:
     if code == 127:
         return f"the {host} CLI couldn't start: {err.strip()[-200:]}"
+    if host == "antigravity" and re.search(r"sign in|authenticat", err, re.IGNORECASE):
+        return "the Antigravity CLI isn't signed in; the user runs `agy` once in a terminal to sign in"
+    if re.search(r"quota|rate limit|usage limit|resource.?exhausted|429", err, re.IGNORECASE):
+        return f"{host} is out of quota for now: {err.strip()[-160:]}"
     return f"two failed turns or no session on {host}; likely quota, sign-in or outage"
 
 
@@ -8205,7 +8502,173 @@ def run_again(a: argparse.Namespace, stem: str, worktree: Path, host: str | None
     return loop_cmd(*args)
 
 
-def other_host(host: str) -> str:
+# ------------------------------------------------------------------------------------------------------- routing
+# With an Agents table, every filled cell in a kind of agent's row is a choice the user has agreed to, so the script
+# picks among them for each work package rather than the lead. It picks the host that would otherwise lose the most
+# quota at its next reset, so no plan's quota goes unspent while another's runs out; and, once the user agrees a plan
+# for a banked reset (`quota --plan agree`), it favours that host until the reset is worth redeeming. A host that is
+# out of quota, not installed or at its own builder cap is passed over.
+
+QUOTA_READ_S = 10 * 60.0  # a host's reading younger than this is used without asking the host again
+PLAN_WEIGHT = 50.0  # how strongly an agreed reset plan that is short of its target pulls work to its host
+
+
+def host_installed(host: str) -> bool:
+    exe = {"codex": CODEX, "claude": CLAUDE, "antigravity": AGY}.get(host)
+    return exe is None or bool(shutil.which(exe)) or Path(exe).exists()
+
+
+def read_codex_quota() -> dict:
+    srv = None
+    try:
+        srv = CodexAppServer()
+        return host_quota.read_codex(lambda method, params: srv.call(method, params, timeout=20))
+    except Exception as e:
+        return {"host": "codex", "read_at": time.time(), "source": "app-server", "error": str(e)[:200],
+                "windows": [], "banked": []}
+    finally:
+        if srv:
+            srv.close()
+
+
+def host_reading(host: str, refresh: bool = False) -> dict | None:
+    """`host`'s latest quota reading: the stored one while it is fresh, else read now from the host itself, which
+    costs no model call on any host. A failed read keeps the last good one, with the error beside it."""
+    stored = host_quota.latest(host)
+    if os.environ.get("ORCHESTRATE_NO_QUOTA_READ") or not refresh and stored and \
+            time.time() - (stored.get("read_at") or 0) < QUOTA_READ_S:
+        return stored
+    if not host_installed(host):
+        return stored
+    if host == "codex":
+        if not Path(CODEX_APP_CLI).exists():
+            return stored
+        reading = read_codex_quota()
+    elif host == "claude":
+        reading = host_quota.read_claude(CLAUDE, env=clean_env("quota"))
+    elif host == "antigravity":
+        reading = host_quota.read_agy(AGY, env=agy_env("quota"))
+    else:
+        return stored
+    if reading.get("windows") or reading.get("banked"):
+        return host_quota.record(reading)
+    return {**stored, "error": reading.get("error"), "stale": True} if stored else reading
+
+
+def builders_on(worktree: Path | None) -> dict:
+    """How many builder runs each host has now in this repository."""
+    if worktree is None:
+        return {}
+    try:
+        loops, _ = live_loops(repository_of(git_common_dir(worktree)), clean=False)
+    except Exception:
+        return {}
+    out: dict = {}
+    for r in builder_runs(loops):
+        if r.get("host"):
+            out[r["host"]] = out.get(r["host"], 0) + 1
+    return out
+
+
+def route(prof: dict, role: str, exclude=(), fallback: str | None = "default", worktree: Path | None = None,
+          stick: str | None = None, refresh: bool = False) -> dict | None:
+    """The host, model and effort for one agent of kind `role`, chosen among the hosts its row of the Agents table
+    gives, less `exclude`. Returns {"host", "model", "effort", "why", "others"}, or None with no table row for the
+    role. `host` is None when every host in the row is out, with `fallback` given, else the default host. `stick` is
+    the host the work package ran on last: it stays there while that host is open, so its session resumes."""
+    table = prof.get("agents_table") or {}
+    r = role
+    while r and r not in (table.get("allowed") or {}):
+        r = ROLE_FALLBACK.get(r)
+    allowed = [h for h in (table.get("allowed") or {}).get(r or "", []) if h not in set(exclude)]
+    if not table or not r:
+        return None
+    caps = prof.get("builders_by_host") or {}
+    running = builders_on(worktree) if role == "build" and caps else {}
+    plans = host_quota.plans()
+    views, others = [], []
+    for order, host in enumerate(allowed):
+        model, effort = role_setting(prof, role, host)
+        effort = effort or ("high" if role == "plan" else prof.get("effort"))
+        if not host_installed(host):
+            others.append({"host": host, "open": False, "why": "not installed"})
+            continue
+        if role == "build" and host in caps and running.get(host, 0) >= caps[host]:
+            others.append({"host": host, "open": False, "why": f"at its cap of {caps[host]} builders"})
+            continue
+        try:
+            reading = host_reading(host, refresh)
+            view = host_quota.summary(reading) if reading else None
+        except Exception as e:
+            view, reading = None, {"error": str(e)[:200]}
+        if view and view.get("windows"):
+            lost, why, open_ = host_quota.loss_score(view, model)
+            known = True
+        else:
+            lost, why, open_, known = 0.0, "no quota reading" + (f" ({reading.get('error')})" if reading and
+                                                                  reading.get("error") else ""), True, False
+        pull = 0.0
+        for p in (view or {}).get("plans") or []:
+            if p.get("id") in plans and p.get("status") in ("behind", "will_be_lost", "on_track", "redeem_now"):
+                gap = max(0.0, host_quota.REDEEM_AT_USED_PCT - (p.get("worth_pct") or 0))
+                pull = max(pull, PLAN_WEIGHT + gap)
+                why += f"; agreed plan for the banked reset expiring {host_quota.when_text(p.get('expires_at'))}"
+        views.append({"host": host, "model": model, "effort": effort, "open": open_, "known": known,
+                      "score": lost + pull, "why": why, "order": order})
+    open_views = [v for v in views if v["open"]]
+    others += [{"host": v["host"], "open": False, "why": v["why"]} for v in views if not v["open"]]
+    if not open_views:
+        if fallback is None:
+            return {"host": None, "why": "every host in the Agents table is out or unavailable", "others": others}
+        host = default_host(prof)
+        model, effort = role_setting(prof, role, host)
+        return {"host": host, "model": model, "effort": effort, "why": "every host in the Agents table is out or "
+                "unavailable, so the default host", "others": others, "all_out": True}
+    open_views.sort(key=lambda v: (not v["known"], -v["score"], v["order"]))
+    pick = open_views[0]
+    if stick and any(v["host"] == stick for v in open_views) and stick != pick["host"]:
+        pick = next(v for v in open_views if v["host"] == stick)
+        pick = {**pick, "why": f"stays on {stick}, where this work package ran last and its session resumes; " +
+                pick["why"]}
+    others += [{"host": v["host"], "open": True, "why": v["why"]} for v in open_views if v is not pick and
+               v["host"] != pick["host"]]
+    return {"host": pick["host"], "model": pick["model"], "effort": pick["effort"], "why": pick["why"],
+            "others": others}
+
+
+def builders_by_host(text: str, hosts) -> dict:
+    """Per-host builder caps from the `Builders:` line, such as "2 Codex, 1 Claude, 1 Antigravity": each number with
+    a host's name within the three words after it."""
+    value = profile_value(text, "builders")
+    if not value or PLACEHOLDER.search(value):
+        return {}
+    number = r"(\d+|" + "|".join(NUMBER_WORDS) + r")"
+    words = re.findall(r"[\w.-]+", value)
+    out: dict = {}
+    for n, w in enumerate(words):
+        if not re.fullmatch(number, w, re.IGNORECASE):
+            continue
+        for x in words[n + 1:n + 4]:
+            if re.fullmatch(number, x, re.IGNORECASE):
+                break
+            if x.lower() in hosts:
+                out[x.lower()] = out.get(x.lower(), 0) + (int(w) if w.isdigit() else NUMBER_WORDS[w.lower()])
+                break
+    return out
+
+
+def other_host(host: str, prof: dict | None = None, role: str = "build") -> str:
+    """A host other than `host` for the same kind of agent: the one routing would choose with `host` left out (see
+    `route`), among the hosts the settings' Agents table gives this kind of agent; with no table, Codex for Claude
+    and Claude for anything else, as before Antigravity."""
+    prof = prof or LAST_PROFILE.get("prof")
+    if prof:
+        try:
+            picked = route(prof, role, exclude={host}, fallback=None)
+        except Exception:  # routing reads quota, which must never cost a result line its `next`
+            picked = None
+        if picked:
+            return picked["host"]
     return "claude" if host == "codex" else "codex"
 
 
@@ -8237,7 +8700,7 @@ def cmd_run(a: argparse.Namespace) -> None:
         EMIT_EXTRA["worktree"] = {"path": str(worktree), "branch": build_branch(stem), "how": how}
     again = run_again(a, stem, worktree)
     # Items that need access or hardware are done only in a session the user can see and answer.
-    headless = host not in ("codex", "claude") or visible_unavailable(host) is not None
+    headless = host not in APP_HOSTS or visible_unavailable(host) is not None
     if not run_lock(worktree, key):
         who = run_holder_info(worktree, key)
         emit("IN_PROGRESS_ELSEWHERE", module=stem, by="another run on this repository" + holder_text(who),
@@ -8480,16 +8943,36 @@ def cmd_run(a: argparse.Namespace) -> None:
         print("warning: ORCHESTRATE.md has no filled-in " + " or ".join(f"`{m}`" for m in missing) +
               " line, so the agents have no such rule", file=sys.stderr)
     timeout_s = a.turn_timeout_hours * 3600
-    resumable = host in ("codex", "claude")
+    resumable = host in BUILT_IN_HOSTS
+
+    def routed_away() -> str | None:
+        """With an Agents table, the host routing moves this work to when its own host runs out: the user agreed
+        to every cell in the row, so moving needs no question while another host has quota."""
+        if not (prof.get("agents_table") or {}).get("allowed", {}).get("build"):
+            return None
+        try:
+            picked = route(prof, "build", exclude={host}, fallback=None, worktree=worktree, refresh=True)
+        except Exception:
+            return None
+        return (picked or {}).get("host")
 
     def floor_next() -> dict:
+        if moved := routed_away():
+            return next_cmd(run_again(a, stem, worktree, moved), "lead",
+                            f"the {host} host failed or ran out (quota, sign-in or outage); the Agents table allows "
+                            f"{moved}, which has quota, so the work moves there")
         return next_cmd(again, "lead", f"the {host} host failed or ran out (quota, sign-in or outage); run it again "
                                        "once it's back, or on the other host", alternative=run_again(
                                            a, stem, worktree, other_host(host)))
 
     def limit_next(status: str) -> dict:
         """A Codex goal that hit its usage or budget limit: whether to wait for the reset or move the work to the
-        other host spends the user's plan, so it is theirs to choose."""
+        other host spends the user's plan, so it is theirs to choose, unless the Agents table already allows a host
+        that has quota."""
+        if moved := routed_away():
+            return next_cmd(run_again(a, stem, worktree, moved), "lead",
+                            f"the Codex goal stopped: {status.replace('_', ' ')}; the Agents table allows {moved}, "
+                            "which has quota, so the work moves there")
         return next_cmd(again, "lead", f"the Codex goal stopped: {status.replace('_', ' ')}", decides="human",
                         ask=f"Codex has hit its {status.split('_')[0]} limit. Wait for it to reset and carry on there, "
                             f"or move {stem} to {other_host(host)}?",
@@ -8970,7 +9453,7 @@ def one_session(host: str, prof: dict, model: str, effort: str, worktree: Path, 
     another host."""
     session, message, turns, observed, owed, usage, stop = None, "", 0, None, FINISH, {}, {}
     while turns < max_turns:
-        resume = session if (turns and host in ("codex", "claude")) else None
+        resume = session if (turns and host in BUILT_IN_HOSTS) else None
         text = prompt if not turns else owed + (f"\n\n{restate}" if restate else "")
         if turns and (note := stopped_note(stop)):  # the script stopped the last turn on a tool call
             text = note + "\n\n" + text
@@ -9549,7 +10032,7 @@ def review_prompt(host: str, prof: dict, stem: str, mid: str, commit: str, done:
     commit, `context` what changed since the last design review, and `tree` the reviewer's checkout, where a design
     reviewer finds the vision and scope document and the module list."""
     template = DESIGN_REVIEW_TEMPLATE if design else REVIEW_TEMPLATE
-    headless = host not in ("codex", "claude") or visible_unavailable(host) is not None
+    headless = host not in APP_HOSTS or visible_unavailable(host) is not None
     return template.format(session=session_rule(headless, host, prof),
                            **paths_for_prompt(tree or Path.cwd(), prof),work_package=mid, module=stem, commit=commit, done=done, captures=review[:-len(".md")],
                            loop=LOOP, checks="" if design else checks_note(prof, work_package,
@@ -10472,14 +10955,26 @@ SETTINGS_TEMPLATE = """\
 - **Review host:** <same|other|host>  *(script: optional; the host for work package reviews: `same` as the builder, `other` than the builder (a reviewer from another company shares fewer of its blind spots), or a host's name; left out, the builder's host)*
 - **Planner host:** <host>  *(script: optional, and only if the user wants planners on another host; left out, the `Default host`)*
 - **<Host> model:** <model>  *(script: optional, and only when the user named a model; any `<host> model:` line, such as `Claude model:`, sets that host's model)*
-- **Claude planner:** <model> <effort>  *(script: optional, and only when the user asked; a model, an effort or both for one kind of agent on one host: `<Host> planner|builder|reviewer|design reviewer:`; `settings` prints what each kind of agent gets and where it came from)*
+- **Claude planner:** <model> <effort>  *(script: optional, and only when the user asked, for a project with no Agents table; a model, an effort or both for one kind of agent on one host: `<Host> planner|builder|reviewer|design reviewer:`; `settings` prints what each kind of agent gets and where it came from)*
 - **Reviewer:** <effort>  *(script: optional, and only when the user asked; an effort for one kind of agent on every host)*
 - **Effort:** medium  *(script: optional; for builders and reviewers, default medium; planners default to high)*
 - **Claude permissions:** auto  *(script: the permission mode for Claude sessions in the background: auto, acceptEdits, dontAsk or bypassPermissions)*
+- **Antigravity permissions:** auto  *(script: the agent mode for Antigravity sessions: auto (agy decides which commands run), accept-edits, plan, turbo (the account's own default, often no restrictions) or skip-permissions. In print mode a tool call that needs approval is refused without stopping the turn, and the result line warns)*
 - **Codex sandbox:** workspace-write  *(script: or danger-full-access, which only the user chooses; in workspace-write a browser starts once the agent asks to run it outside the sandbox)*
 - **Writable roots:** <paths the build writes outside the worktree, separated by commas, such as ~/.cargo, ~/.npm>  *(script)*
 - **Host <name>:** <command with {prompt}, {model} and {effort}, and {cwd} if it needs the folder>  *(script: optional; any other command-line agent; the first three placeholders are required, because every launch names its model and effort rather than leave them to the host's default)*
 - **<Name> model:** <model>  *(script: needed for each Host line's name, unless the lead passes --model)*
+
+## Agents
+
+| Role            | Codex              | Claude                 | Antigravity          |
+|-----------------|--------------------|------------------------|----------------------|
+| Planner         | gpt-6.2-sol high   | claude-opus-5-5 high   | gemini-4-carbon high |
+| Builder         | gpt-6.2-sol medium | claude-opus-5-5 medium | gemini-4-neon medium |
+| Reviewer        | gpt-6.2-sol medium | claude-opus-5-5 medium | gemini-4-neon medium |
+| Design reviewer | gpt-6.2-sol high   | claude-opus-5-5 high   | gemini-4-carbon high |
+
+*(script: optional; the lead agrees it with the user before the first build, from `models`. A column is a host the project may use and a cell the model and effort one kind of agent runs on it; `-` or a blank keeps that kind of agent off that host. Every filled cell in a row is a choice the user has agreed to, so a launch that names no host is routed: to the host that would otherwise lose the most quota at its next reset, or one the user agreed a banked-reset plan for, skipping any host out of quota, not installed or at its own count in the Builders line. A work package stays on its host while that host has quota. Drop the columns of hosts the user doesn't use; one column runs everything there, as before. `settings --set 'Agents Builder Codex' 'gpt-6.2-sol high'` sets one cell)*
 
 ## Starting from a clean clone
 <how a new worktree gets to a running product: the setup command, seed data and test accounts, the services it
@@ -10544,7 +11039,7 @@ def agent_settings(prof: dict) -> dict:
     """The model and effort each kind of agent gets on each host when the lead names neither, with where each came
     from, as `resolve` would choose them."""
     out = {}
-    for host in ("codex", "claude", *prof.get("hosts", {})):
+    for host in (*BUILT_IN_HOSTS, *prof.get("hosts", {})):
         for role, kind in (("plan", "planner"), ("build", "builder"), ("review", "reviewer"),
                            ("design", "design reviewer")):
             model, effort = role_setting(prof, role, host)
@@ -10664,10 +11159,194 @@ def cmd_builders(a: argparse.Namespace) -> None:
             if working and most and working["count"] > most else {}))
 
 
+def codex_pace(report: dict | None) -> float | None:
+    """The Codex forecast's measured pace, %/h of the weekly window, for plans made before the stored readings span
+    enough time to measure it themselves."""
+    rate = ((report or {}).get("rate") or {}).get("pct_per_hour")
+    return rate[1] if isinstance(rate, list) and len(rate) > 1 else None
+
+
+def hosts_quota(refresh: bool = False, hosts=None, codex_rate: float | None = None) -> list[dict]:
+    """Every installed built-in host's quota: its windows, each with time to reset, burn rate and what is projected
+    to be left unused at the reset, and its banked resets, each with its plan. `codex_rate` is the Codex forecast's
+    measured pace, %/h, used until the stored readings span enough time to measure it themselves."""
+    out = []
+    for host in hosts or BUILT_IN_HOSTS:
+        if not host_installed(host) and not host_quota.latest(host):
+            continue
+        try:
+            view = host_quota.summary(host_reading(host, refresh), rate_hint=codex_rate if host == "codex" else None)
+        except Exception as e:
+            view = {"host": host, "error": str(e)[:200], "windows": [], "plans": []}
+        out.append(view or {"host": host, "windows": [], "plans": [], "error": "no reading yet"})
+    return out
+
+
+def reset_plans_due(views: list[dict] | None = None) -> list[dict]:
+    """The banked-reset plans to raise with the user now: a reset expiring within a week that the current pace
+    leaves short of worth redeeming, or one worth redeeming now. Each is a proposal; the user decides, and only the
+    user redeems."""
+    views = hosts_quota() if views is None else views
+    return [p for v in views for p in v.get("plans") or [] if p.get("raise_with_user")]
+
+
+def host_quota_text(views: list[dict]) -> str:
+    lines = []
+    for v in views:
+        head = f"{v['host']}" + (f" ({v['plan']})" if v.get("plan") else "")
+        if not v.get("windows"):
+            if v.get("error") and v["error"] != "no reading yet":
+                lines.append(f"{head}: no reading ({v['error']})")
+            continue
+        age = v.get("age_s") or 0
+        parts = []
+        for w in v.get("windows") or []:
+            text = f"{w.get('label')} {w.get('used_pct', 0):.0f}% used, resets {host_quota.when_text(w.get('resets_at'))}"
+            if w.get("left_at_reset_pct") is not None:
+                text += f", about {w['left_at_reset_pct']:.0f}% unused then at {w.get('pct_per_hour')}%/h"
+            parts.append(text)
+        lines.append(f"{head}, read {round(age / 60)} min ago: " + "; ".join(parts))
+        for p in v.get("plans") or []:
+            lines.append(f"  banked reset: {p['say']}" + (" (plan agreed)" if p.get("agreed") else ""))
+    return "\n".join(lines)
+
+
+TABLE_ROLE_NAMES = {"plan": "Planner", "build": "Builder", "review": "Reviewer", "design": "Design reviewer"}
+MODELS_FILE = Path(__file__).with_name("models.json")
+USER_MODELS = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "orchestrate" / "models.json"
+
+
+def catalogue() -> dict:
+    """The model catalogue: models.json beside the script, with the user's copy over it, entry by entry, so a model
+    released today can be added from any project without waiting for a release."""
+    def load(path: Path) -> dict:
+        try:
+            got = json.loads(path.read_text())
+            return got if isinstance(got, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+    shipped, mine = load(MODELS_FILE), load(USER_MODELS)
+    entries = {(m.get("host"), m.get("id")): {**m, "from": "shipped"} for m in shipped.get("models") or []}
+    for m in mine.get("models") or []:
+        key = (m.get("host"), m.get("id"))
+        entries[key] = {**entries.get(key, {}), **m, "from": "yours"}
+    return {"checked": max(filter(None, (shipped.get("checked"), mine.get("checked"))), default=None),
+            "models": sorted(entries.values(), key=lambda m: (BUILT_IN_HOSTS.index(m["host"]) if m.get("host") in
+                                                              BUILT_IN_HOSTS else 9, m.get("id") or ""))}
+
+
+def price_now(m: dict, day: str | None = None) -> dict:
+    """A model's list price today, taking any announced change that has come into force."""
+    day = day or datetime.now().strftime("%Y-%m-%d")
+    price = dict(m.get("price") or {})
+    for change in sorted(m.get("price_changes") or [], key=lambda c: c.get("from") or ""):
+        if (change.get("from") or "9999") <= day:
+            price.update({k: v for k, v in change.items() if k != "from"})
+    return price
+
+
+def table_findings(prof: dict, cat: dict) -> list[str]:
+    """What in the project's Agents table points at a model the catalogue doesn't know, one retired or retiring, or an
+    effort the model doesn't take."""
+    known = {(m["host"], m["id"]): m for m in cat["models"]}
+    today = datetime.now().strftime("%Y-%m-%d")
+    soon = (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d")
+    out = []
+    for role, entry in ((prof.get("agents_table") or {}).get("roles") or {}).items():
+        for host, cell in entry.get("hosts", {}).items():
+            m = known.get((host, cell.get("model")))
+            where = f"{TABLE_ROLE_NAMES.get(role, role)} on {host}: {cell.get('model')}"
+            if host not in BUILT_IN_HOSTS:
+                continue
+            if not m:
+                out.append(f"{where} isn't in the catalogue; check the ID (the models skill can add it)")
+                continue
+            if m.get("retires") and m["retires"] <= today:
+                out.append(f"{where} was retired on {m['retires']}")
+            elif m.get("retires") and m["retires"] <= soon:
+                out.append(f"{where} retires on {m['retires']}")
+            if cell.get("effort") and m.get("efforts") and cell["effort"] not in m["efforts"]:
+                out.append(f"{where} doesn't take effort {cell['effort']} ({', '.join(m['efforts'])})")
+    return out
+
+
+def cmd_models(a: argparse.Namespace) -> None:
+    cat = catalogue()
+    models = [m for m in cat["models"] if not a.host or m.get("host") == a.host]
+    findings = None
+    if a.worktree:
+        findings = table_findings(profile(Path(a.worktree).resolve(), missing_ok=True), cat)
+    if a.json:
+        print(json.dumps({"checked": cat["checked"], "models": [{**m, "price_now": price_now(m)} for m in models],
+                          **({"table": findings} if findings is not None else {})}, indent=2))
+        return
+    lines = [f"Model catalogue, checked {cat['checked']}; list prices per million tokens (input / cached / output), "
+             "for comparing hosts, not what a plan charges"]
+    for host in dict.fromkeys(m["host"] for m in models):
+        lines.append(f"\n{host}")
+        for m in (x for x in models if x["host"] == host):
+            p = price_now(m)
+            money = "/".join("-" if p.get(k) is None else f"${p[k]:g}" for k in ("input", "cached", "output"))
+            change = next((f"; from {c['from']} ${c.get('input'):g}/${c.get('output'):g}"
+                           for c in m.get("price_changes") or [] if c.get("from", "") > datetime.now().strftime("%Y-%m-%d")), "")
+            lines.append(f"  {m['id']} ({m.get('name')}): {m.get('for')}. Efforts {', '.join(m.get('efforts') or []) or 'not listed'}"
+                         f"{', default ' + m['default_effort'] if m.get('default_effort') else ''}. {money}{change}"
+                         f"{'. Retires ' + m['retires'] if m.get('retires') else ''}"
+                         f"{' (your copy)' if m.get('from') == 'yours' else ''}")
+    if findings is not None:
+        lines.append("\nThe Agents table: " + ("every cell names a current model" if not findings else ""))
+        lines += [f"  {f}" for f in findings]
+    print("\n".join(lines))
+
+
 def cmd_quota(a: argparse.Namespace) -> None:
+    if a.plan:
+        action, rid = a.plan
+        if action not in ("agree", "withdraw"):
+            raise SystemExit("error: --plan takes agree or withdraw, then the banked reset's id from `quota --json`")
+        known = {p["id"]: v["host"] for v in hosts_quota() for p in v.get("plans") or []}
+        if action == "agree":
+            if rid not in known:
+                raise SystemExit(f"error: no available banked reset has the id {rid!r}; `quota --json` lists them")
+            if not a.said:
+                raise SystemExit("error: --plan agree needs --said with the user's own words agreeing the plan")
+            host_quota.agree(rid, known[rid], a.said)
+        elif not host_quota.withdraw(rid):
+            raise SystemExit(f"error: no agreed plan for {rid!r}")
+        print(json.dumps({"result": "QUOTA_PLAN", "id": rid, "agreed": action == "agree"}))
+        return
+    if a.bank:
+        if not a.expires:
+            raise SystemExit("error: --bank needs --expires, the date the banked reset expires, such as 2027-03-08")
+        when = host_quota.parse_when(a.expires, time.time())
+        if not when:
+            raise SystemExit(f"error: can't read {a.expires!r} as a date")
+        entry = host_quota.bank(a.bank.lower(), when, a.title or "")
+        print(json.dumps({"result": "QUOTA_BANKED", **entry}))
+        return
+    if a.redeemed:
+        if not host_quota.mark_used(a.redeemed):
+            raise SystemExit(f"error: no banked reset the user told about has the id {a.redeemed!r}")
+        host_quota.withdraw(a.redeemed)
+        print(json.dumps({"result": "QUOTA_REDEEMED", "id": a.redeemed}))
+        return
     worktree = Path(a.worktree).resolve() if a.worktree else None
-    report = quota_report(worktree, budget_s=a.budget)
-    print(json.dumps(report, indent=2) if a.json else quota_text(report))
+    report = None
+    if not a.host or a.host == "codex":
+        try:
+            report = quota_report(worktree, budget_s=a.budget)
+        except Exception:
+            report = None
+    views = hosts_quota(refresh=a.refresh, hosts=[a.host] if a.host else None, codex_rate=codex_pace(report))
+    if a.json:
+        print(json.dumps({**(report or {}), "hosts": views, "reset_plans": reset_plans_due(views)}, indent=2,
+                         default=str))
+        return
+    hosts_text = host_quota_text(views)
+    text = quota_text(report) if report else ""
+    if hosts_text:
+        text += ("\n\n" if text else "") + "Every host:\n" + hosts_text
+    print(text or "no quota reading for any host")
 
 
 def cmd_lock(a: argparse.Namespace) -> None:
@@ -12871,6 +13550,47 @@ def cmd_history(a: argparse.Namespace) -> None:
                          if swept["files_left"] else "")}))
 
 
+def dashboard_quota(worktree: Path, hours: int = 168) -> dict:
+    """The Quota view's data: every host's windows and banked resets with their plans, where routing sends the next
+    builder and why, each window's use hour by hour over the last `hours`, and the resets and redemptions seen."""
+    now_s = time.time()
+    try:
+        pace = codex_pace(quota_report(worktree, budget_s=20))
+    except Exception:
+        pace = None
+    out: dict = {"read_at": now_s, "hosts": hosts_quota(codex_rate=pace)}
+    out["plans_due"] = reset_plans_due(out["hosts"])
+    try:
+        prof = profile(worktree, missing_ok=True)
+        picked = route(prof, "build", worktree=worktree)
+        out["routing"] = picked and {k: picked.get(k) for k in ("host", "model", "effort", "why", "others")}
+        out["table"] = (prof.get("agents_table") or {}).get("roles") or None
+    except (Exception, SystemExit):
+        out["routing"] = None
+    start = int(now_s // 3600 - hours + 1) * 3600
+    labels = [start + i * 3600 for i in range(hours)]
+    series = {}
+    for r in host_quota.readings(since=start - 3600):
+        for w in r.get("windows") or []:
+            if w.get("used_pct") is None or not (w["name"] == "seven_day" or w["name"].startswith("seven_day:")
+                                                 or r["host"] == "antigravity"):
+                continue
+            key = f"{r['host']}:{w['name']}"
+            entry = series.setdefault(key, {"key": key, "host": r["host"], "name": f"{r['host']} {w.get('label')}",
+                                            "points": {}})
+            entry["points"][int((r["read_at"] - start) // 3600)] = w["used_pct"]
+    out_series = []
+    for entry in series.values():
+        values, last = [], None
+        for i in range(hours):
+            last = entry["points"].get(i, last)
+            values.append(last)
+        out_series.append({k: entry[k] for k in ("key", "host", "name")} | {"values": values})
+    out["history"] = {"labels": labels, "series": out_series}
+    out["resets"] = host_quota.resets(since=now_s - 14 * 86400)
+    return out
+
+
 def cmd_dashboard(a: argparse.Namespace) -> None:
     """Writes the delivery dashboard, one HTML file with the history embedded, and opens it with --open. --json
     prints the same records for an agent instead."""
@@ -12880,10 +13600,15 @@ def cmd_dashboard(a: argparse.Namespace) -> None:
         sweep_history(worktree, budget_s=a.budget, wait_s=120)
         history_work_packages(worktree)
     folder = delivery_history.project_dir(repo)
+    meta = history_meta(worktree)
+    try:
+        meta["quota"] = dashboard_quota(worktree)
+    except Exception as e:  # the history draws without it
+        meta["quota"] = {"error": f"{type(e).__name__}: {e}"}
     if a.json:
-        print(json.dumps(delivery_history.dashboard_model(folder, history_meta(worktree))))
+        print(json.dumps(delivery_history.dashboard_model(folder, meta), default=str))
         return
-    out = delivery_history.render(folder, Path(a.out).expanduser().resolve() if a.out else None, history_meta(worktree))
+    out = delivery_history.render(folder, Path(a.out).expanduser().resolve() if a.out else None, meta)
     if a.open:
         opener = "open" if sys.platform == "darwin" else "xdg-open"
         subprocess.run([opener, str(out)], capture_output=True)
@@ -14002,9 +14727,56 @@ def set_plans_line(text: str, to: str) -> str:
     return set_setting_line(text, "Plans", to)
 
 
+AGENTS_CELL = re.compile(r"^agents\s+(planner|builder|reviewer|design reviewer)\s+(\S+)$", re.IGNORECASE)
+TABLE_ROLES = ("Planner", "Builder", "Reviewer", "Design reviewer")
+
+
+def set_agents_cell(text: str, role: str, host: str, value: str) -> str:
+    """ORCHESTRATE.md with one cell of its Agents table set: the row for `role`, the column for `host`, adding the
+    section, the row or the column when it has none. `-` clears the cell, keeping that kind of agent off that host."""
+    role = next(r for r in TABLE_ROLES if r.lower() == role.lower())
+    section = AGENTS_SECTION.search(text)
+    rows: list[list[str]] = []
+    if section:
+        lines = [l for l in section.group(1).splitlines() if l.strip().startswith("|")]
+        rows = [[c.strip() for c in l.strip().strip("|").split("|")] for l in lines]
+        rows = [r for i, r in enumerate(rows) if i == 0 or not set("".join(r)) <= set("-: ")]
+    if not rows:
+        rows = [["Role"]]
+    head = rows[0]
+    col = next((i for i, c in enumerate(head) if c.lower() == host.lower()), None)
+    if col is None:
+        head.append(host.capitalize())
+        col = len(head) - 1
+    row = next((r for r in rows[1:] if r and r[0].lower() == role.lower()), None)
+    if row is None:
+        row = [role]
+        rows.append(row)
+        rows[1:] = sorted(rows[1:], key=lambda r: next((i for i, x in enumerate(TABLE_ROLES) if x.lower() ==
+                                                        r[0].lower()), 9))
+    for r in rows:
+        r.extend([""] * (len(head) - len(r)))
+    row[col] = "-" if value.strip() in NO_CELL else value.strip()
+    widths = [max(len(r[i]) for r in rows) for i in range(len(head))]
+    fmt = lambda r: "| " + " | ".join(c.ljust(w) for c, w in zip(r, widths)) + " |"
+    table = "\n".join([fmt(head), "|" + "|".join("-" * (w + 2) for w in widths) + "|", *map(fmt, rows[1:])])
+    if section:
+        body = section.group(1)
+        spans = [m.span() for m in re.finditer(r"^[ \t]*\|.*$", body, re.M)]
+        if spans:
+            new_body = body[:spans[0][0]] + table + body[spans[-1][1]:]
+        else:
+            new_body = "\n\n" + table + "\n\n" + body.lstrip("\n")
+        return text[:section.start(1)] + new_body + text[section.end(1):]
+    return text.rstrip("\n") + "\n\n## Agents\n\n" + table + "\n"
+
+
 def set_setting_line(text: str, label: str, value: str) -> str:
     """ORCHESTRATE.md with its `label` line set to `value`, adding the line after the last settings line if it has
-    none. A note in *(...)* after the old value is dropped with it."""
+    none. A note in *(...)* after the old value is dropped with it. `Agents <Role> <Host>`, such as `Agents Builder
+    Codex`, sets one cell of the Agents table instead."""
+    if m := AGENTS_CELL.match(label.strip()):
+        return set_agents_cell(text, m.group(1), m.group(2), value)
     line = re.compile(rf"^(\s*[-*]\s*\*\*{re.escape(label)}:\*\*[ \t]*).*$", re.IGNORECASE | re.MULTILINE)
     if line.search(text):
         return line.sub(lambda m: m.group(1) + value, text, count=1)
@@ -16688,7 +17460,17 @@ def watch_look(worktree: Path, prof: dict, since: dict, fetch: bool) -> dict:
     return {"stamp": stamp, "tip": ref, "loops": loops, "builds": builds, "proj": proj, "steps": steps,
             "running": running, "waiting": waiting, "limit": limit, "free": max(free, 0), "disk": disk,
             "broken": broken, "ahead": ahead, "since": since,
-            "progress": {r["pid"]: run_progress(r) for r in builds}}
+            "progress": {r["pid"]: run_progress(r) for r in builds}, "reset_plans": look_reset_plans()}
+
+
+def look_reset_plans() -> list[dict]:
+    """The banked-reset plans to raise with the user, for `watch` and `flow`; never fails them."""
+    try:
+        return [{k: p.get(k) for k in ("id", "host", "status", "expires_at", "worth_pct", "pct_per_hour",
+                                        "need_pct_per_hour", "redeem_at", "more_builders", "agreed", "redeem_where",
+                                        "say")} for p in reset_plans_due()]
+    except Exception:
+        return []
 
 
 def watch_signs(look: dict) -> dict:
@@ -16718,6 +17500,12 @@ def watch_signs(look: dict) -> dict:
                     "seen": str(reviews[-1].get("at")),
                     "text": f"{e['stem']} {m['id']} failed the same items in its last two reviews "
                             f"({', '.join(sorted(same))}), whether or not the findings were new"}
+    for p in look.get("reset_plans") or []:
+        # a banked reset is the user's to redeem: the lead proposes a plan, and wakes again when its status changes
+        signs[f"reset_plan {p['id']}"] = {
+            "seen": f"{p['status']} {p.get('agreed')}",
+            "text": f"banked reset: {p['say']} Propose a plan to the user (routing favours that host once they agree "
+                    f"it with `quota --plan agree {p['id']} --said '<their words>'`); only the user redeems it"}
     first = look["since"].get("ready_waiting")
     if first and stamp - first >= READY_IDLE_WARN_S:
         names = ", ".join(f"{s['module']} {s.get('work_package') or ''}".strip() for s in look["waiting"])
@@ -17442,15 +18230,16 @@ def run_worktree(worktree: Path, prof: dict, stem: str) -> Path | None:
 
 def start_run(worktree: Path, prof: dict, stem: str) -> bool:
     """Starts `run --module <stem>` in the module's worktree, detached, logged beside the supervisor's log, and says
-    whether it could. With no Default host in the settings, it runs on the lead's host, as a run the lead started
-    would."""
+    whether it could. With an Agents table, the run routes itself; otherwise, with no Default host in the settings,
+    it runs on the lead's host, as a run the lead started would."""
     folder = loop_dir(worktree)
     where = run_worktree(worktree, prof, stem)
     if where is None:
         return False
     argv = [sys.executable, str(LOOP), "run", "--module", stem, "--worktree", str(where)]
     lead = read_json_file(folder / LEAD_FILE) or {}
-    if not prof.get("default_host") and lead.get("host") in ("codex", "claude"):
+    routes = bool((prof.get("agents_table") or {}).get("allowed", {}).get("build"))
+    if not routes and not prof.get("default_host") and lead.get("host") in BUILT_IN_HOSTS:
         argv += ["--host", lead["host"]]
     (folder / "supervisor").mkdir(exist_ok=True)
     with open(folder / "supervisor" / f"{stem}.log", "a") as log:
@@ -18141,9 +18930,30 @@ builders --worktree PATH [--set N --why TEXT | --clear]
       the supervisor starts builders up to the new limit on its next look, and a lower one stops nobody, so builders
       finish what they are on. REFUSED for a number under 1 or no --why.
 """,
+    "models": """\
+models [--worktree PATH] [--host H] [--json]
+      The model catalogue: models.json beside this script, with ~/.config/orchestrate/models.json over it entry by entry
+      (so a model released today can be added from any project). For each model: what it is for, the efforts it takes
+      and its default, its list price per million tokens today (input, cached, output) and any announced change, and
+      its retirement date. List prices are for comparing hosts; a plan is charged by its quota, never by these. With
+      --worktree, also each cell of the project's Agents table that names a model the catalogue doesn't know, one
+      retired or retiring within two weeks, or an effort the model doesn't take. Prints text, or JSON with --json.
+""",
     "quota": """\
-quota [--worktree PATH] [--budget 120] [--json]
-      A short readout leading with the verdict, saying whose use each figure counts; --json gives everything.
+quota [--worktree PATH] [--host H] [--refresh] [--budget 120] [--json]
+quota --plan agree|withdraw RESET_ID [--said '<the user's words>']
+quota --bank HOST --expires DATE [--title T]  |  quota --redeemed RESET_ID
+      Each installed host's quota: every window's use, its reset and what is projected to be left unused then, and
+      each banked reset with its expiry and a plan for it (`reset_plans`: what has to be spent for it to be worth
+      redeeming, against the measured pace, and when to suggest redeeming). Readings are cached ten minutes per
+      account; --refresh reads every host now. Reading costs no model call: Codex through its app-server, Claude
+      through `claude -p /usage` and each turn's rate_limit_event, Antigravity through `agy -p /usage`. The script
+      never redeems a banked reset; the user does, where the plan says. `--plan agree` records the user's agreement
+      to a plan, after which routing favours that host until the reset is worth redeeming. `--bank` records a reset
+      the user tells the lead about, for a host whose resets the script can't read. Each of these prints one line:
+      QUOTA_PLAN (the agreement recorded or withdrawn), QUOTA_BANKED (the reset recorded) or QUOTA_REDEEMED (a told
+      reset marked used). --json gives the Codex forecast's fields, as before, with `hosts` and `reset_plans` added.
+      The readout leads with the Codex forecast, then every host:
       The weekly Codex limit, read from Codex's local rollouts: burn per active hour and per builder-hour by model
       and effort, what each work package of this repository cost, the script's own use apart from other local threads,
       and a forecast of the open work packages against what's left before the reset, with a one-sentence verdict.
@@ -18575,11 +19385,30 @@ def build_parser() -> argparse.ArgumentParser:
     builders.add_argument("--why", help="what the working number is for, such as the machine's load")
     builders.add_argument("--clear", action="store_true", help="remove the working number")
     builders.set_defaults(func=cmd_builders)
-    quota = sub.add_parser("quota", help="show how much of the weekly Codex limit is used and forecast")
+    quota = sub.add_parser("quota", help="show each host's quota windows, banked resets and their plans, and the "
+                           "Codex forecast")
     quota.add_argument("--worktree", help="also forecast this repository's open work packages")
+    quota.add_argument("--host", choices=BUILT_IN_HOSTS, help="only this host")
+    quota.add_argument("--refresh", action="store_true", help="read every host now, not the last ten minutes' reading")
+    quota.add_argument("--plan", nargs=2, metavar=("agree|withdraw", "RESET_ID"),
+                       help="record that the user agreed (or withdrew) the plan for a banked reset; routing then "
+                            "favours its host. Never redeems it")
+    quota.add_argument("--said", help="with --plan agree: the user's own words")
+    quota.add_argument("--bank", choices=BUILT_IN_HOSTS, help="record a banked reset the user says this host gave "
+                       "them, for a host whose resets the script can't read")
+    quota.add_argument("--expires", help="with --bank: when it expires, such as 2027-03-08")
+    quota.add_argument("--title", help="with --bank: what the host calls it")
+    quota.add_argument("--redeemed", metavar="RESET_ID", help="record that the user redeemed a banked reset they "
+                       "told the script about")
     quota.add_argument("--budget", type=float, default=120.0, help="seconds to spend reading rollouts")
     quota.add_argument("--json", action="store_true", help="the full report, as JSON")
     quota.set_defaults(func=cmd_quota)
+    models = sub.add_parser("models", help="show the model catalogue: what each model is for, its efforts and list "
+                            "price, and what in the Agents table is out of date")
+    models.add_argument("--worktree", help="also check this project's Agents table against the catalogue")
+    models.add_argument("--host", choices=BUILT_IN_HOSTS)
+    models.add_argument("--json", action="store_true")
+    models.set_defaults(func=cmd_models)
     prof = sub.add_parser("settings", aliases=["profile"], help="print the project settings, as the script reads them")
     prof.add_argument("--worktree", default=".")
     prof.add_argument("--template", action="store_true", help="print a new ORCHESTRATE.md to fill in, with a note on "
