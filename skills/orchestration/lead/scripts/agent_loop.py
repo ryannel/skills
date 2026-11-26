@@ -99,7 +99,6 @@ import shlex
 import shutil
 import signal
 import socket
-import sqlite3
 import struct
 import subprocess
 import sys
@@ -116,7 +115,31 @@ from statistics import median
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_quota  # noqa: E402  (beside this file)
 import delivery_history  # noqa: E402  (beside this file)
-import host_quota  # noqa: E402  (beside this file)
+
+
+def relay_scripts() -> Path | None:
+    """Where agent-relay's scripts folder is. Orchestrate starts every agent through agent-relay, which installs with
+    it: AGENT_RELAY_PATH names it, else it is a sibling skill (hosts that copy each skill to its own folder, such as
+    Antigravity), else it is in the same repository (plugin caches that hold the whole repository)."""
+    here = Path(__file__).resolve()
+    candidates = [Path(os.environ["AGENT_RELAY_PATH"]).expanduser()] if os.environ.get("AGENT_RELAY_PATH") else []
+    candidates += [here.parents[2] / "agent-relay" / "scripts", here.parents[3] / "agent-relay" / "scripts"]
+    return next((c for c in candidates if (c / "relay" / "hosts.py").is_file()), None)
+
+
+_RELAY = relay_scripts()
+if _RELAY is None:
+    raise SystemExit("error: orchestrate needs the agent-relay skill, which starts its agents, and can't find it. "
+                     "Install it with `python3 install.py --plugins agent-relay` from ryannel/skills, or set "
+                     "AGENT_RELAY_PATH to its scripts folder.")
+sys.path.insert(0, str(_RELAY))
+from relay import antigravity as relay_agy  # noqa: E402
+from relay import claude as relay_claude  # noqa: E402
+from relay import codex as relay_codex  # noqa: E402
+from relay import hosts as relay  # noqa: E402
+from relay import models as relay_models  # noqa: E402
+from relay import quota as host_quota  # noqa: E402  (the quota store moved to agent-relay in 3.2.0)
+from relay.experimental import codex_app  # noqa: E402
 
 DEFAULT_MODELS = {"codex": "gpt-6.2-sol", "claude": "claude-opus-5-5", "antigravity": "gemini-4-neon"}
 BUILT_IN_HOSTS = ("codex", "claude", "antigravity")  # the hosts the script has adapters for: sessions, tokens, pins
@@ -5828,27 +5851,21 @@ def quota_now() -> dict | None:
 
 
 def goal_status(thread_id: str | None) -> str | None:
-    db = CODEX_HOME / "goals_1.sqlite"
-    if not thread_id or not db.exists():
+    """The thread's goal status (active, paused, blocked, complete), from the app-server's `thread/goal/get`: on the
+    shared app-server when it holds the thread, else on a short-lived one."""
+    if not thread_id:
         return None
-    try:
-        with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as conn:
-            row = conn.execute("select status from thread_goals where thread_id=?", (thread_id,)).fetchone()
-        return row[0] if row else None
-    except sqlite3.Error:
-        return None
+    goal, _ = codex_with_server(thread_id, lambda srv: (srv.call("thread/goal/get", {"threadId": thread_id},
+                                                                 timeout=20) or {}).get("goal"))
+    return (goal or {}).get("status")
 
 
 # ------------------------------------------------------------------------------------------------------ the hosts
 
 def clean_env(role: str = "build") -> dict:
-    """The environment for a Claude run: no API key or parent-session variables, so it uses the signed-in plan and
-    doesn't mistake itself for a nested session. CLAUDE_CONFIG_DIR is kept, because it says which sign-in to use, and
-    so is CLAUDE_CODE_OAUTH_TOKEN, the plan's own token from `claude setup-token`."""
-    env = {k: v for k, v in os.environ.items()
-           if not (k.startswith("ANTHROPIC_") or k.startswith("CLAUDE"))
-           or k in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN")}
-    return {**env, "ORCHESTRATE_ROLE": role}
+    """The environment for a Claude run: agent-relay's (no API key or parent-session variables, so it uses the
+    signed-in plan), plus the role, which the agent's own commands read."""
+    return relay_claude.clean_env({"ORCHESTRATE_ROLE": role})
 
 
 def plugin_components(home: Path, kind: str) -> dict[str, str]:
@@ -5916,151 +5933,81 @@ def default_host(prof: dict) -> str:
 
 def host_command(host: str, prof: dict, model: str, effort: str, worktree: Path, prompt: str,
                  session: str | None, role: str = "build", new_id: str | None = None, title: str = "") -> tuple[list[str], dict | None]:
-    """The command line and environment for one headless turn on `host`. `new_id` names a new Claude session."""
-    env = {**os.environ, "ORCHESTRATE_ROLE": role}
+    """The command line and environment for one headless turn on `host`, as agent-relay builds it, with the flags
+    that are orchestrate's own: Codex's sandbox and approvals, the role in the agent's environment, no subagents for
+    reviewers and planners, and the repository's shared .git folder writable. `new_id` names a new Claude session."""
+    shared = git_common_dir(worktree)
     if host == "codex":
-        flags = codex_flags({**prof, "model": model, "effort": effort}, role)
-        common = ["-C", str(worktree), "--add-dir", git_common_dir(worktree)]
-        if session:
-            return [CODEX, "exec", *common, "resume", session, *flags, "--json", prompt], env
-        # Labels the thread the way the Codex app labels its own, so it shows in the app's thread list.
-        source = ["--thread-source", "vscode"] if codex_supports("--thread-source") else []
-        return [CODEX, "exec", *flags, *common, *source, "--json", prompt], env
+        req = relay.Request(prompt=prompt, cwd=str(worktree), session=session, add_dirs=[shared], env={"ORCHESTRATE_ROLE": role},
+                            args=codex_flags({**prof, "model": model, "effort": effort}, role))
+        args, env = relay_codex.Codex().command(req)
+        return [CODEX, *args[1:]], env
     if host == "claude":
-        args = [CLAUDE, "-p", prompt, "--model", model, "--effort", effort, "--output-format", "stream-json",
-                "--verbose", "--permission-mode", prof.get("claude_permissions", "auto"),
-                "--add-dir", git_common_dir(worktree)]
-        if role in ("review", "plan"):
-            args += ["--disallowedTools", "Agent"]
-        if session:
-            args += ["--resume", session]
-        elif new_id:
-            args += ["--session-id", new_id]
-        if title and not session and claude_supports("--name"):  # the name the Code tab lists it under
-            args += ["--name", title]
-        return args, clean_env(role)
+        req = relay.Request(prompt=prompt, cwd=str(worktree), model=model, effort=effort, session=session,
+                            mode=prof.get("claude_permissions", "auto"), add_dirs=[shared], name=title or None,
+                            env={"ORCHESTRATE_ROLE": role},
+                            args=["--disallowedTools", "Agent"] if role in ("review", "plan") else [])
+        args, env = relay_claude.Claude().command(req, new_id=new_id)
+        return [CLAUDE, *args[1:]], env
     if host == "antigravity":
-        args = [AGY, "-p", prompt, "--model", model, "--effort", effort, "--output-format", "stream-json",
-                "--add-dir", git_common_dir(worktree)]
-        mode = (prof.get("antigravity_permissions") or "auto").lower()
-        if mode == "skip-permissions":  # only the user chooses it, in the settings
-            args += ["--dangerously-skip-permissions"]
-        elif mode != "turbo":
-            # Named through --settings, not --mode: in print mode agy 1.5.18 checks --mode before its sign-in finishes,
-            # calls auto "not available for this account" and falls back to the account's default, which can be Turbo
-            args += ["--settings", json.dumps({"agentMode": mode})]
-        if session:
-            args += ["--conversation", session]
-        return args, agy_env(role)
+        # The mode goes through --settings, not --mode, which print mode refuses (antigravity-cli#1787); turbo is
+        # agy's default and takes no setting, and skip-permissions only the user chooses, in the settings.
+        req = relay.Request(prompt=prompt, cwd=str(worktree), model=model, effort=effort, session=session,
+                            mode=(prof.get("antigravity_permissions") or "auto").lower(), add_dirs=[shared],
+                            env={"ORCHESTRATE_ROLE": role})
+        args, env = relay_agy.Antigravity().command(req)
+        return [AGY, *args[1:]], env
     template = prof.get("hosts", {}).get(host)
     if not template:
         raise SystemExit(f"error: unknown host {host!r}; use codex, claude, antigravity, or add a "
                          f"'- **Host {host}:** <command>' line to ORCHESTRATE.md")
     values = {"prompt": prompt, "model": model, "effort": effort, "cwd": str(worktree)}
-    return [token.format(**values) for token in shlex.split(template)], env
+    return [token.format(**values) for token in shlex.split(template)], {**os.environ, "ORCHESTRATE_ROLE": role}
 
 
 def agy_env(role: str = "build") -> dict:
-    """The environment for an Antigravity run: no Gemini API key or custom endpoint, so `agy` uses the signed-in plan
-    and never bills an API account, and no self-update while the script depends on how it behaves."""
-    env = {k: v for k, v in os.environ.items()
-           if k not in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "AGY_ADC_AUTH", "GOOGLE_GEMINI_BASE_URL",
-                        "GOOGLE_APPLICATION_CREDENTIALS")}
-    return {**env, "AGY_CLI_DISABLE_AUTO_UPDATE": "true", "ORCHESTRATE_ROLE": role}
+    """agent-relay's environment for an Antigravity run (the signed-in plan, never an API key; no self-update),
+    plus the role."""
+    return relay_agy.env_for({"ORCHESTRATE_ROLE": role})
 
 
 def agy_events(stdout: str):
-    """Antigravity's stream-json lines as (event name, payload). Each line names its event under `event` and carries
-    the payload under a key of the same name; a line from `--output-format json` is one envelope, read as `result`."""
-    for line in stdout.splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(event, dict):
-            continue
-        name = event.get("event") or event.get("type")
-        if not name and "conversation_id" in event and "status" in event:
-            name = "result"
-        body = event.get(name) if isinstance(event.get(name), dict) else event
-        yield name, body
+    return relay_agy.events(stdout)
 
 
-AGY_FAILED = {"ERROR", "INVALID"}  # a result status that means the turn failed; CANCELED and INTERRUPTED are stops
+AGY_FAILED = relay_agy.FAILED_STATES
 
 
 def parse_agy(stdout: str) -> tuple[str | None, str, str | None, bool]:
-    session, message, model, error, deltas = None, "", None, False, []
-    for name, body in agy_events(stdout):
-        session = body.get("conversation_id") or session
-        if name == "init":
-            model = body.get("model") or model
-        elif name == "step_update":
-            if body.get("step_type") == "agent_response" and body.get("text_delta"):
-                deltas.append(body["text_delta"])
-            if body.get("step_type") == "agent_response" and body.get("state") == "DONE" and deltas:
-                message, deltas = "".join(deltas), []
-        elif name == "result":
-            message = body.get("response") or message or "".join(deltas)
-            error = str(body.get("status") or "").upper() in AGY_FAILED or bool(body.get("error"))
-            if body.get("error") and not body.get("response"):
-                message = str(body["error"])
-    return session, message or "".join(deltas), model, error
+    got = relay_agy.parse(stdout)
+    return got["session"], got["text"], got["model"], got["error"]
 
 
-AGY_DENIED = re.compile(r"(soft[- ]?denied|denied|not approved|blocked)\b.*", re.IGNORECASE)
+AGY_DENIED = relay_agy.DENIED
 
 
 def agy_denials(stderr: str) -> list[str]:
-    """The tool calls an Antigravity turn had soft-denied, from its stderr: in print mode a request that needs approval
-    is refused without stopping the turn, which still exits 0, so a builder that couldn't run its tests would look
-    like one that chose not to."""
-    found = []
-    for line in stderr.splitlines():
-        m = AGY_DENIED.search(line)
-        if m and line.strip() not in found:
-            found.append(line.strip()[:200])
-    return found[:5]
+    """The tool calls an Antigravity turn had refused without stopping, from its stderr (see agent-relay)."""
+    return relay_agy.denials(stderr)
 
 
 def parse_output(host: str, stdout: str) -> tuple[str | None, str, str | None, bool]:
-    """(session id, last agent message, model the host reported, whether the host reported an error)."""
-    session, message, model, error, limits = None, "", None, False, None
+    """(session id, last agent message, model the host reported, whether the host reported an error), read by
+    agent-relay's parser for the host."""
     if host == "antigravity":
         return parse_agy(stdout)
-    if host not in ("codex", "claude"):
-        return None, stdout.strip()[-4000:], None, False
-    for line in stdout.splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if host == "codex":
-            if event.get("type") == "thread.started":
-                session = event.get("thread_id")
-            item = event.get("item") or {}
-            if item.get("type") == "agent_message" and item.get("text"):
-                message = item["text"]
-        else:
-            session = event.get("session_id") or session
-            if event.get("type") == "system" and event.get("subtype") == "init":
-                model = event.get("model")
-            elif event.get("type") == "assistant":
-                text = [c.get("text", "") for c in (event.get("message") or {}).get("content") or []
-                        if isinstance(c, dict) and c.get("type") == "text"]
-                if any(text):
-                    message = "\n".join(text)
-            elif event.get("type") == "result":
-                message = event.get("result") or message
-                error = bool(event.get("is_error"))
-            elif event.get("type") == "rate_limit_event":
-                limits = event
-    if host == "claude" and limits:
-        try:  # each Claude turn says how full the plan's windows are; routing reads it, for free
-            host_quota.note_claude_event(limits)
-        except Exception:
-            pass
-    return session, message, model, error
+    if host == "codex":
+        got = relay_codex.parse(stdout)
+        return got["session"], got["text"], None, False
+    if host == "claude":
+        got = relay_claude.parse(stdout)
+        if got["limits_event"]:
+            try:  # each Claude turn says how full the plan's windows are; routing reads it, for free
+                host_quota.note_claude_event(got["limits_event"])
+            except Exception:
+                pass
+        return got["session"], got["text"], got["model"], got["error"]
+    return None, stdout.strip()[-4000:], None, False
 
 
 TURN_USAGE: dict = {}  # the tokens the last turn's host reported; empty when it reported none
@@ -6069,58 +6016,26 @@ TURN_STOP: dict = {}  # why the script stopped the last turn, with the tool call
 
 
 def usage_of(host: str, stdout: str) -> dict:
-    """The tokens a headless turn's own output reported: `input` (not read from cache), `cached` (cache reads) and
-    `output`, plus Claude's `cost_usd`, which is a list-price estimate and not what a plan is charged. Claude reports
-    them in its `result` event and `codex exec` in `turn.completed`. A Claude turn stopped before its `result`
-    (paused, timed out) still reported each finished message's tokens, so those are summed and the turn is counted
-    under `incomplete_turns`, since the message it was writing is missing. A turn that ran in the Codex app, or on
-    another host, reports nothing here, and the result stays empty: missing telemetry is never filled in. For Codex,
+    """The tokens a headless turn's own output reported, read by agent-relay: `input` (not read from cache),
+    `cached` (cache reads) and `output`, plus Claude's `cost_usd`, which is a list-price estimate and not what a plan
+    is charged. A Claude turn stopped before its `result` (paused, timed out) still reported each finished message's
+    tokens, so those are summed and the turn is counted under `incomplete_turns`, since the message it was writing is
+    missing. A turn that reported nothing leaves the result empty: missing telemetry is never filled in. For Codex,
     `run_turn` replaces these figures with the turn's rise in the session's rollout file whenever it can read one
     (see `session_tokens`), and they are used only when it can't."""
-    out: dict = {}
-    if host == "antigravity":
-        for name, body in agy_events(stdout):
-            use = body.get("usage") if name == "result" else None
-            if isinstance(use, dict):
-                cached = use.get("cache_read_tokens") or 0
-                given = use.get("input_tokens") or 0
-                # Gemini counts cached tokens inside the prompt's count, as Codex does
-                out = add_usage(out, {"input": max(given - cached, 0) if given >= cached else given, "cached": cached,
-                                      "output": (use.get("output_tokens") or 0) + (use.get("thinking_tokens") or 0)})
-        return out
-    partial: dict = {}  # Claude's per-message usage, by message id, for a turn that never reached its result
-    for line in stdout.splitlines() if host in APP_HOSTS else []:
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if host == "claude" and isinstance(event, dict) and event.get("type") == "assistant":
-            message = event.get("message") or {}
-            if isinstance(message.get("usage"), dict):
-                partial[message.get("id") or len(partial)] = message["usage"]
-        use = event.get("usage") if isinstance(event, dict) else None
-        if not isinstance(use, dict):
-            continue
-        if host == "claude" and event.get("type") == "result":
-            partial = {}
-            turn = {"input": (use.get("input_tokens") or 0) + (use.get("cache_creation_input_tokens") or 0),
-                    "cached": use.get("cache_read_input_tokens") or 0, "output": use.get("output_tokens") or 0}
-            if isinstance(event.get("total_cost_usd"), (int, float)):
-                turn["cost_usd"] = event["total_cost_usd"]
-        elif host == "codex" and event.get("type") == "turn.completed":
-            cached = use.get("cached_input_tokens") or 0
-            turn = {"input": max((use.get("input_tokens") or 0) - cached, 0), "cached": cached,
-                    "output": use.get("output_tokens") or 0}
-        else:
-            continue
-        out = add_usage(out, turn)
-    if partial and not out:
-        out = add_usage({}, {"input": sum((u.get("input_tokens") or 0) + (u.get("cache_creation_input_tokens") or 0)
-                                          for u in partial.values()),
-                             "cached": sum(u.get("cache_read_input_tokens") or 0 for u in partial.values()),
-                             "output": sum(u.get("output_tokens") or 0 for u in partial.values()),
-                             "incomplete_turns": 1})
-    return out
+    got = {"antigravity": relay_agy.parse, "codex": relay_codex.parse, "claude": relay_claude.parse}.get(host)
+    if got is None:
+        return {}
+    got = got(stdout)
+    use = dict(got.get("usage") or {})
+    if not use:
+        return {}
+    turn = {k: use[k] for k in TOKEN_KEYS if k in use}
+    if use.get("incomplete"):
+        turn["incomplete_turns"] = 1
+    elif isinstance(got.get("cost_usd"), (int, float)):
+        turn["cost_usd"] = got["cost_usd"]
+    return add_usage({}, turn)
 
 
 TOKEN_KEYS = ("input", "cached", "output")
@@ -6358,18 +6273,14 @@ def _run_turn(host: str, prof: dict, model: str, effort: str, worktree: Path, pr
     if host == "codex" and not why:
         return codex_visible_turn(prof, model, effort, worktree, prompt, session, timeout_s, role, title)
     new_id = None
-    if host == "claude" and not why:
+    if host == "claude":
         new_id = None if session else str(uuid.uuid4())
-        sid = session or new_id
-        if session and (pid := claude_app_process(session)):
-            return 130, session, "", f"the user has this session open in Claude desktop (pid {pid}); the script " \
+        if session and (live := claude_live_elsewhere(session)):
+            return 130, session, "", f"the session is open in another Claude Code process ({live}); the script " \
                                      "won't write to it at the same time", None
     args, env = host_command(host, prof, model, effort, worktree, prompt, session, role, new_id, title)
-    tick = None
-    if host == "claude" and not why:
-        tick = lambda: claude_import(sid)  # noqa: E731
     watch = HeadlessWatch(host, session or new_id) if host in APP_HOSTS else None
-    code, stdout, stderr = run_proc(args, worktree, timeout_s, env=env, tick=tick, watch=watch)
+    code, stdout, stderr = run_proc(args, worktree, timeout_s, env=env, watch=watch)
     if host == "antigravity":
         if code == 0 and not stdout.strip():
             # `agy -p` is reported to print nothing when its stdout isn't a terminal; run the turn again in a pty
@@ -6384,11 +6295,6 @@ def _run_turn(host: str, prof: dict, model: str, effort: str, worktree: Path, pr
     TURN_USAGE.update(usage_of(host, stdout))
     if host == "claude":
         TURN_SIZE.update(session_tokens(host, new_session or session or new_id, stdout))
-    if tick:
-        claude_import(sid, wait_s=CLAUDE_IMPORT_WAIT_S)
-        if not claude_app_record(sid):
-            SESSION_PATH.update(path="headless", path_reason="Claude desktop didn't list the session after the "
-                                                             "import link")
     if error and code == 0:
         code, stderr = 1, (stderr + "\n" + message)[-800:]
     return code, new_session or session, message, stderr[-800:], seen
@@ -6468,7 +6374,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.1.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.2.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6508,6 +6414,14 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.2.0": [
+        "Every agent now starts through agent-relay, a separate plugin installed with orchestrate; if the script says "
+        "it can't find agent-relay, run the install line it prints, or `python3 install.py` from the skills "
+        "repository, and try again.",
+        "Headless Codex sessions no longer appear in the Codex app's Recents. Claude sessions always run headless: "
+        "`ORCHESTRATE_VISIBLE=1` shows Codex threads in the app, and a Claude session can be opened in Claude "
+        "Desktop once its turn has ended, with `relay.py open --host claude --session <id>`.",
+    ],
     "3.1.0": [
         "Antigravity (`agy`) is a third built-in host. The settings can have an `## Agents` table naming, for each kind "
         "of agent, the model and effort on each host; with a Builder row, a run that names no host is routed to the "
@@ -7398,47 +7312,38 @@ def floor_reason(host: str, code: int, err: str) -> str:
 
 # ------------------------------------------------------------------------------------ sessions the apps show (macOS)
 #
-# Off by default: the script runs `codex exec` and `claude -p` headless, so nothing opens in either app. With
-# ORCHESTRATE_VISIBLE=1, on a Mac where the Codex app or Claude desktop is running, the script's sessions are made so
-# that the app lists them under the project, and the user can watch, steer, pause and take over there. The script
-# still drives every turn and checks every Ready for Review itself. Elsewhere (another OS, no app, app not running, Claude CLI
-# signed out) it runs headless. The methods were proven with the
-# Codex app 26.1103 (CLI 0.167.0-alpha.3.2) and Claude desktop 4.23118.0; they rest on deep links, a local IPC
-# socket and experimental app-server methods, so re-check them after an app update.
+# Off by default: the script runs `codex exec` and `claude -p` headless, through agent-relay, so nothing opens in
+# either app and headless Codex threads stay out of the app's Recents. With ORCHESTRATE_VISIBLE=1, on a Mac where the
+# Codex app is running, Codex turns run in the app instead, where the user can watch, steer, pause and take over;
+# the script still drives every turn and checks every Ready for Review itself. That path is agent-relay's
+# experimental Codex app mode (relay/experimental/codex_app.py): OpenAI documents no way for another program to run
+# a turn in the app (openai/codex#40134), so it rests on undocumented behaviour, and is re-checked after each update.
 #
-# Codex: a short-lived `codex app-server` creates the thread (source `vscode`, like the app's own) and runs one tiny
-# bootstrap turn, so the rollout records the model, effort and sandbox the app then resumes with. Each loop turn
-# queues the prompt (`codex queue`) and fires `codex://threads/wake/<id>`; the app's own app-server runs it. The
-# loop waits on the thread's rollout file until the turn (and any goal turns the app chains after it) has ended.
+# Codex: a short-lived `codex app-server` creates the thread and runs one tiny bootstrap turn, so the session file
+# records the model, effort and sandbox the app then resumes with. Each loop turn queues the prompt (`codex queue`)
+# and fires `codex://threads/wake/<id>`; the app's own app-server runs it. The loop follows the thread's session file
+# until the turn (and any goal turns the app chains after it) has ended.
 # Threads whose last visible turn the script stopped on a hung tool call, with the call's name. In Thrum, 13 Nov, the
 # app then held the queued message that resumes the thread, and the run waited out the 2-hour turn limit on it.
 HUNG_THREADS: dict = {}
 
-# Stopping a turn, pausing or resuming a goal and clearing queued messages need the app-server that runs the thread.
-# Up to app 26.1103 the app's IPC router (`<CODEX_HOME>/ipc/ipc.sock`) forwarded `thread-follower-*` requests to the
-# window holding the thread, and `codex://threads/<id>` made the window hold it. From app 26.1117 nothing listens
-# there and the app's own app-server talks only to the app over stdio, so nothing outside the app can stop a turn it
-# runs: a second app-server answers `turn/interrupt` with "thread not found" and `thread/resume` with "already has an
-# active writer". The app can instead run on the shared app-server daemon (`codex app-server daemon start`, then the
-# app started with CODEX_APP_SERVER_USE_LOCAL_DAEMON=1), whose control socket every client can reach; the script uses
-# it when it holds the thread. A short-lived app-server can still change a goal's status and delete queued messages,
-# because both live in files every app-server shares (`goals_1.sqlite`, `queue_1.sqlite`).
+# Stopping a turn the app runs needs the app-server that runs it. The app's own talks only to the app, so the script
+# can stop a turn only when the app runs on the shared app-server daemon (`codex app-server daemon start`, then the
+# app started with CODEX_APP_SERVER_USE_LOCAL_DAEMON=1), whose control socket every client can reach. Otherwise only
+# the user can stop it, in the app. A short-lived app-server can still change a goal's status and delete queued
+# messages, because every app-server shares the thread store.
 #
-# Claude: only the app can sign in a process it starts, so the script keeps running its own signed-in `claude -p` per
-# turn, under a session id it chooses, and imports the session into the app with `claude://resume?session=<id>`.
-# The Code tab then lists it with its transcript. A session the user has open in the app (a live app process on it)
-# is never written to by the script at the same time: the turn reports PAUSED instead.
+# Claude: Claude Code documents no way to show a running `claude -p` session in Desktop, so Claude turns always run
+# headless. `claude --desktop --resume <id>` (agent-relay's `open`) hands a session to Desktop once its turn has
+# ended, and a session open in another Claude Code process is never written to by the script at the same time.
 
 SESSION_PATH: dict = {}  # which path the last turn ran on, for the result line
-_IMPORTS_SENT: set = set()
-CODEX_APP_CLI = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
-CLAUDE_APP_STORE = Path.home() / "Library/Application Support/Claude/claude-code-sessions"
+CODEX_APP_CLI = relay_codex.APP_BUNDLED
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
 SETTLE_S = 20.0  # quiet time after the last turn ends, so a goal's chained turn isn't mistaken for the end
 START_S = 120.0  # how often a queued turn that hasn't started is woken again
 STALL_START_S = 3 * 3600.0  # how long a turn may stay queued (the app asleep or busy) before it's given up on
 POLL_S = 1.0
-CLAUDE_IMPORT_WAIT_S = 15.0
 BOOTSTRAP = ("The orchestrate script started this thread; its task arrives as the next message. "
              "Reply with exactly: ready")
 
@@ -7455,14 +7360,8 @@ def visible_unavailable(host: str) -> str | None:
         if not codex_app_running():
             return "the Codex app isn't running"
         return None
-    if not CLAUDE_APP_STORE.is_dir():
-        return "Claude desktop isn't installed (no Code tab session store)"
-    if not claude_app_running():
-        return "Claude desktop isn't running"
-    if not claude_signed_in():
-        return ("the Claude CLI is signed out (`claude auth login`, or CLAUDE_CODE_OAUTH_TOKEN from "
-                "`claude setup-token`)")
-    return None
+    return ("Claude Code documents no way to show a running headless session in Desktop; `claude --desktop --resume` "
+            "hands a session over once its turn has ended")
 
 
 def open_link(url: str) -> bool:
@@ -7477,239 +7376,24 @@ def text_input(text: str) -> list[dict]:
     return [{"type": "text", "text": text, "text_elements": []}]
 
 
-class CodexAppServer:
-    """A short-lived JSON-RPC client for the app's bundled `codex app-server` over stdio. It exists only to create a
-    thread record (and to change a goal's status); the app's own app-server runs every turn after the bootstrap."""
+class CodexAppServer(relay_codex.AppServer):
+    """agent-relay's short-lived app-server, on the CLI the Codex app bundles, which shares the app's thread store.
+    It creates threads and changes a goal's status or queue; the app's own app-server runs every turn."""
 
     def __init__(self):
-        self.p = subprocess.Popen([CODEX_APP_CLI, "app-server", "--listen", "stdio://"], stdin=subprocess.PIPE,
-                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
-        self.q, self.n, self.notes = queue.Queue(), 0, []
-        threading.Thread(target=self._read, daemon=True).start()
-        self.call("initialize", {"clientInfo": {"name": "orchestrate", "title": "orchestrate", "version": "1"},
-                                 "capabilities": {"experimentalApi": True}})
-        self._send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
-
-    def _read(self):
-        for line in self.p.stdout:
-            try:
-                self.q.put(json.loads(line))
-            except ValueError:
-                pass
-
-    def _send(self, obj):
-        self.p.stdin.write(json.dumps(obj) + "\n")
-        self.p.stdin.flush()
-
-    def _next(self, deadline):
-        try:
-            return self.q.get(timeout=max(0.05, min(1.0, deadline - time.time())))
-        except queue.Empty:
-            return None
-
-    def _note(self, m):
-        if "method" in m and "id" in m:  # a server request, such as an approval; the bootstrap needs none
-            self._send({"jsonrpc": "2.0", "id": m["id"], "error": {"code": -32601, "message": "not handled"}})
-        self.notes.append(m)
-
-    def call(self, method, params, timeout=60):
-        self.n += 1
-        rid, deadline = self.n, time.time() + timeout
-        self._send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
-        while time.time() < deadline:
-            m = self._next(deadline)
-            if m is None:
-                continue
-            if m.get("id") == rid and "method" not in m:
-                if "error" in m:
-                    raise RuntimeError(f"{method}: {m['error']}")
-                return m["result"]
-            self._note(m)
-        raise TimeoutError(method)
-
-    def wait_for(self, method, timeout=180):
-        deadline = time.time() + timeout
-        if hit := next((m for m in self.notes if m.get("method") == method), None):
-            return hit
-        while time.time() < deadline:
-            m = self._next(deadline)
-            if m is not None:
-                self._note(m)
-                if m.get("method") == method:
-                    return m
-        raise TimeoutError(method)
-
-    def close(self):
-        try:
-            self.p.stdin.close()
-            self.p.wait(10)
-        except Exception:
-            self.p.kill()
-
-
-class CodexIpc:
-    """The Codex app's local IPC router, `<CODEX_HOME>/ipc/ipc.sock`: frames are a 4-byte little-endian length and
-    JSON. The router forwards thread-follower requests to the app window that owns the thread."""
-    VERSIONS = {"initialize": 0, "thread-follower-read-model-settings": 1, "thread-follower-interrupt-turn": 3}
-
-    def __init__(self, timeout: float = 20):
-        self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.s.settimeout(timeout)
-        try:
-            self.s.connect(str(CODEX_HOME / "ipc" / "ipc.sock"))
-            self.buf, self.client_id = b"", None
-            self.client_id = self.request("initialize", {"clientType": "orchestrate-loop"})["clientId"]
-        except BaseException:
-            self.s.close()
-            raise
-
-    def _send(self, obj):
-        data = json.dumps(obj).encode()
-        self.s.sendall(struct.pack("<I", len(data)) + data)
-
-    def _recv(self):
-        while True:
-            if len(self.buf) >= 4:
-                (n,) = struct.unpack("<I", self.buf[:4])
-                if len(self.buf) >= 4 + n:
-                    msg, self.buf = self.buf[4:4 + n], self.buf[4 + n:]
-                    return json.loads(msg)
-            chunk = self.s.recv(65536)
-            if not chunk:
-                raise ConnectionError("the IPC socket closed")
-            self.buf += chunk
-
-    def request(self, method, params, timeout_ms=20000):
-        rid = str(uuid.uuid4())
-        self._send({"type": "request", "requestId": rid, "sourceClientId": self.client_id,
-                    "version": self.VERSIONS.get(method, 0), "method": method, "params": params,
-                    "timeoutMs": timeout_ms})
-        while True:
-            m = self._recv()
-            if m.get("type") == "response" and m.get("requestId") == rid:
-                if m.get("resultType") == "error":
-                    raise RuntimeError(f"{method}: {m.get('error')}")
-                return m.get("result")
-            if m.get("type") == "client-discovery-request":
-                self._send({"type": "client-discovery-response", "requestId": m.get("requestId"),
-                            "response": {"canHandle": False}})
-
-    def close(self):
-        self.s.close()
+        super().__init__(CODEX_APP_CLI)
 
 
 CODEX_CONTROL_SOCK = CODEX_HOME / "app-server-control" / "app-server-control.sock"
 CODEX_WHY: dict = {}  # thread -> why the last stop, goal change or unqueue on it didn't happen, for the result
 
 
-class CodexSharedServer(CodexAppServer):
-    """A JSON-RPC client for the shared app-server daemon: a websocket at ws://localhost/rpc over its control socket,
-    which is how the Codex app reaches it when it runs on the daemon. Requests go to the server that runs the
-    thread's turns, so `turn/interrupt` stops a turn as the app's Stop button does."""
+class CodexSharedServer(codex_app.SharedServer):
+    """agent-relay's client for the shared app-server daemon's control socket. When the app runs on the daemon,
+    `turn/interrupt` here stops a turn as the app's Stop button does."""
 
     def __init__(self, timeout: float = 10.0):
-        import base64
-        path = os.path.realpath(CODEX_CONTROL_SOCK)
-        self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.s.settimeout(timeout)
-        try:
-            self.s.connect(path)
-            key = base64.b64encode(os.urandom(16)).decode()
-            self.s.sendall((f"GET /rpc HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                            f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
-            head = b""
-            while b"\r\n\r\n" not in head:
-                chunk = self.s.recv(4096)
-                if not chunk:
-                    raise ConnectionError("the shared app-server closed the connection during the handshake")
-                head += chunk
-            head, self.buf = head.split(b"\r\n\r\n", 1)
-            if b" 101 " not in head.split(b"\r\n", 1)[0]:
-                raise ConnectionError(f"the shared app-server refused the websocket: {head[:120]!r}")
-            self.s.settimeout(None)
-        except BaseException:
-            self.s.close()
-            raise
-        self.q, self.n, self.notes, self.lock = queue.Queue(), 0, [], threading.Lock()
-        threading.Thread(target=self._read, daemon=True).start()
-        try:
-            self.call("initialize", {"clientInfo": {"name": "orchestrate", "title": "orchestrate", "version": "1"},
-                                     "capabilities": {"experimentalApi": True}}, timeout=timeout)
-            self._send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
-        except BaseException:
-            self.s.close()
-            raise
-
-    def _frame(self, opcode: int, data: bytes) -> None:
-        mask, n = os.urandom(4), len(data)
-        size = bytes([0x80 | n]) if n < 126 else bytes([0x80 | 126]) + struct.pack(">H", n) if n < 1 << 16 \
-            else bytes([0x80 | 127]) + struct.pack(">Q", n)
-        with self.lock:
-            self.s.sendall(bytes([0x80 | opcode]) + size + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
-
-    def _send(self, obj):
-        self._frame(0x1, json.dumps(obj).encode())
-
-    def _take_frame(self) -> tuple[int, int, bytes] | None:
-        """(fin, opcode, data) of the first whole frame in the buffer, removed from it, or None. Server frames
-        aren't masked."""
-        if len(self.buf) < 2:
-            return None
-        n, at = self.buf[1] & 0x7F, 2
-        if n == 126:
-            if len(self.buf) < 4:
-                return None
-            n, at = struct.unpack(">H", self.buf[2:4])[0], 4
-        elif n == 127:
-            if len(self.buf) < 10:
-                return None
-            n, at = struct.unpack(">Q", self.buf[2:10])[0], 10
-        if len(self.buf) < at + n:
-            return None
-        head, data, self.buf = self.buf[0], self.buf[at:at + n], self.buf[at + n:]
-        return head & 0x80, head & 0x0F, data
-
-    def _read(self):
-        message = b""
-        try:
-            while True:
-                while (frame := self._take_frame()) is None:
-                    chunk = self.s.recv(65536)
-                    if not chunk:
-                        return
-                    self.buf += chunk
-                fin, opcode, data = frame
-                if opcode == 0x8:
-                    return
-                if opcode == 0x9:
-                    self._frame(0xA, data)
-                    continue
-                if opcode in (0x0, 0x1, 0x2):
-                    message += data
-                    if fin:
-                        try:
-                            self.q.put(json.loads(message))
-                        except ValueError:
-                            pass
-                        message = b""
-        except OSError:
-            return
-
-    def close(self):
-        try:
-            self.s.close()
-        except OSError:
-            pass
-
-
-def codex_ipc_why() -> str:
-    """"" when the Codex app's IPC router (app 26.1103 and earlier) takes a connection, else what refused it."""
-    try:
-        CodexIpc(timeout=5).close()
-        return ""
-    except (OSError, RuntimeError, ValueError, KeyError) as e:
-        return (f"the app's IPC router at {CODEX_HOME / 'ipc' / 'ipc.sock'}, which apps up to 26.1103 used, refused "
-                f"the connection ({type(e).__name__})")
+        super().__init__(timeout, CODEX_CONTROL_SOCK)
 
 
 def codex_control(thread: str) -> tuple[CodexSharedServer | None, str]:
@@ -7753,18 +7437,8 @@ def codex_running_turn(thread: str) -> str | None:
 
 
 def codex_project_for(projects: list[dict], paths: list[str]) -> str | None:
-    """The id of the Codex project whose root is, or holds, the first of `paths` that one does: the worktree, then
-    the repository it belongs to. The deepest root wins, so a project for a subfolder beats one for its parent."""
-    for path in paths:
-        best = None
-        for p in projects:
-            for root in p.get("roots") or []:
-                r = str(Path(root.get("path", "")).resolve()) if root.get("path") else ""
-                if r and (path == r or path.startswith(r.rstrip("/") + "/")) and (best is None or len(r) > best[0]):
-                    best = (len(r), p.get("id"))
-        if best:
-            return best[1]
-    return None
+    """The id of the Codex project whose root is, or holds, the first of `paths` that one does (see agent-relay)."""
+    return codex_app.project_for(projects, paths)
 
 
 def codex_thread_create(prof: dict, model: str, effort: str, worktree: Path, role: str, title: str) -> str:
@@ -7810,62 +7484,10 @@ def codex_thread_create(prof: dict, model: str, effort: str, worktree: Path, rol
     return thread
 
 
-def codex_owner(thread: str) -> dict | None:
-    """The model settings the app window holding `thread` reports, or None if no window holds it."""
-    try:
-        ipc = CodexIpc()
-        try:
-            return (ipc.request("thread-follower-read-model-settings", {"conversationId": thread}) or {}).get(
-                "settings") or {}
-        finally:
-            ipc.close()
-    except (OSError, RuntimeError, ValueError):
-        return None
-
-
-def codex_interrupt_request(thread: str) -> str:
-    """Asks the app's IPC router (apps up to 26.1103) to stop the thread's turn, as the Stop button does. Returns ""
-    when the app took the stop, and otherwise why it didn't."""
-    try:
-        ipc = CodexIpc()
-        try:
-            ipc.request("thread-follower-interrupt-turn", {"conversationId": thread, "mode": "user-stop"})
-            return ""
-        finally:
-            ipc.close()
-    except (OSError, RuntimeError, ValueError) as e:
-        return f"{type(e).__name__}: {e}"
-
-
-REOPEN_TRIES = 30  # how many times, POLL_S apart, a reopened thread is asked to stop before the script gives up
-
-
-def codex_ipc_interrupt(thread: str) -> str:
-    """The Stop button through the IPC router of apps up to 26.1103: "" when the app took the stop, else why not. The
-    app stops a thread only while one of its windows holds it, and a window holds one thread at a time. The script
-    opens the thread when its turn starts, but the window may have moved to another thread since, and the app then
-    answers `no-client-found` while the turn works on. So the thread is opened again, and the stop is sent once the
-    window holds it."""
-    why = codex_interrupt_request(thread)
-    if not why:
-        return ""
-    if "no-client-found" not in why:
-        return (f"the app's IPC router at {CODEX_HOME / 'ipc' / 'ipc.sock'}, which apps up to 26.1103 used, refused "
-                f"the stop ({why})")
-    if not open_link(f"codex://threads/{thread}"):
-        return "no app window holds the thread, and the link that opens it failed"
-    for _ in range(REOPEN_TRIES):
-        time.sleep(POLL_S)
-        if codex_owner(thread) is not None and not codex_interrupt_request(thread):
-            return ""
-    return "no app window took the thread after it was opened again"
-
-
 def codex_interrupt(thread: str) -> bool:
     """The app's Stop button: interrupts the running turn and pauses the thread's goal, through the shared app-server
-    when it runs the thread, else through the IPC router of apps up to 26.1103. When neither can, it returns False and
-    CODEX_WHY[thread] says why; on app 26.1117 run on its own app-server, only the user can stop the turn, in the
-    app."""
+    when it runs the thread. When it doesn't, it returns False and CODEX_WHY[thread] says why: only the user can then
+    stop the turn, in the app."""
     CODEX_WHY.pop(thread, None)
     srv, why = codex_control(thread)
     if srv:
@@ -7879,10 +7501,7 @@ def codex_interrupt(thread: str) -> bool:
             why = f"the shared app-server refused the stop ({type(e).__name__}: {e})"
         finally:
             srv.close()
-    ipc = codex_ipc_interrupt(thread)
-    if not ipc:
-        return True
-    CODEX_WHY[thread] = f"{why}; {ipc}"
+    CODEX_WHY[thread] = why
     return False
 
 
@@ -7924,10 +7543,9 @@ def codex_queue(thread: str, text: str) -> None:
     rollout, so a turn that ran on others ends WRONG_MODEL_OR_EFFORT. As of app 26.1117 nothing outside the app can
     change the thread's settings: its app-server talks only to the app over stdio, and the IPC router that carried
     `thread-follower-*` requests no longer listens."""
-    out = subprocess.run([CODEX_APP_CLI, "queue", "--thread", thread, "--resume", "--message", text],
-                         capture_output=True, text=True, timeout=60)
-    if out.returncode != 0 or "Queued" not in out.stdout + out.stderr:
-        raise RuntimeError(f"codex queue failed: {(out.stdout + out.stderr).strip()[-300:]}")
+    r = _AppCodex().send(thread, text)  # the wake link that follows makes the app take the thread
+    if r.status != "done":
+        raise RuntimeError(f"codex queue failed: {r.text[-300:]}")
 
 
 def codex_clear_queue(thread: str) -> tuple[int | None, str]:
@@ -7956,13 +7574,14 @@ def codex_unqueue(thread: str) -> bool:
 
 
 def codex_queued(thread: str) -> int:
-    db = CODEX_HOME / "queue_1.sqlite"
-    if not db.exists():
+    """How many messages wait in the thread's queue, from the app-server's `thread/queue/list`."""
+    if not Path(CODEX_APP_CLI).exists():
         return 0
     try:
-        with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as conn:
-            return conn.execute("select count(*) from queued_items where thread_id=?", (thread,)).fetchone()[0]
-    except sqlite3.Error:
+        with CodexAppServer() as srv:
+            return len((srv.call("thread/queue/list", {"threadId": thread, "limit": 100}, timeout=20) or {}).get(
+                "data") or [])
+    except (OSError, RuntimeError, TimeoutError, ValueError, AttributeError):
         return 0
 
 
@@ -7993,22 +7612,10 @@ def codex_visible_turn(prof: dict, model: str, effort: str, worktree: Path, prom
     try:
         if thread is None:
             thread = codex_thread_create(prof, model, effort, worktree, role, title)
-        settings = codex_owner(thread)
-        ipc = "" if settings is not None else codex_ipc_why()
-        if settings is None and not ipc:  # the IPC router stops a thread only while a window holds it
-            open_link(f"codex://threads/{thread}")
-            for _ in range(30):
-                if (settings := codex_owner(thread)) is not None:
-                    break
-                time.sleep(POLL_S)
-        if settings:
-            SESSION_PATH["app_settings"] = f"{settings.get('model')} {settings.get('reasoningEffort')}"
-        elif not ipc:
-            SESSION_PATH["path_note"] = "no app window holds the thread, so a pause or timeout can't stop its turn"
-        elif not CODEX_CONTROL_SOCK.exists():
+        if not CODEX_CONTROL_SOCK.exists():
             SESSION_PATH["path_note"] = ("the script can't stop this thread's turns, because the Codex app runs them "
-                                         "in its own app-server and " + ipc + "; on a pause or timeout the user "
-                                         "stops the turn in the app")
+                                         "in its own app-server; on a pause or timeout the user stops the turn in "
+                                         "the app")
         rollout = rollout_for(thread)
         offset = rollout.stat().st_size if rollout else 0
         loop_note(session=thread, transcript=str(rollout) if rollout else LIVE.get("transcript"))
@@ -8122,63 +7729,19 @@ def codex_app_running() -> bool:
     return any(line.strip().startswith(f"{app}/Contents/MacOS/") for line in out.splitlines())
 
 
-def claude_app_running() -> bool:
-    try:  # `pgrep -x Claude` misses the app on macOS 26, so read the executables' paths
-        out = subprocess.run(["ps", "-axo", "comm="], capture_output=True, text=True, timeout=30).stdout
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return any(line.strip().endswith("Claude.app/Contents/MacOS/Claude") for line in out.splitlines())
-
-
-def claude_signed_in() -> bool:
-    if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
-        return True
-    try:
-        out = subprocess.run([CLAUDE, "auth", "status"], capture_output=True, text=True, timeout=30,
-                             env=clean_env())
-        return bool(json.loads(out.stdout).get("loggedIn"))
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        return False
-
-
-def claude_app_record(session: str) -> Path | None:
-    """The Code tab's record of `session`, which is what makes the app list it."""
-    hits = glob.glob(str(CLAUDE_APP_STORE / "*" / "*" / f"local_{session}.json"))
-    return Path(hits[0]) if hits else None
-
-
 def claude_transcript(session: str) -> Path | None:
-    hits = glob.glob(str(CLAUDE_HOME / "projects" / "*" / f"{session}.jsonl"))
-    return Path(hits[0]) if hits else None
+    return relay_claude.transcript(session)
 
 
-def claude_import(session: str, wait_s: float = 0.0) -> None:
-    """Imports a CLI session into the Code tab once its transcript exists (`claude://resume` writes the app's
-    record). Called while the turn runs, so the user can watch the first turn too."""
-    if claude_app_record(session) or not claude_transcript(session):
-        return
-    if session not in _IMPORTS_SENT:
-        _IMPORTS_SENT.add(session)
-        open_link(f"claude://resume?session={session}")
-    deadline = time.time() + wait_s
-    while time.time() < deadline and not claude_app_record(session):
-        time.sleep(POLL_S)
-
-
-def claude_app_process(session: str) -> int | None:
-    """The pid of a live Claude desktop process on `session`, if the user has it open in the app."""
-    for f in glob.glob(str(CLAUDE_HOME / "sessions" / "*.json")):
-        try:
-            reg = json.loads(Path(f).read_text())
-            if reg.get("sessionId") != session or not (reg.get("hostSessionId") or
-                                                       reg.get("entrypoint") == "claude-desktop"):
-                continue
-            pid = int(reg.get("pid") or Path(f).stem)
-            os.kill(pid, 0)
-            return pid
-        except (OSError, ValueError, TypeError):
-            continue
-    return None
+def claude_live_elsewhere(session: str) -> str | None:
+    """How another live Claude Code process holds `session`, from `claude agents --json`, or None: the user may have
+    it open, and two processes writing one session at once corrupt it."""
+    if not (shutil.which(CLAUDE) or Path(CLAUDE).is_file()):
+        return None
+    entry = next((a for a in relay_claude.agents(exe=CLAUDE) if a.get("sessionId") == session), None)
+    if not entry:
+        return None
+    return ", ".join(f"{k} {entry[k]}" for k in ("kind", "pid", "status", "state") if entry.get(k)) or "live"
 
 
 # ------------------------------------------------------------------------------------------------------- building
@@ -11212,37 +10775,19 @@ def host_quota_text(views: list[dict]) -> str:
 
 
 TABLE_ROLE_NAMES = {"plan": "Planner", "build": "Builder", "review": "Reviewer", "design": "Design reviewer"}
-MODELS_FILE = Path(__file__).with_name("models.json")
-USER_MODELS = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "orchestrate" / "models.json"
+MODELS_FILE = relay_models.SHIPPED  # the catalogue ships with agent-relay
+USER_MODELS = relay_models.USER_FILES[-1]  # ~/.config/agent-relay/models.json; the orchestrate one before it still counts
 
 
 def catalogue() -> dict:
-    """The model catalogue: models.json beside the script, with the user's copy over it, entry by entry, so a model
-    released today can be added from any project without waiting for a release."""
-    def load(path: Path) -> dict:
-        try:
-            got = json.loads(path.read_text())
-            return got if isinstance(got, dict) else {}
-        except (OSError, json.JSONDecodeError):
-            return {}
-    shipped, mine = load(MODELS_FILE), load(USER_MODELS)
-    entries = {(m.get("host"), m.get("id")): {**m, "from": "shipped"} for m in shipped.get("models") or []}
-    for m in mine.get("models") or []:
-        key = (m.get("host"), m.get("id"))
-        entries[key] = {**entries.get(key, {}), **m, "from": "yours"}
-    return {"checked": max(filter(None, (shipped.get("checked"), mine.get("checked"))), default=None),
-            "models": sorted(entries.values(), key=lambda m: (BUILT_IN_HOSTS.index(m["host"]) if m.get("host") in
-                                                              BUILT_IN_HOSTS else 9, m.get("id") or ""))}
+    """The model catalogue: agent-relay's, with the user's copies over it, entry by entry, so a model released today
+    can be added from any project without waiting for a release."""
+    return relay_models.catalogue(user_files=(*relay_models.USER_FILES[:-1], USER_MODELS))
 
 
 def price_now(m: dict, day: str | None = None) -> dict:
     """A model's list price today, taking any announced change that has come into force."""
-    day = day or datetime.now().strftime("%Y-%m-%d")
-    price = dict(m.get("price") or {})
-    for change in sorted(m.get("price_changes") or [], key=lambda c: c.get("from") or ""):
-        if (change.get("from") or "9999") <= day:
-            price.update({k: v for k, v in change.items() if k != "from"})
-    return price
+    return relay_models.price_now(m, day)
 
 
 def table_findings(prof: dict, cat: dict) -> list[str]:
@@ -12553,7 +12098,7 @@ def cmd_thread(a: argparse.Namespace) -> None:
     if a.action == "status":
         emit("THREAD", **fields, goal=goal_status(t) or "none", turn_running=codex_running_turn(t),
              queued=codex_queued(t), app_running=codex_app_running(), control=control,
-             can_stop=bool(srv) or not codex_ipc_why())
+             can_stop=bool(srv))
     if a.action == "stop":
         if codex_interrupt(t):
             emit("STOPPED", **fields, goal=goal_status(t) or "none", note="the turn stopped and the goal is paused, "
@@ -18045,31 +17590,34 @@ def push_path(lead: dict, setting: str) -> tuple[str | None, str]:
 
 
 def wake_claude(lead: dict, text: str, setting: str) -> str:
-    """Posts `text` to the lead session's inbox socket, as Claude Code's cross-session messaging does: an idle
-    session starts a turn with it, and a busy one reads it between tool calls. The token makes it count as the
-    session's own child, which the inbound rules deliver even to a session that bypasses permission prompts."""
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(10)
-            s.connect(lead["socket"])
-            lines = ([{"type": "auth", "token": lead["token"]}] if lead.get("token") else []) + \
-                [{"type": "user", "message": {"role": "user", "content": text}}]
-            s.sendall("".join(json.dumps(x) + "\n" for x in lines).encode())
-        return ""
-    except (OSError, KeyError, TypeError) as e:
-        return f"the lead's Claude session didn't take the message: {type(e).__name__}: {e}"
+    """Posts `text` to the lead session's inbox socket through agent-relay, as Claude Code's cross-session messaging
+    does: an idle session starts a turn with it, and a busy one reads it between tool calls. The token makes it count
+    as the session's own child, which the inbound rules deliver even to a session that bypasses permission prompts."""
+    if not lead.get("socket"):
+        return "the lead's Claude session has no inbox socket on record"
+    why = relay_claude.post(lead["socket"], text, lead.get("token"))
+    return f"the lead's Claude session didn't take the message: {why}" if why else ""
+
+
+class _AppCodex(relay_codex.Codex):
+    """agent-relay's Codex host, on the CLI the Codex app bundles."""
+
+    def exe(self) -> str:
+        return CODEX_APP_CLI
 
 
 def wake_codex(lead: dict, text: str, setting: str) -> str:
-    """Queues `text` on the lead's thread. The desktop app runs a queued message once the thread is idle, which is
-    how the script starts every visible builder turn too."""
-    try:
-        out = subprocess.run([CODEX_APP_CLI, "queue", "--thread", lead["session"], "--resume", "--message", text],
-                             capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.SubprocessError, KeyError) as e:
-        return f"codex queue didn't run: {e}"
-    said = (out.stdout + out.stderr).strip()
-    return "" if out.returncode == 0 and "Queued" in said else f"codex queue failed: {said[-300:]}"
+    """Queues `text` on the lead's thread through agent-relay. The desktop app runs a queued message once the thread
+    is idle, which is how the script starts every visible builder turn too. `codex queue` only warns when it can't
+    resume the thread, so for a thread the app doesn't hold, that warning means the lead wasn't woken."""
+    if not lead.get("session"):
+        return "the lead's Codex thread isn't on record"
+    r = _AppCodex().send(lead["session"], text)
+    if r.status != "done":
+        return f"codex queue failed: {r.text}"
+    if r.warnings and not lead.get("app_thread"):
+        return f"the message is queued, but nothing resumed the lead's thread: {r.warnings[0]}"
+    return ""
 
 
 def wake_command(lead: dict, text: str, setting: str) -> str:

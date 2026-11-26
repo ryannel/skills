@@ -2297,14 +2297,39 @@
       "last_checked": "2026-11-26",
       "last_drift_found": null,
       "quiet_streak": 0,
-      "why_tier": "Registered 2026-11-26. The shipped catalogue skills/orchestration/lead/scripts/models.json holds model IDs, efforts, list prices, plans and retirement dates for Codex, Claude and Antigravity, which change within days of a launch (Argon retires 2026-11-30; Carbon's price doubles 2026-12-01).",
+      "why_tier": "Registered 2026-11-26. The shipped catalogue skills/agent-relay/scripts/relay/models.json holds model IDs, efforts, list prices, plans and retirement dates for Codex, Claude and Antigravity, which change within days of a launch (Argon retires 2026-11-30; Carbon's price doubles 2026-12-01).",
       "watchlist": [
         {
           "id": "model-catalogue",
           "type": "model-names",
           "claim": "models.json lists the current agent models on each host with their IDs, CLI efforts and defaults, context, list prices, announced price changes, plans and retirement dates.",
-          "where": "skills/orchestration/lead/scripts/models.json; the vendor pages named in skills/orchestration/models/SKILL.md",
+          "where": "skills/agent-relay/scripts/relay/models.json; the vendor pages named in skills/orchestration/models/SKILL.md",
           "check": "Re-read each vendor's model and pricing pages. Add launched models, mark retirements, apply price changes, and check the SETTINGS_TEMPLATE Agents table in agent_loop.py still names current models (test_hosts.Catalogue checks this)."
+        }
+      ]
+    },
+    "agent-relay": {
+      "path": "skills/agent-relay",
+      "tier": "hot",
+      "cadence_days": 2,
+      "last_checked": "2026-11-26",
+      "last_drift_found": null,
+      "quiet_streak": 0,
+      "why_tier": "Registered 2026-11-26. Drives the claude, codex and agy CLIs by their flags, stream formats and undocumented edges (the Claude inbox message line, Codex's wake link and session files, agy bugs #1787 and #1884), any of which a CLI release can change within days.",
+      "watchlist": [
+        {
+          "id": "relay-cli-flags",
+          "type": "cli-interface",
+          "claim": "The flags and stream-json event shapes the adapters use: claude -p --output-format stream-json, --session-id, --resume, --settings, --desktop --resume, `claude agents --json`; codex exec --json, exec resume, codex queue --resume; agy -p --output-format stream-json, --conversation, --settings agentMode.",
+          "where": "skills/agent-relay/scripts/relay/{claude,codex,antigravity}.py; the capability table in SKILL.md and README.md",
+          "check": "Read each CLI's --help and the vendor pages linked in SKILL.md, then run `relay.py check` and one small `run` per host."
+        },
+        {
+          "id": "relay-experimental",
+          "type": "open-issues",
+          "claim": "Each experimental piece and the vendor issue that would retire it: Claude's inbox message line; Codex app mode (openai/codex#40134, #41014, #40935); agy's --mode in print mode (#1787) and concurrent starts (#1884).",
+          "where": "skills/agent-relay/README.md, Experimental parts; skills/agent-relay/scripts/relay/experimental/codex_app.py",
+          "check": "Check whether each issue has closed or the vendor has documented the route; if so, move that piece onto the documented route and drop it from the table."
         }
       ]
     }

@@ -1,6 +1,6 @@
 ---
 name: models
-description: Keeps orchestrate's model catalogue and a project's Agents table current, as part of the orchestrate set. Researches the models Codex, Claude Code and Antigravity offer from each vendor's own pages, updates models.json with their IDs, efforts, context, list prices, plans and retirement dates, and proposes changes to the table with reasons. Use when a model launches or retires, when the models command flags a cell, or when asked whether the project's models are current. Not for writing prompts for a new model (prompting-agents).
+description: Keeps orchestrate's model catalogue and a project's Agents table current, as part of the orchestrate set. Researches the models Codex, Claude Code and Antigravity offer from each vendor's own pages, updates the catalogue with their IDs, efforts, context, list prices, plans and retirement dates, and proposes changes to the table with reasons. Use when a model launches or retires, when the models command flags a cell, or when asked whether the project's models are current. Not for writing prompts for a new model (prompting-agents).
 ---
 
 # Models
@@ -13,10 +13,11 @@ bring the catalogue up to date from the vendors' own pages, then propose what th
 to agree.
 
 The script is `scripts/agent_loop.py` in the lead skill's folder, a sibling of this one
-([lead](../lead/SKILL.md)). The shipped catalogue is `scripts/models.json` beside it. The user's own copy,
-`~/.config/orchestrate/models.json`, overrides an entry with the same host and ID and adds new ones; it works from any
-project and survives a plugin update, so that is the one to write unless you are working in the repository that
-publishes the plugin.
+([lead](../lead/SKILL.md)). The catalogue belongs to agent-relay, the plugin the script starts every agent through:
+the shipped copy is `scripts/relay/models.json` in the agent-relay skill's folder. The user's own copy,
+`~/.config/agent-relay/models.json`, overrides an entry with the same host and ID and adds new ones (an older
+`~/.config/orchestrate/models.json` is still read, beneath it); it works from any project and survives a plugin
+update, so that is the one to write unless you are working in the repository that publishes the plugin.
 
 ## Start from what the script sees
 
@@ -79,6 +80,6 @@ point to the prompting-agents skill, which holds a reference per model family.
 
 ## In the repository that publishes orchestrate
 
-If you are working in the skills repository itself, update the shipped `scripts/models.json` as well as, or instead
+If you are working in the skills repository itself, update the shipped `skills/agent-relay/scripts/relay/models.json` as well as, or instead
 of, the user's copy, and bump that skill's entry in the repository's `freshness.json` so its last-checked date
 matches.

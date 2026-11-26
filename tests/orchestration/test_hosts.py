@@ -205,9 +205,10 @@ class Plans(QuotaDir):
         self.assertEqual(p["status"], "unmeasured")
 
     def test_never_redeems(self):
-        source = "".join((Path(agent_loop.__file__).parent / f).read_text() for f in ("agent_loop.py", "host_quota.py"))
+        files = [Path(agent_loop.__file__)] + sorted(Path(agent_loop._RELAY).rglob("*.py"))
+        source = "".join(f.read_text() for f in files)
         calls = re.findall(r"""["']account/rateLimitResetCredit/consume["']""", source)
-        self.assertEqual(calls, [], "nothing in the script redeems a banked reset")
+        self.assertEqual(calls, [], "nothing in the script or agent-relay redeems a banked reset")
 
 
 class Routing(QuotaDir):

@@ -118,6 +118,16 @@ knows the field recognises the work at once, hunts out ambiguous and duplicate w
 using the agreed terms, fixes code and docs that drift from them, and adds a pointer to `AGENTS.md` so later
 sessions keep to them. Orchestrate keeps its own glossary and doesn't need it. Install it with `npx skills add ryannel/skills --skill domain-language`.
 
+## Agent relay
+
+[`agent-relay`](./skills/agent-relay/) is a standalone skill and command-line tool for driving Claude Code, Codex
+and Antigravity from a script or another agent. One command starts, resumes and stops a turn, messages a running
+session, opens it in its desktop app, and reads each host's quota and banked resets, with the same JSON result for
+every host. It uses each vendor's documented CLI interfaces, and labels the few undocumented ones as experimental,
+with the vendor issue that would retire each. Orchestrate starts every agent through it, so installing orchestrate
+installs it too. Install it alone with `npx skills add ryannel/skills --skill agent-relay`, or
+`python3 install.py --plugins agent-relay`.
+
 ## Install
 
 ```bash
@@ -154,18 +164,18 @@ As a Claude Code plugin instead:
 /plugin install generative-media-skills@ryannel-skills
 ```
 
-These routes are for the generative-media skills. `prompting-agents`, `orchestrate`, `skill-creator` and
-`domain-language` install
+These routes are for the generative-media skills. `prompting-agents`, `orchestrate`, `skill-creator`,
+`domain-language` and `agent-relay` install
 through `install.py`, below.
 
 ## Setting up for Claude Code and Codex
 
-For `prompting-agents`, `orchestrate`, `skill-creator` and `domain-language`, one command from a clone of this repo
+For `prompting-agents`, `orchestrate`, `skill-creator`, `domain-language` and `agent-relay`, one command from a clone of this repo
 sets up both hosts
 without editing settings by hand:
 
 ```bash
-python3 install.py                       # all four plugins, both hosts, user scope
+python3 install.py                       # all five plugins, every installed host, user scope
 python3 install.py --replace-standalone  # the same, replacing an earlier npx-skills or hand install (see below)
 python3 install.py --repo ~/code/app     # and set that repo up too
 python3 install.py --plugins prompting-agents --host codex

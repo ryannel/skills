@@ -1,5 +1,5 @@
 {
-  "about": "The models orchestrate's Agents table can name, per host, with what each is for and its list price per million tokens. Prices are the API list price, for comparing hosts only: a subscription is charged by its plan's quota, never by these. A copy at ~/.config/orchestrate/models.json overrides an entry with the same host and id, and adds new ones. The models skill keeps this file current. Default efforts are Claude Code's and Codex's, not the API's. Codex prices are for prompts up to 272K tokens; efforts left empty are ones OpenAI doesn't list per model.",
+  "about": "The models agent-relay's hosts offer for agent work, with what each is for, the efforts it takes and its list price per million tokens. Prices are the API list price, for comparing hosts only: a subscription is charged by its plan's quota, never by these. A copy at ~/.config/agent-relay/models.json overrides an entry with the same host and id, and adds new ones. Default efforts are the hosts' CLIs', not the APIs'. Codex prices are for prompts up to 272K tokens; efforts left empty are ones OpenAI doesn't list per model.",
   "checked": "2026-11-26",
   "models": [
     {

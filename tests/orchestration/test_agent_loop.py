@@ -14,7 +14,6 @@ import re
 import shlex
 import shutil
 import signal
-import sqlite3
 from pathlib import Path
 import subprocess
 import sys
@@ -1040,17 +1039,13 @@ class Building(Repo):
 
     def test_second_blocked_report_with_an_active_goal_finishes(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED: no device")
-        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
-            conn.execute("create table thread_goals (thread_id text, status text)")
-            conn.execute("insert into thread_goals values ('t1', 'active')")
+        self.goals["t1"] = "active"
         self.assertEqual(self.run_loop()["result"], "BLOCKED")
         self.assertEqual(len(self.calls()), 2)
 
     def test_a_block_with_a_reason_finishes_at_once_and_pauses_the_goal(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="BLOCKED needs_dependency: CORE has no save API yet")
-        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
-            conn.execute("create table thread_goals (thread_id text, status text)")
-            conn.execute("insert into thread_goals values ('t1', 'active')")
+        self.goals["t1"] = "active"
         self.assertEqual(self.run_loop()["result"], "BLOCKED")
         self.assertEqual(len(self.calls()), 1)
         self.assertEqual(self.goal_changes, ["paused"])
@@ -1075,18 +1070,14 @@ class Building(Repo):
 
     def test_paused_goal_stops_before_dispatching_another_turn(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="working")
-        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
-            conn.execute("create table thread_goals (thread_id text, status text)")
-            conn.execute("insert into thread_goals values ('t1', 'paused')")
+        self.goals["t1"] = "paused"
         self.assertEqual(self.run_loop()["result"], "PAUSED")
         self.assertEqual(self.run_loop()["result"], "PAUSED")
         self.assertEqual(len(self.calls()), 1)
 
     def set_goal(self, status):
-        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
-            conn.execute("create table if not exists thread_goals (thread_id text, status text)")
-            conn.execute("delete from thread_goals")
-            conn.execute("insert into thread_goals values ('t1', ?)", (status,))
+        self.goals.clear()
+        self.goals["t1"] = status
 
     def test_a_headless_run_sets_a_paused_goal_active_again_and_resumes(self):
         """A block or `pause` leaves the goal paused; `run` again must resume the session, not report PAUSED."""
@@ -1994,13 +1985,13 @@ class WhatTheLeadSees(Repo):
         with mock.patch.object(agent_loop, "QUOTA_WORKTREE", [self.wt]):
             first = self.call(lambda a: agent_loop.emit("NOTHING"))
             second = self.call(lambda a: agent_loop.emit("NOTHING"))
-        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5", "3.0.6", "3.0.7", "3.0.8", "3.1.0"])
+        self.assertEqual(sorted(first["changed"]), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.5.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5", "3.0.6", "3.0.7", "3.0.8", "3.1.0", "3.2.0"])
         self.assertIn("From before 2.6.0", first["changed"]["2.5.0"][0])
         self.assertNotIn("changed", second)
         note.write_text('{"version": "2.0.0"}')
         self.assertIn("2.5.0", agent_loop.version_change(self.wt))
         note.write_text('{"version": "2.5.0"}')
-        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5", "3.0.6", "3.0.7", "3.0.8", "3.1.0"])
+        self.assertEqual(sorted(agent_loop.version_change(self.wt)), ["2.10.0", "2.10.1", "2.11.0", "2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.12.0", "2.12.1", "2.12.2", "2.12.3", "2.12.4", "2.13.0", "2.14.0", "2.6.0", "2.7.0", "2.7.1", "2.8.0", "2.9.0", "3.0.0", "3.0.1", "3.0.2", "3.0.3", "3.0.4", "3.0.5", "3.0.6", "3.0.7", "3.0.8", "3.1.0", "3.2.0"])
         note.write_text('{"version": "2.9.0"}')
         (line, *_) = agent_loop.version_change(self.wt)["2.10.0"]
         self.assertIn("Read the lead skill again", line)
@@ -2227,10 +2218,6 @@ class FakeCodexApp:
                    {"type": "turn_context", "payload": {"turn_id": "boot", "model": model, "effort": effort}})
         return t
 
-    def owner(self, t):
-        info = self.threads.get(t)
-        return {"model": info["model"], "reasoningEffort": info["effort"]} if info else None
-
     def queue(self, t, text):
         self.queued[t] = text
         self.sent.append(text)
@@ -2284,10 +2271,10 @@ class FakeCodexApp:
     def installed(self, claude=False):
         patches = [mock.patch.object(agent_loop, name, value) for name, value in dict(
             visible_unavailable=lambda host: None if host == "codex" or claude else "no app",
-            codex_thread_create=self.create, codex_owner=self.owner, codex_queue=self.queue, open_link=self.link,
+            codex_thread_create=self.create, codex_queue=self.queue, open_link=self.link,
             codex_interrupt=self.interrupt, codex_queued=lambda t: int(t in self.queued), codex_unqueue=self.unqueue,
             codex_goal_activate=lambda t, status="active": self.activated.append(t) or True,
-            SETTLE_S=0.0, POLL_S=0.01, START_S=0.05, STALL_START_S=0.3, CLAUDE_IMPORT_WAIT_S=0.0,
+            SETTLE_S=0.0, POLL_S=0.01, START_S=0.05, STALL_START_S=0.3,
             CODEX_APP_CLI=agent_loop.CODEX).items()]
         for p in patches:
             p.start()
@@ -2315,8 +2302,7 @@ class VisibleCodex(Repo):
     def test_decision_8_a_build_runs_in_a_thread_the_app_shows_and_the_loop_still_claims(self):
         with FakeCodexApp(self).installed() as app:
             result = self.run_loop()
-        self.assertEqual((result["result"], result["path"], result["app_settings"]),
-                         ("READY_FOR_REVIEW", "visible", "gpt-6.2-sol medium"))
+        self.assertEqual((result["result"], result["path"]), ("READY_FOR_REVIEW", "visible"))
         (t, info), = app.threads.items()
         self.assertEqual((info["model"], info["effort"], info["role"], info["title"], info["cwd"]),
                          ("gpt-6.2-sol", "medium", "build", agent_loop.session_title(self.wt, "WATER", "WP1 build"),
@@ -2379,36 +2365,8 @@ class VisibleCodex(Repo):
         (thread,) = app.threads
         self.assertIn(f"the Codex app didn't take the stop for thread {thread}", result["turn_not_stopped"])
 
-    def test_a_stop_refused_because_the_window_left_the_thread_opens_it_and_is_sent_again(self):
-        asked, links = [], []
-
-        def request(thread):  # the app stops a thread only while one of its windows holds it
-            asked.append(thread)
-            return "" if links else "RuntimeError: thread-follower-interrupt-turn: no-client-found"
-        with mock.patch.object(agent_loop, "codex_interrupt_request", request), \
-                mock.patch.object(agent_loop, "open_link", lambda url: links.append(url) or True), \
-                mock.patch.object(agent_loop, "codex_owner", lambda thread: {} if links else None), \
-                mock.patch.object(agent_loop, "POLL_S", 0.0):
-            self.assertTrue(agent_loop.codex_interrupt("t1"))
-        self.assertEqual((asked, links), (["t1", "t1"], ["codex://threads/t1"]))
-
-    def test_a_stop_gives_up_when_no_window_takes_the_thread_and_opens_nothing_for_another_failure(self):
-        links = []
-        with mock.patch.object(agent_loop, "open_link", lambda url: links.append(url) or True), \
-                mock.patch.object(agent_loop, "codex_owner", lambda thread: None), \
-                mock.patch.object(agent_loop, "POLL_S", 0.0), mock.patch.object(agent_loop, "REOPEN_TRIES", 3):
-            with mock.patch.object(agent_loop, "codex_interrupt_request",
-                                   lambda thread: "RuntimeError: thread-follower-interrupt-turn: no-client-found"):
-                self.assertFalse(agent_loop.codex_interrupt("t1"))
-            self.assertEqual(links, ["codex://threads/t1"])
-            with mock.patch.object(agent_loop, "codex_interrupt_request", lambda thread: "OSError: no socket"):
-                self.assertFalse(agent_loop.codex_interrupt("t2"))  # the app isn't running, so no turn is either
-            self.assertEqual(links, ["codex://threads/t1"])
-
     def test_decision_8_a_timeout_interrupts_the_apps_turn_and_keeps_an_active_goal(self):
-        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
-            conn.execute("create table thread_goals (thread_id text, status text)")
-            conn.execute("insert into thread_goals values ('019a0000-0000-7000-8000-000000000000', 'active')")
+        self.goals["019a0000-0000-7000-8000-000000000000"] = "active"
         with FakeCodexApp(self, behaviour="hang").installed() as app:
             result = self.run_loop(turn_timeout_hours=0.1 / 3600)
         # A turn stopped at the turn limit isn't a host failure, so the run ends on the stall check, not HOST_FAILED.
@@ -2421,13 +2379,9 @@ class VisibleCodex(Repo):
         with FakeCodexApp(self).installed() as app:
             self.run_loop()
             t = self.state()["thread"]
-            with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
-                conn.execute("create table thread_goals (thread_id text, status text)")
-                conn.execute("insert into thread_goals values (?, 'paused')", (t,))
             for n, status in enumerate(("paused", "blocked"), 1):  # paused in the app, or blocked until unblocked
                 with self.subTest(status=status):
-                    with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
-                        conn.execute("update thread_goals set status = ?", (status,))
+                    self.goals[t] = status
                     self.run_loop(message="x is 3")
                     self.assertEqual(app.activated, [t] * n)
 
@@ -2464,41 +2418,20 @@ class VisibleCodex(Repo):
         self.assertTrue(app.unqueued)
 
 class VisibleClaude(Repo):
-    """Decision 8: Claude turns run in the loop's own signed-in CLI, imported into the Code tab."""
+    """Claude turns run headless even when the apps are asked for, and never into a session another process holds."""
 
-    def setUp(self):
-        super().setUp()
-        self.records = set()
-
-    def link(self, url):
-        self.links.append(url)
-        self.records.add(url.split("session=")[1])
-        return True
-
-    @contextlib.contextmanager
-    def app(self, owner_pid=None):
-        self.links = []
-        with FakeCodexApp(self).installed(claude=True), \
-                mock.patch.object(agent_loop, "open_link", self.link), \
-                mock.patch.object(agent_loop, "claude_transcript", lambda s: Path("/t") / s), \
-                mock.patch.object(agent_loop, "claude_app_record", lambda s: s in self.records and Path("/r")), \
-                mock.patch.object(agent_loop, "claude_app_process", lambda s: owner_pid):
-            yield
-
-    def test_decision_8_a_claude_build_names_its_session_and_imports_it_into_the_app(self):
-        with self.app():
+    def test_decision_8_a_claude_build_runs_headless_and_says_why(self):
+        with mock.patch.dict(os.environ, {"ORCHESTRATE_VISIBLE": "1"}), \
+                mock.patch.object(agent_loop.sys, "platform", "darwin"):
             result = self.run_loop(host="claude")
-        self.assertEqual((result["result"], result["path"]), ("READY_FOR_REVIEW", "visible"))
-        argv = self.calls()[0]["argv"]
-        sid = argv[argv.index("--session-id") + 1]
-        self.assertEqual(self.links, [f"claude://resume?session={sid}"])
-        self.assertEqual(self.state()["thread"], sid)
+        self.assertEqual(result["result"], "READY_FOR_REVIEW")
+        self.assertNotEqual(result.get("path"), "visible")
+        self.assertIn("--session-id", self.calls()[0]["argv"])
 
-    def test_decision_8_the_loop_wont_write_to_a_session_the_human_has_open_in_the_app(self):
+    def test_decision_8_the_loop_wont_write_to_a_session_another_process_holds(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
-        with self.app():
-            self.run_loop(host="claude")
-        with self.app(owner_pid=4242):
+        self.run_loop(host="claude")
+        with mock.patch.object(agent_loop, "claude_live_elsewhere", lambda s: "kind interactive, pid 4242"):
             result = self.run_loop(host="claude", message="x is 3")
         self.assertEqual(result["result"], "PAUSED")
         self.assertIn("pid 4242", result["reason"])
@@ -2510,7 +2443,6 @@ class VisibleChoice(Clean):
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(agent_loop, "CODEX_HOME", Path(tmp)), \
                 mock.patch.object(agent_loop, "CODEX_APP_CLI", sys.executable), \
-                mock.patch.object(agent_loop, "CLAUDE_APP_STORE", Path(tmp)), \
                 mock.patch.object(agent_loop.sys, "platform", "darwin"):
             for off in ("", "0"):
                 with mock.patch.dict(os.environ, {"ORCHESTRATE_VISIBLE": off}):
@@ -2520,16 +2452,7 @@ class VisibleChoice(Clean):
                 self.assertIn("isn't running", agent_loop.visible_unavailable("codex"))
                 with mock.patch.object(agent_loop, "CODEX_APP_CLI", "/no/such/app"):
                     self.assertIn("isn't installed", agent_loop.visible_unavailable("codex"))
-                with mock.patch.object(agent_loop, "claude_app_running", lambda: False):
-                    self.assertIn("isn't running", agent_loop.visible_unavailable("claude"))
-                with mock.patch.object(agent_loop, "claude_app_running", lambda: True), \
-                        mock.patch.object(agent_loop, "claude_signed_in", lambda: False):
-                    self.assertIn("signed out", agent_loop.visible_unavailable("claude"))
-                with mock.patch.object(agent_loop, "claude_app_running", lambda: True), \
-                        mock.patch.object(agent_loop, "claude_signed_in", lambda: True):
-                    self.assertIsNone(agent_loop.visible_unavailable("claude"))
-                with mock.patch.object(agent_loop, "CLAUDE_APP_STORE", Path(tmp) / "none"):
-                    self.assertIn("isn't installed", agent_loop.visible_unavailable("claude"))
+                self.assertIn("documents no way", agent_loop.visible_unavailable("claude"))
                 with mock.patch.object(agent_loop.sys, "platform", "linux"):
                     self.assertIn("macOS", agent_loop.visible_unavailable("codex"))
 
@@ -2601,9 +2524,7 @@ class Fold(Repo):
         self.assertEqual(self.run_loop()["goal"], "none")
         self.run_loop(message="Use the simulator.")
         self.assertIn("\n\nEvery item of WP1 has to pass with evidence", self.prompt(self.calls()[-1]))
-        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
-            conn.execute("create table thread_goals (thread_id text, status text)")
-            conn.execute("insert into thread_goals values ('t1', 'active')")
+        self.goals["t1"] = "active"
         before = len(self.calls())
         os.environ.update(FAKE_REPLY="BLOCKED: no device")  # a plain block keeps one more turn while the goal is active
         result = self.run_loop(message="Use the simulator.")
@@ -2863,9 +2784,7 @@ class Holistic(Repo):
     def test_holistic_2_an_active_codex_goal_still_gets_human_rules_added_after_it(self):
         os.environ.update(FAKE_PASS="0", FAKE_REPLY="NEEDS_CONTEXT: x")
         self.run_loop()
-        with sqlite3.connect(self.home / "goals_1.sqlite") as conn:
-            conn.execute("create table thread_goals (thread_id text, status text)")
-            conn.execute("insert into thread_goals values ('t1', 'active')")
+        self.goals["t1"] = "active"
         self.run_loop(message="go on", human_rule=["keep the public API"])
         resumed = self.prompt(self.calls()[1])
         self.assertEqual(resumed, "go on\n\nThe user's rule: keep the public API.")

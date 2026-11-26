@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills organised by domain — deeply researched, provenance-tracked, and kept current against fast-moving ecosystems",
-    "version": "3.1.0"
+    "version": "3.2.0"
   },
   "plugins": [
     {
@@ -51,7 +51,7 @@
       "description": "Build software with AI agents in Claude Code, Codex, Antigravity or another host. The lead talks with you to find out what you want and agrees the project's terms, a planner writes work packages with done-when files, builders prove them, and new reviewers judge them. /lead keeps builders busy, up to the most you set, routes each one to the host with quota to spare, tracks banked resets, and accepts no work it can't verify.",
       "source": "./",
       "strict": false,
-      "version": "3.1.0",
+      "version": "3.2.0",
       "category": "development",
       "keywords": [
         "agents",
@@ -68,7 +68,8 @@
       ],
       "dependencies": [
         "prompting-agents",
-        "domain-language"
+        "domain-language",
+        "agent-relay"
       ],
       "skills": [
         "./skills/orchestration/planner",
@@ -117,6 +118,32 @@
       ],
       "skills": [
         "./skills/domain-language"
+      ]
+    },
+    {
+      "name": "agent-relay",
+      "description": "Drive Claude Code, Codex and Antigravity from a script or another agent, through one command line with the same JSON result for each. Starts, resumes and stops turns, messages running sessions, opens them in their desktop apps, and reads quota, banked resets and the model catalogue, using each vendor's documented CLI interfaces, with the few undocumented ones marked experimental.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "development",
+      "author": {
+        "name": "ryannel",
+        "url": "https://github.com/ryannel"
+      },
+      "keywords": [
+        "agents",
+        "claude-code",
+        "codex",
+        "antigravity",
+        "gemini",
+        "cli",
+        "headless",
+        "quota",
+        "multi-agent"
+      ],
+      "skills": [
+        "./skills/agent-relay"
       ]
     },
     {

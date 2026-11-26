@@ -74,7 +74,6 @@ import invariants  # noqa: E402
 invariants.install(agent_loop)  # every `next` printed while a test runs is checked; see invariants.py
 
 agent_loop.AGENTS_HOME = PROCESS / "agents-home"
-agent_loop.CLAUDE_APP_STORE = PROCESS / "no-claude-desktop"
 agent_loop.CODEX_APP_CLI = "/no/such/app"
 # Shorter waits than a real run uses. Each is a module setting, so the script behaves the same apart from timing.
 agent_loop.RUN_POLL_S = 0.05
@@ -91,7 +90,7 @@ SETTINGS = {module: {name: value for name, value in vars(module).items()
 STATE = {name: getattr(agent_loop, name) for name in (
     "RUN_HERE", "LIVE", "_LIVE_LOCK", "_RUN_LOCKS", "CONTEXT", "HOSTS_USED", "_COMMON", "QUOTA_WORKTREE",
     "TURN_USAGE", "TURN_SIZE", "TURN_STOP", "WARNINGS", "EMIT_EXTRA", "LAUNCH_HOSTS", "_VERSIONS", "SESSION_PATH",
-    "_IMPORTS_SENT", "_HELP", "STEPS_RUN", "STEP_LINES", "EVIDENCE_HERE")}
+    "_HELP", "STEPS_RUN", "STEP_LINES", "EVIDENCE_HERE")}
 assert not any(STATE.values()), "the script's per-process state starts empty"
 
 # The settings without a Builders line, as the planner writes them before the lead asks the user how they want
@@ -575,8 +574,14 @@ class Repo(Clean):
         # Loop records go to this test's folder, for the loop in this process and for any process it starts.
         os.environ.update(ORCHESTRATE_LOOPS_DIR=str(self.loops), FAKE_LOG=str(self.log), FAKE_PASS="1",
                           FAKE_REPLY="DONE", FAKE_COMMIT="1")
-        # Goal changes never reach a real Codex app-server; tests read what the script asked for here.
-        self.goal_changes = []
+        # Goal changes never reach a real Codex app-server; tests read what the script asked for here, and set a
+        # thread's goal status in `goals`.
+        self.goal_changes, self.goals = [], {}
+        # The fake `claude` would log `claude agents --json` as a turn; no other process holds a test's session.
+        for name, value in dict(goal_status=lambda t: self.goals.get(t), claude_live_elsewhere=lambda s: None).items():
+            p = mock.patch.object(agent_loop, name, value)
+            p.start()
+            self.addCleanup(p.stop)
         goals = mock.patch.object(agent_loop, "codex_goal_activate",
                                   lambda t, status="active": self.goal_changes.append(status) or True)
         goals.start()

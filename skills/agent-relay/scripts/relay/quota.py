@@ -12,20 +12,20 @@ A reading is one host's account at one moment:
 Where each host's reading comes from, the cheapest way each allows:
 
   codex        the bundled app-server's `account/rateLimits/read`, which returns the windows and the banked resets
-               (`rateLimitResetCredits`) in one call and spends nothing. The script passes in the call (`rpc`).
+               (`rateLimitResetCredits`) in one call and spends nothing. The caller passes in the call (`rpc`).
   claude       `claude -p /usage`, which runs no model and spends nothing, read from its text; and the
-               `rate_limit_event` each `claude -p` turn prints, which the script passes in as it sees them. Claude's
+               `rate_limit_event` each `claude -p` turn prints, which the relay passes in as it sees them. Claude's
                banked resets come from that text when it shows them, else from the user (`bank`), because the only
                machine-readable source is a private endpoint that needs the sign-in token, which this module never
                reads.
   antigravity  `agy -p /usage --output-format json`, which runs no model; its shape is undocumented, so it is read
                defensively: any object with a remaining or used fraction and a reset time is a window.
 
-Banked resets are never redeemed here, or anywhere in the script: redeeming one is the user's decision. This module
+Banked resets are never redeemed here, or anywhere in agent-relay: redeeming one is the user's decision. This module
 only knows they exist, when they expire, what each is worth when, and what it would take to make one worth
 redeeming before it expires (`reset_plan`).
 
-Readings are appended to <cache>/orchestrate/quota.jsonl, per account and not per repository, because quota belongs
+Readings are appended to <cache>/agent-relay/quota/quota.jsonl, per account and not per repository, because quota belongs
 to the account. A natural reset is seen when a window's `resets_at` moves on or its use falls; a redemption when a
 banked reset leaves the available list. Both go to resets.jsonl. Agreed plans are in plans.json.
 """
@@ -46,12 +46,16 @@ except ImportError:  # pragma: no cover
     ZoneInfo = None
 
 HOSTS = ("codex", "claude", "antigravity")
-STATE_DIR = Path(os.environ.get("ORCHESTRATE_QUOTA_DIR") or
-                 Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "orchestrate")
+_CACHE = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+# AGENT_RELAY_QUOTA_DIR, else ORCHESTRATE_QUOTA_DIR (its name before agent-relay), else <state>/quota. Readings and
+# plans kept by orchestrate before 3.2.0, in ~/.cache/orchestrate, are copied over the first time.
+STATE_DIR = Path(os.environ.get("AGENT_RELAY_QUOTA_DIR") or os.environ.get("ORCHESTRATE_QUOTA_DIR") or
+                 Path(os.environ.get("AGENT_RELAY_STATE_DIR") or _CACHE / "agent-relay") / "quota")
+LEGACY_DIR = _CACHE / "orchestrate"
 READINGS = "quota.jsonl"
 RESETS = "resets.jsonl"
 PLANS = "plans.json"
-BANKED = "banked.json"  # resets the user told the script about, for a host that shows none it can read
+BANKED = "banked.json"  # resets the user told agent-relay about, for a host that shows none it can read
 FRESH_S = 10 * 60.0  # a reading younger than this is used as it is
 KEEP_S = 15 * 86400.0  # readings older than this are dropped when the file is rewritten
 RECENT_H = 12.0  # the burn rate is measured over this many hours
@@ -70,6 +74,13 @@ PERIOD_H = {"five_hour": 5, "seven_day": 168, "monthly": 720}
 # ------------------------------------------------------------------------------------------------------ the store
 
 def state_dir() -> Path:
+    if not STATE_DIR.exists() and STATE_DIR.parent.name == "agent-relay" and LEGACY_DIR.is_dir():
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        for name in (READINGS, RESETS, PLANS, BANKED):
+            try:
+                (STATE_DIR / name).write_bytes((LEGACY_DIR / name).read_bytes())
+            except OSError:
+                pass
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     return STATE_DIR
 
@@ -492,14 +503,14 @@ def read_agy(agy: str, env: dict | None = None, timeout_s: float = 25.0, now: fl
 # ------------------------------------------------------------------------------------- resets the user tells about
 
 def told(host: str) -> list[dict]:
-    """The banked resets the user told the script about for `host`, still available."""
+    """The banked resets the user told agent-relay about for `host`, still available."""
     now = time.time()
     return [b for b in (_read_json(BANKED).get(host) or [])
             if b.get("status") == "available" and (b.get("expires_at") or float("inf")) > now]
 
 
 def bank(host: str, expires_at: float, title: str = "", covers: list[str] | None = None) -> dict:
-    """Records a banked reset the user says `host` gave them, for a host whose resets the script can't read."""
+    """Records a banked reset the user says `host` gave them, for a host whose resets the relay can't read."""
     data = _read_json(BANKED)
     entry = {"id": f"{host}-told-{int(time.time())}", "kind": "told", "title": title or "Banked reset",
              "expires_at": expires_at, "granted_at": time.time(), "status": "available",

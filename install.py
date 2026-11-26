@@ -2,7 +2,8 @@
 """Sets this repo's skills up for Claude Code and Codex, with no settings edited by hand.
 
 Usage:
-  python3 install.py                          # prompting-agents, orchestrate, skill-creator and domain-language,
+  python3 install.py                          # prompting-agents, orchestrate, skill-creator, domain-language and
+                                              # agent-relay,
                                               # every installed host (Claude Code, Codex, Antigravity), user scope
   python3 install.py --replace-standalone     # the same, first moving aside earlier standalone copies and hook
   python3 install.py --plugins prompting-agents --host codex
@@ -19,8 +20,8 @@ reinstalling the plugins it had.
 Codex: the same marketplace with the Codex CLI (the copy inside the Codex app when `codex` isn't on PATH), which
 reads `.claude-plugin/marketplace.json`. With prompting-agents, one line goes into the global AGENTS.md.
 
-skill-creator and orchestrate both need prompting-agents, and orchestrate needs domain-language, so installing
-one installs what it needs too. Claude Code does this
+skill-creator and orchestrate both need prompting-agents, and orchestrate needs domain-language and agent-relay
+(which starts every agent it runs), so installing one installs what it needs too. Claude Code does this
 itself from the `dependencies` in marketplace.json; Codex doesn't read that field, so this script adds it.
 
 prompting-agents replaced instructing-agents. Installing it uninstalls the old plugin, treats a standalone copy
@@ -53,7 +54,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 MARKETPLACE = "ryannel-skills"
 ENTRIES = {e["name"]: e for e in json.loads((HERE / ".claude-plugin/marketplace.json").read_text())["plugins"]}
-DEFAULT_PLUGINS = ["prompting-agents", "orchestrate", "skill-creator", "domain-language"]
+DEFAULT_PLUGINS = ["prompting-agents", "orchestrate", "skill-creator", "domain-language", "agent-relay"]
 # A plugin, and the earlier plugins it replaced. Their skills either live on inside it or were retired.
 RETIRED_PLUGINS = {"prompting-agents": ["instructing-agents"]}
 RETIRED_SKILLS = {"prompting-agents": ["instructing-agents"],  # skills that no current plugin holds

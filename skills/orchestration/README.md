@@ -472,10 +472,14 @@ these rules and their sources.
 
 ## Claude Code, Codex and Antigravity
 
+The script starts and drives every agent through
+[agent-relay](https://github.com/ryannel/skills/tree/main/skills/agent-relay), a separate plugin that installs with
+orchestrate and works on its own too. Quota readings, banked resets and the model catalogue live there as well.
+
 | | Codex | Claude Code | Antigravity | Another command-line agent |
 |---|---|---|---|---|
-| How a session starts | With `codex exec --json`. With `ORCHESTRATE_VISIBLE=1` on a Mac with the Codex app running, as a thread the app runs itself instead, which the app lists under Recents rather than under the project. Either way it can be resumed. | With `claude -p`, and it can be resumed. With `ORCHESTRATE_VISIBLE=1` on a Mac with Claude desktop running and the CLI signed in, the session also appears in the Code tab. | With `agy -p --output-format stream-json`, signed in with Google, and it can be resumed. A tool call that needs approval is refused without stopping the run, so the script reports the refused tools as a warning. | With the `Host <name>:` command from the project settings, as one new process for each turn. The command must take `{prompt}`, `{model}` and `{effort}`, so the script can name the model and effort every time.  |
-| What you can do in the app (with `ORCHESTRATE_VISIBLE=1`) | Watch it, type to steer it, and press Stop. After Stop the script reports the session as paused and leaves it to you. Running `run` again hands it back. | Watch the transcript. If you open the session to work in it, the script pauses and does not write to it at the same time. | Nothing. | Nothing.  |
+| How a session starts | With `codex exec --json`, which keeps it out of the Codex app's thread list. With `ORCHESTRATE_VISIBLE=1` on a Mac with the Codex app running, as a thread the app runs itself instead, which the app still lists under Recents rather than under the project until OpenAI fixes [openai/codex#40935](https://github.com/openai/codex/issues/40935). Either way it can be resumed. | With `claude -p`, and it can be resumed. Always headless: Claude Code documents no way to show a running `-p` session in Claude Desktop, so `ORCHESTRATE_VISIBLE=1` doesn't change it. | With `agy -p --output-format stream-json`, signed in with Google, and it can be resumed. A tool call that needs approval is refused without stopping the run, so the script reports the refused tools as a warning. | With the `Host <name>:` command from the project settings, as one new process for each turn. The command must take `{prompt}`, `{model}` and `{effort}`, so the script can name the model and effort every time.  |
+| What you can do in the app (with `ORCHESTRATE_VISIBLE=1`) | Watch it, type to steer it, and press Stop. After Stop the script reports the session as paused and leaves it to you. Running `run` again hands it back. | Nothing while a turn runs. Once it has ended, `relay.py open --host claude --session <id>` hands it to Claude Desktop. If you open the session to work in it, the script pauses and does not write to it at the same time. | Nothing. | Nothing.  |
 | Model and effort | Named when the session starts and on every turn, and checked each turn from the session file. | Named when the session starts and on every turn. The model is checked. The effort can't be. | Named when the session starts and on every turn, and not checked. | Set in the command, and not checked.  |
 | Resumed sessions | With an active Codex goal, only the rules you gave are sent again. Without one, all the rules are. | The rules are sent again on every resumed turn. | The rules are sent again on every resumed turn. | Every turn after the first carries them.  |
 | Stopping reviewers and planners from starting agents | `-c features.multi_agent=false` | `--disallowedTools Agent` | Only the prompt says so. | Only the prompt says so.  |
@@ -504,7 +508,10 @@ the lead tells you when, and you press the button in Codex's `/usage` or Claude'
 ### Sandboxes and permissions
 
 Every session the script starts in the background runs inside the lead's process, with the lead's sandbox and
-operating-system permissions. If the lead can't use the network or write to `.git`, its builders can't merge. A
+operating-system permissions. If the lead can't use the network or write to `.git`, its builders can't merge. A Codex lead in its default
+`workspace-write` sandbox can start Codex builders, but not Claude or Antigravity ones, whose CLIs can't reach the
+network or their sign-in from inside it; the result says so, and the lead asks you to let the script run outside the
+sandbox. A
 builder that needs screen recording or a camera needs it granted to the app the lead runs in.
 
 A browser won't start inside Codex's default `workspace-write` sandbox, so a Codex agent runs one by asking to run

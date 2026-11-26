@@ -605,7 +605,7 @@ Proposed: by Claude, 2026-11-26. Not yet agreed by the user.
 **Model catalogue**
 The list of models the Agents table can name, with what each is for, its efforts, list price, plans and retirement
 date. The models skill keeps it current.
-Stored as: `models.json` beside the script, and `~/.config/orchestrate/models.json` over it; the `models` command
+Stored as: agent-relay's `scripts/relay/models.json`, and `~/.config/agent-relay/models.json` over it (an older `~/.config/orchestrate/models.json` is still read); the `models` command
 Proposed: by Claude, 2026-11-26. Not yet agreed by the user.
 
 ## Results

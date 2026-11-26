@@ -12,7 +12,6 @@ import io
 import json
 import os
 import socket
-import sqlite3
 import struct
 import sys
 import tempfile
@@ -26,13 +25,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from support import Clean, Repo, agent_loop, release  # noqa: E402
 
 REAL_GOAL_ACTIVATE = agent_loop.codex_goal_activate  # Repo replaces it with a recorder; these tests use the real one
+REAL_GOAL_STATUS = agent_loop.goal_status
+GOALS: dict = {}  # thread -> goal status, the store every app-server shares
 T1 = "01a20000-0000-7000-8000-000000000001"
 T2 = "01a20000-0000-7000-8000-000000000002"
 
 
 class FakeSharedServer:
     """The shared app-server daemon, as far as the script uses it: it holds the threads in `loaded`, keeps each
-    thread's goal status in <codex home>/goals_1.sqlite and its queued messages in `queued`, and records every
+    thread's goal status in GOALS and its queued messages in `queued`, and records every
     request in `requests`."""
 
     def __init__(self, home: Path, loaded=(T1,)):
@@ -120,6 +121,8 @@ class FakeSharedServer:
             write(self.home, thread, {"type": "event_msg", "payload": {"type": "turn_aborted",
                                                                        "turn_id": params["turnId"]}})
             return {"result": {}}
+        if method == "thread/goal/get":
+            return {"result": {"goal": {"status": GOALS[thread]} if thread in GOALS else None}}
         if method == "thread/goal/set":
             set_goal(self.home, thread, params["status"])
             return {"result": {"goal": {"status": params["status"]}}}
@@ -149,30 +152,32 @@ def started(home: Path, thread: str, turn: str):
 
 
 def set_goal(home: Path, thread: str, status: str):
-    conn = sqlite3.connect(home / "goals_1.sqlite")
-    with conn:
-        conn.execute("create table if not exists thread_goals (thread_id text primary key, status text)")
-        conn.execute("insert or replace into thread_goals values (?, ?)", (thread, status))
-    conn.close()
+    GOALS[thread] = status
 
 
-def refused_socket(folder: Path) -> Path:
-    """A socket file nothing listens on, as the IPC router of app 26.1117 leaves it: connecting is refused."""
-    path = folder / "ipc" / "ipc.sock"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.bind(str(path))
-    s.close()
-    return path
+class ShortLivedServer:
+    """The short-lived app-server the script starts when no shared one holds the thread; goals are a shared store."""
+
+    def call(self, method, params, timeout=60):
+        if method == "thread/goal/get":
+            return {"goal": {"status": GOALS[params["threadId"]]} if params["threadId"] in GOALS else None}
+        if method == "thread/goal/set":
+            GOALS[params["threadId"]] = params["status"]
+            return {}
+        raise RuntimeError(f"unknown method {method}")
+
+    def close(self):
+        pass
 
 
 class SharedServerPath(Clean):
-    """The mechanism: the shared app-server, then the old IPC router, and what is said when neither can act."""
+    """The mechanism: the shared app-server, and what is said when it can't act."""
 
     def setUp(self):
         super().setUp()
         self.home = Path(tempfile.mkdtemp(prefix="oc-home-", dir="/tmp"))
         self.addCleanup(lambda: __import__("shutil").rmtree(self.home, True))
+        GOALS.clear()
         for name, value in dict(CODEX_HOME=self.home, CODEX_CONTROL_SOCK=self.home / "none.sock",
                                 codex_goal_activate=REAL_GOAL_ACTIVATE).items():
             p = mock.patch.object(agent_loop, name, value)
@@ -201,7 +206,7 @@ class SharedServerPath(Clean):
         set_goal(self.home, T1, "active")
         started(self.home, T1, "turn-1")
         self.assertTrue(agent_loop.codex_interrupt(T1))
-        methods = [m for m, _ in fake.requests if m not in ("initialize", "thread/loaded/list")]
+        methods = [m for m, _ in fake.requests if m not in ("initialize", "thread/loaded/list", "thread/goal/get")]
         self.assertEqual(methods, ["thread/goal/set", "turn/interrupt"], "paused first, so no goal turn follows")
         self.assertEqual(fake.requests[-1][1], {"threadId": T1, "turnId": "turn-1"})
         self.assertEqual(agent_loop.goal_status(T1), "paused")
@@ -214,15 +219,10 @@ class SharedServerPath(Clean):
         self.assertIn("doesn't hold this thread", why)
         self.assertNotIn("turn/interrupt", [m for m, _ in fake.requests])
 
-    def test_a_refused_ipc_socket_is_reported_not_swallowed(self):
-        refused_socket(self.home)
+    def test_with_no_shared_server_the_stop_says_why(self):
         started(self.home, T1, "turn-1")
         self.assertFalse(agent_loop.codex_interrupt(T1))
-        why = agent_loop.CODEX_WHY[T1]
-        self.assertIn("no shared app-server is running", why)
-        self.assertIn("ipc.sock", why)
-        self.assertIn("ConnectionRefusedError", why)
-        self.assertIn("refused the connection (ConnectionRefusedError)", agent_loop.codex_ipc_why())
+        self.assertIn("no shared app-server is running", agent_loop.CODEX_WHY[T1])
 
     def test_queued_messages_are_deleted_through_the_server_that_runs_the_thread(self):
         fake = self.server()
@@ -270,8 +270,9 @@ class ThreadCommand(Repo):
 
     def setUp(self):
         super().setUp()
-        for name, value in dict(codex_goal_activate=REAL_GOAL_ACTIVATE,
-                                CODEX_CONTROL_SOCK=self.home / "none.sock").items():
+        GOALS.clear()
+        for name, value in dict(codex_goal_activate=REAL_GOAL_ACTIVATE, goal_status=REAL_GOAL_STATUS,
+                                CodexAppServer=ShortLivedServer, CODEX_CONTROL_SOCK=self.home / "none.sock").items():
             p = mock.patch.object(agent_loop, name, value)
             p.start()
             self.addCleanup(p.stop)
@@ -306,17 +307,16 @@ class ThreadCommand(Repo):
 
         class ShortLived:  # a short-lived app-server can still pause the goal, which lives in a shared file
             def call(s, method, params, timeout=60):
+                if method == "thread/goal/get":
+                    return {"goal": {"status": GOALS.get(params["threadId"])}}
                 set_goal(home, params["threadId"], params["status"])
                 return {}
 
             def close(s):
                 pass
-        with mock.patch.object(agent_loop, "codex_ipc_interrupt", lambda t: "the app's IPC router refused the stop "
-                               "(ConnectionRefusedError: [Errno 61] Connection refused)"), \
-                mock.patch.object(agent_loop, "CodexAppServer", ShortLived):
+        with mock.patch.object(agent_loop, "CodexAppServer", ShortLived):
             result = self.thread("stop", module="WATER")
         self.assertEqual(result["result"], "NOT_DONE")
-        self.assertIn("ConnectionRefusedError", result["reason"])
         self.assertIn("only the app can reach", result["reason"])
         self.assertEqual((result["goal"], result["turn_running"]), ("paused", "turn-1"))
         self.assertIn("no goal turn after this one", result["note"])
@@ -335,6 +335,8 @@ class ThreadCommand(Repo):
 
             def call(s, method, params, timeout=60):
                 calls.append(method)
+                if method == "thread/goal/get":
+                    return {"goal": {"status": GOALS.get(params["threadId"])}}
                 if method == "thread/goal/set":
                     set_goal(self.home, params["threadId"], params["status"])
                     return {}
