@@ -44,7 +44,8 @@
         "./skills/generative-media/character-lora-training",
         "./skills/generative-media/comfyui-on-runpod",
         "./skills/generative-media/image-production-workflows"
-      ]
+      ],
+      "license": "MIT"
     },
     {
       "name": "orchestrate",
@@ -77,7 +78,8 @@
         "./skills/orchestration/reviewer",
         "./skills/orchestration/lead",
         "./skills/orchestration/models"
-      ]
+      ],
+      "license": "MIT"
     },
     {
       "name": "skill-creator",
@@ -99,7 +101,8 @@
       ],
       "skills": [
         "./skills/skill-creator"
-      ]
+      ],
+      "license": "Apache-2.0"
     },
     {
       "name": "domain-language",
@@ -118,7 +121,8 @@
       ],
       "skills": [
         "./skills/domain-language"
-      ]
+      ],
+      "license": "MIT"
     },
     {
       "name": "agent-relay",
@@ -144,7 +148,8 @@
       ],
       "skills": [
         "./skills/agent-relay"
-      ]
+      ],
+      "license": "MIT"
     },
     {
       "name": "prompting-agents",
@@ -165,7 +170,8 @@
       ],
       "skills": [
         "./skills/prompting-agents"
-      ]
+      ],
+      "license": "MIT"
     }
   ]
 }

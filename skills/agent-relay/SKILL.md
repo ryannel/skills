@@ -1,6 +1,7 @@
 ---
 name: agent-relay
 description: Runs another coding agent's CLI from inside this one, through one command for Claude Code, Codex and Antigravity. Starts, resumes and stops a turn, messages a running session, shows one in its desktop app, and reads quota, banked resets and the model catalogue, with the same JSON result from every host. Use when you need another agent or model to do a piece of work, a second opinion from a different vendor's model, to wake or steer a session that is already running, or to check how much quota each host has left. Not for spawning your own host's subagents, which its own tools do better.
+license: MIT
 ---
 
 # agent-relay

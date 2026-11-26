@@ -9,7 +9,7 @@ so every run uses the sign-in and plan of the CLI that runs it. Python 3.10+, st
 build.
 
 Contents: [Install](#install) · [Use](#use) · [What each host can do](#what-each-host-can-do) ·
-[Experimental parts](#experimental-parts) · [State](#state) · [Author](#author)
+[Experimental parts](#experimental-parts) · [State](#state) · [Author and licence](#author-and-licence)
 
 ## Install
 
@@ -128,8 +128,10 @@ shipped one entry by entry.
 
 The binaries are found on `PATH`, or set with `AGENT_RELAY_CLAUDE`, `AGENT_RELAY_CODEX` and `AGENT_RELAY_AGY`.
 
-## Author
+## Author and licence
 
 By [ryannel](https://github.com/ryannel), part of [ryannel/skills](https://github.com/ryannel/skills).
 [Orchestrate](https://github.com/ryannel/skills/tree/main/skills/orchestration), the same author's process for
 building software with AI agents, uses agent-relay for every agent it starts.
+
+MIT licence; see [LICENSE](../../LICENSE).

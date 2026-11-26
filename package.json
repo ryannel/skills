@@ -12,6 +12,7 @@
     "skills/orchestration/",
     "!**/__pycache__/**"
   ],
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ryannel/skills.git"

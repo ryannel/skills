@@ -227,3 +227,8 @@ What stays manual:
 with a one-line nudge to apply the skill, then called instructing-agents. It was removed on 9 November 2026 to test whether the description
 alone triggers the skill, including late in a long session and after compaction. It's in git history if the trial
 says it's needed.
+
+## Licence
+
+MIT; see [LICENSE](./LICENSE). The one exception is [`skill-creator`](./skills/skill-creator/), adapted from
+Anthropic's skill-creator and kept under Apache-2.0, as its own `LICENSE.txt` says.
