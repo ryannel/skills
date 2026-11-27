@@ -6410,7 +6410,7 @@ def new_command() -> None:
     COMMAND_STARTED[0] = time.time()
 
 
-VERSION = "3.2.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
+VERSION = "3.3.0"  # the orchestrate plugin's version, as in .claude-plugin/marketplace.json
 
 
 def version_tuple(text: str) -> tuple[int, ...] | None:
@@ -6450,6 +6450,17 @@ def newer_install() -> str | None:
 # so a project coming from any older version gets it once. In Thrum the lead guessed what 2.0.0 fixed, guessed wrong,
 # and told the user so.
 CHANGES = {
+    "3.3.0": [
+        "`serve` shows the project in the user's browser: Now, the plan and program board, delivery, machinery and "
+        "retro, refreshed as the project changes. Tell the user it exists; when they want it, start it in the "
+        "background as `serve --help` describes and give them the link. Read stage 4 of the lead skill again.",
+        "A work package that closes a milestone now carries `closes: <slug>` in its done-when file, written only by a "
+        "planner; it doesn't reset the work package. If the vision and scope document has milestones and no work "
+        "package has the mark, start one planner with a `plan` task to add the marks, so the page can show each "
+        "milestone's work. For a milestone reached before orchestration, add `closed YYYY-MM-DD` inside its "
+        "parentheses in the vision and scope document, through `adopt`.",
+        "Reviewers now open each review with a short `## Summary`, which the page shows beside the verdict.",
+    ],
     "3.2.0": [
         "Every agent now starts through agent-relay, a separate plugin installed with orchestrate; if the script says "
         "it can't find agent-relay, run the install line it prints, or `python3 install.py` from the skills "

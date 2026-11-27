@@ -12,6 +12,10 @@ from threading import Condition, Event, Thread
 from urllib.parse import unquote, urlsplit
 
 POLL_SECONDS = 3
+# A build rereads the same records `flow` does, which takes most of a minute on a large busy project, and a running
+# project changes its records every few seconds. So a rebuild waits this long after the last one finished, which keeps
+# the page within about a minute of the project without serve rebuilding all the time beside the builds it shows.
+REBUILD_GAP_SECONDS = float(os.environ.get("ORCHESTRATE_SERVE_REBUILD_GAP", 30))  # the tests shorten it
 HEARTBEAT_SECONDS = 15
 PAGE = Path(__file__).with_name("observability.html")
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"}
@@ -133,6 +137,8 @@ class Server(ThreadingHTTPServer):
                 if current != previous:
                     self.refresh()
                     previous = current
+                    if self.stopping.wait(REBUILD_GAP_SECONDS):
+                        return
             except (Exception, SystemExit) as error:
                 # Keep serving the last complete snapshot if a source is between writes. Retry on the next poll.
                 print(f"serve: couldn't refresh: {error}", file=sys.stderr)

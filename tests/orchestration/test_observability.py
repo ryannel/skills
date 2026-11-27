@@ -138,6 +138,7 @@ class Observability(Repo):
         command = [sys.executable, str(agent_loop.LOOP), "serve", "--port", "0", "--worktree", str(self.wt)]
         with (self.root / "serve.log").open("w+") as log, subprocess.Popen(
             command, stdout=subprocess.PIPE, stderr=log, text=True,
+            env={**os.environ, "ORCHESTRATE_SERVE_REBUILD_GAP": "0"},
         ) as process:
             try:
                 self.assertTrue(select.select([process.stdout], [], [], 30)[0], "serve did not print its URL")
