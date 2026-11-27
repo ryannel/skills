@@ -161,7 +161,13 @@ Each has a name the user would say and a slug made from it, which the plans use 
 Not: Work package, which is work; a milestone is a point the work reaches.
 Avoid: gate; codes such as `G4` or `M2`, which mean nothing to a reader without the plan open
 Source: PMI, "a significant point or event in a project"
-Stored as: a line under `## Milestones` in `VISION.md`, `- **<Name>** (`milestone/<slug>`)`
+Stored as: a line under `## Milestones` in `VISION.md`, `- **<Name>** (`milestone/<slug>`)`. For a milestone reached before orchestration,
+the parentheses can also hold `closed YYYY-MM-DD`.
+
+**Closing work package**
+The work package that completes a milestone. Its dependencies and earlier work packages in their modules are the work the milestone needs.
+Stored as: the work package's optional `closes` field, with the milestone slug
+Proposed: 2026-11-27. Not yet agreed by the user.
 
 **Reference**
 How the plans and the agents point at a milestone, module or work package where its kind isn't plain from the
@@ -560,6 +566,11 @@ Not: Status page, which shows where the plan stands.
 Stored as: the `dashboard` command, which writes `dashboard.html`
 Proposed: by Claude, 2026-11-18. Not yet agreed by the user.
 
+**Live project page**
+The browser view of the plan, live work and saved delivery history.
+Stored as: the `serve` command
+Proposed: 2026-11-27. Not yet agreed by the user.
+
 **What changed**
 The list of changes to how the set behaves, in the first result any command prints after the script's version
 changes in a project.
@@ -630,6 +641,7 @@ there is one, says which of a result's causes it was.
 | `HOST_FAILED` | `run`, `review`, `plan` | The host failed, its program is missing, or its usage limit was reached |
 | `SCRIPT_FAILED` | any command | The script couldn't do a step of its own, or met an error in its own code |
 | `ERROR` | any command | The command stopped before doing what it was asked, with the reason in `error` |
+| `SERVING` | `serve` | The live project page is ready, with its local URL and the server process ID |
 | `RUNNING` | `run`, `review`, `plan`, `unblock` | Only in a result file: the command that writes it hasn't finished |
 | `WRONG_MODEL_OR_EFFORT` | `run`, `review` | A turn ran on a model or effort other than the ones the command named |
 | `PAUSED` | `run`, `review`, `plan`, `pause` | `pause` or the user stopped it |

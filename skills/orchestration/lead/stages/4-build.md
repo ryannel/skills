@@ -121,6 +121,11 @@ problem, not the builder.
 
 ## Telling the user
 
+When the user wants to see the project or watch it run, start `serve` in the background and give them the link.
+If an existing plan has milestones but no closing work packages marked, give a planner a one-time `plan` task to
+mark the work package that closes each milestone whose work is in the plan. Record closure dates for milestones the
+project reached before orchestration in the vision and scope document so they appear in Retro.
+
 Your first message says what they can ask for, where the sessions run, and what you chose where their request left
 something open. After that, write when something needs them or changes what they expect; a message for every result
 buries the one that matters. Quota running short before its reset is no reason to slow down, since what's left at

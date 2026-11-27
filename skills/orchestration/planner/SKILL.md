@@ -40,6 +40,10 @@ When the vision and scope document leaves something open, choose what you think 
 `## Open for the user`, as one line starting `Assumption:`, so the user can correct it. Keep these few, because each
 is a choice the user didn't make. If a wrong guess would mean a lot of rework, ask the lead instead.
 
+Where a work package completes a milestone in the vision and scope document, set its optional `closes` field to
+the milestone's slug. The live project page follows the dependencies and the order within each module to show
+the work the milestone needs.
+
 The settings give the quality bar, the targets and the project's rules.
 
 ## Names

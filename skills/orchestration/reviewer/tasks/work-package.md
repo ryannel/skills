@@ -62,6 +62,9 @@ planner, unless this work is that fake, because the work, not the item, is what 
 
 ## Writing the review
 
+Start the review file with a `## Summary` of two or three sentences explaining why the work package passed or
+failed. The project page shows this beside the verdict.
+
 Write the full review, with each inspection's checklist answered, where your prompt says, and put screenshots and
 recordings in the folder it names. In the done-when file, set each item's `verdict`. If any result isn't `pass`, or a
 Must Fix lies outside the items, list every Must Fix in the work package's `findings`, one entry each: a short `name`,

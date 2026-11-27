@@ -14,6 +14,8 @@ with its meaning. A reference sets how good subjective work has to be, so the us
 aim at it. The first plan names most of the project's concepts, so this is also when the user can most cheaply say
 "we call that a hold", before the names spread into code.
 
+If the user wants to see the plan in a browser, start `serve` in the background and give them the link.
+
 Delete the `Proposed:` line from each name the user agrees. Give everything else they change or answer to one change
 planner in their words, because only a planner changes the plan files.
 

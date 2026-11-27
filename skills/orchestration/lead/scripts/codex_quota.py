@@ -319,7 +319,7 @@ def cache_for(home: Path) -> Path:
 
 
 def read(budget_s: float = 3.0, home: Path | None = None, cache: Path | None | bool = True, now: float | None = None,
-         horizon_s: float = HORIZON_S) -> dict:
+         horizon_s: float = HORIZON_S, *, write_cache: bool = True) -> dict:
     """Everything the analysis needs from the last `horizon_s`, as plain data:
     {host, now, complete, behind_bytes, latest, threads: {id: meta}, turns: [{thread, turn, start, end, model,
     effort}], recs: [{thread, turn, t0, t1, used, resets, uncached, cached, output}]}.
@@ -369,7 +369,7 @@ def read(budget_s: float = 3.0, home: Path | None = None, cache: Path | None | b
                 pass
         behind += max(0, size - entry["offset"])
         _prune(entry, horizon)
-    if cache and (paths or files):
+    if write_cache and cache and (paths or files):
         _save_cache(cache, data)
     names = thread_names(home)
     threads, turns, recs = {}, [], []

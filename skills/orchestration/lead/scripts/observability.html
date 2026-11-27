@@ -1,0 +1,2074 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orchestrate</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg:#f5f5f7; --panel:#ffffff; --subtle:#f2f2f5; --raised:#ffffff; --line:#e6e6eb; --line-strong:#d4d4dc;
+  --ink:#16161d; --muted:#5f5f6b; --faint:#63636e; --link:#16161d; --accent:#16161d; --accent-bg:#ececf1;
+  --shadow:0 1px 2px #16161d0d,0 1px 1px #16161d08; --shadow-lift:0 6px 20px #16161d14,0 1px 3px #16161d0f;
+  --green:#1f6b48; --green-bg:#e8f4ed; --blue:#2559c2; --blue-bg:#e9efff;
+  --purple:#6a45ad; --purple-bg:#f1ebfc; --teal:#166c6b; --teal-bg:#e2f3f2;
+  --gray:#555b68; --gray-bg:#eeeff3; --amber:#8a4e00; --amber-bg:#fff1d9;
+  --red:#a82f42; --red-bg:#fce8eb; --track:#e8e8ee; --edge:#6c6c78;
+  --radius:14px; --radius-sm:9px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0c0d10; --panel:#141519; --subtle:#1b1c21; --raised:#1d1e24; --line:#25262d; --line-strong:#34353e;
+    --ink:#ededf0; --muted:#a3a3ae; --faint:#8a8a95; --link:#ededf0; --accent:#ededf0; --accent-bg:#26272e;
+    --shadow:0 0 0 1px #ffffff05; --shadow-lift:0 10px 30px #00000066,0 0 0 1px #ffffff0a;
+    --green:#86d5a9; --green-bg:#16301f; --blue:#a3bdff; --blue-bg:#1d2a4a;
+    --purple:#cbb2ff; --purple-bg:#2b2342; --teal:#82d6d2; --teal-bg:#123234;
+    --gray:#b9bdc8; --gray-bg:#24262d; --amber:#f6c674; --amber-bg:#3a2a12;
+    --red:#ffa3b1; --red-bg:#3d1d25; --track:#24252c; --edge:#9a9aa6;
+  }
+}
+* { box-sizing:border-box }
+html { scroll-padding-top:120px; -webkit-font-smoothing:antialiased }
+body { margin:0; color:var(--ink); background:var(--bg); font:.875rem/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-variant-numeric:tabular-nums; letter-spacing:-.003em }
+h1,h2,h3,h4,p,ul,ol,dl { margin:0 }
+h1 { font-size:1.75rem; letter-spacing:-.025em; line-height:1.2; font-weight:650; overflow-wrap:anywhere }
+h2 { font-size:1.0625rem; letter-spacing:-.01em; line-height:1.3; font-weight:600 }
+h3 { font-size:.8125rem; font-weight:600 }
+a { color:var(--link); text-decoration:none }
+.doc a,.prose a,.chip-popover a,.back,a.link,a.path,a.module-name { text-decoration:underline; text-decoration-color:var(--line-strong); text-underline-offset:3px }
+.doc a:hover,.prose a:hover,a.link:hover,a.path:hover,a.module-name:hover { text-decoration-color:currentColor }
+button,select { font:inherit; color:var(--ink); background:var(--panel); border:1px solid var(--line-strong); border-radius:8px; padding:6px 11px; cursor:pointer; box-shadow:var(--shadow) }
+button:hover,select:hover { background:var(--subtle) }
+:focus-visible { outline:2px solid var(--ink); outline-offset:2px }
+summary { cursor:pointer; list-style:none }
+summary::-webkit-details-marker { display:none }
+summary::before { content:""; display:inline-block; width:6px; height:6px; margin-right:9px; border-right:1.5px solid var(--faint); border-bottom:1.5px solid var(--faint); transform:rotate(-45deg) translateY(-2px); transition:transform .15s }
+details[open] > summary::before { transform:rotate(45deg) translate(-2px,-1px) }
+.bottom summary::before,.board-backlog summary::before { display:none }
+code,pre,.mono { font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace; font-size:.85em }
+code { background:var(--subtle); border-radius:5px; padding:1px 5px }
+pre code { background:none; padding:0 }
+code,pre { overflow-wrap:anywhere; white-space:pre-wrap }
+pre { background:var(--subtle); border-radius:var(--radius-sm); padding:11px 13px; font-size:.8125rem }
+progress { display:block; width:100%; height:6px; appearance:none; border:0; border-radius:8px; background:var(--track); overflow:hidden }
+progress::-webkit-progress-bar { background:var(--track) }
+progress::-webkit-progress-value { background:var(--ink); border-radius:8px }
+progress::-moz-progress-bar { background:var(--ink); border-radius:8px }
+svg { display:inline-block; vertical-align:middle; flex:none }
+hr { border:0; border-top:1px solid var(--line); margin:16px 0 }
+.wrap { width:min(100% - 64px, 1240px); margin-inline:auto }
+
+/* Shell */
+header.shell { position:sticky; top:0; z-index:5; background:color-mix(in srgb,var(--bg) 82%,transparent); backdrop-filter:saturate(1.6) blur(14px); -webkit-backdrop-filter:saturate(1.6) blur(14px); border-bottom:1px solid var(--line) }
+.top { height:56px; display:flex; align-items:center; justify-content:space-between; gap:12px }
+.brand { display:flex; align-items:center; gap:10px; color:var(--ink); font-size:1rem; font-weight:650; letter-spacing:-.02em }
+.brand svg { background:var(--ink); color:var(--bg); border-radius:8px; padding:6px; width:28px; height:28px; stroke-width:1.8 }
+.snapshot { display:flex; align-items:center; gap:7px; font-size:.8125rem; color:var(--muted); padding:4px 10px; border:1px solid var(--line); border-radius:999px; background:var(--panel) }
+.snapshot strong { color:var(--ink); font-weight:600 }
+.snapshot time { margin-left:2px }
+.nav { display:flex; gap:4px; padding-bottom:8px }
+.nav a { display:flex; gap:7px; align-items:center; padding:6px 12px; border-radius:8px; font-size:.8125rem; color:var(--muted); font-weight:550 }
+.nav a:hover { color:var(--ink); background:var(--subtle) }
+.nav a[aria-current] { color:var(--ink); background:var(--panel); box-shadow:var(--shadow),0 0 0 1px var(--line); font-weight:600 }
+.bottom { display:none }
+main.wrap { padding-block:36px 80px }
+
+/* Page heading */
+.heading { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:28px }
+.heading p { margin-top:8px; max-width:72ch; color:var(--muted); font-size:.9375rem }
+.kicker { font-size:.75rem; font-weight:600; color:var(--muted); margin-bottom:8px; letter-spacing:.02em }
+.state-pill { display:inline-block; line-height:1.5; font-size:.8125rem; color:var(--muted); padding:6px 12px; border-radius:999px; background:var(--panel); border:1px solid var(--line); box-shadow:var(--shadow) }
+.state-pill strong { color:var(--ink); font-weight:600 }
+
+/* Layout */
+.grid { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); align-items:start; gap:24px }
+.grid.even { grid-template-columns:repeat(2,minmax(0,1fr)) }
+.stack { display:grid; align-content:start; gap:24px; min-width:0 }
+.section-gap { margin-top:40px }
+
+/* Surfaces */
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); min-width:0; overflow:hidden; box-shadow:var(--shadow) }
+.panel:target,.panel:focus-visible { outline:1px solid var(--line-strong); outline-offset:2px }
+.panel-head { display:flex; align-items:center; gap:10px; justify-content:space-between; padding:16px 20px 10px; min-height:52px }
+.panel-head h2 { display:flex; align-items:center; gap:9px }
+.panel-head h2 svg { color:var(--faint) }
+.panel-head .count { margin-left:2px }
+.panel-content { padding:6px 20px 18px }
+.muted,.meta { color:var(--muted) }
+.meta { font-size:.8125rem; line-height:1.45 }
+.warning-text { color:var(--amber) }
+.bar { display:flex; align-items:center; flex-wrap:wrap; gap:6px }
+.notice.desktop-note { background:var(--subtle); color:var(--muted) }
+.notice { display:flex; align-items:center; gap:8px; background:var(--amber-bg); color:var(--amber); padding:10px 14px; border-radius:var(--radius-sm); margin-bottom:20px; font-size:.8125rem }
+
+/* Stat tiles */
+.tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:28px }
+.tile { display:grid; gap:2px; padding:16px 18px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); color:var(--ink); transition:box-shadow .15s,transform .15s }
+a.tile:hover { box-shadow:var(--shadow-lift); transform:translateY(-1px) }
+.tile .tile-label { font-size:.8125rem; color:var(--muted); display:flex; align-items:center; gap:7px }
+.tile .tile-value { font-size:1.75rem; font-weight:650; letter-spacing:-.03em; line-height:1.15 }
+.tile .tile-note { font-size:.75rem; color:var(--muted) }
+.tile.attention .tile-value { color:var(--amber) }
+.stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px }
+.stats div { padding:14px 16px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); min-width:0 }
+.stats dt { font-size:.75rem; color:var(--muted) }
+.stats dd { margin:3px 0 0; display:flex; align-items:center; gap:7px; font-size:1.125rem; font-weight:620; overflow-wrap:anywhere }
+
+/* Chips and tags */
+.chip,.tag { --tone:var(--gray); --tint:var(--gray-bg); display:inline-flex; align-items:center; gap:5px; vertical-align:middle; border-radius:6px; padding:1px 7px; font-size:.75rem; line-height:1.55; font-weight:600; color:var(--tone); background:var(--tint); white-space:nowrap; border:1px solid transparent; letter-spacing:.005em }
+.chip { font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace; font-size:.71875rem; letter-spacing:0 }
+.chip:hover { border-color:currentColor }
+.done,.pass { --tone:var(--green); --tint:var(--green-bg) }
+.building,.reviewing,.running { --tone:var(--blue); --tint:var(--blue-bg) }
+.ready_for_review { --tone:var(--purple); --tint:var(--purple-bg) }
+.ready_to_build { --tone:var(--teal); --tint:var(--teal-bg) }
+.blocked,.paused { --tone:var(--amber); --tint:var(--amber-bg) }
+.failed,.fail { --tone:var(--red); --tint:var(--red-bg) }
+.chip.done,.tag.done { background:transparent; border-color:var(--line-strong); color:var(--green) }
+.chip.not_started,.tag.not_started { border:1px dashed var(--line-strong); background:transparent; color:var(--muted) }
+.chip.waiting,.tag.waiting { background:var(--gray-bg); border-color:var(--line-strong) }
+.tag.next { background:var(--ink); border-color:var(--ink); color:var(--panel); font-weight:600 }
+.tag.plain { background:var(--subtle); color:var(--muted) }
+.status-mark { min-width:1ch; text-align:center; font-size:.84em; line-height:1; flex:none; font-family:system-ui,sans-serif }
+.chip.building .status-mark,.chip.reviewing .status-mark { animation:pulse 1.9s ease-in-out infinite }
+.dot { display:inline-block; width:7px; height:7px; flex:none; border-radius:50%; background:var(--tone,var(--muted)) }
+.dot.building,.dot.reviewing,.building .dot,.reviewing .dot { animation:pulse 1.9s ease-in-out infinite }
+@keyframes pulse { 50% { opacity:.35 } }
+@media (prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important } }
+.count { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 6px; border-radius:999px; background:var(--subtle); color:var(--muted); font-size:.71875rem; font-weight:600 }
+.danger { color:var(--red) }
+
+/* Rows */
+.row { padding:11px 20px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap }
+.row + .row,.rule { border-top:1px solid var(--line) }
+.fill { flex:1; min-width:0 }
+.end { margin-left:auto }
+.empty { padding:6px 20px 20px; color:var(--muted); font-size:.8125rem }
+.toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+.jump { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 24px; font-size:.8125rem }
+.jump a { color:var(--muted); padding:5px 11px; border-radius:999px; border:1px solid var(--line); background:var(--panel) }
+.jump a:hover { color:var(--ink); border-color:var(--line-strong) }
+.named-chip { display:flex; align-items:center; gap:10px; min-width:0; flex:1 }
+.named-chip .chip { flex:none }
+td .wp-title { white-space:normal }
+.named-list { display:grid; gap:6px; min-width:0 }
+.named-chip .chip { flex:none }
+.named-chip a:not(.chip),.wp-title { color:var(--ink); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.named-chip a:not(.chip):hover,.wp-title:hover { text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--line-strong) }
+.list-row { display:flex; align-items:center; gap:12px; padding:9px 20px; min-height:42px; border-top:1px solid var(--line); transition:background .12s }
+.list-row:hover { background:var(--subtle) }
+.list-row .named-chip { flex:1 }
+.list-row .side { margin-left:auto; flex:none; color:var(--muted); font-size:.75rem; white-space:nowrap }
+.list-row .reason { display:block; color:var(--muted); font-size:.75rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.list-row .stacked { display:grid; min-width:0; flex:1; gap:1px }
+.more { border-top:1px solid var(--line) }
+.more > summary { padding:10px 20px; font-size:.8125rem; color:var(--muted); font-weight:550 }
+.more > summary:hover { color:var(--ink) }
+.panel-content .group-label { padding-inline:0 }
+.group-label { display:flex; align-items:center; gap:8px; padding:14px 20px 8px; font-size:.75rem; font-weight:600; color:var(--muted) }
+.group-label + .list-row { border-top:0 }
+
+/* Needs you */
+h1:focus,h1:focus-visible,.section-title:focus-visible { outline:none }
+.action-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr)); gap:12px; padding:4px 16px 16px }
+.question { display:grid; gap:10px; align-content:start; padding:16px; border-radius:12px; background:var(--subtle); border:1px solid var(--line) }
+.question .q-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap }
+.question .q-text { font-size:.9375rem; line-height:1.5; color:var(--ink); display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden }
+.question .q-name { font-size:.8125rem; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.question .q-foot { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:.75rem; color:var(--muted); padding-top:10px; border-top:1px solid var(--line) }
+.question .q-foot strong { color:var(--ink); font-weight:600 }
+.badge { display:inline-flex; align-items:center; padding:1px 8px; border-radius:999px; font-size:.71875rem; font-weight:600; background:var(--panel); border:1px solid var(--line-strong); color:var(--ink) }
+
+/* Milestones */
+.milestone { display:grid; gap:12px; padding:16px 20px; border-top:1px solid var(--line) }
+.milestone-top { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap }
+.milestone .milestone-title { display:flex; flex-wrap:wrap; row-gap:2px; align-items:baseline; gap:10px; font-weight:600; color:var(--ink); font-size:.9375rem; min-width:0 }
+.ref { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.71875rem; font-weight:400; color:var(--faint); letter-spacing:0 }
+.milestone-title a { color:inherit; text-decoration:none }
+.milestone-title a:hover { text-decoration:underline; text-underline-offset:3px }
+.milestone-about { color:var(--muted); max-width:72ch }
+.milestone-figure { margin-left:auto; font-size:.8125rem; color:var(--muted); white-space:nowrap }
+.milestone-figure strong { color:var(--ink); font-weight:650 }
+.segments { display:flex; height:8px; border-radius:999px; overflow:hidden; background:var(--track); gap:2px }
+.segments i { display:block; height:100%; background:var(--tone) }
+.segments i.done { background:var(--green) }
+.segments i.ready_for_review { background:var(--purple) }
+.segments i.building,.segments i.reviewing { background:var(--blue) }
+.segments i.ready_to_build { background:var(--teal) }
+.segments i.blocked { background:var(--amber) }
+.segments i.failed { background:var(--red) }
+.segments i.waiting { background:var(--edge) }
+.segments i.not_started { background:transparent }
+.segment-key { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:.75rem; color:var(--muted) }
+.segment-key span { display:inline-flex; align-items:center; gap:6px }
+.segment-key i { width:8px; height:8px; border-radius:2px; display:inline-block }
+.chain { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:.8125rem; color:var(--muted) }
+.chain .forecast-pill { display:inline-flex; align-items:center; gap:6px; padding:2px 9px; border-radius:999px; font-size:.75rem; font-weight:600; background:var(--subtle); color:var(--ink) }
+.chain .forecast-pill.held { background:var(--amber-bg); color:var(--amber) }
+.chain-list { display:flex; flex-wrap:wrap; align-items:center; gap:4px }
+.chain-list .arrow { color:var(--faint); font-size:.75rem }
+.chain-module { font-size:.75rem; font-weight:600; color:var(--muted); margin-right:4px }
+.chain-module:hover { color:var(--ink) }
+.chain-break { flex-basis:100%; height:2px }
+.chain .end { font-weight:550 }
+.closed-milestones { padding:12px 20px; border-top:1px solid var(--line); font-size:.8125rem }
+.closed-milestones a { color:var(--muted) }
+.closed-milestones a:hover { color:var(--ink) }
+
+/* Feed */
+.feed-summary { display:flex; flex-wrap:wrap; gap:6px; padding:0 20px 12px }
+.feed-summary span { display:inline-flex; gap:5px; align-items:baseline; padding:3px 10px; border-radius:999px; background:var(--subtle); font-size:.75rem; color:var(--muted) }
+.feed-summary strong { color:var(--ink); font-weight:650 }
+.event { display:grid; grid-template-columns:118px minmax(0,1fr) max-content; gap:12px; align-items:center; padding:9px 20px; border-top:1px solid var(--line); transition:background .12s }
+.event:hover { background:var(--subtle) }
+.event > .kind { display:flex; align-items:center; gap:7px; font-size:.75rem; color:var(--muted); font-weight:550; white-space:nowrap }
+.event > .kind .dot { width:6px; height:6px }
+.event>time { text-align:right; color:var(--muted); font-size:.75rem; white-space:nowrap }
+.event-text { min-width:0; display:flex }
+.day-label { padding:14px 20px 6px; font-size:.75rem; font-weight:600; color:var(--muted); border-top:1px solid var(--line) }
+.day-label + .event { border-top:0 }
+.fold { padding:12px 20px; border-top:1px solid var(--line); color:var(--muted); font-size:.8125rem }
+.fold > .milestone,.fold > .row { margin-top:5px; padding-inline:0 }
+.fold > .event { padding-inline:0 }
+.reason { color:var(--muted); font-size:.75rem }
+
+/* Docs */
+.doc { max-width:76ch; overflow-wrap:anywhere; line-height:1.6 }
+.doc > * + * { margin-top:12px }
+.doc h2,.doc h3,.doc h4 { margin-top:24px }
+.doc ul,.doc ol { padding-left:22px }
+.doc li + li { margin-top:6px }
+.doc blockquote { margin:12px 0; padding:10px 16px; border-left:3px solid var(--line-strong); background:var(--subtle); border-radius:0 8px 8px 0 }
+.doc table { margin-block:12px }
+.goal { margin-bottom:24px; overflow:hidden }
+.goal .kicker { font-size:.6875rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 8px }
+.goal-grid { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:40px; padding:28px 28px 8px }
+.goal-headline { font-size:1.625rem; line-height:1.25; font-weight:640; letter-spacing:-.01em; margin:0 0 12px; color:var(--ink); max-width:34ch }
+.goal-support { font-size:.9375rem; line-height:1.55; color:var(--muted); margin:0 0 20px; max-width:62ch }
+.goal-done { border-left:3px solid var(--green); padding:4px 0 4px 14px; max-width:62ch }
+.goal-done p { margin:0; font-size:.9375rem; line-height:1.5; color:var(--ink) }
+.goal-open ul { list-style:none; margin:0 0 14px; padding:0; display:grid; gap:2px }
+.goal-open li summary { font-size:.8125rem; line-height:1.4; padding:6px 0; color:var(--ink); cursor:pointer }
+.goal-open li p { font-size:.78125rem; color:var(--muted); margin:0 0 8px 18px; line-height:1.5 }
+.goal-open li + li { border-top:1px solid var(--line) }
+.goal-vision { font-size:.8125rem; color:var(--muted); text-decoration:underline; text-decoration-color:var(--line-strong); text-underline-offset:3px }
+.goal-progress { padding:20px 28px 4px; border-top:1px solid var(--line); margin-top:20px }
+.goal-where { margin:0 0 14px; font-size:.875rem; color:var(--muted) }
+.goal-where strong { color:var(--ink); font-weight:600 }
+.goal-ladder { padding:6px 0 20px }
+.stepper.goal-ladder li { flex:1 0 84px }
+.goal-note { font-size:.75rem; color:var(--muted); margin:0 0 10px }
+.goal-step .step-dot { border-color:var(--amber); color:var(--amber) }
+.goal-step .step-label { font-weight:600; color:var(--ink) }
+.goal-vision-doc { padding:0 28px 24px; border-top:1px solid var(--line) }
+.about-grid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:32px; padding:4px 20px 20px }
+.about-grid h3 { font-size:.75rem; color:var(--muted); margin-bottom:8px }
+.lede { font-size:1rem; line-height:1.55; color:var(--ink) }
+.stepper { display:flex; gap:0; overflow-x:auto; padding:6px 20px 20px; list-style:none; margin:0 }
+.stepper li { flex:1 0 108px; position:relative; display:grid; gap:6px; padding-right:16px; min-width:0 }
+.stepper li::before { content:""; position:absolute; top:11px; left:24px; right:0; height:2px; background:var(--line-strong) }
+.stepper li.closed::before { background:var(--green) }
+.stepper li:last-child::before { display:none }
+.stepper .step-dot { position:relative; z-index:1; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-size:.6875rem; font-weight:700; background:var(--panel); border:2px solid var(--line-strong); color:var(--muted) }
+.stepper li.closed .step-dot { background:var(--green); border-color:var(--green); color:var(--panel) }
+.stepper li.current .step-dot { border-color:var(--ink); color:var(--ink); box-shadow:0 0 0 4px var(--accent-bg) }
+.stepper .step-label { font-size:.8125rem; font-weight:600; color:var(--ink); line-height:1.3; hyphens:auto; overflow-wrap:break-word }
+.stepper .step-name { font-size:.6875rem; color:var(--faint); line-height:1.35; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere }
+.stepper a:hover .step-name { color:var(--ink) }
+
+/* Tables */
+.table-wrap { overflow:auto }
+table { border-collapse:collapse; width:100%; text-align:left; font-size:.8125rem }
+th { color:var(--muted); font-weight:550; white-space:nowrap; font-size:.75rem }
+th,td { padding:10px 14px; vertical-align:top; border-bottom:1px solid var(--line) }
+th:first-child,td:first-child { padding-left:20px }
+th:last-child,td:last-child { padding-right:20px }
+thead th { border-bottom:1px solid var(--line); background:var(--subtle) }
+tbody tr { transition:background .12s }
+tbody tr:hover { background:var(--subtle) }
+tbody tr:last-child td { border-bottom:0 }
+td.num,th.num { text-align:right }
+.module-cell { white-space:nowrap; font-weight:600 }
+.module-cell small { color:var(--faint); display:inline-block; width:26px; font-weight:500 }
+.wp-strip { display:flex; flex-wrap:wrap; gap:4px; min-width:135px }
+
+/* Plan map */
+.map-panel { margin-bottom:24px }
+.map-scroller { overflow:auto; background:var(--panel); isolation:isolate; border-top:1px solid var(--line) }
+.map-canvas { position:relative; padding-bottom:6px }
+.map-lines { position:absolute; inset:0; z-index:1; width:100%; height:100%; pointer-events:none; color:var(--edge) }
+.map-edge { fill:none; stroke:currentColor; stroke-width:1.5 }
+.map-edge.critical { color:var(--ink); stroke-width:2 }
+.map-edge.related { color:var(--ink) }
+.map-edge:not(.live):not(.related):not(.dim) { opacity:.4 }
+.map-edge.live { color:var(--blue); opacity:.75 }
+.map-edge.dim { opacity:.15 }
+.segmented-label { align-self:center; padding:0 8px 0 4px; font-size:.75rem; color:var(--muted) }
+.map-lane { display:contents }
+.pb-scroller { max-height:min(78vh,820px) }
+.pb-phone { display:none }
+.map-canvas { width:max-content; min-width:100% }
+.pb-grid { display:grid; position:relative }
+.pb-corner,.pb-head { position:sticky; top:0; z-index:4; background:var(--panel); border-bottom:1px solid var(--line-strong); padding:10px 12px; font-size:.75rem }
+.pb-corner { left:0; z-index:5; color:var(--muted); font-weight:600; display:flex; align-items:flex-end }
+.pb-head a,.pb-head > div { display:grid; gap:3px; color:var(--ink) }
+.pb-head strong { font-size:.8125rem; line-height:1.3; font-weight:600 }
+.pb-head span { color:var(--muted); font-size:.71875rem }
+.pb-head.current { box-shadow:inset 0 -2px var(--blue); }
+.pb-head.current span:not(.tag) { color:var(--blue) }
+.pb-head.narrow strong { font-size:.6875rem; font-weight:500; color:var(--muted) }
+.pb-head + .pb-head,.pb-cell { border-left:1px solid var(--line) }
+.pb-corner,.pb-module { border-right:1px solid var(--line-strong); box-shadow:6px 0 12px -8px #0006 }
+.pb-module { position:sticky; left:0; z-index:3; background:var(--panel); display:grid; align-content:start; gap:2px; padding:12px; border-top:1px solid var(--line); font-size:.75rem; color:var(--ink) }
+.pb-module b { font-weight:600; overflow-wrap:break-word; hyphens:auto }
+.pb-module small { color:var(--muted); font-size:.71875rem }
+.pb-cell { display:flex; flex-direction:column; gap:6px; padding:8px; border-top:1px solid var(--line); min-width:0 }
+.pb-cell.current { background:color-mix(in srgb,var(--blue) 10%,transparent) }
+.pb-cell.narrow { align-items:center; justify-content:center }
+.pb-cell.wide { display:grid; grid-template-columns:1fr 1fr; align-content:start; align-items:start }
+.pb-cell.wide .pb-more { grid-column:1 / -1 }
+.pb-more summary { font-size:.71875rem; color:var(--green); padding:2px 4px; width:max-content }
+.pb-more[open] { display:grid; gap:6px }
+.pb-next { margin:2px 0; width:max-content }
+.pb-phone-col { padding:12px 16px; border-top:1px solid var(--line) }
+.pb-phone-col h3 { display:flex; align-items:center; gap:8px; font-size:.875rem; margin:0 0 8px }
+.pb-phone-col h3 .meta { margin-left:auto; font-weight:400 }
+.pb-phone-row { display:grid; gap:6px; padding:10px 0; border-top:1px solid var(--line); color:var(--ink); min-height:44px }
+.pb-phone-row .pb-name { -webkit-line-clamp:3 }
+.pb-phone-note { padding:12px 16px }
+.wp-inline { color:var(--ink) }
+.pb-count { font-size:.71875rem; color:var(--green); padding:1px 4px }
+.pb-card { --tone:var(--gray); position:relative; z-index:2; display:grid; gap:7px; padding:8px 10px; background:var(--panel); border:1px solid var(--line-strong); border-left:3px solid var(--tone); border-radius:7px; color:var(--ink); transition:opacity .15s }
+.pb-card.not_started { border-left-style:dashed; border-left-color:var(--line-strong) }
+.pb-card.waiting { border-left-color:var(--muted) }
+.pb-card.late { box-shadow:0 0 0 1px var(--red) }
+.pb-card:hover { border-color:var(--ink); border-left-color:var(--tone) }
+.pb-name { font-size:.78125rem; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden }
+.pb-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap }
+.pb-meta .ref { margin-left:auto }
+.pb-done { display:flex; align-items:center; gap:6px; padding:3px 8px; border-left-width:1px; color:var(--muted) }
+.pb-done .status-mark { color:var(--green) }
+.pb-done .pb-name { -webkit-line-clamp:1; font-size:.71875rem }
+.map-chip.related { border-color:var(--ink) }
+.map-canvas.inspecting .map-chip:not(.related) { opacity:.3 }
+.map-edge.related { color:var(--ink); stroke-width:1.75 }
+.map-chip:focus-visible { outline:2px solid var(--ink); outline-offset:3px }
+.map-toggle { display:inline-flex; gap:6px; align-items:center; font-size:.8125rem; color:var(--muted) }
+.segmented { display:inline-flex; border:1px solid var(--line-strong); border-radius:7px; overflow:hidden }
+.segmented button { font:inherit; font-size:.8125rem; padding:4px 12px; background:transparent; color:var(--muted); border:0; cursor:pointer }
+.segmented button[aria-pressed="true"] { background:var(--subtle); color:var(--ink) }
+.map-toolbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap }
+.map-toolbar { position:sticky; left:0; padding:4px 20px 14px; background:var(--panel) }
+.map-toolbar label { font-size:.8125rem; color:var(--muted) }
+.map-toolbar .meta { margin-left:auto }
+.map-toolbar select { max-width:100% }
+.legend { padding:0 20px 12px; display:flex; flex-wrap:wrap; gap:6px 8px; list-style:none; margin:0 }
+.legend li { margin:0 }
+.legend .tag { font-size:.71875rem }
+.map-instructions { padding:0 20px 12px; font-size:.75rem; color:var(--muted) }
+.map-instructions a { text-decoration:underline; text-decoration-color:var(--line-strong); text-underline-offset:3px }
+.map-spacer { margin-bottom:24px }
+
+/* Board */
+.board { display:grid; overflow:auto; min-height:170px; gap:10px; padding:4px 16px 16px }
+.board-bar { display:flex; align-items:flex-start; gap:8px 24px; flex-wrap:wrap; padding:0 20px 12px }
+.board-bar .board-backlog { padding:0; flex:1 1 100%; order:2 }
+.board-bar .board-backlog:not([open]) { flex:0 0 auto; order:0 }
+.board-empty { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:.75rem; color:var(--muted) }
+.board-empty span { display:inline-flex; gap:5px; align-items:center }
+.board-backlog { padding:0 20px 12px }
+.board-backlog summary { width:max-content; font-size:.8125rem; font-weight:600; display:flex; align-items:center; gap:7px; color:var(--muted) }
+.board-backlog > .board-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px; margin-top:10px }
+.board-col { min-width:0; padding:10px; border-radius:12px; background:var(--subtle) }
+.board-col h3 { display:flex; justify-content:space-between; align-items:center; gap:4px; font-size:.75rem; margin:2px 2px 10px; color:var(--ink) }
+.board-col h3 > span:first-child { display:inline-flex; align-items:center; gap:6px }
+.board-col.is-empty { background:transparent; border:1px dashed var(--line) }
+.board-col.is-empty h3 { margin-bottom:0; color:var(--muted); flex-wrap:wrap }
+.board-card { display:grid; min-width:0; align-content:start; gap:6px; padding:11px 12px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; color:var(--ink); background:var(--panel); box-shadow:var(--shadow); transition:box-shadow .15s,border-color .15s }
+.board-card:hover { box-shadow:var(--shadow-lift); border-color:var(--line-strong) }
+.board-module { color:var(--muted); font-size:.75rem; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.board-title { display:flex; align-items:start; gap:7px; min-width:0; font-size:.8125rem }
+.board-title .chip { flex:none }
+.board-name { white-space:normal; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-height:1.4; font-weight:500 }
+.board-card>.tag { white-space:normal; overflow-wrap:anywhere; justify-self:start; background:var(--subtle); color:var(--muted); font-weight:550 }
+.board-card .meta { font-size:.71875rem }
+.board-backlog .board-card { margin:0 }
+.board-col details > summary { font-size:.75rem; color:var(--muted); padding:4px 2px }
+
+/* On-demand panels and timeline */
+.on-demand > summary { padding:16px 20px; font-size:.9375rem; font-weight:600 }
+.on-demand[open] > summary { border-bottom:1px solid var(--line) }
+.on-demand-body .timeline-options { padding:10px 20px }
+.timeline { overflow:auto; max-height:520px }
+.timeline-grid { min-width:820px }
+.timeline-row { display:grid; grid-template-columns:170px 1fr; border-bottom:1px solid var(--line) }
+.timeline-row:last-child { border-bottom:0 }
+.timeline-label { display:flex; align-items:center; padding:4px 12px 4px 20px; position:sticky; left:0; z-index:2; background:var(--panel); font-size:.75rem }
+.timeline-scale { display:flex; justify-content:space-between; padding:6px 9px; gap:4px; font-size:.71875rem }
+.timeline-axis { position:sticky; top:0; z-index:3; background:var(--panel) }
+.timeline-track { min-height:22px; position:relative; background-image:linear-gradient(to right,var(--line) 1px,transparent 1px); background-size:20% 100% }
+.session { position:absolute; min-width:3px; border-radius:3px; background:var(--tone,var(--gray)); height:8px; opacity:.75 }
+.session:hover,.session:focus-visible { opacity:1; outline:2px solid var(--ink); z-index:1 }
+
+/* Charts */
+.chart { padding:6px 20px 8px; margin:0 }
+.chart svg { width:100%; height:auto; display:block; overflow:visible }
+.chart .guide { stroke:var(--line); stroke-width:1 }
+.chart text { fill:var(--muted); font:11px system-ui }
+.chart .chart-bar { fill:var(--ink); opacity:.3 }
+.chart .chart-line { fill:none; stroke:var(--ink); stroke-width:2; vector-effect:non-scaling-stroke }
+.chart .chart-point { fill:var(--ink) }
+.milestone-progress { display:grid; gap:8px; margin-bottom:6px }
+.milestone-progress > div { display:flex; justify-content:space-between; gap:12px; align-items:baseline; font-size:.8125rem }
+.chart figcaption { font-size:.75rem; color:var(--muted); font-weight:550; margin-bottom:6px }
+.chart-key { display:flex; flex-wrap:wrap; gap:4px 14px; padding:0 20px 14px; font-size:.75rem; color:var(--muted); list-style:none; margin:0 }
+.chart-key li { display:inline-flex; align-items:center; gap:6px }
+.chart-key i { width:9px; height:9px; border-radius:2px; display:inline-block }
+.hbars { display:grid; gap:10px; padding:4px 20px 18px }
+.hbar { display:grid; grid-template-columns:minmax(90px,140px) 1fr 64px; gap:12px; align-items:center; font-size:.8125rem }
+.hbar .track { height:8px; border-radius:999px; background:var(--track); overflow:hidden }
+.hbar .track i { display:block; height:100%; border-radius:999px; background:var(--ink) }
+.hbar .track i.warn { background:var(--amber) }
+.hbar .track i.bad { background:var(--red) }
+.hbar .value { text-align:right; color:var(--muted); font-size:.75rem }
+.big-number { font-size:1.5rem; font-weight:650; letter-spacing:-.02em }
+.bullet-list { padding:4px 20px 18px 38px; font-size:.8125rem }
+.bullet-list li + li { margin-top:8px }
+.forecast { background:var(--subtle); border-radius:8px; padding:6px 10px }
+
+/* Work package page */
+.detail-head { margin-bottom:28px; display:grid; gap:12px }
+.detail-head .bar { gap:8px }
+.proof-title { max-width:52ch; font-size:1.625rem }
+.proof-section { padding:16px 20px; border-top:1px solid var(--line) }
+.proof-section > * + * { margin-top:8px }
+.proof-section .mono { font-weight:650; font-size:.8125rem }
+.proof-section p { font-size:.875rem }
+.proof-section.item-failed { box-shadow:inset 3px 0 var(--red) }
+.verdicts { display:flex; align-items:center; gap:4px; flex-wrap:wrap }
+.verdicts a { width:26px; height:26px; display:grid; place-items:center; border-radius:7px; background:var(--tint,var(--subtle)); color:var(--tone,var(--muted)); font-size:.75rem }
+.verdicts a.unjudged .dot { background:none; border:1px solid var(--muted) }
+.review { scroll-margin-top:8px }
+.review ul { padding-left:20px }
+.review li + li { margin-top:4px }
+.review-summary.generated { display:flex; align-items:baseline; gap:8px }
+.review-summary.generated span:last-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.proof-columns { grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) }
+.proof-summary { margin-bottom:24px }
+.proof-strip { display:grid; gap:10px; padding:4px 20px 18px }
+.proof-strip .proof-review { display:grid; grid-template-columns:44px 1fr; gap:12px; align-items:center }
+.proof-strip .proof-review > span { font-size:.75rem; font-weight:600; color:var(--muted) }
+.proof-cells { display:flex; flex-wrap:wrap; gap:4px }
+.proof-cells a { display:inline-flex; align-items:center; justify-content:center; gap:3px; min-width:44px; height:28px; padding:0 6px; border-radius:7px; font-size:.6875rem; font-weight:600; font-family:ui-monospace,"SF Mono",Menlo,monospace; background:var(--tint,var(--subtle)); color:var(--tone,var(--muted)); border:1px solid transparent }
+.proof-cells a.pass { background:var(--green-bg); color:var(--green) }
+.proof-cells a.fail { background:var(--red-bg); color:var(--red) }
+.proof-cells a.unjudged { background:transparent; border:1px dashed var(--line-strong); color:var(--muted) }
+.proof-cells a:hover { border-color:currentColor }
+.deps { margin-bottom:24px }
+.deps .bar { margin-top:4px }
+.back { display:inline-flex; gap:6px; align-items:center; margin-bottom:16px; font-size:.8125rem; color:var(--muted); text-decoration:none }
+.back:hover { color:var(--ink) }
+.choice { padding:12px 0; overflow-wrap:anywhere }
+.choice + .choice { border-top:1px solid var(--line) }
+.choice p { line-height:1.55 }
+.choice .bar { margin-top:6px }
+td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap }
+.module-progress { display:grid; gap:4px; min-width:120px }
+.module-progress .segment-key { display:none }
+.warning-row { display:grid; gap:4px }
+.warning-row .side { margin:0; text-align:left; white-space:normal; font-size:.8125rem; color:var(--muted) }
+.path { overflow-wrap:anywhere; word-break:break-word }
+.path-list .row { align-items:baseline }
+.statement-toggle { padding:2px 0 }
+.statement-toggle summary { min-height:28px; display:flex; align-items:flex-start }
+.statement-toggle summary code { white-space:normal }
+.statement-toggle:not([open]) summary span { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; white-space:normal; max-width:calc(100% - 20px) }
+.reviewer-question { border-radius:8px; padding:8px 11px; background:var(--subtle); font-size:.8125rem!important }
+.plan-disclosure { padding:0 }
+.plan-disclosure > summary { padding:0 20px 12px; font-size:.8125rem; color:var(--muted) }
+.module-mini { display:none }
+.module-name { font-weight:600 }
+.desktop-note,.mobile-only { display:none }
+dialog { background:var(--panel); color:var(--ink); border:1px solid var(--line-strong); border-radius:var(--radius); padding:20px; width:min(960px, 92vw); max-height:85vh; box-shadow:var(--shadow-lift) }
+dialog::backdrop { background:#0a0b0e99; backdrop-filter:blur(2px) }
+dialog header { display:flex; justify-content:space-between; gap:12px; margin-bottom:12px }
+dialog pre { max-height:62vh; overflow:auto }
+dialog img { display:block; max-width:100%; height:auto }
+.skip-link { position:fixed; left:12px; top:8px; z-index:20; background:var(--panel); border:2px solid var(--ink); border-radius:8px; padding:7px 12px; transform:translateY(-160%) }
+.skip-link:focus { transform:none }
+.visually-hidden { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap }
+.shell-labels { display:flex; gap:8px; align-items:center }
+.update-button[hidden] { display:none }
+.chip-popover { position:fixed; inset:auto; margin:0; width:min(340px,calc(100vw - 24px)); max-height:min(300px,60vh); overflow:auto; padding:14px; color:var(--ink); background:var(--raised); border:1px solid var(--line-strong); border-radius:12px; box-shadow:var(--shadow-lift); overflow-wrap:anywhere; font-size:.8125rem }
+.chip-popover p+p,.chip-popover .bar { margin-top:6px }
+.chip-popover a { display:inline-flex; min-height:30px; align-items:center }
+.chip-popover strong { font-size:.875rem; line-height:1.45 }
+a[href] { scroll-margin-bottom:8px }
+.section-title { display:flex; align-items:baseline; gap:10px; margin:44px 0 14px }
+.section-title h2 { font-size:1.0625rem; font-weight:650; letter-spacing:-.015em }
+.section-title p { color:var(--muted); font-size:.8125rem }
+@media (max-height:600px) { header.shell { position:static } html { scroll-padding-top:12px } }
+
+@media (max-width:760px) {
+  html { scroll-padding-top:70px; scroll-padding-bottom:calc(76px + env(safe-area-inset-bottom)) }
+  .wrap { width:calc(100% - 28px) }
+  main.wrap { padding-block:22px 96px }
+  .top { height:54px }
+  .nav { display:none }
+  .bottom { position:fixed; inset:auto 0 0; padding-bottom:env(safe-area-inset-bottom); z-index:6; display:grid; grid-template-columns:repeat(4,1fr); align-items:center; background:color-mix(in srgb,var(--panel) 88%,transparent); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-top:1px solid var(--line) }
+  .bottom a,.bottom summary { display:grid; place-items:center; gap:3px; min-height:56px; font-size:.6875rem; color:var(--muted); list-style:none; font-weight:550 }
+  .bottom a[aria-current] { color:var(--ink); font-weight:650 }
+  .bottom-menu { position:absolute; bottom:calc(60px + env(safe-area-inset-bottom)); right:8px; padding:4px; border:1px solid var(--line); border-radius:12px; background:var(--raised); min-width:160px; box-shadow:var(--shadow-lift) }
+  .bottom-menu a { min-height:42px; font-size:.875rem }
+  .heading { align-items:flex-start; margin-bottom:18px; flex-wrap:wrap; gap:10px }
+  h1 { font-size:1.5rem }
+  .proof-title { font-size:1.3rem }
+  .grid,.grid.even,.proof-columns,.about-grid { grid-template-columns:minmax(0,1fr) }
+  .grid,.stack { gap:16px }
+  .now-grid > .stack { display:contents }
+  #needs-you { order:-1 }
+  #milestones { order:0 }
+  #recent-events { order:2 }
+  #running-now { order:1 }
+  #waiting { order:3 }
+  .state-pill { border-radius:12px; width:100% }
+  .tiles { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:18px }
+  .tile { padding:12px 14px }
+  .tile .tile-value { font-size:1.375rem }
+  .tile:last-child:nth-child(odd) { grid-column:1/-1 }
+  .panel-head { padding-inline:16px; flex-wrap:wrap; row-gap:4px }
+  .goal-grid { grid-template-columns:minmax(0,1fr); gap:24px; padding:20px 16px 4px }
+  .goal-progress,.goal-vision-doc { padding-inline:16px }
+  .goal-headline { font-size:1.3125rem }
+  .panel-content,.row,.milestone,.proof-section,.list-row,.event,.group-label,.more > summary,.fold,.closed-milestones,.day-label,.feed-summary,.legend,.map-instructions,.map-toolbar,.hbars,.chart,.chart-key,.stepper,.board-backlog,.empty,.about-grid { padding-inline:16px }
+  .action-grid { padding-inline:12px }
+  th:first-child,td:first-child { padding-left:16px }
+  .event { grid-template-columns:minmax(0,1fr) max-content; gap:4px 10px }
+  .event > .kind { grid-column:1/-1 }
+  .desktop-only { display:none!important }
+  .desktop-note,.mobile-only { display:block }
+  .responsive,.responsive tbody { display:block }
+  .responsive thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%) }
+  .responsive tr { display:block; padding:10px 16px; border-bottom:1px solid var(--line) }
+  .responsive tr:last-child { border-bottom:0 }
+  .responsive td { display:block; border:0; padding:2px 0!important; overflow-wrap:anywhere }
+  .responsive td[data-label]::before { content:attr(data-label) " · "; color:var(--muted) }
+  .responsive td .wp-title { white-space:normal }
+  .responsive td.is-empty { display:none }
+  .goal-ladder { display:none }
+  .board { display:block; min-height:0; padding-inline:12px }
+  .board-col { margin-bottom:10px }
+  .board-cards { display:grid; grid-template-columns:minmax(0,1fr); gap:8px }
+  .board-card { margin:0 }
+  .board-col details .board-cards { margin-top:8px }
+  .board-col.is-empty { padding-block:8px }
+  .map-scroller { max-width:100% }
+  .pb-scroller,.map-toolbar,.map-instructions { display:none }
+  .pb-phone { display:block }
+  .chip { min-height:28px }
+  .verdicts,.bar { gap:8px }
+  .closed-milestones { display:none }
+  .module-wide { display:none }
+  .module-mini { display:block; list-style:none; padding:0; margin:0 }
+  .module-mini li+li { border-top:1px solid var(--line) }
+  .module-mini a { display:flex; align-items:center; gap:8px; min-height:42px; padding-inline:16px }
+  .shell-labels,.snapshot { flex-wrap:wrap; justify-content:end; gap:4px }
+  .update-button { font-size:.75rem }
+  .hbar { grid-template-columns:96px 1fr 52px; gap:8px }
+  .milestone-figure { margin-left:0; width:100% }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main" data-jump="main">Skip to content</a>
+<header class="shell">
+  <div class="top wrap"><a class="brand" href="#/now" id="brand">Orchestrate</a><div class="shell-labels"><button class="update-button" id="show-updates" hidden>Updated, show changes</button><div class="snapshot" id="snapshot"></div></div></div>
+  <nav aria-label="Project areas" class="nav wrap" id="primary"></nav>
+</header>
+<nav aria-label="Project areas" class="bottom" id="mobile"></nav>
+<main id="main" class="wrap"><p>Loading project…</p></main>
+<div id="announcements" class="visually-hidden" role="status" aria-live="polite"></div>
+<div id="chip-popover" class="chip-popover" popover="manual" role="group" aria-label="Work package details"></div>
+<dialog id="file-view" aria-labelledby="file-title"></dialog>
+<script>
+"use strict";
+const byId = id => document.getElementById(id);
+const main = byId("main");
+const icons = {
+  project:'<path d="M2 10h4l2-5 3 9 2-4h3"/>',
+  now:'<circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1" fill="currentColor"/>',
+  plan:'<rect x="2" y="3" width="12" height="10" rx="1.4"/><path d="M2 6.5h12m-8-3.5v10"/>',
+  delivery:'<path d="M2 12h12M3 9l3-3 3 2 4-4"/>',
+  machinery:'<path d="M2 4h12M2 8h12M2 12h12"/><path d="M6 2.5v3m4 1v3m-5 1v3" stroke-width="2.2"/>',
+  retro:'<path d="M3.2 6A5.5 5.5 0 1 1 3 10M2 3v3.5h3.5M8 5v3l2 1"/>',
+  more:'<circle cx="3" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="13" cy="8" r="1"/>',
+  alert:'<path d="M8 2 1.6 13h12.8L8 2Zm0 4v3m0 2v.2"/>',
+  people:'<circle cx="8" cy="5" r="2.1"/><path d="M3.8 13v-.8a4.2 4.2 0 0 1 8.4 0v.8"/>',
+  flag:'<path d="M3.5 14V2.5h8.8l-2 3 2 3H3.5"/>',
+  clock:'<circle cx="8" cy="8" r="5.5"/><path d="M8 4.5v4h3"/>'
+};
+const icon = key => `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[key] || ""}</svg>`;
+const esc = value => String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const labels = {done:"Done",not_started:"Not started",waiting:"Waiting",ready_to_build:"Ready to build",building:"Building",ready_for_review:"Ready for review",reviewing:"Reviewing",blocked:"Blocked",failed:"Failed",running:"Running",paused:"Paused",approved:"Design approved",in_review:"Design in review",not_approved:"Design needs approval",review_failed:"Review failed",plan_changed:"Plan changed",merged:"Merged"};
+const human = key => labels[key] || (key ? key.replaceAll("_"," ").replace(/^./,c=>c.toUpperCase()) : "—");
+const statusClass = key => labels[key] ? key : key === "pass" || key === "fail" ? key : "";
+const glyphs={done:"✓",building:"●",reviewing:"◐",ready_for_review:"◆",ready_to_build:"▷",waiting:"⏸",blocked:"!",failed:"✕",pass:"✓",fail:"✕"};
+const mark=key=>glyphs[key] ? `<span class="status-mark" aria-hidden="true">${glyphs[key]}</span>` : "";
+const tag = (key,text=human(key)) => `<span class="tag ${statusClass(key)}">${mark(key)}${esc(text)}</span>`;
+const dateFmt = new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
+const dateOnly = new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric",timeZone:"UTC"});
+const dateText = date => date ? (date.length===10 ? dateOnly : dateFmt).format(new Date(date)) : "—";
+const time = date => date ? `<time datetime="${esc(date)}" title="${esc(date)}">${esc(dateText(date))}</time>` : "—";
+const elapsed = ms => {
+  if (ms<0) return "—";
+  const mins = Math.floor(ms/60000);
+  if (mins>=1440) return `${Math.floor(mins/1440)}d ${Math.floor(mins/60)%24}h`;
+  if (mins>=60) return `${Math.floor(mins/60)}h ${mins%60}m`;
+  return mins ? `${mins}m` : "<1m";
+};
+const ago = (date,clock) => date ? elapsed(clock-Date.parse(date)) : "—";
+const money = value => value == null ? "—" : new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(value);
+const list = (items,empty="None") => items.length ? `<ul class="bullet-list">${items.map(item=>`<li>${item}</li>`).join("")}</ul>` : blank(empty);
+const blank = text => `<p class="empty">${esc(text)}</p>`;
+const link = (hash,text,cls="link") => `<a class="${cls}" href="${esc(hash)}">${esc(text)}</a>`;
+const moduleName = id => modules?.[id]?.name || id;
+const moduleLink = id => `<a class="module-name" href="#/module/${esc(id)}" title="${esc(id)}">${esc(moduleName(id))}</a>`;
+const wrapPanel = (title,content,{extra="",id="",classes="",symbol=""}={}) => `<section class="panel ${classes}"${id ? ` id="${id}"` : ""}><div class="panel-head"><h2>${symbol ? icon(symbol) : ""}${esc(title)}</h2>${extra}</div>${content}</section>`;
+const panelBody = content => `<div class="panel-content">${content}</div>`;
+const header = (title,description="",aside="") => `<div class="heading"><div><h1>${esc(title)}</h1>${description ? `<p>${esc(description)}</p>` : ""}</div>${aside}</div>`;
+const count = n => `<span class="count">${esc(n)}</span>`;
+const row = html => `<div class="row">${html}</div>`;
+const unavailable = "Not on this machine.";
+const secondary = "Built for a large screen.";
+const keyOf = wp => wp.module+":"+wp.id;
+const waitNames = {user:"You", dependency:"A dependency", review:"A review", merge:"A merge", lock:"A lock", failure:"A failure", none:"No reason recorded"};
+const areas = ["now","plan","delivery","machinery","retro"];
+const day = 86400000;
+let model, modules, packages, snapshot, seen, chosen, availableEvidence, timelineHours=24;
+let previousRoute = "", lastArea = "now", focusedMapKey = null, hoveredMapKey = null;
+let historyData, historyRequest;
+const documentRequests = new Map();
+
+function chip(key,full=false,extra="") {
+  const wp=packages[key];
+  if (!wp) { const [mod,id]=key.split(":"); return `<span class="chip not_started" title="${esc(id ? moduleName(mod)+" · "+id : key)}">${esc(id || key)}</span>`; }
+  const map=extra.includes("map-chip");
+  return `<a href="#/wp/${esc(key)}" data-wp="${esc(key)}" class="chip ${esc(wp.status)} ${extra}" ${map ? 'tabindex="-1" aria-controls="chip-popover"' : ""} title="${esc(moduleName(wp.module)+" · "+wp.id)}" aria-label="${esc(moduleName(wp.module)+" "+wp.id+" · "+wp.name+" · "+human(wp.status))}">${mark(wp.status)}${esc(wp.id)}</a>`;
+}
+const chips = keys => keys.length ? `<div class="named-list">${keys.map(namedChip).join("")}</div>` : '<span class="muted">None</span>';
+
+const namedChip = key => packages[key] ? `<span class="named-chip">${link("#/wp/"+key,packages[key].name,"wp-title")}${chip(key)}</span>` :
+  key.includes(":") ? `<span class="named-chip">${moduleLink(key.split(":")[0])}${chip(key)}</span>` : chip(key);
+// Swap MODULE:WPn references in recorded text for the work package's name.
+const shortName = (name,max=60) => name.length>max ? name.slice(0,name.lastIndexOf(" ",max-1)>30 ? name.lastIndexOf(" ",max-1) : max-1).replace(/[,:;]$/,"")+"…" : name;
+const nameRefs = text => text.replace(/\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*):((?:WP|U)\d+)\b/g,(ref)=>packages[ref] ? "“"+shortName(packages[ref].name)+"”" : ref);
+const reason = wp => {
+  const w=wp.waiting;
+  if (!w) return "";
+  if (w.on==="dependency" && w.targets?.length) return "On "+w.targets.map(t=>packages[t] ? "“"+shortName(packages[t].name)+"”" : t).join(", ");
+  if (w.on==="dependency" && w.detail) return nameRefs(w.detail).replace(/^Waiting,\s*/i,"").replace(/^./,c=>c.toUpperCase());
+  if ((w.on==="none" || !w.on) && w.detail) return w.detail.replace(/\.$/,"");
+  return w.on==="user" && w.reason ? human(w.reason) : waitNames[w.on || "none"];
+};
+const explainWait = wp => {
+  const held=wp.held_by || [];
+  return `${esc(reason(wp))}${wp.waiting?.on==="dependency" && held.length ? " · held by "+held.map(key=>link("#/wp/"+key,packages[key]?.name || key)).join(", ")+" · needs you" : ""}`;
+};
+
+const groupBy = (array,key) => {
+  const groups = new Map();
+  for (const item of array) {
+    const id=key(item);
+    if (!groups.has(id)) groups.set(id,[]);
+    groups.get(id).push(item);
+  }
+  return groups;
+};
+function nav(area) {
+  const entry = name => `<a href="#/${name}" ${area===name ? 'aria-current="page"' : ""}>${icon(name)}${human(name)}</a>`;
+  byId("primary").innerHTML = areas.map(entry).join("");
+  byId("mobile").innerHTML = areas.slice(0,3).map(entry).join("")+
+    `<details><summary>${icon("more")}More</summary><div class="bottom-menu">${areas.slice(3).map(entry).join("")}</div></details>`;
+}
+const milestoneOf=slug=>model.milestones.find(m=>m.label===slug);
+const milestoneName=slug=>milestoneOf(slug)?.name || slug;
+const milestoneLink=(slug,text)=>link("#/milestone/"+slug,text ?? milestoneName(slug));
+function forecast(m) {
+  if (m.closed) return {text:m.closed_at ? "Closed "+dateText(m.closed_at) : "Closed",late:false};
+  if (!m.closed_by) return {text:"No work packages linked",late:false};
+  if (m.held_by?.length) return {text:"Held by you",late:true};
+  if (!m.expected_at) return {text:"No estimate yet",late:false};
+  const late=Date.parse(m.expected_at)<snapshot;
+  return {text:(late ? "Overdue · expected " : "Expected around ")+dateText(m.expected_at),late};
+}
+const segmentOrder=["done","ready_for_review","reviewing","building","ready_to_build","waiting","blocked","failed","not_started"];
+function segments(keys,label) {
+  const counts=Object.fromEntries(segmentOrder.map(k=>[k,0]));
+  for (const key of keys) { const st=packages[key]?.status || "not_started"; counts[st in counts ? st : "not_started"]++; }
+  const total=keys.length || 1;
+  const parts=segmentOrder.filter(k=>counts[k]);
+  const text=parts.map(k=>counts[k]+" "+human(k).toLowerCase()).join(", ");
+  return `<div class="segments" role="img" aria-label="${esc(label+": "+text)}">${parts.filter(k=>k!=="not_started").map(k=>`<i class="${k}" style="width:${counts[k]/total*100}%" title="${esc(counts[k]+" "+human(k))}"></i>`).join("")}</div>
+    <div class="segment-key" aria-hidden="true">${parts.map(k=>`<span><i class="${k}" style="background:${k==="not_started" ? "transparent;border:1px dashed var(--muted)" : `var(--${({done:"green",ready_for_review:"purple",reviewing:"blue",building:"blue",ready_to_build:"teal",waiting:"edge",blocked:"amber",failed:"red"})[k]})`}"></i>${counts[k]} ${esc(human(k).toLowerCase())}</span>`).join("")}</div>`;
+}
+function chainChips(keys) {
+  let last="";
+  return keys.map((key,i)=>{
+    const mod=packages[key]?.module || key.split(":")[0];
+    const head=mod!==last ? `${i ? '<span class="chain-break" aria-hidden="true"></span>' : ""}<a class="chain-module" href="#/module/${esc(mod)}" title="${esc(mod)}">${esc(moduleName(mod))}</a>` : '<span class="arrow" aria-hidden="true">→</span>';
+    last=mod;
+    return head+chip(key,false);
+  }).join("");
+}
+function milestoneRows() {
+  const open=model.milestones.filter(m=>!m.closed);
+  const closed=model.milestones.filter(m=>m.closed);
+  const last=closed.filter(m=>m.closed_at).sort((a,b)=>b.closed_at.localeCompare(a.closed_at))[0];
+  return open.map(m=>{
+    const head=packages[m.longest_chain[0]];
+    const f=forecast(m);
+    const scope=m.needs?.length ? m.needs : [...m.left];
+    return `<div class="milestone" id="milestone-${m.label}">
+      <div class="milestone-top"><div class="milestone-title"><a href="#/milestone/${m.label}">${esc(m.name)}</a><span class="ref">${esc(m.ref)}</span></div>
+        ${m.closed_by ? `<span class="milestone-figure"><strong>${m.done}</strong> of ${m.total} done</span>` : ""}</div>
+      ${segments(scope,m.name+" work packages")}
+      <div class="chain"><span class="forecast-pill ${f.late ? "held" : ""}">${esc(f.text)}</span>
+        ${head ? `<span>Next up: ${link("#/wp/"+keyOf(head),head.name,"wp-inline")} · ${esc(human(head.status).toLowerCase())}${head.waiting ? ", "+(head.waiting.on==="none" || !head.waiting.on ? "no reason recorded" : explainWait(head).replace(/^./,c=>c.toLowerCase())) : ""}</span>` : ""}
+        <a class="end" href="#/plan/map/${m.label}">Program board →</a></div>
+      <div class="chain-list" aria-label="Longest remaining chain">${chainChips(m.longest_chain)}</div>
+    </div>`;
+  }).join("")+`<div class="closed-milestones">${link("#/retro",closed.length+" closed"+(last ? " · last "+last.name+", "+dateOnly.format(new Date(last.closed_at)) : "")+" →")}</div>`;
+}
+const kindDot={done:"done",ready_for_review:"ready_for_review",blocked:"blocked",review_failed:"failed",plan_changed:"waiting",merged:"done"};
+function eventLine(e) {
+  return `<div class="event"><span class="kind"><i class="dot ${kindDot[e.kind] || ""}" aria-hidden="true"></i>${esc(human(e.kind))}</span>
+    <span class="event-text">${e.ref && packages[e.ref] ? namedChip(e.ref) : `<span class="muted">${esc(e.text || "Project-wide")}</span>`}</span>${time(e.at)}</div>`;
+}
+function feed(events,shown=6,id="feed") {
+  const dayName=new Intl.DateTimeFormat(undefined,{weekday:"long",month:"short",day:"numeric"});
+  const withDays=list=>{ let last=""; return list.map(e=>{ const d=dayName.format(new Date(e.at)); const h=d!==last ? `<div class="day-label">${esc(d)}</div>` : ""; last=d; return h+eventLine(e); }).join(""); };
+  return withDays(events.slice(0,shown))+(events.length>shown ? `<details class="more" id="${id}-more"><summary>Show ${events.length-shown} more</summary>${withDays(events.slice(shown))}</details>` : "");
+}
+function eventRows() {
+  const counts=Object.fromEntries(groupBy(model.now.event_times.filter(([seconds])=>seconds*1000>seen),([,kind])=>kind));
+  const kinds={done:"done",ready_for_review:"ready for review",blocked:"blocked",review_failed:"review failures",plan_changed:"plan changes",merged:"merges"};
+  const total=Object.values(counts).reduce((sum,rows)=>sum+rows.length,0);
+  if (!total) return blank("Nothing changed since you last looked.");
+  const recent=model.now.recent_events.filter(e=>Date.parse(e.at)>seen);
+  const tooling=e=>e.kind==="plan_changed" && /orchestrat|renam|migrat/i.test(e.text || "") && (e.modules?.length || 0)>3;
+  const status=e=>!["plan_changed","merged"].includes(e.kind);
+  const shown=recent.filter(e=>!tooling(e) && status(e));
+  const bulk=recent.filter(tooling);
+  return `<div class="feed-summary">${Object.entries(kinds).filter(([key])=>counts[key]).map(([key,label])=>`<span><strong>${counts[key].length}</strong>${label}</span>`).join("")}</div>
+    ${feed(shown,6,"recent")}
+    ${bulk.length ? `<details class="more" id="tooling-events"><summary>${bulk.length} bulk tooling commits</summary>${bulk.map(eventLine).join("")}</details>` : ""}`;
+}
+function waitingRow(w,on) {
+  const side=w.waiting.since ? `<span class="side">${esc(ago(w.waiting.since,snapshot))}</span>` : "";
+  return `<div class="list-row"><div class="stacked">${namedChip(keyOf(w))}${on==="dependency" ? `<span class="reason">${explainWait(w)}</span>` : ""}</div>${side}</div>`;
+}
+function waitingRows() {
+  const waiting=Object.values(packages).filter(w=>w.waiting && !["building","reviewing"].includes(w.status));
+  if (!waiting.length) return blank("Nothing is waiting.");
+  const order=["user","failure","review","merge","lock","dependency","none"];
+  return Array.from(groupBy(waiting,w=>w.waiting.on)).sort((a,b)=>order.indexOf(a[0])-order.indexOf(b[0])).map(([on,rows])=>`<section class="wait-group" id="wait-${esc(on)}"><h3 class="group-label">${esc(waitNames[on])} ${count(rows.length)}</h3>
+    ${rows.slice(0,3).map(w=>waitingRow(w,on)).join("")}
+    ${rows.length>3 ? `<details class="more" id="wait-more-${esc(on)}"><summary>Show ${rows.length-3} more</summary>${rows.slice(3).map(w=>waitingRow(w,on)).join("")}</details>` : ""}</section>`).join("");
+}
+function nowScreen() {
+  const n=model.now, p=model.project;
+  const merge=n.last_merge && (snapshot-Date.parse(n.last_merge)>=6*3600000 ? "nothing merged for " : "last merge ")+ago(n.last_merge,snapshot);
+  const state=[p.state && `<strong>${esc(human(p.state))}</strong>`,n.builders.limit!=null && esc(n.builders.running+"/"+n.builders.limit+" builders"),
+    p.here.run_state && esc(n.reviews_running+" reviews"),merge && esc(merge),n.supervisor && esc("supervisor "+human(n.supervisor).toLowerCase())].filter(Boolean);
+  const all=Object.values(packages);
+  const stalled=all.filter(w=>w.waiting && !["building","reviewing"].includes(w.status)).length;
+  const doneDay=all.filter(w=>w.done_at && Date.parse(w.done_at)>snapshot-day).length;
+  const tile=(href,label,value,note="",cls="")=>`<a class="tile ${cls}" href="${href}" ${href.startsWith("#/") ? "" : `data-jump="${href.slice(1)}"`}><span class="tile-label">${esc(label)}</span><span class="tile-value">${esc(value)}</span>${note ? `<span class="tile-note">${esc(note)}</span>` : ""}</a>`;
+  const tiles=`<div class="tiles">
+    ${tile("#needs-you","Needs you",n.needs_you.length,n.needs_you.length===1 ? "decision waiting" : n.needs_you.length ? "decisions waiting" : "nothing waiting",n.needs_you.length ? "attention" : "")}
+    ${(()=>{const m=model.milestones.find(m=>!m.closed); if (!m) return tile("#milestones","Next milestone","—"); const f=forecast(m);
+      return tile("#milestones","Next milestone",m.closed_by ? m.left.length+" left" : "—",m.name+(f.late ? " · overdue" : ""),f.late ? "attention" : "");})()}
+    ${tile("#waiting","Not moving",stalled,"work packages stalled")}
+    ${tile(all.some(w=>w.status==="ready_for_review") ? "#wait-review" : "#/delivery","Ready for review",all.filter(w=>w.status==="ready_for_review").length,"waiting on a reviewer")}
+    ${tile("#/delivery","Done today",doneDay,"in the last 24 hours")}
+  </div>`;
+  const needs=n.needs_you.map(q=>{
+    const w=packages[q.ref];
+    const lead=!q.ref && modules[(q.detail || "").split(" ")[0]] ? (q.detail || "").match(/^([A-Z][A-Z0-9-]+) (U\d+|WP\d+)[:.]?\s+/) : null;
+    return `<article class="question">
+      <div class="q-head">${q.ref && packages[q.ref] ? `${moduleLink(packages[q.ref].module)}${chip(q.ref)}` : q.ref ? `${moduleLink(q.ref.split(":")[0])}${chip(q.ref)}` : lead ? `${moduleLink(lead[1])}${chip(lead[1]+":"+lead[2])}` : ""}${(q.holds?.milestones || []).map(m=>`<a class="badge" href="#/milestone/${esc(m)}">Holds ${esc(milestoneName(m))}</a>`).join("")}</div>
+      <p class="q-text">${inline((lead ? q.detail.slice(lead[0].length) : q.detail) || "See the work package for details.")}</p>
+      ${w ? `<a class="q-name" href="#/wp/${esc(q.ref)}">${esc(w.name)}</a>` : ""}
+      ${q.holds ? `<div class="q-foot" title="${esc(q.holds.modules.join(", "))}"><strong>${q.holds.count}</strong> work packages${q.holds.modules.length ? ` in <strong>${q.holds.modules.length}</strong> ${q.holds.modules.length===1 ? "module" : "modules"}` : ""} wait on this</div>` : ""}
+    </article>`;
+  }).join("");
+  const running=n.running.map(run=>`<div class="list-row">${run.ref ? namedChip(run.ref) : run.module ? moduleLink(run.module) : ""}
+    <span class="side">${esc(human(run.kind))} · ${esc([run.host,run.model].filter(Boolean).join(" · "))} · ${esc(ago(run.start,snapshot))}</span></div>`).join("");
+  return header("Now","",`<p class="state-pill">${state.join(" · ") || unavailable}</p>`)+tiles+
+    wrapPanel("Needs you",needs ? `<div class="action-grid">${needs}</div>` : blank("Nothing needs you."),{id:"needs-you",symbol:"people",extra:count(n.needs_you.length)})+
+    `<div class="grid now-grid section-gap"><div class="stack">
+      ${wrapPanel("Milestones",milestoneRows(),{id:"milestones",symbol:"flag"})}
+      ${wrapPanel("Since you last looked",eventRows(),{id:"recent-events",symbol:"clock",extra:`<span class="meta">since ${time(new Date(seen).toISOString())}</span>`})}
+    </div><div class="stack">
+      ${running ? wrapPanel("Running now",running,{id:"running-now",symbol:"now"}) : ""}
+      ${wrapPanel("Not moving",waitingRows(),{id:"waiting",symbol:"clock",extra:count(stalled)})}
+    </div></div>`;
+}
+const slug = value => value.toLowerCase().replace(/[^a-z0-9\s-]/g,"").trim().replace(/\s+/g,"-");
+function inline(value,source) {
+  const text=String(value ?? "");
+  const tokens=/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g;
+  let html="", last=0;
+  for (const match of text.matchAll(tokens)) {
+    const raw=match[0];
+    html+=esc(text.slice(last,match.index));
+    if (raw[0]==="`") html+=`<code>${esc(raw.slice(1,-1))}</code>`;
+    else if (raw.startsWith("**")) html+=`<strong>${inline(raw.slice(2,-2),source)}</strong>`;
+    else {
+      const [,label,target]=raw.match(/^\[([^\]]+)\]\((.+)\)$/);
+      html+=documentLink(label,target,source);
+    }
+    last=match.index+raw.length;
+  }
+  return html+esc(text.slice(last));
+}
+const visionPath=()=>model.project.plans+"/VISION.md";
+function documentLink(label,target,source) {
+  if (/^https?:\/\//i.test(target)) return link(target,label);
+  if (!source || /^(?:[a-z]+:|\/\/)/i.test(target)) return esc(label);
+  if (target.startsWith("#")) return `<a href="${esc(target)}" data-jump="${esc(decodeURIComponent(target.slice(1)))}">${esc(label)}</a>`;
+  let local, path;
+  try {
+    local=new URL(target,location.origin+"/"+encodeURI(source));
+    path=decodeURIComponent(local.pathname.slice(1));
+  } catch { return esc(label); }
+  if (local.origin!==location.origin) return esc(label);
+  if (path===visionPath()) return link("#/plan/about",label);
+  if (path===model.project.plans+"/ARCHITECTURE.md") return link("#/plan/modules",label);
+  if (path===model.project.plans+"/STATUS.md") return link("#/now",label);
+  const found=Object.entries(model.documents).find(([,doc])=>doc.path===path);
+  if (found) return link("#/doc/"+found[0]+(local.hash ? "/"+local.hash.slice(1) : ""),label);
+  return asset(path,label);
+}
+function markdown(text,source,vision=false) {
+  const lines=text.trim().split("\n");
+  let html="", i=0, inMilestones=false;
+  const block = line => /^(?:#{1,6} |[-*] |\d+\. |>|\s*```|\||<a id=|---\s*$)/.test(line);
+  while (i<lines.length) {
+    const line=lines[i++];
+    if (!line.trim()) continue;
+    if (/^\s*```/.test(line)) {
+      const code=[];
+      while (i<lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
+      i++;
+      html+=`<pre><code>${esc(code.join("\n"))}</code></pre>`;
+    } else if (line.startsWith("<a id=")) {
+      html+=`<span id="${esc(line.match(/id="([^"]+)"/)?.[1] || "")}"></span>`;
+    } else if (/^#{1,6} /.test(line)) {
+      const [,hashes,title]=line.match(/^(#+) (.+)$/);
+      const level=Math.min(6,hashes.length+1);
+      if (hashes.length<=2) inMilestones=vision && /^(?:the )?milestones$/i.test(title);
+      html+=`<h${level} id="${esc(slug(title))}">${inline(title,source)}</h${level}>`;
+    } else if (/^([-*] |\d+\. )/.test(line)) {
+      const ordered=/^\d/.test(line);
+      const match=ordered ? /^\d+\. / : /^[-*] /;
+      const items=[];
+      let next=line;
+      while (next) {
+        let item=next.replace(match,"");
+        while (i<lines.length && /^\s{2,}\S/.test(lines[i])) item+=" "+lines[i++].trim();
+        const label=inMilestones && (item.match(/`milestone\/([a-z0-9-]+)`/)?.[1]);
+        const formatted=inline(item,source);
+        items.push(`<li>${formatted}${label && milestoneOf(label) ? " "+milestoneLink(label,"View progress") : ""}</li>`);
+        next=match.test(lines[i] || "") ? lines[i++] : "";
+      }
+      const element=ordered ? "ol" : "ul";
+      html+=`<${element}>${items.join("")}</${element}>`;
+    } else if (line.startsWith(">")) {
+      const quote=[line.slice(1).trim()];
+      while (lines[i]?.startsWith(">")) quote.push(lines[i++].slice(1).trim());
+      html+=`<blockquote>${inline(quote.join(" "),source)}</blockquote>`;
+    } else if (line.startsWith("|")) {
+      const cols=s=>s.trim().replace(/^\||\|$/g,"").split(/(?<!\\)\|/).map(cell=>inline(cell.trim(),source));
+      const headings=cols(line), rows=[];
+      if (/^\|[\s:|-]+$/.test(lines[i] || "")) i++;
+      while (lines[i]?.startsWith("|")) rows.push(cols(lines[i++]));
+      const cells=(data,tag)=>data.map(cell=>`<${tag}>${cell}</${tag}>`).join("");
+      html+=`<div class="table-wrap"><table><thead><tr>${cells(headings,"th")}</tr></thead><tbody>${rows.map(data=>`<tr>${cells(data,"td")}</tr>`).join("")}</tbody></table></div>`;
+    } else if (/^---\s*$/.test(line)) html+="<hr>";
+    else {
+      const para=[line];
+      while (i<lines.length && lines[i].trim() && !block(lines[i])) para.push(lines[i++].trim());
+      html+=`<p>${inline(para.join(" "),source)}</p>`;
+    }
+  }
+  return `<div class="doc">${html}</div>`;
+}
+
+const linesKey="orchestrate-board-lines";
+let mapAhead=true, mapAllLines=(()=>{ try { return localStorage.getItem(linesKey)==="all"; } catch { return false; } })();
+// One order for every view of the milestones: closed ones in the order they closed, then open ones in plan order.
+function milestoneOrder() {
+  let last="";
+  const timed=model.milestones.map((m,i)=>{
+    if (!m.closed) return [m,"9",i];
+    last=m.closed_at || last;
+    return [m,last,i];
+  });
+  return timed.sort((a,b)=>a[1].localeCompare(b[1]) || a[2]-b[2]).map(([m])=>m);
+}
+function buildOrder(keys) {
+  const set=new Set(keys), placed=new Set(), out=[];
+  const num=key=>Number(packages[key].id.replace(/\D/g,""))||0;
+  const pending=keys.slice().sort((x,y)=>num(x)-num(y));
+  while (pending.length) {
+    const i=Math.max(0,pending.findIndex(key=>packages[key].depends_on.every(d=>!set.has(d) || placed.has(d))));
+    const [key]=pending.splice(i,1);
+    placed.add(key); out.push(key);
+  }
+  return out;
+}
+function boardColumns() {
+  // A work package lands under the milestone that first needed it in time.
+  const cols=milestoneOrder().map(m=>({key:m.label,milestone:m,name:m.name,keys:[]}));
+  cols.push({key:"untied",name:"Not tied to a milestone",keys:[]});
+  const home={};
+  for (const col of cols) for (const key of col.milestone?.needs || []) home[key] ??= col;
+  for (const key of Object.keys(packages)) (home[key] || cols.at(-1)).keys.push(key);
+  return {cols,home};
+}
+function programCard(key,late) {
+  const wp=packages[key];
+  const label=esc(wp.name+" · "+human(wp.status)+" · "+key);
+  if (wp.status==="done") return `<a href="#/wp/${esc(key)}" data-wp="${esc(key)}" class="map-chip pb-card pb-done done" tabindex="-1" aria-controls="chip-popover" aria-label="${label}">
+    <span class="status-mark" aria-hidden="true">✓</span><span class="pb-name">${esc(wp.name)}</span></a>`;
+  return `<a href="#/wp/${esc(key)}" data-wp="${esc(key)}" class="map-chip pb-card ${esc(wp.status)} ${late ? "late" : ""}" tabindex="-1" aria-controls="chip-popover" aria-label="${label}${late ? " · depends on later work" : ""}">
+    <span class="pb-name">${esc(wp.name)}</span>
+    <span class="pb-meta">${tag(wp.status)}${late ? '<span class="tag blocked" title="Depends on work placed under a later milestone">! Later dependency</span>' : ""}<span class="ref">${esc(wp.id)}</span></span></a>`;
+}
+function mapScreen() {
+  const {cols,home}=boardColumns();
+  const index=new Map(cols.map((c,i)=>[c,i]));
+  const open=key=>packages[key].status!=="done";
+  const next=model.milestones.find(m=>!m.closed);
+  const focus=model.milestones.find(m=>m.label===chosen) || next;
+  const late=key=>packages[key].depends_on.some(d=>home[d] && index.get(home[d])>index.get(home[key]));
+  const shown=cols.map(col=>{
+    const anyOpen=col.keys.some(open);
+    const narrow=!col.keys.length || (mapAhead && !anyOpen);
+    return {...col,narrow,anyOpen};
+  });
+  const rows=model.modules.filter(m=>m.work_packages.some(key=>!mapAhead || open(key)));
+  const width=c=>c.narrow ? "96px" : c.milestone ? "236px" : "472px";
+  const head=c=>{
+    const m=c.milestone, closed=m?.closed, done=c.keys.filter(k=>!open(k)).length;
+    const state=!m ? `${c.keys.filter(open).length} open · ${done} done` : closed ? (m.closed_at ? "Closed "+dateText(m.closed_at) : "Closed") :
+       !m.closed_by ? "No work packages linked" :
+      m===next ? `Next · ${m.done} of ${m.total} done` : `${m.done} of ${m.total} done`;
+    const inner=`<strong>${esc(c.name)}</strong>${m===next && !c.narrow ? '<span class="tag next pb-next">Next</span>' : ""}<span>${c.narrow && !c.keys.length ? (closed ? "Work not recorded" : m ? "No work packages linked" : "") : esc(state.replace(/^Next · /,""))}</span>`;
+    return `<div class="pb-head ${m===focus ? "current" : ""} ${c.narrow ? "narrow" : ""}" ${m===focus ? 'id="pb-current"' : ""}>${m ? `<a href="#/milestone/${esc(m.label)}">${inner}</a>` : `<div title="Work packages no milestone needs yet">${inner}</div>`}</div>`;
+  };
+  const cell=(c,mod)=>{
+    const keys=buildOrder(c.keys.filter(key=>packages[key].module===mod.id));
+    const cls=`pb-cell ${c.milestone && c.milestone===focus ? "current" : ""} ${c.narrow ? "narrow" : ""} ${c.milestone ? "" : "wide"}`;
+    if (!keys.length) return `<div class="${cls}"></div>`;
+    if (c.narrow) return `<div class="${cls}"><span class="pb-count">✓ ${keys.length}</span></div>`;
+    const todo=keys.filter(open), done=keys.filter(key=>!open(key));
+    const doneBit=!done.length ? "" : mapAhead ? `<span class="pb-count">✓ ${done.length} done</span>` :
+      done.length>3 ? `<details class="pb-more"><summary>✓ ${done.length} done</summary>${done.map(key=>programCard(key,false)).join("")}</details>` :
+      done.map(key=>programCard(key,false)).join("");
+    return `<div class="${cls}">${todo.map(key=>programCard(key,late(key))).join("")}${doneBit}</div>`;
+  };
+  const grid=`<div class="pb-grid" style="grid-template-columns:200px ${shown.map(width).join(" ")}">
+    <div class="pb-corner">Module</div>${shown.map(head).join("")}
+    ${rows.map(mod=>{
+      const keys=mod.work_packages, done=keys.filter(k=>!open(k)).length;
+      return `<div class="map-lane"><a class="pb-module" tabindex="-1" href="#/module/${esc(mod.id)}" title="${esc(mod.id)}"><b>${esc(mod.name || mod.id)}</b><small>${done} of ${keys.length} done</small></a>${shown.map(c=>cell(c,mod)).join("")}</div>`;
+    }).join("")}</div>`;
+  const openCount=Object.keys(packages).filter(open).length;
+  const toolbar=`<div class="map-toolbar toolbar"><div class="segmented" role="group" aria-label="Show">
+      <button type="button" data-board-mode="whole" aria-pressed="${!mapAhead}">Whole plan</button><button type="button" data-board-mode="ahead" aria-pressed="${mapAhead}">From here on</button></div>
+    <div class="segmented" role="group" aria-label="Dependencies"><span class="segmented-label">Dependencies</span>
+      <button type="button" data-board-lines="selected" aria-pressed="${!mapAllLines}">For the selected card</button><button type="button" data-board-lines="all" aria-pressed="${mapAllLines}">All</button></div>
+    <span class="meta">${openCount} open of ${Object.keys(packages).length} work packages · ${rows.length} modules</span></div>`;
+  const phoneCols=cols.filter(c=>c.keys.some(open));
+  const phone=`<div class="pb-phone">${phoneCols.map(c=>{
+      const keys=c.keys.filter(open), m=c.milestone;
+      return `<section class="pb-phone-col"><h3>${m ? milestoneLink(m.label,m.name) : esc(c.name)} ${m===next ? '<span class="tag next">Next</span>' : ""}<span class="meta">${keys.length} open</span></h3>
+        ${(()=>{const rowOf=key=>{const w=packages[key];return `<a class="pb-phone-row" href="#/wp/${esc(key)}"><span class="pb-name">${esc(w.name)}</span><span class="pb-meta">${tag(w.status)}<span class="ref">${esc(w.module)} · ${esc(w.id)}</span></span></a>`;};
+          const first=keys.length>8 ? 5 : keys.length;
+          return keys.slice(0,first).map(rowOf).join("")+(keys.length>first ? `<details class="fold"><summary>Show ${keys.length-first} more</summary>${keys.slice(first).map(rowOf).join("")}</details>` : "");})()}</section>`;
+    }).join("")}<p class="meta pb-phone-note">The full board, with finished work and dependencies, is on a larger screen.</p></div>`;
+  return wrapPanel("Program board",`${toolbar}
+    <div class="map-instructions" id="map-instructions">Each row is a module and each column a milestone. A work package sits under the first milestone that needs it. Select one to see what it waits on and what waits on it.
+      <a href="#modules" data-jump="modules">Skip past the board</a></div>
+    <div class="map-scroller pb-scroller" id="map-region" role="region" tabindex="0" aria-label="Program board" aria-describedby="map-instructions"><div class="map-canvas"><svg class="map-lines" aria-hidden="true"></svg>${grid}</div></div>${phone}`,
+    {id:"map",classes:"map-panel"});
+}
+function drawMap() {
+  const canvas=main.querySelector(".map-canvas");
+  if (!canvas || !canvas.offsetWidth) return;
+  const svg=canvas.querySelector("svg");
+  const current=byId("pb-current"), scroller=byId("map-region");
+  if (current && scroller && !canvas.dataset.placed) {
+    canvas.dataset.placed="1";
+    const before=current.previousElementSibling;
+    scroller.scrollLeft=Math.max(0,current.offsetLeft-200-(before && !before.classList.contains("pb-corner") ? before.offsetWidth : 0));
+  }
+  // Measure only after the board has scrolled to the next milestone, or every line lands off to one side.
+  const root=canvas.getBoundingClientRect();
+  svg.setAttribute("width",canvas.scrollWidth); svg.setAttribute("height",canvas.scrollHeight);
+  const nodes=Object.fromEntries(Array.from(canvas.querySelectorAll(".map-chip"),a=>[a.dataset.wp,a]).filter(([,a])=>a.getClientRects().length));
+  const inspected=hoveredMapKey || focusedMapKey || selectedMapKey;
+  const related=new Set(inspected ? [inspected] : []);
+  const edges=[];
+  for (const [key,wp] of Object.entries(packages)) {
+    for (const dependency of wp.depends_on) {
+      if (!nodes[dependency] || !nodes[key]) continue;
+      const hit=inspected && (dependency===inspected || key===inspected);
+      if (hit || mapAllLines) edges.push([dependency,key,hit]);
+    }
+  }
+  const arrow=(id,colour)=>`<marker id="${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 8 4 0 8z" style="fill:${colour}"/></marker>`;
+  svg.innerHTML=`<defs>${arrow("pb-arrow","var(--edge)")}${arrow("pb-arrow-strong","var(--ink)")}${arrow("pb-arrow-open","var(--blue)")}</defs>`+edges.map(([source,target,hit])=>{
+    const a=nodes[source].getBoundingClientRect(), b=nodes[target].getBoundingClientRect();
+    let path;
+    if (b.left>=a.right-4) {
+      const ax=a.right-root.left, ay=a.top+a.height/2-root.top, bx=b.left-root.left, by=b.top+b.height/2-root.top, k=Math.max(30,(bx-ax)/2);
+      path=`M${ax} ${ay} C${ax+k} ${ay} ${bx-k} ${by} ${bx} ${by}`;
+    } else {
+      const down=b.top>=a.bottom;
+      const ax=a.left+a.width/2-root.left, ay=(down ? a.bottom : a.top)-root.top, bx=b.left+b.width/2-root.left, by=(down ? b.top : b.bottom)-root.top, k=Math.max(20,Math.abs(by-ay)/2)*(down ? 1 : -1);
+      path=`M${ax} ${ay} C${ax} ${ay+k} ${bx} ${by-k} ${bx} ${by}`;
+    }
+    if (hit) { related.add(source); related.add(target); }
+    // A link into unfinished work still constrains the plan; one between finished work is history.
+    const live=packages[target]?.status!=="done";
+    const kind=hit ? "related" : inspected ? "dim" : live ? "live" : "";
+    return `<path class="map-edge ${kind}" d="${path}" marker-end="url(#${hit ? "pb-arrow-strong" : live && !inspected ? "pb-arrow-open" : "pb-arrow"})"/>`;
+  }).join("");
+  for (const [key,node] of Object.entries(nodes)) node.classList.toggle("related",related.has(key));
+  canvas.classList.toggle("inspecting",Boolean(inspected));
+}
+function table(headings,rows,announced=headings) {
+  return `<div class="table-wrap"><table class="responsive"><thead><tr>${headings.map(name=>`<th scope="col">${esc(name)}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(values=>`<tr>${values.map((value,index)=>`<td${announced[index] ? ` data-label="${esc(announced[index])}"` : ""}${/^(—|<span class="muted">—<\/span>)$/.test(String(value)) ? ' class="is-empty"' : /^(<span[^>]*>)?(at least )?[$\d][\d.,\s/$%]*(<\/span>)?( <span class="meta">.*<\/span>)?$/.test(String(value)) ? ' class="num"' : ""}>${value}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+function moduleTable() {
+  return `<ul class="module-mini">${model.modules.map(m=>`<li><a class="module-name" href="#/module/${esc(m.id)}"><span class="meta">${m.order}</span> ${esc(m.name || m.id)}</a></li>`).join("")}</ul>
+  <div class="module-wide">${table(["Module","What it delivers","Progress","Waiting on"],model.modules.map(m=>{
+    const outstanding=m.waits_on.filter(key=>packages[key].status!=="done");
+    const done=m.work_packages.filter(key=>packages[key].status==="done").length;
+    return [`<span class="module-cell"><small>${m.order}</small>${moduleLink(m.id)}</span>`,inline(m.delivers),
+      `<div class="module-progress">${segments(m.work_packages,m.id+" work packages")}<span class="meta">${done} of ${m.work_packages.length}</span></div>`+(m.design==="approved" ? "" : tag(m.design,m.design==="in_review" ? "Design in review" : "Design needs approval")),
+      outstanding.length ? `<div class="wp-strip">${chips(outstanding)}</div>` : '<span class="muted">—</span>'];
+  }),["","","Progress","Waiting on"])}</div>`;
+}
+function choiceList(choices,source) {
+  return choices.slice().sort((a,b)=>(b.since || "").localeCompare(a.since || "")).map(choice=>
+    `<div class="choice"><p>${inline(choice.text,source || model.documents[choice.module+"/plan"]?.path)}</p><div class="bar meta">${choice.module ? moduleLink(choice.module) : ""}
+    ${Date.parse(choice.since)>seen ? '<span class="tag">New</span>' : ""} ${time(choice.since)}</div></div>`).join("");
+}
+function allChoices() {
+  const fresh=model.modules.flatMap(m=>m.choices.filter(c=>Date.parse(c.since)>seen).map(c=>({...c,module:m.id})));
+  return `<div class="panel-content"><h3 class="group-head">New since you last looked</h3>
+    ${fresh.length ? choiceList(fresh) : '<p class="meta">No new choices.</p>'}</div>
+    ${model.modules.map(m=>{
+      const older=m.choices.filter(c=>!(Date.parse(c.since)>seen));
+      return older.length ? `<details class="fold" id="choices-${m.id}"><summary>${esc(m.id)} · ${older.length}</summary>
+        ${choiceList(older,model.documents[m.id+"/plan"]?.path)}</details>` : "";
+    }).join("")}`;
+}
+function changesList(changes) {
+  if (!changes.length) return blank("No plan changes recorded.");
+  return changes.map(change=>`<div class="row"><div class="fill">
+    ${change.definitions_changed.length ? `<div class="bar">${chips(change.definitions_changed.slice(0,8))}</div>
+      ${change.definitions_changed.length>8 ? `<details><summary>${change.definitions_changed.length-8} more work packages</summary><div class="bar">${chips(change.definitions_changed.slice(8))}</div></details>` : ""}` : ""}
+    <strong>${esc(change.subject)}</strong><div class="bar meta">${time(change.at)} <code>${change.commit.slice(0,8)}</code>
+    ${change.files?.map(file=>esc(file)).join(" · ") || ""} ${change.design_changed ? "Design changed" : ""}
+    ${change.modules.length>6 ? `<details><summary>${change.modules.length} modules</summary><div class="bar">${change.modules.map(moduleLink).join("")}</div></details>` : change.modules.map(moduleLink).join("")}
+    </div></div></div>`).join("");
+}
+function changesPage() {
+  const plan=model.plan_changes.filter(c=>c.definitions_changed.length || c.design_changed || c.files?.length);
+  return changesList(plan.slice(0,12))+
+    `<details class="fold" id="older-plan-changes" data-changes="plan"><summary>${Math.max(0,plan.length-12)} older plan changes</summary></details>
+     <details class="fold" id="all-commits" data-changes="all"><summary>All commits · ${model.plan_commit_count}</summary></details>`;
+}
+function openDecisions(text) {
+  return (text || "").split(/\n(?=- )/).map(item=>item.replace(/^- /,"").replace(/\n\s+/g," ").trim()).filter(Boolean).map(item=>{
+    const m=item.match(/^\*\*(.+?)\*\*\s*(.*)$/);
+    return m ? {title:m[1].replace(/\.$/,""),rest:m[2]} : {title:item,rest:""};
+  });
+}
+function goalHeader(segment,vision,next) {
+  const project=model.project, ms=model.milestones;
+  const split=project.goal.match(/^(.+?[.:])\s+(.*)$/s);
+  const [headline,support]=split ? [split[1].replace(/:$/,"."),split[2].replace(/^./,c=>c.toUpperCase())] : [project.goal,""];
+  const closed=ms.filter(m=>m.closed).length;
+  const open=Object.values(packages).filter(w=>w.status!=="done").length;
+  const f=next ? forecast(next) : null;
+  const forecastLine=f ? (f.late && next.expected_at && !next.held_by?.length ? "which was expected around "+dateText(next.expected_at)+" and is overdue" : f.text.replace(/^./,c=>c.toLowerCase())) : "";
+  const allDecisions=openDecisions(project.open_decisions);
+  const decisions=allDecisions.filter(d=>d.rest), notes=allDecisions.filter(d=>!d.rest);
+  const ladder=`<ol class="stepper goal-ladder" aria-label="Milestones toward the goal">${milestoneOrder().map(m=>{
+      const cls=m.closed ? "closed" : m===next ? "current" : "";
+      return `<li class="${cls}"><a href="#/milestone/${m.label}" aria-label="${esc(m.name+", "+(m.closed ? "closed" : m===next ? "next" : "open"))}" style="display:grid;gap:6px"><span class="step-dot">${m.closed ? "✓" : ""}</span>
+        <span class="step-label">${esc(m.name)}</span></a></li>`;
+    }).join("")}<li class="goal-step"><span class="step-dot" aria-hidden="true">★</span><span class="step-label">V1 done</span></li></ol>`;
+  return `<section class="panel goal" id="about" aria-labelledby="goal-heading">
+    <div class="goal-grid">
+      <div class="goal-main">
+        <p class="kicker">What we're building</p>
+        <h2 id="goal-heading" class="goal-headline">${esc(headline)}</h2>
+        ${support ? `<p class="goal-support">${esc(support)}</p>` : ""}
+        <div class="goal-done"><span class="kicker">V1 is done when</span><p>${inline(project.v1_exit.replace(/^./,c=>c.toUpperCase()))}</p></div>
+      </div>
+      <aside class="goal-open" aria-label="Decisions still open">
+        <p class="kicker">Still open · ${decisions.length}</p>
+        <ul>${decisions.map(d=>`<li><details><summary>${inline(d.title)}</summary>${d.rest ? `<p>${inline(d.rest)}</p>` : ""}</details></li>`).join("")}</ul>
+        ${notes.map(n=>`<p class="goal-note">${inline(n.title)}</p>`).join("")}
+        <a class="goal-vision" href="#/plan/about">Read the vision and scope document →</a>
+      </aside>
+    </div>
+    <div class="goal-progress">
+      <p class="goal-where"><strong>${closed} of ${ms.length} milestones closed.</strong>${next ? ` Next is ${milestoneLink(next.label,next.name)}, ${esc(forecastLine)}.` : ""} ${open} work packages open.</p>
+      ${ladder}
+    </div>
+    ${vision ? `<details id="full-vision" class="goal-vision-doc" open><summary>Vision and scope document</summary>${vision}</details>` : ""}
+  </section>`;
+}
+function planScreen(segment) {
+  const project=model.project;
+  const vision=segment==="about" ? markdown(project.vision,visionPath(),true) : "";
+  const ms=model.milestones;
+  const next=ms.find(m=>!m.closed);
+  const state=`${ms.filter(m=>m.closed).length} of ${ms.length} milestones are closed${next ? " and "+next.name+" is next" : ""}.`;
+  const freshChoices=model.modules.flatMap(m=>m.choices.filter(c=>Date.parse(c.since)>seen)).length;
+  const totalChoices=model.modules.reduce((n,m)=>n+m.choices.length,0);
+  const summaryText={choices:`${totalChoices} choices recorded · ${freshChoices} new since you last looked`,changes:`${model.plan_changes.length} plan changes · ${model.plan_commit_count} commits in all`};
+  const section=(id,heading,body)=>wrapPanel(heading,`<details class="plan-disclosure" id="${id}-disclosure" ${segment===id ? "open" : ""}>
+    <summary>${summaryText[id]}</summary>${body}</details>`,{id});
+  return header("Plan")+
+    `<nav class="jump" aria-label="Plan sections"><a href="#/plan/about">Goal</a><a href="#/plan/map">Program board</a><a href="#/plan/modules">Modules</a><a href="#/plan/choices">Choices made for you</a><a href="#/plan/changes">Plan changes</a></nav>
+    ${goalHeader(segment,vision,next)}
+    ${mapScreen()}
+    <div class="stack">
+      ${wrapPanel("Modules",moduleTable(),{id:"modules",extra:count(model.modules.length)})}
+      ${section("choices","Choices made for you",allChoices())}
+      ${section("changes","Plan changes",changesPage())}
+    </div>`;
+}
+function boardCard(w) {
+  const age=w.status_since ? ago(w.status_since,snapshot) : "";
+  const waiting=["waiting","blocked"].includes(w.status) ? reason(w) || waitNames.none : "";
+  const label=[moduleName(w.module)+" "+w.id,w.name,human(w.status),waiting,age ? age+" in this status" : ""].filter(Boolean).join(" · ");
+  return `<a class="board-card" data-wp="${esc(keyOf(w))}" href="#/wp/${esc(keyOf(w))}" aria-label="${esc(label)}">
+    <span class="board-module" title="${esc(w.module)}">${esc(moduleName(w.module))}</span>
+    <span class="board-title"><span class="chip ${esc(w.status)}">${mark(w.status)}${esc(w.id)}</span>
+    <span class="board-name">${esc(w.name)}</span></span>
+    ${waiting ? `<span class="tag">${esc(waiting)}</span>` : ""}
+    ${age ? `<span class="meta">${esc(age)}</span>` : ""}
+  </a>`;
+}
+const boardCards = rows => `<div class="board-cards">${rows.map(boardCard).join("")}</div>`;
+function board() {
+  const doneRecent=w=>w.done_at && Date.parse(w.done_at)>snapshot-day;
+  const groups=groupBy(Object.values(packages),w=>w.status);
+  const states=["waiting","ready_to_build","building","ready_for_review","reviewing","blocked","done"];
+  const backlog=groups.get("not_started") || [];
+  const columns=states.map(state=>[state,(groups.get(state) || []).filter(w=>state!=="done" || doneRecent(w))
+    .sort((a,b)=>(b.status_since||"").localeCompare(a.status_since||""))]);
+  const filled=columns.filter(([,rows])=>rows.length), empty=columns.filter(([,rows])=>!rows.length);
+  return `<div class="board-bar"><details class="board-backlog"><summary>${mark("not_started")}Not started ${count(backlog.length)}</summary>${boardCards(backlog)}</details>
+    ${empty.length ? `<p class="board-empty"><strong>Nothing is ${empty.map(([state])=>esc(human(state).toLowerCase())).join(", ").replace(/, ([^,]*)$/," or $1")} right now.</strong></p>` : ""}</div>
+    <div class="board" role="region" tabindex="0" aria-label="Delivery board" style="grid-template-columns:repeat(${filled.length},minmax(190px,1fr))">${filled.map(([state,rows])=>{
+    return `<section class="board-col"><h3><span>${mark(state)}${state==="done" ? "Done · 24h" : human(state)}</span>${count(rows.length)}</h3>
+      ${boardCards(rows.slice(0,8))}
+      ${rows.length>8 ? `<details><summary class="meta">${rows.length-8} more</summary>${boardCards(rows.slice(8))}</details>` : ""}</section>`;
+  }).join("")}</div>`;
+}
+function timeline() {
+  if (!model.project.here.history) return blank(unavailable);
+  const low=snapshot-timelineHours*3600000, span=snapshot-low;
+  const scale=ms=>Math.max(0,Math.min(100,(ms-low)/span*100));
+  const dayClock=new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric",hour:"2-digit",hourCycle:"h23"});
+  const timestamps=Array.from({length:6},(_,i)=>dayClock.format(new Date(low+span*i/5)));
+  const sessions=[...historyData.sessions,...model.now.running].filter(s=>Date.parse(s.start)<snapshot &&
+    (s.end ? Date.parse(s.end)>low : !s.historical || Date.parse(s.start)>=low));
+  const grouped=groupBy(sessions,s=>s.module);
+  const line=(module,title)=>{
+    const records=(grouped.get(module)||[]).slice().sort((a,b)=>a.start.localeCompare(b.start));
+    const tracks=[];
+    const bars=records.map(s=>{
+      const start=Date.parse(s.start);
+      const unknownEnd=s.historical && !s.end;
+      const end=s.end ? Date.parse(s.end) : unknownEnd ? start : snapshot;
+      let track=tracks.findIndex(t=>t<=start);
+      if (track<0) track=tracks.length;
+      tracks[track]=end;
+      const outcome=s.ended;
+      const outcomeClass=/fail|abort|timeout|block|stop|limit|error|changes/i.test(outcome||"") ? "failed" :
+         /ready_for_review/i.test(outcome||"") ? "ready_for_review" :
+         /^(pass|done|completed|planned|design.ok)$/i.test(outcome||"") ? "done" : !s.historical ? "running" : "waiting";
+      const desc=[s.ref,human(s.kind),s.host,s.model, dateText(s.start), s.end ? elapsed(end-start) : unknownEnd ? "End unknown" : "Running", outcome ? human(outcome) : null].filter(Boolean).join(" · ");
+      return `<a href="${s.ref && packages[s.ref] ? "#/wp/"+s.ref : module ? "#/module/"+module : "#/delivery"}" class="session ${outcomeClass}" tabindex="-1" style="left:${scale(start)}%;width:${scale(end)-scale(start)}%;top:${5+12*track}px" title="${esc(desc)}" aria-label="${esc(desc)}"></a>`;
+    }).join("");
+    return `<div class="timeline-row"><span class="timeline-label">${title.replace("<a ", '<a tabindex="-1" ')}</span><div class="timeline-track" style="height:${Math.max(24,10+tracks.length*12)}px">${bars}</div></div>`;
+  };
+  const rows=model.modules.map(m=>line(m.id,moduleLink(m.id))).join("")+(grouped.has(null) ? line(null,"Project-wide") : "");
+  return `<div class="timeline" id="timeline-region" role="region" tabindex="0" aria-label="Session timeline. Use arrow keys to move between sessions."><div class="timeline-grid">
+    <div class="timeline-row timeline-axis"><span class="timeline-label">Module</span><div class="timeline-scale meta">${timestamps.map(date=>`<span>${esc(date)}</span>`).join("")}</div></div>
+    ${rows}
+    </div></div><details class="fold" id="timeline-list"><summary>Session list · ${sessions.length}</summary>${table(["Work package","Task","Host","Started","Outcome"],sessions.slice().reverse().map(s=>[s.ref ? namedChip(s.ref) : s.module ? moduleLink(s.module) : "Project-wide",esc(human(s.kind)),esc(s.host),time(s.start),esc(human(s.ended))]))}</details><div class="legend">${tag("done","Passed / completed")}${tag("ready_for_review")}${tag("failed","Failed / stopped")}${tag("waiting","Outcome unknown")}</div>`;
+}
+function pace() {
+  const rows=model.pace;
+  const avg=rows.map((d,i)=>i<6 ? null : rows.slice(i-6,i+1).reduce((sum,v)=>sum+v.done,0)/7);
+  const peak=Math.ceil(Math.max(3,...rows.map(d=>d.done))/3)*3;
+  const chart=(id,heading,values,top,description,average=[])=>{
+    const width=680, height=128, x=i=>43+i*(width-62)/(rows.length-1), y=n=>101-n/top*80;
+    const path=values=>values.map((n,i)=>n===null ? "" : `${i && values[i-1]!==null ? "L" : "M"}${x(i)} ${y(n)}`).join(" ");
+    const guides=[0,.5,1].map(r=>`<path class="guide" d="M42 ${y(r*top)}H${width-13}"/><text x="35" y="${y(r*top)+4}" text-anchor="end">${id==="pass" ? Math.round(r*100)+"%" : Math.round(r*top)}</text>`).join("");
+    return `<figure class="chart"><figcaption class="group-head">${heading}</figcaption>
+      <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(description)}">${guides}
+      ${id==="done" ? values.map((n,i)=>`<rect class="chart-bar" x="${x(i)-6}" y="${y(n)}" width="12" height="${101-y(n)}"/>`).join("")+`<path class="chart-line" d="${path(average)}"/>` :
+        `<path class="chart-line" d="${path(values)}"/>`+values.map((n,i)=>n===null ? "" : `<circle class="chart-point" cx="${x(i)}" cy="${y(n)}" r="2.6"/>`).join("")}
+      ${[0,4,8,rows.length-1].map(i=>`<text x="${x(i)}" y="123" text-anchor="middle">${esc(dateOnly.format(new Date(rows[i].day)))}</text>`).join("")}</svg></figure>`;
+  };
+  const total=rows.reduce((n,d)=>n+d.done,0);
+  const reviews=rows.reduce((n,d)=>n+d.reviews,0);
+  const passed=rows.reduce((n,d)=>n+d.passed,0);
+  return chart("done","Done per day · line shows 7-day average",rows.map(d=>d.done),peak,`${total} work packages completed over these 14 dates, with a seven-day rolling average.`,avg)+
+    chart("pass","Review pass rate",rows.map(d=>d.pass_rate),1,`${passed} of ${reviews} reviews passed across these 14 dates; days without reviews have gaps.`)+
+    `<details class="fold" id="daily-counts"><summary>Daily counts</summary>${table(["Day","Done","Reviews passed"],rows.slice().reverse().map(d=>[time(d.day),d.done,d.reviews ? `${d.passed} / ${d.reviews}` : "—"]))}</details>`;
+}
+function historyPanel(title,view,classes="") {
+  return `<details class="panel on-demand ${classes}" data-history-panel><summary>${title}</summary>
+    <div class="on-demand-body" data-history-view="${view}"></div></details>`;
+}
+function timelineBody() {
+  return `<div class="timeline-options"><label class="meta">Window <select id="timeline-window">${[12,24,48,168].map(h=>`<option value="${h}" ${h===timelineHours ? "selected" : ""}>${h===168 ? "7 days" : h+" hours"}</option>`).join("")}</select></label></div>
+    <div id="timeline-chart">${timeline()}</div>`;
+}
+function deliveryScreen() {
+  return header("Delivery")+`<div class="stack">
+    ${wrapPanel("Board",board())}
+    <div class="grid">${wrapPanel("Pace",pace(),{extra:count("14 days")})}
+    ${(()=>{const all=model.now.warnings, settled=w=>w.ref && packages[w.ref]?.status==="done";
+      const rowOf=w=>`<div class="list-row warning-row">${w.ref ? namedChip(w.ref) : ""}<p class="side">${esc(w.text)}</p></div>`;
+      const current=all.filter(w=>!settled(w)), old=all.filter(settled);
+      return wrapPanel("Warnings",(current.length ? current.map(rowOf).join("") : blank(model.project.here.run_state ? "No current warnings." : unavailable))+
+        (old.length ? `<details class="fold"><summary>${old.length} on work that has since finished</summary>${old.map(rowOf).join("")}</details>` : ""),{extra:count(current.length)});})()}</div>
+    ${historyPanel("Timeline","timeline","desktop-only")}
+    </div>`;
+}
+
+function activityTrend() {
+  const bins=Array.from({length:24},(_,i)=>{
+    const from=snapshot-(24-i)*3600000, to=from+3600000;
+    return historyData.sessions.filter(s=>Date.parse(s.start)<to && Date.parse(s.end || s.start)>=from).length;
+  });
+  const peak=Math.max(1,...bins);
+  return `<figure class="chart"><figcaption class="group-head">Agent session activity · 24 hours</figcaption>
+    <svg viewBox="0 0 680 90" role="img" aria-label="Peak of ${peak} recorded sessions overlapping an hour.">
+      ${bins.map((count,i)=>`<rect fill="var(--ink)" x="${i*20+3}" y="${50-count/peak*45}" width="12" height="${count/peak*45}"><title>${24-i} hours ago · ${count} sessions</title></rect>`).join("")}
+      <text x="3" y="69">24h ago</text><text x="477" y="69" text-anchor="end">Snapshot</text>
+    </svg><p class="meta">Counts logged sessions overlapping each hour. Machine load history is unavailable.</p></figure>`;
+}
+const compact=n=>n==null ? "—" : new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:1}).format(n);
+const kindShades={builder:1,lead:.72,subagent:.5,reviewer:.36,planner:.24,"approval reviewer":.14,script:.1,other:.08};
+const kindFill={builder:"var(--ink)",lead:"var(--blue)",subagent:"var(--teal)",reviewer:"var(--purple)",planner:"var(--amber)"};
+const fillOf=k=>kindFill[k] ? `fill="${kindFill[k]}" fill-opacity="${k==="builder" ? .85 : .9}"` : `fill="var(--muted)" fill-opacity=".45"`;
+function hbars(rows,{unit="",cls=()=>""}={}) {
+  const peak=Math.max(1,...rows.map(([,v])=>v));
+  return `<div class="hbars">${rows.map(([label,value])=>`<div class="hbar"><span>${esc(label)}</span><span class="track" role="img" aria-label="${esc(label+": "+value+unit)}"><i class="${cls(label,value,peak)}" style="width:${value/peak*100}%"></i></span><span class="value">${esc(compact(value)+unit)}</span></div>`).join("")}</div>`;
+}
+function tokensChart(a) {
+  const kinds=a.kinds.map(k=>k.kind);
+  const totals=a.daily.map(d=>Object.values(d.weighted).reduce((x,y)=>x+y,0));
+  const peak=Math.max(1,...totals), width=1120, height=210, base=180, bw=(width-60)/a.daily.length;
+  const y=v=>v/peak*(base-12);
+  const bars=a.daily.map((d,i)=>{
+    let top=base;
+    return kinds.map(k=>{ const v=d.weighted[k] || 0; if (!v) return ""; const h=y(v); top-=h;
+      return `<rect x="${44+i*bw+3}" y="${top}" width="${bw-6}" height="${h}" rx="1.5" ${fillOf(k)}><title>${esc(dateOnly.format(new Date(d.day))+" · "+k+" · "+compact(v)+" tokens")}</title></rect>`; }).join("");
+  }).join("");
+  const guides=[0,.5,1].map(r=>`<path class="guide" d="M40 ${base-r*(base-12)}H${width}"/><text x="34" y="${base-r*(base-12)+4}" text-anchor="end">${compact(r*peak)}</text>`).join("");
+  const labels=[0,Math.floor(a.daily.length/2),a.daily.length-1].map(i=>`<text x="${44+i*bw+bw/2}" y="${base+18}" text-anchor="middle">${esc(dateOnly.format(new Date(a.daily[i].day)))}</text>`).join("");
+  const sum=totals.reduce((x,y)=>x+y,0);
+  return `<figure class="chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(compact(sum)+" weighted tokens over 14 days, peak "+compact(peak)+" in one day, stacked by kind of agent.")}">${guides}${bars}${labels}</svg></figure>
+    <ul class="chart-key">${kinds.map(k=>`<li><i style="background:${kindFill[k] || "var(--muted)"};opacity:${kindFill[k] ? .9 : .45}"></i>${esc(human(k))}</li>`).join("")}</ul>`;
+}
+function limitChart(points) {
+  if (!points?.length) return "";
+  const t0=Date.parse(points[0].at), t1=Date.parse(points.at(-1).at), width=520, height=130, base=104;
+  const x=t=>40+(Date.parse(t)-t0)/Math.max(1,t1-t0)*(width-48), y=v=>base-v/100*(base-10);
+  const d=points.map((p,i)=>`${i ? "L" : "M"}${x(p.at).toFixed(1)} ${y(p.used).toFixed(1)}`).join(" ");
+  const guides=[0,50,100].map(v=>`<path class="guide" d="M40 ${y(v)}H${width}"/><text x="34" y="${y(v)+4}" text-anchor="end">${v}%</text>`).join("");
+  return `<figure class="chart"><figcaption>Weekly limit used, last 14 days</figcaption><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc("Codex weekly limit use over 14 days, now "+points.at(-1).used+"%.")}">${guides}<path class="chart-line" style="stroke:var(--ink)" d="${d}"/>
+    <text x="40" y="${base+18}">${esc(dateOnly.format(new Date(points[0].at)))}</text><text x="${width}" y="${base+18}" text-anchor="end">${esc(dateOnly.format(new Date(points.at(-1).at)))}</text></svg></figure>`;
+}
+function agentsBody() {
+  const a=historyData.agents;
+  if (!a) return blank(unavailable);
+  const t=a.totals, m=historyData.machinery;
+  const tiles=`<div class="tiles">
+    <div class="tile"><span class="tile-label">Agent sessions</span><span class="tile-value">${compact(t.sessions)}</span><span class="tile-note">${compact(t.turns)} turns</span></div>
+    <div class="tile"><span class="tile-label">Weighted tokens</span><span class="tile-value">${compact(t.weighted)}</span><span class="tile-note">tokens weighted by price, all history</span></div>
+    <div class="tile"><span class="tile-label">Recorded cost</span><span class="tile-value">${money(t.usd).replace(/\.\d+$/,"")}</span><span class="tile-note">${Math.round(t.priced/t.turns*100)}% of turns priced</span></div>
+    ${(()=>{const q=m.quota, rate=Number(q?.rate?.match(/([\d.]+)%\/h/)?.[1]), hours=Number(q?.rate?.match(/([\d.]+) h to the reset/)?.[1]);
+      const proj=rate && hours ? Math.round(q.used_percent+rate*hours) : null, warn=q && (q.warn || proj>=100 || q.used_percent>80);
+      return `<div class="tile ${warn ? "attention" : ""}"><span class="tile-label">Codex weekly limit</span><span class="tile-value">${q ? esc(q.used_percent)+"% used" : "—"}</span><span class="tile-note">${q ? (proj>=100 ? "on course for "+proj+"% before it resets" : "resets "+esc(q.resets_at)) : ""}</span></div>`;})()}
+    <div class="tile"><span class="tile-label">Turns that ended badly</span><span class="tile-value">${compact(a.failures.reduce((n,[,v])=>n+v,0))}</span><span class="tile-note">timeouts, aborts, refusals</span></div>
+  </div>`;
+  const kindsTable=table(["Kind of agent","Sessions","Turns","Median turn","90% of turns under","Weighted tokens","Recorded cost","Aborted","Context fill, 90th percentile"],
+    a.kinds.map(k=>[`<strong>${esc(human(k.kind))}</strong>`,compact(k.sessions),compact(k.turns),elapsed(k.median_s*1000).replace("<1m",k.median_s+"s"),elapsed(k.p90_s*1000).replace("<1m",k.p90_s+"s"),compact(k.weighted),
+      k.priced ? money(k.usd) : '<span class="muted">Unpriced</span>',k.aborted ? `<span class="${k.aborted/k.turns>.02 ? "danger" : ""}">${k.aborted}</span>` : '<span class="muted">0</span>',k.context_p90==null ? "—" : Math.round(k.context_p90*100)+"%"]),
+    ["","Sessions","Turns","Median turn","90% under","Tokens","Cost","Aborted","Context p90"]);
+  const models=table(["Model","Turns","Weighted tokens","Recorded cost"],a.models.map(r=>[`<span class="mono">${esc(r.model)}</span>`,compact(r.turns),compact(r.weighted),r.usd ? money(r.usd) : '<span class="muted">Unpriced</span>']),["","Turns","Tokens","Cost"]);
+  const versions=table(["Script version","First seen","Turns","Aborted","Median turn"],a.versions.map(v=>[`<span class="mono">${esc(v.version)}</span>`,time(v.first),v.turns,
+    v.aborted ? `${v.aborted} <span class="meta">· ${Math.round(v.aborted/v.turns*100)}%</span>` : '<span class="muted">0</span>',elapsed(v.median_s*1000).replace("<1m",v.median_s+"s")]),["","First seen","Turns","Aborted","Median turn"]);
+  return tiles+`<div class="stack">
+    ${wrapPanel("Tokens per day by kind of agent",tokensChart(a),{extra:'<span class="meta">14 days · weighted tokens</span>'})}
+    ${wrapPanel("Each kind of agent",kindsTable,{extra:count(a.kinds.length)})}
+    <div class="grid even">
+      ${wrapPanel("Why turns ended badly",hbars(a.failures,{cls:(l,v,peak)=>v===peak ? "bad" : ""}),{extra:'<span class="meta">all history</span>'})}
+      ${wrapPanel("Errors per day",hbars(a.daily.slice(-7).map(d=>[new Intl.DateTimeFormat(undefined,{weekday:"short",day:"numeric"}).format(new Date(d.day)),d.errors]),{cls:(l,v,peak)=>v===peak && v>0 ? "bad" : ""}),{extra:'<span class="meta">last 7 days</span>'})}
+      ${wrapPanel("How long turns run",hbars(a.durations),{extra:`<span class="meta">${compact(t.turns)} turns</span>`})}
+      ${wrapPanel("How full the context got",hbars(a.context,{cls:l=>/90|75/.test(l) ? "warn" : ""}),{extra:'<span class="meta">peak per turn · lead, builders, reviewers, planners</span>'})}
+    </div>
+    <div class="grid even desktop-only">
+      ${wrapPanel("Models",models)}
+      ${wrapPanel("Script versions",versions,{extra:'<span class="meta">newest first</span>'})}
+    </div></div>`;
+}
+function machineryBody() {
+  return `${agentsBody()}<div class="section-title"><h2>Machine and merges</h2><p>Load, limits, the merge queue and slow checks.</p></div>${machineBody()}`;
+}
+function machineBody() {
+  const m=historyData.machinery;
+  const machine=m.machine, quota=m.quota, merge=m.merges;
+  const rate=Number(quota?.rate?.match(/([\d.]+)%\/h/)?.[1]);
+  const hours=Number(quota?.rate?.match(/([\d.]+) h to the reset/)?.[1]);
+  const projected=rate && hours ? (quota.used_percent+rate*hours).toFixed(0) : null;
+  const ratio=c=>c.seconds/c.usual_seconds;
+  const checks=Object.entries(machine?.checks?.commands || {}).filter(([,c])=>c.usual_seconds>0 && ratio(c)>1)
+    .sort((a,b)=>ratio(b[1])-ratio(a[1])).slice(0,10);
+  const modulesByCheck=groupBy(Object.values(packages).flatMap(w=>w.items.filter(i=>i.check).map(i=>[i.check,w.module])),([command])=>command);
+  const slow=checks.map(([command,c])=>{
+    const modules=[...new Set((modulesByCheck.get(command) || []).map(([,id])=>id))];
+    const start=command.search(/(?:^|[\s;&])(?:cargo|python3?|npm|node|just|make)\s/);
+    const bare=(start>=0 ? command.slice(start) : command).replace(/^[\s;&]+/,"");
+    const pkg=bare.match(/(?:-p|--package)\s+(\S+)/)?.[1] || bare.match(/package\(=?([\w-]+)\)/)?.[1];
+    const test=bare.match(/test\(=?([\w:]+)\)/)?.[1]?.split("::").at(-1) || bare.match(/binary\(=?([\w-]+)\)/)?.[1];
+    const named=bare.match(/(?:--test\s+|--bin\s+|--example\s+)(\S+)/)?.[1];
+    const short=(pkg && (test || named) ? pkg+" · "+(test || named) : null) || (named && named!=="it" ? named : null) ||
+      command.match(/(?:^|\s)(?:[.\w/-]+\/)?([\w.-]+\.(?:py|sh))\b/)?.[1] || bare.split(/\s+/).slice(0,3).join(" ");
+    return row(`<details class="fill"><summary><strong>${esc(short)}</strong> · ${ratio(c).toFixed(1)}× usual
+      <span class="meta">· ${modules.length===1 ? esc(moduleName(modules[0])) : "Module unrecorded"}</span></summary>
+      <p class="meta">${Math.round(c.seconds)}s against ${Math.round(c.usual_seconds)}s usual</p><pre>${esc(command)}</pre></details>`);
+  }).join("");
+  const mainChecks=Object.entries(machine?.checks?.main_branch || {});
+  const errorGroups=Array.from(groupBy(m.errors,e=>e.kind)).sort((a,b)=>b[1].length-a[1].length);
+  const costs=(rows=>rows.some(c=>c.model) ? table(["Host","Task","Model","Sessions","Recorded cost"],rows.map(c=>[esc(c.host),esc(human(c.kind)),esc(c.model || "—"),c.sessions,
+    c.priced ? `${money(c.cost)} <span class="meta">· ${c.priced}/${c.sessions} priced</span>` : "Unpriced"])) :
+    table(["Host","Task","Sessions","Recorded cost"],rows.map(c=>[esc(c.host),esc(human(c.kind)),c.sessions,
+    c.priced ? `${money(c.cost)} <span class="meta">· ${c.priced}/${c.sessions} priced</span>` : "Unpriced"])));
+  const priced=m.costs.filter(c=>c.priced), unpriced=m.costs.filter(c=>!c.priced);
+  const windowNote=text=>panelBody(`<p class="meta">${text}</p>`);
+  return `<div class="stack">
+    <div class="grid">
+      ${wrapPanel("Machine load",machine ? panelBody(`<p><strong>${esc(machine.load?.["1m"])} / ${esc(machine.load?.["15m"])}</strong> <span class="muted">1m / 15m load averages at the snapshot · ${esc(machine.cores)} cores · ${esc(machine.memory_pressure)} memory pressure</span></p>
+        ${(machine.cpu_by_app||[]).filter(r=>r.orchestrate_cpu_pct>0).map(r=>`<p>${esc(r.app)} · ${esc(r.orchestrate_cpu_pct)}% agent CPU</p>`).join("")}</p>`)+activityTrend() : blank(unavailable))}
+      ${wrapPanel("Codex weekly limit",quota ? panelBody(`<div class="milestone-progress"><div><strong>${esc(quota.used_percent)}% used${projected ? ` · <span class="${projected>=100 ? "warning-text" : ""}">${projected}% projected</span>` : ""}</strong><span class="muted">Resets ${esc(quota.resets_at)}</span></div>
+        <progress max="100" value="${Number(quota.used_percent)||0}" aria-label="Weekly quota used"></progress></div>
+        <p class="meta">${projected ? "Projection extends the observed account usage rate to the reset." : "Projection unavailable."}</p>`)+limitChart(historyData.agents?.limit)+(quota.verdict ? panelBody(`<p class="${quota.warn ? "warning-text" : "meta"}">${esc(quota.verdict)}</p>`) : "") : blank(unavailable))}
+    </div>
+    <div class="grid">
+      ${wrapPanel("Merge queue and main",merge ? panelBody(`<p><strong>${merge.count} attempts · ${merge.failed} failed</strong> <span class="muted">in the saved 24-hour window</span></p><p>${merge.median_min}m median · ${merge.p90_min}m p90 · ${merge.conflicts} conflicts</p><p class="meta">Attempts count each queued merge. Failures include unsuccessful attempts.</p><p class="meta">${esc(m.main_branch)}</p>`)+
+        table(["Latest main branch check","Result","Duration"],mainChecks.map(([name,c])=>[esc(name),tag(c.exit===0 ? "pass" : "fail",c.exit===0 ? "Passed" : "Failed"),esc(elapsed(c.seconds*1000))]),["","Result","Duration"]) : blank(unavailable))}
+      ${wrapPanel("Lock contention",m.locks ? windowNote("Saved 24-hour window. Busy is the share of time held; queued is total time jobs waited.")+table(["Lock","Busy","Queued","Failed holds"],Object.entries(m.locks).map(([name,c])=>[esc(name),Math.round(c.busy*100)+"%",c.queued_h+"h",c.failed]),["","Busy","Queued","Failed holds"]) : blank(unavailable))}
+    </div>
+    <div class="grid">
+      ${wrapPanel("Slow checks",machine ? windowNote("Latest recorded duration divided by the usual duration. Up to ten checks.")+(slow || blank("No checks above usual.")) : blank(unavailable))}
+      <div class="stack">${wrapPanel("Errors by kind",model.project.here.history ? windowNote("All saved dashboard history. Each entry is one logged error event.")+errorGroups.map(([kind,errors])=>
+        `<details class="fold"><summary>${esc(human(kind))} · ${errors.length}</summary><div class="bar">${errors.slice().reverse().map(e=>
+          e.session && m.error_sessions[e.session] ? link("#/session/"+e.session,dateText(e.at)) : `<span>${time(e.at)}</span>`).join("")}</div></details>`).join("") : blank(unavailable))}
+      ${wrapPanel("Logged check results",model.project.here.history ? windowNote("All saved dashboard history. Each check result counts once.")+panelBody(`<p>${m.check_outcomes.passed||0} passed · ${m.check_outcomes.failed||0} failed</p>`) : blank(unavailable))}</div>
+    </div>
+    ${wrapPanel("Cost by host, task, and model",model.project.here.history ?
+      windowNote("All saved dashboard sessions. Dollars sum the sessions with a recorded price.")+
+      (priced.length ? costs(priced) : blank("No priced sessions."))+
+      (unpriced.length ? `<details class="fold" id="unpriced-costs"><summary>Unpriced groups · ${unpriced.length}</summary>${costs(unpriced)}</details>` : "") : blank(unavailable))}
+  </div>`;
+}
+function sessionBody(id) {
+  const s=historyData.machinery.error_sessions[id];
+  if (!s) return blank("Session details unavailable.");
+  return wrapPanel("Session details",panelBody(`<p>${esc([s.host,s.model,s.role].filter(Boolean).join(" · "))}</p>
+    <p>Started ${time(s.start)} · Ended ${time(s.end)}</p>
+    <p>${s.module && s.work_package ? namedChip(s.module+":"+s.work_package.replace(/^M/,"WP")) : s.module ? moduleLink(s.module) : ""}</p>`));
+}
+function retroBody() {
+  const retro=historyData.retro;
+  return wrapPanel("Closed milestones",panelBody(`<p class="meta">Planned counts work packages present in the first plan revision containing the closing work package.</p>`)+
+    table(["Milestone","Closed","Duration","Recorded cost","Planned / added","Failed reviews","Failed design reviews","By task and host"],
+      model.milestones.filter(m=>m.closed).sort((a,b)=>(b.closed_at || "").localeCompare(a.closed_at || "")).map(m=>{
+        const r=retro[m.label];
+        if (!r) return [milestoneLink(m.label),time(m.closed_at),"—","—","—","—","—",m.historical ? "Closed before orchestration" : "—"];
+        const length=r.first && m.closed_at ? elapsed(Date.parse(m.closed_at)-Date.parse(r.first)) : "—";
+        return [`<details id="retro-${m.label}"><summary>${milestoneLink(m.label,m.name)} <span class="ref">${esc(m.ref)}</span></summary><div class="bar">${namedChip(m.closed_by)}</div>
+          ${r.added.length ? `<div class="bar"><span class="meta">Added</span>${chips(r.added)}</div>` : ""}
+          ${Object.entries(r.failed_by_module).map(([id,n])=>`<div>${moduleLink(id)} · ${n}</div>`).join("")}</details>`,
+          time(m.closed_at),`<span style="white-space:nowrap">${esc(length)}</span>`,r.priced<r.sessions ? `at least ${money(r.cost).replace(/\.\d+$/,"")} <span class="meta">· ${r.priced} of ${r.sessions} sessions priced</span>` : money(r.cost),
+          `${r.planned ?? "—"} / ${r.added.length}`,r.failed_by_task["work package review"],r.failed_by_task["design review"],
+          r.review_hosts?.map(h=>`<div class="meta" style="white-space:nowrap">${esc(h.task)} · ${esc(h.host)} · ${h.count}</div>`).join("") || "—"];
+      }),["","Closed","Duration","Recorded cost","Planned / added","Failed reviews","Failed design reviews","By task and host"]));
+}
+function milestoneScreen(slug) {
+  const m=milestoneOf(slug);
+  if (!m) return back("#/plan/about","Plan")+blank("No milestone is called "+slug+".");
+  const next=model.milestones.find(x=>!x.closed);
+  const closed=m.closed;
+  const state=closed ? tag("done","Closed") : m===next ? '<span class="tag next">Next</span>' : tag("not_started","Open");
+  const f=forecast(m), when=f.text;
+  const scope=m.needs?.length ? m.needs : [...m.left];
+  const byModule={};
+  for (const key of scope) { const mod=packages[key]?.module || key.split(":")[0]; (byModule[mod] ||= []).push(key); }
+  const moduleRows=Object.entries(byModule).map(([mod,keys])=>`<div class="list-row">${moduleLink(mod)}<span class="side">${keys.filter(k=>packages[k]?.status==="done").length} of ${keys.length} done</span></div>`).join("");
+  const holding=model.now.needs_you.filter(q=>q.holds?.milestones?.includes(slug));
+  return back("#/plan/about","Plan")+
+    `<div class="detail-head"><h1 class="proof-title">${esc(m.name)} <span class="ref">${esc(m.ref)}</span></h1>
+      <div class="bar">${state}<span class="meta">${esc(when)}</span>${m.closed_by ? link("#/plan/map/"+m.label,"Program board") : ""}</div>
+      ${m.about ? `<p class="milestone-about" style="margin-top:12px">${inline(m.about,visionPath())}</p>` : ""}</div>`+
+    (holding.length ? wrapPanel("Waiting on you",holding.map(q=>`<div class="list-row">${q.ref ? namedChip(q.ref) : ""}<span class="side">${inline(q.detail || "")}</span></div>`).join(""),{symbol:"people",extra:count(holding.length)}) : "")+
+    (scope.length ? `<div class="stack">`+wrapPanel("Progress",panelBody(`<p class="milestone-figure"><strong>${m.done}</strong> of ${m.total} work packages done</p>${segments(scope,m.name+" work packages")}
+      ${m.longest_chain.length ? `<h3 class="group-label">Longest remaining chain</h3><div class="chain-list">${chainChips(m.longest_chain)}</div>` : ""}`),{symbol:"flag"})+
+      (m.left.length ? wrapPanel("Work left",buildOrder([...m.left]).map(key=>`<div class="list-row">${namedChip(key)}<span class="side">${tag(packages[key]?.status || "not_started")}</span></div>`).join(""),{extra:count(m.left.length)}) : "")+
+      wrapPanel("Modules",moduleRows,{extra:count(Object.keys(byModule).length)})+`</div>` :
+      wrapPanel("Progress",blank(m.historical ? "Closed before the orchestrate loop began, so no work packages are recorded for it." : "No work packages are linked to it yet.")))+
+    (closed && m.closed_by ? `<p class="section-gap">${link("#/retro","How it went, in the retro →")}</p>` : "");
+}
+function back(href,text) {
+  return `<a class="back" href="${esc(href)}"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>${esc(text)}</a>`;
+}
+function dependencyModules(keys) {
+  if (!keys.length) return '<span class="muted">None</span>';
+  return Array.from(groupBy(keys,key=>packages[key]?.module),([mod,refs])=>
+    `<div class="list-row">${moduleLink(mod)}<span class="side">${refs.length} work package${refs.length===1 ? "" : "s"}</span></div>`
+  ).join("");
+}
+function moduleScreen(id) {
+  const m=modules[id];
+  if (!m) return missing();
+  const outstanding=m.waits_on.filter(key=>packages[key].status!=="done");
+  const ordered=buildOrder(m.work_packages), finished=ordered.filter(key=>packages[key].status==="done").length;
+  const rows=ordered.map(key=>{
+    const w=packages[key];
+    const passed=w.items.filter(item=>(item.verdict || item.verdicts.at(-1))==="pass").length;
+    return [`<span class="ref">${esc(w.id)}</span>`,link("#/wp/"+key,w.name,"wp-title"),tag(w.status)+(w.status==="done" ? "" : `<span class="meta" style="display:block;margin-top:3px">${explainWait(w)}</span>`),
+      w.items.length ? `${passed} / ${w.items.length}` : "—",`<span class="${w.failed_reviews && w.status!=="done" ? "danger" : "muted"}">${w.failed_reviews}</span>`,money(w.cost)];
+  });
+  const columns=["Ref","Work package","Status","Items passed","Failed reviews","Builder cost"];
+  const announced=["","","","Items passed","Failed reviews","Builder cost"];
+  const visible=columns.map((_,i)=>i).filter(i=>i!==5 || m.work_packages.some(key=>packages[key].cost!=null));
+  const log=model.documents[id+"/log"];
+  const logExcerpt=log?.excerpt;
+  return back(lastArea==="plan" ? "#/plan/modules" : "#/"+lastArea,lastArea==="plan" ? "Plan / Modules" : human(lastArea))+
+    `<div class="detail-head"><div class="heading"><div><h1>${esc(m.name || id)} <span class="ref">${esc(id)}</span></h1><p>${esc(m.delivers)}</p></div>${tag(m.design)}</div>
+    <p class="milestone-figure" style="margin-top:12px"><strong>${finished}</strong> of ${ordered.length} work packages done</p>${segments(ordered,id+" work packages")}
+    <div class="bar" style="margin-top:10px">${Object.entries(m.links).map(([kind,url])=>link(url,human(kind))).join(" · ")}</div></div>
+    <div class="stack">
+      ${wrapPanel("Work packages",rows.length ? table(visible.map(i=>columns[i]), rows.map(values=>visible.map(i=>values[i])), visible.map(i=>announced[i])) : blank("No work packages."),{extra:count(rows.length)})}
+      <div class="grid">${wrapPanel("Waiting on work packages",panelBody(`<div class="bar">${chips(outstanding)}</div>
+        ${m.waits_on.length>outstanding.length ? `<details id="upstream-packages" style="margin-top:7px"><summary class="meta">All upstream work packages</summary><div class="bar">${chips(m.waits_on)}</div></details>` : ""}`))}
+      ${wrapPanel("Needed by modules",panelBody(`<div>${dependencyModules(m.needed_by)}</div>`))}</div>
+      <div class="grid">
+        ${wrapPanel("Choices made for you",m.choices.length ? panelBody(choiceList(m.choices,model.documents[id+"/plan"]?.path)) : blank("No choices recorded."))}
+        <div class="stack">${wrapPanel("Recent log entries",logExcerpt ? panelBody(markdown(logExcerpt,log.path)) : blank("No log entries."),{extra:m.links.log ? link(m.links.log,"Full log") : ""})}
+        ${wrapPanel("Design history",m.design_history.length ? `<details class="fold"><summary>${m.design_history.length} recorded reviews</summary>${m.design_history.slice().reverse().map(r=>row(`<strong>${esc(human(r.verdict))}</strong><span class="meta">${esc([r.host,r.model].filter(Boolean).join(" · "))}</span><span class="meta end">${time(r.at)}</span>`)).join("")}</details>` : blank("No design reviews recorded."))}</div>
+      </div>
+    </div>`;
+}
+function asset(path,title,cleared=false) {
+  if (cleared) return `<span class="path muted">${esc(title)}</span> ${tag("waiting","Cleared")}`;
+  return `<a class="path" href="#file" data-file="${esc(path)}">${esc(title)}</a>`;
+}
+const itemId=id=>id.replace(/^[DM](?=\d+\.)/,"WP");
+function relativePath(folder,path) {
+  const from=folder.split("/").filter(Boolean);
+  const to=path.split("/").filter(Boolean);
+  let common=0;
+  while (common<from.length && from[common]===to[common]) common++;
+  return "../".repeat(from.length-common)+to.slice(common).join("/");
+}
+function reviewSummary(review,items) {
+  if (review.summary) return `<p class="review-summary">${esc(review.summary)}</p>`;
+  const judged=items.map(item=>[item.id,item.verdicts[review.n-1]]);
+  const failed=judged.filter(([,verdict])=>verdict==="fail").map(([id])=>itemId(id));
+  const passed=judged.filter(([,verdict])=>verdict==="pass").length;
+  const itemList=(values,limit)=>new Intl.ListFormat(undefined,{type:"conjunction"}).format(
+    values.length>limit ? [...values.slice(0,limit),`${values.length-limit} more`] : values);
+  const named=review.findings.map(f=>f.name).filter(Boolean);
+  let summary;
+  if (review.verdict==="fail") {
+    summary=failed.length ? "Failed on "+itemList(failed,3)+"." : "Failed review.";
+  } else if (review.verdict==="pass") {
+    summary=passed ? `Passed ${passed===items.length ? "all " : ""}${passed} ${passed===1 ? "item" : "items"}.` : "Passed review.";
+  } else {
+    summary=human(review.verdict)+".";
+  }
+  if (named.length) summary+=" "+itemList(named,2)+".";
+  else if (!failed.length && !passed) summary+=" No item verdicts recorded.";
+  return `<p class="review-summary generated"><span class="tag">Generated</span><span title="${esc(summary)}">${esc(summary)}</span></p>`;
+}
+function builderRuns(w) {
+  const runs=historyData.sessions.filter(run=>run.kind==="builder" && run.ref===keyOf(w)).reverse().map(run=>[
+    time(run.start),esc([run.host,run.model].filter(Boolean).join(" · ")),run.end ? esc(elapsed(Date.parse(run.end)-Date.parse(run.start))) : "—",
+    esc(run.ended ? human(run.ended) : "Outcome unknown"),money(run.cost)
+  ]);
+  return runs.length ? table(["Started","Host and model","Duration","Outcome","Cost"],runs) : blank("No builder runs recorded.");
+}
+function proofSummary(w) {
+  const passed=w.items.filter(item=>(item.verdicts.at(-1) || item.verdict)==="pass").length;
+  const strip=w.reviews.length ? `<div class="proof-strip" role="list" aria-label="Item verdicts by review">${w.reviews.map((r,i)=>`<div class="proof-review" role="listitem"><span>R${r.n}</span>
+    <div class="proof-cells">${w.items.map(item=>{
+      const verdict=item.verdicts[i], id=itemId(item.id);
+      return `<a class="${verdict==="pass" || verdict==="fail" ? verdict : "unjudged"}" href="#item-${esc(id)}" data-jump="item-${esc(id)}" aria-label="${esc(id)}, review ${r.n}, ${verdict ? human(verdict) : "not judged"}">${mark(verdict)}${esc(id.split(".").at(-1))}</a>`;
+    }).join("")}</div></div>`).join("")}</div>` : blank("No review verdicts recorded.");
+  return wrapPanel("Proof summary",strip,{classes:"proof-summary",extra:`<span class="meta">${passed}/${w.items.length} items pass · ${w.reviews.length} reviews · ${w.failed_reviews} failed</span>`});
+}
+function workPackageScreen(key) {
+  const w=packages[key];
+  if (!w) return missing();
+  const wait=w.waiting;
+  const warning=model.now.warnings.find(warning=>warning.ref===key);
+  const chains=model.milestones.filter(m=>m.longest_chain.includes(key));
+  const itemRows=w.items.map(item=>{
+    const dots=item.verdicts.map((verdict,index)=>{
+      const label=verdict==="pass" ? "Pass" : verdict==="fail" ? "Fail" : "Not judged";
+      const title=`Review ${index+1} · ${label}`;
+      return `<a class="${verdict==="pass" || verdict==="fail" ? verdict : "unjudged"}" href="#review-${index+1}" data-jump="review-${index+1}" aria-label="${title}">${mark(verdict) || "—"}</a>`;
+    }).join("");
+    const failures=item.verdicts.filter(v=>v==="fail").length;
+    return `<article class="proof-section ${item.verdicts.at(-1)==="fail" ? "item-failed" : ""}" id="item-${esc(itemId(item.id))}">
+      <div class="bar"><span class="mono">${esc(itemId(item.id))}</span>${dots ? `<div class="verdicts" aria-label="Verdicts in review order">${dots}</div>` : ""}${failures>1 ? tag("fail",`${failures} failed reviews`) : ""}</div>
+      <details class="statement-toggle" id="statement-${esc(itemId(item.id))}"><summary><span>${inline(item.statement)}</span></summary></details>
+      ${item.check ? `<pre aria-label="Check command"><code>${esc(item.check)}</code></pre>` : ""}
+      ${item.inspect ? `<p class="muted"><strong>Inspect</strong> ${inline(item.inspect)}</p>` : ""}
+      ${item.ask ? `<p class="muted reviewer-question"><strong>Reviewer question</strong> ${inline(item.ask)}</p>` : ""}
+    </article>`;
+  }).join("");
+  const reviews=w.reviews.length ? w.reviews.slice().reverse().map(r=>`<article class="proof-section review" id="review-${r.n}">
+    <div class="bar"><strong>Review ${r.n}</strong>${tag(r.verdict)}<span class="meta end">${time(r.at)}</span></div>
+    <p class="meta">${esc([r.host,r.model,r.tokens==null ? null : r.tokens.toLocaleString()+" input and output tokens"].filter(Boolean).join(" · "))}</p>
+    ${reviewSummary(r,w.items)}
+    ${r.findings.length ? `<ul>${r.findings.map(f=>`<li>${f.item ? `<a href="#item-${esc(itemId(f.item))}" data-jump="item-${esc(itemId(f.item))}">${esc(itemId(f.item))}</a> ` : ""}${esc(f.name)} ${f.repeat ? tag("fail","Repeated") : ""}</li>`).join("")}</ul>` : '<p class="meta">No named findings in the record.</p>'}
+    ${r.text ? `<div class="meta">${r.text_here ? asset(r.text,"Full review text") : "Full review text cleared"}</div>` : ""}
+    </article>`).join("") : blank("No reviews recorded.");
+  const paths=new Map();
+  for (const item of w.items) {
+    for (const e of item.evidence || []) {
+      if (!paths.has(e.path)) paths.set(e.path,{...e,items:[]});
+      paths.get(e.path).items.push(itemId(item.id));
+    }
+  }
+  const folder=model.project.evidence+"/"+w.module+"/"+w.id+"/";
+  const evidence=Array.from(paths.values(),e=>row(`<div class="fill"><div class="meta">${e.items.map(id=>`<a href="#item-${esc(id)}" data-jump="item-${esc(id)}">${esc(id)}</a>`).join(" · ")}</div>
+    ${asset(e.path,relativePath(folder,e.path),!e.here)}</div>`)).join("");
+  return back("#/module/"+w.module,moduleName(w.module))+
+    `<div class="detail-head"><h1 class="proof-title">${esc(w.name)} <span class="ref">${esc(key)}</span></h1>
+      <div class="bar">${tag(w.status)}${wait ? `<span class="reason">${explainWait(w)}</span>` : ""}
+      ${w.closes ? milestoneLink(w.closes,"Closes "+milestoneName(w.closes)) : ""}
+      ${chains.map(m=>link("#/milestone/"+m.label,"Needed for "+m.name)).join("")}</div>
+      ${wait?.detail ? `<p class="muted" style="margin-top:8px">${inline(wait.detail)}</p>` : ""}
+      ${warning ? `<p class="foreground warning-text" style="margin-top:8px">${esc(warning.text)}</p>` : ""}
+    </div>
+    ${w.reviews.length ? proofSummary(w) : ""}
+    ${!w.depends_on.length && !w.needed_by.length ? `<p class="meta section-gap">It depends on no other work package, and none depends on it.</p>` : `<div class="grid deps">
+    ${wrapPanel("Depends on",panelBody(w.depends_on.length ? w.depends_on.map(namedChip).join("") : '<p class="meta">Nothing</p>'))}
+    ${wrapPanel("Needed by",panelBody(w.needed_by.length ? w.needed_by.map(namedChip).join("") : '<p class="meta">Nothing</p>'))}</div>`}
+    <div class="grid proof-columns">
+      <div class="stack">${wrapPanel("Items",itemRows || blank("No items."),{extra:count(w.items.length)})}</div>
+      <div class="stack">
+        ${wrapPanel("Reviews",reviews,{extra:count(w.reviews.length)})}
+        ${historyPanel("Builder runs","runs")}
+        ${wrapPanel("Evidence",evidence || blank(model.project.here.evidence ? "No evidence paths recorded for these items." : unavailable),{classes:"path-list",extra:count(paths.size)})}
+      </div>
+    </div>`;
+}
+function docScreen(module,kind) {
+  const doc=model.documents[module+"/"+kind];
+  if (!doc) return missing();
+  return back("#/module/"+module,module)+header(human(kind))+
+    wrapPanel(module,`<div id="document-body">${blank("Loading document…")}</div>`);
+}
+async function readResponse(path) {
+  const response=await fetch(path,{cache:"no-cache"});
+  if (!response.ok) throw new Error("HTTP "+response.status);
+  return response;
+}
+const contentUrl = path => "content/"+path.split("/").map(encodeURIComponent).join("/");
+function getHistory() {
+  if (!historyRequest) {
+    const request=readResponse("history.json").then(response=>response.json());
+    historyRequest=request;
+    request.then(data=>{ if (historyRequest===request) historyData=data; },
+                 ()=>{ if (historyRequest===request) historyRequest=undefined; });
+  }
+  return historyRequest;
+}
+function historyPage(view) {
+  return header(human(view),view==="retro" ? "Delivery and plan growth for closed milestones." : view==="machinery" ? "Agents, tokens and cost, then the machine they run on and the merge queue." : "")+
+    `<div class="notice desktop-note">${secondary}</div><div data-history-view="${view}"></div>`;
+}
+async function loadHistoryInto(target) {
+  if (!target || target.dataset.loaded) return;
+  const view=target.dataset.historyView;
+  const key=location.hash.split("/")[2];
+  if ((view==="timeline" || view==="runs") && !model.project.here.history) {
+    target.innerHTML=blank(unavailable);
+    return;
+  }
+  target.dataset.loaded="pending";
+  if (!historyData) target.innerHTML=blank("Loading history…");
+  try {
+    await getHistory();
+    if (!target.isConnected) return;
+    const bodies={machinery:machineryBody,retro:retroBody,timeline:timelineBody,runs:()=>builderRuns(packages[key]),session:()=>sessionBody(key)};
+    target.innerHTML=bodies[view]();
+    target.dataset.loaded="true";
+  } catch {
+    if (!target.isConnected) return;
+    delete target.dataset.loaded;
+    target.innerHTML=panelBody(`<p class="muted">History could not load. <button data-history-retry>Retry</button></p>`);
+  }
+}
+async function loadDocument(doc,anchor) {
+  const target=byId("document-body");
+  if (!target) return;
+  if (!documentRequests.has(doc.path)) {
+    documentRequests.set(doc.path,readResponse(contentUrl(doc.path)).then(response=>response.text()));
+  }
+  try {
+    const text=await documentRequests.get(doc.path);
+    if (!target.isConnected) return;
+    target.innerHTML=panelBody(markdown(text,doc.path));
+    if (anchor) jump(decodeURIComponent(anchor));
+  } catch {
+    documentRequests.delete(doc.path);
+    if (target.isConnected) target.innerHTML=blank("Document could not load.");
+  }
+}
+function missing() {
+  return header("Page not found")+link("#/now","Back to Now");
+}
+
+const routeStates=new Map();
+let pendingModel, connected=false;
+let focusBeforeUpdate=null;
+let popoverTrigger=null, popoverTimer, suppressPopover=false, selectedMapKey=null;
+let lastChange=null;
+const popover=byId("chip-popover");
+const announce=text=>{ byId("announcements").textContent=text; };
+history.scrollRestoration="manual";
+
+function focusTarget(target,scroll=false) {
+  if (!target) return;
+  if (!target.matches("a,button,select,summary,[tabindex]")) target.tabIndex=-1;
+  target.focus({preventScroll:true});
+  if (scroll) target.scrollIntoView({block:"start",inline:"nearest"});
+}
+function jump(id) {
+  const target=byId(id);
+  if (!target) return false;
+  for (let parent=target.parentElement;parent;parent=parent.parentElement) {
+    if (parent instanceof HTMLDetailsElement) parent.open=true;
+  }
+  focusTarget(target,true);
+  return true;
+}
+function focusToken(element) {
+  if (!element || element===document.body) return null;
+  if (element.id) return {id:element.id};
+  const field=element.matches("summary") ? "summary" : element.dataset.wp ? "[data-wp]" :
+    element.matches("[href]") ? "[href]" : null;
+  if (!field) return null;
+  const scope=element.parentElement.closest("[id]")?.id || "main";
+  const value=element.dataset.wp || element.getAttribute("href") || element.textContent.trim();
+  const read=e=>e.dataset.wp || e.getAttribute("href") || e.textContent.trim();
+  const peers=[...byId(scope).querySelectorAll(field)].filter(e=>read(e)===value);
+  return {scope,field,value,index:peers.indexOf(element)};
+}
+function findFocus(token) {
+  if (!token) return null;
+  if (token.id) return byId(token.id);
+  const read=e=>e.dataset.wp || e.getAttribute("href") || e.textContent.trim();
+  return [...(byId(token.scope)?.querySelectorAll(token.field) || [])].filter(e=>read(e)===token.value)[token.index];
+}
+function currentView() {
+  const active=document.activeElement;
+  return {x:scrollX,y:scrollY,map:byId("map-region")?.scrollLeft || 0,focus:focusToken(popover.contains(active) ? popoverTrigger : active),
+    disclosures:[...main.querySelectorAll("details")].map(d=>[focusToken(d.querySelector("summary")),d.open]).filter(([token])=>token)};
+}
+function restoreView(view) {
+  for (const [token,open] of view.disclosures) {
+    const disclosure=findFocus(token)?.closest("details");
+    if (disclosure) disclosure.open=open;
+  }
+  window.scrollTo(view.x,view.y);
+  if (byId("map-region")) byId("map-region").scrollLeft=view.map;
+  const target=findFocus(view.focus);
+  focusTarget(target || main.querySelector("h1"));
+}
+function navigate(hash) {
+  if (hash===(location.hash || "#/now")) {
+    const [,section,segment,detail]=hash.split("/");
+    if (section==="plan" && segment) jump(segment);
+    else focusTarget(main.querySelector("h1"),true);
+    return;
+  }
+  if (previousRoute) routeStates.set(previousRoute,currentView());
+  history.pushState(null,"",hash);
+  render();
+}
+function connectionStatus() {
+  const status=connected && navigator.onLine ? "Live" : "Disconnected, last update";
+  byId("snapshot").innerHTML=`<i class="dot ${status==="Live" ? "done" : ""}" aria-hidden="true"></i><strong>${status}</strong><span>${time(model.project.built_at)}</span>`;
+}
+function render({force=false,restore=false}={}) {
+  if (!model && !pendingModel) return;
+  if (/^#\/now\/milestone\//.test(location.hash)) history.replaceState(null,"",location.hash.replace("#/now/milestone/","#/milestone/"));
+  const hash=location.hash || "#/now";
+  const refresh=hash===previousRoute;
+  const active=document.activeElement;
+  if (pendingModel && refresh && !force && (active?.closest("#main .panel") || popover.matches(":popover-open") || byId("file-view").open)) {
+    if (!focusBeforeUpdate) focusBeforeUpdate=focusToken(active);
+    byId("show-updates").hidden=false;
+    const updates=pendingModel.now.recent_events.filter(item=>!lastChange || item.at>lastChange);
+    announce(updates.length ? `${updates.length} new changes. ${human(updates[0].kind)} ${updates[0].ref || ""}. Choose Updated, show changes.` :
+      "Updated project data available. Choose Updated, show changes to keep your place.");
+    return;
+  }
+  const view=refresh ? currentView() : restore ? routeStates.get(hash) : null;
+  if (refresh && focusBeforeUpdate && (active===byId("show-updates") || active===document.body)) view.focus=focusBeforeUpdate;
+  if (!refresh && restore && previousRoute) routeStates.set(previousRoute,currentView());
+  const updated=Boolean(pendingModel && model);
+  if (pendingModel) applyModel();
+  focusBeforeUpdate=null;
+  byId("show-updates").hidden=true;
+  closePopover();
+  const [,section,segment,detail,anchor]=hash.split("/");
+  const area=areas.includes(section) ? section : ["module","wp","doc","milestone"].includes(section) ? "plan" : section==="session" ? "machinery" : "now";
+  if (areas.includes(section)) lastArea=section;
+  if (section==="plan") chosen=segment==="map" && detail ? detail : model.milestones.find(m=>!m.closed)?.label || "";
+  if (section==="plan" && segment==="map" && detail==="all") chosen="";
+  nav(area);
+  const screens={now:nowScreen,plan:()=>planScreen(segment),delivery:deliveryScreen,
+    machinery:()=>historyPage("machinery"),retro:()=>historyPage("retro"),session:()=>back("#/machinery","Machinery")+historyPage("session"),
+    milestone:()=>milestoneScreen(segment),module:()=>moduleScreen(segment),wp:()=>workPackageScreen(segment),doc:()=>docScreen(segment,detail)};
+  main.innerHTML=(Object.hasOwn(screens,section) ? screens[section] : missing)();
+  document.title=(section==="milestone" ? milestoneName(segment) : section==="wp" ? (packages[segment]?.name || segment) : section==="module" ? moduleName(segment) : human(section || "now"))+" · "+model.project.name;
+  focusedMapKey=hoveredMapKey=selectedMapKey=null;
+  drawMap();
+  previousRoute=hash;
+  connectionStatus();
+  if (view) restoreView(view);
+  else {
+    window.scrollTo(0,0);
+    focusTarget(main.querySelector("h1"));
+    if (section==="plan" && segment) jump(segment);
+  }
+  if (["machinery","retro","session"].includes(section)) loadHistoryInto(main.querySelector("[data-history-view]"));
+  if (section==="doc" && byId("document-body")) loadDocument(model.documents[segment+"/"+detail],view ? null : anchor);
+  if (refresh && updated) announce("Updates shown. Your place on this page was kept.");
+  lastChange=model.now.recent_events[0]?.at || lastChange;
+}
+function showPopover(trigger,openLink=false) {
+  const key=trigger.dataset.wp;
+  const w=packages[key];
+  if (!w || suppressPopover) return;
+  clearTimeout(popoverTimer);
+  if (popoverTrigger!==trigger || !popover.matches(":popover-open")) {
+    popoverTrigger=trigger;
+    const onChain=model.milestones.filter(m=>m.longest_chain.includes(key)).map(m=>m.name);
+    popover.innerHTML=`<p class="meta">${moduleLink(w.module)} · <span class="ref">${esc(w.id)}</span></p><p><strong>${esc(w.name)}</strong></p>
+      <p>${tag(w.status)} ${w.waiting ? explainWait(w) : ""}
+      ${(w.waiting?.since || w.status_since) ? " · since "+time(w.waiting?.since || w.status_since) : ""}</p>
+      <p class="meta">${w.depends_on.length} dependencies · ${w.needed_by.length} needed by
+      ${w.closes ? " · closes "+esc(milestoneName(w.closes)) : ""}${onChain.length ? " · needed for "+esc(onChain.join(", ")) : ""}</p>
+      <a class="popover-open-link" href="#/wp/${esc(key)}">Open work package</a>`;
+    if (!popover.matches(":popover-open")) popover.showPopover();
+    const r=trigger.getBoundingClientRect();
+    const bottomBar=byId("mobile");
+    const viewBottom=getComputedStyle(bottomBar).display==="none" ? innerHeight : bottomBar.getBoundingClientRect().top;
+    const below=r.bottom;
+    popover.style.left=Math.max(8,Math.min(r.left,innerWidth-popover.offsetWidth-8))+"px";
+    popover.style.top=Math.max(8,below+popover.offsetHeight<=viewBottom-8 ? below : Math.min(r.top-popover.offsetHeight,viewBottom-popover.offsetHeight-8))+"px";
+  }
+  if (openLink) focusTarget(popover.querySelector(".popover-open-link"));
+}
+function closePopover(returnFocus=false) {
+  clearTimeout(popoverTimer);
+  if (popover.matches(":popover-open")) popover.hidePopover();
+  if (returnFocus && popoverTrigger?.isConnected) {
+    suppressPopover=true;
+    focusTarget(popoverTrigger);
+    suppressPopover=false;
+  }
+  popoverTrigger=null;
+}
+function queuePopoverClose() {
+  clearTimeout(popoverTimer);
+  popoverTimer=setTimeout(()=>{
+    if (!popover.matches(":hover") && !popover.contains(document.activeElement) &&
+        popoverTrigger!==document.activeElement) closePopover();
+  },180);
+}
+function moveWithin(region,event) {
+  const map=region.id==="map-region";
+  const active=document.activeElement;
+  const keys=[...region.querySelectorAll(map ? ".map-chip" : ".session")];
+  const i=keys.indexOf(active);
+  let target;
+  if (event.key==="Home") target=keys[0];
+  else if (event.key==="End") target=keys.at(-1);
+  else if (i<0) target=keys[0];
+  else if (map && ["ArrowUp","ArrowDown"].includes(event.key)) {
+    const lane=active.closest(".map-lane");
+    const lanes=[...region.querySelectorAll(".map-lane")].filter(l=>l.querySelector(".map-chip"));
+    const next=lanes[lanes.indexOf(lane)+(event.key==="ArrowUp" ? -1 : 1)];
+    const index=[...lane.querySelectorAll(".map-chip")].indexOf(active);
+    if (next) {
+      const chips=next.querySelectorAll(".map-chip");
+      target=chips[Math.min(index,chips.length-1)];
+    }
+  } else target=keys[i+(["ArrowUp","ArrowLeft"].includes(event.key) ? -1 : 1)];
+  event.preventDefault();
+  if (target) {
+    region.tabIndex=-1;
+    target.scrollIntoView({block:"nearest",inline:"center"});
+    focusTarget(target);
+  }
+}
+async function showFile(path) {
+  const dialog=byId("file-view");
+  const full=(model.project.source_root+"/"+path).replace(/\/\.\//g,"/");
+  const local='<p class="muted">File unavailable here. Open this path in your checkout.</p>';
+  const available=availableEvidence.has(path) ||
+    [model.project.plans,model.project.evidence].some(folder=>path.startsWith(folder+"/"));
+  const url=contentUrl(path);
+  const isText=/\.(md|json|log|txt|csv)$/i.test(path);
+  let contents=local;
+  if (available && isText) contents='<p class="muted">Loading evidence…</p>';
+  else if (available && /\.(png|jpe?g|webp|gif)$/i.test(path)) contents=`<img alt="${esc(path)}" src="${esc(url)}">`;
+  else if (available) contents=`<p><a download href="${esc(url)}">Download file</a></p>`;
+  dialog.innerHTML=`<header><div class="fill"><h2 id="file-title">${esc(path.split("/").at(-1))}</h2><p class="meta path">${esc(path)}</p></div><form method="dialog"><button>Close</button></form></header>`
+    +`<div data-file-content>${contents}</div><p class="meta path" style="margin-top:8px">${esc(full)}</p>`;
+  dialog.showModal();
+  if (!available || !isText) return;
+  const target=dialog.querySelector("[data-file-content]");
+  try {
+    const response=await readResponse(url);
+    const text=await response.text();
+    target.innerHTML=`<pre>${esc(text)}</pre>`;
+  } catch {
+    target.innerHTML=local;
+  }
+}
+
+
+document.addEventListener("click",event=>{
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const jumped=event.target.closest("[data-jump]");
+  const file=event.target.closest("[data-file]");
+  const retry=event.target.closest("[data-history-retry]");
+  const mapChip=event.target.closest(".map-chip");
+  const navLink=event.target.closest('a[href^="#/"]');
+  if (jumped) { event.preventDefault(); jump(jumped.dataset.jump); }
+  else if (file) { event.preventDefault(); showFile(file.dataset.file); }
+  else if (retry) loadHistoryInto(retry.closest("[data-history-view]"));
+  else if (event.target.closest("[data-board-lines]")) {
+    mapAllLines=event.target.closest("[data-board-lines]").dataset.boardLines==="all";
+    try { localStorage.setItem(linesKey,mapAllLines ? "all" : "selected"); } catch {}
+    for (const button of main.querySelectorAll("[data-board-lines]")) button.setAttribute("aria-pressed",String((button.dataset.boardLines==="all")===mapAllLines));
+    drawMap();
+  }
+  else if (event.target.closest("[data-board-mode]")) { mapAhead=event.target.closest("[data-board-mode]").dataset.boardMode==="ahead"; render({force:true,restore:true}); }
+  else if (mapChip) {
+    event.preventDefault();
+    selectedMapKey=mapChip.dataset.wp;
+    drawMap();
+    showPopover(mapChip,event.detail===0);
+  } else if (navLink) {
+    event.preventDefault();
+    navigate(navLink.hash);
+  }
+});
+document.addEventListener("pointerdown",event=>{
+  const more=byId("mobile").querySelector("details");
+  if (more?.open && !more.contains(event.target)) more.open=false;
+  if (!popover.contains(event.target) && !event.target.closest("[data-wp]")) closePopover();
+});
+document.addEventListener("keydown",event=>{
+  if (event.key==="Escape") {
+    if (popover.matches(":popover-open")) {
+      event.preventDefault();
+      closePopover(popover.contains(document.activeElement));
+      selectedMapKey=null;
+      drawMap();
+    } else {
+      const more=byId("mobile").querySelector("details[open]");
+      if (more) { more.open=false; focusTarget(more.querySelector("summary")); }
+    }
+  }
+  if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End"].includes(event.key)) {
+    const region=event.target.closest("#map-region,#timeline-region");
+    if (region) moveWithin(region,event);
+  }
+});
+main.addEventListener("change",event=>{
+  if (event.target.id==="milestone-select") navigate("#/plan/map/"+(event.target.value || "all"));
+  if (event.target.id==="timeline-window") {
+    timelineHours=Number(event.target.value);
+    byId("timeline-chart").innerHTML=timeline();
+  }
+});
+let allCommitsRequest;
+main.addEventListener("toggle",async event=>{
+  const target=event.target;
+  if (!target.open) return;
+  if (target.matches("[data-history-panel]")) loadHistoryInto(target.querySelector("[data-history-view]"));
+  if (!target.dataset.changes || target.dataset.loaded) return;
+  target.dataset.loaded="true";
+  let remaining;
+  try {
+    if (target.dataset.changes==="all") {
+      allCommitsRequest ||= readResponse("plan-commits.json").then(r=>r.json());
+      remaining=(await allCommitsRequest).slice();
+    } else remaining=model.plan_changes.slice(12);
+  } catch {
+    allCommitsRequest=null;
+    delete target.dataset.loaded;
+    target.insertAdjacentHTML("beforeend",blank("Commits could not load. Close and reopen to retry."));
+    return;
+  }
+  if (!target.isConnected || !remaining.length) return;
+  const button=document.createElement("button");
+  const append=()=>{
+    button.insertAdjacentHTML("beforebegin",changesList(remaining.splice(0,12)));
+    button.textContent="Show next "+Math.min(12,remaining.length);
+    if (!remaining.length) button.remove();
+  };
+  button.addEventListener("click",append);
+  target.append(button);
+  append();
+},true);
+main.addEventListener("pointerover",event=>{
+  const node=event.target.closest("[data-wp]");
+  if (!node || node.contains(event.relatedTarget) || event.pointerType==="touch") return;
+  if (node.matches(".map-chip")) { hoveredMapKey=node.dataset.wp; drawMap(); }
+  showPopover(node);
+});
+main.addEventListener("pointerout",event=>{
+  const node=event.target.closest("[data-wp]");
+  if (!node || node.contains(event.relatedTarget)) return;
+  if (node.matches(".map-chip")) { hoveredMapKey=null; drawMap(); }
+  queuePopoverClose();
+});
+main.addEventListener("focusin",event=>{
+  const active=event.target;
+  if (active.matches(".map-chip")) {
+    focusedMapKey=active.dataset.wp;
+    byId("map-region").tabIndex=-1;
+    drawMap();
+  }
+  if (active.matches(".session")) byId("timeline-region").tabIndex=-1;
+  if (active.matches("[data-wp]")) showPopover(active);
+  if (matchMedia("(max-width:760px)").matches) {
+    const r=active.getBoundingClientRect();
+    const bottom=byId("mobile").getBoundingClientRect().top;
+    if (r.bottom>bottom-8 && r.height<innerHeight/2) {
+      window.scrollBy(0,r.bottom-bottom+12);
+      if (popoverTrigger===active) { closePopover(); showPopover(active); }
+    }
+  }
+});
+main.addEventListener("focusout",event=>{
+  const region=event.target.closest("#map-region,#timeline-region");
+  if (region && !region.contains(event.relatedTarget)) region.tabIndex=0;
+  if (event.target.matches(".map-chip")) { focusedMapKey=null; drawMap(); }
+  queuePopoverClose();
+});
+popover.addEventListener("pointerenter",()=>clearTimeout(popoverTimer));
+popover.addEventListener("pointerleave",queuePopoverClose);
+popover.addEventListener("focusout",queuePopoverClose);
+byId("show-updates").addEventListener("click",()=>{ if (pendingModel) render({force:true}); });
+window.addEventListener("popstate",()=>{ if (location.hash!==previousRoute) render({restore:true}); });
+window.addEventListener("hashchange",()=>{ if (location.hash!==previousRoute) render(); });
+window.addEventListener("resize",drawMap);
+window.addEventListener("offline",()=>{ if (model) connectionStatus(); });
+window.addEventListener("online",()=>{ if (model) connectionStatus(); });
+function applyModel() {
+  const first=!model;
+  model=pendingModel;
+  pendingModel=undefined;
+  historyData=historyRequest=allCommitsRequest=undefined;
+  documentRequests.clear();
+  modules=Object.fromEntries(model.modules.map(m=>[m.id,m]));
+  packages=model.work_packages;
+  availableEvidence=new Set();
+  for (const w of Object.values(packages)) {
+    for (const review of w.reviews) if (review.text_here) availableEvidence.add(review.text);
+    for (const item of w.items) {
+      for (const evidence of item.evidence || []) if (evidence.here) availableEvidence.add(evidence.path);
+    }
+  }
+  snapshot=Date.parse(model.project.built_at || model.project.snapshot_at);
+  const seenKey="orchestrate-last-seen:"+model.project.source_root;
+  const opened=Math.min(Date.now(),snapshot);
+  if (first) seen=opened-day;
+  try {
+    const previous=Number(localStorage.getItem(seenKey));
+    if (first && previous>0 && previous<opened) seen=previous;
+    localStorage.setItem(seenKey,String(opened));
+  } catch { /* The page still works when storage is disabled. */ }
+  byId("brand").innerHTML=icon("project")+esc(model.project.name);
+}
+let fetching=false, fetchAgain=false;
+async function refreshModel() {
+  fetchAgain=true;
+  if (fetching) return;
+  fetching=true;
+  try {
+    while (fetchAgain) {
+      fetchAgain=false;
+      pendingModel=await (await readResponse("model.json")).json();
+      render();
+    }
+  } catch (error) {
+    if (!model) main.innerHTML=header("Project could not load",error.message);
+    console.error(error);
+  } finally {
+    fetching=false;
+    if (fetchAgain) refreshModel();
+  }
+}
+if (!location.hash) history.replaceState(null,"","#/now");
+const events=new EventSource("/events");
+events.addEventListener("open",()=>{
+  connected=true;
+  if (model) connectionStatus();
+  refreshModel();
+});
+events.addEventListener("changed",refreshModel);
+events.addEventListener("error",()=>{
+  connected=false;
+  if (model) connectionStatus();
+  else main.innerHTML=header("Project disconnected","Waiting for the local server to reconnect.");
+});
+</script>
+</body>
+</html>

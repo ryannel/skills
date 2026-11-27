@@ -199,7 +199,7 @@ Each field of the done-when file has one owner at any time, and the script refus
 
 | Who | What they change |
 |---|---|
-| Planner | The work packages, their items and how each is proved. The script saves new items as the approved ones and clears the old proof. |
+| Planner | The work packages, their items, how each is proved and the `closes` milestone mark. The script saves new items as the approved ones and clears the old proof. |
 | Builder | The work package's status from Not Started to In Progress, and each item's result and evidence. |
 | Reviewer | Each item's verdict, and the review's findings. |
 | The script | Every other status, the counts of failed reviews, the record file and the status page. |

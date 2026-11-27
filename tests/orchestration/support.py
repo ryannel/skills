@@ -325,6 +325,8 @@ elif role == "review":
             (ev / f"{mid}-review").mkdir(exist_ok=True)
             (ev / f"{mid}-review" / "shot.png").write_bytes(f"PNG {n}".encode())
             text += f"; see [the shot]({mid}-review/shot.png)"
+        if summary := os.environ.get("FAKE_REVIEW_SUMMARY"):
+            text = "## Summary\\n" + summary + "\\n\\n## Findings\\n" + text
         (ev / f"{mid}-review.md").write_text(text)
         if mode == "overreach":
             (cwd / "src.txt").write_text("fixed it myself")
@@ -350,6 +352,11 @@ elif role == "plan":
         reply = "PLANNED: docs/plans/WATER/RECORD.json"
     elif mode == "progress" or (mode == "late" and turn == 1):
         reply = "I've read the vision and scope document. Next I'll write the PAY design and its done-when file."
+    elif mode == "milestone":
+        d = json.loads(path.read_text())
+        d["work_packages"][-1]["closes"] = os.environ["FAKE_CLOSES"]
+        path.write_text(json.dumps(d))
+        reply = "PLANNED: docs/plans/WATER/DONE.json"
     elif mode in ("replan", "replan_counted"):  # re-plans WATER WP1; `replan_counted` also does the bookkeeping
         water = cwd / "docs/plans/WATER/DONE.json"
         d = json.loads(water.read_text())

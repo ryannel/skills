@@ -115,6 +115,7 @@ from statistics import median
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import codex_quota  # noqa: E402  (beside this file)
 import delivery_history  # noqa: E402  (beside this file)
+import observability_model  # noqa: E402
 
 
 def relay_scripts() -> Path | None:
@@ -646,7 +647,8 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
     if not old_ok and path.exists():
         if committed := committed_evidence(worktree, text):
             raise SystemExit(evidence_refusal(worktree, committed))
-        link_evidence(worktree, out["evidence"], remember=True)
+        if not SERVING_READ_ONLY:
+            link_evidence(worktree, out["evidence"], remember=True)
     if problems:
         message = "ORCHESTRATE.md has missing, unfilled or invalid fields: " + "; ".join(problems)
         if strict:
@@ -655,6 +657,9 @@ def profile(worktree: Path, strict: bool = False, missing_ok: bool = False, flat
             print("warning: " + message, file=sys.stderr)
     LAST_PROFILE["prof"] = out
     return out
+
+
+SERVING_READ_ONLY = False  # serve uses the same readers without creating local state or updating caches
 
 
 LAST_PROFILE: dict = {}  # the settings this process read last, for `other_host` where a caller has none to hand
@@ -845,7 +850,8 @@ def git_common_dir(worktree: Path) -> str:
 
 def loop_dir(worktree: Path) -> Path:
     path = Path(git_common_dir(worktree)) / "orchestrate"
-    path.mkdir(parents=True, exist_ok=True)
+    if not SERVING_READ_ONLY:
+        path.mkdir(parents=True, exist_ok=True)
     return path
 
 
@@ -1520,7 +1526,7 @@ def is_count(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
-def validate(done, module: str = "") -> list[str]:
+def validate(done, module: str = "", milestones: dict | None = None) -> list[str]:
     """The structural problems that would let a work package through without proof, or leave the queue stuck."""
     if isinstance(done, dict) and done.get("unreadable"):
         return [done["unreadable"]]
@@ -1581,6 +1587,8 @@ def validate(done, module: str = "") -> list[str]:
                         or not n["what"].strip():
                     problems.append(f"{iid}: needs {n!r} should be an object like {{\"type\": \"access\", \"what\": "
                                     f"\"approve Computer Use for IINA\"}}, with type one of {', '.join(NEEDS_TYPES)}")
+        if "closes" in m and (problem := milestone_mark_problem(mid, m["closes"], milestones)):
+            problems.append(problem)
         if "alone" in m and not isinstance(m["alone"], bool):
             problems.append(f"{mid}: alone {m['alone']!r} should be true or false")
         deps = m.get("depends_on", [])
@@ -2165,6 +2173,33 @@ BUILDER_FIELDS = {"status"}, {"builder_result", "evidence"}
 REVIEWER_FIELDS = {"status", "findings"}, {"verdict", "review"}
 
 
+def milestone_mark_problem(mid: str, label, milestones: dict | None) -> str | None:
+    if not isinstance(label, str) or not MILESTONE_SLUG.fullmatch(label):
+        return f"{mid}: closes must be a milestone slug, such as first-release"
+    if milestones is not None and label not in milestones:
+        return f"{mid}: closes names milestone/{label}, which isn't in the vision and scope document"
+    return None
+
+
+def milestone_mark_problems(doc: dict, milestones: dict) -> list[str]:
+    rows = doc.get("work_packages") if isinstance(doc, dict) else None
+    return [problem for m in rows if isinstance(m, dict) and "closes" in m
+            and (problem := milestone_mark_problem(m.get("id") or "work package", m["closes"], milestones))] \
+        if isinstance(rows, list) else []
+
+
+def milestone_mark_changes(before: dict | None, after: dict | None) -> list[str]:
+    """The work packages whose milestone mark was added, removed or changed."""
+    def marks(doc):
+        rows = doc.get("work_packages") if isinstance(doc, dict) else None
+        return {m["id"]: m["closes"] for m in rows
+                if isinstance(m, dict) and isinstance(m.get("id"), str) and "closes" in m} \
+            if isinstance(rows, list) else {}
+    old, new = marks(before), marks(after)
+    return [f"{mid}: changed closes, which only a planner can set through plan"
+            for mid in sorted(old.keys() | new.keys()) if mid not in old or mid not in new or old[mid] != new[mid]]
+
+
 def delta_problems(before: dict | None, after: dict, role: str, mid: str | None = None,
                    upstream: list | dict | None = None) -> list[str]:
     """What the role changed in a done-when file that it doesn't own. `upstream` holds other versions the file may
@@ -2331,6 +2366,7 @@ def project(worktree: Path, prof: dict, ref: str) -> dict[str, dict]:
     (as they stand only in a repository that has never had a loop record)."""
     out = {}
     legacy = None  # asked only when a module has no record
+    milestones = observability_model.milestones_in(show(worktree, ref, project_file(prof, "vision")) or "")
     for stem in modules_at(worktree, prof, ref):
         key = stem.upper()
         try:
@@ -2340,7 +2376,7 @@ def project(worktree: Path, prof: dict, ref: str) -> dict[str, dict]:
         design = text_hash(show(worktree, ref, design_rel(prof, stem)))
         old = old_names_in_doc(doc)
         problems = [f"{done_rel(prof, stem)} still uses names from before 3.0 ({', '.join(old)}); run "
-                    f"`migrate`"] if old else validate(doc, key)
+                    f"`migrate`"] if old else validate(doc, key, milestones)
         rec_text = show(worktree, ref, record_rel(prof, stem))
         rec = None
         if rec_text is not None:
@@ -5691,7 +5727,7 @@ def plan_forecast(acc: dict, history: list[dict], open_ms: list[dict], recent: d
 def quota_report(worktree: Path | None, budget_s: float = QUOTA_BUDGET_S, reading: dict | None = None) -> dict | None:
     """The full quota picture: the account (codex_quota), the script's own and other use this window, what work packages
     cost, and the plan forecast."""
-    reading = reading or codex_quota.read(budget_s=budget_s, home=CODEX_HOME)
+    reading = reading or codex_quota.read(budget_s=budget_s, home=CODEX_HOME, write_cache=not SERVING_READ_ONLY)
     acc = codex_quota.account(reading)
     if not acc:
         return None
@@ -8098,7 +8134,7 @@ def host_reading(host: str, refresh: bool = False) -> dict | None:
     """`host`'s latest quota reading: the stored one while it is fresh, else read now from the host itself, which
     costs no model call on any host. A failed read keeps the last good one, with the error beside it."""
     stored = host_quota.latest(host)
-    if os.environ.get("ORCHESTRATE_NO_QUOTA_READ") or not refresh and stored and \
+    if SERVING_READ_ONLY or os.environ.get("ORCHESTRATE_NO_QUOTA_READ") or not refresh and stored and \
             time.time() - (stored.get("read_at") or 0) < QUOTA_READ_S:
         return stored
     if not host_installed(host):
@@ -9378,6 +9414,7 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
              session=out.get("session"))
 
     passed = verdict in ("PASS", "DESIGN OK")
+    summary = " ".join(observability_model.section(review_text or "", "summary").split("\n\n", 1)[0].split())
 
     stale: dict = {}
     counts: dict = {}  # the work package's counts as the script left them, read back from `change`
@@ -9464,7 +9501,8 @@ def review_turn(a: argparse.Namespace, locked: bool, undo: list) -> dict:
             e.setdefault("reviews", []).append({"verdict": "pass" if passed else "fail", "commit": start,
                                                 "review": review_path,
                                                 "items": {i["id"]: i.get("verdict", "") for i in reviewed["items"]},
-                                                **({"findings": found} if found else {}), **launch, "at": now()})
+                                                **({"findings": found} if found else {}),
+                                                **({"summary": summary} if summary else {}), **launch, "at": now()})
             if passed:
                 e["done"] = {"by": "review", "commit": start, "review": review_path,
                                  "checked": ready_record(e).get("checked"), "at": now()}
@@ -10076,6 +10114,13 @@ def cmd_plan(a: argparse.Namespace) -> None:
                  for p in changed if p == status_rel(prof)]
     problems += flat_names(prof, changed)
     problems += plan_checks(tree, prof, changed)
+    vision_rel = project_file(prof, "vision")
+    milestones = observability_model.milestones_in((file_here(tree, vision_rel) or b"").decode(errors="replace"))
+    if vision_rel in changed:
+        for stem in modules_here(tree, prof):
+            if done_rel(prof, stem) not in changed:
+                problems += [f"{stem}: {problem}" for problem in
+                             milestone_mark_problems(load_done(tree, stem, prof), milestones)]
     # a planner limited to a module leaves the other modules' folders to their own planners, which may be running now
     known = {m.upper() for m in modules_at(tree, prof, start)} if scope else set()
     head = prof["plans"].rstrip("/") + "/"
@@ -10093,8 +10138,9 @@ def cmd_plan(a: argparse.Namespace) -> None:
             except json.JSONDecodeError as e:
                 problems.append(f"{p} isn't valid JSON: {e}")
                 continue
-            problems += [f"{stem}: {x}" for x in validate(doc, stem.upper())]
-            if not validate(doc, stem.upper()):
+            invalid = validate(doc, stem.upper(), milestones)
+            problems += [f"{stem}: {x}" for x in invalid]
+            if not invalid:
                 problems += [f"{stem}: {x}" for x in delta_problems(before.get(stem), doc, "plan")]
             modules.append(stem)
     if problems:
@@ -11274,6 +11320,15 @@ def cmd_merge(a: argparse.Namespace) -> None:
             f"branch started. Nothing merged. Rebase onto {base_ref(prof)}, taking its copy of the plan files, read "
             "the items again, change your work to meet them as they now stand, then merge"))
     touched = git(worktree, "diff", "--name-only", base, "HEAD").stdout.split() if base else []
+    for path in touched:
+        where = module_of(prof, path)
+        if where and where[1] == "done":
+            try:
+                before, after = (json.loads(show(worktree, at, path) or "null") for at in (base, "HEAD"))
+            except json.JSONDecodeError:
+                continue  # stale_definitions handles an unreadable done-when file
+            if problems := milestone_mark_changes(before, after):
+                own_status("FAILED", 1, detail=f"{path}: " + "; ".join(problems))
     warnings = plan_checks(worktree, prof, touched)
     warnings += [f"{p} changed; the script writes it after each record it merges, so this change will be overwritten"
                  for p in touched if p == status_rel(prof)]
@@ -12949,18 +13004,95 @@ def flow_text(f: dict) -> list[str]:
     return out
 
 
+def flow_reading(worktree: Path, prof: dict, hours: float | None = None) -> tuple[dict, dict]:
+    state = read_json_file(loop_dir(worktree) / WATCH_FILE) or {}
+    look = watch_look(worktree, prof, dict(state.get("since") or {}), fetch=False)
+    start = look["stamp"] - (FLOW_HOURS if hours is None else hours) * 3600
+    if hours is None:
+        start = float(state.get("summary_since") or start)
+    return watch_summary(worktree, prof, look, start, FLOW_HOURS if hours is None else hours), look
+
+
 def cmd_flow(a: argparse.Namespace) -> None:
     worktree = Path(a.worktree).resolve()
     if a.since is not None and not (0 < a.since < float("inf")):
         emit("INVALID", problems=["--since must be a positive number of hours"])
-    prof = profile(worktree)
-    state = read_json_file(loop_dir(worktree) / WATCH_FILE) or {}
-    look = watch_look(worktree, prof, dict(state.get("since") or {}), fetch=False)
-    hours = a.since if a.since is not None else FLOW_HOURS
-    start = look["stamp"] - hours * 3600
-    if a.since is None:
-        start = float(state.get("summary_since") or start)
-    print(json.dumps(watch_summary(worktree, prof, look, start, hours)))
+    flow, _ = flow_reading(worktree, profile(worktree), a.since)
+    print(json.dumps(flow))
+
+
+def cmd_serve(a: argparse.Namespace) -> None:
+    import observability_server
+
+    worktree = Path(a.worktree).resolve()
+    where = git(worktree, "rev-parse", "--show-toplevel")
+    if where.returncode or Path(where.stdout.strip()).resolve() != worktree:
+        raise SystemExit("error: --worktree must name the top of a Git checkout")
+    if not 0 <= a.port <= 65535:
+        raise SystemExit("error: --port must be from 0 to 65535")
+    common = Path(git_common_dir(worktree))
+    state = common / "orchestrate"
+    git_dir = Path(git(worktree, "rev-parse", "--absolute-git-dir").stdout.strip())
+    folder = delivery_history.project_dir(Path(repository_of(str(common))))
+
+    def content(prof):
+        return observability_server.Content(worktree, common, prof["plans"], prof["evidence"])
+
+    def sources():
+        prof = LAST_PROFILE["prof"]
+        folders = dict(content(prof).folders())
+        plans = folders.get(Path(prof["plans"]))
+        evidence = folders.get(Path(prof["evidence"]))
+        # State shares its folder with checkouts, build caches, logs and captures. Poll the records themselves.
+        files = [
+            worktree / PROFILE_FILE, git_dir / "HEAD", common / "packed-refs",
+            *state.glob("*.json"), *state.glob("*.jsonl"), *state.glob("*.lock"),
+            *(state / "results").glob("*.json"), *(state / "jobs").glob("*.exit"),
+            *(state / MAIN_CHECKS_DIR).glob("*/current.json"),
+            *(state / MAIN_CHECKS_DIR).glob("*/runs/*.json"),
+            *(git_dir / "orchestrate").glob("*.json"),
+            *(common / "worktrees").glob("*/orchestrate/*.json"),
+            *LOOPS_DIR.glob("*.json"), *folder.glob("*.jsonl"),
+        ]
+        if evidence:
+            files.append(evidence)
+        trees = [common / "refs", *([plans] if plans else [])]
+        return observability_server.source_times(files, trees)
+
+    def build():
+        prof = profile(worktree, missing_ok=True)
+        files = content(prof)
+        flow, look = flow_reading(worktree, prof)
+        # The supervisor and history-producing commands keep these records current. Sweeping here would reread
+        # host transcripts and write history whenever plans or run state change.
+        dash = delivery_history.dashboard_model(folder, history_meta(worktree))
+        here = dict(run_state=bool(look["loops"]) or any(p.name != "evidence" for p in state.glob("*")),
+                    history=any((folder / f"{kind}.jsonl").is_file() for kind in delivery_history.FILES)
+                    or (folder / delivery_history.OLD_HISTORY_FILE).is_file(),
+                    evidence=any(path.is_file() for prefix, source in files.folders() if str(prefix) == prof["evidence"]
+                                 for path in source.rglob("*")))
+        model, history, commits = observability_model.build(
+            worktree, prof, flow, dash, module_table=module_table, module_stems=modules_here(worktree, prof),
+            live_runs=look["loops"], content=files, here=here, recorded_done=recorded_done,
+            supervisor_running=supervisor_alive(state))
+        return files, model, history, commits
+
+    def started(url):
+        print(json.dumps({"result": "SERVING", "url": url, "pid": os.getpid(), "version": VERSION}), flush=True)
+
+    global SERVING_READ_ONLY
+    SERVING_READ_ONLY = True
+    try:
+        profile(worktree, missing_ok=True)
+        observability_server.serve(a.port, sources, build, started)
+    except OSError as error:
+        if error.errno == errno.EADDRINUSE:
+            raise SystemExit(f"error: port {a.port} is already in use; choose another port or pass --port 0") from error
+        if isinstance(error, PermissionError) and error.filename is None:
+            raise SystemExit(f"error: cannot listen on 127.0.0.1:{a.port}: {error.strerror}") from error
+        raise
+    finally:
+        SERVING_READ_ONLY = False
 
 
 def design_reviews(worktree: Path, prof: dict, ref: str, stem: str, rec: dict) -> list[dict]:
@@ -13726,7 +13858,15 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
     authorises them as a `plan` would."""
     problems = [why for p in paths if (why := adoptable(prof, worktree, ref, p))]
     problems += plan_checks(worktree, prof, [p for p in paths if not adoptable(prof, worktree, ref, p)])
+    vision_rel = project_file(prof, "vision")
+    vision = file_here(worktree, vision_rel) if vision_rel in paths else file_at(worktree, ref, vision_rel)
+    milestones = observability_model.milestones_in((vision or b"").decode(errors="replace"))
     proj = project(worktree, prof, ref)
+    if vision_rel in paths:
+        for entry in proj.values():
+            if done_rel(prof, entry["stem"]) not in paths:
+                problems += [f"{entry['stem']}: {problem}" for problem in
+                             milestone_mark_problems(entry["doc"], milestones)]
     sync_holds(worktree, prof)
     held = holds(worktree)
     authorise, adopted, refusal, run_only = [], [], None, set()
@@ -13747,10 +13887,14 @@ def adopt_problems(worktree: Path, prof: dict, ref: str, base: str, paths: list[
         except json.JSONDecodeError as e:
             problems.append(f"{p} isn't valid JSON: {e}")
             continue
-        if found := validate(doc, key):
+        if found := validate(doc, key, milestones):
             problems += [f"{p}: {x}" for x in found]
             continue
         before = file_at(worktree, ref, p)
+        try:
+            problems += [f"{p}: {x}" for x in milestone_mark_changes(json.loads(before) if before else None, doc)]
+        except json.JSONDecodeError:
+            pass
         if before is not None:  # an existing module: the file can change only as a planner may change it
             try:
                 problems += [f"{p}: {x}" for x in delta_problems(json.loads(before), doc, "plan")]
@@ -14087,6 +14231,8 @@ def cmd_human(a: argparse.Namespace) -> None:
             new = load_done(worktree, stem, prof)
             if problems := validate(new, key):
                 raise SystemExit("error: the edited done-when file is invalid: " + "; ".join(problems[:5]))
+            if problems := milestone_mark_changes(doc, new):
+                raise SystemExit("error: " + "; ".join(problems[:5]))
             old = {m["id"]: m for m in doc["work_packages"]}
             merged = []
             for m in new["work_packages"]:
@@ -15558,7 +15704,7 @@ def migrate_local_files_3(changes: list) -> None:
 
 
 RENAME_SUBJECT = "orchestrate: rename milestones"
-MILESTONE_SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+MILESTONE_SLUG = observability_model.MILESTONE_SLUG
 # A path, link target, URL or heading anchor keeps its old name: those files and headings weren't renamed.
 RENAME_SKIP = re.compile(r"(?<![\w./-])(?:[\w+.-]+://[^\s\x22'`<>()[\]]+|(?:[\w.-]*/)+[\w.-]+(?:#[\w.-]+)?"
                          r"|[\w.-]+\.[a-z]+(?:#[\w.-]+)?|#[\w]+(?:-[\w]+)+|\]\([^)\s]*\))")
@@ -16152,7 +16298,8 @@ def main_check_lines(text: str, problems: list) -> dict:
 
 def main_check_dir(worktree: Path, name: str) -> Path:
     path = loop_dir(worktree) / MAIN_CHECKS_DIR / name
-    (path / "runs").mkdir(parents=True, exist_ok=True)
+    if not SERVING_READ_ONLY:
+        (path / "runs").mkdir(parents=True, exist_ok=True)
     return path
 
 
@@ -18653,6 +18800,24 @@ history --worktree PATH [--json] [--full] [--budget SECONDS]
       token: weighted tokens (each kind priced relative to a fresh input token, which compares a Claude turn with a
       Codex turn), Codex's share of the weekly limit, and Claude's list price.
 """,
+    "serve": """\
+    Show the plans, live work and saved delivery history in a browser on this machine. The server
+    listens on 127.0.0.1 and refreshes the page when its sources change. It reads saved delivery
+    history as it stands. Use `history` separately when you need to bring those records up to date.
+    For a milestone reached before orchestration, the lead can record its date in the vision and
+    scope document:
+
+      - **First release** (`milestone/first-release`, closed 2026-11-05).
+
+    To keep the lead free to chat, start it with `background --worktree PATH -- python3 SCRIPT serve
+    --port 0` (use the absolute path to this script for SCRIPT). Read the job's log, or run
+    `wait JOB --worktree PATH --until SERVING`, and give the user the `url` from the result.
+    The `pid` in SERVING is the server's own process. Send it SIGTERM to stop it, or press Ctrl-C
+    when running in the foreground. The page and its link are local to the machine running serve.
+
+    Results:
+      SERVING       the page and model are ready, with the browser `url` and server `pid`
+    """,
     "dashboard": """\
 dashboard --worktree PATH [--out FILE] [--open] [--json] [--no-sweep] [--budget SECONDS]
       Writes the delivery history (see `history --help`) as one HTML page: cost by host, kind of agent, model and
@@ -19010,6 +19175,10 @@ def build_parser() -> argparse.ArgumentParser:
                                                               "sessions first")
     dash.add_argument("--budget", type=float, default=120.0, help="seconds to spend reading new sessions")
     dash.set_defaults(func=cmd_dashboard)
+    serve = sub.add_parser("serve", help="serve the live project page on this machine")
+    serve.add_argument("--worktree", default=".", help="top of the checkout to show")
+    serve.add_argument("--port", type=int, default=8787, help="loopback port (default: 8787, or 0 for a free port)")
+    serve.set_defaults(func=cmd_serve)
     flow = sub.add_parser("flow", help="show the wake overview of delivery, stalled work and resources")
     flow.add_argument("--worktree", default=".")
     flow.add_argument("--since", type=float, help="set the movement and flow windows in hours")
@@ -19117,7 +19286,7 @@ def main() -> None:
     worktree = getattr(args, "worktree", None)
     if worktree and args.func is not cmd_quota:
         QUOTA_WORKTREE[:] = [Path(worktree).resolve()]
-    if worktree and getattr(args, "command", None):
+    if worktree and getattr(args, "command", None) and args.func is not cmd_serve:
         supervise_hook(args.command, Path(worktree).resolve(), steer=steers_work(args))
     if not STEPS_PARENT:
         mark_running(argv, worktree)
