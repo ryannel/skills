@@ -1,0 +1,8 @@
+# Built from ~/Workspace/thrum by prototype/build_model.py; rebuild rather than commit.
+prototype/model.json
+prototype/history.json
+prototype/content/
+thrum-dashboard.html
+# Screenshots stay local: tens of megabytes in a repo every skills install clones.
+*.png
+review-2026-11-26/neon-result.json
