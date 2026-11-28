@@ -118,6 +118,13 @@ knows the field recognises the work at once, hunts out ambiguous and duplicate w
 using the agreed terms, fixes code and docs that drift from them, and adds a pointer to `AGENTS.md` so later
 sessions keep to them. Orchestrate keeps its own glossary and doesn't need it. Install it with `npx skills add ryannel/skills --skill domain-language`.
 
+## Dogfood UI
+
+[`dogfood-ui`](./skills/dogfood-ui/) is a standalone skill that uses a web app in a real browser as a curious
+human would, maps its surfaces and user-question navigation graph in `docs/ux-map.md`, fixes dead ends, data
+mismatches, pattern gaps and visual flaws in shared components, and verifies every fix from screenshots in
+every supported theme. Install it with `npx skills add ryannel/skills --skill dogfood-ui`.
+
 ## Agent relay
 
 [`agent-relay`](./skills/agent-relay/) is a standalone skill and command-line tool for driving Claude Code, Codex

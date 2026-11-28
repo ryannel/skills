@@ -172,6 +172,27 @@
         "./skills/prompting-agents"
       ],
       "license": "MIT"
+    },
+    {
+      "name": "dogfood-ui",
+      "description": "Uses a web app in a real browser as a curious human would, maps its surfaces and user-question navigation graph in docs/ux-map.md, fixes dead ends, data mismatches, pattern gaps and visual flaws, and verifies every fix from screenshots.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "development",
+      "keywords": [
+        "ui",
+        "ux",
+        "dogfood",
+        "navigation",
+        "visual-qa",
+        "browser",
+        "polish"
+      ],
+      "skills": [
+        "./skills/dogfood-ui"
+      ],
+      "license": "MIT"
     }
   ]
 }
